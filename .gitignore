@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs & OS clutter
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/workspace.xml
+.idea/tasks.xml
