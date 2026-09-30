@@ -90,6 +90,15 @@ npm run dev
 
 ---
 
+## Project rules (code quality)
+
+Every change to this codebase must follow the code-quality rules in
+[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) (24 rules — size,
+complexity, testing, docs and behaviour gates, adopted from the sister project
+`Process-Images-in-Areana`). Current behaviour and invariants are documented in
+[`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md); the doc
+map lives in [`docs/README.md`](docs/README.md).
+
 ## Project structure
 
 ```
