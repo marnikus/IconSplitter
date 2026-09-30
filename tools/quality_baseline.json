@@ -1,0 +1,229 @@
+{
+  "src/App.tsx": {
+    "file_lines": 607,
+    "func_count": 76,
+    "funcs": {
+      "pad2": {
+        "loc": 1,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "sleep": {
+        "loc": 1,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "(anonymous)": {
+        "loc": 45,
+        "params": 2,
+        "cc": 7,
+        "nesting": 2
+      },
+      "loadImage": {
+        "loc": 8,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "download": {
+        "loc": 10,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "App": {
+        "loc": 552,
+        "params": 0,
+        "cc": 14,
+        "nesting": 0
+      },
+      "toggleBox": {
+        "loc": 8,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "removeSheet": {
+        "loc": 7,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "renderBlob": {
+        "loc": 2,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "fileName": {
+        "loc": 1,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "copyIcon": {
+        "loc": 9,
+        "params": 2,
+        "cc": 2,
+        "nesting": 1
+      },
+      "saveIcon": {
+        "loc": 3,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "collect": {
+        "loc": 17,
+        "params": 1,
+        "cc": 4,
+        "nesting": 2
+      },
+      "run": {
+        "loc": 12,
+        "params": 2,
+        "cc": 5,
+        "nesting": 2
+      },
+      "downloadZip": {
+        "loc": 9,
+        "params": 0,
+        "cc": 1,
+        "nesting": 0
+      },
+      "downloadAll": {
+        "loc": 9,
+        "params": 0,
+        "cc": 1,
+        "nesting": 0
+      },
+      "saveFolder": {
+        "loc": 27,
+        "params": 0,
+        "cc": 1,
+        "nesting": 0
+      }
+    }
+  },
+  "src/lib/detect.ts": {
+    "file_lines": 307,
+    "func_count": 15,
+    "funcs": {
+      "median": {
+        "loc": 4,
+        "params": 1,
+        "cc": 2,
+        "nesting": 0
+      },
+      "(anonymous)": {
+        "loc": 4,
+        "params": 2,
+        "cc": 2,
+        "nesting": 0
+      },
+      "analyze": {
+        "loc": 92,
+        "params": 1,
+        "cc": 11,
+        "nesting": 2
+      },
+      "push": {
+        "loc": 8,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "dilate": {
+        "loc": 28,
+        "params": 4,
+        "cc": 10,
+        "nesting": 2
+      },
+      "label": {
+        "loc": 42,
+        "params": 5,
+        "cc": 14,
+        "nesting": 5
+      },
+      "detect": {
+        "loc": 97,
+        "params": 2,
+        "cc": 32,
+        "nesting": 3
+      },
+      "run": {
+        "loc": 1,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "len": {
+        "loc": 1,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      }
+    }
+  },
+  "src/lib/render.ts": {
+    "file_lines": 106,
+    "func_count": 8,
+    "funcs": {
+      "squareInfo": {
+        "loc": 4,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "(anonymous)": {
+        "loc": 2,
+        "params": 2,
+        "cc": 2,
+        "nesting": 0
+      },
+      "cropRect": {
+        "loc": 5,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "renderIcon": {
+        "loc": 74,
+        "params": 7,
+        "cc": 9,
+        "nesting": 3
+      },
+      "draw": {
+        "loc": 18,
+        "params": 4,
+        "cc": 3,
+        "nesting": 1
+      },
+      "canvasToBlob": {
+        "loc": 5,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      }
+    }
+  },
+  "src/main.tsx": {
+    "file_lines": 11,
+    "func_count": 0,
+    "funcs": {}
+  },
+  "src/utils/cn.ts": {
+    "file_lines": 7,
+    "func_count": 1,
+    "funcs": {
+      "cn": {
+        "loc": 3,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      }
+    }
+  }
+}

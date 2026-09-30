@@ -88,7 +88,7 @@ export default function App() {
           const an = analyze(img);
           const det = detect(an, null);
           const id = crypto.randomUUID();
-          const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w\-]+/g, "_") || "sheet";
+          const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_") || "sheet";
           const sheet: Sheet = {
             id,
             name: f.name,
@@ -164,7 +164,6 @@ export default function App() {
   const copyIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {
     try {
       const blob = await renderBlob(s, it.b, it.sq);
-      // @ts-ignore ClipboardItem typing
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       say(`Icon ${it.n + 1} copied to clipboard`);
     } catch {
@@ -294,16 +293,16 @@ export default function App() {
             </div>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button onClick={() => fileRef.current?.click()} className="btn-ghost">
+            <button data-testid="upload-button" onClick={() => fileRef.current?.click()} className="btn-ghost">
               + Upload images
             </button>
-            <button disabled={!total} onClick={downloadZip} className="btn-primary">
+            <button data-testid="export-zip" disabled={!total} onClick={downloadZip} className="btn-primary">
               ⬇ ZIP ({total})
             </button>
-            <button disabled={!total} onClick={saveFolder} className="btn-ghost">
+            <button data-testid="export-folder" disabled={!total} onClick={saveFolder} className="btn-ghost">
               📁 Save to folder
             </button>
-            <button disabled={!total} onClick={downloadAll} className="btn-ghost">
+            <button data-testid="export-download" disabled={!total} onClick={downloadAll} className="btn-ghost">
               Download files
             </button>
           </div>
@@ -312,6 +311,7 @@ export default function App() {
 
       <input
         ref={fileRef}
+        data-testid="file-input"
         type="file"
         accept="image/*"
         multiple
@@ -325,6 +325,7 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         {!sheets.length ? (
           <div
+            data-testid="dropzone"
             onClick={() => fileRef.current?.click()}
             className="mx-auto mt-10 flex max-w-2xl cursor-pointer flex-col items-center rounded-3xl border-2 border-dashed border-white/15 bg-white/[0.03] px-6 py-20 text-center transition hover:border-indigo-400/60 hover:bg-white/[0.06]"
           >
@@ -362,6 +363,7 @@ export default function App() {
                         </p>
                       </div>
                       <button
+                        data-testid={`sheet-remove-${s.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           removeSheet(s.id);
@@ -387,6 +389,7 @@ export default function App() {
                     <span className="text-slate-400">{padding}%</span>
                   </div>
                   <input
+                    data-testid="padding-slider"
                     type="range"
                     min={0}
                     max={25}
@@ -398,6 +401,7 @@ export default function App() {
                 <label className="mt-4 block text-sm">
                   <span className="mb-1 block">Square size</span>
                   <select
+                    data-testid="size-select"
                     value={size}
                     onChange={(e) => setSize(+e.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"
@@ -411,6 +415,7 @@ export default function App() {
                 </label>
                 <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm">
                   <input
+                    data-testid="transparent-checkbox"
                     type="checkbox"
                     checked={transparent}
                     onChange={(e) => setTransparent(e.target.checked)}
@@ -434,6 +439,7 @@ export default function App() {
                     <span className="text-slate-400">{active.manual ? "manual" : "auto"}</span>
                   </div>
                   <input
+                    data-testid="merge-slider"
                     type="range"
                     min={0}
                     max={0.15}
@@ -448,6 +454,7 @@ export default function App() {
                     {active.boxes.length === 1 ? "" : "s"}.
                   </p>
                   <button
+                    data-testid="merge-reset"
                     disabled={!active.manual}
                     onClick={() => redetect(active.id, null)}
                     className="btn-ghost mt-3 w-full"
@@ -487,7 +494,7 @@ export default function App() {
                         const sqi = it ? it.sq : squareInfo(active.boxes, padding);
                         const cr = cropRect(b, sqi.total);
                         return (
-                          <g key={i} onClick={() => toggleBox(active.id, i)} className="cursor-pointer">
+                          <g key={i} data-testid={`box-toggle-${i}`} onClick={() => toggleBox(active.id, i)} className="cursor-pointer">
                             {!off && (
                               <rect
                                 x={cr.x}
@@ -576,16 +583,17 @@ export default function App() {
       )}
 
       {busy && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
+        <div data-testid="busy-overlay" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
           <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl">
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-            <span className="text-sm">{busy}</span>
+            <span data-testid="busy-message" className="text-sm">{busy}</span>
           </div>
         </div>
       )}
 
       {toast && (
         <div
+          data-testid="toast"
           className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
             toast.err ? "bg-rose-600" : "bg-emerald-600"
           }`}

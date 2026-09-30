@@ -6,6 +6,9 @@ This file is the **detailed code-quality rules** for Icon Splitter, adapted from
 React + Vite + TypeScript browser app.
 
 * Current behaviour, invariants and flows: [`SYSTEM_OF_RECORD.md`](SYSTEM_OF_RECORD.md)
+* Verification workflow before every push: [`CODE_VERIFICATION.md`](CODE_VERIFICATION.md)
+* Living UI handle reference: [`UI_SELECTORS.md`](UI_SELECTORS.md)
+* Dated quality re-check records: [`QUALITY_RECHECK.md`](QUALITY_RECHECK.md)
 * Doc map (what is current vs historical): [`../README.md`](../README.md)
 * Rule numbers are **stable** — never renumber; append instead.
 
@@ -151,6 +154,11 @@ Verification lives in the export path and fails **closed**: any failed check →
 ## RULE 16 — Code-quality gates on every production change
 
 Mandatory for every change to production code in `src/`. Thresholds are frozen, inherited from PIA RULE 16; only the tooling is adapted to TypeScript.
+
+Executable form: `tools/quality.mjs` (run it; do not re-derive). Baseline:
+`tools/quality_baseline.json`. Full verification workflow:
+[`CODE_VERIFICATION.md`](CODE_VERIFICATION.md) — **must be run before every
+push** (`npm run verify`).
 
 ### 16.0 When this applies
 

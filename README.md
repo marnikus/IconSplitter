@@ -95,22 +95,34 @@ npm run dev
 Every change to this codebase must follow the code-quality rules in
 [`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) (24 rules — size,
 complexity, testing, docs and behaviour gates, adopted from the sister project
-`Process-Images-in-Areana`). Current behaviour and invariants are documented in
-[`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md); the doc
-map lives in [`docs/README.md`](docs/README.md).
+`Process-Images-in-Areana`). Before every push run the verification lanes:
+
+```bash
+npm run verify        # types + lint + quality gate + tests + coverage + build
+npm run hooks:install # optional: enforce it automatically via a pre-push hook
+```
+
+Current behaviour and invariants are documented in
+[`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md); the
+verification workflow lives in
+[`docs/current/CODE_VERIFICATION.md`](docs/current/CODE_VERIFICATION.md); the
+doc map is [`docs/README.md`](docs/README.md).
 
 ## Project structure
 
 ```
 IconSplitter/
 ├── index.html               # Entry HTML (Vite)
-├── package.json             # Dependencies & npm scripts
+├── package.json             # Dependencies & npm scripts (dev/test/verify)
 ├── vite.config.ts           # Vite config (single-file build enabled)
 ├── src/
 │   ├── main.tsx             # React bootstrap
 │   ├── App.tsx              # Main UI
 │   ├── lib/detect.ts        # Icon detection on the sheet
 │   └── lib/render.ts        # Cropping / resizing / export logic
+├── tests/                   # Vitest — real detect/render logic (RULE 8)
+├── tools/                   # RULE 16 quality gate + pre-push check
+├── docs/                    # Rules + verification docs (see docs/README.md)
 ├── install_dependencies.bat # Windows: npm install
 ├── run_app.bat              # Windows: build + open in browser
 └── run_dev_server.bat       # Windows: live-reload dev server

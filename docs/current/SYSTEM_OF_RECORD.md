@@ -1,44 +1,131 @@
 # System of Record — Icon Splitter
 
-Current behaviour, invariants and flows. If code and this doc disagree, one of them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
+Current behaviour, invariants and flows. If code and this doc disagree, one of
+them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
+Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.md`.
 
-## What the app does
+## 1. What this is
 
-Browser app that detects individual icons in a sprite sheet, lets the user review, resize and exclude them, and exports them as square PNGs — as a ZIP download, into a folder (Chrome/Edge File System Access), or copied to clipboard.
+A browser app that detects individual icons in a sprite sheet, lets the user
+review, resize and exclude them, and exports them as equal-size square PNGs —
+ZIP download, folder save (Chrome/Edge File System Access), or clipboard.
 
-Stack: React 19 + Vite 7 + TypeScript + Tailwind 4. Production build is one self-contained `dist/index.html` (`vite-plugin-singlefile`) that runs offline with no server.
+Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
+Production build is one self-contained `dist/index.html`
+(`vite-plugin-singlefile`) that runs offline with no server (RULE 20).
 
-## Pipeline (single source of truth: `src/lib/`)
+## 2. Current behaviour (authoritative)
 
-| Stage | Function | Input → Output |
+* Drop or choose image files (PNG/JPG/WEBP). Non-images are filtered with a message.
+* Each sheet is analyzed (background colour, ink mask, threshold) and icons are
+  detected automatically; merge distance is adjustable per sheet with an auto default.
+* Detected boxes render over the sheet preview; clicking a box toggles exclude/include.
+* Export: every included icon becomes a centred square (largest icon side +
+  padding %), optionally transparent, optionally fixed size; delivered as ZIP,
+  individual downloads, folder save, or single-icon clipboard copy.
+* Everything runs client-side; nothing is uploaded anywhere.
+
+## 3. State model
+
+One in-memory model, owned by `App`:
+
+```
+sheets: Sheet[]       Sheet = { id, name, base, url, img, an: Analysis,
+                                boxes: Box[], autoFrac, usedFrac, manual,
+                                excluded: number[] }
+activeId              which sheet is shown
+padding, size, transparent   export options (ExportOpts)
+busy: string | null   progress surface (RULE 5)
+toast: {msg, err}     honest reporting surface (RULE 2, RULE 4)
+```
+
+Detection state transitions per sheet: `loaded → analyzed → detected(auto) →
+[redetected(manual frac)…]`. `excluded` is a flag set over intact `boxes`
+(RULE 11); only sheet removal destroys detection work.
+
+## 4. Core flows
+
+* **Add sheets:** files → filter non-images → `loadImage` → `analyze` →
+  `detect(an, null)` → sheet appended, first becomes active.
+* **Review:** preview grid + SVG boundary overlay (`box-toggle-{i}`), merge
+  slider re-runs `detect` with a manual fraction, `merge-reset` returns to auto.
+* **Export all:** `collect()` loops sheets × included boxes → `renderIcon` →
+  `canvasToBlob` (RULE 15 gate) → ZIP / sequential downloads / folder handles;
+  `busy` reports `Rendering d/t…` per item (RULE 5); per-item failure is
+  reported, never silently swallowed.
+* **Single icon:** copy to clipboard or download one rendered blob.
+
+## 5. Invariants
+
+* **I-1 (RULE 6):** every export contains exactly the currently included boxes
+  of currently loaded sheets.
+* **I-2 (RULE 4):** "no icons detected" and "image could not be read" are
+  distinct honest states — never a fake success.
+* **I-3 (RULE 11):** exclusion never destroys detection work.
+* **I-4 (RULE 15):** a blob is delivered only after canvas dims > 0, blob
+  non-null, size > 0; otherwise the item is skipped with an error.
+* **I-5 (RULE 20):** image bytes never leave the browser.
+* **I-6 (RULE 22):** export names derive from one function: sanitized sheet
+  base + `-icon-NN.png`, deterministic detection order.
+* **I-7 (RULE 24):** every visible value mirrors current state at the moment
+  of change — no value waits for another interaction to become visible.
+
+## 6. Storage map — memory only, no persistence
+
+Nothing is persisted today (no localStorage/IndexedDB). Object URLs from user
+files are revoked on sheet removal. If persistence is ever added, RULE 13
+applies: validate on read, reject corrupt payloads, atomic writes.
+
+## 7. Key modules and layers
+
+| Layer | Files | Owns |
 |---|---|---|
-| Load | `loadImage` (App) | File → `HTMLImageElement` (object URL, revoked on removal) |
-| Analyze | `analyze(img)` | image → `Analysis` (downscaled ≤4000px, border-median background, ink mask, adaptive threshold) |
-| Detect | `detect(analysis, radiusFrac)` | mask → `Box[]` in natural-image coords, reading order (rows top→bottom, left→right); auto merge radius = most stable icon count across a radius sweep |
-| Layout | `squareInfo(boxes, padding)` / `cropRect(box, total)` | boxes → one shared square size (largest icon side + padding %), centred crop per icon |
-| Render | `renderIcon(...)` | source + box → square canvas (background fill or transparent, high-quality smoothing, optional fixed output size) |
-| Deliver | `canvasToBlob` + App export paths | canvas → blob → ZIP / folder / clipboard |
+| UI orchestration | `src/App.tsx`, `src/main.tsx`, `src/utils/cn.ts` | state, controls, export paths, reporting |
+| Detection | `src/lib/detect.ts` | `analyze` (mask), `detect` (boxes, auto radius, reading order) |
+| Rendering | `src/lib/render.ts` | `squareInfo`, `cropRect`, `renderIcon`, `canvasToBlob` |
 
-## Invariants
+Direction: UI → lib, never lib → UI (RULE 1, RULE 3).
 
-* **I-1 (RULE 6):** every export contains exactly the currently included boxes of currently loaded sheets; excluded indices and removed sheets never reach output.
-* **I-2 (RULE 4):** "no icons detected" and "image could not be read" are distinct, honestly reported states — never a fake success.
-* **I-3 (RULE 11):** exclusion is a flag over an intact `boxes` array; detection is never re-run for include/exclude toggles.
-* **I-4 (RULE 15):** a blob is delivered only after canvas dims > 0, blob non-null and size > 0; failures skip the item with an error, never a corrupt file.
-* **I-5 (RULE 20):** image bytes never leave the browser; no network transmission of user content.
-* **I-6 (RULE 22):** export file names derive from one naming function: sanitized sheet base + deterministic index in detection order.
+## 8. Tests — what exists and what must exist (RULE 8)
 
-## Flows
+Exists (`tests/`, 17 tests, canvas shims serve synthetic pixels):
 
-* **Add sheets:** drop/select image files → non-images filtered with a message → each file loaded, analyzed, auto-detected → sheet card appears, first sheet active.
-* **Review:** preview grid shows detected boxes (checkerboard background), click to exclude/include, merge-radius slider per sheet (auto = `null`), re-detect on change.
-* **Export all:** for each sheet, each included box → `renderIcon` with shared `ExportOpts` → ZIP via `jszip` (or folder save / clipboard for a single sheet where supported); progress reported per item (RULE 5).
+* `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
+* `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
+* `render.test.ts` — squareInfo/cropRect geometry
+* `render_icon.test.ts` — sizing/clamps, bg fill + neighbour wipe + restore, transparent pass, blob gate
 
-## Legacy hotspots (RULE 16.5)
+Must exist before the matching change ships:
 
-* `src/App.tsx` (598 lines at adoption) — do not grow; extract sheet/preview/export components on touch.
-* `src/lib/detect.ts` (306 lines at adoption) — do not grow; extract `chooseAutoRadius` / reading-order helpers on touch.
+* any new exported lib function → a test that fails if it is deleted
+* sheet lifecycle (add/remove/exclude) → component tests using `UI_SELECTORS.md` handles (jsdom/testing-library) when first needed
+* ZIP/folder export → assertion on names + count (I-6), not just "no throw"
 
-## History
+## 9. Quality gates summary (RULE 16 — thresholds frozen)
 
-* 2026-09-30 — rules adopted from `marnikus/Process-Images-in-Areana` `docs/current/AGENT_RULES.md` (this adoption is the first doc; no archive entries yet).
+| Gate | Fail line | Tool |
+|---|---:|---|
+| Function LOC | > 30 | `tools/quality.mjs` |
+| Params | > 4 | same |
+| Cyclomatic complexity | > 10 | same + eslint warn |
+| Nesting | > 4 | same + eslint warn |
+| File lines | > 300 (warn), ratchet growth fails | same |
+| Coverage `src/lib` | lines ≥ 80%, never decrease | vitest v8 |
+| Anti-gaming | `partN` helpers always fail | same |
+
+Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.md`.
+
+## 10. History of designs — pointers
+
+* 2026-09-30 — rules adopted from `marnikus/Process-Images-in-Areana`
+  `docs/current/*` (AGENT_RULES 24 rules, CODE_VERIFICATION, DOM_SELECTORS →
+  UI_SELECTORS, QUALITY_RECHECK); metrics reports intentionally not ported.
+* No archive entries yet — the first design doc goes to
+  `docs/archive/<YYYY-MM-DD>-<topic>/` (RULE 17).
+
+## 11. Current UI — control inventory
+
+Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
+Panels: header (upload + 3 export buttons), Sheets, Export settings
+(padding/size/transparent), Detection (merge slider + reset), Boundary
+overlay, Result grid, busy overlay, toast.
