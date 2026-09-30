@@ -6,15 +6,23 @@ Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.m
 
 ## 1. What this is
 
-A browser app that detects individual icons in a sprite sheet, lets the user
-review, resize and exclude them, and exports them as equal-size square PNGs —
-ZIP download, folder save (Chrome/Edge File System Access), or clipboard.
+A browser app with two modes (top tabs, `src/ui/Workbench.tsx`):
+
+1. **Single sheets** — detect individual icons in a sprite sheet, review,
+   resize and exclude them, export equal-size square PNGs (ZIP / downloads /
+   folder / clipboard).
+2. **Batch folders** (Chrome/Edge only, File System Access API) — pick a root
+   folder, recursively scan every `*_AI*` image, review and select them, split
+   each into its own organised output tree beside the sources, with presets
+   and per-reference JSON status tracking.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
 (`vite-plugin-singlefile`) that runs offline with no server (RULE 20).
 
 ## 2. Current behaviour (authoritative)
+
+Single sheets:
 
 * Drop or choose image files (PNG/JPG/WEBP). Non-images are filtered with a message.
 * Each sheet is analyzed (background colour, ink mask, threshold) and icons are
@@ -23,7 +31,29 @@ Production build is one self-contained `dist/index.html`
 * Export: every included icon becomes a centred square (largest icon side +
   padding %), optionally transparent, optionally fixed size; delivered as ZIP,
   individual downloads, folder save, or single-icon clipboard copy.
-* Everything runs client-side; nothing is uploaded anywhere.
+
+Batch folders:
+
+* Pick a source root (readwrite handle). Recursively scans all images; the
+  output folder `_split_output` is ignored during scans (configurable list).
+* Only `name_AI.ext` / `name_AI_<n>.ext` images are eligible; the reference
+  `name.ext` is linked, never processed, and copied into every `split_NN`
+  subfolder. Missing reference → warning + user may skip or continue.
+* Review window: thumbnail, filename, relPath, status badge
+  (unprocessed/processed/skipped/changed/missing/deleted), checkbox, Select/Deselect All.
+* Presets store every configurable value (source/dest handles in IndexedDB,
+  config in localStorage); last-used preset restores automatically.
+* Processing: rescan runs before each batch; per-item progress, per-item
+  failure isolation, Stop button honoured between items.
+* Output tree: `<root>/_split_output/YYYY-MM/YYYY-MM-DD_HH-mm-ss/<src-hierarchy>/<src-stem>/split_NN/<stem>_NN.png`
+  (+ reference copy), or the same structure directly inside a custom destination.
+  Never overwrites; collisions get `_v02…` appended after any existing `_AI_7`.
+* State JSON `<base>.json` lives beside the reference; refreshed after every
+  scan and batch; corrupt payloads are rejected and rebuilt (RULE 13).
+* "Open in File Explorer" is impossible from a browser — the action copies the
+  path and says so honestly (RULE 4/9).
+
+Everything runs client-side; nothing is uploaded anywhere.
 
 ## 3. State model
 
@@ -43,7 +73,24 @@ Detection state transitions per sheet: `loaded → analyzed → detected(auto) �
 [redetected(manual frac)…]`. `excluded` is a flag set over intact `boxes`
 (RULE 11); only sheet removal destroys detection work.
 
+Batch model (`useBatch.ts`):
+
+```
+root, dest              FileSystemDirectoryHandles (dest null => auto)
+rows: Row[]             Row = AiImageEntry + status + selected
+keys: StateKey[]        which <base>.json files are known
+preset                  Preset (split settings, ignore list, dest mode…)
+busy / toast            progress + honest reporting surfaces
+```
+
+Status transitions per source record: `unprocessed → processed | skipped |
+deleted`; file changed → `changed` (re-selectable); file gone at scan → `missing`
+(retained in JSON); gone during processing → `deleted` (skipped safely, batch
+continues).
+
 ## 4. Core flows
+
+Single sheets:
 
 * **Add sheets:** files → filter non-images → `loadImage` → `analyze` →
   `detect(an, null)` → sheet appended, first becomes active.
@@ -54,6 +101,18 @@ Detection state transitions per sheet: `loaded → analyzed → detected(auto) �
   `busy` reports `Rendering d/t…` per item (RULE 5); per-item failure is
   reported, never silently swallowed.
 * **Single icon:** copy to clipboard or download one rendered blob.
+
+Batch:
+
+* **Scan:** root handle → `readDirTree` (ignore list) → `walkTree` →
+  `collectAiImages` → `linkReferences` → `syncAndCollect` rewrites every
+  `<base>.json` → rows render with statuses.
+* **Process:** selection → rescan-derived items → `planBatch` (collision-safe
+  folders) → per item: load → `splitSheet` → write `split_NN/<stem>_NN.png`
+  via no-overwrite writes → copy reference per split dir → `applyOutcomes`
+  persists statuses → UI mirrors (RULE 24). Stop is honoured between items.
+* **Presets:** save/load/delete in localStorage; directory handles persisted
+  in IndexedDB per preset name; last-used preset auto-restores on open.
 
 ## 5. Invariants
 
@@ -69,37 +128,71 @@ Detection state transitions per sheet: `loaded → analyzed → detected(auto) �
   base + `-icon-NN.png`, deterministic detection order.
 * **I-7 (RULE 24):** every visible value mirrors current state at the moment
   of change — no value waits for another interaction to become visible.
+* **I-8 (batch, RULE 23):** batch outputs never overwrite: dirs/files are
+  probed `create:false` first; collisions take `_v02…`; existing `_AI_7`
+  variant suffixes are preserved, never replaced.
+* **I-9 (batch, RULE 6):** the `_split_output` tree is never scanned as input;
+  filtered-out (missing/deleted) sources never enter a batch.
+* **I-10 (batch, RULE 13):** state JSON is validated on read; corrupt payloads
+  are replaced with fresh valid state, never fatal.
+* **I-11 (batch, RULE 1/3):** pixel math in batch mode reuses `lib/detect` +
+  `lib/render` through `splitSheet` — no second detection implementation.
 
-## 6. Storage map — memory only, no persistence
+## 6. Storage map
 
-Nothing is persisted today (no localStorage/IndexedDB). Object URLs from user
-files are revoked on sheet removal. If persistence is ever added, RULE 13
-applies: validate on read, reject corrupt payloads, atomic writes.
+| Where | What | Rules |
+|---|---|---|
+| localStorage `iconSplitter.presets.v1` | preset list (JSON) | validated on read (RULE 13) |
+| localStorage `iconSplitter.lastPreset.v1` | last-used preset name | restores on boot |
+| IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
+| `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
+| `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
+
+Object URLs from user files are revoked on sheet removal (sheets mode).
 
 ## 7. Key modules and layers
 
 | Layer | Files | Owns |
 |---|---|---|
-| UI orchestration | `src/App.tsx`, `src/main.tsx`, `src/utils/cn.ts` | state, controls, export paths, reporting |
+| Mode shell | `src/ui/Workbench.tsx`, `src/main.tsx` | Sheets/Batch tab switch |
+| Sheets UI | `src/App.tsx`, `src/utils/cn.ts` | sheet state, controls, export paths |
 | Detection | `src/lib/detect.ts` | `analyze` (mask), `detect` (boxes, auto radius, reading order) |
 | Rendering | `src/lib/render.ts` | `squareInfo`, `cropRect`, `renderIcon`, `canvasToBlob` |
+| Naming (batch) | `src/lib/naming.ts` | `_AI` parse, split names, variations, batch path |
+| Scan (batch) | `src/lib/scan.ts` | tree walk, eligibility, ref linking, diff |
+| State JSON | `src/lib/statefile.ts`, `src/batch/statewrite.ts` | model + merge + validation; file sync + outcomes |
+| Output plan | `src/lib/output.ts` | month/timestamp layout, `_vNN` allocation |
+| FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, tree read, folder picking |
+| Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
+| Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 
-Direction: UI → lib, never lib → UI (RULE 1, RULE 3).
+Direction: UI → batch → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 17 tests, canvas shims serve synthetic pixels):
+Exists (`tests/`, 14 files / 68 tests; canvas shims serve synthetic pixels,
+in-memory fakes implement the FS handle interfaces):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
 * `render.test.ts` — squareInfo/cropRect geometry
 * `render_icon.test.ts` — sizing/clamps, bg fill + neighbour wipe + restore, transparent pass, blob gate
+* `naming.test.ts` — `_AI` parse, reference derivation, split/variation names, batch path
+* `scan.test.ts` — recursive walk + ignore, eligibility, ref linking, scan diff
+* `statefile.test.ts` — merge semantics, statuses, corrupt-payload rejection
+* `presets.test.ts` — defaults, validation clamps, list round-trip, apply
+* `output_plan.test.ts` — layout, `_vNN` collisions, existing-folder respect
+* `fs.test.ts` — tree read, no-overwrite write, nested dirs, copy (fakes)
+* `batchsplit.test.ts` — one blob per icon, honest empty sheet
+* `process.test.ts` — full output tree, deleted/failed isolation, stop, ref copy
+* `statewrite.test.ts` — per-reference JSON write, missing retention, corrupt replace
+* `store.test.ts` — preset persistence, corrupt rejection, last-used name
 
 Must exist before the matching change ships:
 
-* any new exported lib function → a test that fails if it is deleted
-* sheet lifecycle (add/remove/exclude) → component tests using `UI_SELECTORS.md` handles (jsdom/testing-library) when first needed
-* ZIP/folder export → assertion on names + count (I-6), not just "no throw"
+* any new exported lib/batch function → a test that fails if it is deleted
+* sheet/batch UI flows → component tests using `UI_SELECTORS.md` handles when first needed
+* ZIP/folder export → assertion on names + count (I-6/I-8), not just "no throw"
 
 ## 9. Quality gates summary (RULE 16 — thresholds frozen)
 
@@ -120,12 +213,19 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
 * 2026-09-30 — rules adopted from `marnikus/Process-Images-in-Areana`
   `docs/current/*` (AGENT_RULES 24 rules, CODE_VERIFICATION, DOM_SELECTORS →
   UI_SELECTORS, QUALITY_RECHECK); metrics reports intentionally not ported.
-* No archive entries yet — the first design doc goes to
-  `docs/archive/<YYYY-MM-DD>-<topic>/` (RULE 17).
+* 2026-10-01 — batch processing designed TDD-first:
+  `docs/archive/2026-10-01-batch-processing/design.md` (module map, browser
+  constraints, rule budget, negative tests).
 
 ## 11. Current UI — control inventory
 
 Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
-Panels: header (upload + 3 export buttons), Sheets, Export settings
-(padding/size/transparent), Detection (merge slider + reset), Boundary
-overlay, Result grid, busy overlay, toast.
+
+* Workbench: `tab-sheets`, `tab-batch`.
+* Sheets mode: header (upload + 3 export buttons), Sheets, Export settings
+  (padding/size/transparent), Detection (merge slider + reset), Boundary
+  overlay, Result grid, busy overlay, toast.
+* Batch mode: header controls (`batch-root`, `batch-refresh`, `batch-process`,
+  `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
+  info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
+  reference warnings, busy overlay, toast.

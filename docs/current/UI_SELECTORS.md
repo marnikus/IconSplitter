@@ -1,10 +1,13 @@
-# UI Selector Reference — Icon Splitter (verified against `src/App.tsx`)
+# UI Selector Reference — Icon Splitter (verified against `src/`)
 
 Adapted from `Process-Images-in-Areana/docs/current/DOM_SELECTORS.md`. That app
 automates a foreign site, so its selectors target someone else's DOM. Icon
 Splitter **is** the page, so this reference lists the app's own stable handles
 for tests (RULE 8) and any future UI automation. Every `data-testid` below
-exists in `src/App.tsx` — verified 2026-09-30.
+exists in source — Sheets handles verified in `src/App.tsx` (2026-09-30);
+Workbench + Batch handles verified in `src/ui/Workbench.tsx`,
+`src/batch/BatchPanel.tsx`, `src/batch/ScanTable.tsx`, `src/batch/PresetBar.tsx`
+(2026-10-01).
 
 Priority per RULE 21: **semantic** (role / label / text) > **structural** >
 **class fragment** (Tailwind utilities are last resort, never primary).
@@ -93,7 +96,62 @@ Same shape as the source project, adapted:
 ```
 
 When a test needs a handle that is not listed here, add the `data-testid` to
-`src/App.tsx` **and** a row to this doc in the same change (RULE 17).
+the owning component (`src/App.tsx` or `src/batch/*`) **and** a row to this
+doc in the same change (RULE 17).
+
+## K. Workbench tabs — mode switch
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with `tab-batch` |
+| `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
+
+Semantic fallback: button role + visible text.
+
+## L. Batch panel — `src/batch/*`
+
+Primary header controls:
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `batch-root` | `Choose source folder…` → `Root: {name}` | opens directory picker (`picker.ts`); Chrome/Edge File System Access; label mirrors state (RULE 24) |
+| `batch-refresh` | `↺ Rescan` | re-walks root; gated on handle + permission |
+| `batch-process` | `▶ Split selected` | disabled when 0 selected (RULE 4) |
+| `batch-cancel` | `✕ Stop` | shown only while busy; sets the stop signal |
+| `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output` |
+
+Status + warning surfaces:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `fs-warning` | amber banner | File System Access unsupported (non-Chromium); honest degrade |
+| `ref-warnings` | amber paragraph | references missing for one or more sources |
+| `batch-busy` | fixed overlay | present only while a batch runs; message inside (RULE 5) |
+| `batch-toast` | bottom toast | green/rose; text is the assertion target (RULE 2, RULE 4) |
+
+PresetBar — `preset-bar` panel:
+
+| Test id | Control | Range / values |
+|---|---|---|
+| `preset-name` | preset name text input | current preset label |
+| `preset-save` | button `Save` | persists under `name.trim() || preset.name` |
+| `preset-list` | preset `<select>` | list of saved presets; first option is the `Load preset…` placeholder |
+| `preset-delete` | button `Delete` | removes preset by trimmed name |
+| `batch-padding` | range 0–25 | per-side padding %, shared with sheets |
+| `batch-size` | select | 0 (auto) / 128 / 256 / 512 / 1024 / 2048 |
+| `batch-transparent` | checkbox | transparent background on/off |
+| `batch-ignore` | comma list | directories/files skipped by the walk |
+
+Review window (scan table) — `scan-table` panel:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
+| `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
+| `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
+
+Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
+the data `relPath`, so tests should build handles from the scanned entry.
 
 ## J. Handles still needed (to be added on demand)
 
@@ -102,6 +160,8 @@ When a test needs a handle that is not listed here, add the `data-testid` to
 | `sheet-row-{id}` | sheet list rows | first test that selects a sheet by click |
 | `icon-card-{n}` / `icon-copy-{n}` / `icon-save-{n}` | result grid cards | first test of per-icon export |
 | `empty-result-note` | "No icons selected…" paragraph | empty-state assertions |
+| `row-status-{relPath}` | scan table status cell | first test asserting per-row status text |
+| `ref-warn-{relPath}` | per-row missing-reference note | first test of per-row warning detail |
 
 Nothing fetches these yet — they are the discovery list, kept honest like the
 source doc's "Missing Selectors" section.

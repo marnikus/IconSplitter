@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 import { analyze, detect, type Analysis, type Box } from "./lib/detect";
 import { canvasToBlob, cropRect, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
+import { download, loadImage } from "./lib/dom";
 
 interface Sheet {
   id: string;
@@ -31,26 +32,6 @@ const checker =
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const sleep = (ms = 0) => new Promise((r) => setTimeout(r, ms));
-
-function loadImage(url: string) {
-  return new Promise<HTMLImageElement>((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = () => rej(new Error("Could not read image"));
-    i.src = url;
-  });
-}
-
-function download(blob: Blob, name: string) {
-  const u = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = u;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(u), 2000);
-}
 
 export default function App() {
   const [sheets, setSheets] = useState<Sheet[]>([]);

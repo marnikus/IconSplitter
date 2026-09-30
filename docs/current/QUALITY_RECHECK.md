@@ -77,3 +77,55 @@ must meet the hard lines (LOC ≤ 30, params ≤ 4, CC ≤ 10, nesting ≤ 4).
   `docs/archive/<date>-app-split/` when that happens)
 * `detect()` at cc 32 — auto-radius sweep and reading-order sort are separable
   concepts (`chooseAutoRadius`, `orderBoxesByReading`), extract on touch
+
+---
+
+# Quality re-check — 2026-10-01 (batch processing feature, TDD)
+
+Second re-check: the batch-processing feature shipped (design:
+`docs/archive/2026-10-01-batch-processing/design.md`), written test-first in
+10 TDD cycles. 17 new source files, 10 new test files; Sheets-mode code was
+not touched except `App` shrinking behind the new mode shell.
+
+## What changed
+
+* `src/lib/` +6: `naming.ts`, `scan.ts`, `statefile.ts`, `presets.ts`,
+  `output.ts`, `fs.ts`, `batchsplit.ts`, `dom.ts` (8 new lib files)
+* `src/batch/` +9: `store.ts`, `process.ts`, `statewrite.ts`, `picker.ts`,
+  `useBatch.ts` (composed of 4 sub-hooks), `BatchPanel.tsx`, `ScanTable.tsx`,
+  `PresetBar.tsx`
+* `src/ui/Workbench.tsx` — new mode shell (tabs); `src/main.tsx` renders it
+* `tests/` +10 files incl. `tests/helpers/fakefs.ts` (in-memory FS fakes)
+* RULE 16.5 honoured: `App.tsx` was NOT grown — the tab switch lives outside it
+
+## The numbers (measured, not estimated)
+
+| File | Lines | Functions | Gate state |
+|---|---:|---:|---|
+| `src/App.tsx` | 588 | 70 | LEGACY held — App 552 LOC, cc 14; two anonymous handlers 36/45 LOC |
+| `src/lib/detect.ts` | 307 | 15 | LEGACY held — analyze 92/cc 11, label 42/cc 14/nest 5, detect 97/cc 32 |
+| `src/lib/render.ts` | 106 | 8 | LEGACY held — renderIcon 74 LOC, 7 params, cc 9 |
+| 17 new batch/shell files | ≤ 184 each | — | all `[OK]` — no violations |
+
+* Tests: **68 passed** (14 files; was 17 tests / 4 files)
+* Coverage `src/lib`: **lines 94.76%, branches 90.4%** (threshold lines ≥ 80%;
+  drop vs 2026-09-30 is `dom.ts` browser-lane code, untestable in vitest)
+* Lanes: tsc ✓ · eslint 0 errors / 8 legacy warnings · gate strict run fails
+  only the 3 baseline-held files · `--changed --allow-legacy` **GATE PASSED** ·
+  build ✓
+* `dist/index.html` single-file build: 374.79 kB (gzip 113.04 kB)
+
+## Baseline decision
+
+**Not re-recorded.** The only legacy-file delta is `App.tsx` shrinking
+(606 → 588 lines), which the ratchet already permits (shrink never fails).
+`detect.ts` and `render.ts` are unchanged. Every new file passes the hard
+lines standalone. Re-recording would only risk cementing values; there is
+nothing to grandfather.
+
+## Known debt carried
+
+Same two items as 2026-09-30 (`App` split on first functional touch;
+`detect()` cc 32 extraction). No new debt accepted — all batch code is
+gate-clean at introduction, including RULE 18 (no file > 300 lines, no function
+> 30 LOC, context objects instead of >4 params).

@@ -4,6 +4,14 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
+It has two modes:
+
+* **Single sheets** — the original workflow: upload sheets, review detection,
+  export icons.
+* **Batch folders** — point the app at a folder tree of `*_AI` sheets and let
+  it scan, review, split and write everything in one pass, preserving your
+  folder hierarchy (see below). Batch mode requires **Chrome or Edge**.
+
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
 modern browser — no server, no Python, no installation required.
@@ -16,7 +24,7 @@ modern browser — no server, no Python, no installation required.
 |------|---------|-----------------|
 | [Node.js](https://nodejs.org/) (LTS) | 20.19+ or 22.12+ | https://nodejs.org/ |
 | npm | comes bundled with Node.js | — |
-| A modern browser | Chrome / Edge / Firefox | — |
+| A modern browser | Chrome / Edge / Firefox | batch mode needs Chrome or Edge |
 | [PyCharm](https://www.jetbrains.com/pycharm/) (optional) | any recent version | only needed if you want to edit the code |
 
 > This is **not** a Python project — Node.js is the only runtime needed.
@@ -90,6 +98,39 @@ npm run dev
 
 ---
 
+## Batch mode (Chrome / Edge only)
+
+Switch to the **Batch folders** tab to process a whole directory tree of
+sheets in one go.
+
+1. **Choose source folder** — the app walks the folder recursively, keeps your
+   relative paths, and collects every `*_AI` / `*_AI_<n>` image. Each source
+   gets a status file `<base>.json` next to its reference image, tracking
+   `unprocessed / processed / changed / missing / deleted` per record.
+2. **Review** — a table shows thumbnails, filenames, relative paths and
+   status. Tick rows, use **Select All**, or **copy a file path** when you'd
+   rather open the file yourself (browsers can't launch Explorer directly).
+   Missing reference files are called out up front.
+3. **Presets** — every split setting (padding, size, transparency, ignore
+   list, destination) is saved per named preset; the last-used preset and the
+   chosen folders are remembered for the next session.
+4. **▶ Split selected** — only `*_AI` images are split; their reference image
+   is copied untouched into every output sub-folder. Results land in
+   `<destination>/YYYY-MM/YYYY-MM-DD_HH-mm-ss/<your-folder-layout>/…`, one
+   `split_NN/` folder per source. The default destination is
+   `<source>/_split_output`, or pick a custom folder.
+
+Nothing is ever overwritten: if an output name already exists, a `_v02`,
+`_v03`, … suffix is used instead, and existing files in your source tree stay
+untouched. The app re-scans before every run, so files added, changed or
+removed between runs are detected and reported.
+
+> Batch mode uses the browser's File System Access API, which today only
+> Chrome and Edge support. Firefox/Safari users can still use Single sheets
+> mode (ZIP export).
+
+---
+
 ## Project rules (code quality)
 
 Every change to this codebase must follow the code-quality rules in
@@ -117,10 +158,13 @@ IconSplitter/
 ├── vite.config.ts           # Vite config (single-file build enabled)
 ├── src/
 │   ├── main.tsx             # React bootstrap
-│   ├── App.tsx              # Main UI
-│   ├── lib/detect.ts        # Icon detection on the sheet
+│   ├── App.tsx              # Single-sheets UI
+│   ├── ui/Workbench.tsx     # Mode shell — Single sheets / Batch folders tabs
+│   ├── batch/               # Batch mode (store, process, presets, UI)
+│   ├── lib/                 # Pure logic: detect, render, naming, scan, fs,
+│   │                        # statefile, presets, output plan, batchsplit
 │   └── lib/render.ts        # Cropping / resizing / export logic
-├── tests/                   # Vitest — real detect/render logic (RULE 8)
+├── tests/                   # Vitest — real detect/render/batch logic (RULE 8)
 ├── tools/                   # RULE 16 quality gate + pre-push check
 ├── docs/                    # Rules + verification docs (see docs/README.md)
 ├── install_dependencies.bat # Windows: npm install
