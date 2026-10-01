@@ -18,7 +18,7 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selection" | "selectionV2";
+export type TabId = "sheets" | "batch" | "selection" | "selectionV2" | "generateSvg";
 
 export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2"];
 

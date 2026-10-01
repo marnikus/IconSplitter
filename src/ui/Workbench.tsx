@@ -50,6 +50,7 @@ function Shell() {
       {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
       {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
       {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
+      {tab === "generateSvg" && <div className="v2-shell px-4 py-3"><GenerateSvgPanel /></div>}
     </div>
   );
 }
