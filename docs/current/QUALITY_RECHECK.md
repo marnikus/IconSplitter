@@ -668,3 +668,69 @@ version", which is what the preview and Copy both read.
   the version Copy puts on the clipboard, a truncated file shows "Preview
   failed / not well-formed XML", a source with no SVG shows "No SVG".
 * `tests/svg_io.test.ts` — one scan bumps `rootToken` once.
+
+---
+
+# Quality re-check — 2026-10-01 (preview colour fidelity)
+
+Correction after the previous round: *"The app also do not change Lines or any
+color inside SVG at all. on screenshot see as icon SVG has white lines but in
+reality it black."* Root cause, the decision and the rejected alternatives:
+[`docs/archive/2026-10-01-svg-preview-rendering/design.md`](../archive/2026-10-01-svg-preview-rendering/design.md) (D4, corrected).
+
+## What changed
+
+`src/lib/svgpreview.ts` — `PREVIEW_INK` is now `#000000`, the colour a standalone
+SVG resolves `currentColor` to, and the default moved into `PREVIEW_CSS`
+(`svg{…;color:#000000}`), i.e. into the stylesheet that rides in the shadow root
+next to the artwork instead of into the artwork's own `style` attribute.
+`fittedStyle()` no longer injects a colour at all: it keeps the author's
+declarations minus `width`/`height` and adds `display:block`, so a document
+saved with `style="color:#ff0000"` keeps it. The document the app serializes now
+contains no colour the app chose. The Bg frame colour stays exactly as it was —
+it is a wrapper the user picks, never an edit to the document — and a
+`currentColor` icon on a dark frame is still legible through the WCAG contrast
+outline on the frame, not through a recolour of the artwork.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 57 files / 517 | **57 files / 517** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.52 / 91.79 / 95.75 / 97.20 | **96.85 / 92.68 / 96.22 / 97.47** |
+| jscpd `src --min-tokens 60` | 11 clones | 11 clones (unchanged) |
+| build `dist/index.html` | 582.70 kB / gzip 171.42 kB | **601.97 kB / gzip 176.88 kB** |
+
+`bash tools/pre_push_check.sh` → **ALL LANES PASSED** (6/6).
+`npx knip` still cannot run in this sandbox (`oxc-parser` fails to allocate its
+`ArrayBuffer`, on `HEAD` as well) — the dead-code lane stays unverified here.
+
+## RULE 18 / RULE 16 re-check
+
+Changed production files: `svgpreview.ts` 252, `SvgPreview.tsx` 73,
+`SvgThumbs.tsx` 102 — all inside the 150–300-line ideal or the module's single
+responsibility, none ≥ 300. The gate reports every function inside the RULE 16
+caps (30 lines / 4 params / CC 10 / nesting 4) and no baseline entry grew.
+
+Baseline: **untouched** — `tools/quality_baseline.json` is not re-recorded; the
+change only removes an injected declaration, so the ratchet does not move.
+
+Context files stay above the RULE 18 200-line ideal (`SYSTEM_OF_RECORD.md` 660,
+this log 732). That is the debt already recorded on 2026-09-30 and re-affirmed
+by RULE 17 — one current doc per app, with design detail pushed to
+`docs/archive/`. No new doc was added for this correction.
+
+## Regression tests (RULE 8 — each fails if the fix is deleted)
+
+* `tests/svg_preview.test.ts` — the default ink is `#000000`, the fitted style
+  injects no `color:`, explicit `fill`/`stroke` values survive byte-for-byte, an
+  author's own `style="color:#ff0000"` wins over any app default, and the
+  serialized document carries no app-chosen colour.
+* `tests/svg_ui.test.tsx` — the frame's shadow-root stylesheet carries the
+  default ink while the document's own `style` has none, so the newest SVG
+  renders inline, fitted and centred with its own colours.
+* `tests/svg_bg.test.ts` — unchanged and still green: the Bg colour frames the
+  preview and changes nothing else.

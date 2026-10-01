@@ -7,8 +7,10 @@
 //
 // Defects this file exists for (docs/archive/2026-10-01-svg-preview-rendering):
 // a document without xmlns, or with an XML prolog, copied as valid code and
-// painted nothing; a document with no intrinsic size painted off-centre; a
-// stroke-only icon painted black on a near-black frame.
+// painted nothing; a document with no intrinsic size painted off-centre. The
+// preview never recolours the artwork: `currentColor` resolves exactly as it
+// does in a standalone document (the UA default), and a dark frame is answered
+// by the frame's contrast outline, never by a different ink.
 
 export interface SvgPreview {
   ok: boolean;
@@ -20,13 +22,20 @@ export interface SvgPreview {
   error: string | null;
 }
 
-/** Ink for `currentColor`: an <svg> has no inherited colour of its own. */
-export const PREVIEW_INK = "#eaf0ff";
+/**
+ * `currentColor` in a standalone SVG document resolves to the UA default —
+ * black. The preview paints it that way so the artwork keeps the colours it
+ * was saved with: the app never recolours a document (prompt §"the app does
+ * not change lines or any colour inside the SVG"). Visibility on a dark frame
+ * is the frame's contrast outline, not a different ink.
+ */
+export const PREVIEW_INK = "#000000";
 
 /** Scoped to the preview's shadow root, so it cannot style the app. */
 export const PREVIEW_CSS = "<style>"
   + ":host{display:block}"
-  + "svg{display:block;width:100%;height:100%;overflow:hidden}"
+  + "svg{display:block;width:100%;height:100%;overflow:hidden"
+  + `;color:${PREVIEW_INK}}`
   + "</style>";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -154,7 +163,9 @@ function usesXlink(root: Element): boolean {
 /** Keeps the author's declarations, minus any that would fight the fit. */
 function fittedStyle(style: string | null): string {
   const kept = (style ?? "").split(";").filter((decl) => decl.trim() !== "" && !WIDTH_HEIGHT.test(decl));
-  return [...kept, `color:${PREVIEW_INK}`, "display:block"].join(";");
+  // No colour is added here: whatever the document declares is what it is
+  // painted with, and the default lives in the shadow root's stylesheet.
+  return [...kept, "display:block"].join(";");
 }
 
 /** Removes what can execute, fetch from the network, or escape the SVG. */

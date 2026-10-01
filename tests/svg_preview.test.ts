@@ -75,12 +75,25 @@ describe("buildSvgPreview — fit, centre and stroke width", () => {
     }
   });
 
-  it("gives currentColor a visible ink and leaves explicit colours alone (D4)", () => {
+  it("never recolours the artwork: currentColor resolves as a standalone document does (D4)", () => {
+    // The saved document decides its own colours. A standalone SVG resolves
+    // currentColor to the UA default (black), so that is what the preview
+    // paints — never a colour the app picked for it.
+    expect(PREVIEW_INK).toBe("#000000");
     const p = preview(STROKE_ONLY);
     expect(p.html).toContain(`stroke="currentColor"`);
-    expect(p.html).toContain(`color:${PREVIEW_INK}`);
+    // Nothing is injected into the document's own style attribute.
+    expect(p.html).not.toContain("color:");
+    // Explicit colours are carried through untouched.
     const white = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24"><path fill="#ffffff" d="M2 2h20v20H2z"/></svg>`);
     expect(white.html).toContain(`fill="#ffffff"`);
+    const black = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24"><path stroke="#000000" d="M2 2h20v20H2z"/></svg>`);
+    expect(black.html).toContain(`stroke="#000000"`);
+    // An author's own colour declaration survives, and is not overridden.
+    const own = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24" style="color:#ff0000;opacity:.9"><path stroke="currentColor" d="M2 2h20v20H2z"/></svg>`);
+    expect(own.html).toContain("color:#ff0000");
+    expect(own.html).not.toContain(`color:${PREVIEW_INK}`);
+    expect(own.html).toContain("opacity:.9");
   });
 
   it("drops the root's own width/height so the fit cannot be overridden", () => {

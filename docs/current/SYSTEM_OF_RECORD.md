@@ -152,9 +152,10 @@ that makes a network call, only when the user asks it to):
   handlers, no remote URLs, no `<foreignObject>`), fitted (`viewBox` from the
   declared box or from px width/height, `width/height="100%"`,
   `preserveAspectRatio="xMidYMid meet"` so strokes scale uniformly and the art
-  is centred), given an ink for `currentColor`, id-scoped per document, and
-  rendered INLINE inside its own open shadow root. The saved file is never
-  modified. The row's preview and its Copy/Code actions read ONE target
+  is centred), `currentColor` resolved the way a standalone document resolves it
+  (the UA default, black — the app never recolours the artwork), id-scoped per
+  document, and rendered INLINE inside its own open shadow root. The saved file
+  is never modified. The row's preview and its Copy/Code actions read ONE target
   (`previewTargetOf` in `src/svg/rowmodel.ts`), so they can never show
   different versions, and `rootToken` (bumped on every pick and scan) forces
   every row to re-read the file it shows. Empty (no SVG yet) and broken
@@ -418,7 +419,9 @@ and `data-testid` handles):
 * `svg_preview.test.ts` — the preview pipeline end to end: a document without
   `xmlns`, an XML prolog / doctype / comment, an unbound `xlink` prefix, px
   `width`/`height` with no `viewBox`, `%` sizes with no box, varied boxes
-  (24×24 / 64×32 / 512×128 / negative origin), `currentColor` ink, an author
+  (24×24 / 64×32 / 512×128 / negative origin), `currentColor` resolved as a
+  standalone document resolves it (never an app-chosen ink — explicit colours
+  and the author's own `color:` survive byte-for-byte), an author
   `style` that would fight the fit, script/`on*`/`javascript:`/remote-URL
   removal, safe vs importing `@import`/`url()` stylesheets, id scoping (in
   markup and inside `<style>`), and every failure reason (empty ≠ broken);

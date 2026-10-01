@@ -72,7 +72,7 @@ text → parse (real DOMParser, image/svg+xml)
      → repair namespaces when the first parse fails
      → require <svg> root + a usable box (viewBox, else px width/height)
      → sanitize (drop unsafe elements/attributes)
-     → normalize (xmlns, 100%×100%, xMidYMid meet, ink colour, scoped ids)
+     → normalize (xmlns, 100%×100%, xMidYMid meet, scoped ids)
      → serialize                              → { ok, html, viewBox, ratio, error }
 ```
 
@@ -88,8 +88,13 @@ text → parse (real DOMParser, image/svg+xml)
   artwork scales **uniformly** (strokes keep their proportions), fits inside the
   frame and is centred on both axes. Any `width`/`height` in the root's own
   `style` is dropped so it cannot override the fit.
-* **Ink.** The root gets `color:#eaf0ff`, so `currentColor` strokes/fills
-  resolve to a visible light ink (D4) while explicit colours are untouched.
+* **Ink (corrected 2026-10-01).** The first implementation set
+  `color:#eaf0ff` on the root, which made a `currentColor` icon paint WHITE
+  lines when the saved document is black — the app was recolouring the artwork.
+  The preview now paints `currentColor` the way a standalone SVG document
+  resolves it (the UA default, black) from the shadow root's own stylesheet,
+  and nothing is injected into the document's style. Visibility on a dark
+  frame is the frame's contrast outline, never a different ink.
 * **Scoped ids.** Every `id` is prefixed (deterministically, from a hash of the
   document) together with `url(#id)`, `href="#id"` and `#id` selectors inside
   `<style>`. Many inline previews share one document; without this a row's
@@ -160,7 +165,7 @@ a defect above:
 | only `width`/`height` px, no `viewBox` | viewBox derived (D3) |
 | `width="100%"` and no dimensions | honest error, not a broken box |
 | varied boxes (24×24, 64×32, 512×128) | `ratio` + `xMidYMid meet` + 100% fit |
-| stroke-only `currentColor` | ink colour set, strokes visible (D4) |
+| stroke-only `currentColor` | UA-default black, strokes visible on a light frame; the contrast outline covers a dark one (D4) |
 | own background rect / transparent | markup preserved |
 | `<script>`, `onload`, `javascript:`, remote `href`, remote `url()` | removed |
 | `<style>` with `@import` | element dropped; a safe `.cls{}` style is kept |

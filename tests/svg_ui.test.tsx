@@ -7,6 +7,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
+import { PREVIEW_INK } from "../src/lib/svgpreview";
 import { saveCatalog } from "../src/svg/catalog";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
@@ -551,10 +552,13 @@ describe("SVG row preview", () => {
     expect(svg?.getAttribute("viewBox")).toBe("0 0 64 32");
     expect(frame(FOG)?.dataset.version).toBe("2");
     // the frame's own CSS travels with the document, scoped to the shadow root
-    expect(frame(FOG)?.shadowRoot?.querySelector("style")).not.toBeNull();
-    // a stroke-only icon paints with currentColor, so the preview must give it
-    // an ink — without one it drew black on a near-black frame (D4).
-    expect(svg?.getAttribute("style") ?? "").toContain("color:");
+    const style = frame(FOG)?.shadowRoot?.querySelector("style");
+    expect(style).not.toBeNull();
+    expect(style?.textContent).toContain(`color:${PREVIEW_INK}`);
+    // ...and nothing is written into the document's own style: the artwork
+    // keeps the colours it was saved with (a currentColor icon paints the
+    // UA-default black, not a colour the app picked for it).
+    expect(svg?.getAttribute("style") ?? "").not.toContain("color:");
   });
 
   it("previews and copies the SAME version", async () => {
