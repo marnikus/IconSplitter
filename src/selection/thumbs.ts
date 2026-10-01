@@ -1,25 +1,24 @@
-// thumbs.ts — object-URL thumbnail resolver for Selection rows/panes.
-// Caches URLs per relPath for the session (same idiom as batch ScanTable).
+// thumbs.ts — object-URL resolver for Selection rows/panes (RULE 20).
+// Caches one URL per relPath for the session so dual thumbnails per row
+// resolve each side independently (same idiom as batch ScanTable).
 
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import type { ReviewPair } from "../lib/pairing";
 import { resolveFile } from "./handles";
 
-export type ThumbFor = (p: ReviewPair) => Promise<string>;
+export type UrlFor = (relPath: string) => Promise<string>;
 
-export function useThumbFor(rootRef: { current: DirHandleLike | null }): ThumbFor {
+/** Cached resolver shared by every list row (both sides). */
+export function useUrlFor(rootRef: { current: DirHandleLike | null }): UrlFor {
   const cache = useRef(new Map<string, string>());
-  return useCallback(async (p: ReviewPair) => {
-    const side = p.source ?? p.ai;
-    if (!side) throw new Error("pair has no files");
-    const hit = cache.current.get(side.relPath);
+  return useCallback(async (relPath: string) => {
+    const hit = cache.current.get(relPath);
     if (hit) return hit;
     const root = rootRef.current;
-    const fh = root ? await resolveFile(root, side.relPath) : null;
+    const fh = root ? await resolveFile(root, relPath) : null;
     if (!fh) throw new Error("file gone");
     const url = URL.createObjectURL(await fh.getFile());
-    cache.current.set(side.relPath, url);
+    cache.current.set(relPath, url);
     return url;
   }, [rootRef]);
 }

@@ -3,7 +3,7 @@
 // free-text search. A pair anchors on BOTH created and generated timestamps:
 // it passes a range when either of them falls inside it (spec §3).
 
-import type { ReviewPair } from "./pairing";
+import { attentionInfo, type ReviewPair } from "./pairing";
 
 export type Decision = "pending" | "approved" | "declined";
 
@@ -20,7 +20,7 @@ export type DateFilter =
 
 export interface ListFilter {
   date: DateFilter;
-  status: "all" | Decision;
+  status: "all" | Decision | "missing";
   search: string;
 }
 
@@ -44,7 +44,9 @@ function anchors(p: ViewPair): number[] {
 }
 
 function inStatus(p: ViewPair, s: ListFilter["status"]): boolean {
-  return s === "all" || p.decision === s;
+  if (s === "all") return true;
+  if (s === "missing") return attentionInfo(p) !== null;
+  return p.decision === s;
 }
 
 function inSearch(p: ViewPair, q: string): boolean {

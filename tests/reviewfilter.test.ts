@@ -52,6 +52,12 @@ describe("applyFilters", () => {
     expect(applyFilters(PAIRS, { ...ALL, status: "pending" }).map((p) => p.pairId)).toEqual(["p1"]);
   });
 
+  it("missing status keeps pairs lacking either side, whatever the decision", () => {
+    const srcless: ViewPair = { ...pair("p4", 1, 2), source: null }; // original missing
+    const got = applyFilters([...PAIRS, srcless], { ...ALL, status: "missing" }).map((p) => p.pairId);
+    expect(got.sort()).toEqual(["p3", "p4"]); // p3 lacks its AI result
+  });
+
   it("search matches filename or folder, case-insensitive", () => {
     expect(applyFilters(PAIRS, { ...ALL, search: "P1" }).map((p) => p.pairId)).toEqual(["p1"]);
     expect(applyFilters(PAIRS, { ...ALL, search: "b/" }).map((p) => p.pairId)).toEqual(["p3"]);

@@ -103,8 +103,9 @@ doc in the same change (RULE 17).
 
 | Test id | Visible text | Notes |
 |---|---|---|
-| `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with `tab-batch` |
+| `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time |
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
+| `tab-selection` | `Selection` | mounts `SelectionPanel`; appears after `tab-batch` |
 
 Semantic fallback: button role + visible text.
 
@@ -153,7 +154,7 @@ Review window (scan table) — `scan-table` panel:
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.
 
-## M. Selection review — `src/selection/*` (verified 2026-10-01)
+## M. Selection review — `src/selection/*` (verified 2026-10-01, list-review update)
 
 Header + status:
 
@@ -167,19 +168,36 @@ Header + status:
 
 Filter bar (`sel-filterbar`): `sel-date-all` / `sel-date-month` / `sel-date-custom`,
 `sel-month` (month input), `sel-from` / `sel-to` (datetime-local, inclusive),
-`sel-status`, `sel-sort` (date/status/name/path), `sel-dir` (newest/oldest),
+`sel-status-filter` (all/pending/approved/declined/**missing**),
+`sel-sort` (date/status/name/path), `sel-dir` (newest/oldest),
 `sel-clear`, `sel-shown` ("Showing N pairs").
 
-Review list (`sel-list`): `sel-search` (Ctrl+K focuses), `sel-attention`
-("N NEED ATTENTION"), `sel-expand` / `sel-collapse`, `sel-row-{pairId}`
-(rows carry text status chips — never colour alone), `sel-empty`,
-`sel-clear-empty`.
+Toolbar (`sel-toolbar`): `sel-view-compare` / `sel-view-list` (layout toggle,
+aria-pressed), `sel-thumbzoom` (range 48–240, aria-label "Thumbnail maximum
+height") + `sel-thumbzoom-value` ("128 px"), `sel-autonext` (next-pending
+auto-advance), `sel-select-all` / `sel-deselect-all`,
+`sel-selected-count` ("Selected: N (+hidden)"), `sel-approve-selected` /
+`sel-decline-selected` (disabled unless checked ∩ visible),
+`sel-approve-visible` / `sel-decline-visible` (disabled when the list is
+empty).
+
+Review list (`sel-list`): `sel-search` (Ctrl+K focuses), `sel-attention`,
+`sel-expand` / `sel-collapse`, `sel-select-all-check` (tri-state header
+checkbox), `sel-row-{pairId}` (row), `sel-row-main-{pairId}` (activate
+button, `aria-current` marks the active row), `sel-check-{pairId}` (row
+checkbox), `sel-row-approve-{pairId}` / `sel-row-decline-{pairId}` /
+`sel-row-opensrc-{pairId}` / `sel-row-openai-{pairId}` (wide layout only),
+`sel-empty`, `sel-clear-empty`. Rows carry text status chips — never colour
+alone.
 
 Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (1:1 fit/full,
 Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,
-`sel-autonext`, `sel-open-src` / `sel-open-ai` (copy-path fallback),
-`sel-missing` (absent side / decode failure), `sel-discovery`
-(created/generated line).
+`sel-open-src` / `sel-open-ai` (copy-path fallback), `sel-missing`
+(absent side / decode failure), `sel-discovery` (created/generated line).
+
+Bulk confirmation (`sel-bulk-confirm` dialog): `sel-bulk-apply`,
+`sel-bulk-cancel`; the dialog text carries affected / missing / changed /
+hidden-skipped counts (the assertion target).
 
 Surfaces: `sel-writewarn` + `sel-retry` (atomic-write failure banner),
 `sel-corrupt`, `sel-toast`, `sel-busy`, `sel-footer` with `sel-rescan-age`,

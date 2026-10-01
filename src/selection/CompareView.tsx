@@ -17,8 +17,7 @@ export interface CompareProps {
   rootRef: { current: DirHandleLike | null };
   zoom: "fit" | "full";
   sync: boolean;
-  autoNext: boolean;
-  patch: (p: { zoom?: "fit" | "full"; sync?: boolean; autoNext?: boolean }) => void;
+  patch: (p: { zoom?: "fit" | "full"; sync?: boolean }) => void;
   decide: (id: string, d: "approved" | "declined") => void;
   copyPath: (relPath: string) => void;
 }
@@ -62,9 +61,6 @@ function Header({ pair, meta, p }: { pair: ViewPair; meta: ReturnType<typeof sta
           onClick={() => p.decide(pair.pairId, "declined")}>✕ Decline</button>
         <button data-testid="sel-approve" className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 sel-focus"
           onClick={() => p.decide(pair.pairId, "approved")}>✓ Approve</button>
-        <label className="flex items-center gap-1 text-xs text-slate-400">Next pending
-          <input data-testid="sel-autonext" type="checkbox" className="accent-indigo-500" checked={p.autoNext} onChange={(e) => p.patch({ autoNext: e.target.checked })} />
-        </label>
       </div>
     </div>
   );

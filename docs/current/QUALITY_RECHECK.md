@@ -167,3 +167,57 @@ lines standalone (largest new file 153 LOC).
 ## Known debt carried
 
 Same two legacy items; nothing new.
+
+---
+
+# Quality re-check — 2026-10-01 (Selection: list review, multi-select, bulk)
+
+Second re-check: Selection mode gained the List review layout, dual
+thumbnails with a zoom slider, multi-selection and bulk approve/decline
+(`docs/archive/2026-10-01-list-review/design.md`). Full lane run + review
+lanes.
+
+## What changed
+
+* `src/lib/` +3: `reviewselect.ts` (multi-select model), `reviewthumb.ts`
+  (thumbnail geometry + validated persistence), `reviewbulk.ts` (bulk scope +
+  summary + single result message); `reviewfilter.ts` gained the "missing"
+  status filter
+* `src/selection/` +2: `PairRow.tsx` (row: checkbox, dual labelled thumbs,
+  chips, actions), `SelectionToolbar.tsx` (layout toggle, zoom slider,
+  selection + bulk controls); `state.ts` gained `view`/`thumbH`/`checked`,
+  renamed `selectedId`→`activeId`, added `withDecisions` bulk reducer;
+  `useSelection.ts` gained bulk/selection/thumbH actions; `thumbs.ts`
+  resolves per side
+* Legacy hotspots untouched (App.tsx 588 lines, detect.ts unchanged).
+* Fixed a duplicate `sel-status` handle (filter select → `sel-status-filter`)
+  that made DOM assertions vacuous.
+
+## The numbers (measured, not estimated)
+
+* Tests: **168 passed** (27 files; was 123 / 23) — +3 pure modules, +29
+  suite cases incl. 10 DOM cases (view switch, slider bounds/persistence,
+  tri-state select-all, bulk confirm + apply, bulk-save failure counts,
+  active-row A/D/arrows)
+* Coverage `src/lib`: **lines 96.52%** (threshold ≥ 80%); the three new
+  modules are at 100%
+* Lanes: tsc ✓ · eslint 0 errors (8 warnings, all pre-existing legacy
+  App/detect) · `--changed --allow-legacy` **GATE PASSED** · build ✓
+  (`dist/index.html` 422.28 kB / gzip 125.27 kB)
+* Review lanes: jscpd 0 clones (32 files); knip could not run — its
+  oxc-parser crashes on allocation in this sandbox (tooling, not code)
+* RULE 18 ideal sizes in the touched module: largest fn 30 LOC
+  (`BulkButtons`, declarative JSX payload), max cc 5, max nesting 1, max
+  params 1 (domain prop objects), largest file 238 LOC (`SelectionPanel`),
+  module 14 files — every deviation from the 4–20 line sweet spot is JSX
+  markup, no second responsibility behind it
+
+## Baseline decision
+
+**Not re-recorded** — legacy values unchanged; all new/changed files pass the
+hard lines standalone (first-run violations, `BulkConfirmDialog` 31 LOC, were
+extracted to `ConfirmNotes` until the gate passed).
+
+## Known debt carried
+
+Same two legacy items (App.tsx complexity, detect.ts CC/nesting); nothing new.

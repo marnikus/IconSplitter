@@ -1,7 +1,7 @@
 // selection_state.test.ts — RULE 8/24: pure reducers behind useSelection.
 import { describe, expect, it } from "vitest";
 import {
-  applyScan, counters, initialSelState, nextPendingId, recordsFromViews, withDecision,
+  applyScan, counters, initialSelState, nextPendingId, recordsFromViews, withDecision, withDecisions,
 } from "../src/selection/state";
 import type { ReviewPair } from "../src/lib/pairing";
 import type { ReviewRecord } from "../src/lib/reviewfile";
@@ -26,7 +26,7 @@ describe("applyScan", () => {
     const s1 = applyScan(s0, [pair("p1", 1, 10), pair("p2", 2, 20)], { records: [REC("p1", "approved")], corrupt: false }, 1000);
     expect(s1.pairs.find((p) => p.pairId === "p1")?.decision).toBe("approved");
     expect(s1.pairs.find((p) => p.pairId === "p2")?.decision).toBe("pending");
-    expect(s1.selectedId).toBe(s1.pairs[0].pairId);
+    expect(s1.activeId).toBe(s1.pairs[0].pairId);
     expect(s1.lastRescanAt).toBe(1000);
     expect(s1.lastDiff.added).toBe(2);
   });
@@ -73,6 +73,52 @@ describe("withDecision + recordsFromViews", () => {
     const s1 = applyScan(initialSelState(), [pair("p1", 1, 10)], { records: [], corrupt: false }, 1);
     const s2 = withDecision(s1, "nope", "approved", "t");
     expect(s2.pairs[0].decision).toBe("pending");
+  });
+});
+
+describe("withDecisions (bulk)", () => {
+  const three = () => applyScan(
+    initialSelState(),
+    [pair("p1", 1, 10), pair("p2", 2, 20), pair("p3", 3, 30)],
+    { records: [REC("p1", "declined")], corrupt: false },
+    1,
+  );
+
+  it("applies one verdict to many pairs in a single logical operation", () => {
+    const { state, applied, skipped } = withDecisions(three(), ["p1", "p2"], "approved", "2026-10-01T12:00:00.000Z");
+    expect(applied).toBe(2);
+    expect(skipped).toEqual([]);
+    expect(state.pairs.map((p) => p.decision)).toEqual(["approved", "approved", "pending"]);
+    expect(state.pairs[0].reviewedAt).toBe("2026-10-01T12:00:00.000Z"); // change decision wins
+  });
+
+  it("reports ids that are no longer listed instead of failing silently", () => {
+    const { state, applied, skipped } = withDecisions(three(), ["p2", "ghost"], "declined", "t");
+    expect(applied).toBe(1);
+    expect(skipped).toEqual(["ghost"]);
+    expect(state.pairs.find((p) => p.pairId === "p2")?.decision).toBe("declined");
+  });
+
+  it("empty outcome leaves state untouched", () => {
+    const s = three();
+    expect(withDecisions(s, ["ghost"], "approved", "t").state).toBe(s);
+  });
+});
+
+describe("selection safety across rescan and sorting", () => {
+  it("prunes checked ids whose pairs vanished and keeps the rest", () => {
+    let s = applyScan(initialSelState(), [pair("p1", 1, 10), pair("p2", 2, 20)], { records: [], corrupt: false }, 1);
+    s = { ...s, checked: ["p1", "p2"] };
+    const s2 = applyScan(s, [pair("p2", 2, 20)], { records: [], corrupt: false }, 2);
+    expect(s2.checked).toEqual(["p2"]);
+  });
+
+  it("keeps the active row when it survives; falls back to the first pair", () => {
+    let s = applyScan(initialSelState(), [pair("p1", 1, 10), pair("p2", 2, 20)], { records: [], corrupt: false }, 1);
+    s = { ...s, activeId: "p2" };
+    expect(applyScan(s, [pair("p1", 1, 10), pair("p2", 2, 20)], { records: [], corrupt: false }, 2).activeId).toBe("p2");
+    expect(applyScan(s, [pair("p1", 1, 10)], { records: [], corrupt: false }, 3).activeId).toBe("p1");
+    expect(applyScan(s, [], { records: [], corrupt: false }, 4).activeId).toBeNull();
   });
 });
 

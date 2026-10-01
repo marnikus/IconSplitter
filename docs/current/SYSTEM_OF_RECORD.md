@@ -16,8 +16,9 @@ A browser app with three modes (top tabs, `src/ui/Workbench.tsx`):
    each into its own organised output tree beside the sources, with presets
    and per-reference JSON status tracking.
 3. **Selection** (Chrome/Edge only) — recursively scan a root, pair every
-   original with its `_AI` result, review them side by side and store an
-   approve/decline decision per pair in `review-decisions.json`.
+   original with its `_AI` result, review them in two layouts (Comparison /
+   List review) and store an approve/decline decision per pair in
+   `review-decisions.json`, individually or in bulk.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
@@ -62,19 +63,36 @@ Selection:
 * Recursive scan pairs `name.ext` with `name_AI.ext` incl. numeric tails
   (`name_AI_9_01.ext`; stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
   "AI result missing" / "Original missing", never silently dropped.
-* Review list: thumbnail, filename, relative folder, creation date, status
-  chip with text + glyph; search, month / custom-range date filters, status
-  filter, sorting by date/status/name/path in both directions, counters.
-* Comparison: side-by-side panes with preserved aspect ratio, dims / format /
-  size / path per side, 1:1 zoom with synced scrolling, hotkeys A/D/arrows/
-  Space/Ctrl+K, auto-advance to the next pending after each decision.
+* Two layouts share one filter/selection/decision pipeline: **Comparison view**
+  (side-by-side panes, dims / format / size / path per side, 1:1 zoom with
+  synced scrolling, per-side Open-in-Explorer) and **List review** (full-width
+  list, no comparison panel) where every row shows both labelled thumbnails
+  (aspect preserved, never upscaled past source pixels), filename, folder,
+  date, dimensions, status chips and row actions.
+* Thumbnail max height is a zoom slider (48–240 px, live while dragging,
+  persisted in `localStorage iconSplitter.sel.thumbH.v1`, validated on read).
+* Multi-selection (checkbox per row) is separate from review status and from
+  the active row (keyboard target). Selection survives filters/sorting by
+  pair id; "Select all" unions the visible rows, "Deselect all" clears all;
+  the header checkbox is tri-state over the visible scope. Bulk actions
+  (Approve/Decline selected or visible list) confirm first with affected /
+  missing / changed counts plus the number of hidden checked rows that will
+  be skipped, then apply in ONE operation with ONE report; a failed write
+  reports affected/unaffected counts and keeps decisions in memory (I-12).
+* Review list filters: search, month / custom-range dates, status
+  (pending/approved/declined/missing-pair), sorting by date/status/name/path
+  in both directions, counters.
+* Hotkeys A/D/arrows/Space/Ctrl+K act on the active row; "Next pending"
+  auto-advances after each decision (toggle in the toolbar); the active row
+  scrolls into view.
 * Decisions persist in `<root>/review-decisions.json` (atomic tmp-verify-
   overwrite protocol); missing file is created pending; corrupt file raises a
   warning and previous in-memory decisions are kept; write failures keep the
   change in memory with a Retry action.
 * Rescan diffs added/renamed/removed/unchanged; decisions travel across
   renames via size+mtime identity; orphan records are retained so a
-  transiently missing file never destroys a decision.
+  transiently missing file never destroys a decision; selection is pruned to
+  surviving pairs and the active row falls back to the first pair.
 * A watcher re-scans every 30 s while a root is open (toggleable).
 
 Everything runs client-side; nothing is uploaded anywhere.
@@ -167,6 +185,10 @@ Batch:
   without a stored decision is pending, always.
 * **I-14 (selection, a11y):** every status is text + glyph first; colour is
   reinforcement, never the only signal.
+* **I-15 (selection, RULE 6/10):** a bulk action touches exactly the rows its
+  scope names — checked ∩ visible for "selected", all visible for "visible";
+  hidden checked rows are reported and skipped, never silently included.
+  Selection state and review status are independent stores.
 
 ## 6. Storage map
 
@@ -178,6 +200,7 @@ Batch:
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
 | `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
 | `<root>/review-decisions.json` | selection approve/decline records | atomic write; corrupt → warn + keep memory (I-12) |
+| localStorage `iconSplitter.sel.thumbH.v1` | selection thumbnail max height (48–240) | validated on read (RULE 13) |
 | IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle | permission re-requested on restore |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
@@ -197,16 +220,16 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
-| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing, filters, sorts, status/hotkey semantics, decision records |
-| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, review UI |
+| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts`, `reviewselect.ts`, `reviewthumb.ts`, `reviewbulk.ts` | pairing, filters, sorts, status/hotkey semantics, decision records, multi-select model, thumbnail geometry, bulk planning |
+| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `useSelection.ts`, `SelectionPanel.tsx`, `SelectionToolbar.tsx`, `FilterBar.tsx`, `PairList.tsx`, `PairRow.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, both review layouts |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 23 files / 123 tests; canvas shims serve synthetic pixels,
-in-memory fakes implement the FS handle interfaces, one happy-dom smoke test
-renders the Selection panel and drives it with hotkeys):
+Exists (`tests/`, 27 files / 168 tests; canvas shims serve synthetic pixels,
+in-memory fakes implement the FS handle interfaces, two happy-dom component
+tests render the Selection panel and drive it with clicks and hotkeys):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
@@ -223,13 +246,17 @@ renders the Selection panel and drives it with hotkeys):
 * `statewrite.test.ts` — per-reference JSON write, missing retention, corrupt replace
 * `store.test.ts` — preset persistence, corrupt rejection, last-used name
 * `pairing.test.ts` — nested pairing, variants, duplicates, unpaired sides, ids
-* `reviewfilter.test.ts` — month/custom ranges (inclusive, either anchor), status+search
+* `reviewfilter.test.ts` — month/custom ranges (inclusive, either anchor), status+missing+search
 * `reviewsort.test.ts` — all sort modes × directions, status meta, hotkeys
 * `reviewfile.test.ts` — corrupt/valid parse, orphans, rename carry, diff
 * `reviewstore.test.ts` — missing/corrupt load, atomic write + failure path
-* `selection_state.test.ts` — applyScan/withDecision/nextPending/counters
+* `reviewselect.test.ts` — toggle/union, tri-state header, visible/hidden split, prune
+* `reviewthumb.test.ts` — slider bounds, aspect/no-upscale geometry, persisted height
+* `reviewbulk.test.ts` — scope plans, summary counts, single result message
+* `selection_state.test.ts` — applyScan/withDecision/withDecisions/nextPending/counters, selection pruning
 * `handles.test.ts`, `fmt.test.ts` — path resolution, formatters
 * `selection_ui.test.tsx` — DOM smoke: pick → list → A/D hotkeys → text chips
+* `selection_list_ui.test.tsx` — view switching, zoom slider + restart persistence, multi-select + tri-state header, bulk confirm/apply, bulk-save failure counts, active-row A/D/arrows
 
 Must exist before the matching change ships:
 
@@ -276,7 +303,14 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
   reference warnings, busy overlay, toast.
 * Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
-  help), FilterBar (date modes + From/To, status, sort, order, clear), review
-  list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,
-  Approve/Decline, 1:1/SYNC, per-side Open-in-Explorer), status footer
+  help), FilterBar (date modes + From/To, `sel-status-filter`, sort, order,
+  clear), toolbar (`sel-toolbar`: `sel-view-compare`/`sel-view-list`,
+  `sel-thumbzoom` + value, `sel-autonext`, `sel-select-all`,
+  `sel-deselect-all`, `sel-selected-count`, `sel-approve-selected`,
+  `sel-decline-selected`, `sel-approve-visible`, `sel-decline-visible`),
+  review list (`sel-list`, `sel-search`, `sel-select-all-check`, rows
+  `sel-row-*` with `sel-check-*`, `sel-row-main-*`, `sel-row-approve/decline/
+  opensrc/openai-*`), comparison (`sel-compare`, `sel-status`,
+  Approve/Decline, 1:1/SYNC, per-side Open-in-Explorer), bulk confirmation
+  (`sel-bulk-confirm`, `sel-bulk-apply`, `sel-bulk-cancel`), status footer
   (`sel-footer`), write/corrupt banners, busy + toast.

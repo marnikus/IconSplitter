@@ -28,9 +28,9 @@ export default function FilterBar(p: FilterBarProps) {
 function SortRow({ p, clear }: { p: FilterBarProps; clear: () => void }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <SelectBox label="Status" testid="sel-status" value={p.filter.status}
+      <SelectBox label="Status" testid="sel-status-filter" value={p.filter.status}
         onChange={(v) => p.setFilter({ ...p.filter, status: v as ListFilter["status"] })}
-        options={[["all", "All decisions"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"]]} />
+        options={[["all", "All decisions"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"], ["missing", "Missing pair"]]} />
       <SelectBox label="Sort by" testid="sel-sort" value={p.sort.by}
         onChange={(v) => p.setSort({ ...p.sort, by: v as SortState["by"] })}
         options={[["date", "Creation date"], ["status", "Review status"], ["name", "Filename"], ["path", "Folder / path"]]} />
