@@ -811,3 +811,56 @@ Baseline: **untouched** — the gate passes against the existing
   3 + 1 with 128 000, and a cut-off answer fails the item with that sentence.
 * `tests/svg_ui.test.tsx` — at a zoom past the old 116 px cap, the AI thumbnail
   and the SVG frame report the same square size (width **and** height).
+
+---
+
+# Quality re-check — 2026-10-02 (row layout at a zoomed thumbnail size)
+
+The zoom fix above exposed the next defect, reported immediately: *"UI is
+brocken no correct zoom. some overlapping of SVG part. overlating text as zoonm
+bigger"*. Root cause and fix:
+[`docs/archive/2026-10-02-svg-thumb-zoom/design.md`](../archive/2026-10-02-svg-thumb-zoom/design.md)
+(the second half).
+
+## What changed
+
+The row is a grid whose second column held **both** thumbnails at a fixed
+`220px`. Two 84px thumbnails fit, so nothing showed; the zoom fix made them
+240px each (488px), and a grid item cannot shrink its column — it overflows it,
+straight across the file / status / review text. `SvgList.tsx` now publishes the
+zoom as `--svg-thumb` on the list (the idiom `selectionv2/ReviewList.tsx` already
+uses) and the column is `calc(var(--svg-thumb) * 2 + 8px)`: two squares plus the
+gap, identical for the column header and every row, at every zoom step. The row's
+`min-height` already read the variable, so it stops being stuck at 84px.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 58 files / 534 | **59 files / 537** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.79 / 92.63 / 96.13 / 97.51 | **96.79 / 92.63 / 96.13 / 97.51** |
+| build `dist/index.html` | 603.54 kB / gzip 177.31 kB | **603.69 kB / gzip 177.37 kB** |
+
+`bash tools/pre_push_check.sh` → **ALL LANES PASSED** (6/6).
+
+## RULE 18 / RULE 16 re-check
+
+`SvgList.tsx` 68 lines / 5 functions. Adding the zoom variable pushed
+`SvgList` itself to 35 LOC, so its head became `ListHead` — the same split
+`selectionv2/ReviewList.tsx` already makes, not a line-shaving one.
+
+Baseline: **untouched** — the gate passes against the existing
+`tools/quality_baseline.json`.
+
+## Regression tests
+
+* `tests/svg_layout.test.ts` (new, 3) — the shared grid template derives the
+  thumbnails column from `--svg-thumb` (and never from a fixed width), the file
+  column stays flexible, the fixed columns stay where the design put them, and
+  the row height reads the same variable. Verified red against the old
+  `220px` column.
+* `tests/svg_ui.test.tsx` — at a 200px zoom the list publishes
+  `--svg-thumb: 200px`, and both thumbnails are the same 200px square.

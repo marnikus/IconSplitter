@@ -4,6 +4,7 @@
 // its own: filtering, sorting and the selection all come from the hook, so the
 // same rules the Selection V2 tab uses stay in one place (RULE 10).
 
+import type { CSSProperties } from "react";
 import { shownLabel } from "../lib/svglist";
 import SvgRow, { type SvgRowActions } from "./SvgRow";
 import type { SvgGenApi } from "./useSvgGen";
@@ -16,19 +17,14 @@ export interface SvgListProps {
 export default function SvgList({ g, actions }: SvgListProps) {
   const running = g.rows.filter((r) => r.running).length;
   const attention = g.rows.filter((r) => r.status === "failed" || r.corrupt).length;
+  // One variable for every row geometry: the thumbnails, the preview frame and
+  // the grid column that holds them all read --svg-thumb (the same idiom the
+  // Selection V2 list uses). Publishing it here is what lets the column follow
+  // the zoom instead of overflowing into the text columns beside it.
+  const style = { "--svg-thumb": `${g.thumb}px` } as CSSProperties;
   return (
-    <div className="svg-panel" data-testid="svg-list">
-      <header className="svg-head">
-        <div className="svg-title">
-          <h1>APPROVED SOURCES / SVG OUTPUT</h1>
-          <span data-testid="svg-row-count">{g.visible.length}</span>
-          <span>per-file sidecars</span>
-        </div>
-        <div className="svg-attention">
-          <span className="running" data-testid="svg-running-count">{running} generating</span>
-          <span className="needs" data-testid="svg-attention-count">{attention} need attention</span>
-        </div>
-      </header>
+    <div className="svg-panel" data-testid="svg-list" style={style}>
+      <ListHead shown={g.visible.length} running={running} attention={attention} />
       <Columns />
       <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
         {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={actions} />)}
@@ -41,6 +37,23 @@ export default function SvgList({ g, actions }: SvgListProps) {
         </span>
       </footer>
     </div>
+  );
+}
+
+/** The list's own head: what is shown, and the two counters that move. */
+function ListHead({ shown, running, attention }: { shown: number; running: number; attention: number }) {
+  return (
+    <header className="svg-head">
+      <div className="svg-title">
+        <h1>APPROVED SOURCES / SVG OUTPUT</h1>
+        <span data-testid="svg-row-count">{shown}</span>
+        <span>per-file sidecars</span>
+      </div>
+      <div className="svg-attention">
+        <span className="running" data-testid="svg-running-count">{running} generating</span>
+        <span className="needs" data-testid="svg-attention-count">{attention} need attention</span>
+      </div>
+    </header>
   );
 }
 

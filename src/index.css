@@ -818,10 +818,16 @@
 .svg-attention .running { color: var(--v2-purple-2); }
 .svg-attention .needs { color: var(--v2-yellow); }
 
+/* Column 2 holds BOTH thumbnails, so it must be as wide as the zoom made them:
+   two squares plus the 8px gap. A fixed pixel column here is what made the
+   thumbnails overflow into the file/status columns as soon as the zoom passed
+   it ("overlapping of SVG part, overlapping text as zoom bigger"). Deriving it
+   from --svg-thumb keeps the header and every row on the same columns at every
+   zoom step, and a row that no longer fits simply scrolls (svg-rows). */
 .svg-columns,
 .svg-row {
   display: grid;
-  grid-template-columns: 34px 220px minmax(280px, 1fr) 122px 118px 130px 158px 210px;
+  grid-template-columns: 34px calc(var(--svg-thumb) * 2 + 8px) minmax(280px, 1fr) 122px 118px 130px 158px 210px;
   align-items: center;
   column-gap: 12px;
 }

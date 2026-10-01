@@ -576,6 +576,10 @@ describe("SVG row preview", () => {
     expect(ai()?.getAttribute("height")).toBe("200");
     expect(prev()?.style.width).toBe("200px");
     expect(prev()?.style.height).toBe("200px");
+    // ...and the row layout is told about it: the list publishes the zoom as the
+    // one variable the grid column and the row height read, so the thumbnails
+    // can never overflow into the text columns beside them.
+    expect(q("[data-testid=svg-list]")?.style.getPropertyValue("--svg-thumb")).toBe("200px");
   });
 
   it("previews and copies the SAME version", async () => {

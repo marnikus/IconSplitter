@@ -38,8 +38,44 @@ per-side cap:
   radius and background stay, so a letterboxed image still reads as a card.
 
 A very wide source (512×128) is letterboxed inside the square, which is the same
-treatment its SVG twin already gets — the pair stays comparable, and the row
-keeps a predictable width at every zoom step.
+treatment its SVG twin already gets — the pair stays comparable.
+
+## The defect the first attempt caused: the row overlapped itself
+
+Making both thumbnails the square of the zoom exposed the next problem, reported
+straight away: *"UI is brocken no correct zoom. some overlapping of SVG part.
+overlating text as zoonm bigger"*. The row is a grid whose **second column held
+both thumbnails at a fixed 220px**:
+
+```css
+.svg-columns, .svg-row {
+  grid-template-columns: 34px 220px minmax(280px, 1fr) 122px 118px 130px 158px 210px;
+}
+```
+
+Two 84px thumbnails fit inside 220px, so nothing showed; two 240px ones are
+488px, and a grid item does not shrink its column — it overflows it, straight
+across the file / status / review columns. The zoom itself was never broken; the
+column it grows into was.
+
+**The fix.** `src/svg/SvgList.tsx` publishes the zoom as `--svg-thumb` on the
+list (the same idiom `src/selectionv2/ReviewList.tsx` already uses), and the
+column is derived from it:
+
+```css
+grid-template-columns: 34px calc(var(--svg-thumb) * 2 + 8px) minmax(280px, 1fr) 122px 118px 130px 158px 210px;
+```
+
+Two squares plus the 8px gap of `.svg-thumbs`, at whatever the zoom is. The
+column header and every row compute the same width from the same variable, so
+they stay on the same columns at every step, the row's `min-height` (which
+already read the variable) becomes truthful instead of stuck at 84px, and a row
+that no longer fits simply scrolls — `.svg-rows` is `overflow: auto`, and the
+row was already wider than a laptop screen before the zoom existed.
+
+`tests/svg_layout.test.ts` reads the stylesheet for this contract, because a
+cascade regression is invisible to a DOM assertion; `tests/svg_ui.test.tsx`
+asserts the variable reaches the DOM at the zoomed value.
 
 ## About the colour report
 
