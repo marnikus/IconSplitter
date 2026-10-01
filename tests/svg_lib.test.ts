@@ -5,8 +5,8 @@
 // and usage formatting. Each test fails if the module it covers is deleted.
 import { describe, expect, it } from "vitest";
 import {
-  chatUrl, clampImagesPerRequest, DEFAULT_CONFIG, modelLabel, parseConfig, providerLabel,
-  serializeConfig,
+  chatUrl, clampImagesPerRequest, clampRetries, clampTimeoutMs, DEFAULT_CONFIG, modelLabel, parseConfig,
+  providerLabel, RETRIES_MAX, RETRIES_MIN, serializeConfig, TIMEOUT_MAX_MS, TIMEOUT_MIN_MS,
 } from "../src/lib/svgconfig";
 import { authHeader, containsSecret, findSecrets, maskKey, redact } from "../src/lib/svgsecret";
 import {
@@ -30,6 +30,23 @@ describe("svgconfig", () => {
     expect(clampImagesPerRequest(4)).toBe(4);
     expect(clampImagesPerRequest(99)).toBe(9);
     expect(clampImagesPerRequest(Number.NaN)).toBe(4);
+  });
+
+  it("clamps the wait and the retry count, so the card's own controls are safe", () => {
+    // The model card edits these two, so the clamp has to exist for the moment
+    // of change (RULE 24), not only for the read path (RULE 13).
+    expect(clampTimeoutMs(90_000)).toBe(90_000);
+    expect(clampTimeoutMs(1_000)).toBe(TIMEOUT_MIN_MS);
+    expect(clampTimeoutMs(9_999_999)).toBe(TIMEOUT_MAX_MS);
+    expect(clampTimeoutMs(Number.NaN)).toBe(DEFAULT_CONFIG.timeoutMs);
+    expect(clampTimeoutMs("abc")).toBe(DEFAULT_CONFIG.timeoutMs);
+    expect(clampRetries(3)).toBe(3);
+    expect(clampRetries(-2)).toBe(RETRIES_MIN);
+    expect(clampRetries(99)).toBe(RETRIES_MAX);
+    expect(clampRetries(Number.NaN)).toBe(DEFAULT_CONFIG.retries);
+    // the read path uses the very same clamps
+    expect(parseConfig({ timeoutMs: 9_999_999 }).timeoutMs).toBe(TIMEOUT_MAX_MS);
+    expect(parseConfig({ retries: -2 }).retries).toBe(RETRIES_MIN);
   });
 
   it("keeps a usable config from a corrupt payload (RULE 13)", () => {

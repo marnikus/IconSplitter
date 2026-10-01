@@ -24,6 +24,8 @@ export const DEFAULT_TIMEOUT_MS = 90_000;
  */
 export const TIMEOUT_MIN_MS = 5_000;
 export const TIMEOUT_MAX_MS = 900_000;
+export const RETRIES_MIN = 0;
+export const RETRIES_MAX = 5;
 export const DEFAULT_RETRIES = 2;
 export const DEFAULT_CONCURRENCY = 4;
 /** Output ceiling sent with each request (0 = let the provider decide). */
@@ -60,6 +62,16 @@ export const DEFAULT_CONFIG: SvgConfig = {
 };
 
 /** Clamps the batch size into the documented grid range and snaps to integer. */
+/** The wait in ms, clamped the same way on read and at the moment of change. */
+export function clampTimeoutMs(value: unknown): number {
+  return clampRange(value, TIMEOUT_MIN_MS, TIMEOUT_MAX_MS, DEFAULT_TIMEOUT_MS);
+}
+
+/** Retries: 0..5 — the card's own control, clamped at the moment of change. */
+export function clampRetries(value: unknown): number {
+  return clampRange(value, RETRIES_MIN, RETRIES_MAX, DEFAULT_RETRIES);
+}
+
 export function clampImagesPerRequest(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_IMAGES_PER_REQUEST;
   const n = Math.round(value);
@@ -103,8 +115,8 @@ export function parseConfig(raw: unknown): SvgConfig {
   return {
     baseUrl: urlOf(raw.baseUrl),
     model: textOf(raw.model, DEFAULT_MODEL),
-    timeoutMs: clampRange(raw.timeoutMs, TIMEOUT_MIN_MS, TIMEOUT_MAX_MS, DEFAULT_TIMEOUT_MS),
-    retries: clampRange(raw.retries, 0, 5, DEFAULT_RETRIES),
+    timeoutMs: clampTimeoutMs(raw.timeoutMs),
+    retries: clampRetries(raw.retries),
     concurrency: clampRange(raw.concurrency, 1, 8, DEFAULT_CONCURRENCY),
     imagesPerRequest: clampImagesPerRequest(Number(raw.imagesPerRequest)),
     maxTokens: toMaxTokens(raw.maxTokens),

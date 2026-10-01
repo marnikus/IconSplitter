@@ -6,7 +6,10 @@
 // here — every value comes from the hook and every change goes back to it.
 
 import { useState } from "react";
-import { IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, clampImagesPerRequest, modelLabel, type SvgConfig } from "../lib/svgconfig";
+import {
+  IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, RETRIES_MAX, RETRIES_MIN, TIMEOUT_MAX_MS, TIMEOUT_MIN_MS,
+  clampImagesPerRequest, clampRetries, clampTimeoutMs, modelLabel, type SvgConfig,
+} from "../lib/svgconfig";
 import { effectivePerRequest, limitNote, timeoutLabel } from "../lib/effortlimits";
 import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
@@ -142,19 +145,31 @@ function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMa
   );
 }
 
-/** The two settings that belong to the request, not to the model. */
+/** The settings that belong to the request, not to the model. */
 function ProviderFields({ config, onConfig }: { config: SvgConfig; onConfig: (patch: Partial<SvgConfig>) => void }) {
   return (
     <div className="svg-provider-fields">
       <NumberField label="Images / request" testid="svg-per-request" value={config.imagesPerRequest}
         min={IMAGES_PER_REQUEST_MIN} max={IMAGES_PER_REQUEST_MAX}
         onChange={(n) => onConfig({ imagesPerRequest: clampImagesPerRequest(n) })} />
+      <WaitField config={config} onConfig={onConfig} />
+      <NumberField label="Retries" testid="svg-retries" value={config.retries} min={RETRIES_MIN} max={RETRIES_MAX}
+        onChange={(n) => onConfig({ retries: clampRetries(n) })} />
       <label className="svg-field">
         <span className="svg-label">Model</span>
         <input className="svg-input" data-testid="svg-model" aria-label="Requesty model id" spellCheck={false}
           value={config.model} onChange={(e) => onConfig({ model: e.target.value })} />
       </label>
     </div>
+  );
+}
+
+/** The wait in SECONDS — the same unit every label uses, clamped on change. */
+function WaitField({ config, onConfig }: { config: SvgConfig; onConfig: (patch: Partial<SvgConfig>) => void }) {
+  return (
+    <NumberField label="Timeout (s)" testid="svg-timeout" value={Math.round(config.timeoutMs / 1000)}
+      min={TIMEOUT_MIN_MS / 1000} max={TIMEOUT_MAX_MS / 1000}
+      onChange={(s) => onConfig({ timeoutMs: clampTimeoutMs(s * 1000) })} />
   );
 }
 

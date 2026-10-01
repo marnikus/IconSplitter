@@ -10,6 +10,7 @@ import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
 import { saveCatalog } from "../src/svg/catalog";
+import { clearApiKey } from "../src/svg/keystore";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -146,6 +147,11 @@ afterEach(() => {
 
 beforeEach(async () => {
   await dropDb();
+  // dropDb() empties IndexedDB but not the key store's session copy, and the
+  // config/effort/prefs live in localStorage: without both resets a test that
+  // saves a key or picks a tier would leak into the next one (RULE 8).
+  await clearApiKey();
+  window.localStorage.clear();
   stored.clear();
   resetAppStore();
   host = document.createElement("div");
@@ -215,6 +221,52 @@ describe("Generate SVG panel", () => {
     });
     await settle();
     expect(q("[data-testid=svg-code-dialog]")).toBeNull();
+  });
+
+  it("lets the user configure the wait and the retries the timeout hint points at", async () => {
+    await mount(await makeRoot());
+    const limits = () => q("[data-testid=svg-limits]")?.textContent ?? "";
+    // the controls exist, are clamped to the documented range, and show the
+    // configured value (seconds, so it matches the label)
+    const timeout = () => input("[data-testid=svg-timeout]");
+    expect(timeout().value).toBe("90");
+    expect(timeout().min).toBe("5");
+    expect(timeout().max).toBe("900");
+    expect(input("[data-testid=svg-retries]").value).toBe("2");
+    expect(limits()).toContain("timeout 90s");
+    expect(limits()).toContain("2 retries");
+
+    // raising the wait is a real config change: the label follows immediately...
+    await type("[data-testid=svg-timeout]", "400");
+    expect(timeout().value).toBe("400");
+    expect(limits()).toContain("timeout 400s");
+
+    // ...a value outside the range is clamped at the moment of change...
+    await type("[data-testid=svg-timeout]", "9999");
+    expect(timeout().value).toBe("900");
+    await type("[data-testid=svg-timeout]", "1");
+    expect(timeout().value).toBe("5");
+    await type("[data-testid=svg-retries]", "-3");
+    expect(input("[data-testid=svg-retries]").value).toBe("0");
+
+    // ...and the tier floor still wins over an impatient configured wait, while
+    // the field keeps showing what the user actually configured
+    await type("[data-testid=svg-timeout]", "60");
+    await selectEffort("high");
+    expect(limits()).toContain("timeout 600s (high floor)");
+    expect(timeout().value).toBe("60");
+
+    // the confirmation states the same effective wait as the card
+    await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
+    await settle();
+    await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "ui_test_key_9876"));
+    await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
+    await settle();
+    await act(async () => { input("[data-testid=svg-check-all]").click(); });
+    await settle();
+    await act(async () => { (q("[data-testid=svg-generate-selected]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(q("[data-testid=svg-confirm-timeout]")?.textContent).toContain("600s (high floor)");
   });
 
   it("caps one request at EVERY reasoning tier and shows how many requests that is", async () => {

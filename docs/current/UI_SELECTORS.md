@@ -324,7 +324,9 @@ Prompt + provider card:
 | `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-reset-prompt` restores the documented default |
 | `svg-provider` | text | provider name + "OpenAI-compatible" |
 | `svg-limits` | text | the values that will really be used: "timeout \{label} · N retries · N per request" — the timeout names its tier floor ("600s (high floor)") and the per-request size is the configured one capped by the tier; the `title` carries the tier note |
-| `svg-per-request` | `input[type=number]` | images per request, 1–9 |
+| `svg-per-request` | `input[type=number]` | images per request, 1–9 (a ceiling: the reasoning tier may allow fewer) |
+| `svg-timeout` | `input[type=number]` | the wait per request in **seconds**, 5–900, default 90; clamped at the moment of change; the tier floor can raise the effective value, which `svg-limits` and `svg-confirm-timeout` then show |
+| `svg-retries` | `input[type=number]` | retries per request, 0–5, default 2 (a timeout is never retried — its outcome is unknown) |
 | `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
 | `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
 | `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap |

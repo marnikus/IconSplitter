@@ -159,11 +159,14 @@ that makes a network call, only when the user asks it to):
   failed request never touches another request's files, usage or cost; a
   timeout is never retried (its outcome is unknown) and its message names the
   tier and the fix instead of a bare error.
-* Waits: the configured timeout is raised to the selected tier's floor —
-  low 120 s, medium 300 s, high/xhigh 600 s
-  (`lib/effortlimits.effectiveTimeoutMs`) — because reasoning requests
-  routinely outlive a flat 90 s, and the confirmation states the wait that
-  will really be used.
+* Waits: the model card configures the wait (seconds, 5–900, default 90) and
+  the retries (0–5, default 2) beside the images-per-request field — both
+  clamped at the moment of change and on every read. The configured timeout is
+  then raised to the selected tier's floor — low 120 s, medium 300 s,
+  high/xhigh 600 s (`lib/effortlimits.effectiveTimeoutMs`) — because reasoning
+  requests routinely outlive a flat 90 s; the card's limits line and the
+  confirmation both state the wait that will really be used ("600s (high
+  floor)"), which is what makes the timeout message's advice actionable.
 * Zoom: ONE value (`svg-thumb`, 48..240 px, step 4, default 84) sizes BOTH
   the AI thumbnail and the SVG preview box, the row's minimum height and the
   previews column (inline `--svg-thumb`). Both boxes are the same square and
@@ -415,7 +418,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 61 files / 572 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 61 files / 574 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -451,6 +454,8 @@ and `data-testid` handles):
   selection across filter + sort, approve selected/visible, incomplete pairs
   out of scope, save failure + retry, empty/no-match, corrupt JSON, rescan,
   restart persistence, a11y labels
+* `svg_lib.test.ts` — also `clampTimeoutMs` / `clampRetries` (the card's own
+  controls share the read path's clamps) including nonsense input.
 * `svg_batch.test.ts`, `svg_effort.test.ts` — the split and the tier rules:
   1/3/4/5/8/9/11/23 images at several per-request sizes plus **every**
   configured size 1..9 on a nine-image selection (the partial last request
@@ -594,7 +599,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `UI_SELECTORS.md` §N.
 * Generate SVG mode: source bar (`svg-root`, `svg-choose-root`, `svg-rescan`,
   `svg-count-*`), prompt + provider card (`svg-prompt`, `svg-reset-prompt`,
-  `svg-provider`, `svg-limits`, `svg-per-request`, `svg-model`, `svg-key-state`
+  `svg-provider`, `svg-limits`, `svg-per-request`, `svg-timeout`,
+  `svg-retries`, `svg-model`, `svg-key-state`
   / `svg-key-input` / `svg-key-save`), filters (`svg-filter-generation`,
   `svg-filter-review`, `svg-sort`, `svg-search`, `svg-shown`,
   `svg-clear-filters`), bulk bar (`svg-check-all`, `svg-selected-count`,

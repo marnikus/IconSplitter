@@ -765,6 +765,16 @@ and the row. Design record:
   the code and history dialogs.
 * `src/svg/SvgBatchStrip.tsx` — the request in flight plus one line per
   finished request; it stays after the run so the record is readable.
+* Follow-up (same day): the model card now exposes the wait (`svg-timeout`, in
+  seconds, 5–900) and the retries (`svg-retries`, 0–5), clamped by
+  `clampTimeoutMs` / `clampRetries` — the same clamps the read path uses. That
+  closes the honesty gap in the timeout message, which tells the user to raise
+  the timeout: before this the value could only be changed by editing storage.
+  `tests/svg_ui.test.tsx` drives both controls (including clamping and the tier
+  floor overriding a smaller configured wait) and `tests/svg_lib.test.ts` the
+  clamps. The same pass fixed test isolation in `tests/svg_ui.test.tsx`: its
+  `beforeEach` now clears the key store's session copy and localStorage, so a
+  test that saves a key or picks a tier can no longer leak into the next.
 * One zoom value (`--svg-thumb`) written inline by `SvgPanel.tsx`, sizing both
   preview boxes, the row's minimum height and the previews column; the AI box
   is contained (`object-fit: contain`), the SVG keeps `xMidYMid meet`, and the
@@ -785,8 +795,8 @@ and the row. Design record:
 | `tsc --noEmit` | clean | clean |
 | eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
 | `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED (20 changed files) |
-| tests | 57 files / 517 | **61 files / 572** |
-| coverage (all files, stmts/branch/funcs/lines) | 96.85 / 92.68 / 96.22 / 97.47 | **97.33 / 92.85 / 96.93 / 98.10** |
+| tests | 57 files / 517 | **61 files / 574** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.85 / 92.68 / 96.22 / 97.47 | **97.34 / 92.85 / 96.94 / 98.11** |
 | jscpd `src --min-tokens 60` | 11 clones | 12 clones (the new one is a CSS block; no new TS/TSX clone) |
 | build `dist/index.html` | 601.97 kB / gzip 176.88 kB | 608.20 kB / gzip 178.81 kB |
 
