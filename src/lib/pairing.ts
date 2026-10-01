@@ -52,7 +52,7 @@ function isImageFile(name: string): boolean {
 function addAiPair(e: FileEntry, sources: SourceMap, out: Map<string, ReviewPair>): void {
   const ai = parseAiName(e.name);
   if (!ai || !isImageExt(ai.ext)) return;
-  const src = sources.get(srcPath(e, ai.base, ai.ext)) ?? null;
+  const src = sources.get(srcPath(e, ai.base, ai.ext).toLowerCase()) ?? null;
   const pair: ReviewPair = {
     pairId: pairId(e.dirPath, ai.base, ai.suffix),
     base: ai.base,

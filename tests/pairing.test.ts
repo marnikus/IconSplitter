@@ -62,6 +62,19 @@ describe("pairEntries", () => {
     expect(attentionInfo(pairs[0])).toBeNull();
   });
 
+  it("links reference case-insensitively when folder names carry _AI casing", () => {
+    // real batch output tree: folder icon-bunny-face_AI_5 holds both files
+    const dir = "2026-10/2026-10-01_10-24-31/icon-bunny-face_AI_5/split_04";
+    const pairs = pairEntries([
+      file(dir, "icon-bunny-face.png", 74, 1),
+      file(dir, "icon-bunny-face_AI_5_04.png", 224, 2),
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].source?.relPath).toBe(`${dir}/icon-bunny-face.png`);
+    expect(pairs[0].ai?.relPath).toBe(`${dir}/icon-bunny-face_AI_5_04.png`);
+    expect(attentionInfo(pairs[0])).toBeNull();
+  });
+
   it("never emits the same pair twice for duplicated input", () => {
     const e = [file("", "d.png"), file("", "d_AI.png"), file("", "d_AI.png")];
     const pairs = pairEntries(e);
