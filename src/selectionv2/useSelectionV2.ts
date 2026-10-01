@@ -32,6 +32,7 @@ export interface SelectionV2Api {
   setThumb: (px: number) => void;
   setScroll: (y: number) => void;
   toggleCheck: (id: string) => void;
+  setCheckedIds: (ids: string[], on: boolean) => void;
   checkVisible: () => void;
   uncheckAll: () => void;
 }
@@ -54,6 +55,7 @@ export function useSelectionV2(): SelectionV2Api {
     setScroll: (y) => patchV2({ scrollY: y }),
     selectRow: (id, intent) => applySelect({ hist, visibleIds, checked, anchorId, id, intent }),
     toggleCheck: (id) => editSelection(hist, toggleChecked(checked, id), anchorId),
+    setCheckedIds: (ids, on) => editSelection(hist, setChecked(checked, ids, on), anchorId),
     checkVisible: () => editSelection(hist, setChecked(checked, visibleIds, true), anchorId),
     uncheckAll: () => editSelection(hist, [], null),
   };

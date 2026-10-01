@@ -84,6 +84,6 @@ describe("applyEntry", () => {
 
   it("refuses a kind it does not know instead of guessing", async () => {
     await expect(applyEntry(entry("deleteFiles"), { all: true })).resolves.toBe(false);
-    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "view", "prefs", "sheets"]);
+    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "view", "prefs", "sheets", "svgPrefs", "svgReview"]);
   });
 });

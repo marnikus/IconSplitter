@@ -9,6 +9,8 @@ Workbench + Batch handles verified in `src/ui/Workbench.tsx`,
 `src/batch/BatchPanel.tsx`, `src/batch/ScanTable.tsx`, `src/batch/PresetBar.tsx`
 (2026-10-01).
 
+<!-- ideal-size: ~335 lines reason=one discoverable semantic-handle inventory spans all five modes; splitting it would fragment test-selector guidance. -->
+
 Priority per RULE 21: **semantic** (role / label / text) > **structural** >
 **class fragment** (Tailwind utilities are last resort, never primary).
 
@@ -301,3 +303,35 @@ anchor and the row a plain click also made active.
 Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo. Ignored only
 while the focus is in a *text* surface — text-ish input, textarea, select or a
 contenteditable — so undo still works after using the zoom slider or a checkbox.
+
+## P. Generate SVG (verified 2026-10-01)
+
+Prefer semantic labels/text; rows use stable Selection pair IDs, never row
+indices. `GenerateSvgPanel` is mounted by `tab-generate-svg`.
+
+| handle | element | notes |
+|---|---|---|
+| `svg-panel` | `<main>` | Generate SVG workspace |
+| `svg-empty` | paragraph | explains that Selection approval is required |
+| `svg-rows` | `role="list"` | source list container |
+| `svg-row-{pairId}` | `role="listitem"` article | active row is focusable and `aria-current`; checked state is separate |
+| `svg-check-{pairId}` | checkbox | `aria-label="Select <filename> for SVG actions"` |
+| `svg-dialog` | `role="dialog"` | has accessible title/label, Escape, focus entry/restore and tab loop; no generated id is a test handle |
+
+Key controls use these semantics:
+
+| control | semantic handle | purpose |
+|---|---|---|
+| prompt | `aria-label="SVG generation prompt"` | exact editable text, saved locally, global-undoable |
+| filters | `aria-label="Filter by generation status"`, `Filter by SVG review decision`, `Sort SVG sources`, `Search SVG sources` | persistent filter/search/sort |
+| thumbnail zoom | label text `Thumbnail zoom` + range output | 48–180 px, step 4; a range focus does not block global undo |
+| selection | `aria-label="Select all visible approved sources"`; buttons `Select visible`, `Deselect all`, `Generate selected (n)` | selected-only actions; hidden rows excluded |
+| pre-send consent | dialog heading `Confirm SVG generation`; button `Generate now` | shows source count, batch plan, exact prompt and payload/cost disclosures |
+| source actions | buttons `Generate` / `Regenerate`, `Approve`, `Decline`, `View code`, `History`, optional `Retry save` | disabled when state/approval/validation rules prohibit action |
+| progress | `role="progressbar"`, `aria-label="Generation batch progress"` | queued batch completion; live stage text |
+| notifications | `role="status"` / `aria-live="polite"`; errors are safe and credential-redacted | progress, result, notice |
+
+Keyboard row shortcuts (when focus is not a form control): `↑/↓` changes active
+row, `Space` toggles its check, `G` generates the active row, `A/D` reviews its
+newest valid SVG, and `V` opens its sanitized code. Global undo/redo remains
+available after range and checkbox interactions.

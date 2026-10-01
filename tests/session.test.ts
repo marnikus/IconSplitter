@@ -61,6 +61,11 @@ describe("parseSession", () => {
     expect(s.selectionV2.anchorId).toBe("pair_b");
   });
 
+  it("restores the Generate SVG tab through the versioned session snapshot", () => {
+    const session = { ...DEFAULT_SESSION, tab: "generateSvg" as const };
+    expect(parseSession(serializeSession(session, NOW))).toEqual(session);
+  });
+
   it("replaces an unknown tab with the default instead of rendering nothing", () => {
     expect(parseSession(asText({ tab: "nonsense" })).tab).toBe("sheets");
     expect(parseSession(asText({ tab: 42 })).tab).toBe("sheets");

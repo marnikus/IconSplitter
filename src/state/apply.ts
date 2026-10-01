@@ -15,9 +15,12 @@ import type { HistoryEntry } from "../lib/history";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { patchV2, patchView, setAppState } from "./appstore";
+import { parseSvgPreferences } from "../svg/prefs";
+import { setSvgPreferences } from "../svg/prefsstore";
+import { applySvgReviewHistory } from "../svg/review";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgPrefs", "svgReview"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
@@ -27,6 +30,8 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
+    case "svgPrefs": return applySvgPrefs(value);
+    case "svgReview": return applySvgReviewHistory(value);
     default: return false; // an entry from a future schema: refuse, do not guess
   }
 }
@@ -99,5 +104,11 @@ function applyPrefs(value: unknown): boolean {
 function applySheets(value: unknown): boolean {
   if (!isRecord(value)) return false;
   setAppState({ sheets: parseSheetOpts(value) });
+  return true;
+}
+
+function applySvgPrefs(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  setSvgPreferences(parseSvgPreferences(value));
   return true;
 }

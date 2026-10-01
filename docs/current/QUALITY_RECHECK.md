@@ -4,6 +4,8 @@ Adapted from `Process-Images-in-Areana/docs/current/QUALITY_RECHECK.md`, which
 is the dated log of full quality re-checks after substantial changes. The
 numbers there belong to that app; this file carries Icon Splitter's own.
 
+<!-- ideal-size: ~476 lines reason=RULE 17 keeps dated verification and baseline decisions in one chronological quality ledger; splitting would fragment comparisons. -->
+
 ## What a re-check is
 
 A **full** run of every verification lane (`npm run verify` — types, lint,
@@ -364,3 +366,111 @@ run flagged `HistoryBar` at 36 and `HistoryPanel` at 42 body lines.
   a11y label test (the visible-list aria-label is gone) and the cross-tab undo
   assertion, which hard-coded a one-entry timeline and now asserts one step back
   from the tip instead of `index === -1`.
+
+---
+
+# Quality re-check — 2026-10-01 (Generate SVG)
+
+Final full re-check after implementing the Generate SVG workspace, restart
+recovery, global undo/redo integration, security controls, tests and current
+behaviour/design documentation. The final code-fit review was performed after
+the initial passing verification; the full suite was rerun afterward.
+
+## What changed
+
+* Added the Generation workspace over Selection V2’s approved-source index:
+  local contact-sheet preflight, explicit consent, Requesty mapping/validation,
+  immutable SVG versions, per-version review, recovery and shared-batch usage.
+* Added persisted non-secret preferences, encrypted local key storage, safe
+  request/error handling and restart-recoverable sidecars. Generate SVG
+  edits participate in the existing single global undo/redo timeline; the
+  credential never enters that timeline.
+* Refactored multi-responsibility UI/schema code during the RULE 18 fit review:
+  schema envelope vs. icon schema, separate filter/header/history/key-dialog
+  regions, consent disclosures, source-row collection, bulk-action controls,
+  and preflight/settings parsing.
+
+## Verification lanes and review results
+
+| Lane | Command / measurement | Result |
+|---|---|---|
+| Types | `npx tsc --noEmit` | clean |
+| Lint | `npm run lint` (inside verify) | 0 errors; 8 existing warnings in legacy `App.tsx` / `detect.ts` |
+| Changed-file gate | `node tools/quality.mjs --changed --allow-legacy` (inside verify) | **GATE PASSED** |
+| Full source gate | `node tools/quality.mjs --allow-legacy` | **GATE PASSED** |
+| Tests | `npm run verify` | **60 files / 438 tests passed** |
+| `src/lib` coverage | statements / branches / functions / lines | **96.31% / 92.03% / 96.55% / 97.61%** |
+| Production build | Vite single-file `dist/index.html` | **605.06 kB / 179.62 kB gzip** |
+| Duplication | `npx jscpd src --min-tokens 60` | **0 clones** in 120 files / 12,463 lines |
+| Dead-code scan | `npx knip` | blocked by the previously recorded `oxc-parser` `RangeError: Array buffer allocation failed`; manual export-consumer check found an external consumer for all **107 checked declarations across 47 feature source files** |
+
+`npm run verify` completed all six lanes: types, lint, changed-file quality,
+tests, coverage and production build (**ALL LANES PASSED**). The only lint
+warnings are the same pre-existing legacy warnings; no new warnings or gate
+debt were accepted. `svgvalidate.ts` remains at 100% line coverage.
+
+## RULE 18 — final code-fit recheck
+
+The Generate SVG feature touches 47 production modules (45 under `src/svg/`
+plus `src/lib/svgcomposite.ts` and `src/lib/svgvalidate.ts`): **4,802 lines
+and 731 functions** by the quality tool's file/function metrics. Largest files
+are `src/svg/sidecar.schema.ts` (296 lines / 60 functions),
+`src/svg/run/response.ts` (285 / 36), and `src/lib/svgvalidate.ts` (280 / 40).
+No feature file exceeds the 300-line hard limit; the longest function is 25
+lines, below the 30-line hard limit.
+
+The code-fit pass reduced the previously over-ideal compound functions; the
+only remaining functions over 20 lines are the three annotated cohesive
+lifecycles/composition points below. All remain within CC 10 and nesting 4:
+
+| Function | Lines | Disposition |
+|---|---:|---|
+| `GenerateSvgWorkspace` | 23 | `ideal-size` comment: top-level ordering of independently owned screen regions; extra wrapper-only components would add indirection |
+| `useRequestyKey` | 25 | `ideal-size` comment: credential availability, validation and secure save/remove share one state owner to keep plaintext contained |
+| `useRunState` | 21 | `ideal-size` comment: run state, liveness refs and object-URL cleanup share one hook lifecycle |
+
+All other feature functions are at or below the 20-line ideal. The full
+per-file line/function measurements follow (physical source lines; function
+counts from `tools/quality.mjs`):
+
+| File | Lines | Fns | File | Lines | Fns |
+|---|---:|---:|---|---:|---:|
+| `src/lib/svgcomposite.ts` | 132 | 16 | `src/lib/svgvalidate.ts` | 280 | 40 |
+| `src/svg/events.ts` | 13 | 4 | `src/svg/files.ts` | 128 | 15 |
+| `src/svg/indexer.ts` | 186 | 25 | `src/svg/keyvault.ts` | 93 | 24 |
+| `src/svg/preflight.ts` | 126 | 13 | `src/svg/prefs.ts` | 110 | 11 |
+| `src/svg/prefsstore.ts` | 40 | 6 | `src/svg/prompt.ts` | 73 | 12 |
+| `src/svg/recovery.ts` | 62 | 10 | `src/svg/requesty.ts` | 184 | 20 |
+| `src/svg/responsemap.ts` | 135 | 20 | `src/svg/review.ts` | 127 | 13 |
+| `src/svg/run/checkpoint.ts` | 145 | 21 | `src/svg/run/process.ts` | 50 | 6 |
+| `src/svg/run/queue.ts` | 59 | 7 | `src/svg/run/registry.ts` | 17 | 5 |
+| `src/svg/run/response.ts` | 285 | 36 | `src/svg/run/types.ts` | 27 | 0 |
+| `src/svg/security.ts` | 16 | 2 | `src/svg/sidecar.parse.ts` | 27 | 5 |
+| `src/svg/sidecar.schema.ts` | 296 | 60 | `src/svg/sidecar.ts` | 106 | 18 |
+| `src/svg/sort.ts` | 49 | 10 | `src/svg/types.ts` | 119 | 0 |
+| `src/svg/ui/GenerateSvgPanel.tsx` | 242 | 52 | `src/svg/ui/SvgBulkToolbar.tsx` | 137 | 30 |
+| `src/svg/ui/SvgCodeDialog.tsx` | 29 | 3 | `src/svg/ui/SvgConfirmDialog.tsx` | 64 | 11 |
+| `src/svg/ui/SvgDialog.tsx` | 45 | 10 | `src/svg/ui/SvgFilterBar.tsx` | 79 | 16 |
+| `src/svg/ui/SvgHeader.tsx` | 158 | 25 | `src/svg/ui/SvgHistoryDialog.tsx` | 98 | 16 |
+| `src/svg/ui/SvgKeyDialog.tsx` | 74 | 9 | `src/svg/ui/SvgOverlayHost.tsx` | 48 | 5 |
+| `src/svg/ui/SvgPreview.tsx` | 54 | 10 | `src/svg/ui/SvgSourceRow.tsx` | 127 | 16 |
+| `src/svg/ui/SvgStatusFooter.tsx` | 69 | 8 | `src/svg/ui/hotkeys.ts` | 99 | 19 |
+| `src/svg/ui/useRequestyKey.ts` | 33 | 5 | `src/svg/ui/useSvgIndex.ts` | 105 | 19 |
+| `src/svg/ui/useSvgPreferences.ts` | 27 | 3 | `src/svg/ui/useSvgReview.ts` | 39 | 7 |
+| `src/svg/ui/useSvgRun.ts` | 213 | 34 | `src/svg/usage.ts` | 41 | 12 |
+| `src/svg/versionindex.ts` | 136 | 22 |  |  |  |
+
+## Baseline decision
+
+**Not re-recorded.** `tools/quality_baseline.json` was left unchanged; legacy
+hotspots did not grow and the full-source gate passed with only the recorded
+legacy allowances.
+
+## Accepted debt / notes
+
+* No new quality debt accepted. `npx knip` remains unavailable in this
+  environment as recorded above; the export-consumer scan is the documented
+  substitute, not a claim that `knip` passed.
+* The three 21–25-line functions above have explicit `ideal-size: reason`
+  annotations. Every other Generate SVG function is at or below the RULE 18
+  ideal, and the full feature passed RULE 16 gates.

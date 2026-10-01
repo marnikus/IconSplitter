@@ -3,7 +3,15 @@ import type { DirHandleLike, FileHandleLike, WritableLike } from "../../src/lib/
 
 export class FakeFile implements FileHandleLike {
   kind = "file" as const;
+  private parent: FakeDir | null = null;
   constructor(public name: string, public size = 10, public mtime = 1000, public text = "data") {}
+  bind(parent: FakeDir): void { this.parent = parent; }
+  async move(newName: string): Promise<void> {
+    if (!this.parent || this.parent.children.has(newName)) throw new DOMException("Move unavailable", "InvalidModificationError");
+    this.parent.children.delete(this.name);
+    this.name = newName;
+    this.parent.children.set(newName, this);
+  }
   async getFile(): Promise<File> {
     const f = new File([this.text], this.name);
     Object.defineProperty(f, "lastModified", { value: this.mtime });
@@ -37,9 +45,10 @@ export class FakeDir implements DirHandleLike {
   }
   async getFileHandle(n: string, opts?: { create?: boolean }): Promise<FakeFile> {
     const c = this.children.get(n);
-    if (c instanceof FakeFile) return c;
+    if (c instanceof FakeFile) { c.bind(this); return c; }
     if (!opts?.create) throw new DOMException("Not found", "NotFoundError");
     const f = new FakeFile(n);
+    f.bind(this);
     this.children.set(n, f);
     return f;
   }

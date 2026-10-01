@@ -56,7 +56,20 @@ describe("the shell", () => {
     expect(loadSessionState().tab).toBe("batch"); // …and now it is
   });
 
-  it("opens on the tab the last session ended on", () => {
+  it("opens Generate SVG from the restored tab and shows its approved-source empty state", async () => {
+    saveSessionState({ ...DEFAULT_SESSION, tab: "generateSvg" }, "2026-10-01T12:00:00.000Z");
+    bootStores();
+    mountWorkbench();
+    await settle();
+    expect(getAppState().tab).toBe("generateSvg");
+    expect(q("[data-testid='svg-panel']")).not.toBeNull();
+    expect(q("[data-testid='svg-empty']")?.textContent).toContain("No Selection-approved AI images yet");
+    expect((q("[aria-label='SVG generation prompt']") as HTMLTextAreaElement).value)
+      .toBe("Create 4 split SVG icons. Snap visually intended connections exactly to curves/anchors. Never leave tiny gaps, floating endpoints, overshoots, or approximate joins. Preserve seamless geometry without breaking the intended image.");
+    expect(q("[data-testid='history-bar']")).not.toBeNull();
+  });
+
+  it("opens on the Selection tab the last session ended on", () => {
     saveSessionState({ ...DEFAULT_SESSION, tab: "selection" }, "2026-10-01T12:00:00.000Z");
     bootStores();
     mountWorkbench();

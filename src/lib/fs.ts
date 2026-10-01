@@ -15,6 +15,8 @@ export interface FileHandleLike {
   name: string;
   getFile(): Promise<File>;
   createWritable(): Promise<WritableLike>;
+  /** Chromium File System Access atomic rename; absent browsers fail closed. */
+  move?(newName: string): Promise<void>;
 }
 
 export interface DirHandleLike {

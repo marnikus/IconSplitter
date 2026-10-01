@@ -6,6 +6,7 @@ import App from "../App";
 import BatchPanel from "../batch/BatchPanel";
 import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
+import GenerateSvgPanel from "../svg/ui/GenerateSvgPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppState } from "../state/useAppState";

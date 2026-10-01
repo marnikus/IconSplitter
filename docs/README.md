@@ -19,6 +19,7 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 | `archive/2026-10-01-batch-processing/design.md` | Batch folders: module map, browser constraints, negative tests |
 | `archive/2026-10-01-selection-review/design.md` | Selection V1: pairing model, atomic decision protocol, hotkeys, a11y |
 | `archive/2026-10-01-selection-v2/design.md` | Selection V2: template-driven list review, zoom, selection vs decision state, bulk scope |
+| `archive/2026-10-01-generate-svg/design.md` | Generate SVG: explicit Requesty consent, deterministic contact sheets, mapping, SVG safety, versions, restart recovery and undo |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has four modes (tabs across the top):
+It has five modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -18,13 +18,22 @@ It has four modes (tabs across the top):
 * **Selection V2** — the same review data in a denser, table-like layout:
   a full-width list where every row shows the original and the AI result side
   by side, a thumbnail zoom slider (48–240 px, remembered between sessions),
-  checkboxes with select-all, and **Approve selected** / **Approve visible
-  list** for bulk decisions. A second layout switches to the large
-  side-by-side comparison. Also Chrome/Edge only.
+  checkboxes with select-all and **Approve selected**, **Decline selected** or
+  **Reset selected to pending**. Bulk actions are selected-only, counted and
+  undoable; hidden checks stay out of scope. A second layout switches to the
+  large side-by-side comparison. Also Chrome/Edge only.
+* **Generate SVG** — browse only Selection-approved AI images, filter/search/
+  sort them, create square numbered contact sheets and generate mapped SVGs
+  through Requesty's multimodal API. Every version is locally reviewed,
+  sanitized, retained in a sidecar history and saved without overwriting older
+  outputs. Requesty submission requires an explicit confirmation. Also
+  Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
-modern browser — no server, no Python, no installation required.
+modern browser — no server, no Python, no installation required. Sheet, Batch
+and Selection workflows remain local/offline; Generate SVG needs network access
+only when you confirm a Requesty generation.
 
 ---
 
@@ -151,13 +160,15 @@ bulk action is always one history entry, so undoing a bulk approve restores all
 of its pairs at once.
 
 Reversible: decisions (approve / decline / **reset to pending**), checkbox
-selection, filters, sort, date range, view prefs, and the sheets export
-settings. Not reversible, and never reported as such: batch processing, ZIP or
-clipboard export, picking a folder, and switching tabs.
+selection, filters, sort, date range, view prefs, sheets export settings, and
+Generate SVG prompt/request settings plus per-version review decisions. Not
+reversible, and never reported as such: API requests, completed file writes,
+batch processing, ZIP or clipboard export, picking a folder, and switching tabs.
 
-The last session — active tab, folders' review state, filters, sort, selected
-and checked rows, thumbnail zoom, sheets settings — is restored on the next
-start. A folder or file that has since disappeared is reported, never hidden.
+The last session — active tab, folder review state, filters, sort, selected and
+checked rows, thumbnail zoom, sheets settings, and Generate SVG preferences — is
+restored on the next start. In-flight API plans are not replayed. A folder or
+file that has since disappeared is reported, never hidden.
 
 ## Selection V2 (Chrome / Edge only)
 
@@ -178,10 +189,10 @@ and one `review-decisions.json`.
    **Deselect all**. Selection is independent of the review status and
    survives filtering and sorting; rows hidden by a filter are counted and
    never changed behind your back.
-4. **Approve in bulk** — **✓ Approve selected (n)** or **✓ Approve visible
-   list (n)**. The count is part of the button, the button asks you to confirm
-   before writing, and the whole batch produces a single message such as
-   `12 pairs approved · 2 skipped (incomplete or gone)`.
+4. **Review in bulk** — **Approve selected (n)**, **Decline selected (n)** or
+   **Reset selected to pending (n)**. The count is part of the button, the
+   button asks you to confirm before writing, and one batch is one undoable
+   action. Hidden or incomplete pairs are counted but never decided silently.
 5. **Decide one by one** — click a row to make it the *active* row (highlighted
    with a violet bar), then press **A** to approve or **D** to decline. With
    **Next pending after a decision** on, the active row jumps to the next
@@ -195,6 +206,59 @@ and one `review-decisions.json`.
 Decisions are written to `review-decisions.json` in the source folder. If the
 file cannot be written, the decisions stay in memory, a warning explains what
 happened, and **↻ Retry write** saves them once the folder is writable again.
+
+---
+
+## Generate SVG (Chrome / Edge only)
+
+Generate SVG uses the same folder and approval decisions as **Selection**. It
+recursively lists only AI results currently approved there; an SVG decision does
+not replace or change the original Selection decision.
+
+1. **Choose folder / Rescan approved** — reuse the Selection root or choose the
+   folder again. Sources are fingerprinted locally; a removed approval or changed
+   image is checked again before sending and before saving.
+2. **Find and select sources** — search filenames/paths/statuses, filter by
+   generation and SVG review state, sort by date/name/status/review/cost, and
+   adjust thumbnail zoom. Active row (keyboard target) and checked rows (bulk
+   scope) are separate. Generate/Review selected applies only to visible,
+   actionable checked rows. `↑/↓` changes active row, `Space` checks it, `G`
+   generates it, `A/D` approves/declines its newest SVG, `V` opens sanitized code.
+3. **Edit the prompt** — the exact editable default is:
+
+   > Create 4 split SVG icons. Snap visually intended connections exactly to curves/anchors. Never leave tiny gaps, floating endpoints, overshoots, or approximate joins. Preserve seamless geometry without breaking the intended image.
+
+   Prompt, filters, sort, zoom and request settings persist locally and participate
+   in the same global undo/redo timeline as the other tabs.
+4. **Configure Requesty** — default model `azure/gpt-6.1-sol@eastus2`, four
+   images per request (up to nine), one concurrent request and 512 px cells.
+   Advanced options expose timeout and bounded safe 429 retries; the cell-size
+   control and automatic batch reduction obey the full serialized request-body
+   cap. Add the Requesty API key in the key dialog; it is encrypted at rest in
+   browser IndexedDB and never displayed or written to history, sidecars or logs.
+5. **Review before sending** — local preflight orders paths deterministically,
+   creates square contact sheets with numbered positions, matches those
+   positions to a filename/path manifest, and checks the full JSON request-body
+   cap. The confirmation dialog shows the approved image count, request batches,
+   model, payload sizes, cost caveat and exact prompt. Nothing is sent until you
+   click **Generate now**. That action sends the approved contact sheets,
+   manifest and prompt to Requesty; the original files and exports are not sent.
+6. **Track and recover** — progress is per batch; Stop prevents new requests but
+   lets in-flight work finish. Explicit 429s may be retried within the chosen
+   bound; a timeout, lost response or uncertain provider outcome is marked
+   **Unknown** and is never automatically resent. Actual token/cost data comes
+   from Requesty's response; a shared batch cost is not guessed or allocated per
+   image. Each sanitized, render-tested SVG is saved beside its AI source as
+   `<stem>.svg`, then `<stem>-v2.svg`, etc. Older versions are never overwritten.
+7. **Review versions** — use Approve/Decline/Reset to pending, History, View
+   code or Retry save for a validated staged temp. Per-version review decisions
+   and preferences are undoable globally; API requests and already-saved files
+   are not. A restart turns interrupted requests into Unknown and offers safe
+   recovery for validated temps/orphaned SVG metadata.
+
+This opt-in API upload is the only content-bearing network path in the app. See
+[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) RULE 20 and the
+[Generate SVG design record](docs/archive/2026-10-01-generate-svg/design.md).
 
 ---
 

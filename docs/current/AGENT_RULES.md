@@ -5,6 +5,8 @@ This file is the **detailed code-quality rules** for Icon Splitter, adapted from
 `Process-Images-in-Areana/docs/current/AGENT_RULES.md` (24 rules) to this
 React + Vite + TypeScript browser app.
 
+<!-- ideal-size: ~335 lines reason=the stable 24-rule policy, workflow and acceptance checklist remain one discoverable reference; per-feature behaviour and design stay in System-of-Record/archive. -->
+
 * Current behaviour, invariants and flows: [`SYSTEM_OF_RECORD.md`](SYSTEM_OF_RECORD.md)
 * Verification workflow before every push: [`CODE_VERIFICATION.md`](CODE_VERIFICATION.md)
 * Living UI handle reference: [`UI_SELECTORS.md`](UI_SELECTORS.md)
@@ -33,7 +35,7 @@ React + Vite + TypeScript browser app.
 | 17 | One current doc, dated archive | docs | PIA RULE 17 |
 | 18 | Ideal sizes: write for the reader's context budget | quality | PIA RULE 18 |
 | 19 | Fix complexity before size (nesting → CC → cognitive → size) | quality | PIA RULE 19 |
-| 20 | Privacy & compliance: images never leave the browser | compliance | PIA RULE 20 — ToS adapted |
+| 20 | Privacy & compliance: local by default; explicit Requesty opt-in | compliance | PIA RULE 20 — ToS adapted |
 | 21 | Selector priority: semantic > structural > class fragment | quality | PIA RULE 21 |
 | 22 | Export output must be traceable to its source | data | PIA RULE 22 — correlation token |
 | 23 | Delivery is atomic; never a partial file | data | PIA RULE 23 — atomic save |
@@ -296,9 +298,11 @@ Baseline at adoption (2026-09-30): `src/App.tsx` = 598 lines, `src/lib/detect.ts
 
 Verify after every step: the existing suite must stay green, because steps 1–3 must be behaviour-preserving.
 
-## RULE 20 — Privacy & compliance: images never leave the browser
+## RULE 20 — Privacy & compliance: local by default, explicit Requesty opt-in
 
-* The app processes user-provided images **entirely client-side**. Image bytes and exports must never be uploaded anywhere: no network calls with image data, no third-party analytics that see content. The app must remain fully functional offline (the single-file build proves it).
+* Existing sheet, Batch and Selection workflows process files locally. They make no content-bearing network calls or analytics, and remain available offline in the single-file build.
+* **Generate SVG is the explicit user-requested exception:** it sends only Selection-approved AI-image contact sheets, their filename/path/position manifest, and the displayed prompt to the fixed Requesty router, and only after the user reviews the pre-send plan and chooses **Generate now**. Scanning, filtering, opening a row and local preflight do not upload content.
+* Never send originals, exports, or unapproved images. Do not add other content-bearing endpoints or analytics; the API key is sent only as the Requesty Bearer header and is excluded from preferences, history, sidecars, UI disclosures and logs.
 * Respect copyright: the user is responsible for owning the sheets they process; the app never fetches images from URLs the user has not provided.
 * Object URLs created from user files are revoked when no longer needed.
 
