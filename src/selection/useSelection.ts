@@ -13,10 +13,13 @@ import type { Decision } from "../lib/reviewfilter";
 import { pickDirectory, fsSupported } from "../batch/picker";
 import { loadHandles, saveHandles } from "../batch/store";
 import { loadDecisions, saveDecisions } from "./reviewstore";
+import { loadUndoSave, saveUndoSave } from "./undostore";
 import {
-  applyScan, bulkDecide, initialSelState, moveActive, nextPendingId,
-  reconcileActive, selectVisible, toggleSelect, withDecision, type SelState,
+  applyScan, applyUndoOut, bulkDecide, bulkReset,
+  initialSelState, moveActive, nextPendingId, pushUndo, reconcileActive,
+  selectVisible, toggleSelect, withDecision, type SelState,
 } from "./state";
+import { redoOnce, undoOnce } from "../lib/undo";
 
 const HANDLE_KEY = "__selection__";
 const WATCH_MS = 30_000;
@@ -43,18 +46,41 @@ export function useSelection() {
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
   return {
     s, visible, say, supported: fsSupported(), rootRef: ctx.root,
+    ...useFlowActions(ctx, setS, say), ...useEditActions(ctx, setS),
+  };
+}
+
+/** Folder / decision / timeline actions. */
+function useFlowActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
+  return {
     chooseRoot: useCallback(() => chooseRoot(ctx, setS, say), [ctx, setS, say]),
     rescan: useCallback(() => rescan(ctx, setS, say), [ctx, setS, say]),
     decide: useCallback((id: string, d: Decision) => decide(ctx, setS, id, d), [ctx, setS]),
     bulk: useCallback((d: Decision) => bulk(ctx, setS, say, d), [ctx, setS, say]),
+    reset: useCallback((id: string) => resetFlow(ctx, setS, say, [id]), [ctx, setS, say]),
+    bulkResetSel: useCallback(() => resetFlow(ctx, setS, say, selectedVisible(ctx)), [ctx, setS, say]),
+    undo: useCallback(() => stepHistory(ctx, setS, "undo"), [ctx, setS]),
+    redo: useCallback(() => stepHistory(ctx, setS, "redo"), [ctx, setS]),
     move: useCallback((dir: 1 | -1) => move(ctx, setS, dir), [ctx, setS]),
-    toggle: useCallback((id: string) => setS((p) => toggleSelect(p, id)), []),
-    selectVis: useCallback((ids: string[], on: boolean) => setS((p) => selectVisible(p, ids, on)), []),
     retryWrite: useCallback(() => retryWrite(ctx, setS), [ctx, setS]),
-    select: useCallback((id: string) => setS((p) => ({ ...p, selectedId: id })), []),
-    setFilter: useCallback((f: ListFilter) => setS((p) => ({ ...p, filter: f })), []),
-    setSort: useCallback((so: SortState) => setS((p) => ({ ...p, sort: so })), []),
-    patch: useCallback((part: Partial<SelState>) => setS((p) => ({ ...p, ...part })), []),
+  };
+}
+
+/** List edits — every one of these lands on the undo timeline. */
+function useEditActions(ctx: Ctx, setS: Setter) {
+  return {
+    toggle: useCallback((id: string) => pushCommit(ctx, setS, (p) => {
+      const n = toggleSelect(p, id);
+      return pushUndo(n, "select", n.selectedIds);
+    }), [ctx, setS]),
+    selectVis: useCallback((ids: string[], on: boolean) => pushCommit(ctx, setS, (p) => {
+      const n = selectVisible(p, ids, on);
+      return pushUndo(n, "select", n.selectedIds);
+    }), [ctx, setS]),
+    select: useCallback((id: string) => setS((p) => ({ ...p, selectedId: id })), [setS]),
+    setFilter: useCallback((f: ListFilter) => pushCommit(ctx, setS, (p) => pushUndo({ ...p, filter: f }, "filter", f)), [ctx, setS]),
+    setSort: useCallback((so: SortState) => pushCommit(ctx, setS, (p) => pushUndo({ ...p, sort: so }, "sort", so)), [ctx, setS]),
+    patch: useCallback((part: Partial<SelState>) => setS((p) => ({ ...p, ...part })), [setS]),
   };
 }
 
@@ -69,7 +95,20 @@ async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   const h = stored?.source ?? null;
   if (!h) return;
   setRoot(ctx, setS, h);
-  await rescan(ctx, setS, () => undefined);
+  await rescan(ctx, setS, () => undefined, true);
+  restoreUndo(setS, h.name); // restarts keep their honest timeline
+}
+
+/** Restore the persisted timeline only when it belongs to this root. */
+function restoreUndo(setS: Setter, rootName: string): void {
+  const save = loadUndoSave();
+  if (save.root !== rootName) return;
+  setS((p) => ({ ...p, undo: save.stack, undoBase: save.base }));
+}
+
+/** Apply a state that already carries a fresh undo entry; persist the timeline. */
+function pushCommit(ctx: Ctx, setS: Setter, fn: (p: SelState) => SelState): void {
+  commitTimeline(ctx, setS, fn(ctx.state.current));
 }
 
 async function chooseRoot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
@@ -85,7 +124,9 @@ function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
   setS((p) => ({ ...p, rootName: h.name }));
 }
 
-export async function rescan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
+export async function rescan(
+  ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void, keepTimeline = false,
+): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
   setS((p) => ({ ...p, busy: "Scanning folders…" }));
@@ -93,7 +134,9 @@ export async function rescan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolea
     const tree = await readDirTree(root, []);
     const pairs = pairEntries(walkTree(tree, []));
     const load = await loadDecisions(root);
-    setS((p) => applyScan(p, pairs, load, Date.now()));
+    const next = applyScan(ctx.state.current, pairs, load, Date.now());
+    setS(next);
+    if (!keepTimeline) saveUndoSave(next.undo, next.undoBase, root.name);
     if (load.corrupt) say("review-decisions.json is corrupt — kept previous decisions in memory", true);
   } catch {
     say("Rescan failed — the folder may be unreadable", true);
@@ -105,9 +148,43 @@ export async function rescan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolea
 function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   const merged = withDecision(ctx.state.current, id, d, new Date().toISOString());
   const rolled = merged.autoNext ? nextPendingId(merged.pairs, id) : null;
-  const next = rolled ? { ...merged, selectedId: rolled } : merged;
-  setS(next);
+  const next = pushUndo(rolled ? { ...merged, selectedId: rolled } : merged, "decisions", merged.records);
+  commitTimeline(ctx, setS, next);
   void persist(ctx, setS, next);
+}
+
+/** Reset-to-pending for the given ids; one undo entry + one save + one toast. */
+function resetFlow(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void, ids: string[]): void {
+  const s = ctx.state.current;
+  const affected = ids.filter((id) => s.pairs.some((p) => p.pairId === id && p.decision !== "pending"));
+  if (affected.length === 0) return;
+  const reset = bulkReset(s, affected);
+  const next = pushUndo(reset, "decisions", reset.records);
+  commitTimeline(ctx, setS, next);
+  say(`Reset ${affected.length} pair${affected.length === 1 ? "" : "s"} to pending`);
+  void persist(ctx, setS, next);
+}
+
+/** setS + timeline persistence — every recorded change survives a restart. */
+function commitTimeline(ctx: Ctx, setS: Setter, next: SelState): void {
+  setS(next);
+  saveUndoSave(next.undo, next.undoBase, ctx.root.current?.name ?? "");
+}
+
+function selectedVisible(ctx: Ctx): string[] {
+  const s = ctx.state.current;
+  const visibleIds = new Set(sortPairs(applyFilters(s.pairs, s.filter), s.sort).map((v) => v.pairId));
+  return s.selectedIds.filter((id) => visibleIds.has(id));
+}
+
+/** Undo/redo one step; decisions steps persist like any other change. */
+function stepHistory(ctx: Ctx, setS: Setter, dir: "undo" | "redo"): void {
+  const s = ctx.state.current;
+  const res = dir === "undo" ? undoOnce(s.undo) : redoOnce(s.undo);
+  if (!res.out) return;
+  const next = applyUndoOut({ ...s, undo: res.stack }, res.out);
+  commitTimeline(ctx, setS, next);
+  if (res.out.kind === "decisions") void persist(ctx, setS, next);
 }
 
 /** One decision over the selected *visible* pairs; one save, one summary. */
@@ -116,8 +193,9 @@ function bulk(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void, d: 
   const visibleIds = new Set(sortPairs(applyFilters(s.pairs, s.filter), s.sort).map((v) => v.pairId));
   const affected = s.selectedIds.filter((id) => visibleIds.has(id));
   if (affected.length === 0) return;
-  const next = bulkDecide(s, affected, d, new Date().toISOString());
-  setS(next);
+  const decided = bulkDecide(s, affected, d, new Date().toISOString());
+  const next = pushUndo(decided, "decisions", decided.records);
+  commitTimeline(ctx, setS, next);
   say(`${d === "approved" ? "Approved" : "Declined"} ${affected.length} pair${affected.length === 1 ? "" : "s"}`);
   void persist(ctx, setS, next);
 }

@@ -161,6 +161,8 @@ Header + status:
 |---|---|---|
 | `sel-root` | root picker button | label mirrors state (`Root: {name}`), RULE 24 |
 | `sel-rescan` | `↺ Rescan` | re-walks the root |
+| `sel-undo` | `↩ Undo` | global timeline, disabled at the frontier (Ctrl+Z) |
+| `sel-redo` | `↪ Redo` | disabled at the tail (Ctrl+Shift+Z / Ctrl+Y) |
 | `sel-watcher` | watcher pill | toggles the 30 s auto-rescan |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
 | `sel-help` | `?` popover | keyboard reference |
@@ -179,11 +181,13 @@ clicking a thumb opens that pair's preview.
 
 Multi-select + bulk (`ListControls`): `sel-check-all` (tri-state header
 checkbox), `sel-select-all`, `sel-selcount`, `sel-bulk-approve` /
-`sel-bulk-decline` (disabled at 0, label shows affected count), `sel-wrap`
+`sel-bulk-decline` / `sel-bulk-reset` (disabled at 0, label shows affected
+count; reset returns selected visible pairs to pending), `sel-wrap`
 (navigation wrap setting), `sel-thumbsize` (S/L row thumbnails).
 
 Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (1:1 fit/full,
 Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,
+`sel-reset` (shown only for reviewed pairs — back to pending, undoable),
 `sel-autonext`, `sel-open-src` / `sel-open-ai` (copy-path fallback),
 `sel-missing` (absent side / decode failure), `sel-discovery`
 (created/generated line).

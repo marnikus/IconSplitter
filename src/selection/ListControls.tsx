@@ -12,6 +12,7 @@ export interface ListControlsProps {
   toggle: (id: string) => void;
   selectVis: (ids: string[], on: boolean) => void;
   bulk: (d: "approved" | "declined") => void;
+  bulkResetSel: () => void;
   patch: (p: { wrap?: boolean; thumbSize?: "sm" | "lg" }) => void;
 }
 
@@ -31,7 +32,7 @@ export default function ListControls(p: ListControlsProps) {
         {allOn ? "Deselect all" : "Select all visible"}
       </button>
       <span className="text-slate-400" data-testid="sel-selcount">{n} selected</span>
-      <BulkBtns n={n} bulk={p.bulk} />
+      <BulkBtns n={n} bulk={p.bulk} bulkResetSel={p.bulkResetSel} />
       <label className="flex items-center gap-1 text-slate-400">Wrap
         <input type="checkbox" className="accent-indigo-500" data-testid="sel-wrap" checked={p.wrap}
           onChange={(e) => p.patch({ wrap: e.target.checked })} />
@@ -44,9 +45,13 @@ export default function ListControls(p: ListControlsProps) {
   );
 }
 
-function BulkBtns({ n, bulk }: { n: number; bulk: (d: "approved" | "declined") => void }) {
+function BulkBtns({ n, bulk, bulkResetSel }: { n: number; bulk: (d: "approved" | "declined") => void; bulkResetSel: () => void }) {
   return (
     <span className="ml-auto flex items-center gap-2">
+      <button
+        className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 font-semibold text-slate-300 hover:bg-white/10 disabled:opacity-40 sel-focus"
+        disabled={n === 0} data-testid="sel-bulk-reset" onClick={bulkResetSel}
+      >↺ Reset selected ({n})</button>
       <button
         className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40 sel-focus"
         disabled={n === 0} data-testid="sel-bulk-approve" onClick={() => bulk("approved")}

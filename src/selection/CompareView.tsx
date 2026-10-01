@@ -20,6 +20,7 @@ export interface CompareProps {
   autoNext: boolean;
   patch: (p: { zoom?: "fit" | "full"; sync?: boolean; autoNext?: boolean }) => void;
   decide: (id: string, d: "approved" | "declined") => void;
+  reset: (id: string) => void;
   copyPath: (relPath: string) => void;
 }
 
@@ -41,16 +42,22 @@ export default function CompareView(p: CompareProps) {
   );
 }
 
-function Header({ pair, meta, p }: { pair: ViewPair; meta: ReturnType<typeof statusInfo>; p: CompareProps }) {
+function HeaderTitle({ pair, meta }: { pair: ViewPair; meta: ReturnType<typeof statusInfo> }) {
   const warn = attentionInfo(pair);
   return (
+    <div className="min-w-0">
+      <h3 className="truncate text-base font-semibold">{pair.base}
+        <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs" data-testid="sel-status">{meta.glyph} {warn ?? meta.label}</span>
+      </h3>
+      <p className="truncate font-mono text-xs text-slate-400">{pair.pairId} · {pair.relDir || "/"}</p>
+    </div>
+  );
+}
+
+function Header({ pair, meta, p }: { pair: ViewPair; meta: ReturnType<typeof statusInfo>; p: CompareProps }) {
+  return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="min-w-0">
-        <h3 className="truncate text-base font-semibold">{pair.base}
-          <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs" data-testid="sel-status">{meta.glyph} {warn ?? meta.label}</span>
-        </h3>
-        <p className="truncate font-mono text-xs text-slate-400">{pair.pairId} · {pair.relDir || "/"}</p>
-      </div>
+      <HeaderTitle pair={pair} meta={meta} />
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <button data-testid="sel-zoom" onClick={() => p.patch({ zoom: p.zoom === "fit" ? "full" : "fit" })}
           className={`rounded-lg px-2 py-1 text-xs font-semibold ${p.zoom === "full" ? "bg-indigo-500 text-white" : "bg-white/10 text-slate-300"}`}
@@ -58,6 +65,11 @@ function Header({ pair, meta, p }: { pair: ViewPair; meta: ReturnType<typeof sta
         <label className="flex items-center gap-1 text-xs text-slate-400">SYNC
           <input data-testid="sel-sync" type="checkbox" className="accent-indigo-500" checked={p.sync} onChange={(e) => p.patch({ sync: e.target.checked })} />
         </label>
+        {pair.decision !== "pending" && (
+          <button data-testid="sel-reset" className="btn-ghost" onClick={() => p.reset(pair.pairId)}>
+            ↺ Reset to pending
+          </button>
+        )}
         <button data-testid="sel-decline" className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25 sel-focus"
           onClick={() => p.decide(pair.pairId, "declined")}>✕ Decline</button>
         <button data-testid="sel-approve" className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 sel-focus"

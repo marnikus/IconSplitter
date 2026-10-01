@@ -12,10 +12,12 @@ It has two modes:
   it scan, review, split and write everything in one pass, preserving your
   folder hierarchy (see below). Batch mode requires **Chrome or Edge**.
 * **Selection** — review every original next to its `_AI` result, approve or
-  decline each pair (singly or in bulk via checkboxes), and keep the decisions
-  in `review-decisions.json`. Filters by month/date range/status, sorting,
-  search, and hotkeys: A/D decide, ↑↓/W/S navigate, Space zoom, Ctrl+K search.
-  Also Chrome/Edge only.
+  decline each pair (singly or in bulk via checkboxes), reset any reviewed pair
+  back to pending, and keep the decisions in `review-decisions.json`. A global
+  undo/redo timeline records every change (decisions, selection, filters,
+  sort) and survives reloads. Filters by month/date range/status, sorting,
+  search, and hotkeys: A/D decide, ↑↓/W/S navigate, Space zoom, Ctrl+K search,
+  Ctrl+Z / Ctrl+Shift+Z undo/redo. Also Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

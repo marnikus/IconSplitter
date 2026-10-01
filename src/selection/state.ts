@@ -5,12 +5,15 @@
 
 import { attentionInfo, type ReviewPair } from "../lib/pairing";
 import {
-  carryRenamed, diffPairs, type PairDiff, type ReviewRecord,
+  carryRenamed, diffPairs, mergeDecisions, type PairDiff, type ReviewRecord,
 } from "../lib/reviewfile";
 import {
   ALL_FILTER, type Decision, type ListFilter, type ViewPair,
 } from "../lib/reviewfilter";
 import { DEFAULT_SORT, type SortState } from "../lib/reviewsort";
+import {
+  emptyStack, pushEntry, type UndoOut, type UndoStack,
+} from "../lib/undo";
 
 export interface SelToast {
   msg: string;
@@ -29,6 +32,8 @@ export interface SelState {
   selectedIds: string[]; // checkbox multi-selection (stable pair ids)
   wrap: boolean; // navigation wraps at list ends when on
   thumbSize: "sm" | "lg";
+  undo: UndoStack; // global timeline (adapted from sister app)
+  undoBase: ReviewRecord[]; // records before the first history entry
   corrupt: boolean;
   writeWarn: string | null;
   awaitingRetry: number;
@@ -46,6 +51,7 @@ export function initialSelState(): SelState {
     rootName: "", pairs: [], records: [], lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
     selectedIds: [], wrap: false, thumbSize: "sm",
+    undo: emptyStack(), undoBase: [],
     corrupt: false, writeWarn: null, awaitingRetry: 0, watcher: true,
     collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
   };
@@ -67,10 +73,12 @@ export function applyScan(s: SelState, scanned: ReviewPair[], load: ScanLoad, no
   const orphans = records.filter((r) => !viewIds.has(r.pair_id) && !consumed.has(r.pair_id));
   const diff = diffPairs(s.pairs, scanned);
   const selectedId = s.selectedId && viewIds.has(s.selectedId) ? s.selectedId : (pairs[0]?.pairId ?? null);
+  const merged = recordsFromViews(pairs, orphans);
   return {
-    ...s, pairs, records: recordsFromViews(pairs, orphans),
+    ...s, pairs, records: merged,
     lastDiff: diff, lastRescanAt: now, selectedId, corrupt: load.corrupt,
     selectedIds: s.selectedIds.filter((id) => viewIds.has(id)),
+    undo: emptyStack(), undoBase: merged, // external changes rewrite the domain
   };
 }
 
@@ -159,6 +167,52 @@ export function moveActive(s: SelState, visibleIds: string[], dir: 1 | -1): SelS
     return { ...s, selectedId: visibleIds[(next + visibleIds.length) % visibleIds.length] };
   }
   return { ...s, selectedId: visibleIds[next] };
+}
+
+/** One pair back to pending: record dropped, timestamp cleared. */
+export function resetDecision(s: SelState, id: string): SelState {
+  return resetMany(s, [id]);
+}
+
+/** Many pairs back to pending; unknown ids ignored. */
+export function bulkReset(s: SelState, ids: string[]): SelState {
+  return resetMany(s, ids);
+}
+
+function resetMany(s: SelState, ids: string[]): SelState {
+  const want = new Set(ids);
+  const pairs = s.pairs.map((p) => (want.has(p.pairId)
+    ? { ...p, decision: "pending" as Decision, reviewedAt: null }
+    : p));
+  return { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) };
+}
+
+/** Record a snapshot on the global timeline (never from undo/redo itself). */
+export function pushUndo(s: SelState, kind: string, value: unknown): SelState {
+  return { ...s, undo: pushEntry(s.undo, kind, value) };
+}
+
+export function canUndo(s: SelState): boolean {
+  return s.undo.index >= 0;
+}
+
+export function canRedo(s: SelState): boolean {
+  return s.undo.index < s.undo.history.length - 1;
+}
+
+/** Re-apply an undo/redo outcome onto the matching domain slice. */
+export function applyUndoOut(s: SelState, out: UndoOut): SelState {
+  if (out.kind === "decisions") return withRecords(s, out.empty ? s.undoBase : (out.value as ReviewRecord[]));
+  if (out.kind === "select") return { ...s, selectedIds: out.empty ? [] : (out.value as string[]) };
+  if (out.kind === "filter") return { ...s, filter: out.empty ? ALL_FILTER : (out.value as ListFilter) };
+  if (out.kind === "sort") return { ...s, sort: out.empty ? DEFAULT_SORT : (out.value as SortState) };
+  return s;
+}
+
+function withRecords(s: SelState, records: ReviewRecord[]): SelState {
+  const { byId } = mergeDecisions(s.pairs, records);
+  const pairs = s.pairs.map((p) => byId.get(p.pairId) ?? { ...p, decision: "pending" as Decision, reviewedAt: null });
+  return { ...s, pairs, records };
 }
 
 /** Keep the active pair when visible; else the nearest visible by raw order. */

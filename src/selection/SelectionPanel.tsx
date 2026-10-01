@@ -11,7 +11,7 @@ import HeaderRow from "./HeaderRow";
 import ListControls from "./ListControls";
 import PairList from "./PairList";
 import StatusFooter from "./StatusFooter";
-import { counters } from "./state";
+import { counters, canUndo, canRedo } from "./state";
 import { fullPathText } from "./handles";
 import { useThumbFor } from "./thumbs";
 import { useSelection, type SelectionApi } from "./useSelection";
@@ -26,7 +26,9 @@ export default function SelectionPanel() {
   return (
     <div className="space-y-3">
       <HeaderRow rootName={api.s.rootName} watcher={api.s.watcher} pairs={api.visible}
-        chooseRoot={api.chooseRoot} rescan={api.rescan} patch={api.patch} />
+        canUndoNow={canUndo(api.s)} canRedoNow={canRedo(api.s)}
+        chooseRoot={api.chooseRoot} rescan={api.rescan} patch={api.patch}
+        onUndo={api.undo} onRedo={api.redo} />
       <Banners api={api} />
       {api.s.rootName !== "" && (
         <FilterBar filter={api.s.filter} sort={api.s.sort} shown={api.visible.length}
@@ -83,7 +85,8 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
     <div className="grid items-start gap-3 lg:grid-cols-[24rem_1fr]">
       <div className="space-y-2">
         <ListControls visibleIds={visibleIds} selectedIds={api.s.selectedIds} wrap={api.s.wrap}
-          thumbSize={api.s.thumbSize} toggle={api.toggle} selectVis={api.selectVis} bulk={api.bulk} patch={api.patch} />
+          thumbSize={api.s.thumbSize} toggle={api.toggle} selectVis={api.selectVis} bulk={api.bulk}
+          bulkResetSel={api.bulkResetSel} patch={api.patch} />
         <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}
           selectedId={api.s.selectedId} selectedIds={api.s.selectedIds} thumbSize={api.s.thumbSize}
           collapsed={api.s.collapsed} search={search}
@@ -92,7 +95,7 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
       </div>
       <CompareView pair={selected} rootName={api.s.rootName} rootRef={api.rootRef}
         zoom={api.s.zoom} sync={api.s.sync} autoNext={api.s.autoNext}
-        patch={api.patch} decide={api.decide} copyPath={copyPath} />
+        patch={api.patch} decide={api.decide} reset={api.reset} copyPath={copyPath} />
     </div>
   );
 }
@@ -127,13 +130,9 @@ function UnsupportedNote({ onPick }: { onPick: () => void }) {
 function useHotkeys(api: SelectionApi): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        (document.querySelector("[data-testid='sel-search']") as HTMLInputElement | null)?.focus();
-        return;
-      }
       const t = e.target as HTMLElement;
       const inField = t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement;
+      if (ctrlKeyAction(e, api, inField)) return;
       const act = keyToAction(e.key, inField);
       if (!act) return;
       e.preventDefault();
@@ -142,6 +141,21 @@ function useHotkeys(api: SelectionApi): void {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [api]);
+}
+
+/** Ctrl/Cmd chords: focus search, undo/redo (inert inside form fields). */
+function ctrlKeyAction(e: KeyboardEvent, api: SelectionApi, inField: boolean): boolean {
+  if (!(e.ctrlKey || e.metaKey)) return false;
+  const k = e.key.toLowerCase();
+  if (k === "k") {
+    e.preventDefault();
+    (document.querySelector("[data-testid='sel-search']") as HTMLInputElement | null)?.focus();
+    return true;
+  }
+  if (inField) return false;
+  if (k === "z") { e.preventDefault(); if (e.shiftKey) api.redo(); else api.undo(); return true; }
+  if (k === "y") { e.preventDefault(); api.redo(); return true; }
+  return false;
 }
 
 function handle(act: NonNullable<ReturnType<typeof keyToAction>>, api: SelectionApi): void {

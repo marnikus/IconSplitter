@@ -204,3 +204,50 @@ contract locked by tests.
 ## Known debt carried
 
 Same two legacy items; nothing new.
+
+---
+
+# Quality re-check — 2026-10-01 (global undo/redo + reset-to-pending)
+
+Global timeline adapted from the sister app (`Process-Images-in-Areana`
+UndoStore/UndoService): one `{history, index}` stack capped at 100, redo-tail
+truncation, consecutive-dedupe, empty-frontier baseline; kinds `decisions` /
+`select` / `filter` / `sort`. Plus reset-to-pending (single + bulk), both
+undoable themselves. RULE 12 satisfied: ONE timeline, one Ctrl+Z.
+
+## What changed
+
+* `src/lib/undo.ts` (new, 110 LOC) — pure core: clampStack, pushEntry,
+  undoOnce, redoOnce, parse/serialize
+* `src/lib/undopersist.ts` (new, 39 LOC) — persisted save `{root, stack, base}`
+  with validated parse; `src/selection/undostore.ts` (new, 25 LOC) —
+  localStorage `iconSplitter.undo.v1`, root-scoped restore on boot
+* `src/selection/state.ts` +`resetDecision` / `bulkReset` / `pushUndo` /
+  `canUndo` / `canRedo` / `applyUndoOut`; `SelState` grew `undo` / `undoBase`;
+  applyScan resets the timeline (external changes rewrite the domain)
+* `src/selection/useSelection.ts` — decide/toggle/selectVis/setFilter/setSort
+  push entries; `reset` / `bulkResetSel` / `undo` / `redo` actions; split into
+  `useFlowActions` / `useEditActions` to keep the hook ≤ 30 LOC
+* UI: `sel-undo` / `sel-redo` (HeaderRow), `sel-reset` (CompareView),
+  `sel-bulk-reset` (ListControls); Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y hotkeys,
+  inert inside form fields; CompareView `Header` → +`HeaderTitle` subcomponent
+
+## The numbers (measured, not estimated)
+
+* Tests: **164 passed** (28 files; was 141 / 25) — coverage 96.05 %
+  statements / 91.32 % branches
+* Lanes: tsc ✓ · eslint 0 errors (8 legacy warnings only) ·
+  `--changed --allow-legacy` **GATE PASSED** after refactoring four first-pass
+  offenders (undoStep/redoOnce renamed off the anti-gaming regex; applyScan
+  param dropped via boot-restore; onKey cc 11 → ctrlKeyAction; useSelection
+  39 → action builders; Header 33 → HeaderTitle)
+* Largest changed file `useSelection.ts` 244 LOC; RULE 18 honoured.
+
+## Baseline decision
+
+**Not re-recorded** — none of the new files needed a legacy entry; all pass
+standalone.
+
+## Known debt carried
+
+Same two legacy items (`App.tsx`, `detect.ts`); nothing new.

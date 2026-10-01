@@ -7,8 +7,12 @@ export interface HeaderProps {
   rootName: string;
   watcher: boolean;
   pairs: ViewPair[];
+  canUndoNow: boolean;
+  canRedoNow: boolean;
   chooseRoot: () => void;
   rescan: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
   patch: (p: { watcher?: boolean }) => void;
 }
 
@@ -21,6 +25,10 @@ export default function HeaderRow(p: HeaderProps) {
         {p.rootName ? `Root: ${p.rootName}` : "Choose source folder…"}
       </button>
       <button data-testid="sel-rescan" className="btn-ghost" onClick={p.rescan}>↺ Rescan</button>
+      <button data-testid="sel-undo" className="btn-ghost" disabled={!p.canUndoNow} onClick={p.onUndo}
+        title="Ctrl+Z" aria-label="Undo">↩ Undo</button>
+      <button data-testid="sel-redo" className="btn-ghost" disabled={!p.canRedoNow} onClick={p.onRedo}
+        title="Ctrl+Shift+Z" aria-label="Redo">↪ Redo</button>
       <button
         data-testid="sel-watcher" onClick={() => p.patch({ watcher: !p.watcher })}
         className={`rounded-full px-3 py-1 text-xs font-medium ${p.watcher ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-slate-400"}`}

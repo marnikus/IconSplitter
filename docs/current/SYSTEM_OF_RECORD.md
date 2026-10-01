@@ -206,13 +206,14 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing, filters, sorts, status/hotkey semantics, decision records |
-| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, review UI |
+| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `undostore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `ListControls.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, undo localStorage IO, review UI |
+| Undo timeline | `src/lib/undo.ts`, `src/lib/undopersist.ts` | pure global timeline core (cap/clamp/truncate/dedupe/frontier) + persisted-save shape (RULE 12) |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 25 files / 141 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 28 files / 164 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, two happy-dom component
 tests render the Selection panel and drive it with hotkeys, checkboxes and
 bulk buttons):
@@ -243,6 +244,12 @@ bulk buttons):
   selection set, active-row reconciliation, All-decisions contract
 * `selection_bulk_ui.test.tsx` — paired thumbs, indeterminate select-all,
   bulk approve summary, disabled bulk, status filters in the DOM
+* `undo.test.ts` — timeline cap/clamp, redo-tail truncation, dedupe,
+  undo/redo walk incl. empty frontier, corrupt parse, save round-trip
+* `selection_undo.test.ts` — resetDecision/bulkReset, pushUndo/canUndo/
+  canRedo, applyUndoOut per kind, rescan resets the timeline
+* `selection_undo_ui.test.tsx` — DOM: undo/redo buttons, Ctrl+Z/Ctrl+Shift+Z,
+  sel-reset to pending, sel-bulk-reset, all fully undoable
 
 Must exist before the matching change ships:
 
