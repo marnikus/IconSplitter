@@ -327,7 +327,14 @@ Prompt + provider card:
 | `svg-per-request` | `input[type=number]` | images per request, 1–9 |
 | `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
 | `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
+| `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap |
 | `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"` |
+
+The provider card (`svg-provider-card`) is **minimizable**: `svg-provider-toggle`
+is a link in the header with `aria-expanded` and `aria-label`
+("Minimize model settings" / "Restore model settings"). Minimized, only the
+header stays — provider, limits (`svg-limits`) and the toggle — and the choice
+is remembered locally (RULE 6), so a restart opens the card the way it was left.
 
 Sampling (`SvgSampling.tsx`) — only what the selected model accepts is offered:
 

@@ -26,6 +26,8 @@ export interface SvgControlsProps {
   paramNote: string | null;
   keySet: boolean;
   keyMask: string;
+  /** false while the provider card is minimized to its header (RULE 6 pref). */
+  providerOpen: boolean;
   filter: SvgListFilter;
   sort: SvgSort;
   shown: number;
@@ -39,6 +41,7 @@ export interface SvgControlsProps {
   onRefreshModels: () => void;
   onDismissNote: () => void;
   onSaveKey: (key: string) => void;
+  onProviderOpen: (open: boolean) => void;
   onFilter: (patch: Partial<SvgListFilter>) => void;
   onSort: (sort: SvgSort) => void;
   onClearFilters: () => void;
@@ -59,9 +62,9 @@ export default function SvgControls(p: SvgControlsProps) {
       <div className="svg-toolbar">
         <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />
         <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params}
-          paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask}
+          paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask} open={p.providerOpen}
           onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
-          onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} />
+          onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} onToggleOpen={p.onProviderOpen} />
       </div>
       <FilterLine filter={p.filter} sort={p.sort} shown={p.shown} total={p.total}
         onFilter={p.onFilter} onSort={p.onSort} onClear={p.onClearFilters} />
@@ -115,32 +118,56 @@ function PromptZone({ prompt, onPrompt, onReset }: { prompt: string; onPrompt: (
   );
 }
 
-function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey }: {
+function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, open, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey, onToggleOpen }: {
   provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams; paramNote: string | null;
-  keySet: boolean; keyMask: string;
+  keySet: boolean; keyMask: string; open: boolean;
   onConfig: (patch: Partial<SvgConfig>) => void; onParams: (patch: Partial<SamplingParams>) => void;
   onRefreshModels: () => void; onDismissNote: () => void; onSaveKey: (key: string) => void;
+  onToggleOpen: (open: boolean) => void;
 }) {
   return (
-    <div className="svg-provider">
-      <div className="svg-provider-top">
-        <span><strong data-testid="svg-provider">{provider}</strong> · OpenAI-compatible</span>
-        <span data-testid="svg-limits">timeout {Math.round(config.timeoutMs / 1000)}s · {config.retries} retries · {config.imagesPerRequest} per request</span>
-      </div>
-      <div className="svg-provider-fields">
-        <NumberField label="Images / request" testid="svg-per-request" value={config.imagesPerRequest}
-          min={IMAGES_PER_REQUEST_MIN} max={IMAGES_PER_REQUEST_MAX}
-          onChange={(n) => onConfig({ imagesPerRequest: clampImagesPerRequest(n) })} />
-        <label className="svg-field">
-          <span className="svg-label">Model</span>
-          <input className="svg-input" data-testid="svg-model" aria-label="Requesty model id" spellCheck={false}
-            value={config.model} onChange={(e) => onConfig({ model: e.target.value })} />
-        </label>
-      </div>
-      <SvgSampling caps={caps} params={params} note={paramNote} onParams={onParams}
-        onRefresh={onRefreshModels} onDismissNote={onDismissNote} />
-      <ProviderFoot keySet={keySet} keyMask={keyMask} model={modelLabel(config.model)}
-        onSaveKey={onSaveKey} onRefreshModels={onRefreshModels} />
+    <div className={`svg-provider${open ? "" : " closed"}`} data-testid="svg-provider-card">
+      <ProviderHead provider={provider} config={config} open={open} onToggleOpen={onToggleOpen} />
+      {open && (
+        <>
+          <ProviderFields config={config} onConfig={onConfig} />
+          <SvgSampling caps={caps} params={params} note={paramNote} onParams={onParams}
+            onRefresh={onRefreshModels} onDismissNote={onDismissNote} />
+          <ProviderFoot keySet={keySet} keyMask={keyMask} model={modelLabel(config.model)}
+            onSaveKey={onSaveKey} onRefreshModels={onRefreshModels} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The two settings that belong to the request, not to the model. */
+function ProviderFields({ config, onConfig }: { config: SvgConfig; onConfig: (patch: Partial<SvgConfig>) => void }) {
+  return (
+    <div className="svg-provider-fields">
+      <NumberField label="Images / request" testid="svg-per-request" value={config.imagesPerRequest}
+        min={IMAGES_PER_REQUEST_MIN} max={IMAGES_PER_REQUEST_MAX}
+        onChange={(n) => onConfig({ imagesPerRequest: clampImagesPerRequest(n) })} />
+      <label className="svg-field">
+        <span className="svg-label">Model</span>
+        <input className="svg-input" data-testid="svg-model" aria-label="Requesty model id" spellCheck={false}
+          value={config.model} onChange={(e) => onConfig({ model: e.target.value })} />
+      </label>
+    </div>
+  );
+}
+
+/** The one line that survives minimizing: who, which limits, and the toggle. */
+function ProviderHead({ provider, config, open, onToggleOpen }: {
+  provider: string; config: SvgConfig; open: boolean; onToggleOpen: (open: boolean) => void;
+}) {
+  return (
+    <div className="svg-provider-top">
+      <span><strong data-testid="svg-provider">{provider}</strong> · OpenAI-compatible</span>
+      <span data-testid="svg-limits">timeout {Math.round(config.timeoutMs / 1000)}s · {config.retries} retries · {config.imagesPerRequest} per request</span>
+      <button type="button" className="svg-link" data-testid="svg-provider-toggle" aria-expanded={open}
+        aria-label={open ? "Minimize model settings" : "Restore model settings"}
+        onClick={() => onToggleOpen(!open)}>{open ? "Minimize" : "Restore"}</button>
     </div>
   );
 }
@@ -165,10 +192,12 @@ function KeyRow({ keySet, keyMask, model, onSave }: { keySet: boolean; keyMask: 
   if (!editing) {
     return (
       <button type="button" className="svg-key-state" data-testid="svg-key-state" onClick={() => setEditing(true)}>
-        <span aria-hidden="true">🛡</span>
-        <strong>{keySet ? "API key secured locally" : "No API key yet"}</strong>
-        <span className="svg-masked">{keyMask}</span>
-        <span>{model} · excluded from Git · logs · exports</span>
+        <span className="svg-key-line">
+          <span aria-hidden="true">🛡</span>
+          <strong>{keySet ? "API key secured locally" : "No API key yet"}</strong>
+          <span className="svg-masked" data-testid="svg-key-mask">{keyMask}</span>
+        </span>
+        <span className="svg-key-note" data-testid="svg-key-note">{model} · excluded from Git · logs · exports</span>
       </button>
     );
   }

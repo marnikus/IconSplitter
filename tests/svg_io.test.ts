@@ -14,6 +14,8 @@ import { headerState, newestValidOf, pruneChecked, toListRow, toRow, visibleRows
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
+import { DEFAULT_SVG_PREFS, SVG_PREFS_KEY, loadSvgPrefs, parseSvgPrefs, saveSvgPrefs } from "../src/svg/prefsstore";
+import { THUMB_DEFAULT } from "../src/lib/reviewprefs";
 import type { SvgRow } from "../src/svg/types";
 import { hasPreview, svgPreviewUrl } from "../src/svg/preview";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
@@ -335,9 +337,11 @@ describe("runner events and the review decision", () => {
   });
 });
 
+const CFG = { baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 };
+
 describe("state reducer and preview", () => {
   it("starts from the documented defaults and applies every action once", () => {
-    const start = initialModel({ baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 }, "prompt", 84);
+    const start = initialModel(CFG, "prompt", 84);
     expect(start.filter).toEqual({ generation: "all", review: "all", search: "" });
     expect(start.keyMask).toBe("not set");
     expect(reduceState(start, { type: "key", key: "not-a-real-key-value-1234" }).keySet).toBe(true);
@@ -351,6 +355,30 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "filter", patch: { search: "fog" } }).filter.search).toBe("fog");
     expect(reduceState(start, { type: "thumb", px: 120 }).thumb).toBe(120);
     expect(reduceState(start, { type: "dialog", dialog: null }).dialog).toBeNull();
+  });
+
+  it("remembers the zoom and whether the model card is minimized", () => {
+    localStorage.setItem(SVG_PREFS_KEY, JSON.stringify({ thumbHeight: 132, providerOpen: false }));
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false });
+    saveSvgPrefs({ thumbHeight: 96, providerOpen: false });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false });
+    localStorage.removeItem(SVG_PREFS_KEY);
+  });
+
+  it("shows the model card when the stored value is missing or not a boolean", () => {
+    expect(parseSvgPrefs({})).toEqual({ thumbHeight: THUMB_DEFAULT, providerOpen: true });
+    expect(parseSvgPrefs({ providerOpen: "closed" })).toEqual({ thumbHeight: THUMB_DEFAULT, providerOpen: true });
+    expect(parseSvgPrefs({ thumbHeight: 140 })).toEqual({ thumbHeight: 140, providerOpen: true });
+    expect(parseSvgPrefs(null)).toEqual(DEFAULT_SVG_PREFS);
+  });
+
+  it("minimizes and restores the model card through one action", () => {
+    const start = initialModel(CFG, "prompt", 84);
+    expect(start.providerOpen).toBe(true);
+    const closed = reduceState(start, { type: "provider-open", open: false });
+    expect(closed.providerOpen).toBe(false);
+    expect(closed.config).toBe(start.config); // nothing else moved
+    expect(initialModel(CFG, "prompt", 84, false).providerOpen).toBe(false);
   });
 
   it("only previews a document that starts like an SVG", () => {

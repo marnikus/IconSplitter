@@ -30,7 +30,7 @@ export type SvgGenApi = SvgModel & SvgActions & {
 
 export function useSvgGen(): SvgGenApi {
   const boot = useRef(loadBoot()).current;
-  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.thumb);
+  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.thumb, boot.providerOpen);
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
   const { visible, checked, activeId, header, affected, totals, provider, refs } = ctx;
@@ -44,9 +44,11 @@ interface Boot {
   config: ReturnType<typeof loadConfig>;
   prompt: string;
   thumb: number;
+  providerOpen: boolean;
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */
 function loadBoot(): Boot {
-  return { config: loadConfig(), prompt: loadPrompt(), thumb: loadSvgPrefs().thumbHeight };
+  const prefs = loadSvgPrefs();
+  return { config: loadConfig(), prompt: loadPrompt(), thumb: prefs.thumbHeight, providerOpen: prefs.providerOpen };
 }

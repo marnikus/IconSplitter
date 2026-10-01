@@ -238,6 +238,48 @@ describe("Generate SVG panel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the masked key and its note on separate lines", async () => {
+    await mount(await makeRoot());
+    await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
+    await settle();
+    await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "layout_ui_1234"));
+    await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
+    await settle();
+    const mask = q("[data-testid=svg-key-mask]");
+    const note = q("[data-testid=svg-key-note]");
+    expect(mask?.textContent).toContain("•");
+    expect(note?.textContent).toContain("excluded from Git");
+    // Two rows, not two columns of one row: a long key can never run into the note.
+    expect(mask?.parentElement).not.toBe(note?.parentElement);
+    expect(q("[data-testid=svg-key-state]")?.textContent).toContain("API key secured locally");
+  });
+
+  it("minimizes the model card to its header and restores it, and remembers", async () => {
+    await mount(await makeRoot());
+    const toggle = () => q("[data-testid=svg-provider-toggle]") as HTMLButtonElement;
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(q("[data-testid=svg-max-tokens]")).not.toBeNull();
+    expect(q("[data-testid=svg-key-state]")).not.toBeNull();
+
+    await act(async () => { toggle().click(); });
+    await settle();
+    // Only the header stays: the model, its limits and the toggle itself.
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(q("[data-testid=svg-provider]")?.textContent).toContain("Requesty");
+    expect(q("[data-testid=svg-limits]")?.textContent).toContain("timeout");
+    expect(q("[data-testid=svg-max-tokens]")).toBeNull();
+    expect(q("[data-testid=svg-key-state]")).toBeNull();
+
+    // A restart restores the minimized card — the space saving is remembered.
+    await act(async () => { ui.unmount(); });
+    await mount(await makeRoot());
+    expect(q("[data-testid=svg-max-tokens]")).toBeNull();
+    await act(async () => { toggle().click(); });
+    await settle();
+    expect(q("[data-testid=svg-max-tokens]")).not.toBeNull();
+    expect(q("[data-testid=svg-key-state]")).not.toBeNull();
+  });
+
   it("offers only what the default reasoning model accepts", async () => {
     await mount(await makeRoot());
     await setModel("openai/gpt-6.1-sol");

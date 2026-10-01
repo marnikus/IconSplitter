@@ -13,7 +13,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { pickDirectory } from "../batch/picker";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
-import { clearApiKey, saveApiKey } from "./keystore";
+import { useKeyActions } from "./keyactions";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
@@ -66,6 +66,7 @@ export interface SvgActions {
   setFilter: (patch: Partial<SvgListFilter>) => void;
   setSort: (sort: SvgSort) => void;
   setConfig: (patch: Partial<SvgConfig>) => void;
+  setProviderOpen: (open: boolean) => void;
   setParams: (patch: Partial<SamplingParams>) => void;
   refreshModels: () => void;
   setPrompt: (text: string) => void;
@@ -87,7 +88,8 @@ export interface SvgActions {
   openLocation: (id: string) => void;
 }
 
-type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
+/** One hook's share of the action surface, so the composition stays typed. */
+export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 
 /** The undo path must live where the model does (RULE 12). */
 export function useSvgActions(ctx: SvgCtx): SvgActions {
@@ -124,19 +126,20 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   return { chooseRoot, rescan };
 }
 
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setFilter" | "setSort" | "setPrompt" | "resetPrompt"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setFilter" | "setSort" | "setPrompt" | "resetPrompt" | "setProviderOpen"> {
   const latest = useRef(ctx);
   latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
+  const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
   const setPrompt = useCallback((text: string) => latest.current.dispatch({ type: "prompt", prompt: text }), []);
   const resetPrompt = useCallback(() => {
     const c = latest.current;
     c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
     c.say("Default prompt restored");
   }, []);
-  return { setThumb, setFilter, setSort, setPrompt, resetPrompt };
+  return { setThumb, setFilter, setSort, setProviderOpen, setPrompt, resetPrompt };
 }
 
 /**
@@ -192,35 +195,6 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
     void decideReview(latest.current, ids, decision);
   }, []);
   return { toggleCheck, selectVisible, deselectAll, setActive, decide };
-}
-
-function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const saveKey = useCallback((value: string) => {
-    void (async () => {
-      const c = latest.current;
-      const trimmed = value.trim();
-      // Never throws, and reports whether the write really persisted — a
-      // silent failure here is what made the Save button look broken.
-      const stored = await saveApiKey(trimmed);
-      c.refs.key.current = trimmed === "" ? null : trimmed;
-      c.dispatch({ type: "key", key: c.refs.key.current });
-      if (trimmed === "") c.say("API key cleared from this device");
-      else if (stored) c.say("API key stored on this device only");
-      else c.say("API key kept for this session only — browser storage refused it", true);
-    })();
-  }, []);
-  const forgetKey = useCallback(() => {
-    void (async () => {
-      const c = latest.current;
-      await clearApiKey();
-      c.refs.key.current = null;
-      c.dispatch({ type: "key", key: null });
-      c.say("API key cleared from this device");
-    })();
-  }, []);
-  return { saveKey, forgetKey };
 }
 
 function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "confirmGenerate" | "dismissDialog"> {

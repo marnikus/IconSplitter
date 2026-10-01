@@ -42,6 +42,8 @@ export interface SvgModel {
   keyMask: string;
   keySet: boolean;
   thumb: number;
+  /** false while the provider card is minimized to its header line. */
+  providerOpen: boolean;
   filter: SvgListFilter;
   sort: SvgSort;
   dialog: Dialog | null;
@@ -64,6 +66,7 @@ export type SvgAction =
   | { type: "prompt"; prompt: string }
   | { type: "key"; key: string | null }
   | { type: "thumb"; px: number }
+  | { type: "provider-open"; open: boolean }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
   | { type: "dialog"; dialog: Dialog | null }
@@ -87,6 +90,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
+  "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
   sort: (m, a) => ({ ...m, sort: (a as { sort: SvgSort }).sort }),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: Dialog | null }).dialog }),
@@ -110,16 +114,16 @@ function mask(key: string): string {
 }
 
 /** The model a fresh tab opens with (persisted values are merged in boot). */
-export function initialModel(config: SvgConfig, prompt: string, thumb: number): SvgModel {
+export function initialModel(config: SvgConfig, prompt: string, thumb: number, providerOpen = true): SvgModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, keyMask: "not set", keySet: false, thumb,
+    prompt, keyMask: "not set", keySet: false, thumb, providerOpen,
     filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false,
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
-export function useSvgModel(config: SvgConfig, prompt: string, thumb: number): [SvgModel, Dispatch<SvgAction>] {
-  return useReducer(reduceState, config, (c) => initialModel(c, prompt, thumb));
+export function useSvgModel(config: SvgConfig, prompt: string, thumb: number, providerOpen: boolean): [SvgModel, Dispatch<SvgAction>] {
+  return useReducer(reduceState, config, (c) => initialModel(c, prompt, thumb, providerOpen));
 }
