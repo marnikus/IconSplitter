@@ -1,23 +1,22 @@
 // svg_io.test.ts — the SVG tab's IO layer executes for real (RULE 8): scanning
 // the picked root for approved pairs, the row model, the runner-event mapping,
-// the review decision + its undo path, the state reducer, the preview rule and
+// the review decision + its undo path, the state reducer, the root token and
 // the write order that makes a bad result harmless. Each test fails if the
 // module it covers is deleted.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { newSidecar, parseSidecar, serializeSidecar, withVersion } from "../src/lib/svgfile";
+import { newSidecar, newestValid, parseSidecar, serializeSidecar, withVersion } from "../src/lib/svgfile";
 import { saveSvgVersion, recordFailure } from "../src/svg/saveversion";
 import { loadSidecar, readSvgText, listSvgFiles, saveSidecar } from "../src/svg/sidecar";
 import { discoverApprovedSources, toBatchSource } from "../src/svg/sources";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
-import { headerState, newestValidOf, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
+import { headerState, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
 import { DEFAULT_SVG_PREFS, SVG_PREFS_KEY, loadSvgPrefs, parseSvgPrefs, saveSvgPrefs } from "../src/svg/prefsstore";
 import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
-import { hasPreview, svgPreviewUrl } from "../src/svg/preview";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
@@ -62,7 +61,7 @@ function decisionsJson(...approved: string[]): string {
 
 /** Minimal setters object that records what a scan wrote. */
 function setters() {
-  const out = { name: "", rows: [] as unknown[], discovery: null as unknown, busy: null as unknown, said: [] as string[] };
+  const out = { name: "", rows: [] as unknown[], discovery: null as unknown, busy: null as unknown, said: [] as string[], tokens: 0 };
   return {
     out,
     api: {
@@ -70,6 +69,7 @@ function setters() {
       setRows: (r: unknown[]) => { out.rows = r; },
       setDiscovery: (d: unknown) => { out.discovery = d; },
       setBusy: (b: unknown) => { out.busy = b; },
+      setRootToken: () => { out.tokens += 1; },
       say: (m: string) => { out.said.push(m); },
     },
   };
@@ -130,6 +130,8 @@ describe("scanSources", () => {
     await scanSources(r, s.api);
     expect(s.out.rows).toHaveLength(2);
     expect(s.out.busy).toBeNull();
+    // one bumped token per scan: a row's preview re-reads the file it shows
+    expect(s.out.tokens).toBe(1);
     const rows = s.out.rows as { source: { id: string }; sidecar: unknown }[];
     expect(rows.every((row) => row.sidecar === null)).toBe(true);
     expect(r.sidecars.size).toBe(2);
@@ -187,7 +189,7 @@ describe("row model", () => {
     const row = toRow(source, loaded.sidecar, loaded.corrupt);
     expect(row.status).toBe("generated");
     expect(row.newest?.version).toBe(1);
-    expect(newestValidOf(loaded.sidecar)?.version).toBe(1);
+    expect(newestValid(loaded.sidecar)?.version).toBe(1);
     expect(toListRow(row).tokens).toBe(300);
     expect(toListRow(row).cost).toBe(0.01);
     expect(await readSvgText(root, first.ok ? first.svgPath : "")).toBe(svg);
@@ -382,10 +384,11 @@ describe("state reducer and preview", () => {
     expect(initialModel(CFG, "prompt", { ...VIEW_PREFS, providerOpen: false }).providerOpen).toBe(false);
   });
 
-  it("only previews a document that starts like an SVG", () => {
-    expect(hasPreview("<svg xmlns=\"http://www.w3.org/2000/svg\"/>")).toBe(true);
-    expect(hasPreview("not svg")).toBe(false);
-    expect(hasPreview(null)).toBe(false);
-    expect(svgPreviewUrl("<svg/>")).toBe("data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E");
+  it("bumps the root token so no preview can outlive its folder", () => {
+    expect(initialModel(CFG, "prompt", VIEW_PREFS).rootToken).toBe(0);
+    const start = initialModel(CFG, "prompt", VIEW_PREFS);
+    expect(reduceState(start, { type: "root-token" }).rootToken).toBe(1);
+    expect(reduceState(reduceState(start, { type: "root-token" }), { type: "root-token" }).rootToken).toBe(2);
+    expect(reduceState(start, { type: "root", name: "split_root" }).rootToken).toBe(1);
   });
 });

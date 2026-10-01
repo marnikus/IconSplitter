@@ -60,7 +60,7 @@ function Controls({ g }: { g: SvgGenApi }) {
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
   if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
   const actions: SvgRowActions = {
-    activeId: g.activeId, checked: g.checked, thumb: g.thumb, bg: g.bg, rootRef,
+    activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootToken: g.rootToken, bg: g.bg, rootRef,
     toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
     decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
     openLocation: g.openLocation,

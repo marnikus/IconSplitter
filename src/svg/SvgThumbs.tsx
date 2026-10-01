@@ -1,62 +1,73 @@
 // SvgThumbs.tsx — the two previews of one row (prompt §2/§16): the approved AI
-// image the generation starts from, and the newest valid SVG beside it. Both
-// are resolved from the folder handle, cached per path for the session, and
-// the SVG is rendered as an image (svg/preview) so no saved document can
-// execute anything in the panel. The SVG preview sits in a FRAME whose
-// background colour is the user's choice (lib/svgbackground): the colour is a
-// CSS background of the wrapper, so the document itself is never modified.
+// image the generation starts from, and the newest valid SVG beside it. The AI
+// side is an object URL cached per path for the session; the SVG side is the
+// saved document, rendered INLINE by SvgPreview — parsed, sanitized and fitted
+// there, and never written back to disk. It sits in a FRAME whose background
+// colour is the user's choice (lib/svgbackground): a CSS background of the
+// wrapper, so the document itself is never modified.
 
-import { useEffect, useState } from "react";
-import { previewFrame, type PreviewBackground } from "../lib/svgbackground";
+import { useEffect, useMemo, useState } from "react";
+import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { useSideThumbs } from "../selection/thumbs";
 import { readSvgText } from "./sidecar";
-import { svgPreviewUrl } from "./preview";
+import { previewTargetOf } from "./rowmodel";
+import SvgPreviewBox from "./SvgPreview";
 import type { SvgRow } from "./types";
 
 export interface SvgThumbsProps {
   rootRef: { current: DirHandleLike | null };
+  /** Bumped by every pick and scan: no preview may outlive its folder. */
+  rootToken: number;
   row: SvgRow;
   thumb: number;
   bg: PreviewBackground;
 }
 
-export default function SvgThumbs({ rootRef, row, thumb, bg }: SvgThumbsProps) {
+export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg }: SvgThumbsProps) {
   const ai = useImageUrl(rootRef, row.source.relPath);
-  const svgText = useSvgText(rootRef, row.newest?.svgPath ?? "");
-  const frame = previewFrame(bg);
+  const target = previewTargetOf(row);
+  const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
   const id = row.source.id;
   return (
     <div className="svg-thumbs">
-      <Thumb url={ai} tag="AI source" alt={row.source.name} height={thumb} testid={`svg-ai-${id}`} />
-      <Thumb url={svgPreviewUrl(svgText)} tag="Newest SVG" alt={`${row.source.stem} newest SVG`} height={thumb}
-        testid={`svg-prev-${id}`} frameId={`svg-prev-frame-${id}`} frame={frame} empty="No SVG" />
+      <Cell tag="AI source">
+        <Thumb url={ai} alt={row.source.name} height={thumb} testid={`svg-ai-${id}`} />
+      </Cell>
+      <Cell tag="Newest SVG" frame={previewFrame(bg)} frameId={`svg-prev-frame-${id}`}>
+        <SvgPreviewBox code={svg} size={thumb} testid={`svg-prev-${id}`}
+          label={`${row.source.stem} newest SVG`} version={target?.version ?? 0} />
+      </Cell>
     </div>
+  );
+}
+
+/** The label plus whatever it is labelling; the SVG side also carries the
+    user's background frame (a CSS colour, never a change to the document). */
+function Cell({ tag, children, frame, frameId }: {
+  tag: string; children: React.ReactNode; frame?: PreviewFrame; frameId?: string;
+}) {
+  const className = `svg-thumb-wrap${frame ? " svg-preview-frame" : ""}${frame?.outline ? " contrast" : ""}`;
+  return (
+    <span className={className} style={frame ? { background: frame.color } : undefined}
+      data-testid={frameId} data-bg={frame?.color}>
+      {children}
+      <span className="svg-thumb-tag">{tag}</span>
+    </span>
   );
 }
 
 interface ThumbProps {
   url: string | null;
-  tag: string;
   alt: string;
   height: number;
   testid: string;
-  empty?: string;
-  frame?: { color: string; outline: boolean };
-  frameId?: string;
 }
 
-function Thumb({ url, tag, alt, height, empty, testid, frame, frameId }: ThumbProps) {
-  const className = `svg-thumb-wrap${frame ? " svg-preview-frame" : ""}${frame?.outline ? " contrast" : ""}`;
-  return (
-    <span className={className} style={frame ? { background: frame.color } : undefined}
-      data-testid={frameId} data-bg={frame?.color}>
-      {url === null
-        ? <span className="svg-thumb missing" style={{ height }} data-testid={testid}>{empty ?? "Unreadable"}</span>
-        : <img className="svg-thumb" src={url} alt={alt} height={height} loading="lazy" data-testid={testid} />}
-      <span className="svg-thumb-tag">{tag}</span>
-    </span>
-  );
+function Thumb({ url, alt, height, testid }: ThumbProps) {
+  return url === null
+    ? <span className="svg-thumb missing" style={{ height }} data-testid={testid}>Unreadable</span>
+    : <img className="svg-thumb" src={url} alt={alt} height={height} loading="lazy" data-testid={testid} />;
 }
 
 /** Object URL for the AI image, cached for the session (RULE 10). */
@@ -71,18 +82,20 @@ function useImageUrl(rootRef: { current: DirHandleLike | null }, relPath: string
   return url;
 }
 
-/** Text of the saved SVG; null when the row has no version or it is gone. */
-function useSvgText(rootRef: { current: DirHandleLike | null }, relPath: string): string | null {
+/** Text of the saved SVG the row previews; null when there is none yet. */
+function useSvgText(rootRef: { current: DirHandleLike | null }, rootToken: number, relPath: string): string | null {
   const [text, setText] = useState<string | null>(null);
+  // The file to read is (folder generation, path): a rescan has to re-read it,
+  // or the row would keep painting a version Copy no longer hands out.
+  const wanted = useMemo(() => ({ token: rootToken, path: relPath }), [rootToken, relPath]);
   useEffect(() => {
     let live = true;
     const root = rootRef.current;
-    if (relPath === "" || root === null) {
-      setText(null);
-      return;
+    setText((prev) => (prev === null ? prev : null));
+    if (root !== null && wanted.path !== "") {
+      void readSvgText(root, wanted.path).then((t) => live && setText(t), () => live && setText(null));
     }
-    readSvgText(root, relPath).then((t) => live && setText(t)).catch(() => live && setText(null));
     return () => { live = false; };
-  }, [relPath, rootRef]);
+  }, [wanted, rootRef]);
   return text;
 }

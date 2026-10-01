@@ -47,6 +47,7 @@ export interface SvgCtx {
   setRootName: (name: string) => void;
   setDiscovery: (d: Discovery | null) => void;
   setBusy: (b: string | null) => void;
+  setRootToken: () => void;
   setRows: (rows: SvgRow[]) => void;
   setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void;
   setProgress: (p: RunProgress | null) => void;
@@ -56,7 +57,7 @@ export interface SvgCtx {
 /** The write half of the context, wired by svg/ctx from the reducer. */
 export type SvgSetters = Pick<SvgCtx,
   "say" | "loadAll" | "refreshKey" | "setRootName" | "setDiscovery" | "setBusy"
-  | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn">;
+  | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn">;
 
 /** The public action surface of the tab, in the order the panel uses them. */
 export interface SvgActions {

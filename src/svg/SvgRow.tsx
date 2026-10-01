@@ -10,6 +10,7 @@ import type { ReviewStatus } from "../lib/svgfile";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
+import { previewTargetOf } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
 import type { SvgRow } from "./types";
 
@@ -18,6 +19,8 @@ export interface SvgRowActions {
   checked: string[];
   thumb: number;
   bg: PreviewBackground;
+  /** Bumped by every pick and scan so the SVG preview re-reads its file. */
+  rootToken: number;
   rootRef: { current: DirHandleLike | null };
   toggleCheck: (id: string) => void;
   setActive: (id: string) => void;
@@ -42,7 +45,7 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`} checked={checked}
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
-      <SvgThumbs rootRef={a.rootRef} row={row} thumb={a.thumb} bg={a.bg} />
+      <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg} />
       <FileCell row={row} />
       <StatusCell row={row} />
       <ReviewCell row={row} />
@@ -56,8 +59,10 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
 /** Location / copy / code / history — all disabled until a version exists. */
 function FileActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
   const id = row.source.id;
-  const version = row.newest?.version ?? 0;
-  const hasSvg = row.newest !== null;
+  // The version Copy hands out is the version the preview shows — one owner.
+  const target = previewTargetOf(row);
+  const version = target?.version ?? 0;
+  const hasSvg = target !== null;
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
     <div className="svg-file-actions">

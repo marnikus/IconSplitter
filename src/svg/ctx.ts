@@ -38,7 +38,7 @@ export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCt
     rows: model.rows, checked: app.svg.checked, activeId: app.svg.activeId,
     say, loadAll: bridge.loadAll, refreshKey: bridge.refreshKey,
     setRootName: bridge.setRootName,
-    setDiscovery: bridge.setDiscovery, setBusy: bridge.setBusy,
+    setDiscovery: bridge.setDiscovery, setBusy: bridge.setBusy, setRootToken: bridge.setRootToken,
     setRows: bridge.setRows, setRowsFn: bridge.setRowsFn,
     setProgress: bridge.setProgress, setProgressFn: bridge.setProgressFn,
     ...derived,
@@ -73,13 +73,14 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
   const setRootName = useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]);
   const setDiscovery = useCallback((discovery: Discovery | null) => dispatch({ type: "discovery", discovery }), [dispatch]);
   const setBusy = useCallback((busy: string | null) => dispatch({ type: "busy", busy }), [dispatch]);
+  const setRootToken = useCallback(() => dispatch({ type: "root-token" }), [dispatch]);
   const setRows = useCallback((rows: SvgRow[]) => dispatch({ type: "rows", rows }), [dispatch]);
   const setRowsFn = useCallback((fn: (rows: SvgRow[]) => SvgRow[]) => dispatch({ type: "rows-fn", fn }), [dispatch]);
   const setProgress = useCallback((progress: RunProgress | null) => dispatch({ type: "progress", progress }), [dispatch]);
   const setProgressFn = useCallback((fn: (p: RunProgress | null) => RunProgress | null) => dispatch({ type: "progress-fn", fn }), [dispatch]);
-  setters.current = { setRootName, setRows, setDiscovery, setBusy, say };
+  setters.current = { setRootName, setRows, setDiscovery, setBusy, setRootToken, say };
   return {
-    loadAll, refreshKey, say, setRootName, setDiscovery, setBusy,
+    loadAll, refreshKey, say, setRootName, setDiscovery, setBusy, setRootToken,
     setRows, setRowsFn, setProgress, setProgressFn,
   };
 }

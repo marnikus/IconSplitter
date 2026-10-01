@@ -42,6 +42,8 @@ export interface SvgModel {
   /** Masked key for display; the key itself lives in svg/keystore. */
   keyMask: string;
   keySet: boolean;
+  /** Bumped by every pick and scan so a preview cannot outlive its folder. */
+  rootToken: number;
   thumb: number;
   /** false while the provider card is minimized to its header line. */
   providerOpen: boolean;
@@ -68,6 +70,7 @@ export type SvgAction =
   | { type: "param-note"; note: string | null }
   | { type: "prompt"; prompt: string }
   | { type: "key"; key: string | null }
+  | { type: "root-token" }
   | { type: "thumb"; px: number }
   | { type: "provider-open"; open: boolean }
   | { type: "bg"; bg: PreviewBackground }
@@ -80,7 +83,7 @@ export type SvgAction =
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
-  root: (m, a) => ({ ...m, rootName: (a as { name: string }).name }),
+  root: (m, a) => ({ ...m, rootName: (a as { name: string }).name, rootToken: m.rootToken + 1 }),
   rows: (m, a) => ({ ...m, rows: (a as { rows: SvgRow[] }).rows }),
   "rows-fn": (m, a) => ({ ...m, rows: (a as { fn: (r: SvgRow[]) => SvgRow[] }).fn(m.rows) }),
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: Discovery | null }).discovery }),
@@ -93,6 +96,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   "param-note": (m, a) => ({ ...m, paramNote: (a as { note: string | null }).note }),
   prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
+  "root-token": (m) => ({ ...m, rootToken: m.rootToken + 1 }),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
@@ -130,7 +134,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, keyMask: "not set", keySet: false,
+    prompt, keyMask: "not set", keySet: false, rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
     filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false,
   };

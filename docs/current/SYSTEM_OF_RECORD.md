@@ -146,6 +146,21 @@ that makes a network call, only when the user asks it to):
   regeneration takes the next free version from disk + sidecar and never
   overwrites. The newest VALID version is previewed by default; every version
   stays reachable through the history dialog.
+* Previewing a saved SVG (`src/lib/svgpreview.ts`, rendered by
+  `src/svg/SvgPreview.tsx`): the saved text is parsed with the real XML parser,
+  repaired once when a namespace is missing, sanitized (no scripts, no event
+  handlers, no remote URLs, no `<foreignObject>`), fitted (`viewBox` from the
+  declared box or from px width/height, `width/height="100%"`,
+  `preserveAspectRatio="xMidYMid meet"` so strokes scale uniformly and the art
+  is centred), given an ink for `currentColor`, id-scoped per document, and
+  rendered INLINE inside its own open shadow root. The saved file is never
+  modified. The row's preview and its Copy/Code actions read ONE target
+  (`previewTargetOf` in `src/svg/rowmodel.ts`), so they can never show
+  different versions, and `rootToken` (bumped on every pick and scan) forces
+  every row to re-read the file it shows. Empty (no SVG yet) and broken
+  (un-previewable file) are different states: the frame says "No SVG" or
+  "Preview failed" + the reason. Design + root cause:
+  `docs/archive/2026-10-01-svg-preview-rendering/design.md`.
 * Per-file metadata: `<stem>.svg.json` beside the AI image (no global SVG
   decision file), written tmp → verify → overwrite → cleanup. Missing sidecar
   = pending; a corrupt sidecar warns and never destroys the SVG files. Each
@@ -168,7 +183,9 @@ that makes a network call, only when the user asks it to):
   sidecar or export is ever modified** by it. The choice is persisted with the
   tab's view prefs and restored on the next visit. Where the chosen colour
   leaves black artwork under 3:1 contrast (WCAG non-text), the frame adds a
-  light outline around the artwork so black strokes stay visible.
+  light outline around the artwork so black strokes stay visible. Inside a
+  frame the inline preview host paints nothing of its own, so the chosen colour
+  is what the artwork is actually painted on.
 * Review: a new valid SVG starts **pending**; Approve/Decline act on the
   selection (one history entry per gesture, undoable). The approved version
   is identified in the row; regenerating adds a new pending version without
@@ -335,15 +352,15 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
-| SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `modelcaps.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request + error classification, token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, per-model capability rules (temperature / token field / effort tiers) + value sanitising |
+| SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `modelcaps.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request + error classification, token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, per-model capability rules (temperature / token field / effort tiers) + value sanitising |
 | SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery, sidecar IO, key store, the generation run, row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
-| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `preview.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews, batch strip, dialogs, hotkeys, the three sampling controls |
+| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, dialogs, hotkeys, the three sampling controls |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 50 files / 426 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 52 files / 452 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -398,9 +415,20 @@ and `data-testid` handles):
   missing / unreadable reporting, scan + remembered root, row model, the
   write order (validate first, never overwrite, failure records), runner
   events, the review decision + its undo patch, the state reducer, preview
+* `svg_preview.test.ts` — the preview pipeline end to end: a document without
+  `xmlns`, an XML prolog / doctype / comment, an unbound `xlink` prefix, px
+  `width`/`height` with no `viewBox`, `%` sizes with no box, varied boxes
+  (24×24 / 64×32 / 512×128 / negative origin), `currentColor` ink, an author
+  `style` that would fight the fit, script/`on*`/`javascript:`/remote-URL
+  removal, safe vs importing `@import`/`url()` stylesheets, id scoping (in
+  markup and inside `<style>`), and every failure reason (empty ≠ broken);
+  plus `previewTargetOf` — the one version the row previews and copies
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
-  its Escape close, the confirm-before-send guard, approve + undo
+  its Escape close, the confirm-before-send guard, approve + undo, and the
+  preview frame: inline `<svg>` with `xmlns` + `100%` + `xMidYMid meet`, the
+  frame's `data-version` equal to the version Copy hands over, "Preview
+  failed" + reason for a malformed file, "No SVG" for a source with none
 
 Must exist before the matching change ships:
 
