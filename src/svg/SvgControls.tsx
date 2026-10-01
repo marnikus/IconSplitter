@@ -9,6 +9,8 @@ import { useState } from "react";
 import { IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, clampImagesPerRequest, modelLabel, type SvgConfig } from "../lib/svgconfig";
 import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
+import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
+import SvgSampling from "./SvgSampling";
 import type { Discovery } from "./sources";
 
 export interface SvgControlsProps {
@@ -19,6 +21,9 @@ export interface SvgControlsProps {
   prompt: string;
   provider: string;
   config: SvgConfig;
+  caps: ModelCaps;
+  params: SamplingParams;
+  paramNote: string | null;
   keySet: boolean;
   keyMask: string;
   filter: SvgListFilter;
@@ -30,6 +35,9 @@ export interface SvgControlsProps {
   onPrompt: (text: string) => void;
   onResetPrompt: () => void;
   onConfig: (patch: Partial<SvgConfig>) => void;
+  onParams: (patch: Partial<SamplingParams>) => void;
+  onRefreshModels: () => void;
+  onDismissNote: () => void;
   onSaveKey: (key: string) => void;
   onFilter: (patch: Partial<SvgListFilter>) => void;
   onSort: (sort: SvgSort) => void;
@@ -50,8 +58,10 @@ export default function SvgControls(p: SvgControlsProps) {
         onChooseRoot={p.onChooseRoot} onRescan={p.onRescan} />
       <div className="svg-toolbar">
         <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />
-        <ProviderCard provider={p.provider} config={p.config} keySet={p.keySet} keyMask={p.keyMask}
-          onConfig={p.onConfig} onSaveKey={p.onSaveKey} />
+        <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params}
+          paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask}
+          onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
+          onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} />
       </div>
       <FilterLine filter={p.filter} sort={p.sort} shown={p.shown} total={p.total}
         onFilter={p.onFilter} onSort={p.onSort} onClear={p.onClearFilters} />
@@ -105,9 +115,11 @@ function PromptZone({ prompt, onPrompt, onReset }: { prompt: string; onPrompt: (
   );
 }
 
-function ProviderCard({ provider, config, keySet, keyMask, onConfig, onSaveKey }: {
-  provider: string; config: SvgConfig; keySet: boolean; keyMask: string;
-  onConfig: (patch: Partial<SvgConfig>) => void; onSaveKey: (key: string) => void;
+function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey }: {
+  provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams; paramNote: string | null;
+  keySet: boolean; keyMask: string;
+  onConfig: (patch: Partial<SvgConfig>) => void; onParams: (patch: Partial<SamplingParams>) => void;
+  onRefreshModels: () => void; onDismissNote: () => void; onSaveKey: (key: string) => void;
 }) {
   return (
     <div className="svg-provider">
@@ -125,7 +137,24 @@ function ProviderCard({ provider, config, keySet, keyMask, onConfig, onSaveKey }
             value={config.model} onChange={(e) => onConfig({ model: e.target.value })} />
         </label>
       </div>
-      <KeyRow keySet={keySet} keyMask={keyMask} model={modelLabel(config.model)} onSave={onSaveKey} />
+      <SvgSampling caps={caps} params={params} note={paramNote} onParams={onParams}
+        onRefresh={onRefreshModels} onDismissNote={onDismissNote} />
+      <ProviderFoot keySet={keySet} keyMask={keyMask} model={modelLabel(config.model)}
+        onSaveKey={onSaveKey} onRefreshModels={onRefreshModels} />
+    </div>
+  );
+}
+
+/** The key state beside the one action that can change a model's limits. */
+function ProviderFoot({ keySet, keyMask, model, onSaveKey, onRefreshModels }: {
+  keySet: boolean; keyMask: string; model: string; onSaveKey: (k: string) => void; onRefreshModels: () => void;
+}) {
+  return (
+    <div className="svg-provider-foot">
+      <KeyRow keySet={keySet} keyMask={keyMask} model={model} onSave={onSaveKey} />
+      <button type="button" className="svg-link" data-testid="svg-refresh-models" onClick={onRefreshModels}>
+        Refresh model list
+      </button>
     </div>
   );
 }

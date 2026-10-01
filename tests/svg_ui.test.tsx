@@ -7,6 +7,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
+import { saveCatalog } from "../src/svg/catalog";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -89,6 +90,16 @@ async function type(sel: string, value: string): Promise<void> {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+/** Changing the model is a real config write: it re-reads the new caps. */
+async function setModel(id: string): Promise<void> {
+  await act(async () => {
+    const el = input("[data-testid=svg-model]");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, id);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
 }
 
 async function mount(root: FakeDir): Promise<void> {
@@ -208,6 +219,9 @@ describe("Generate SVG panel", () => {
     await settle();
     expect(q("[data-testid=svg-confirm]")).not.toBeNull();
     expect(q("[data-testid=svg-confirm]")?.textContent).toContain("batch");
+    // The confirmation states the sampling values that will be sent.
+    expect(q("[data-testid=svg-confirm-sampling]")?.textContent).toContain("no temperature");
+    expect(q("[data-testid=svg-confirm-sampling]")?.textContent).toContain("32 000 max tokens");
   });
 
   it("says the key is session-only when storage refuses the write", async () => {
@@ -222,6 +236,91 @@ describe("Generate SVG panel", () => {
     expect(q("[data-testid=svg-key-state]")?.textContent).toContain("API key secured locally");
     expect(q("[data-testid=svg-toast]")?.textContent).toContain("this session only");
     vi.unstubAllGlobals();
+  });
+
+  it("offers only what the default reasoning model accepts", async () => {
+    await mount(await makeRoot());
+    await setModel("openai/gpt-6.1-sol");
+    // openai/gpt-6.1-sol is a reasoning model: no temperature, completion
+    // tokens, four efforts (extra high included).
+    expect(q("[data-testid=svg-temperature]")).toBeNull();
+    expect(q("[data-testid=svg-temperature-off]")?.textContent).toContain("Not supported");
+    expect(input("[data-testid=svg-max-tokens]").min).toBe("1000");
+    const effort = q("[data-testid=svg-effort]") as HTMLSelectElement;
+    expect([...effort.options].map((o) => o.value)).toEqual(["", "low", "medium", "high", "xhigh"]);
+    expect(q("[data-testid=svg-caps]")?.textContent).toContain("max_completion_tokens");
+    expect(q("[data-testid=svg-caps]")?.textContent).toContain("family");
+  });
+
+  it("keeps one setting per model and switches back to it", async () => {
+    await mount(await makeRoot());
+    await setModel("openai/gpt-4o");
+    expect(q("[data-testid=svg-temperature]")).not.toBeNull();
+    expect(q("[data-testid=svg-effort]")).toBeNull();
+    await type("[data-testid=svg-temperature]", "0.3");
+    await settle();
+    expect(input("[data-testid=svg-temperature]").value).toBe("0.3");
+
+    // The reasoning model has its own (empty) temperature: nothing of gpt-4o's
+    // was carried over, so there is nothing to warn about.
+    await setModel("openai/gpt-6.1-sol");
+    expect(q("[data-testid=svg-param-note]")).toBeNull();
+    expect(q("[data-testid=svg-temperature]")).toBeNull();
+    await setModel("openai/gpt-4o");
+    expect(input("[data-testid=svg-temperature]").value).toBe("0.3");
+  });
+
+  it("takes the model list's limits over the family defaults, and warns", async () => {
+    const catalog = { object: "list", data: [{ id: "openai/gpt-6.1-sol", max_output_tokens: 8_000, supports_reasoning: true }] };
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify(catalog), { status: 200 }));
+    await mount(await makeRoot());
+    await setModel("openai/gpt-6.1-sol");
+    // The boot refresh fetched the list: its 8 000 ceiling replaces the 32 000
+    // default, and the user is told instead of being silently served less.
+    expect(input("[data-testid=svg-max-tokens]").value).toBe("8000");
+    expect(q("[data-testid=svg-param-note]")?.textContent).toContain("output tokens clamped");
+    expect(q("[data-testid=svg-caps]")?.textContent).toContain("model list");
+    // A hand-typed value above that ceiling cannot be saved either.
+    await type("[data-testid=svg-max-tokens]", "48000");
+    await settle();
+    expect(input("[data-testid=svg-max-tokens]").value).toBe("8000");
+    // The manual refresh re-reads the same list and says where it came from.
+    await act(async () => { (q("[data-testid=svg-refresh-models]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(q("[data-testid=svg-toast]")?.textContent).toContain("Model list refreshed");
+  });
+
+  it("restores the saved settings after a restart, per model", async () => {
+    await mount(await makeRoot());
+    await setModel("openai/gpt-4o");
+    await type("[data-testid=svg-temperature]", "0.4");
+    await type("[data-testid=svg-max-tokens]", "4096");
+    await settle();
+    await setModel("openai/gpt-6.1-sol");
+    const reasoningTokens = input("[data-testid=svg-max-tokens]").value;
+
+    // A restart with no cached model list: the family rules are back in charge,
+    // but the stored settings are not.
+    saveCatalog([]);
+    await act(async () => { ui.unmount(); });
+    await mount(await makeRoot());
+    await setModel("openai/gpt-4o");
+    expect(input("[data-testid=svg-temperature]").value).toBe("0.4");
+    expect(input("[data-testid=svg-max-tokens]").value).toBe("4096");
+    // The reasoning model keeps its own settings — and still no temperature.
+    await setModel("openai/gpt-6.1-sol");
+    expect(q("[data-testid=svg-temperature]")).toBeNull();
+    expect(input("[data-testid=svg-max-tokens]").value).toBe(reasoningTokens);
+  });
+
+  it("clamps a token ceiling into the model's range before it can be sent", async () => {
+    await mount(await makeRoot());
+    await type("[data-testid=svg-max-tokens]", "999999");
+    await settle();
+    expect(input("[data-testid=svg-max-tokens]").value).toBe("200000");
+    await type("[data-testid=svg-max-tokens]", "5");
+    await settle();
+    expect(input("[data-testid=svg-max-tokens]").value).toBe("1000");
   });
 
   it("approves the active row's version and undoes it in one entry", async () => {

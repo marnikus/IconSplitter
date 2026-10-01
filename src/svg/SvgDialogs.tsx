@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { planBatches } from "../lib/svgbatch";
+import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
 import { fmtCost, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -18,6 +19,8 @@ export interface SvgDialogsProps {
   dialog: Dialog | null;
   rows: SvgRow[];
   config: SvgConfig;
+  caps: ModelCaps;
+  params: SamplingParams;
   rootRef: { current: DirHandleLike | null };
   readCode: (id: string, version: number) => Promise<string | null>;
   onConfirm: () => void;
@@ -48,7 +51,8 @@ function ConfirmDialog({ ids, batches, perRequest, p }: { ids: string[]; batches
           <button type="button" className="svg-btn" data-testid="svg-confirm-close" onClick={p.onDismiss}>Close</button>
         </header>
         <div className="svg-modal-body">
-          <Facts ids={ids.length} batches={batches} perRequest={perRequest} model={p.config.model} />
+          <Facts ids={ids.length} batches={batches} perRequest={perRequest} model={p.config.model}
+            sampling={paramsLabel(p.caps, p.params)} />
           <p className="svg-note">
             The saved local prompt is sent with every request. Existing SVG versions are never overwritten —
             each result is saved as the next version. A rate limit reports its retry-after delay, and nothing
@@ -66,13 +70,16 @@ function ConfirmDialog({ ids, batches, perRequest, p }: { ids: string[]; batches
   );
 }
 
-/** The four facts a confirmation must state before anything is sent. */
-function Facts({ ids, batches, perRequest, model }: { ids: number; batches: number; perRequest: number; model: string }) {
+/** The facts a confirmation must state before anything is sent. */
+function Facts({ ids, batches, perRequest, model, sampling }: {
+  ids: number; batches: number; perRequest: number; model: string; sampling: string;
+}) {
   return (
     <div className="svg-facts">
       <Fact label="Selected images" value={String(ids)} testid="svg-confirm-count" />
       <Fact label="Requests" value={`${batches} × ${perRequest} max`} testid="svg-confirm-requests" />
       <Fact label="Provider / model" value={model} testid="svg-confirm-model" />
+      <Fact label="Model settings" value={sampling} testid="svg-confirm-sampling" />
       <Fact label="Output policy" value="Versioned SVG + per-file sidecar" />
     </div>
   );

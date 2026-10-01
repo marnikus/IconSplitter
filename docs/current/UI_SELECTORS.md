@@ -329,6 +329,17 @@ Prompt + provider card:
 | `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
 | `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"` |
 
+Sampling (`SvgSampling.tsx`) — only what the selected model accepts is offered:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-temperature` | `input[type=number]` | 0–2, step 0.1; **absent** on a reasoning model, which shows `svg-temperature-off` ("Not supported by this model") instead |
+| `svg-max-tokens` | `input[type=number]` | clamped to the model's range (family default 1 000–200 000, or the model list's `max_output_tokens`) |
+| `svg-effort` | `select` | Low / Medium / High / Extra High; the empty option is the provider default. `xhigh` (Extra High) only on the models that accept it |
+| `svg-caps` | text | the token field, both ranges and where the limits came from (model list / family / default) |
+| `svg-param-note` | warning | what a model change reset, and why; dismissable |
+| `svg-refresh-models` | button | re-reads `GET /v1/models` (cached 24 h) and re-resolves the limits |
+
 Filters: `svg-filter-generation` (all / not generated / generating / generated
 / failed), `svg-filter-review` (all / pending / approved / declined),
 `svg-sort` (date / name / generation / review / cost), `svg-search` (matches the
@@ -377,6 +388,7 @@ Dialogs:
 |---|---|
 | `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
 | `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
+| `svg-confirm-sampling` | text | the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") |
 | `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-close`, `svg-history-done` |

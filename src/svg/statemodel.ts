@@ -5,6 +5,13 @@
 
 import { useReducer, type Dispatch } from "react";
 import type { SvgConfig } from "../lib/svgconfig";
+import {
+  DEFAULT_PARAMS,
+  capsFor,
+  type CatalogModel,
+  type ModelCaps,
+  type SamplingParams,
+} from "../lib/modelcaps";
 import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
 import type { Discovery } from "./sources";
 import type { Dialog, RunProgress, SvgRow } from "./types";
@@ -22,6 +29,14 @@ export interface SvgModel {
   busy: string | null;
   toast: Toast | null;
   config: SvgConfig;
+  /** Sampling values for the selected model — never a value it refuses. */
+  params: SamplingParams;
+  /** What the selected model accepts (lib/modelcaps), for the controls and the payload. */
+  caps: ModelCaps;
+  /** Requesty's model list when it has been read; null = family rules only. */
+  catalog: CatalogModel[] | null;
+  /** Warning shown until dismissed: what a model change had to reset. */
+  paramNote: string | null;
   prompt: string;
   /** Masked key for display; the key itself lives in svg/keystore. */
   keyMask: string;
@@ -42,6 +57,10 @@ export type SvgAction =
   | { type: "busy"; busy: string | null }
   | { type: "toast"; toast: Toast | null }
   | { type: "config"; config: SvgConfig }
+  | { type: "params"; params: SamplingParams }
+  | { type: "caps"; caps: ModelCaps }
+  | { type: "catalog"; catalog: CatalogModel[] | null }
+  | { type: "param-note"; note: string | null }
   | { type: "prompt"; prompt: string }
   | { type: "key"; key: string | null }
   | { type: "thumb"; px: number }
@@ -61,6 +80,10 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
   toast: (m, a) => ({ ...m, toast: (a as { toast: Toast | null }).toast }),
   config: (m, a) => ({ ...m, config: (a as { config: SvgConfig }).config }),
+  params: (m, a) => ({ ...m, params: (a as { params: SamplingParams }).params }),
+  caps: (m, a) => ({ ...m, caps: (a as { caps: ModelCaps }).caps }),
+  catalog: (m, a) => ({ ...m, catalog: (a as { catalog: CatalogModel[] | null }).catalog }),
+  "param-note": (m, a) => ({ ...m, paramNote: (a as { note: string | null }).note }),
   prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
@@ -90,7 +113,8 @@ function mask(key: string): string {
 export function initialModel(config: SvgConfig, prompt: string, thumb: number): SvgModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
-    config, prompt, keyMask: "not set", keySet: false, thumb,
+    config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
+    prompt, keyMask: "not set", keySet: false, thumb,
     filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false,
   };
 }

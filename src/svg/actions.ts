@@ -14,10 +14,13 @@ import { pickDirectory } from "../batch/picker";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { clearApiKey, saveApiKey } from "./keystore";
+import { refreshCatalog } from "./catalog";
+import { loadParamMap, saveParamMap, withParams } from "./paramstore";
+import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
-import { runGeneration } from "./runner";
+import { message, runGeneration } from "./runner";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
@@ -63,6 +66,8 @@ export interface SvgActions {
   setFilter: (patch: Partial<SvgListFilter>) => void;
   setSort: (sort: SvgSort) => void;
   setConfig: (patch: Partial<SvgConfig>) => void;
+  setParams: (patch: Partial<SamplingParams>) => void;
+  refreshModels: () => void;
   setPrompt: (text: string) => void;
   resetPrompt: () => void;
   saveKey: (key: string) => void;
@@ -90,6 +95,7 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
   return {
     ...useSourceActions(ctx),
     ...useViewActions(ctx),
+    ...useModelActions(ctx),
     ...useSelectActions(ctx),
     ...useKeyActions(ctx),
     ...useRunActions(ctx),
@@ -118,23 +124,54 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   return { chooseRoot, rescan };
 }
 
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setFilter" | "setSort" | "setConfig" | "setPrompt" | "resetPrompt"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setFilter" | "setSort" | "setPrompt" | "resetPrompt"> {
   const latest = useRef(ctx);
   latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
-  const setConfig = useCallback((patch: Partial<SvgConfig>) => {
-    const c = latest.current;
-    c.dispatch({ type: "config", config: parseConfig({ ...c.m.config, ...patch }) });
-  }, []);
   const setPrompt = useCallback((text: string) => latest.current.dispatch({ type: "prompt", prompt: text }), []);
   const resetPrompt = useCallback(() => {
     const c = latest.current;
     c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
     c.say("Default prompt restored");
   }, []);
-  return { setThumb, setFilter, setSort, setConfig, setPrompt, resetPrompt };
+  return { setThumb, setFilter, setSort, setPrompt, resetPrompt };
+}
+
+/**
+ * Model and sampling. Changing the model is only a config write: ctx's sync
+ * effect re-reads the new model's capabilities and stored settings and warns
+ * about anything it had to drop.
+ */
+function useModelActions(ctx: SvgCtx): Slice<"setConfig" | "setParams" | "refreshModels"> {
+  const latest = useRef(ctx);
+  latest.current = ctx;
+  const setConfig = useCallback((patch: Partial<SvgConfig>) => {
+    const c = latest.current;
+    c.dispatch({ type: "config", config: parseConfig({ ...c.m.config, ...patch }) });
+  }, []);
+  const setParams = useCallback((patch: Partial<SamplingParams>) => {
+    const c = latest.current;
+    const { params, reset } = sanitizeParams(c.m.caps, { ...c.m.params, ...patch });
+    c.dispatch({ type: "params", params });
+    saveParamMap(withParams(loadParamMap(), c.m.config.model, params));
+    if (reset.length > 0) c.say(reset.join("; "), true);
+  }, []);
+  const refreshModels = useCallback(() => {
+    void (async () => {
+      const c = latest.current;
+      try {
+        const models = await refreshCatalog(c.m.config.baseUrl, c.refs.key.current);
+        // Storing the list is enough: the sync effect re-resolves the caps.
+        c.dispatch({ type: "catalog", catalog: models });
+        c.say(`Model list refreshed — ${models.length} models`);
+      } catch (error) {
+        c.say(message(error), true);
+      }
+    })();
+  }, []);
+  return { setConfig, setParams, refreshModels };
 }
 
 function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "deselectAll" | "setActive" | "decide"> {
@@ -231,7 +268,7 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
   const summary = await runGeneration({
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, prompt: ctx.m.prompt, sources,
+    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
     sidecars: ctx.refs.sidecars, signal: controller.signal,
     onEvent: (event) => onRunEvent(event, ctx),
   });

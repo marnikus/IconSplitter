@@ -28,15 +28,19 @@ export default function SvgPanel() {
   return (
     <div className="svg" data-testid="svg-panel">
       <SvgControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
-        prompt={g.prompt} provider={g.provider} config={g.config} keySet={g.keySet} keyMask={g.keyMask}
+        prompt={g.prompt} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
+        paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask}
         filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
         onChooseRoot={g.chooseRoot} onRescan={g.rescan} onPrompt={g.setPrompt} onResetPrompt={g.resetPrompt}
-        onConfig={g.setConfig} onSaveKey={g.saveKey} onFilter={g.setFilter} onSort={g.setSort}
+        onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}
+        onDismissNote={() => g.dispatch({ type: "param-note", note: null })}
+        onSaveKey={g.saveKey} onFilter={g.setFilter} onSort={g.setSort}
         onClearFilters={() => g.setFilter({ generation: "all", review: "all", search: "" })} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
-      <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} rootRef={rootRef} readCode={g.readCode}
+      <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
+        rootRef={rootRef} readCode={g.readCode}
         onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode} />
       <Overlay g={g} />
     </div>

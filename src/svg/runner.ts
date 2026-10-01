@@ -12,6 +12,7 @@ import { buildChatRequest, sendChatRequest, type Failure, type Usage } from "../
 import { allocateUsage, sumUsage } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import type { SvgConfig } from "../lib/svgconfig";
+import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { DirHandleLike } from "../lib/fs";
 import type { SvgSidecar } from "../lib/svgfile";
 import { buildComposite, type BuiltComposite } from "./composite";
@@ -32,6 +33,9 @@ export interface RunArgs {
   root: DirHandleLike;
   apiKey: string;
   config: SvgConfig;
+  /** What the selected model accepts, and the values to send with it. */
+  caps: ModelCaps;
+  params: SamplingParams;
   prompt: string;
   sources: readonly SvgSource[];
   /** Sidecars loaded before the run; refreshed in place as results are saved. */
@@ -149,7 +153,10 @@ interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAft
 async function sendBatch(state: RunState, plan: BatchPlan, items: SvgSource[], composite: BuiltComposite): Promise<SendOk | SendBad> {
   const manifest = batchManifest(plan.items);
   const prompt = items.length === 1 ? singlePrompt(state.args.prompt, items[0].stem) : batchPrompt(state.args.prompt, manifest);
-  const request = buildChatRequest(state.args.config.model, prompt, composite.dataUrl, state.args.config.maxTokens);
+  const request = buildChatRequest({
+    model: state.args.config.model, prompt, image: composite.dataUrl,
+    caps: state.args.caps, params: state.args.params,
+  });
   for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
     if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
     const out = await sendChatRequest({ config: state.args.config, apiKey: state.args.apiKey, request, signal: state.args.signal });
@@ -256,7 +263,7 @@ function toBatchSources(sources: readonly SvgSource[]): BatchSource[] {
   return sources.map(toBatchSource);
 }
 
-function message(error: unknown): string {
+export function message(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
 }
 

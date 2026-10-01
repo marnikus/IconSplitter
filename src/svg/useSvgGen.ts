@@ -25,6 +25,7 @@ export type SvgGenApi = SvgModel & SvgActions & {
   affected: string[];
   totals: SvgCtx["totals"];
   refs: SvgCtx["refs"];
+  dispatch: SvgCtx["dispatch"];
 };
 
 export function useSvgGen(): SvgGenApi {
@@ -35,7 +36,7 @@ export function useSvgGen(): SvgGenApi {
   const { visible, checked, activeId, header, affected, totals, provider, refs } = ctx;
   return {
     ...model, ...actions, supported: fsSupported(), provider, visible,
-    checked, activeId, header, affected, totals, refs,
+    checked, activeId, header, affected, totals, refs, dispatch,
   };
 }
 

@@ -9,6 +9,9 @@ import { usageTotals } from "../lib/svglist";
 import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
 import { loadApiKey } from "./keystore";
+import { isStale, loadCatalog, refreshCatalog } from "./catalog";
+import { loadParamMap, paramsFor, saveParamMap, withParams } from "./paramstore";
+import { resetNote, resolveModelParams } from "./modelparams";
 import { saveConfig, savePrompt } from "./promptstore";
 import { saveSvgPrefs } from "./prefsstore";
 import { bootSources, scanSources, type ScanSetters } from "./scan";
@@ -16,6 +19,7 @@ import { headerState, toListRow, visibleRows } from "./rowmodel";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { SvgCtx, SvgSetters } from "./actions";
 import type { Discovery } from "./sources";
+import type { CatalogModel } from "../lib/modelcaps";
 import type { RunProgress, SvgRefs, SvgRow } from "./types";
 
 export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCtx {
@@ -24,8 +28,10 @@ export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCt
   const app = useAppState();
   const say = useSay(dispatch);
   const bridge = useScanBridge(refs, dispatch, say);
+  const setCatalog = useCallback((catalog: CatalogModel[] | null) => dispatch({ type: "catalog", catalog }), [dispatch]);
   const derived = useDerived(model, app.svg.checked);
-  useSvgBoot(refs, bridge);
+  useSvgBoot(refs, { ...bridge, setCatalog, baseUrl: model.config.baseUrl });
+  useModelSync(model, dispatch, say);
   useSvgPersist(model);
   return {
     m: model, dispatch, refs, hist, provider: providerLabel(model.config),
@@ -78,12 +84,60 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
   };
 }
 
-/** Once per mount: restore the remembered folder and the stored key. */
-function useSvgBoot(refs: SvgRefs, bridge: Pick<SvgCtx, "loadAll" | "refreshKey" | "setRootName">): void {
-  const { loadAll, refreshKey, setRootName } = bridge;
+/**
+ * Once per mount: restore the remembered folder, the stored key and the cached
+ * model list. A stale cache is refreshed in the background — the tab never waits
+ * for the network, and a failed refresh leaves the family rules in charge.
+ */
+function useSvgBoot(refs: SvgRefs, bridge: BootBridge): void {
+  const { loadAll, refreshKey, setRootName, setCatalog, baseUrl } = bridge;
   useEffect(() => {
     void bootSources(refs, { setRootName, loadAll, refreshKey });
-  }, [refs, loadAll, refreshKey, setRootName]);
+    const cached = loadCatalog();
+    if (cached !== null) setCatalog(cached.models);
+    if (cached === null || isStale(cached)) {
+      void refreshCatalog(baseUrl, refs.key.current)
+        .then((models) => setCatalog(models))
+        .catch(() => undefined);
+    }
+  }, [refs, loadAll, refreshKey, setRootName, setCatalog, baseUrl]);
+}
+
+interface BootBridge {
+  loadAll: () => void;
+  refreshKey: () => void;
+  setRootName: (name: string) => void;
+  setCatalog: (catalog: CatalogModel[] | null) => void;
+  baseUrl: string;
+}
+
+/**
+ * The one place a model's settings are (re)resolved: on mount, when the model
+ * id changes, and when a fresh model list arrives. Whatever the new model
+ * refuses is dropped and named in a warning — never silently kept, and never
+ * guessed at. Runs once per (model, catalog) pair, so editing a value is safe.
+ */
+function useModelSync(model: SvgModel, dispatch: Dispatch<SvgAction>, say: SvgCtx["say"]): void {
+  const applied = useRef("");
+  const key = `${model.config.model}#${model.catalog === null ? "-" : model.catalog.length}`;
+  const latest = useRef({ model, dispatch, say, key });
+  latest.current = { model, dispatch, say, key };
+  useEffect(() => {
+    const now = latest.current;
+    if (applied.current === now.key) return;
+    applied.current = now.key;
+    const target = now.model;
+    const model_ = target.config.model;
+    const { caps, params, reset } = resolveModelParams(model_, target.catalog, paramsFor(loadParamMap(), model_));
+    now.dispatch({ type: "caps", caps });
+    now.dispatch({ type: "params", params });
+    saveParamMap(withParams(loadParamMap(), model_, params));
+    const note = resetNote(model_, reset);
+    if (note !== null) {
+      now.dispatch({ type: "param-note", note });
+      now.say(note, true);
+    }
+  }, [key]);
 }
 
 /** Zoom, provider settings and the prompt are remembered locally (RULE 6). */

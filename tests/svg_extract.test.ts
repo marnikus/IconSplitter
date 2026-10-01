@@ -10,7 +10,7 @@ import {
   approvedVersion, newSidecar, newestValid, nextVersion, parseSidecar, serializeSidecar, sidecarName,
   svgFileName, svgStem, tallyReviews, versionOfFileName, withVersion, type SvgVersion,
 } from "../src/lib/svgfile";
-import { buildChatRequest, classifyHttp, classifyTransport, readContent, readRetryAfterMs, readUsage } from "../src/lib/svgrequest";
+import { classifyHttp, classifyTransport, readContent, readRetryAfterMs, readUsage } from "../src/lib/svgrequest";
 import { allocateUsage, fmtCost, fmtTokens, sumUsage, usageLine } from "../src/lib/svgusage";
 import { batchManifest } from "../src/lib/svgbatch";
 
@@ -206,18 +206,9 @@ describe("svgfile", () => {
 });
 
 describe("svgrequest", () => {
-  it("sends the documented multimodal payload with the image and the prompt", () => {
-    const req = buildChatRequest("openai/gpt-6.1-sol", "the prompt", "data:image/png;base64,AAAA", 32000);
-    expect(req.model).toBe("openai/gpt-6.1-sol");
-    expect(req.max_tokens).toBe(32000);
-    expect(req.messages).toHaveLength(1);
-    expect(req.messages[0].content).toEqual([
-      { type: "text", text: "the prompt" },
-      { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } },
-    ]);
-    expect(buildChatRequest("m", "p", "u").max_tokens).toBeUndefined();
-  });
-
+  // The payload itself (and which sampling fields a model accepts) is asserted
+  // in tests/svg_send.test.ts against the real capability rules; here we only
+  // read a response back.
   it("reads tokens and the provider-reported cost, inventing nothing", () => {
     expect(readUsage({ usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10, cost: 0.0123 } }))
       .toEqual({ input: 7, output: 3, total: 10, cost: 0.0123, currency: "USD" });

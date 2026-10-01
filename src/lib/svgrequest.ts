@@ -7,6 +7,7 @@
 // not payload.
 
 import { chatUrl, type SvgConfig } from "./svgconfig";
+import { effortOf, type Effort, type ModelCaps, type SamplingParams } from "./modelcaps";
 import { authHeader } from "./svgsecret";
 import { isRecord } from "./isrecord";
 
@@ -17,19 +18,47 @@ export interface ChatMessage {
   content: ContentPart[];
 }
 
+/**
+ * The wire shape, reduced to what this build sends. `temperature`, the token
+ * ceiling and `reasoning_effort` are all optional because a model may refuse
+ * them — see lib/modelcaps, which is the only place that decides.
+ */
 export interface ChatRequest {
   model: string;
   messages: ChatMessage[];
+  temperature?: number;
   max_tokens?: number;
+  max_completion_tokens?: number;
+  reasoning_effort?: Effort;
 }
 
-/** The documented OpenAI-compatible multimodal shape: text part + image part. */
-export function buildChatRequest(model: string, prompt: string, imageDataUrl: string, maxTokens = 0): ChatRequest {
+export interface BuildArgs {
+  model: string;
+  prompt: string;
+  /** Data URL of the (composite) image sent with the request. */
+  image: string;
+  caps: ModelCaps;
+  params: SamplingParams;
+}
+
+/**
+ * The documented OpenAI-compatible multimodal shape: text part + image part,
+ * plus only the sampling parameters the selected model accepts. An unsupported
+ * field is omitted, never sent and then rejected with a 400.
+ */
+export function buildChatRequest(args: BuildArgs): ChatRequest {
+  const { model, prompt, image, caps, params } = args;
   const request: ChatRequest = {
     model,
-    messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imageDataUrl } }] }],
+    messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }],
   };
-  if (maxTokens > 0) request.max_tokens = maxTokens;
+  if (caps.temperature !== null && params.temperature !== null) request.temperature = params.temperature;
+  if (params.maxTokens > 0) {
+    if (caps.tokenField === "max_completion_tokens") request.max_completion_tokens = params.maxTokens;
+    else request.max_tokens = params.maxTokens;
+  }
+  const effort = effortOf(caps, params.effort);
+  if (effort !== null) request.reasoning_effort = effort;
   return request;
 }
 

@@ -78,8 +78,12 @@ function cap(word: string): string {
 
 /** Full chat-completions URL for the configured base (no trailing slash dupes). */
 export function chatUrl(baseUrl: string): string {
-  const base = baseUrl.replace(/\/+$/, "");
-  return base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
+  return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+}
+
+/** The model list endpoint on the same base — the capability source of truth. */
+export function chatModelsUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/models`;
 }
 
 /**
