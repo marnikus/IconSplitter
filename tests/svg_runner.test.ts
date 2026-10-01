@@ -218,6 +218,29 @@ describe("runGeneration — one request per batch", () => {
     expect(summary.problems.join(" ")).toContain("500");
   });
 
+  it("splits a large selection too (23 images -> 6 requests, 4 x5 + 3)", async () => {
+    const { root, sources } = fixture(23);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+
+    const summary = await runGeneration(args);
+
+    expect(t.calls.map((c) => c.items.length)).toEqual([4, 4, 4, 4, 4, 3]);
+    expect(summary.batches).toBe(6);
+    expect(summary.saved).toBe(23);
+    expect(summary.outcomes.map((o) => o.index)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(summary.outcomes.every((o) => o.status === "done" && o.count === o.saved)).toBe(true);
+    // every source got ITS OWN file, and the last request's grid is a 2x2 with
+    // one empty cell — the empty cell never becomes output
+    for (const source of sources) expect(await svgText(root, source)).toContain(`<title>${source.stem}</title>`);
+    const calls = compositeCalls.mock.calls.slice(callsAtStart);
+    expect(calls.map((c) => c[1].length)).toEqual([4, 4, 4, 4, 4, 3]);
+    const last = await compositeCalls.mock.results[callsAtStart + 5].value;
+    expect(last.layout.cols).toBe(2);
+    expect(last.layout.empty).toEqual([4]);
+  });
+
   it("sends 9 images as 4 + 4 + 1, the last request a partial square", async () => {
     const { root, sources } = fixture(9);
     const t = transport();

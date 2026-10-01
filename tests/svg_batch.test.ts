@@ -56,6 +56,23 @@ describe("planBatches — every selection size the report asks about", () => {
     expect(emptyPositions(last)).toEqual([4]);
   });
 
+  it("honours every configured size from 1 to 9 on a nine-image selection", () => {
+    // The prompt's verify list: every batch size the input allows. The plan
+    // must never exceed the requested size, must cover all nine images, and
+    // its request count must match requestCount().
+    for (let per = 1; per <= 9; per += 1) {
+      const plans = planBatches(sources(9), per);
+      expect(plans).toHaveLength(Math.ceil(9 / per));
+      expect(plans.every((p) => p.items.length <= per)).toBe(true);
+      expect(plans.flatMap((p) => p.items)).toHaveLength(9);
+      expect(requestCount(9, per)).toBe(plans.length);
+      // the last batch keeps a square grid with the cells it did not fill
+      const last = plans[plans.length - 1];
+      expect(last.cols * last.rows).toBeGreaterThanOrEqual(last.items.length);
+      expect(last.emptyCells).toBe(last.cols * last.rows - last.items.length);
+    }
+  });
+
   it("never exceeds the per-request size even when asked for more", () => {
     expect(planBatches(sources(5), 99).map((p) => p.items.length)).toEqual([5]);
     expect(planBatches([], 4)).toEqual([]);

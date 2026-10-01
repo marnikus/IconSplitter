@@ -154,9 +154,11 @@ that makes a network call, only when the user asks it to):
   missing counts, tokens, cost and (on failure) its redacted reason, folded
   into one run summary and shown in the run strip — the request in flight
   plus one line per finished request — which stays visible after the run
-  ends. A failed request never touches another request's files, usage or
-  cost; a timeout is never retried (its outcome is unknown) and its message
-  names the tier and the fix instead of a bare error.
+  ends. A request that got no answer is named in the run's summary line
+  ("… · 1 request failed · …"), never folded into the per-image counters. A
+  failed request never touches another request's files, usage or cost; a
+  timeout is never retried (its outcome is unknown) and its message names the
+  tier and the fix instead of a bare error.
 * Waits: the configured timeout is raised to the selected tier's floor —
   low 120 s, medium 300 s, high/xhigh 600 s
   (`lib/effortlimits.effectiveTimeoutMs`) — because reasoning requests
@@ -413,7 +415,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 61 files / 560 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 61 files / 572 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -450,20 +452,22 @@ and `data-testid` handles):
   out of scope, save failure + retry, empty/no-match, corrupt JSON, rescan,
   restart persistence, a11y labels
 * `svg_batch.test.ts`, `svg_effort.test.ts` — the split and the tier rules:
-  1/3/4/5/8/9/11/23 images at several per-request sizes (the partial last
-  request keeps its square grid with its empty cells, the cap is never
-  exceeded, an unusable plan is refused) and the effort rules (medium caps a
-  request at 2, high at 1, never above the configured size; the timeout
-  floors; the note and the timeout hint wording)
+  1/3/4/5/8/9/11/23 images at several per-request sizes plus **every**
+  configured size 1..9 on a nine-image selection (the partial last request
+  keeps its square grid with its empty cells, the cap is never exceeded, an
+  unusable plan is refused) and the effort rules (medium caps a request at 2,
+  high at 1, never above the configured size; the timeout floors; the note and
+  the timeout hint wording)
 * `svg_runner.test.ts` — the run end to end over an in-memory FS and a fake
-  transport: 8 images as 2×4, 9 images as 4+4+1, effort-driven splits
-  (medium → 2, high → 1), per-request tokens and cost kept apart, a failed
-  request leaving the successful one's four files untouched, and the tier
-  timeout floor proven under fake timers
+  transport: 8 images as 2×4, 9 images as 4+4+1, 23 images as 4+4+4+4+4+3,
+  effort-driven splits (medium → 2, high → 1), per-request tokens and cost
+  kept apart, a failed request leaving the successful one's four files
+  untouched, and the tier timeout floor proven under fake timers
 * `svg_confirm.test.tsx` — the confirmation: request count + tier limit, one
   page per request with its own composite and exact ordered filenames,
   pagination, the empty cells of a partial last page, confirm/cancel, nothing
-  sent by opening it, and an honest message when a composite cannot be built
+  sent by opening it, an honest message when a composite cannot be built, and
+  the 1/3/4/5/8/9-image matrix walked page by page
 * `svg_lib.test.ts`, `svg_extract.test.ts`, `svg_send.test.ts`,
   `svg_canvas.test.ts` — the SVG pure layer: provider defaults + the verified
   model id, prompt/manifest text, response split + name/title matching,
@@ -492,16 +496,21 @@ and `data-testid` handles):
   `style` that would fight the fit, script/`on*`/`javascript:`/remote-URL
   removal, safe vs importing `@import`/`url()` stylesheets, id scoping (in
   markup and inside `<style>`), and every failure reason (empty ≠ broken);
-  plus `previewTargetOf` — the one version the row previews and copies — and
-  the CSS contracts: one `--svg-thumb` value behind both previews and the row,
-  no `filter` on the artwork, the contrast hint as a frame outline
+  plus `previewTargetOf` — the one version the row previews and copies — the
+  CSS contracts (one `--svg-thumb` value behind both previews and the row, no
+  `filter` on the artwork, the contrast hint as a frame outline), and a
+  multicolour document (gradient stops, fills, strokes, dash, opacity) carried
+  through with only its ids scoped
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
   preview frame: inline `<svg>` with `xmlns` + `100%` + `xMidYMid meet`, the
   frame's `data-version` equal to the version Copy hands over, "Preview
-  failed" + reason for a malformed file, "No SVG" for a source with none, and
-  the one zoom slider resizing BOTH preview boxes in step
+  failed" + reason for a malformed file, "No SVG" for a source with none, the
+  one zoom slider resizing BOTH preview boxes in step at EVERY value 48…240,
+  every preview background applied to the frame while the document stays
+  byte-identical, and the model card + request estimate following all four
+  tiers
 
 Must exist before the matching change ships:
 

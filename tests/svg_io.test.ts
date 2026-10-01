@@ -289,6 +289,29 @@ describe("runner events and the review decision", () => {
     expect(rows[0].sidecar?.source.relPath).toBe(source.relPath);
   });
 
+  it("names a request that failed instead of hiding it in the totals", () => {
+    const outcome = (index: number, status: "done" | "failed", error: string | null) => ({
+      id: `batch_${index}_4`, index, count: 4, status, saved: status === "done" ? 4 : 0,
+      failed: status === "done" ? 0 : 4, missing: 0,
+      usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
+      cost: { actual: null, estimated: null, currency: "USD", pricing: "requesty-2026-10-01", basis: "none" as const },
+      error,
+    });
+    const line = summaryLine({
+      perRequest: 4, batches: 2, saved: 4, failed: 4, missing: 0, invalid: 0, cancelled: false,
+      usage: { input: 100, output: 200, total: 300, cost: 0.01, currency: "USD" }, estimated: null,
+      problems: ["icon-5_AI.png: the provider answered 500"], outcomes: [outcome(1, "done", null), outcome(2, "failed", "the provider answered 500")],
+    });
+    expect(line).toContain("1 request failed");
+    expect(line).toContain("4 saved");
+    // a clean run never claims a failure
+    expect(summaryLine({
+      perRequest: 4, batches: 1, saved: 4, failed: 0, missing: 0, invalid: 0, cancelled: false,
+      usage: { input: 1, output: 2, total: 3, cost: 0.01, currency: "USD" }, estimated: null,
+      problems: [], outcomes: [outcome(1, "done", null)],
+    })).not.toContain("request");
+  });
+
   it("summarises a run in one line with the real usage", () => {
     const line = summaryLine({
       perRequest: 4, batches: 2, saved: 3, failed: 1, missing: 0, invalid: 1, cancelled: false,

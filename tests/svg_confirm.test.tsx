@@ -125,6 +125,30 @@ describe("SvgConfirm — the whole plan before any request", () => {
     expect(compositeCalls).toHaveBeenCalledTimes(2);
   });
 
+  it.each([1, 3, 4, 5, 8, 9])("plans %i images into the right requests, 4 at a time", async (count) => {
+    await mount({ count, perRequest: 4 });
+    const pages = Math.ceil(count / 4);
+    expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe(String(count));
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toBe(`${pages} × 4 max`);
+    expect(q("[data-testid=svg-batch-page]")?.textContent).toContain(`Request 1 of ${pages}`);
+    expect(items()).toHaveLength(Math.min(4, count));
+
+    // walk to the last page: it holds exactly the remaining images, in order
+    for (let i = 1; i < pages; i += 1) await click("[data-testid=svg-batch-next]");
+    const shown = items();
+    expect(shown).toHaveLength(count - (pages - 1) * 4);
+    // positions restart at 1 inside EVERY request (they name the contact
+    // sheet's cells), while the file names carry on with the real image
+    const first = (pages - 1) * 4 + 1;
+    expect(shown[0]).toBe(`1 — icon-${first}_AI`);
+    expect(shown[shown.length - 1]).toBe(`${shown.length} — icon-${first + shown.length - 1}_AI`);
+    // a partial page keeps a square grid with the cells it could not fill
+    const shape = q("[data-testid=svg-batch-grid]")?.textContent ?? "";
+    const cells = (() => { const m = /(\d+)×(\d+) grid/.exec(shape); return m ? Number(m[1]) * Number(m[2]) : 0; })();
+    expect(cells).toBeGreaterThanOrEqual(shown.length);
+    expect(q("[data-testid=svg-batch-empty]")?.textContent).toContain(String(cells - shown.length));
+  });
+
   it("keeps the empty cells of a partial last batch visible", async () => {
     await mount({ count: 11, perRequest: 4 });
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 3");

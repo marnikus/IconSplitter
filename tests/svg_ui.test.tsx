@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
+import { BG_PRESETS } from "../src/lib/svgbackground";
 import { saveCatalog } from "../src/svg/catalog";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
@@ -216,28 +217,42 @@ describe("Generate SVG panel", () => {
     expect(q("[data-testid=svg-code-dialog]")).toBeNull();
   });
 
-  it("caps one request at the reasoning tier and shows how many requests that is", async () => {
+  it("caps one request at EVERY reasoning tier and shows how many requests that is", async () => {
     await mount(await makeRoot());
     await act(async () => { input("[data-testid=svg-check-all]").click(); });
     await settle();
     const limits = () => q("[data-testid=svg-limits]") ?? null;
     const estimate = () => q("[data-testid=svg-estimate]")?.textContent ?? "";
-    // the fixture selects two approved images; default effort does not cap the
-    // configured size, so they are one request
+    // the fixture selects two approved images; no effort chosen leaves the
+    // configured size alone, so they are one request
     expect(estimate()).toContain("2 images");
     expect(limits()?.textContent).toContain("4 per request");
+    expect(estimate()).toContain("1 request(s)");
+    expect(q("[data-testid=svg-confirm-limit]")).toBeNull(); // no note without a dialog
+
+    // low: the configured size is the limit, and the wait gets its floor
+    await selectEffort("low");
+    expect(limits()?.textContent).toContain("4 per request");
+    expect(limits()?.textContent).toContain("120s (low floor)");
     expect(estimate()).toContain("1 request(s)");
 
     // medium caps a request at 2 icons: those two images still fit in one...
     await selectEffort("medium");
     expect(limits()?.textContent).toContain("2 per request");
+    expect(limits()?.textContent).toContain("300s (medium floor)");
     expect(limits()?.getAttribute("title")).toContain("medium");
-    expect(limits()?.getAttribute("title")).toContain("2");
     expect(estimate()).toContain("1 request(s)");
 
-    // ...and high caps it at 1, so each icon becomes its own request.
+    // ...high caps it at 1, so each icon becomes its own request...
     await selectEffort("high");
     expect(limits()?.textContent).toContain("1 per request");
+    expect(limits()?.textContent).toContain("600s (high floor)");
+    expect(estimate()).toContain("2 request(s)");
+
+    // ...and extra high splits the same way, with its own floor label
+    await selectEffort("xhigh");
+    expect(limits()?.textContent).toContain("1 per request");
+    expect(limits()?.textContent).toContain("600s (xhigh floor)");
     expect(estimate()).toContain("2 request(s)");
   });
 
@@ -499,6 +514,61 @@ describe("Generate SVG panel", () => {
     await settle();
     expect(panel.style.getPropertyValue("--svg-thumb")).toBe("48px");
     expect(both()).toEqual({ ai: { w: "48px", h: "48px" }, svg: { w: "48px", h: "48px" } });
+  });
+
+  it("resizes both previews in step at EVERY slider value, never cropping one", async () => {
+    await mount(await makeRoot());
+    const panel = q(".svg") as HTMLElement;
+    const box = (sel: string) => {
+      const el = q(sel) as HTMLElement;
+      return [el.style.width, el.style.height];
+    };
+    const seen = new Set<string>();
+    for (let px = 48; px <= 240; px += 4) {
+      await type("[data-testid=svg-thumb]", String(px));
+      await settle();
+      const side = `${px}px`;
+      expect(panel.style.getPropertyValue("--svg-thumb")).toBe(side);
+      expect(q("[data-testid=svg-thumb-value]")?.textContent).toBe(`${px} px`);
+      // BOTH previews are the same square at every single step of the slider
+      expect(box(`[data-testid=svg-ai-${FOG}]`)).toEqual([side, side]);
+      expect(box(`[data-testid=svg-prev-${FOG}]`)).toEqual([side, side]);
+      seen.add(side);
+    }
+    // the whole documented range was really exercised: 48, 52, ... 240
+    expect(seen.size).toBe((240 - 48) / 4 + 1);
+  });
+
+  it("puts every background behind the artwork and never into it", async () => {
+    await mount(await makeRoot());
+    const host = () => q(`[data-testid=svg-prev-${FOG}]`) as HTMLElement;
+    const frame = () => q(`[data-testid=svg-prev-frame-${FOG}]`) as HTMLElement;
+    const artwork = () => host().shadowRoot?.innerHTML ?? "";
+    const before = artwork();
+    // the expected colours come from the module that owns them, so this test
+    // really checks every preset the UI offers
+    for (const { id: preset, color } of BG_PRESETS) {
+      await act(async () => { (q(`[data-testid=svg-bg-${preset}]`) as HTMLButtonElement).click(); });
+      await settle();
+      expect(frame().dataset.bg).toBe(color);
+      // the colour really is on the frame (as authored hex or its rgb form)
+      const rgb = `rgb(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)})`;
+      expect([color, rgb].some((c) => frame().style.background.includes(c))).toBe(true);
+      // the frame is the ONLY coloured surface: the artwork host paints nothing
+      expect(host().style.background).toBe("");
+      // and the document is byte-identical whatever the frame colour is
+      expect(artwork()).toBe(before);
+      expect(frame().classList.contains("contrast")).toBe(preset === "black");
+    }
+    // a custom colour is applied the same way, still without touching the file
+    await act(async () => {
+      const el = q("[data-testid=svg-bg-custom]") as HTMLInputElement;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, "#123456");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+    expect(frame().dataset.bg).toBe("#123456");
+    expect(artwork()).toBe(before);
   });
 
   it("remembers the preview background across a restart", async () => {

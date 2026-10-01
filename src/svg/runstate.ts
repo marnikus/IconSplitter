@@ -61,6 +61,10 @@ export async function reloadSidecars(refs: SvgRefs, sources: SvgSource[], s: Run
 /** The single honest line a finished run reports (RULE 2/4). */
 export function summaryLine(summary: RunSummary): string {
   const parts = [`${summary.saved} saved`, `${summary.invalid} invalid`, `${summary.missing} missing`];
+  // A request that got no answer at all is named as such, not folded into the
+  // per-image counters (RULE 4: the run says which request failed).
+  const failed = summary.outcomes.filter((o) => o.status === "failed").length;
+  if (failed > 0) parts.push(`${failed} request${failed === 1 ? "" : "s"} failed`);
   if (summary.cancelled) parts.push("cancelled");
   const cost = costText({ reported: summary.usage.cost, estimated: summary.estimated });
   return `SVG generation: ${parts.join(" · ")} · ${fmtTokens(summary.usage.total)} tokens · ${cost}`;

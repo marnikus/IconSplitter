@@ -785,7 +785,7 @@ and the row. Design record:
 | `tsc --noEmit` | clean | clean |
 | eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
 | `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED (20 changed files) |
-| tests | 57 files / 517 | **61 files / 560** |
+| tests | 57 files / 517 | **61 files / 572** |
 | coverage (all files, stmts/branch/funcs/lines) | 96.85 / 92.68 / 96.22 / 97.47 | **97.33 / 92.85 / 96.93 / 98.10** |
 | jscpd `src --min-tokens 60` | 11 clones | 12 clones (the new one is a CSS block; no new TS/TSX clone) |
 | build `dist/index.html` | 601.97 kB / gzip 176.88 kB | 608.20 kB / gzip 178.81 kB |
@@ -821,20 +821,27 @@ to `docs/archive/`.
 
 ## Regression tests (RULE 8 — each fails if the fix is deleted)
 
-* `tests/svg_batch.test.ts` — the split for 1/3/4/5/8/9/11/23 images, the partial
-  last batch keeping its empty cells, the fail-closed validator, per-request
-  outcome status/usage/cost.
+* `tests/svg_batch.test.ts` — the split for 1/3/4/5/8/9/11/23 images and for
+  every configured size 1..9 on a nine-image selection, the partial last batch
+  keeping its empty cells, the fail-closed validator, per-request outcome
+  status/usage/cost.
 * `tests/svg_effort.test.ts` — medium caps a request at 2 and high at 1, never
   above the configured size; the timeout floors; the note and hint wording.
-* `tests/svg_runner.test.ts` — 8 images as 2×4 and 9 as 4+4+1 over an in-memory
-  FS with a recording fake transport, effort-driven splits, per-request
-  tokens/cost, failure isolation, and the high-tier timeout floor under fake
-  timers.
+* `tests/svg_runner.test.ts` — 8 images as 2×4, 9 as 4+4+1 and 23 as 4×5+3 over
+  an in-memory FS with a recording fake transport, effort-driven splits,
+  per-request tokens/cost, failure isolation, and the high-tier timeout floor
+  under fake timers.
 * `tests/svg_confirm.test.tsx` — the request count, one page per request with
   its own composite and exact ordered filenames, pagination, empty cells,
-  nothing sent by opening the dialog.
+  nothing sent by opening the dialog, and the 1/3/4/5/8/9-image matrix walked
+  page by page.
 * `tests/svg_preview.test.ts` / `tests/svg_ui.test.tsx` — the artwork keeps its
   own colours (no `color`/`filter`/stroke override in the preview CSS, hex fills
-  never rewritten), the contrast hint is a frame outline, the one slider
-  resizes BOTH previews in step from 48 px to 240 px, and the panel's model
-  card and request estimate follow the selected tier (medium 2, high 1).
+  never rewritten, a multicolour gradient/fill/stroke/dash/opacity document
+  carried through byte-for-byte with only its ids scoped), the contrast hint is
+  a frame outline, the one slider resizes BOTH previews in step at EVERY value
+  from 48 px to 240 px, every preview background is applied to the frame while
+  the document stays byte-identical, and the model card and request estimate
+  follow all four tiers (low 120 s/4, medium 300 s/2, high and xhigh 600 s/1).
+* `tests/svg_io.test.ts` — the run summary line names a failed request
+  ("1 request failed") while a clean run claims none.

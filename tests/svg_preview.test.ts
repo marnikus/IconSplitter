@@ -115,6 +115,40 @@ describe("buildSvgPreview — fit, centre and stroke width", () => {
     expect(hex.html).toContain(`fill="#ff0000"`);
   });
 
+  it("carries a multicolour document through byte-for-byte (fills, strokes, gradient, opacity)", () => {
+    // The prompt's verify list: black, white AND multicolour artwork. Every
+    // colour the document declares must come out the way it went in — nothing
+    // is normalised, brightened, inverted or dropped.
+    const doc = `<svg xmlns="${NS}" viewBox="0 0 24 24">
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/>
+      </linearGradient></defs>
+      <rect width="24" height="24" fill="url(#g1)" opacity="0.8"/>
+      <path fill="#00ff00" stroke="#123456" stroke-width="1.5" d="M2 2h20v20H2z"/>
+      <path fill="none" stroke="currentColor" stroke-dasharray="2 2" opacity="0.5" d="M4 4h16v16H4z"/>
+      <circle cx="12" cy="12" r="3" fill="#ffffff"/>
+    </svg>`;
+    const p = preview(doc);
+    expect(p.ok).toBe(true);
+    for (const fragment of [
+      `opacity="0.8"`, `stop-color="#ff0000"`, `stop-color="#0000ff"`,
+      `fill="#00ff00"`, `stroke="#123456"`, `stroke-width="1.5"`, `stroke-dasharray="2 2"`,
+      `opacity="0.5"`, `fill="#ffffff"`, `stroke="currentColor"`,
+    ]) {
+      expect(p.html).toContain(fragment);
+    }
+    // The gradient id is scoped for this shadow root (ids must not collide), so
+    // the reference is rewritten to the SAME scoped id — the gradient keeps
+    // pointing at the document's own stops, never at another document's or at
+    // some app-chosen colour.
+    const scoped = /id="([^"]*g1)"/.exec(p.html)?.[1] ?? "";
+    expect(scoped).not.toBe("");
+    expect(p.html).toContain(`fill="url(#${scoped})"`);
+    expect(p.html).not.toContain(`stop-color="#000000"`);
+    // the preview never paints the artwork itself: the stylesheet is layout only
+    expect(PREVIEW_CSS).not.toContain("background");
+  });
+
   it("never applies a filter, a stroke override or an inversion", () => {
     const p = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24" stroke-width="2"><path fill="none" stroke="#ffffff" d="M2 2h20v20H2z"/></svg>`);
     expect(p.html).not.toContain("filter");
