@@ -303,6 +303,11 @@ or nesting 4 (the gate enforces all four and passes).
   `withRecords`/`withReset` (useSelection). `hasLiveApplier` is used only by
   tests — kept because it is the documented way to ask whether a panel owns the
   apply path.
+- **Open item:** `selectionV2.scrollY` is carried by the store, the session
+  schema and `useSelectionV2` (`scrollY` / `setScroll`), but `ReviewList` does
+  not yet write it on scroll or apply it on mount, so the list currently always
+  opens at the top. The plumbing is in place; the two lines in `ReviewList` (an
+  `onScroll` handler and a mount effect) plus a DOM test are still to come.
 - History and session live in `localStorage`, not in the atomic file flow: they
   are UI state, not user data, and writing them into the user's image folder
   would leave stray files. The atomic tmp-verify-overwrite writer remains the
