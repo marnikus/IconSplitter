@@ -24,6 +24,8 @@ export type SvgGenApi = SvgModel & SvgActions & {
   header: "none" | "some" | "all";
   affected: string[];
   totals: SvgCtx["totals"];
+  /** Requests the current selection becomes at the effective per-request size. */
+  requests: number;
   refs: SvgCtx["refs"];
   dispatch: SvgCtx["dispatch"];
 };
@@ -33,10 +35,10 @@ export function useSvgGen(): SvgGenApi {
   const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs);
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
-  const { visible, checked, activeId, header, affected, totals, provider, refs } = ctx;
+  const { visible, checked, activeId, header, affected, totals, provider, requests, refs } = ctx;
   return {
     ...model, ...actions, supported: fsSupported(), provider, visible,
-    checked, activeId, header, affected, totals, refs, dispatch,
+    checked, activeId, header, affected, totals, requests, refs, dispatch,
   };
 }
 

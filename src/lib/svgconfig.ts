@@ -17,6 +17,13 @@ export const DEFAULT_MODEL = "openai/gpt-6.1-sol";
 export const DEFAULT_MODEL_LABEL = "GPT 6.1 Sol";
 
 export const DEFAULT_TIMEOUT_MS = 90_000;
+/**
+ * The wait may be configured up to 15 minutes: a high-effort reasoning request
+ * is documented to take minutes, and the effort floors in lib/effortlimits
+ * (low 120 s, medium 300 s, high 600 s) have to fit inside this range.
+ */
+export const TIMEOUT_MIN_MS = 5_000;
+export const TIMEOUT_MAX_MS = 900_000;
 export const DEFAULT_RETRIES = 2;
 export const DEFAULT_CONCURRENCY = 4;
 /** Output ceiling sent with each request (0 = let the provider decide). */
@@ -96,7 +103,7 @@ export function parseConfig(raw: unknown): SvgConfig {
   return {
     baseUrl: urlOf(raw.baseUrl),
     model: textOf(raw.model, DEFAULT_MODEL),
-    timeoutMs: clampRange(raw.timeoutMs, 5_000, 600_000, DEFAULT_TIMEOUT_MS),
+    timeoutMs: clampRange(raw.timeoutMs, TIMEOUT_MIN_MS, TIMEOUT_MAX_MS, DEFAULT_TIMEOUT_MS),
     retries: clampRange(raw.retries, 0, 5, DEFAULT_RETRIES),
     concurrency: clampRange(raw.concurrency, 1, 8, DEFAULT_CONCURRENCY),
     imagesPerRequest: clampImagesPerRequest(Number(raw.imagesPerRequest)),

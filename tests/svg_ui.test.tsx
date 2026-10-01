@@ -7,7 +7,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { PREVIEW_INK } from "../src/lib/svgpreview";
+import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { saveCatalog } from "../src/svg/catalog";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
@@ -110,6 +110,16 @@ async function type(sel: string, value: string): Promise<void> {
   });
 }
 
+/** Changing the effort is a real config write: the tier caps re-resolve. */
+async function selectEffort(value: string): Promise<void> {
+  await act(async () => {
+    const el = q("[data-testid=svg-effort]") as HTMLSelectElement;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(el, value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
 /** Changing the model is a real config write: it re-reads the new caps. */
 async function setModel(id: string): Promise<void> {
   await act(async () => {
@@ -206,6 +216,31 @@ describe("Generate SVG panel", () => {
     expect(q("[data-testid=svg-code-dialog]")).toBeNull();
   });
 
+  it("caps one request at the reasoning tier and shows how many requests that is", async () => {
+    await mount(await makeRoot());
+    await act(async () => { input("[data-testid=svg-check-all]").click(); });
+    await settle();
+    const limits = () => q("[data-testid=svg-limits]") ?? null;
+    const estimate = () => q("[data-testid=svg-estimate]")?.textContent ?? "";
+    // the fixture selects two approved images; default effort does not cap the
+    // configured size, so they are one request
+    expect(estimate()).toContain("2 images");
+    expect(limits()?.textContent).toContain("4 per request");
+    expect(estimate()).toContain("1 request(s)");
+
+    // medium caps a request at 2 icons: those two images still fit in one...
+    await selectEffort("medium");
+    expect(limits()?.textContent).toContain("2 per request");
+    expect(limits()?.getAttribute("title")).toContain("medium");
+    expect(limits()?.getAttribute("title")).toContain("2");
+    expect(estimate()).toContain("1 request(s)");
+
+    // ...and high caps it at 1, so each icon becomes its own request.
+    await selectEffort("high");
+    expect(limits()?.textContent).toContain("1 per request");
+    expect(estimate()).toContain("2 request(s)");
+  });
+
   it("confirms before sending and never sends twice", async () => {
     await mount(await makeRoot());
     await act(async () => { input("[data-testid=svg-check-all]").click(); });
@@ -240,6 +275,8 @@ describe("Generate SVG panel", () => {
     // The confirmation states the sampling values that will be sent.
     expect(q("[data-testid=svg-confirm-sampling]")?.textContent).toContain("no temperature");
     expect(q("[data-testid=svg-confirm-sampling]")?.textContent).toContain("32 000 max tokens");
+    // ...and how many requests the selection will really become.
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("1");
   });
 
   it("says the key is session-only when storage refuses the write", async () => {
@@ -436,6 +473,34 @@ describe("Generate SVG panel", () => {
     expect(SIDECAR).not.toContain("#c22f2f");
   });
 
+  it("resizes BOTH previews with the one zoom slider, in step and never cropped", async () => {
+    await mount(await makeRoot());
+    const panel = q(".svg") as HTMLElement;
+    const box = (sel: string) => {
+      const el = q(sel) as HTMLElement;
+      return { w: el.style.width, h: el.style.height };
+    };
+    const both = () => {
+      const ai = box(`[data-testid=svg-ai-${FOG}]`);
+      const svg = box(`[data-testid=svg-prev-${FOG}]`);
+      return { ai, svg };
+    };
+    // the slider value is the shared box size, and the row height reads it too
+    expect(panel.style.getPropertyValue("--svg-thumb")).toBe("84px");
+    expect(both()).toEqual({ ai: { w: "84px", h: "84px" }, svg: { w: "84px", h: "84px" } });
+
+    await type("[data-testid=svg-thumb]", "240");
+    await settle();
+    expect(q("[data-testid=svg-thumb-value]")?.textContent).toBe("240 px");
+    expect(panel.style.getPropertyValue("--svg-thumb")).toBe("240px");
+    expect(both()).toEqual({ ai: { w: "240px", h: "240px" }, svg: { w: "240px", h: "240px" } });
+
+    await type("[data-testid=svg-thumb]", "48");
+    await settle();
+    expect(panel.style.getPropertyValue("--svg-thumb")).toBe("48px");
+    expect(both()).toEqual({ ai: { w: "48px", h: "48px" }, svg: { w: "48px", h: "48px" } });
+  });
+
   it("remembers the preview background across a restart", async () => {
     const root = await makeRoot();
     await mount(root);
@@ -554,10 +619,12 @@ describe("SVG row preview", () => {
     // the frame's own CSS travels with the document, scoped to the shadow root
     const style = frame(FOG)?.shadowRoot?.querySelector("style");
     expect(style).not.toBeNull();
-    expect(style?.textContent).toContain(`color:${PREVIEW_INK}`);
-    // ...and nothing is written into the document's own style: the artwork
-    // keeps the colours it was saved with (a currentColor icon paints the
-    // UA-default black, not a colour the app picked for it).
+    expect(style?.textContent).not.toContain("color");
+    expect(style?.textContent).not.toContain("filter");
+    // currentColor resolves the way a standalone document resolves it, through
+    // the weakest declaration there is — a presentation attribute on the root;
+    // the app never forces an ink through CSS.
+    expect(svg?.getAttribute("color")).toBe(STANDALONE_INK);
     expect(svg?.getAttribute("style") ?? "").not.toContain("color:");
   });
 

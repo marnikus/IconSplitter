@@ -3,6 +3,7 @@
 // speak the same language without importing each other.
 
 import type { SvgSidecar, SvgVersion } from "../lib/svgfile";
+import type { BatchOutcome } from "../lib/svgbatch";
 import type { SvgSource } from "./sources";
 
 export type RowStatus = "not-generated" | "generating" | "generated" | "failed";
@@ -22,9 +23,11 @@ export interface SvgRow {
   running: boolean;
 }
 
-/** Live state of the batch currently being sent. */
+/** Live state of the run: the batch in flight plus every finished request. */
 export interface RunProgress {
   batchId: string;
+  /** 1-based index of the request in flight. */
+  index: number;
   batches: number;
   count: number;
   cols: number;
@@ -35,10 +38,14 @@ export interface RunProgress {
   saved: number;
   failed: number;
   missing: number;
+  /** Icons one request was allowed to carry in this run. */
+  perRequest: number;
+  /** One outcome per finished request, in request order. */
+  outcomes: BatchOutcome[];
 }
 
 export type Dialog =
-  | { kind: "confirm"; ids: string[]; batches: number; perRequest: number }
+  | { kind: "confirm"; ids: string[] }
   | { kind: "code"; id: string; version: number }
   | { kind: "history"; id: string };
 

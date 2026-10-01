@@ -5,6 +5,7 @@
 // and the review decision all live in tested modules; this file is the wiring
 // that makes them one screen.
 
+import type { CSSProperties } from "react";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -27,7 +28,7 @@ export default function SvgPanel() {
   });
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
-    <div className="svg" data-testid="svg-panel">
+    <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
       <Controls g={g} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
@@ -67,8 +68,8 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
   };
   return (
     <>
-      {g.progress !== null && <SvgBatchStrip progress={g.progress} onCancel={g.cancelRun} />}
-      <SvgBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
+      {g.progress !== null && <SvgBatchStrip progress={g.progress} running={g.running} onCancel={g.cancelRun} />}
+      <SvgBulkBar header={g.header} checkedCount={g.checked.length} requestCount={g.requests} visibleCount={g.visible.length}
         decidableCount={decidableCount(g)} thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
         progress={g.progress} running={g.running}
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
@@ -91,6 +92,11 @@ function Overlay({ g }: { g: SvgGenApi }) {
       {g.busy !== null && <span className="svg-busy" data-testid="svg-busy">{g.busy}</span>}
     </>
   );
+}
+
+/** The ONE zoom value: both previews, the row height and the column read it. */
+function thumbStyle(px: number): CSSProperties {
+  return { "--svg-thumb": `${px}px` } as CSSProperties;
 }
 
 /** The four counters above the list, straight off the rows (no extra state). */

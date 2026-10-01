@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, clampImagesPerRequest, modelLabel, type SvgConfig } from "../lib/svgconfig";
+import { effectivePerRequest, limitNote, timeoutLabel } from "../lib/effortlimits";
 import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
@@ -127,7 +128,7 @@ function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMa
 }) {
   return (
     <div className={`svg-provider${open ? "" : " closed"}`} data-testid="svg-provider-card">
-      <ProviderHead provider={provider} config={config} open={open} onToggleOpen={onToggleOpen} />
+      <ProviderHead provider={provider} config={config} caps={caps} params={params} open={open} onToggleOpen={onToggleOpen} />
       {open && (
         <>
           <ProviderFields config={config} onConfig={onConfig} />
@@ -157,14 +158,19 @@ function ProviderFields({ config, onConfig }: { config: SvgConfig; onConfig: (pa
   );
 }
 
-/** The one line that survives minimizing: who, which limits, and the toggle. */
-function ProviderHead({ provider, config, open, onToggleOpen }: {
-  provider: string; config: SvgConfig; open: boolean; onToggleOpen: (open: boolean) => void;
+/** The one line that survives minimizing: who, which EFFECTIVE limits, and the toggle. */
+function ProviderHead({ provider, config, caps, params, open, onToggleOpen }: {
+  provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams;
+  open: boolean; onToggleOpen: (open: boolean) => void;
 }) {
+  const perRequest = effectivePerRequest(config.imagesPerRequest, caps, params);
+  const note = limitNote(config.imagesPerRequest, caps, params);
   return (
     <div className="svg-provider-top">
       <span><strong data-testid="svg-provider">{provider}</strong> · OpenAI-compatible</span>
-      <span data-testid="svg-limits">timeout {Math.round(config.timeoutMs / 1000)}s · {config.retries} retries · {config.imagesPerRequest} per request</span>
+      <span data-testid="svg-limits" title={note ?? undefined}>
+        timeout {timeoutLabel(config.timeoutMs, caps, params)} · {config.retries} retries · {perRequest} per request
+      </span>
       <button type="button" className="svg-link" data-testid="svg-provider-toggle" aria-expanded={open}
         aria-label={open ? "Minimize model settings" : "Restore model settings"}
         onClick={() => onToggleOpen(!open)}>{open ? "Minimize" : "Restore"}</button>

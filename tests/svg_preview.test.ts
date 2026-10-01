@@ -5,8 +5,10 @@
 // prefix), painted wrong (no intrinsic size, currentColor on a dark frame,
 // cross-row id collisions) or painted nothing at all with no reason given.
 // Each assertion fails if src/lib/svgpreview.ts is deleted.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildSvgPreview, PREVIEW_INK } from "../src/lib/svgpreview";
+import { buildSvgPreview, PREVIEW_CSS, STANDALONE_INK } from "../src/lib/svgpreview";
 import { previewTargetOf } from "../src/svg/rowmodel";
 import { newSidecar, withVersion, type SvgSidecar, type SvgVersion } from "../src/lib/svgfile";
 import type { SvgRow } from "../src/svg/types";
@@ -77,23 +79,72 @@ describe("buildSvgPreview — fit, centre and stroke width", () => {
 
   it("never recolours the artwork: currentColor resolves as a standalone document does (D4)", () => {
     // The saved document decides its own colours. A standalone SVG resolves
-    // currentColor to the UA default (black), so that is what the preview
-    // paints — never a colour the app picked for it.
-    expect(PREVIEW_INK).toBe("#000000");
+    // currentColor to the UA default (black). The app never chooses an ink:
+    // the default is a PRESENTATION ATTRIBUTE on the root (the weakest kind of
+    // declaration), so every author value still wins.
+    expect(STANDALONE_INK).toBe("#000000");
     const p = preview(STROKE_ONLY);
     expect(p.html).toContain(`stroke="currentColor"`);
-    // Nothing is injected into the document's own style attribute.
-    expect(p.html).not.toContain("color:");
+    expect(p.html).toContain(`color="${STANDALONE_INK}"`);
+    // No stylesheet and no style attribute may force a colour onto the artwork.
+    expect(PREVIEW_CSS).not.toContain("color");
+    expect(p.html).not.toContain(`style="color`);
     // Explicit colours are carried through untouched.
     const white = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24"><path fill="#ffffff" d="M2 2h20v20H2z"/></svg>`);
     expect(white.html).toContain(`fill="#ffffff"`);
     const black = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24"><path stroke="#000000" d="M2 2h20v20H2z"/></svg>`);
     expect(black.html).toContain(`stroke="#000000"`);
+  });
+
+  it("keeps every colour the document declares — attribute, style, descendant and opacity", () => {
     // An author's own colour declaration survives, and is not overridden.
     const own = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24" style="color:#ff0000;opacity:.9"><path stroke="currentColor" d="M2 2h20v20H2z"/></svg>`);
     expect(own.html).toContain("color:#ff0000");
-    expect(own.html).not.toContain(`color:${PREVIEW_INK}`);
     expect(own.html).toContain("opacity:.9");
+    expect(own.html).not.toContain(STANDALONE_INK);
+    // ...including the presentation attribute form, which a stylesheet would beat.
+    const attr = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24" color="#00ff00"><path stroke="currentColor" d="M2 2h20v20H2z"/></svg>`);
+    expect(attr.html).toContain(`color="#00ff00"`);
+    expect(attr.html).not.toContain(STANDALONE_INK);
+    // ...and a descendant that sets its own colour or opacity.
+    const inner = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24"><g fill="#123456" opacity="0.4"><path d="M2 2h20v20H2z"/></g></svg>`);
+    expect(inner.html).toContain(`fill="#123456"`);
+    expect(inner.html).toContain(`opacity="0.4"`);
+    // A hex colour is not an id: scoping must never touch it.
+    const hex = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24"><path fill="#ff0000" d="M2 2h20v20H2z"/><path id="ff0000" d="M1 1h2v2H1z"/></svg>`);
+    expect(hex.html).toContain(`fill="#ff0000"`);
+  });
+
+  it("never applies a filter, a stroke override or an inversion", () => {
+    const p = preview(`<svg xmlns="${NS}" viewBox="0 0 24 24" stroke-width="2"><path fill="none" stroke="#ffffff" d="M2 2h20v20H2z"/></svg>`);
+    expect(p.html).not.toContain("filter");
+    expect(p.html).not.toContain("invert");
+    expect(p.html).toContain(`stroke="#ffffff"`);
+    expect(p.html).toContain(`stroke-width="2"`);
+    // The preview stylesheet is layout only: no ink, no filter, no override.
+    expect(PREVIEW_CSS).not.toContain("filter");
+    expect(PREVIEW_CSS).not.toContain("invert");
+    expect(PREVIEW_CSS).not.toContain("stroke");
+    expect(PREVIEW_CSS).not.toContain("fill");
+    expect(PREVIEW_CSS).not.toContain("opacity");
+  });
+
+  it("keeps the app's CSS out of the artwork (the frame is the only coloured surface)", () => {
+    // The contrast hint for a dark background is a frame outline, never a
+    // filter on the document — so no preview CSS may paint the artwork.
+    const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+    expect(css).toMatch(/\.svg-preview-frame\.contrast\s*\{[^}]*outline/);
+    expect(css).not.toMatch(/\.svg-preview[^{,]*\{[^}]*filter\s*:/);
+  });
+
+  it("keeps one zoom value behind both previews and the row they sit in", () => {
+    // One CSS variable: the box size of BOTH previews (inline px), the row's
+    // minimum height and the previews column width. That is what makes them
+    // resize in step without ever overlapping the next column.
+    const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+    expect(css).toMatch(/\.svg-thumb\s*\{[^}]*object-fit:\s*contain/);
+    expect(css).toMatch(/\.svg-row\s*\{[^}]*min-height:\s*calc\(var\(--svg-thumb\)/);
+    expect(css).toMatch(/grid-template-columns:\s*[^;]*calc\(var\(--svg-thumb\)\s*\*\s*2/);
   });
 
   it("drops the root's own width/height so the fit cannot be overridden", () => {

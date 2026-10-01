@@ -1,10 +1,15 @@
-// svgbatch.ts — batch planning for composite SVG requests (prompt §2/§3).
-// Owns: deterministic batch order, the batch-local position id (1-based, never
-// a list index), the smallest square grid that fits a batch, and the manifest
-// the provider receives. Stable source ids travel beside the position so a
-// result can always be mapped back to its file.
+// svgbatch.ts — batch planning and per-request outcome for composite SVG
+// requests (prompt §2/§3/§14). Owns: deterministic batch order, the batch-local
+// position id (1-based, never a list index), the smallest square grid that fits
+// a batch, the manifest the provider receives, the pre-send validation of a
+// plan, and the outcome record of one finished request (status, saved/failed/
+// missing, tokens and the one cost decision). Stable source ids travel beside
+// the position so a result can always be mapped back to its file.
 
 import { clampImagesPerRequest } from "./svgconfig";
+import { costInfoFor } from "./svgpricing";
+import type { CostInfo } from "./svgfile";
+import type { Usage } from "./svgrequest";
 
 /** One source image inside one request. */
 export interface BatchItem {
@@ -89,4 +94,75 @@ export function emptyPositions(plan: BatchPlan): number[] {
 export function cellOf(position: number, cols: number): { row: number; col: number } {
   const i = Math.max(0, position - 1);
   return { row: Math.floor(i / cols), col: i % cols };
+}
+
+/** How many requests a selection of `count` images becomes at `perRequest`. */
+export function requestCount(count: number, perRequest: number): number {
+  if (count <= 0) return 0;
+  return Math.ceil(count / Math.max(1, perRequest));
+}
+
+/**
+ * Why a plan must not be sent, or [] when it can. The confirmation and the
+ * runner both call this before a single byte leaves: a plan that cannot be
+ * mapped back to its sources is a bug, and the user is told instead of the app
+ * guessing (RULE 15 spirit — fail closed).
+ */
+export function validateBatchPlan(plans: readonly BatchPlan[], perRequest: number): string[] {
+  const size = Math.max(1, perRequest);
+  const problems: string[] = [];
+  for (const plan of plans) {
+    if (plan.items.length === 0) problems.push(`${plan.id}: empty request`);
+    if (plan.items.length > size) problems.push(`${plan.id}: ${plan.items.length} images exceed the ${size} per request limit`);
+    if (plan.items.some((item, i) => item.position !== i + 1)) problems.push(`${plan.id}: positions are not contiguous from 1`);
+    if (plan.cols * plan.rows < plan.items.length) problems.push(`${plan.id}: a ${plan.cols}×${plan.rows} grid cannot hold ${plan.items.length} images`);
+    if (plan.emptyCells !== plan.cols * plan.rows - plan.items.length) problems.push(`${plan.id}: empty-cell count does not match its grid`);
+  }
+  return problems;
+}
+
+/** One finished request, as the run and the UI both report it. */
+export interface BatchOutcome {
+  id: string;
+  /** 1-based request index within the run. */
+  index: number;
+  /** Images the request carried. */
+  count: number;
+  /** "failed" only when the request itself failed (no answer to map). */
+  status: "done" | "failed";
+  saved: number;
+  failed: number;
+  missing: number;
+  usage: Usage;
+  cost: CostInfo;
+  /** Redacted reason when the request failed; null after an answer. */
+  error: string | null;
+}
+
+export interface OutcomeInput {
+  plan: BatchPlan;
+  index: number;
+  model: string;
+  saved: number;
+  failed: number;
+  missing: number;
+  usage: Usage;
+  error: string | null;
+}
+
+/** The outcome of one request: counts, tokens and the one cost decision. */
+export function batchOutcome(input: OutcomeInput): BatchOutcome {
+  const { plan, usage } = input;
+  return {
+    id: plan.id,
+    index: input.index,
+    count: plan.items.length,
+    status: input.error === null ? "done" : "failed",
+    saved: input.saved,
+    failed: input.failed,
+    missing: input.missing,
+    usage,
+    cost: costInfoFor(input.model, usage),
+    error: input.error,
+  };
 }

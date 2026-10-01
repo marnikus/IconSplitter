@@ -323,7 +323,7 @@ Prompt + provider card:
 |---|---|---|
 | `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-reset-prompt` restores the documented default |
 | `svg-provider` | text | provider name + "OpenAI-compatible" |
-| `svg-limits` | text | "timeout Ns · N retries · N per request" |
+| `svg-limits` | text | the values that will really be used: "timeout \{label} · N retries · N per request" — the timeout names its tier floor ("600s (high floor)") and the per-request size is the configured one capped by the tier; the `title` carries the tier note |
 | `svg-per-request` | `input[type=number]` | images per request, 1–9 |
 | `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
 | `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
@@ -359,7 +359,7 @@ Bulk bar (`svg-bulk`):
 | `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
 | `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
-| `svg-thumb` | `input[type=range]` | thumbnail height; `svg-thumb-value` is the live readout |
+| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, 48–240 step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
@@ -372,8 +372,8 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 |---|---|---|
 | `svg-row-{sourceId}` | row `role="listitem"` | keyed by the stable pair id, never a row index |
 | `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"` |
-| `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>`); missing → placeholder |
-| `svg-prev-{sourceId}` | inline preview | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame sized by `svg-thumb`; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
+| `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>` in the same `svg-thumb` square box, `object-fit: contain`); missing → placeholder of the same size |
+| `svg-prev-{sourceId}` | inline preview | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the version history; disabled with no SVG / no versions |
@@ -387,19 +387,26 @@ List chrome: `svg-row-count` (visible rows), `svg-running-count`,
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved
 source matches these filters."), `svg-footer-summary` (`shownLabel`).
 
-Batch strip (`svg-batch`, shown while a batch is in flight):
-`svg-batch-composite` (the contact sheet actually sent), `svg-batch-id`,
-`svg-batch-grid` ("3×2 grid · 5 image(s)"), `svg-batch-counts` ("N saved · N
-failed · N missing"), `svg-batch-cancel`.
+Batch strip (`svg-batch`, the request in flight and every finished request;
+it stays after the run ends so the record is readable): `svg-batch-composite`
+(the contact sheet actually sent), `svg-batch-id`, `svg-batch-grid`
+("request 2 of 3 · 2×2 grid · 4 image(s)"), `svg-batch-counts` ("N saved · N
+failed · N missing"), `svg-batch-reports` with one `svg-batch-report-{index}`
+per finished request (its own counts, tokens and cost; class `failed` when
+that request failed), `svg-batch-cancel` (only while something is in flight).
 
 Dialogs:
 
 | Test id | Notes |
 |---|---|
-| `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
-| `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
-| `svg-confirm-sampling` | text | the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") |
-| `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
+| `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
+| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 2 max") |
+| `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the wait that will really be used |
+| `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("reasoning tier medium · max 2 icons per request"); the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
+| `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
+| `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
+| `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
+| `svg-composite-building` / `svg-composite-error` | the honest in-progress and could-not-build states |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
 

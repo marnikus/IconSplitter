@@ -33,12 +33,25 @@ function srcFiles() {
   return out.trim().split("\n").filter(Boolean).sort();
 }
 
-function changedFiles() {
-  let base = "HEAD~1";
+/** The commit the working tree is compared against. */
+function baseRef() {
   try {
-    base = execSync("git merge-base origin/main HEAD", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
+    const base = execSync("git merge-base origin/main HEAD", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
       .toString().trim();
-  } catch { /* no origin/main — fall back to HEAD~1 */ }
+    if (base) return base;
+  } catch { /* no origin/main, or unrelated histories */ }
+  try {
+    // A branch with history: compare against its parent.
+    execSync("git rev-parse --verify HEAD~1", { cwd: ROOT, stdio: ["ignore", "ignore", "ignore"] });
+    return "HEAD~1";
+  } catch {
+    // A single-commit snapshot: everything uncommitted since HEAD is the change.
+    return "HEAD";
+  }
+}
+
+function changedFiles() {
+  const base = baseRef();
   const diff = execSync(`git diff --name-only ${base}`, { cwd: ROOT }).toString().trim();
   const unstaged = execSync("git diff --name-only HEAD", { cwd: ROOT }).toString().trim();
   // Untracked files never appear in git diff — detect them explicitly,

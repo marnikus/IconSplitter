@@ -6,6 +6,8 @@
 
 import { useCallback, useRef, type Dispatch } from "react";
 import type { ReviewStatus } from "../lib/svgfile";
+import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
+import { effectivePerRequest } from "../lib/effortlimits";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
@@ -22,6 +24,7 @@ import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
 import { message, runGeneration } from "./runner";
+import { toBatchSource } from "./sources";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
@@ -40,6 +43,8 @@ export interface SvgCtx {
   header: "none" | "some" | "all";
   affected: string[];
   totals: UsageTotals;
+  /** Requests the current selection becomes at the effective per-request size. */
+  requests: number;
   provider: string;
   say: (msg: string, err?: boolean) => void;
   loadAll: () => void;
@@ -209,8 +214,11 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     const c = latest.current;
     const why = guard(c, ids);
     if (why !== null) return c.say(why, true);
-    const perRequest = c.m.config.imagesPerRequest;
-    const dialog: Dialog = { kind: "confirm", ids, batches: Math.ceil(ids.length / perRequest), perRequest };
+    // The plan the user confirms is the plan the runner will send (RULE 10):
+    // one splitter, one effective per-request size, validated before the dialog.
+    const problems = validateBatchPlan(planOf(c, ids), perRequestOf(c));
+    if (problems.length > 0) return c.say(problems[0], true);
+    const dialog: Dialog = { kind: "confirm", ids };
     c.dispatch({ type: "dialog", dialog });
   }, []);
   const cancelRun = useCallback(() => {
@@ -223,6 +231,17 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
   }, []);
   const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
   return { requestGenerate, cancelRun, confirmGenerate, dismissDialog };
+}
+
+/** The one split the confirmation and the run both see (RUN-1). */
+function planOf(c: SvgCtx, ids: string[]): BatchPlan[] {
+  const sources = c.rows.filter((r) => ids.includes(r.source.id)).map((r) => toBatchSource(r.source));
+  return planBatches(sources, perRequestOf(c));
+}
+
+/** Icons one request may carry: the configured size capped by the effort tier. */
+function perRequestOf(c: SvgCtx): number {
+  return effectivePerRequest(c.m.config.imagesPerRequest, c.m.caps, c.m.params);
 }
 
 /** Why a run cannot start, or null when it can. Never a partial reason. */
@@ -252,7 +271,8 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
     onEvent: (event) => onRunEvent(event, ctx),
   });
   ctx.dispatch({ type: "running", running: false });
-  ctx.dispatch({ type: "progress", progress: null });
+  // The finished run stays visible: its per-request outcomes are the record of
+  // what was sent, what it cost and what failed (the batch strip shows it).
   ctx.refs.abort.current = null;
   await reloadSidecars(ctx.refs, sources, ctx);
   ctx.say(summaryLine(summary), summary.saved === 0 && summary.problems.length > 0);

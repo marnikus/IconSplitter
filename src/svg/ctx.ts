@@ -5,6 +5,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
 import { providerLabel } from "../lib/svgconfig";
+import { requestCount } from "../lib/svgbatch";
+import { effectivePerRequest } from "../lib/effortlimits";
 import { usageTotals } from "../lib/svglist";
 import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
@@ -151,13 +153,18 @@ function useSvgPersist(model: SvgModel): void {
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
 }
 
-/** The filtered/sorted view and its totals, derived from the model only. */
-function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected"> {
+/** The filtered/sorted view, its totals and the request count, derived only. */
+function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected" | "requests"> {
   const visible = useMemo(() => visibleRows(model.rows, model.filter, model.sort), [model.rows, model.filter, model.sort]);
   const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const affected = useMemo(() => visible.filter((r) => checked.includes(r.source.id)).map((r) => r.source.id), [visible, checked]);
-  return { visible, totals, header, affected };
+  // The same size the confirmation and the runner use — shown before any send.
+  const requests = useMemo(
+    () => requestCount(checked.length, effectivePerRequest(model.config.imagesPerRequest, model.caps, model.params)),
+    [checked.length, model.config.imagesPerRequest, model.caps, model.params],
+  );
+  return { visible, totals, header, affected, requests };
 }
 
 function newRefs(): SvgRefs {

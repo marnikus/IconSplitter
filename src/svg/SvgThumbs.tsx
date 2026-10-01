@@ -29,10 +29,13 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg }: SvgThu
   const target = previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
   const id = row.source.id;
+  // Both boxes are the SAME square the slider names, so one zoom resizes both
+  // previews in step; each artwork is contained inside it (ai: object-fit,
+  // svg: xMidYMid meet), so nothing is cropped and nothing overlaps.
   return (
     <div className="svg-thumbs">
       <Cell tag="AI source">
-        <Thumb url={ai} alt={row.source.name} height={thumb} testid={`svg-ai-${id}`} />
+        <Thumb url={ai} alt={row.source.name} size={thumb} testid={`svg-ai-${id}`} />
       </Cell>
       <Cell tag="Newest SVG" frame={previewFrame(bg)} frameId={`svg-prev-frame-${id}`}>
         <SvgPreviewBox code={svg} size={thumb} testid={`svg-prev-${id}`}
@@ -60,14 +63,16 @@ function Cell({ tag, children, frame, frameId }: {
 interface ThumbProps {
   url: string | null;
   alt: string;
-  height: number;
+  /** Side of the square box — the zoom slider value, shared with the SVG box. */
+  size: number;
   testid: string;
 }
 
-function Thumb({ url, alt, height, testid }: ThumbProps) {
+function Thumb({ url, alt, size, testid }: ThumbProps) {
+  const box = { width: size, height: size };
   return url === null
-    ? <span className="svg-thumb missing" style={{ height }} data-testid={testid}>Unreadable</span>
-    : <img className="svg-thumb" src={url} alt={alt} height={height} loading="lazy" data-testid={testid} />;
+    ? <span className="svg-thumb missing" style={box} data-testid={testid}>Unreadable</span>
+    : <img className="svg-thumb" src={url} alt={alt} style={box} loading="lazy" data-testid={testid} />;
 }
 
 /** Object URL for the AI image, cached for the session (RULE 10). */

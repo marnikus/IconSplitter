@@ -16,6 +16,8 @@ import type { RunProgress } from "./types";
 export interface SvgBulkBarProps {
   header: "none" | "some" | "all";
   checkedCount: number;
+  /** Requests the selection becomes at the effective per-request size. */
+  requestCount: number;
   visibleCount: number;
   decidableCount: number;
   thumb: number;
@@ -92,10 +94,10 @@ function Estimate({ p }: { p: SvgBulkBarProps }) {
   const cost = costText({ reported: p.totals.cost, estimated: p.totals.estimated });
   return (
     <div className="svg-estimate" data-testid="svg-estimate">
-      <strong>{p.checkedCount} images · {p.model}</strong>
+      <strong>{p.checkedCount} images · {p.requestCount} request(s) · {p.model}</strong>
       {p.progress === null
         ? <span>visible usage {fmtTokens(p.totals.tokens)} tokens · {cost}</span>
-        : <span data-testid="svg-batch-progress">batch {p.progress.batchId} · {p.progress.saved} saved · {p.progress.failed} failed · {p.progress.missing} missing</span>}
+        : <span data-testid="svg-batch-progress">request {p.progress.index}/{p.progress.batches} · {p.progress.saved} saved · {p.progress.failed} failed · {p.progress.missing} missing</span>}
     </div>
   );
 }

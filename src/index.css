@@ -790,6 +790,38 @@
 .svg-batch-meta { display: grid; gap: 3px; font-size: 9px; color: var(--v2-muted); }
 .svg-batch-meta strong { color: var(--v2-text); font-size: 11px; }
 
+/* One line per finished request: its own counts, tokens and cost. */
+.svg-batch-list {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 9px;
+  color: var(--v2-muted);
+  max-height: 96px;
+  overflow: auto;
+}
+
+.svg-batch-list li.failed { color: var(--v2-red); }
+
+/* The paginated confirmation: one page per request. */
+.svg-modal.wide { width: min(760px, 94vw); }
+.svg-batch-pager { display: grid; gap: 7px; margin: 10px 0; }
+.svg-pager-buttons { display: flex; gap: 6px; }
+.svg-batch-shape { display: flex; gap: 12px; color: var(--v2-muted); font-size: 9px; }
+.svg-batch-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 2px 12px;
+  margin: 0;
+  padding: 0 0 0 16px;
+  color: #c3cde2;
+  font-size: 9px;
+  list-style: decimal;
+}
+
 /* list ─────────────────────────────────────────────────────────────────── */
 
 .svg-panel {
@@ -821,7 +853,10 @@
 .svg-columns,
 .svg-row {
   display: grid;
-  grid-template-columns: 34px 220px minmax(280px, 1fr) 122px 118px 130px 158px 210px;
+  /* Both preview boxes are --svg-thumb square, so the column is exactly two of
+     them plus the gap and padding: the row can never overlap the next column,
+     at any zoom value (RULE 24, invariant I-16). */
+  grid-template-columns: 34px calc(var(--svg-thumb) * 2 + 30px) minmax(280px, 1fr) 122px 118px 130px 158px 210px;
   align-items: center;
   column-gap: 12px;
 }
@@ -888,30 +923,28 @@
 .svg-thumb-wrap { position: relative; min-width: 0; display: inline-flex; }
 
 .svg-thumb {
-  width: auto;
-  max-width: 116px;
   border: 1px solid #35405e;
   border-radius: 5px;
   background: #05070f;
   object-fit: contain;
-  transition: height 0.15s;
+  transition: width 0.15s, height 0.15s;
 }
 
 /* Preview frame: the user's background colour sits BEHIND the artwork — the
    inline preview host paints nothing of its own inside a frame, so the chosen
-   colour is what shows through. A dark frame also adds a light outline around
-   the artwork so black strokes cannot disappear (the filter reaches the shadow
-   root, and `color` inside it comes from lib/svgpreview's PREVIEW_INK).
+   colour is what shows through. A dark frame also gets a light outline around
+   the FRAME, so black strokes cannot disappear — the artwork itself is never
+   filtered, recoloured or inverted (prompt §"only the area behind the SVG").
    Preview only — the saved document is never touched. */
 .svg-preview-frame .svg-preview { background: none; }
-.svg-preview-frame.contrast .svg-preview {
-  filter: drop-shadow(0 0 1px rgb(255 255 255 / 92%)) drop-shadow(0 0 2px rgb(255 255 255 / 55%));
+.svg-preview-frame.contrast {
+  outline: 1px solid rgb(255 255 255 / 55%);
+  outline-offset: 1px;
 }
 
 .svg-thumb.missing {
   display: grid;
   place-items: center;
-  width: 96px;
   color: var(--v2-yellow);
   border-style: dashed;
   border-color: #5b4624;
@@ -1136,20 +1169,6 @@
 .svg-fact span { display: block; color: var(--v2-muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
 .svg-fact strong { display: block; margin-top: 4px; font-size: 11px; }
 
-.svg-manifest {
-  margin: 10px 0;
-  padding: 10px 12px;
-  border: 1px solid var(--v2-line);
-  border-radius: 7px;
-  background: var(--v2-surface);
-  font-size: 10px;
-}
-
-.svg-manifest ol { margin: 8px 0 0; padding-left: 18px; color: #a9b4ca; }
-.svg-manifest li { margin-bottom: 6px; }
-.svg-manifest-positions { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
-
-.svg-composite { margin: 10px 0; }
 .svg-composite-img { max-width: 100%; max-height: 320px; border: 1px solid var(--v2-line-strong); border-radius: 7px; background: #05070f; }
 
 .svg-history-cost small { display: block; color: var(--v2-muted-2); font-size: 8px; }
@@ -1220,7 +1239,7 @@
 
 @media (max-width: 1360px) {
   .svg-columns,
-  .svg-row { grid-template-columns: 32px 200px minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
+  .svg-row { grid-template-columns: 32px calc(var(--svg-thumb) * 2 + 26px) minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

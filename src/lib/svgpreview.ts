@@ -23,19 +23,23 @@ export interface SvgPreview {
 }
 
 /**
- * `currentColor` in a standalone SVG document resolves to the UA default —
- * black. The preview paints it that way so the artwork keeps the colours it
- * was saved with: the app never recolours a document (prompt §"the app does
- * not change lines or any colour inside the SVG"). Visibility on a dark frame
- * is the frame's contrast outline, not a different ink.
+ * The colour a standalone SVG document resolves `currentColor` to (the UA
+ * default). It is applied ONLY when the document declares no colour of its own,
+ * and only as a presentation attribute on the root — the weakest declaration
+ * there is — so the app never overrides the artwork: an author's `color`
+ * attribute, a `color:` in the style, and every fill/stroke/opacity value all
+ * win untouched. The preview paints the document it was given, not a theme.
  */
-export const PREVIEW_INK = "#000000";
+export const STANDALONE_INK = "#000000";
 
-/** Scoped to the preview's shadow root, so it cannot style the app. */
+/**
+ * Scoped to the preview's shadow root, so it cannot style the app. Layout only:
+ * no colour, no stroke/fill override, no filter, no inversion — the preview
+ * must render exactly what the saved file renders.
+ */
 export const PREVIEW_CSS = "<style>"
   + ":host{display:block}"
-  + "svg{display:block;width:100%;height:100%;overflow:hidden"
-  + `;color:${PREVIEW_INK}}`
+  + "svg{display:block;width:100%;height:100%;overflow:hidden}"
   + "</style>";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -132,8 +136,25 @@ function fitBox(root: Element): Box | null {
   root.setAttribute("width", "100%");
   root.setAttribute("height", "100%");
   root.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  applyStandaloneInk(root);
   root.setAttribute("style", fittedStyle(root.getAttribute("style")));
   return { viewBox, ratio: width / height };
+}
+
+/** True when the document decides its own `currentColor` (root attribute or style). */
+function declaresOwnColour(root: Element): boolean {
+  if (root.hasAttribute("color")) return true;
+  return /(?:^|;)\s*color\s*:/i.test(root.getAttribute("style") ?? "");
+}
+
+/**
+ * `currentColor` inherits, and an inline preview inherits from the app — which
+ * would repaint a black icon in the app's own text colour. The document's own
+ * declarations win by construction (a presentation attribute is the weakest
+ * kind), so this sets the standalone default only when the author declared none.
+ */
+function applyStandaloneInk(root: Element): void {
+  if (!declaresOwnColour(root)) root.setAttribute("color", STANDALONE_INK);
 }
 
 function boxSize(viewBox: string): [number, number] | null {
@@ -160,12 +181,14 @@ function usesXlink(root: Element): boolean {
     Array.from(el.attributes).some((attr) => attr.name.toLowerCase().startsWith("xlink:")));
 }
 
-/** Keeps the author's declarations, minus any that would fight the fit. */
+/**
+ * Keeps the author's declarations, minus the two that would fight the fit (an
+ * inline `width:512px` beats the `width="100%"` attribute). Nothing else is
+ * ever added or removed: colour, opacity and every other declaration survive
+ * byte-for-byte.
+ */
 function fittedStyle(style: string | null): string {
-  const kept = (style ?? "").split(";").filter((decl) => decl.trim() !== "" && !WIDTH_HEIGHT.test(decl));
-  // No colour is added here: whatever the document declares is what it is
-  // painted with, and the default lives in the shadow root's stylesheet.
-  return [...kept, "display:block"].join(";");
+  return (style ?? "").split(";").filter((decl) => decl.trim() !== "" && !WIDTH_HEIGHT.test(decl)).join(";");
 }
 
 /** Removes what can execute, fetch from the network, or escape the SVG. */
@@ -200,7 +223,7 @@ function scopeIds(root: Element, prefix: string): void {
   for (const el of elementsOf(root)) {
     const id = el.getAttribute("id");
     if (id !== null && scoped.has(id)) el.setAttribute("id", scoped.get(id) as string);
-    for (const attr of Array.from(el.attributes)) el.setAttribute(attr.name, remapValue(attr.value, scoped));
+    for (const attr of Array.from(el.attributes)) el.setAttribute(attr.name, remapValue(attr.name, attr.value, scoped));
     if (name(el) === "style") el.textContent = remapCss(el.textContent ?? "", scoped);
   }
 }
@@ -220,10 +243,13 @@ function idMap(elements: Element[], prefix: string): Map<string, string> {
   return map;
 }
 
-function remapValue(value: string, scoped: Map<string, string>): string {
-  return value
-    .replace(/url\(\s*['"]?#([\w:.-]+)['"]?\s*\)/g, (all, id) => swap(all, id, scoped))
-    .replace(/^#([\w:.-]+)$/, (all, id) => swap(all, id, scoped));
+/** Only these attributes hold a bare `#id` reference; `fill="#ff0000"` is a colour. */
+const REFERENCE_ATTR = /^(?:href|xlink:href|src)$/i;
+
+function remapValue(attr: string, value: string, scoped: Map<string, string>): string {
+  const withUrls = value.replace(/url\(\s*['"]?#([\w:.-]+)['"]?\s*\)/g, (all, id) => swap(all, id, scoped));
+  if (!REFERENCE_ATTR.test(attr)) return withUrls;
+  return withUrls.replace(/^#([\w:.-]+)$/, (all, id) => swap(all, id, scoped));
 }
 
 function swap(text: string, id: string, scoped: Map<string, string>): string {

@@ -15,13 +15,20 @@ import type { SvgSource } from "./sources";
 
 /** Runner events -> row/progress state. One source of truth per row (RULE 24). */
 export function onRunEvent(event: RunEvent, s: RunSetters): void {
-  if (event.kind === "batch-start") {
-    s.setProgress({
-      batchId: event.batchId, batches: event.batches, count: event.count, cols: event.cols,
+  if (event.kind === "run-start") {
+    s.setProgress(null);
+  } else if (event.kind === "batch-start") {
+    // A new request is in flight: its own counters at zero, the finished
+    // requests' outcomes kept so the whole run stays visible (RULE 24).
+    s.setProgressFn((prev) => ({
+      batchId: event.batchId, index: event.index, batches: event.batches, count: event.count, cols: event.cols,
       rows: event.rows, composite: event.composite, hash: event.hash, saved: 0, failed: 0, missing: 0,
-    });
+      perRequest: event.perRequest, outcomes: prev?.outcomes ?? [],
+    }));
   } else if (event.kind === "batch-done") {
-    s.setProgressFn((prev) => (prev ? { ...prev, saved: event.saved, failed: event.failed, missing: event.missing } : prev));
+    s.setProgressFn((prev) => (prev
+      ? { ...prev, saved: event.report.saved, failed: event.report.failed, missing: event.report.missing, outcomes: [...prev.outcomes, event.report] }
+      : prev));
   } else if (event.kind === "item-saved") {
     s.setRowsFn((rows) => rows.map((r) => (r.source.id === event.sourceId
       ? { ...r, sidecar: event.sidecar, newest: newestValid(event.sidecar), status: "generated", running: false, error: null }

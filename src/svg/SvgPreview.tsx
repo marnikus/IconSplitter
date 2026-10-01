@@ -39,7 +39,7 @@ interface ChipProps {
 /** The honest fallback: says which of the two failures it is. */
 function Chip({ className, size, testid, error, children }: ChipProps) {
   return (
-    <span className={className} style={{ height: size }} title={error ?? undefined}
+    <span className={className} style={{ width: size, height: size }} title={error ?? undefined}
       data-testid={testid} data-error={error ?? undefined}>{children}</span>
   );
 }

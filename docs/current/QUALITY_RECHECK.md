@@ -734,3 +734,107 @@ by RULE 17 — one current doc per app, with design detail pushed to
   renders inline, fitted and centred with its own colours.
 * `tests/svg_bg.test.ts` — unchanged and still green: the Bg colour frames the
   preview and changes nothing else.
+
+---
+
+# Quality re-check — 2026-10-01 (multi-request confirmation, reasoning limits, tier waits, preview/zoom)
+
+Second re-check of the day, after the SVG tab's fix pass: the confirmation now
+plans every request (not just the first), the reasoning tier caps how many
+icons one request may carry, the wait is raised to a per-tier floor, the
+preview never recolours the artwork, and one zoom value drives both previews
+and the row. Design record:
+[`docs/archive/2026-10-01-svg-batches-limits-preview/design.md`](../archive/2026-10-01-svg-batches-limits-preview/design.md).
+
+## What changed
+
+* `src/lib/effortlimits.ts` (new) — the tier rules: effective per-request size
+  (low = configured, **medium 2, high/xhigh 1**), timeout floors (120/300/600 s),
+  the tier note and the timeout hint. The panel, the confirmation and the
+  runner all read the same two functions.
+* `src/lib/svgbatch.ts` — `requestCount`, `validateBatchPlan` (fail-closed) and
+  `batchOutcome`; `src/lib/svgconfig.ts` — the timeout clamp widened to
+  5 000–900 000 ms so a tier floor is never re-clamped away.
+* `src/svg/runner.ts` split into `runtypes.ts` (the shared vocabulary),
+  `runbatch.ts` (ONE request: composite → send → match → save → record) and
+  `runner.ts` (plan → validate → run each request → fold the outcomes), with
+  per-request outcomes (status, saved/failed/missing, tokens, cost, error).
+* `src/svg/SvgConfirm.tsx` (new) — the paginated confirmation: request count,
+  tier limit, model/sampling/effective wait, and one page per request with its
+  own composite, ordered filenames and empty cells; `SvgDialogs.tsx` keeps only
+  the code and history dialogs.
+* `src/svg/SvgBatchStrip.tsx` — the request in flight plus one line per
+  finished request; it stays after the run so the record is readable.
+* One zoom value (`--svg-thumb`) written inline by `SvgPanel.tsx`, sizing both
+  preview boxes, the row's minimum height and the previews column; the AI box
+  is contained (`object-fit: contain`), the SVG keeps `xMidYMid meet`, and the
+  contrast hint is a frame outline instead of a drop-shadow filter.
+* `src/lib/svgpreview.ts` — the inline stylesheet is layout only; the UA-default
+  ink is a root `color` presentation attribute written only when the document
+  declares no colour, and a bare `#id` is rewritten only in real reference
+  attributes (so hex fills are never mistaken for ids). Dead CSS for the removed
+  manifest dialog was deleted.
+* `tools/quality.mjs` — `--changed` now degrades gracefully on a single-commit
+  branch (no `origin/main` merge-base, no `HEAD~1`): it compares the working
+  tree against `HEAD` instead of crashing. No threshold or baseline changed.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED (20 changed files) |
+| tests | 57 files / 517 | **61 files / 560** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.85 / 92.68 / 96.22 / 97.47 | **97.33 / 92.85 / 96.93 / 98.10** |
+| jscpd `src --min-tokens 60` | 11 clones | 12 clones (the new one is a CSS block; no new TS/TSX clone) |
+| build `dist/index.html` | 601.97 kB / gzip 176.88 kB | 608.20 kB / gzip 178.81 kB |
+
+`bash tools/pre_push_check.sh` → **ALL LANES PASSED** (6/6).
+`npx knip` still cannot run in this sandbox (`oxc-parser` fails to allocate its
+`ArrayBuffer`, on `HEAD` as well) — the dead-code lane stays unverified here,
+so the dead CSS and the unused exports were checked by hand (`grep` per class
+and symbol) instead.
+
+## RULE 18 / RULE 16 re-check
+
+New/changed production files, all inside the 150–300-line ideal or explained by
+a single responsibility: `effortlimits.ts` 79, `svgbatch.ts` 169, `svgconfig.ts`
+141, `svgpreview.ts` 278, `runner.ts` 78, `runtypes.ts` 74, `runbatch.ts` 237,
+`SvgConfirm.tsx` 213, `SvgBatchStrip.tsx` 54, `SvgDialogs.tsx` 162,
+`SvgPanel.tsx` 188, `SvgThumbs.tsx` 107, `actions.ts` 292, `ctx.ts` 176,
+`useSvgGen.ts` 57, `types.ts` 59, `SvgControls.tsx` 278. The first cut of
+`runner.ts` (356 lines) and of `SvgConfirm` (31-line component) failed the gate
+by one metric each; both were split by responsibility rather than padded —
+`runner.ts`/`runbatch.ts`/`runtypes.ts`, and the confirm dialog's plan hook +
+body/actions components. No function is above 30 lines / 4 params / CC 10 /
+nesting 4, and no anti-gaming name pattern is used.
+
+Baseline: **untouched** — `tools/quality_baseline.json` is not re-recorded. The
+full gate still reports only the three recorded legacy files (`src/App.tsx`,
+`src/lib/detect.ts`, `src/lib/render.ts`), unchanged; every file this change
+touches meets the hard lines directly.
+
+Context files stay above the RULE 18 200-line ideal (`SYSTEM_OF_RECORD.md` 741,
+this log 838) — the same recorded debt as before, with the design detail pushed
+to `docs/archive/`.
+
+## Regression tests (RULE 8 — each fails if the fix is deleted)
+
+* `tests/svg_batch.test.ts` — the split for 1/3/4/5/8/9/11/23 images, the partial
+  last batch keeping its empty cells, the fail-closed validator, per-request
+  outcome status/usage/cost.
+* `tests/svg_effort.test.ts` — medium caps a request at 2 and high at 1, never
+  above the configured size; the timeout floors; the note and hint wording.
+* `tests/svg_runner.test.ts` — 8 images as 2×4 and 9 as 4+4+1 over an in-memory
+  FS with a recording fake transport, effort-driven splits, per-request
+  tokens/cost, failure isolation, and the high-tier timeout floor under fake
+  timers.
+* `tests/svg_confirm.test.tsx` — the request count, one page per request with
+  its own composite and exact ordered filenames, pagination, empty cells,
+  nothing sent by opening the dialog.
+* `tests/svg_preview.test.ts` / `tests/svg_ui.test.tsx` — the artwork keeps its
+  own colours (no `color`/`filter`/stroke override in the preview CSS, hex fills
+  never rewritten), the contrast hint is a frame outline, the one slider
+  resizes BOTH previews in step from 48 px to 240 px, and the panel's model
+  card and request estimate follow the selected tier (medium 2, high 1).

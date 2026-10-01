@@ -276,8 +276,12 @@ describe("runner events and the review decision", () => {
       setProgressFn: (fn) => { written.push(`progressFn:${fn(null) === null ? "null" : "set"}`); },
       setRowsFn: (fn) => { rows.splice(0, rows.length, ...fn(rows)); },
     };
-    onRunEvent({ kind: "batch-start", batchId: "b1", count: 1, batches: 1, cols: 1, rows: 1, composite: "data:,", hash: "h" }, api);
-    expect(written[0]).toBe("progress:set");
+    onRunEvent({ kind: "run-start", batches: 1, perRequest: 4 }, api);
+    // a new run clears whatever progress the last one left behind...
+    expect(written[0]).toBe("progress:null");
+    onRunEvent({ kind: "batch-start", batchId: "b1", index: 1, count: 1, batches: 1, perRequest: 4, cols: 1, rows: 1, composite: "data:,", hash: "h" }, api);
+    // ...then the request in flight is what the strip shows.
+    expect(written).toEqual(["progress:null", "progressFn:set"]);
     onRunEvent({ kind: "item-failed", batchId: "b1", position: 1, sourceId: FOG, error: "boom", failure: "malformed", retryAfterMs: null }, api);
     expect(rows[0].status).toBe("failed");
     expect(rows[0].error).toBe("boom");
@@ -287,13 +291,19 @@ describe("runner events and the review decision", () => {
 
   it("summarises a run in one line with the real usage", () => {
     const line = summaryLine({
-      batches: 2, saved: 3, failed: 1, missing: 0, invalid: 1, cancelled: false,
+      perRequest: 4, batches: 2, saved: 3, failed: 1, missing: 0, invalid: 1, cancelled: false,
       usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" }, estimated: null, problems: [],
+      outcomes: [{
+        id: "batch_1_4", index: 1, count: 4, status: "done", saved: 3, failed: 1, missing: 0,
+        usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" },
+        cost: { actual: 0.05, estimated: null, currency: "USD", pricing: "requesty-2026-10-01", basis: "provider" },
+        error: null,
+      }],
     });
     expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500 reported");
     expect(summaryLine({
-      batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true, estimated: 0.02,
-      usage: { input: null, output: null, total: null, cost: null, currency: "USD" }, problems: [],
+      perRequest: 4, batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true, estimated: 0.02,
+      usage: { input: null, output: null, total: null, cost: null, currency: "USD" }, problems: [], outcomes: [],
     })).toContain("$0.0200 Estimated");
   });
 
@@ -352,7 +362,8 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "rows-fn", fn: (rows) => rows }).rows).toEqual([]);
     expect(reduceState(start, { type: "progress", progress: null }).progress).toBeNull();
     const patched = reduceState(reduceState(start, { type: "progress", progress: {
-      batchId: "b", batches: 1, count: 1, cols: 1, rows: 1, composite: "", hash: "h", saved: 0, failed: 0, missing: 0,
+      batchId: "b", index: 1, batches: 1, count: 1, cols: 1, rows: 1, composite: "", hash: "h",
+      saved: 0, failed: 0, missing: 0, perRequest: 4, outcomes: [],
     } }), { type: "progress-fn", fn: (p) => (p ? { ...p, saved: 2 } : p) });
     expect(patched.progress?.saved).toBe(2);
     expect(reduceState(start, { type: "filter", patch: { search: "fog" } }).filter.search).toBe("fog");
