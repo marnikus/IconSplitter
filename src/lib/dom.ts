@@ -21,6 +21,16 @@ export function download(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(u), 2000);
 }
 
+/** Blob -> data URL (used for the composite image sent to the provider). */
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("Could not read image bytes"));
+    r.readAsDataURL(blob);
+  });
+}
+
 /** Loads a File into an HTMLImageElement via a short-lived object URL. */
 export async function loadImageFile(file: File): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(file);

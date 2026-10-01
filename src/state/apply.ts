@@ -14,10 +14,11 @@ import { parseSort } from "../lib/reviewsort";
 import type { HistoryEntry } from "../lib/history";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
+import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { patchV2, patchView, setAppState } from "./appstore";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgReview"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
@@ -27,8 +28,22 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
+    case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
     default: return false; // an entry from a future schema: refuse, do not guess
   }
+}
+
+/** Refuses a payload that is not a list of version decisions (RULE 13). */
+function toReviewPatch(value: unknown): SvgReviewPatch {
+  if (!isRecord(value) || !Array.isArray(value.recs)) return { recs: [] };
+  const recs = value.recs.flatMap((r) => (isReviewRec(r) ? [r] : []));
+  return { recs };
+}
+
+function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
+  if (!isRecord(value)) return false;
+  return typeof value.id === "string" && Number.isInteger(value.version)
+    && (value.review === "pending" || value.review === "approved" || value.review === "declined");
 }
 
 async function applyDecisions(ids: readonly string[], value: unknown): Promise<boolean> {

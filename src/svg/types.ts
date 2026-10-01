@@ -1,0 +1,51 @@
+// types.ts — the Generate SVG tab's shared shapes (prompt §2/§4).
+// Kept in one file so the hook, the row model, the scan and the dialogs all
+// speak the same language without importing each other.
+
+import type { SvgSidecar, SvgVersion } from "../lib/svgfile";
+import type { SvgSource } from "./sources";
+
+export type RowStatus = "not-generated" | "generating" | "generated" | "failed";
+
+/** One list row: the approved source plus everything known about its SVGs. */
+export interface SvgRow {
+  source: SvgSource;
+  sidecar: SvgSidecar | null;
+  /** true when the sidecar exists but could not be parsed (SVGs are kept). */
+  corrupt: boolean;
+  /** Newest valid version — what the preview shows by default. */
+  newest: SvgVersion | null;
+  /** The version currently carrying an approval, if any. */
+  approved: SvgVersion | null;
+  status: RowStatus;
+  error: string | null;
+  running: boolean;
+}
+
+/** Live state of the batch currently being sent. */
+export interface RunProgress {
+  batchId: string;
+  batches: number;
+  count: number;
+  cols: number;
+  rows: number;
+  /** Composite image data URL — shown in the batch preview. */
+  composite: string;
+  hash: string;
+  saved: number;
+  failed: number;
+  missing: number;
+}
+
+export type Dialog =
+  | { kind: "confirm"; ids: string[]; batches: number; perRequest: number }
+  | { kind: "code"; id: string; version: number }
+  | { kind: "history"; id: string };
+
+/** Mutable internals shared by the state and action halves of the hook. */
+export interface SvgRefs {
+  root: { current: unknown };
+  sidecars: Map<string, SvgSidecar | null>;
+  abort: { current: AbortController | null };
+  key: { current: string | null };
+}

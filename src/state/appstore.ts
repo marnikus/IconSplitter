@@ -9,7 +9,7 @@
 
 import { DEFAULT_PREFS, type ReviewPrefs } from "../lib/reviewprefs";
 import {
-  DEFAULT_SESSION, type SessionSelection, type SessionState, type SessionV2, type TabId,
+  DEFAULT_SESSION, type SessionSelection, type SessionState, type SessionSvg, type SessionV2, type TabId,
 } from "../lib/session";
 
 export interface AppState {
@@ -19,6 +19,8 @@ export interface AppState {
   view: SessionSelection;
   /** What only the V2 layout adds on top of that. */
   v2: SessionV2;
+  /** Generate SVG tab: its own checkbox selection (stable source ids). */
+  svg: SessionSvg;
   /** Held in memory only — selectionv2/prefsstore is its single writer. */
   prefs: ReviewPrefs;
 }
@@ -32,7 +34,7 @@ const listeners = new Set<Listener>();
 export function initialAppState(session: SessionState, prefs: ReviewPrefs): AppState {
   return {
     tab: session.tab, sheets: session.sheets,
-    view: session.selection, v2: session.selectionV2, prefs,
+    view: session.selection, v2: session.selectionV2, svg: session.svg, prefs,
   };
 }
 
@@ -53,6 +55,10 @@ export function patchV2(patch: Partial<SessionV2>): void {
   setAppState({ v2: { ...state.v2, ...patch } });
 }
 
+export function patchSvg(patch: Partial<SessionSvg>): void {
+  setAppState({ svg: { ...state.svg, ...patch } });
+}
+
 export function subscribe(listener: Listener): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -66,7 +72,7 @@ export function resetAppStore(next: AppState = initialAppState(DEFAULT_SESSION, 
 
 /** The restart projection. Prefs stay out — prefsstore already owns them. */
 export function sessionOf(s: AppState): SessionState {
-  return { tab: s.tab, sheets: s.sheets, selection: s.view, selectionV2: s.v2 };
+  return { tab: s.tab, sheets: s.sheets, selection: s.view, selectionV2: s.v2, svg: s.svg };
 }
 
 function notify(): void {

@@ -17,3 +17,13 @@ Thumbs.db
 # IDE
 .idea/workspace.xml
 .idea/tasks.xml
+
+# Local secrets — the SVG tab's Requesty API key lives in the browser secret
+# store, never in the repo. These patterns keep a local key file from being
+# committed by accident (RULE 20; enforced by tests/secret_hygiene.test.ts).
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+*.local.json

@@ -18,9 +18,9 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selection" | "selectionV2";
+export type TabId = "sheets" | "batch" | "selection" | "selectionV2" | "generateSvg";
 
-export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2"];
+export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2", "generateSvg"];
 
 /** Review list state shared by the Selection and Selection V2 tabs. */
 export interface SessionSelection {
@@ -42,11 +42,19 @@ export interface SessionV2 {
   anchorId: string | null;
 }
 
+/** What only the Generate SVG tab adds: its own selection and active row. */
+export interface SessionSvg {
+  checked: string[];
+  /** Stable source id of the active row — never a list index. */
+  activeId: string | null;
+}
+
 export interface SessionState {
   tab: TabId;
   sheets: SheetOpts;
   selection: SessionSelection;
   selectionV2: SessionV2;
+  svg: SessionSvg;
 }
 
 export const DEFAULT_SELECTION: SessionSelection = {
@@ -54,9 +62,12 @@ export const DEFAULT_SELECTION: SessionSelection = {
   collapsed: false, zoom: "fit", sync: true, autoNext: true,
 };
 
+export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null };
+
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
+  svg: DEFAULT_SVG,
 };
 
 /**
@@ -94,6 +105,15 @@ function toSession(raw: unknown): SessionState {
     sheets: parseSheetOpts(raw.sheets),
     selection: parseSelection(raw.selection),
     selectionV2: parseV2(raw.selectionV2),
+    svg: parseSvgSlice(raw.svg),
+  };
+}
+
+function parseSvgSlice(raw: unknown): SessionSvg {
+  if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_SVG;
+  return {
+    checked: raw.checked.filter((id): id is string => typeof id === "string"),
+    activeId: typeof raw.activeId === "string" ? raw.activeId : null,
   };
 }
 
