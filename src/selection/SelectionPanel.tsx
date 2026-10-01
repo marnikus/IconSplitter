@@ -2,7 +2,7 @@
 // list + comparison, footer, honest banners, and global hotkeys (A/D/arrows/
 // Space/Ctrl+K) via the tested keyToAction mapping (a11y §11).
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { ALL_FILTER } from "../lib/reviewfilter";
 import CompareView from "./CompareView";
@@ -19,9 +19,10 @@ import { useSelection, type SelectionApi } from "./useSelection";
 
 export default function SelectionPanel() {
   const api = useSelection();
-  const [search, setSearch] = useState("");
+  // the search box reads the filter, so a restore or an undo shows in the box
+  const search = api.s.filter.search;
+  const setSearch = (value: string) => api.setFilter({ ...api.s.filter, search: value }, true);
   useHotkeys(api);
-  useEffect(() => { api.setFilter({ ...api.s.filter, search }); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
   const thumbFor = useThumbFor(api.rootRef);
   if (!api.supported) return <UnsupportedNote onPick={api.chooseRoot} />;
   return (
@@ -63,10 +64,11 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
       <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}
         selectedId={api.s.selectedId} collapsed={api.s.collapsed} search={search}
         select={api.select} setSearch={setSearch} patch={api.patch}
-        clearFilters={() => { setSearch(""); api.setFilter(ALL_FILTER); }} thumbFor={thumbFor} />
+        clearFilters={() => api.setFilter(ALL_FILTER)} thumbFor={thumbFor} />
       <CompareView pair={selected} rootName={api.s.rootName} rootRef={api.rootRef}
         zoom={api.s.zoom} sync={api.s.sync} autoNext={api.s.autoNext}
-        patch={api.patch} decide={api.decide} copyPath={copyPath} />
+        patch={api.patch} decide={api.decide} copyPath={copyPath}
+        resetOne={(id) => api.resetBulk([id])} />
     </div>
   );
 }

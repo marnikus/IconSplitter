@@ -1,8 +1,9 @@
 // BulkBar.tsx — the bulk review bar (spec V2 §5/§6): header checkbox with an
 // indeterminate state, the selected/visible scope, select-visible and
-// deselect-all, the thumbnail zoom slider, and the two approve actions. Both
-// approve buttons carry the affected count and arm before applying, so the
-// number of affected items is visible before anything is written.
+// deselect-all, the thumbnail zoom slider, the two approve actions and the two
+// reset-to-pending actions. Every bulk button carries its count and arms before
+// applying, so the number of affected items is visible before anything is
+// written, and each press is ONE undoable action.
 
 import { useEffect, useState } from "react";
 import type { CheckState } from "../lib/reviewselect";
@@ -23,11 +24,13 @@ export interface BulkBarProps {
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onApprove: (scope: BulkScope) => void;
+  onReset: (scope: BulkScope) => void;
 }
 
 export default function BulkBar(p: BulkBarProps) {
   const [armed, setArmed] = useState<BulkScope | null>(null);
-  useEscape(() => setArmed(null), armed !== null);
+  const [armReset, setArmReset] = useState<BulkScope | null>(null);
+  useEscape(() => { setArmed(null); setArmReset(null); }, armed !== null || armReset !== null);
   return (
     <div className="v2-bulk" data-testid="v2-bulk">
       <BulkLeft p={p} />
@@ -39,6 +42,9 @@ export default function BulkBar(p: BulkBarProps) {
             Cancel
           </button>
         )}
+        <ResetBtn scope="selected" label="Reset selected" count={p.affectedCount} armed={armReset} setArmed={setArmReset} onReset={p.onReset} />
+        <ResetBtn scope="visible" label="Reset visible list" count={p.visibleCount} armed={armReset} setArmed={setArmReset} onReset={p.onReset} />
+        <span className="v2-divider" aria-hidden="true" />
         <ApproveBtn scope="selected" label="Approve selected" count={p.affectedCount} armed={armed} setArmed={setArmed} onApprove={p.onApprove} />
         <ApproveBtn scope="visible" solid label="Approve visible list" count={p.visibleCount} armed={armed} setArmed={setArmed} onApprove={p.onApprove} />
       </div>
@@ -92,6 +98,36 @@ function ApproveBtn(p: ApproveBtnProps) {
       className={`v2-btn success${p.solid ? " solid" : ""}${isArmed ? " armed" : ""}`}
       aria-label={`${p.label} — ${p.count} ${p.count === 1 ? "pair" : "pairs"}`}>
       {isArmed ? `Confirm approve ${p.count}?` : `✓ ${p.label} (${p.count})`}
+    </button>
+  );
+}
+
+interface ResetBtnProps {
+  scope: BulkScope;
+  label: string;
+  count: number;
+  armed: BulkScope | null;
+  setArmed: (s: BulkScope | null) => void;
+  onReset: (s: BulkScope) => void;
+}
+
+/** Reset to pending — undoable, and honest about how many pairs it touches. */
+function ResetBtn(p: ResetBtnProps) {
+  const isArmed = p.armed === p.scope;
+  const click = () => {
+    if (isArmed) {
+      p.setArmed(null);
+      p.onReset(p.scope);
+      return;
+    }
+    p.setArmed(p.scope);
+  };
+  return (
+    <button type="button" data-testid={`v2-reset-${p.scope}`} disabled={p.count === 0} onClick={click}
+      className={`v2-btn${isArmed ? " armed" : ""}`}
+      title="Returns approved or declined pairs to pending. Undoable."
+      aria-label={`${p.label} — ${p.count} ${p.count === 1 ? "pair" : "pairs"}`}>
+      {isArmed ? `Confirm reset ${p.count}?` : `↺ ${p.label} (${p.count})`}
     </button>
   );
 }

@@ -49,15 +49,23 @@ export interface BulkOutcome {
   saved: boolean;
 }
 
+/** Why a pair was left out — it differs for a reset (already pending is fine). */
+const SKIP_REASON: Record<Decision, string> = {
+  pending: "already pending or gone",
+  approved: "incomplete or gone",
+  declined: "incomplete or gone",
+};
+
 /** The single honest line a bulk operation reports (RULE 2, RULE 4). */
 export function bulkMessage(o: BulkOutcome): string {
   const parts = [appliedText(o)];
-  if (o.skipped > 0) parts.push(`${o.skipped} skipped (incomplete or gone)`);
+  if (o.skipped > 0) parts.push(`${o.skipped} skipped (${SKIP_REASON[o.decision]})`);
   if (!o.saved) parts.push("save failed — retry");
   return parts.join(" · ");
 }
 
 function appliedText(o: BulkOutcome): string {
   if (o.applied === 0) return "No eligible pairs";
-  return `${o.applied} pair${o.applied === 1 ? "" : "s"} ${o.decision}`;
+  const noun = `pair${o.applied === 1 ? "" : "s"}`;
+  return o.decision === "pending" ? `${o.applied} ${noun} reset to pending` : `${o.applied} ${noun} ${o.decision}`;
 }

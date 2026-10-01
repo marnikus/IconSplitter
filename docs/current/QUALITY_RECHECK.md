@@ -247,3 +247,63 @@ none of them grew — `App.tsx` and `detect.ts` were not modified at all, and
   `role="listbox"` / `option`: an `option` may not contain the checkbox and
   four buttons every row has. Recorded in
   `docs/archive/2026-10-01-selection-v2/design.md`.
+
+# Quality re-check — 2026-10-01 (session restore, reset to pending, global undo/redo)
+
+## What changed
+
+New pure modules `lib/history.ts` (the one global timeline), `lib/session.ts`
+(the restart snapshot), `lib/exportopts.ts`, `lib/isrecord.ts`; a store above the
+tabs (`state/appstore.ts` + `useAppState`, `boot`, `useSessionAutosave`,
+`usePrefsAutosave`, `safestorage`, `historystore`, `sessionstore`); the apply path
+(`state/apply.ts`, `selection/offline.ts`); the UI (`state/HistoryProvider.tsx`,
+`ui/HistoryBar.tsx`, `ui/useSheetsEdit.ts`). Touched: `selection/state.ts`
+(`withReset`, `withRecords`), `useSelection`, `useSelectionV2`, `BulkBar`,
+`CompareView`, `SelectionPanel`, `SelectionV2Panel`, `App`, `Workbench`,
+`main`, `lib/reviewbulk|reviewfile|reviewfilter|reviewprefs|reviewsort`.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 30 files / 207 | **41 files / 322** |
+| coverage `src/lib` (stmts/branch/funcs/lines) | 96.11 / 91.78 / 95.78 / 96.55 | **96.53 / 92.91 / 96.53 / 96.99** |
+| build `dist/index.html` | 467.97 kB / gzip 139.25 kB | 485.14 kB / gzip 144.73 kB |
+| jscpd | 2 clones (both pre-existing) | 2 clones, 12 lines — `lib/detect.ts` self-clone and `SelectBox` in `FilterBar`/`FilterGrid`; neither file was touched by this change |
+
+`npm run verify` → **ALL LANES PASSED**.
+
+## RULE 18 — ideal sizes
+
+Every new file is small and single-purpose: `history.ts` 154, `session.ts` 118,
+`HistoryProvider.tsx` 137, `apply.ts` 83, `appstore.ts` 74, `HistoryBar.tsx` 68,
+`offline.ts` 59, `useSheetsEdit.ts` 43, the rest under 30 lines. No file exceeds
+the 300-line hard limit; no function exceeds 30 body lines, 4 parameters, CC 10
+or nesting 4 (the gate enforces all four and passes).
+
+## Accepted debt / notes
+
+- `selection/useSelection.ts` grew 161 → 273 lines: it now also maps view and
+  decision changes onto history entries. Under the hard limit, but the natural
+  next split is a `selection/history.ts` holding `ACTION_WORD`, `bulkLabel`,
+  `VIEW_TOGGLES`, `pushDecisions`, `editView` and `patchState`.
+- `knip` still cannot run in this sandbox (`oxc-parser` buffer allocation
+  failure), so unused exports were checked by grepping every consumer instead:
+  each new export has at least one non-test consumer, with one documented
+  exception below.
+- Exports verified to have a real consumer: `pruneIds` (useSelection rescan),
+  `filterLabel`/`sortLabel` (useSelection), `patchRecords` (selection/offline),
+  `parsePrefsValue` (state/apply), `parseSheetOpts`/`SIZES` (session, apply, App),
+  `stepBack`/`stepForward`/`pushCoalesced`/`undoLabel`/`redoLabel`/
+  `parseTimeline`/`serializeTimeline` (HistoryProvider, historystore),
+  `bindDecisionApplier`/`hasLiveApplier` (useSelection / tests),
+  `withRecords`/`withReset` (useSelection). `hasLiveApplier` is used only by
+  tests — kept because it is the documented way to ask whether a panel owns the
+  apply path.
+- History and session live in `localStorage`, not in the atomic file flow: they
+  are UI state, not user data, and writing them into the user's image folder
+  would leave stray files. The atomic tmp-verify-overwrite writer remains the
+  only path for `review-decisions.json`.

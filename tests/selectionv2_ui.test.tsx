@@ -2,14 +2,18 @@
 // surface (spec V2 §16). Everything here drives the real panel: folder pick →
 // recursive scan → list review rows → zoom → selection → bulk approve →
 // persistence, against in-memory FS fakes. No component logic is re-implemented.
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { DECISIONS_FILE, TMP_FILE } from "../src/selection/reviewstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
+import { HistoryProvider } from "../src/state/HistoryProvider";
+import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
+import { resetAppStore } from "../src/state/appstore";
 import { PREFS_KEY } from "../src/selectionv2/prefsstore";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
+import { dropDb } from "./helpers/idb";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,6 +44,7 @@ function makeRoot(): FakeDir {
 describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
+    resetAppStore(); // no checked rows / filters leaking between tests
     await dropDb();
   });
 
@@ -297,12 +302,18 @@ describe("Selection V2 panel", () => {
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
+/** Prefs persistence lives above the tabs (Workbench mounts it); mirror that here. */
+function PrefsHost({ children }: { children: ReactNode }) {
+  usePrefsAutosave();
+  return <>{children}</>;
+}
+
 async function mount(root: FakeDir): Promise<{ el: HTMLElement; ui: Root }> {
   (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(root);
   const el = document.createElement("div");
   document.body.appendChild(el);
   const ui = createRoot(el);
-  await act(async () => { ui.render(<SelectionV2Panel />); });
+  await act(async () => { ui.render(<HistoryProvider><PrefsHost><SelectionV2Panel /></PrefsHost></HistoryProvider>); });
   await click(q(el, "[data-testid='v2-root']")!);
   return { el, ui };
 }
@@ -366,12 +377,4 @@ async function settle(): Promise<void> {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
-function dropDb(): Promise<void> {
-  if (typeof indexedDB === "undefined") return Promise.resolve();
-  return new Promise((resolve) => {
-    const req = indexedDB.deleteDatabase("iconSplitter");
-    req.onsuccess = () => resolve();
-    req.onerror = () => resolve();
-    req.onblocked = () => resolve();
-  });
-}
+

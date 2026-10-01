@@ -1,7 +1,7 @@
 // reviewsort.test.ts — RULE 8: every sort mode + direction, status metadata
 // and keyboard mapping (a11y §11: status is text-first, keys are testable).
 import { describe, expect, it } from "vitest";
-import { sortPairs, type SortState } from "../src/lib/reviewsort";
+import { parseSort, sortLabel, sortPairs, type SortState } from "../src/lib/reviewsort";
 import { keyToAction, statusInfo } from "../src/lib/reviewmeta";
 import type { ViewPair } from "../src/lib/reviewfilter";
 
@@ -73,5 +73,25 @@ describe("keyToAction", () => {
 
   it("ignores unknown keys and modifier combos", () => {
     expect(keyToAction("x", false)).toBeNull();
+  });
+});
+
+describe("parseSort — restoring a saved sort (RULE 13)", () => {
+  it("accepts a well-formed sort", () => {
+    expect(parseSort({ by: "path", dir: "asc" })).toEqual({ by: "path", dir: "asc" });
+  });
+
+  it("falls back to the default for anything unusable", () => {
+    for (const bad of [null, "x", { by: "colour" }, []]) {
+      expect(parseSort(bad)).toEqual({ by: "date", dir: "desc" });
+    }
+    expect(parseSort({ by: "name", dir: "sideways" })).toEqual({ by: "name", dir: "desc" }); // keeps the valid half
+  });
+});
+
+describe("sortLabel — the words an undo shows", () => {
+  it("names the mode and the direction", () => {
+    expect(sortLabel({ by: "name", dir: "asc" })).toBe("Sort: name (A→Z)");
+    expect(sortLabel({ by: "date", dir: "desc" })).toBe("Sort: date (Z→A)");
   });
 });

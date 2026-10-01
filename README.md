@@ -142,6 +142,23 @@ removed between runs are detected and reported.
 
 ---
 
+## Undo, redo and the last session
+
+`Ctrl+Z` undoes the newest reversible action from **any** tab, `Ctrl+Shift+Z`
+(or `Ctrl+Y`) redoes it, and the toolbar above the tabs names what each will do
+("Undo: Approve 3 pairs") and stays disabled when there is nothing to do. One
+bulk action is always one history entry, so undoing a bulk approve restores all
+of its pairs at once.
+
+Reversible: decisions (approve / decline / **reset to pending**), checkbox
+selection, filters, sort, date range, view prefs, and the sheets export
+settings. Not reversible, and never reported as such: batch processing, ZIP or
+clipboard export, picking a folder, and switching tabs.
+
+The last session — active tab, folders' review state, filters, sort, selected
+and checked rows, thumbnail zoom, sheets settings — is restored on the next
+start. A folder or file that has since disappeared is reported, never hidden.
+
 ## Selection V2 (Chrome / Edge only)
 
 The **Selection V2** tab reviews the same pairs as **Selection**, but as a

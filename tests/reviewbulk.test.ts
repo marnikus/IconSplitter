@@ -83,3 +83,13 @@ describe("bulkMessage — one honest line per operation", () => {
       .toBe("No eligible pairs · 2 skipped (incomplete or gone)");
   });
 });
+
+describe("bulkMessage for a reset", () => {
+  it("says what a reset did and why the rest were skipped", () => {
+    expect(bulkMessage({ decision: "pending", applied: 3, skipped: 0, saved: true })).toBe("3 pairs reset to pending");
+    expect(bulkMessage({ decision: "pending", applied: 1, skipped: 2, saved: false }))
+      .toBe("1 pair reset to pending · 2 skipped (already pending or gone) · save failed — retry");
+    expect(bulkMessage({ decision: "pending", applied: 0, skipped: 4, saved: true }))
+      .toBe("No eligible pairs · 4 skipped (already pending or gone)");
+  });
+});

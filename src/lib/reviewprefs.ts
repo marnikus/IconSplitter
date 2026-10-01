@@ -4,12 +4,17 @@
 // a corrupt or hand-edited payload costs one ignored load, never a broken
 // panel. The localStorage read/write lives in src/selectionv2/prefsstore.ts.
 
+import { isRecord } from "./isrecord";
+
 export const THUMB_MIN = 48;
 export const THUMB_MAX = 240;
 export const THUMB_STEP = 4;
 export const THUMB_DEFAULT = 84;
 
 export type ViewMode = "list" | "compare";
+
+/** Detail-view scaling for a single pair (Selection review V1). */
+export type ZoomMode = "fit" | "full";
 
 export interface ReviewPrefs {
   mode: ViewMode;
@@ -44,9 +49,13 @@ export function serializePrefs(p: ReviewPrefs): string {
 
 /** Stored payload → prefs; anything unusable falls back to the defaults. */
 export function parsePrefs(text: string | null): ReviewPrefs {
-  const raw = readObject(text);
-  const height = raw?.thumbHeight ?? THUMB_DEFAULT;
-  return { mode: toMode(raw?.mode), thumbHeight: clampThumb(Number(height)) };
+  return parsePrefsValue(readObject(text));
+}
+
+/** Same validation for an in-memory value (a history entry being re-applied). */
+export function parsePrefsValue(raw: unknown): ReviewPrefs {
+  if (!isRecord(raw)) return DEFAULT_PREFS;
+  return { mode: toMode(raw.mode), thumbHeight: clampThumb(Number(raw.thumbHeight ?? THUMB_DEFAULT)) };
 }
 
 function toMode(value: unknown): ViewMode {
@@ -57,8 +66,7 @@ function readObject(text: string | null): Record<string, unknown> | null {
   if (!text) return null;
   try {
     const data: unknown = JSON.parse(text);
-    if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
-    return data as Record<string, unknown>;
+    return isRecord(data) ? data : null;
   } catch {
     return null; // corrupt payload: defaults win, never a crash (RULE 13)
   }

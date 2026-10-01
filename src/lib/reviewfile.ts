@@ -141,3 +141,13 @@ export function diffPairs(prev: ViewPair[], curr: ReviewPair[]): PairDiff {
   );
   return { added, removed: gone.length - renamedGone.size, renamed, unchanged: prev.length - gone.length };
 }
+
+/**
+ * Offline undo/redo: replace the stored records for the touched pairs with the
+ * ones a history entry carries, leaving every other record untouched. A pair
+ * back to pending owns no record (I-13), so it is simply absent from `patch`.
+ */
+export function patchRecords(records: ReviewRecord[], touched: readonly string[], patch: ReviewRecord[]): ReviewRecord[] {
+  const drop = new Set(touched);
+  return [...records.filter((r) => !drop.has(r.pair_id)), ...patch.filter((r) => drop.has(r.pair_id))];
+}

@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { attentionInfo } from "../lib/pairing";
 import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
+import { checkedInView } from "../lib/reviewselect";
 import CompareView from "../selection/CompareView";
 import { copyPathText } from "../selection/copypath";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
@@ -64,7 +65,8 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
         blockedCount={v.blockedCount} hiddenCount={v.hiddenCount} visibleCount={v.core.visible.length}
         thumb={v.prefs.thumbHeight}
         onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckAll())} onSelectVisible={v.checkVisible}
-        onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onApprove={(scope) => approve(v, scope)} />
+        onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onApprove={(scope) => approve(v, scope)}
+        onReset={(scope) => reset(v, scope)} />
       <ReviewList rows={v.core.visible} total={v.core.s.pairs.length} activeId={v.core.s.selectedId}
         checked={v.checked} thumb={v.prefs.thumbHeight} autoNext={v.core.s.autoNext} thumbFor={thumbFor}
         setAutoNext={(on) => v.core.patch({ autoNext: on })} activate={v.core.select}
@@ -80,6 +82,15 @@ function approve(v: SelectionV2Api, scope: BulkScope): void {
   v.core.decideBulk(ids, "approved");
 }
 
+/**
+ * Reset to pending over the same scopes. Unlike approve it also applies to
+ * incomplete pairs — a decision on one can always be taken back.
+ */
+function reset(v: SelectionV2Api, scope: BulkScope): void {
+  const visibleIds = v.core.visible.map((p) => p.pairId);
+  v.core.resetBulk(scope === "selected" ? checkedInView(visibleIds, v.checked) : visibleIds);
+}
+
 function openSide(v: SelectionV2Api, relPath: string): void {
   void copyPathText(v.core.s.rootName, relPath, v.core.say);
 }
@@ -91,7 +102,7 @@ function CompareBody({ v }: { v: SelectionV2Api }) {
       <PairPicker rows={v.core.visible} activeId={v.core.s.selectedId} select={v.core.select} />
       <CompareView pair={pair} rootName={v.core.s.rootName} rootRef={v.core.rootRef} zoom={v.core.s.zoom}
         sync={v.core.s.sync} autoNext={v.core.s.autoNext} patch={v.core.patch} decide={v.core.decide}
-        copyPath={(r) => openSide(v, r)} />
+        copyPath={(r) => openSide(v, r)} resetOne={(id) => v.core.resetBulk([id])} />
     </div>
   );
 }

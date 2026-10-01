@@ -3,6 +3,7 @@
 // on pairId so ordering is deterministic (RULE 22-style stability).
 
 import type { ViewPair, Decision } from "./reviewfilter";
+import { isRecord } from "./isrecord";
 
 export interface SortState {
   by: "date" | "status" | "name" | "path";
@@ -41,4 +42,20 @@ function ci(x: string, y: string): number {
   const a = x.toLowerCase();
   const b = y.toLowerCase();
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+const SORT_KEYS: SortState["by"][] = ["date", "status", "name", "path"];
+
+/** Stored sort → SortState; anything unusable yields DEFAULT_SORT (RULE 13). */
+export function parseSort(raw: unknown): SortState {
+  if (!isRecord(raw)) return DEFAULT_SORT;
+  return {
+    by: SORT_KEYS.includes(raw.by as SortState["by"]) ? (raw.by as SortState["by"]) : DEFAULT_SORT.by,
+    dir: raw.dir === "asc" || raw.dir === "desc" ? raw.dir : DEFAULT_SORT.dir,
+  };
+}
+
+/** "Sort: name (A→Z)" — the words a history entry shows for a sort change. */
+export function sortLabel(s: SortState): string {
+  return `Sort: ${s.by} (${s.dir === "asc" ? "A→Z" : "Z→A"})`;
 }

@@ -1,6 +1,8 @@
 // reviewfilter.test.ts — RULE 8: date/status/search filtering for Selection.
 import { describe, expect, it } from "vitest";
-import { applyFilters, monthKey, type ListFilter, type ViewPair } from "../src/lib/reviewfilter";
+import {
+  applyFilters, filterLabel, monthKey, parseFilter, type ListFilter, type ViewPair,
+} from "../src/lib/reviewfilter";
 
 const T = (s: string) => new Date(s).getTime();
 
@@ -88,5 +90,39 @@ describe("monthKey", () => {
   it("formats epoch ms as YYYY-MM in local time", () => {
     const d = new Date(2026, 9, 1, 12, 0, 0); // local Oct 1 2026
     expect(monthKey(d.getTime())).toBe("2026-10");
+  });
+});
+
+describe("parseFilter — restoring a saved filter (RULE 13)", () => {
+  it("accepts a well-formed filter", () => {
+    const f: ListFilter = { date: { mode: "month", month: "2026-10" }, status: "approved", search: "fog", pairing: "incomplete" };
+    expect(parseFilter(f)).toEqual(f);
+  });
+
+  it("falls back to ALL_FILTER for anything unusable", () => {
+    for (const bad of [null, undefined, "x", 7, [], { date: "soon" }, { status: "maybe" }, { pairing: "half" }]) {
+      expect(parseFilter(bad)).toEqual(ALL);
+    }
+  });
+
+  it("keeps valid parts and defaults the rest", () => {
+    expect(parseFilter({ status: "declined", date: { mode: "all" }, search: 3, pairing: "all" }))
+      .toEqual({ ...ALL, status: "declined", search: "" });
+  });
+
+  it("rejects a custom range with non-finite bounds", () => {
+    expect(parseFilter({ date: { mode: "custom", from: "a", to: 2 }, status: "all", search: "", pairing: "all" })).toEqual(ALL);
+    expect(parseFilter({ date: { mode: "custom", from: 1, to: 2 }, status: "all", search: "", pairing: "all" }))
+      .toEqual({ ...ALL, date: { mode: "custom", from: 1, to: 2 } });
+  });
+});
+
+describe("filterLabel — the words an undo shows", () => {
+  it("names every active condition and falls back to all pairs", () => {
+    expect(filterLabel(ALL)).toBe("Filter: all pairs");
+    expect(filterLabel({ ...ALL, status: "approved" })).toBe("Filter: status approved");
+    expect(filterLabel({ ...ALL, pairing: "incomplete", search: "fog" })).toBe("Filter: incomplete pairs, “fog”");
+    expect(filterLabel({ ...ALL, date: { mode: "month", month: "2026-10" } })).toBe("Filter: 2026-10");
+    expect(filterLabel({ ...ALL, date: { mode: "custom", from: 1, to: 2 } })).toBe("Filter: custom range");
   });
 });

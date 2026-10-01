@@ -2,11 +2,11 @@
 // rename carry-over and rescan diffing for Selection review.
 import { describe, expect, it } from "vitest";
 import {
-  carryRenamed, diffPairs, mergeDecisions, parseDecisions, serializeDecisions,
+  carryRenamed, diffPairs, mergeDecisions, parseDecisions, patchRecords, serializeDecisions,
   type ReviewRecord,
 } from "../src/lib/reviewfile";
 import type { ReviewPair } from "../src/lib/pairing";
-import type { ViewPair } from "../src/lib/reviewfilter";
+import type { Decision, ViewPair } from "../src/lib/reviewfilter";
 
 function pair(id: string, size: number, mtime: number, dir = "a"): ReviewPair {
   return {
@@ -94,5 +94,30 @@ describe("diffPairs", () => {
     const curr = [pair("pair_a", 1, 10), pair("pair_new", 3, 30)];
     const d = diffPairs(prev, curr);
     expect(d).toEqual({ added: 1, removed: 1, renamed: 0, unchanged: 1 });
+  });
+});
+
+describe("patchRecords — an offline undo/redo write", () => {
+  const rec = (id: string, decision: Decision): ReviewRecord => ({
+    pair_id: id, source: `a/${id}.png`, ai_result: null, decision, reviewed_at: "2026-10-01T12:00:00.000Z",
+  });
+  const stored = [rec("a", "approved"), rec("b", "declined"), rec("orphan", "approved")];
+
+  it("replaces only the touched records", () => {
+    const out = patchRecords(stored, ["a"], [rec("a", "declined")]);
+    expect(out.map((r) => `${r.pair_id}:${r.decision}`).sort()).toEqual(["a:declined", "b:declined", "orphan:approved"]);
+  });
+
+  it("removes the record of a pair that returns to pending (I-13)", () => {
+    expect(patchRecords(stored, ["a", "b"], []).map((r) => r.pair_id)).toEqual(["orphan"]);
+  });
+
+  it("ignores patch records for ids nobody asked about", () => {
+    const out = patchRecords(stored, ["a"], [rec("a", "declined"), rec("zzz", "approved")]);
+    expect(out.map((r) => r.pair_id).sort()).toEqual(["a", "b", "orphan"]);
+  });
+
+  it("leaves the stored list alone when nothing is touched", () => {
+    expect(patchRecords(stored, [], [rec("a", "declined")])).toEqual(stored);
   });
 });

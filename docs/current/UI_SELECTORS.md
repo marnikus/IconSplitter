@@ -253,3 +253,29 @@ empty-root states `v2-root-empty` / `v2-unsupported`.
 
 Nothing fetches these yet — they are the discovery list, kept honest like the
 source doc's "Missing Selectors" section.
+
+## O. Global history bar, reset actions (verified 2026-10-01)
+
+App-level, rendered by `ui/Workbench` above every panel (`ui/HistoryBar.tsx`):
+
+| testid | element | notes |
+|---|---|---|
+| `history-bar` | container | present on every tab |
+| `hist-undo` | button | `disabled` at the frontier; `title` = "Undo: <label> (Ctrl+Z)" |
+| `hist-redo` | button | `disabled` at the tip; `title` = "Redo: <label> (Ctrl+Shift+Z)" |
+| `hist-label` | text | "Undo: <label>" or "Nothing to undo" |
+| `hist-list` / `hist-list-toggle` | details / summary | "<n> actions" |
+| `hist-items` | ul | newest first |
+| `hist-item-<actionId>` | li | `data-current` marks the entry under the cursor |
+| `hist-error` | span `role="alert"` | shown when an undo/redo could not be applied |
+
+Reset to pending:
+
+| testid | element | notes |
+|---|---|---|
+| `sel-reset` | button | single pair, comparison view; `disabled` while pending |
+| `v2-reset-selected` | button | arms first, then "Confirm reset <n>?" |
+| `v2-reset-visible` | button | arms first, then "Confirm reset <n>?" |
+
+Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo; ignored
+while the focus is in an input/select/textarea.

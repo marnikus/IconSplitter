@@ -20,6 +20,8 @@ export interface CompareProps {
   autoNext: boolean;
   patch: (p: { zoom?: "fit" | "full"; sync?: boolean; autoNext?: boolean }) => void;
   decide: (id: string, d: "approved" | "declined") => void;
+  /** Back to pending — undoable, and the pair keeps its files (I-13). */
+  resetOne: (id: string) => void;
   copyPath: (relPath: string) => void;
 }
 
@@ -58,10 +60,7 @@ function Header({ pair, meta, p }: { pair: ViewPair; meta: ReturnType<typeof sta
         <label className="flex items-center gap-1 text-xs text-slate-400">SYNC
           <input data-testid="sel-sync" type="checkbox" className="accent-indigo-500" checked={p.sync} onChange={(e) => p.patch({ sync: e.target.checked })} />
         </label>
-        <button data-testid="sel-decline" className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25 sel-focus"
-          onClick={() => p.decide(pair.pairId, "declined")}>✕ Decline</button>
-        <button data-testid="sel-approve" className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 sel-focus"
-          onClick={() => p.decide(pair.pairId, "approved")}>✓ Approve</button>
+        <DecideButtons pair={pair} p={p} />
         <label className="flex items-center gap-1 text-xs text-slate-400">Next pending
           <input data-testid="sel-autonext" type="checkbox" className="accent-indigo-500" checked={p.autoNext} onChange={(e) => p.patch({ autoNext: e.target.checked })} />
         </label>
@@ -77,6 +76,21 @@ interface PaneProps {
   p: CompareProps;
   boxRef: { current: HTMLDivElement | null };
   other: { current: HTMLDivElement | null };
+}
+
+/** The three decision actions for the active pair; reset is undoable like the rest. */
+function DecideButtons({ pair, p }: { pair: ViewPair; p: CompareProps }) {
+  return (
+    <>
+      <button data-testid="sel-decline" className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25 sel-focus"
+        onClick={() => p.decide(pair.pairId, "declined")}>✕ Decline</button>
+      <button data-testid="sel-approve" className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 sel-focus"
+        onClick={() => p.decide(pair.pairId, "approved")}>✓ Approve</button>
+      <button data-testid="sel-reset" disabled={pair.decision === "pending"} title="Back to pending — undoable"
+        className="rounded-xl border border-white/15 bg-white/5 px-4 py-1.5 text-sm font-semibold text-slate-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sel-focus"
+        onClick={() => p.resetOne(pair.pairId)}>↺ Reset</button>
+    </>
+  );
 }
 
 function Pane({ title, side, missing, p, boxRef, other }: PaneProps) {

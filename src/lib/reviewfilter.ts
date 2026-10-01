@@ -4,6 +4,7 @@
 // generated timestamps: it passes a range when either of them falls inside it.
 
 import { attentionInfo, type ReviewPair } from "./pairing";
+import { isRecord } from "./isrecord";
 
 export type Decision = "pending" | "approved" | "declined";
 
@@ -67,4 +68,47 @@ function inSearch(p: ViewPair, q: string): boolean {
 export function monthKey(t: number): string {
   const d = new Date(t);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const STATUSES: ListFilter["status"][] = ["all", "pending", "approved", "declined"];
+const PAIRINGS: PairingFilter[] = ["all", "complete", "incomplete"];
+
+/**
+ * Stored filter → ListFilter. Partial payloads keep their valid parts and
+ * default the rest; anything unusable yields ALL_FILTER (RULE 13).
+ */
+export function parseFilter(raw: unknown): ListFilter {
+  if (!isRecord(raw)) return ALL_FILTER;
+  return {
+    date: parseDate(raw.date),
+    status: pick(STATUSES, raw.status, "all"),
+    search: typeof raw.search === "string" ? raw.search : "",
+    pairing: pick(PAIRINGS, raw.pairing, "all"),
+  };
+}
+
+function parseDate(raw: unknown): DateFilter {
+  if (!isRecord(raw)) return { mode: "all" };
+  if (raw.mode === "month" && typeof raw.month === "string") return { mode: "month", month: raw.month };
+  if (raw.mode === "custom" && isRange(raw.from) && isRange(raw.to)) return { mode: "custom", from: raw.from, to: raw.to };
+  return { mode: "all" };
+}
+
+function isRange(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+function pick<T extends string>(allowed: T[], raw: unknown, fallback: T): T {
+  return allowed.includes(raw as T) ? (raw as T) : fallback;
+}
+
+/** "Status: approved" — the words a history entry shows for a filter change. */
+export function filterLabel(f: ListFilter): string {
+  const bits: string[] = [];
+  if (f.status !== "all") bits.push(`status ${f.status}`);
+  if (f.pairing !== "all") bits.push(f.pairing === "complete" ? "complete pairs" : "incomplete pairs");
+  if (f.search !== "") bits.push(`“${f.search}”`);
+  if (f.date.mode === "month") bits.push(f.date.month);
+  if (f.date.mode === "custom") bits.push("custom range");
+  return `Filter: ${bits.length > 0 ? bits.join(", ") : "all pairs"}`;
 }

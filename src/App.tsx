@@ -3,6 +3,8 @@ import JSZip from "jszip";
 import { analyze, detect, type Analysis, type Box } from "./lib/detect";
 import { canvasToBlob, cropRect, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
 import { download, loadImage } from "./lib/dom";
+import { SIZES } from "./lib/exportopts";
+import { useSheetsEdit } from "./ui/useSheetsEdit";
 
 interface Sheet {
   id: string;
@@ -18,15 +20,6 @@ interface Sheet {
   excluded: number[];
 }
 
-const SIZES = [
-  { v: 0, l: "Native (auto)" },
-  { v: 128, l: "128 × 128" },
-  { v: 256, l: "256 × 256" },
-  { v: 512, l: "512 × 512" },
-  { v: 1024, l: "1024 × 1024" },
-  { v: 2048, l: "2048 × 2048" },
-];
-
 const checker =
   "bg-[length:16px_16px] bg-[linear-gradient(45deg,#e5e7eb_25%,transparent_25%,transparent_75%,#e5e7eb_75%),linear-gradient(45deg,#e5e7eb_25%,#fff_25%,#fff_75%,#e5e7eb_75%)] [background-position:0_0,8px_8px]";
 
@@ -39,9 +32,9 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
-  const [padding, setPadding] = useState(6);
-  const [size, setSize] = useState(512);
-  const [transparent, setTransparent] = useState(false);
+  // in the store above the tabs: restored on restart, undoable like any change
+  const sheetsEdit = useSheetsEdit();
+  const { padding, size, transparent } = sheetsEdit.opts;
   const fileRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<number>(0);
 
@@ -375,7 +368,7 @@ export default function App() {
                     min={0}
                     max={25}
                     value={padding}
-                    onChange={(e) => setPadding(+e.target.value)}
+                    onChange={(e) => sheetsEdit.pad(+e.target.value)}
                     className="w-full accent-indigo-500"
                   />
                 </label>
@@ -384,7 +377,7 @@ export default function App() {
                   <select
                     data-testid="size-select"
                     value={size}
-                    onChange={(e) => setSize(+e.target.value)}
+                    onChange={(e) => sheetsEdit.size(+e.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"
                   >
                     {SIZES.map((s) => (
@@ -399,7 +392,7 @@ export default function App() {
                     data-testid="transparent-checkbox"
                     type="checkbox"
                     checked={transparent}
-                    onChange={(e) => setTransparent(e.target.checked)}
+                    onChange={(e) => sheetsEdit.transparent(e.target.checked)}
                     className="h-4 w-4 accent-indigo-500"
                   />
                   Transparent background

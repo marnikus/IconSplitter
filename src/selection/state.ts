@@ -118,6 +118,55 @@ export function withBulkDecision(s: SelState, ids: string[], decision: Decision,
   };
 }
 
+/**
+ * Reset to pending. One transition for the whole batch, so a bulk reset is one
+ * history entry and one summary message. A pending pair owns no stored record
+ * (I-13), so its record is dropped from the persisted set; the pair itself —
+ * identity, paths, timestamps — is left exactly as it was.
+ */
+export function withReset(s: SelState, ids: readonly string[]): BulkOut {
+  const decisionOf = new Map(s.pairs.map((p) => [p.pairId, p.decision]));
+  const applied: string[] = [];
+  const skipped: string[] = [];
+  for (const id of ids) {
+    if (applied.includes(id) || skipped.includes(id)) continue; // a duplicate is not two resets
+    (decisionOf.get(id) === undefined || decisionOf.get(id) === "pending" ? skipped : applied).push(id);
+  }
+  if (applied.length === 0) return { state: s, applied, skipped };
+  const touch = new Set(applied);
+  const pairs = s.pairs.map((p) => (touch.has(p.pairId) ? { ...p, decision: "pending" as const, reviewedAt: null } : p));
+  return {
+    state: { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) },
+    applied, skipped,
+  };
+}
+
+/**
+ * Re-apply stored records — the canonical undo/redo path for decisions. Each
+ * touched pair takes the decision its record carries, or returns to pending when
+ * the entry holds none (I-13). Pairs a rescan removed are reported as skipped
+ * instead of failing the whole apply, so a stale target can never corrupt the
+ * history cursor (design doc §4).
+ */
+export function withRecords(s: SelState, touched: readonly string[], recs: ReviewRecord[]): BulkOut {
+  const recById = new Map(recs.map((r) => [r.pair_id, r]));
+  const known = new Set(s.pairs.map((p) => p.pairId));
+  const applied = touched.filter((id) => known.has(id));
+  const skipped = touched.filter((id) => !known.has(id));
+  if (applied.length === 0) return { state: s, applied, skipped };
+  const touch = new Set(applied);
+  const pairs = s.pairs.map((p) => (touch.has(p.pairId) ? toRecorded(p, recById.get(p.pairId)) : p));
+  return {
+    state: { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) },
+    applied, skipped,
+  };
+}
+
+function toRecorded(p: ViewPair, rec: ReviewRecord | undefined): ViewPair {
+  if (!rec) return { ...p, decision: "pending" as const, reviewedAt: null };
+  return { ...p, decision: rec.decision, reviewedAt: rec.reviewed_at };
+}
+
 /** Next pending pair after fromId, wrapping; null when all reviewed. */
 export function nextPendingId(pairs: ViewPair[], fromId: string): string | null {
   const at = pairs.findIndex((p) => p.pairId === fromId);

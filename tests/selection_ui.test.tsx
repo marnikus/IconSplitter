@@ -5,6 +5,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
 import SelectionPanel from "../src/selection/SelectionPanel";
+import { HistoryProvider } from "../src/state/HistoryProvider";
+import { resetAppStore } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 type PickerWindow = { showDirectoryPicker?: () => Promise<unknown> };
@@ -29,7 +31,8 @@ describe("SelectionPanel in a DOM", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const root: Root = createRoot(el);
-    await act(async () => { root.render(<SelectionPanel />); });
+    resetAppStore();
+    await act(async () => { root.render(<HistoryProvider><SelectionPanel /></HistoryProvider>); });
     const pick = el.querySelector("[data-testid='sel-root']") as HTMLButtonElement;
     expect(pick).toBeTruthy();
     await act(async () => { pick.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
