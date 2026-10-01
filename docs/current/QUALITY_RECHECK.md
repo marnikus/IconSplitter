@@ -77,3 +77,75 @@ must meet the hard lines (LOC ≤ 30, params ≤ 4, CC ≤ 10, nesting ≤ 4).
   `docs/archive/<date>-app-split/` when that happens)
 * `detect()` at cc 32 — auto-radius sweep and reading-order sort are separable
   concepts (`chooseAutoRadius`, `orderBoxesByReading`), extract on touch
+
+---
+
+# Quality re-check — 2026-10-01 (batch folders shipped)
+
+Full `npm run verify` after building the recursive batch tool (design:
+`docs/archive/2026-10-01-batch-folders/DESIGN.md`). Legacy hotspots
+(`src/App.tsx`, `src/lib/detect.ts`, `src/lib/render.ts`) untouched — new code
+only, behind the `Batch folders` tab.
+
+## What changed
+
+* `src/batch/` (8 modules) — pure batch domain + File System Access boundary
+  + review-state reducer; pixel math reuses `src/lib/*`, never hand-rolled
+* `src/ui/Shell.tsx` + `src/ui/batch/` (7 components, 3 flow modules) —
+  folders, presets, settings, review list, process bar; flows hold
+  scan/process orchestration with no JSX
+* `src/main.tsx` renders `Shell` instead of `App` (4-line diff)
+* `tests/batch/` (84 tests) + `tests/shell.test.tsx` (6 tests) — fake-FS
+  end-to-end for flows and a full UI run; `@testing-library/react` 16 added
+  as a devDependency
+* `tools/quality.mjs` — `--changed` now fails safe (gates all src files) when
+  no base commit exists (shallow / single-commit checkout) instead of crashing
+* RULE 18 splits during the build: `flows.ts` (331 lines) → `scanFlow.ts` /
+  `processFlow.ts` / `presetFlow.ts` by lifecycle concept; `SplitSection`
+  yielded `MergeControl`; `runScan` yielded `reportEmptyScan`
+
+## The numbers (measured, not estimated)
+
+| File | Lines | Functions | Gate state |
+|---|---:|---:|---|
+| `src/App.tsx` | 607 | 76 | LEGACY (held, unchanged) |
+| `src/lib/detect.ts` | 307 | 15 | LEGACY (held, unchanged) |
+| `src/lib/render.ts` | 106 | 8 | LEGACY (held, unchanged) |
+| `src/batch/fs.ts` | 156 | 22 | OK |
+| `src/batch/naming.ts` | 85 | 13 | OK |
+| `src/batch/paths.ts` | 29 | 7 | OK |
+| `src/batch/presets.ts` | 255 | 26 | OK |
+| `src/batch/process.ts` | 298 | 24 | OK (2 lines under the 300 ceiling) |
+| `src/batch/reducer.ts` | 136 | 18 | OK |
+| `src/batch/scan.ts` | 142 | 16 | OK |
+| `src/batch/status.ts` | 247 | 28 | OK |
+| `src/main.tsx` | 11 | 0 | OK |
+| `src/ui/Shell.tsx` | 45 | 5 | OK |
+| `src/ui/batch/BatchPanel.tsx` | 105 | 24 | OK |
+| `src/ui/batch/BatchSettings.tsx` | 161 | 28 | OK |
+| `src/ui/batch/FolderPickers.tsx` | 36 | 2 | OK |
+| `src/ui/batch/PresetBar.tsx` | 115 | 19 | OK |
+| `src/ui/batch/ProcessBar.tsx` | 37 | 5 | OK |
+| `src/ui/batch/ScanList.tsx` | 40 | 2 | OK |
+| `src/ui/batch/ScanRow.tsx` | 45 | 4 | OK |
+| `src/ui/batch/presetFlow.ts` | 20 | 2 | OK |
+| `src/ui/batch/processFlow.ts` | 111 | 13 | OK |
+| `src/ui/batch/scanFlow.ts` | 220 | 25 | OK |
+| `src/utils/cn.ts` | 7 | 1 | OK |
+
+* Tests: **107 passed** (14 files) — 17 sheet + 84 batch + 6 shell
+* Coverage `src/lib`: **lines 100%, branches 95%** (threshold lines ≥ 80%)
+* Lanes: tsc ✓ · eslint 0 errors / 8 legacy warnings · gate ✓ (GATE PASSED) ·
+  tests ✓ · coverage ✓ · build ✓ — **ALL LANES PASSED**
+* `dist/index.html` single-file build: 386 kB (gzip 113 kB)
+
+## Baseline decision
+
+Untouched. No legacy value grew (ratchet held on all three hotspots) and all
+new files meet the hard lines — nothing to re-record.
+
+## Known debt carried (added this round)
+
+* `src/batch/process.ts` at 298/300 lines — next functional touch there must
+  split by concept first (output-tree writing vs status updates are the seam).
+* Prior debt unchanged: `App` 553 LOC, `detect()` cc 32 (see 2026-09-30).

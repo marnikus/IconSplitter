@@ -17,8 +17,7 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 | Folder | What it records |
 |---|---|
 | `archive/<YYYY-MM-DD>-<topic>/` | Designs, plans, root-cause notes — dated by day written, never edited afterwards |
-
-(No archived docs yet.)
+| `archive/2026-10-01-batch-folders/` | `DESIGN.md` — recursive batch folders, review, presets, output tree (shipped 2026-10-01) |
 
 ## Outside `docs/`
 

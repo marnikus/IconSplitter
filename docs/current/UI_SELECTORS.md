@@ -1,10 +1,11 @@
-# UI Selector Reference — Icon Splitter (verified against `src/App.tsx`)
+# UI Selector Reference — Icon Splitter
 
 Adapted from `Process-Images-in-Areana/docs/current/DOM_SELECTORS.md`. That app
 automates a foreign site, so its selectors target someone else's DOM. Icon
 Splitter **is** the page, so this reference lists the app's own stable handles
-for tests (RULE 8) and any future UI automation. Every `data-testid` below
-exists in `src/App.tsx` — verified 2026-09-30.
+for tests (RULE 8) and any future UI automation. Sections A–H exist in
+`src/App.tsx` (verified 2026-09-30); sections K–Q exist in `src/ui/**`
+(verified 2026-10-01).
 
 Priority per RULE 21: **semantic** (role / label / text) > **structural** >
 **class fragment** (Tailwind utilities are last resort, never primary).
@@ -93,7 +94,82 @@ Same shape as the source project, adapted:
 ```
 
 When a test needs a handle that is not listed here, add the `data-testid` to
-`src/App.tsx` **and** a row to this doc in the same change (RULE 17).
+the owning component **and** a row to this doc in the same change (RULE 17).
+
+## K. Shell tabs (`src/ui/Shell.tsx`)
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `tab-sheets` | `Sheet editor` | default tab; sheet state survives switching (both tabs stay mounted, inactive is `hidden`) |
+| `tab-batch` | `Batch folders` | batch panel; `main.tsx` renders `Shell`, not `App` |
+
+## L. Batch folders (`src/ui/batch/FolderPickers.tsx`)
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-source-picker` | button `📁 Source folder` | opens the directory picker, then scans; disabled while busy |
+| `batch-source-name` | text | picked source folder name, or `No source chosen` |
+| `batch-refresh` | button `↻ Rescan` | disabled while busy or without a source |
+| `batch-custom-dest-toggle` | checkbox | `Custom destination` on/off |
+| `batch-dest-picker` | button `📁 Destination folder` | only rendered when custom destination is on |
+| `batch-dest-name` | text | picked destination name, or `No destination chosen` |
+| `batch-dest-default` | text | `Output goes to <source>/_split_output` when custom destination is off |
+
+## M. Batch presets (`src/ui/batch/PresetBar.tsx`)
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-preset-list` | `<select>` | preset names from localStorage |
+| `batch-preset-load` | button `Load` | loads the picked preset (fails open when gone/corrupt) |
+| `batch-preset-save` | button `Save` | overwrites the picked preset with current folders + settings |
+| `batch-preset-delete` | button `Delete` | removes the picked preset |
+| `batch-preset-load-last` | button `Load last` | loads the last-used preset (auto-remembered on every save/load, incl. panel mount) |
+| `batch-preset-name` | text input | name for Save-as-new |
+| `batch-preset-save-as` | button `Save as new` | stores current folders + settings under the typed name |
+
+## N. Batch settings (`src/ui/batch/BatchSettings.tsx`)
+
+| Test id | Control | Notes |
+|---|---|---|
+| `batch-extensions` | text input | comma-separated image extensions; invalid values revert on blur with an error toast |
+| `batch-use-hash` | checkbox | content hash for change detection |
+| `batch-padding` | range 0–25 | padding % per side |
+| `batch-size` | `<select>` | 0 (Native auto), 128, 256, 512, 1024, 2048 |
+| `batch-transparent` | checkbox | transparent background |
+| `batch-merge-auto` | checkbox | auto merge distance on/off |
+| `batch-merge` | range 0–0.15 step 0.0025 | only rendered when auto is off |
+| `batch-output-dir` | text input | output folder name (default `_split_output`); invalid values revert on blur |
+| `batch-variation-prefix` | text input | duplicate variation prefix (default `_v`); invalid values revert on blur |
+| `batch-auto-select` | checkbox | auto-select new images after scan |
+| `batch-keep-missing` | checkbox | keep missing files in the review list |
+
+## O. Batch review list (`src/ui/batch/ScanList.tsx`, `ScanRow.tsx`)
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-select-all` | button `Select all` | disabled when nothing is eligible |
+| `batch-deselect-all` | button `Deselect all` | disabled when nothing is selected |
+| `batch-empty-note` | text | shown only when the list is empty |
+| `batch-row-{i}` | row container | i = list index; shows name, rel path, `ref: <name>` (+ `(missing)`), note, status pill |
+| `batch-select-{i}` | checkbox | disabled for ineligible rows (missing/deleted) |
+| `batch-copy-path-{i}` | button `📋 Path` | copies `<root>/<rel path>`; browsers cannot open Explorer, so the path is shown in a toast when the clipboard is blocked (RULE 9) |
+
+## P. Batch process bar (`src/ui/batch/ProcessBar.tsx`)
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-process` | button `⚙ Process selected (N)` | disabled while busy or when N = 0; rescans before running |
+| `batch-cancel` | button `✕ Cancel` | only rendered while busy; stops between files (in-flight file finishes) |
+| `batch-missing-skip` | button `Skip those` | missing-reference confirm: skips files without a reference |
+| `batch-missing-continue` | button `Continue anyway` | missing-reference confirm: processes them without the reference copy |
+
+## Q. Batch status surfaces (`src/ui/batch/BatchPanel.tsx`)
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-busy-overlay` | full-screen progress overlay | present only while busy |
+| `batch-busy-message` | progress text | e.g. `Scanning…`, `Processing 3/12…` (RULE 5 — incremental) |
+| `batch-toast` | bottom toast | green success / rose error; text is the assertion target (RULE 2, RULE 4) |
 
 ## J. Handles still needed (to be added on demand)
 

@@ -39,7 +39,14 @@ function changedFiles() {
     base = execSync("git merge-base origin/main HEAD", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
       .toString().trim();
   } catch { /* no origin/main — fall back to HEAD~1 */ }
-  const diff = execSync(`git diff --name-only ${base}`, { cwd: ROOT }).toString().trim();
+  let diff;
+  try {
+    diff = execSync(`git diff --name-only ${base}`, { cwd: ROOT }).toString().trim();
+  } catch {
+    // No base commit (shallow / single-commit checkout): gate everything (fail-safe).
+    say("No base commit for --changed; gating all src files.");
+    return srcFiles();
+  }
   const unstaged = execSync("git diff --name-only HEAD", { cwd: ROOT }).toString().trim();
   // Untracked files never appear in git diff — detect them explicitly,
   // so a brand-new over-line file cannot slip past --changed.

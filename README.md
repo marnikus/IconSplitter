@@ -1,8 +1,15 @@
 # Icon Splitter
 
-A browser app that detects individual icons in a sprite sheet / icon sheet,
-lets you review, resize and exclude them, and exports the result as PNG files
-(download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
+A browser app with two modes:
+
+- **Sheet editor** — detects individual icons in a sprite sheet / icon sheet,
+  lets you review, resize and exclude them, and exports the result as PNG
+  files (download as ZIP, save to a folder in Chrome/Edge, or copy to
+  clipboard).
+- **Batch folders** — recursively scans a folder tree for `*_AI` icon sheets,
+  shows them in a review list with per-file status tracking, and splits the
+  selected ones into a timestamped output tree. Scan/process settings can be
+  saved as named presets.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
@@ -116,11 +123,16 @@ IconSplitter/
 ├── package.json             # Dependencies & npm scripts (dev/test/verify)
 ├── vite.config.ts           # Vite config (single-file build enabled)
 ├── src/
-│   ├── main.tsx             # React bootstrap
-│   ├── App.tsx              # Main UI
+│   ├── main.tsx             # React bootstrap (renders Shell)
+│   ├── App.tsx              # Sheet editor UI
+│   ├── ui/Shell.tsx         # Tab shell (Sheet editor / Batch folders)
+│   ├── ui/batch/            # Batch UI: panel, folders, presets, settings,
+│   │                        # review list, process bar + scan/process flows
+│   ├── batch/               # Batch domain: naming, scan, process, status,
+│   │                        # presets, FS boundary, review-state reducer
 │   ├── lib/detect.ts        # Icon detection on the sheet
 │   └── lib/render.ts        # Cropping / resizing / export logic
-├── tests/                   # Vitest — real detect/render logic (RULE 8)
+├── tests/                   # Vitest — real logic incl. fake-FS batch runs (RULE 8)
 ├── tools/                   # RULE 16 quality gate + pre-push check
 ├── docs/                    # Rules + verification docs (see docs/README.md)
 ├── install_dependencies.bat # Windows: npm install
@@ -128,10 +140,28 @@ IconSplitter/
 └── run_dev_server.bat       # Windows: live-reload dev server
 ```
 
+## Batch folders — how it works
+
+1. Open the **Batch folders** tab and pick a **source folder** (Chrome/Edge).
+   The app scans it recursively for `*_AI.png`-style sheets and links each to
+   its `<base>` reference image (e.g. `icon_AI.png` → `icon.png`).
+2. Review the list: thumbnail, file name, relative path and status per row.
+   Use the checkboxes (or Select all / Deselect all) to choose what to
+   process. Each row's 📋 Path button copies its location — browsers cannot
+   open File Explorer directly.
+3. Press **Process selected**. Every run rescans first; files whose reference
+   image is missing ask whether to skip them or continue anyway. Output lands
+   in `<source>/_split_output/<month>/<timestamp>/…` (or your custom
+   destination), existing files are never overwritten, and a `<base>.json`
+   status file next to each reference remembers what was processed.
+4. Save your folder + settings setup as a **preset** to reuse it later; the
+   last-used preset reloads automatically.
+
 ## Notes
 
 - The production build (`npm run build`) inlines all JS/CSS into
   `dist/index.html` via `vite-plugin-singlefile`, which is why the app can run
   by just opening that file — perfect for use as a portable browser app.
 - Saving directly to a folder only works in Chromium browsers (Chrome/Edge);
-  in other browsers use the ZIP export.
+  in other browsers use the ZIP export. Batch folder picking likewise needs
+  Chrome/Edge.
