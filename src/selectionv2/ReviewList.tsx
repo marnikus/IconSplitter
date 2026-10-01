@@ -3,6 +3,7 @@
 // height follows the zoom slider through the --v2-thumb custom property.
 
 import type { CSSProperties } from "react";
+import { useListScroll } from "../session/useListScroll";
 import type { Decision, ViewPair } from "../lib/reviewfilter";
 import type { SideThumbFor } from "../selection/thumbs";
 import ReviewRow from "./ReviewRow";
@@ -19,6 +20,7 @@ export interface ReviewListProps {
   setAutoNext: (on: boolean) => void;
   toggleCheck: (id: string) => void;
   decide: (id: string, d: Decision) => void;
+  reset: (id: string) => void;
   openSide: (relPath: string) => void;
   clearFilters: () => void;
 }
@@ -30,20 +32,22 @@ const COLUMNS = [
 
 export default function ReviewList(p: ReviewListProps) {
   const style = { "--v2-thumb": `${p.thumb}px` } as CSSProperties;
+  const scroll = useListScroll("v2-rows"); // restart lands where the user was
   return (
     <section className="v2-panel" data-testid="v2-list" style={style}>
       <ListHead shown={p.rows.length} total={p.total} autoNext={p.autoNext} setAutoNext={p.setAutoNext} />
       <div className="v2-columns" aria-hidden="true">
         {COLUMNS.map((c) => <span key={c}>{c}</span>)}
       </div>
-      <div className="v2-rows" role="list" aria-label="Image review pairs" data-testid="v2-rows">
+      <div className="v2-rows" role="list" aria-label="Image review pairs" data-testid="v2-rows"
+        ref={scroll.ref} onScroll={scroll.onScroll}>
         {p.rows.length === 0
           ? <ListEmpty total={p.total} clearFilters={p.clearFilters} />
           : p.rows.map((row) => <ReviewRow key={row.pairId} row={row} p={p} />)}
       </div>
       <footer className="v2-list-footer">
         <span data-testid="v2-footer">Showing {p.rows.length} of {p.total} pairs</span>
-        <span className="v2-hints"><kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>↑ ↓</kbd> move the active row</span>
+        <span className="v2-hints"><kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>↺</kbd> reset to pending · <kbd>↑ ↓</kbd> move the active row</span>
       </footer>
     </section>
   );

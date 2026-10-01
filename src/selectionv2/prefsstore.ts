@@ -1,19 +1,17 @@
-// prefsstore.ts — localStorage IO for the Selection V2 view prefs (RULE 13).
-// Parsing/clamping lives in lib/reviewprefs, so a corrupt payload costs one
-// ignored load and a blocked storage (private mode) costs one lost preference.
+// prefsstore.ts — the LEGACY view-prefs key from before the session payload
+// existed. Nothing writes it any more (the session owns the value, RULE 10);
+// it is read once so an existing user keeps the layout and zoom they chose.
 
-import { parsePrefs, serializePrefs, type ReviewPrefs } from "../lib/reviewprefs";
+import { parsePrefs, type ReviewPrefs } from "../lib/reviewprefs";
 
 export const PREFS_KEY = "iconSplitter.selectionV2.prefs.v1";
 
-export function loadPrefs(): ReviewPrefs {
-  return parsePrefs(localStorage.getItem(PREFS_KEY));
-}
-
-export function savePrefs(prefs: ReviewPrefs): void {
+/** The pre-session prefs, or null when the user never had any. */
+export function readLegacyPrefs(): ReviewPrefs | null {
   try {
-    localStorage.setItem(PREFS_KEY, serializePrefs(prefs));
+    const text = localStorage.getItem(PREFS_KEY);
+    return text ? parsePrefs(text) : null;
   } catch {
-    // storage unavailable: the panel keeps working, prefs just do not persist
+    return null;
   }
 }

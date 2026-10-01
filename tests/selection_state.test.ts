@@ -1,8 +1,10 @@
 // selection_state.test.ts — RULE 8/24: pure reducers behind useSelection.
 import { describe, expect, it } from "vitest";
 import {
-  applyScan, counters, initialSelState, nextPendingId, recordsFromViews, withDecision,
+  applyScan, counters, initialSelState, nextPendingId, recordsFromViews, withBulkDecision,
+  withChecked, withDecision, withDecisionStates, withResetDecision, withViewPatch,
 } from "../src/selection/state";
+import { decisionStates } from "../src/lib/reviewsnapshot";
 import type { ReviewPair } from "../src/lib/pairing";
 import type { ReviewRecord } from "../src/lib/reviewfile";
 
@@ -13,6 +15,11 @@ function pair(id: string, size: number, mtime: number, dir = "a"): ReviewPair {
     ai: { relPath: `${dir}/${id}_AI.png`, size: size + 1, mtime: mtime + 1 },
     created: mtime, generated: mtime + 1,
   };
+}
+
+/** a, b, c scanned with no stored decisions (shared by the new blocks). */
+function scan() {
+  return applyScan(initialSelState(), [pair("a", 1, 1), pair("b", 2, 2), pair("c", 3, 3)], { records: [], corrupt: false }, 1);
 }
 
 const REC = (id: string, decision: ReviewRecord["decision"]): ReviewRecord => ({
@@ -101,5 +108,74 @@ describe("counters", () => {
     const s = applyScan(initialSelState(), [pair("a", 1, 1), { ...pair("b", 2, 2), ai: null }], { records: [REC("a", "approved")], corrupt: false }, 1);
     const c = counters(s.pairs);
     expect(c).toEqual({ total: 2, pending: 1, approved: 1, declined: 0, attention: 1 });
+  });
+});
+
+/* ── reset to pending + history application (request §2/§3) ─────────────── */
+
+describe("withResetDecision", () => {
+  it("clears the decision and the stored record, keeping the pair intact", () => {
+    const s = scan();
+    const decided = withDecision(s, "a", "approved", "2026-10-01T10:00:00.000Z");
+    const out = withResetDecision(decided, ["a"]);
+    expect(out.applied).toEqual(["a"]);
+    expect(out.skipped).toEqual([]);
+    const pair = out.state.pairs.find((p) => p.pairId === "a")!;
+    expect(pair.decision).toBe("pending");
+    expect(pair.reviewedAt).toBeNull();
+    expect(pair.source).not.toBeNull(); // source/AI sides and metadata survive
+    expect(pair.ai).not.toBeNull();
+    expect(out.state.records.some((r) => r.pair_id === "a")).toBe(false); // I-13
+  });
+
+  it("skips pairs that are already pending and never touches their neighbours", () => {
+    const s = scan();
+    const decided = withDecision(s, "b", "declined", "t");
+    const out = withResetDecision(decided, ["a", "b", "gone"]);
+    expect(out.applied).toEqual(["b"]);
+    expect(out.skipped).toEqual(["a", "gone"]);
+    expect(out.state.records).toEqual([]); // b's record is gone, nothing else was reviewed
+    expect(out.state.pairs.map((p) => p.decision)).toEqual(["pending", "pending", "pending"]);
+  });
+});
+
+describe("withDecisionStates (undo/redo replay)", () => {
+  it("restores a snapshot atomically and rebuilds the records once", () => {
+    const s = withBulkDecision(scan(), ["a", "b"], "approved", "2026-10-01T10:00:00.000Z").state;
+    const before = decisionStates(s.pairs, ["a", "b"]).map((d) => ({ ...d, decision: "pending" as const, reviewedAt: null }));
+    const back = withDecisionStates(s, before);
+    expect(back.changed).toBe(2);
+    expect(back.state.pairs.map((p) => p.decision)).toEqual(["pending", "pending", "pending"]);
+    expect(back.state.records).toEqual([]);
+  });
+
+  it("ignores ids the current scan no longer has (deleted target)", () => {
+    const s = scan();
+    const out = withDecisionStates(s, [{ id: "gone", decision: "approved", reviewedAt: "t" }]);
+    expect(out.changed).toBe(0);
+    expect(out.state).toBe(s);
+  });
+
+  it("re-applies a bulk snapshot as one transition", () => {
+    const s = withBulkDecision(scan(), ["a", "b"], "approved", "2026-10-01T10:00:00.000Z").state;
+    const snap = decisionStates(s.pairs, ["a", "b"]);
+    const undone = withDecisionStates(s, snap.map((d) => ({ ...d, decision: "pending" as const, reviewedAt: null }))).state;
+    const again = withDecisionStates(undone, snap);
+    expect(again.state.pairs.map((p) => p.decision)).toEqual(["approved", "approved", "pending"]);
+  });
+});
+
+describe("withChecked + withViewPatch", () => {
+  it("keeps only ids the current scan knows, in one transition", () => {
+    const s = withChecked(scan(), ["b", "gone", "a", "a"]);
+    expect(s.checked).toEqual(["b", "a"]);
+  });
+
+  it("patches one persisted view value without touching the active row", () => {
+    const s = { ...scan(), selectedId: "b" };
+    const next = withViewPatch(s, { sort: { by: "name", dir: "asc" } });
+    expect(next.sort).toEqual({ by: "name", dir: "asc" });
+    expect(next.selectedId).toBe("b");
+    expect(next.pairs).toBe(s.pairs);
   });
 });

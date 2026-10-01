@@ -20,6 +20,7 @@ export interface CompareProps {
   autoNext: boolean;
   patch: (p: { zoom?: "fit" | "full"; sync?: boolean; autoNext?: boolean }) => void;
   decide: (id: string, d: "approved" | "declined") => void;
+  reset: (id: string) => void; // back to pending (request §2)
   copyPath: (relPath: string) => void;
 }
 
@@ -58,15 +59,28 @@ function Header({ pair, meta, p }: { pair: ViewPair; meta: ReturnType<typeof sta
         <label className="flex items-center gap-1 text-xs text-slate-400">SYNC
           <input data-testid="sel-sync" type="checkbox" className="accent-indigo-500" checked={p.sync} onChange={(e) => p.patch({ sync: e.target.checked })} />
         </label>
-        <button data-testid="sel-decline" className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25 sel-focus"
-          onClick={() => p.decide(pair.pairId, "declined")}>✕ Decline</button>
-        <button data-testid="sel-approve" className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 sel-focus"
-          onClick={() => p.decide(pair.pairId, "approved")}>✓ Approve</button>
+        <DecideButtons pair={pair} p={p} />
         <label className="flex items-center gap-1 text-xs text-slate-400">Next pending
           <input data-testid="sel-autonext" type="checkbox" className="accent-indigo-500" checked={p.autoNext} onChange={(e) => p.patch({ autoNext: e.target.checked })} />
         </label>
       </div>
     </div>
+  );
+}
+
+/** The pair's own Decline/Approve/Reset actions (request §2). */
+function DecideButtons({ pair, p }: { pair: ViewPair; p: CompareProps }) {
+  const pending = pair.reviewedAt === null;
+  return (
+    <>
+      <button data-testid="sel-decline" className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25 sel-focus"
+        onClick={() => p.decide(pair.pairId, "declined")}>✕ Decline</button>
+      <button data-testid="sel-approve" className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 sel-focus"
+        onClick={() => p.decide(pair.pairId, "approved")}>✓ Approve</button>
+      <button data-testid="sel-reset" disabled={pending} className="rounded-xl border border-white/15 px-4 py-1.5 text-sm text-slate-300 hover:bg-white/10 sel-focus disabled:opacity-40"
+        title={pending ? "Already pending" : "Reset this pair to pending"}
+        onClick={() => p.reset(pair.pairId)}>↺ Reset to pending</button>
+    </>
   );
 }
 

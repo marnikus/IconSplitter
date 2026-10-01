@@ -3,6 +3,7 @@
 // toggles the comparison zoom. Kept free of React so the mapping is testable.
 
 import { type HotAction } from "../lib/reviewmeta";
+export { isTextField } from "../lib/dom";
 
 export interface HotTarget {
   selectedId: string | null;
@@ -47,11 +48,4 @@ function neighbour(
   visible: readonly { pairId: string }[], id: string | null, step: number,
 ): { pairId: string } | undefined {
   return visible[visible.findIndex((p) => p.pairId === id) + step];
-}
-
-/** True when the keystroke belongs to a text field, not to review (a11y §14). */
-export function isTextField(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement
-    || target instanceof HTMLSelectElement
-    || target instanceof HTMLTextAreaElement;
 }

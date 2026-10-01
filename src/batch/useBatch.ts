@@ -4,8 +4,8 @@
 // (fs, picker, process, statewrite, store) are separately tested.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { linkReferences, collectAiImages, walkTree, type AiImageEntry } from "../lib/scan";
-import { readDirTree, ensureDirPath, probePath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
+import { type AiImageEntry } from "../lib/scan";
+import { ensureDirPath, probePath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { defaultPreset, type Preset } from "../lib/presets";
 import { parseAiName } from "../lib/naming";
 import { pickDirectory, fsSupported, ensurePermission } from "./picker";
@@ -14,6 +14,10 @@ import { processItems, type BatchItem, type ItemResult } from "./process";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
+import { recordEntry } from "../history/historybus";
+import { selectAllEntry, toggleEntry } from "./selectionhistory";
+import { useBatchSelectionHistory, useToastClear } from "./batchhooks";
+import { rowsFor, scanImages } from "./scanrows";
 import type { SourceStatus } from "../lib/statefile";
 
 export interface Row extends AiImageEntry {
@@ -53,6 +57,7 @@ export function useBatch() {
   const [s, setS] = useState<BatchState>(initial);
   const ctx = useCtx(s);
   useEffect(() => { void boot(ctx, setS); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useBatchSelectionHistory(ctx, setS);
   useToastClear(s.toast, setS);
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
   return {
@@ -93,12 +98,17 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
 
 function useViewActions(ctx: Ctx, setS: Setter) {
   const toggle = useCallback((relPath: string) => {
+    const e = toggleEntry(ctx.state.current.rows, relPath);
+    if (!e) return;
     setS((p) => ({ ...p, rows: p.rows.map((r) => (r.relPath === relPath ? { ...r, selected: !r.selected } : r)) }));
-  }, [setS]);
+    recordEntry(e); // one click = one reversible entry (request §3)
+  }, [ctx, setS]);
 
   const selectAll = useCallback((on: boolean) => {
+    const e = selectAllEntry(ctx.state.current.rows, on);
     setS((p) => ({ ...p, rows: p.rows.map((r) => (selectable(r) ? { ...r, selected: on } : r)) }));
-  }, [setS]);
+    recordEntry(e); // one bulk command = ONE entry (request §3)
+  }, [ctx, setS]);
 
   const thumbUrl = useCallback(async (relPath: string) => {
     const root = ctx.root.current;
@@ -141,13 +151,6 @@ function selectable(r: Row): boolean {
   return r.status !== "missing" && r.status !== "deleted";
 }
 
-function useToastClear(toast: BatchState["toast"], setS: Setter): void {
-  useEffect(() => {
-    const t = toast ? setTimeout(() => setS((p) => ({ ...p, toast: null })), 4000) : 0;
-    return () => clearTimeout(t);
-  }, [toast, setS]);
-}
-
 /** Restores the last-used preset + its saved folders on first open (spec §3). */
 async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   const presets = loadPresets();
@@ -185,26 +188,15 @@ async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => voi
   }
 }
 
-async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
-  const tree = await readDirTree(root, preset.ignoreFolders);
-  const entries = walkTree(tree, preset.ignoreFolders);
-  return linkReferences(collectAiImages(entries), entries);
-}
-
 function finishScan(
   images: AiImageEntry[], statuses: Map<string, SourceStatus>, setS: Setter, say: (m: string, e?: boolean) => void,
 ): void {
   setS((p) => ({
     ...p, busy: null,
-    rows: images.map((img) => toRow(img, statuses)),
+    rows: rowsFor(images, statuses),
     refWarnings: images.filter((i) => i.refRelPath === null).map((i) => i.relPath),
   }));
   say(`Found ${images.length} AI image${images.length === 1 ? "" : "s"}`);
-}
-
-function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>): Row {
-  const status = statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";
-  return { ...img, status, selected: status !== "missing" && status !== "deleted" };
 }
 
 async function process(ctx: Ctx, setS: Setter): Promise<void> {

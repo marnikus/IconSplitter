@@ -6,9 +6,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
+import { resetHistoryForTests } from "../src/history/historybus";
 import { DECISIONS_FILE, TMP_FILE } from "../src/selection/reviewstore";
+import { resetSelectionStoreForTests } from "../src/selection/selectionstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
-import { PREFS_KEY } from "../src/selectionv2/prefsstore";
+import { resetSessionStoreForTests, SESSION_KEY } from "../src/session/sessionstore";
+import { resetSelectionMirrorForTests } from "../src/session/selectionmirror";
+import { resetScrollMemoForTests } from "../src/session/scrollmemo";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,6 +44,12 @@ function makeRoot(): FakeDir {
 describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
+    // the review store + timeline are app-wide singletons: reset them per test
+    resetHistoryForTests();
+    resetSessionStoreForTests();
+    resetSelectionMirrorForTests();
+    resetScrollMemoForTests();
+    resetSelectionStoreForTests();
     await dropDb();
   });
 
@@ -131,7 +141,7 @@ describe("Selection V2 panel", () => {
     expect(q(el, "[data-testid='v2-list']")?.getAttribute("style")).toContain("--v2-thumb: 128px");
     const thumb = q(el, `[data-testid='v2-row-${FOG}'] [data-testid='v2-thumb-src']`)?.firstElementChild as HTMLElement;
     expect(thumb.style.height).toBe("128px");
-    expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).thumbHeight).toBe(128);
+    expect(JSON.parse(localStorage.getItem(SESSION_KEY)!).review.prefs.thumbHeight).toBe(128);
     await act(async () => { ui.unmount(); });
     const again = await mount(makeRoot());
     expect((q(again.el, "[data-testid='v2-thumb']") as HTMLInputElement).value).toBe("128");

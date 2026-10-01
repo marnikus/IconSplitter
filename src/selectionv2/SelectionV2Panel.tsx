@@ -61,14 +61,16 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
   return (
     <div className="v2-workspace">
       <BulkBar header={v.header} checkedCount={v.checked.length} affectedCount={v.affected.length}
+        resetCount={v.resettable.length} pendingChecked={pendingChecked(v)} visibleResetCount={visibleResetCount(v)}
         blockedCount={v.blockedCount} hiddenCount={v.hiddenCount} visibleCount={v.core.visible.length}
         thumb={v.prefs.thumbHeight}
         onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckAll())} onSelectVisible={v.checkVisible}
-        onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onApprove={(scope) => approve(v, scope)} />
+        onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onApprove={(scope) => approve(v, scope)}
+        onReset={(scope) => reset(v, scope)} />
       <ReviewList rows={v.core.visible} total={v.core.s.pairs.length} activeId={v.core.s.selectedId}
         checked={v.checked} thumb={v.prefs.thumbHeight} autoNext={v.core.s.autoNext} thumbFor={thumbFor}
         setAutoNext={(on) => v.core.patch({ autoNext: on })} activate={v.core.select}
-        toggleCheck={v.toggleCheck} decide={v.core.decide} openSide={(r) => openSide(v, r)}
+        toggleCheck={v.toggleCheck} decide={v.core.decide} reset={v.resetOne} openSide={(r) => openSide(v, r)}
         clearFilters={() => v.core.setFilter(ALL_FILTER)} />
     </div>
   );
@@ -78,6 +80,24 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
 function approve(v: SelectionV2Api, scope: BulkScope): void {
   const ids = scope === "selected" ? v.affected : v.core.visible.map((p) => p.pairId);
   v.core.decideBulk(ids, "approved");
+}
+
+/** Bulk reset: the same scopes, but an incomplete pair is reset too (request §2). */
+function reset(v: SelectionV2Api, scope: BulkScope): void {
+  if (scope === "selected") return v.resetSelected();
+  v.resetVisible();
+}
+
+function pendingChecked(v: SelectionV2Api): number {
+  return v.checked.filter((id) => visiblePair(v, id)?.reviewedAt === null).length;
+}
+
+function visibleResetCount(v: SelectionV2Api): number {
+  return v.core.visible.filter((p) => p.reviewedAt !== null).length;
+}
+
+function visiblePair(v: SelectionV2Api, id: string) {
+  return v.core.visible.find((p) => p.pairId === id);
 }
 
 function openSide(v: SelectionV2Api, relPath: string): void {
@@ -91,7 +111,7 @@ function CompareBody({ v }: { v: SelectionV2Api }) {
       <PairPicker rows={v.core.visible} activeId={v.core.s.selectedId} select={v.core.select} />
       <CompareView pair={pair} rootName={v.core.s.rootName} rootRef={v.core.rootRef} zoom={v.core.s.zoom}
         sync={v.core.s.sync} autoNext={v.core.s.autoNext} patch={v.core.patch} decide={v.core.decide}
-        copyPath={(r) => openSide(v, r)} />
+        reset={v.resetOne} copyPath={(r) => openSide(v, r)} />
     </div>
   );
 }

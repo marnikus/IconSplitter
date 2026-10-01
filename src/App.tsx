@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { analyze, detect, type Analysis, type Box } from "./lib/detect";
 import { canvasToBlob, cropRect, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
 import { download, loadImage } from "./lib/dom";
+import { useExportOpts } from "./session/useExportOpts";
 
 interface Sheet {
   id: string;
@@ -39,9 +40,7 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
-  const [padding, setPadding] = useState(6);
-  const [size, setSize] = useState(512);
-  const [transparent, setTransparent] = useState(false);
+  const { padding, size, transparent, setPadding, setSize, setTransparent } = useExportOpts();
   const fileRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<number>(0);
 

@@ -66,7 +66,7 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
         clearFilters={() => { setSearch(""); api.setFilter(ALL_FILTER); }} thumbFor={thumbFor} />
       <CompareView pair={selected} rootName={api.s.rootName} rootRef={api.rootRef}
         zoom={api.s.zoom} sync={api.s.sync} autoNext={api.s.autoNext}
-        patch={api.patch} decide={api.decide} copyPath={copyPath} />
+        patch={api.patch} decide={api.decide} reset={(id) => { void api.reset([id]); }} copyPath={copyPath} />
     </div>
   );
 }

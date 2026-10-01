@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { attentionInfo, type ReviewPair } from "../lib/pairing";
 import { statusInfo } from "../lib/reviewmeta";
 import type { ViewPair } from "../lib/reviewfilter";
+import { useListScroll } from "../session/useListScroll";
 import { fmtShort } from "./fmt";
 import type { ThumbFor } from "./thumbs";
 
@@ -51,9 +52,11 @@ function ListHeader({ p }: { p: PairListProps }) {
 }
 
 function ListBody({ p }: { p: PairListProps }) {
+  const scroll = useListScroll("sel-list"); // restart lands where the user was
   if (p.visible.length === 0) return <EmptyState total={p.totalPairs} clear={p.clearFilters} />;
   return (
-    <ul className="max-h-[38rem] flex-1 space-y-1 overflow-y-auto pr-1" role="listbox" aria-label="Image pairs">
+    <ul ref={scroll.ref} onScroll={scroll.onScroll}
+      className="max-h-[38rem] flex-1 space-y-1 overflow-y-auto pr-1" role="listbox" aria-label="Image pairs">
       {p.visible.map((row) => <Row key={row.pairId} row={row} p={p} />)}
     </ul>
   );

@@ -12,6 +12,9 @@ import {
   ALL_FILTER, type Decision, type ListFilter, type ViewPair,
 } from "../lib/reviewfilter";
 import { DEFAULT_SORT, type SortState } from "../lib/reviewsort";
+import { DEFAULT_PREFS, type ReviewPrefs } from "../lib/reviewprefs";
+import { planReset } from "../lib/reviewreset";
+import type { DecisionState } from "../lib/reviewsnapshot";
 
 export interface SelToast {
   msg: string;
@@ -27,6 +30,8 @@ export interface SelState {
   filter: ListFilter;
   sort: SortState;
   selectedId: string | null;
+  checked: string[]; // checkbox selection, stable pair ids (survives filtering)
+  prefs: ReviewPrefs; // layout mode + thumbnail zoom (V2)
   corrupt: boolean;
   writeWarn: string | null;
   awaitingRetry: number;
@@ -39,13 +44,29 @@ export interface SelState {
   toast: SelToast | null;
 }
 
-export function initialSelState(): SelState {
+/** Persisted view values a user command may patch (not navigation state). */
+export type ViewPatch = Partial<Pick<SelState, "filter" | "sort" | "prefs" | "watcher" | "collapsed" | "zoom" | "sync" | "autoNext">>;
+
+export function initialSelState(over: Partial<SelState> = {}): SelState {
   return {
     rootName: "", pairs: [], records: [], lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
+    checked: [], prefs: { ...DEFAULT_PREFS },
     corrupt: false, writeWarn: null, awaitingRetry: 0, watcher: true,
     collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
+    ...over,
   };
+}
+
+/** Applies one persisted view patch in a single transition (request §3). */
+export function withViewPatch(s: SelState, patch: ViewPatch): SelState {
+  return { ...s, ...patch };
+}
+
+/** Checkbox selection limited to ids the current scan still knows (request §1). */
+export function withChecked(s: SelState, checked: readonly string[]): SelState {
+  const known = new Set(s.pairs.map((p) => p.pairId));
+  return { ...s, checked: [...new Set(checked)].filter((id) => known.has(id)) };
 }
 
 export interface ScanLoad {
@@ -116,6 +137,52 @@ export function withBulkDecision(s: SelState, ids: string[], decision: Decision,
     applied: plan.eligible,
     skipped: plan.skipped,
   };
+}
+
+export interface ResetOut {
+  state: SelState;
+  applied: string[];
+  skipped: string[];
+}
+
+/**
+ * Reset to pending (request §2): clears the decision AND the record — a pair
+ * without a stored decision is pending (I-13). One transition for the whole
+ * scope; pair identity, both sides and all file metadata are untouched.
+ */
+export function withResetDecision(s: SelState, ids: string[]): ResetOut {
+  const plan = planReset(s.pairs, ids);
+  if (plan.resettable.length === 0) return { state: s, applied: [], skipped: plan.skipped };
+  const touch = new Set(plan.resettable);
+  const pairs = s.pairs.map((p) => (touch.has(p.pairId) ? { ...p, decision: "pending" as const, reviewedAt: null } : p));
+  return {
+    state: { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) },
+    applied: plan.resettable,
+    skipped: plan.skipped,
+  };
+}
+
+export interface ApplyOut {
+  state: SelState;
+  changed: number;
+}
+
+/**
+ * Replay path for Undo/Redo (request §3/§9): applies a decision snapshot in
+ * ONE transition through the same reducer a click uses. Ids that the current
+ * scan no longer has are ignored, so a stale entry can never corrupt state.
+ */
+export function withDecisionStates(s: SelState, states: readonly DecisionState[]): ApplyOut {
+  const byId = new Map(states.map((d) => [d.id, d]));
+  let changed = 0;
+  const pairs = s.pairs.map((p) => {
+    const want = byId.get(p.pairId);
+    if (!want || (want.decision === p.decision && want.reviewedAt === p.reviewedAt)) return p;
+    changed++;
+    return { ...p, decision: want.decision, reviewedAt: want.reviewedAt };
+  });
+  if (changed === 0) return { state: s, changed: 0 };
+  return { state: { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) }, changed };
 }
 
 /** Next pending pair after fromId, wrapping; null when all reviewed. */

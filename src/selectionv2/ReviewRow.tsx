@@ -30,12 +30,24 @@ export default function ReviewRow({ row, p }: { row: ViewPair; p: ReviewListProp
       <DimsCell row={row} dims={dims} />
       <StatusCell row={row} />
       <OpenCell row={row} openSide={p.openSide} />
-      <div className="v2-decision-actions">
-        <button type="button" className="v2-btn tiny danger" data-testid={`v2-decline-${row.pairId}`}
-          onClick={() => p.decide(row.pairId, "declined")}>✕ Decline</button>
-        <button type="button" className="v2-btn tiny success" data-testid={`v2-approve-row-${row.pairId}`}
-          onClick={() => p.decide(row.pairId, "approved")}>✓ Approve</button>
-      </div>
+      <DecisionActions row={row} p={p} />
+    </div>
+  );
+}
+
+/** The row's own Reset/Decline/Approve buttons (request §2). */
+function DecisionActions({ row, p }: { row: ViewPair; p: ReviewListProps }) {
+  const pending = row.reviewedAt === null;
+  return (
+    <div className="v2-decision-actions">
+      <button type="button" className="v2-btn tiny" data-testid={`v2-reset-${row.pairId}`}
+        disabled={pending} aria-label={`Reset ${row.base} to pending`}
+        title={pending ? "Already pending" : "Reset this pair to pending"}
+        onClick={() => p.reset(row.pairId)}>↺ Pending</button>
+      <button type="button" className="v2-btn tiny danger" data-testid={`v2-decline-${row.pairId}`}
+        onClick={() => p.decide(row.pairId, "declined")}>✕ Decline</button>
+      <button type="button" className="v2-btn tiny success" data-testid={`v2-approve-row-${row.pairId}`}
+        onClick={() => p.decide(row.pairId, "approved")}>✓ Approve</button>
     </div>
   );
 }

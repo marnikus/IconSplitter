@@ -27,6 +27,14 @@ export function reviewPair(id: string, o: PairOpts = {}): ReviewPair {
   };
 }
 
-export function viewPair(id: string, o: PairOpts & { decision?: ViewPair["decision"] } = {}): ViewPair {
-  return { ...reviewPair(id, o), decision: o.decision ?? "pending", reviewedAt: null };
+export interface ViewOpts extends PairOpts {
+  decision?: ViewPair["decision"];
+  reviewedAt?: string | null;
+}
+
+/** A reviewed pair carries a stamp; pending always has none (I-13). */
+export function viewPair(id: string, o: ViewOpts = {}): ViewPair {
+  const decision = o.decision ?? "pending";
+  const reviewedAt = o.reviewedAt !== undefined ? o.reviewedAt : (decision === "pending" ? null : "2026-01-01T00:00:00.000Z");
+  return { ...reviewPair(id, o), decision, reviewedAt };
 }

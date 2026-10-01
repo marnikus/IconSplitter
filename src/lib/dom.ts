@@ -21,6 +21,13 @@ export function download(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(u), 2000);
 }
 
+/** True when a keyboard event belongs to a text field, not to the app (a11y). */
+export function isTextField(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLSelectElement
+    || target instanceof HTMLTextAreaElement;
+}
+
 /** Loads a File into an HTMLImageElement via a short-lived object URL. */
 export async function loadImageFile(file: File): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(file);
