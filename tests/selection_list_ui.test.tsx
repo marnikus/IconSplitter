@@ -83,6 +83,16 @@ async function setInput(el: HTMLElement, sel: string, value: string): Promise<vo
   await settle();
 }
 
+async function setSelect(el: HTMLElement, sel: string, value: string): Promise<void> {
+  const input = el.querySelector(sel) as HTMLSelectElement;
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+  await act(async () => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
 async function press(key: string): Promise<void> {
   await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); });
   await settle();
@@ -181,6 +191,8 @@ describe("multi-selection", () => {
     await setInput(m.el, "[data-testid='sel-search']", "");
     expect(m.el.querySelector(`[data-testid='sel-row-${ID_A}']`)?.textContent).toContain("Approved");
     expect(m.el.querySelector(`[data-testid='sel-row-${ID_C}']`)?.textContent).toContain("Pending"); // hidden row untouched
+    await setSelect(m.el, "[data-testid='sel-dir']", "asc"); // sorting must not drop selection
+    expect(m.el.querySelector("[data-testid='sel-selected-count']")?.textContent).toContain("2");
     await m.close();
   });
 });
