@@ -314,6 +314,8 @@ describe("SVG row preview", () => {
     // v2 is the newest version, so v2 is what the frame shows (64x32 box)
     expect(svg?.getAttribute("viewBox")).toBe("0 0 64 32");
     expect(frame(FOG)?.dataset.version).toBe("2");
+    // the frame's own CSS travels with the document, scoped to the shadow root
+    expect(frame(FOG)?.shadowRoot?.querySelector("style")).not.toBeNull();
     // a stroke-only icon paints with currentColor, so the preview must give it
     // an ink — without one it drew black on a near-black frame (D4).
     expect(svg?.getAttribute("style") ?? "").toContain("color:");
