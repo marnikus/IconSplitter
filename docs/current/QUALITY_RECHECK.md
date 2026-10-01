@@ -499,3 +499,68 @@ producing an unhandled one.
   that the confirm dialog now opens instead of the "add your key" guard toast.
   The second new test stubs a storage that refuses the write and asserts the
   session-only message.
+
+---
+
+# Quality re-check — 2026-10-01 (SVG preview rendering)
+
+Re-check after the SVG preview fix: *"the SVG generates and copies as valid
+code, the in-app preview is missing or rendered incorrectly"*. Root cause,
+design and rejected alternatives:
+[`docs/archive/2026-10-01-svg-preview-rendering/design.md`](../archive/2026-10-01-svg-preview-rendering/design.md).
+
+## What changed
+
+`src/lib/svgpreview.ts` (new, 240 lines) owns the whole preview pipeline —
+parse with the real XML parser, one namespace repair pass, sanitize, fit,
+scope ids, serialize. `src/svg/SvgPreview.tsx` (new, 73 lines) renders that
+markup INLINE inside an **open shadow root**, and separates empty ("No SVG")
+from broken ("Preview failed" + the reason). `src/svg/preview.ts` is deleted:
+its `data:` URL inside an `<img>` was the path that could not draw a document
+without `xmlns`, without an intrinsic size, or with `currentColor`.
+`src/svg/rowmodel.ts` gained `previewTargetOf`, the single version the row
+previews AND copies, and `SvgModel.rootToken` (bumped by every pick and scan)
+makes every row re-read the file it shows. `src/svg/SvgDialogs.tsx` now draws
+the document the code dialog is about to copy; `useCodeDoc` + `CodeDrawing`
+were extracted to keep `CodeDialog` at 30 lines (RULE 19).
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| `tools/quality.mjs --allow-legacy` (all files) | GATE PASSED | GATE PASSED |
+| tests | 51 files / 431 | **52 files / 453** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.29 / 91.62 / 95.43 / 96.96 | **96.52 / 91.79 / 95.75 / 97.20** |
+| jscpd `src --min-tokens 60` | 12 clones | **11 clones** (1 removed, see below) |
+| build `dist/index.html` | 575.92 kB / gzip 169.40 kB | 582.70 kB / gzip 171.42 kB |
+
+`npm run verify` → **ALL LANES PASSED**.
+`npx knip` could not run in this sandbox (`oxc-parser` fails to allocate its
+`ArrayBuffer`, on `HEAD` as well) — the dead-code lane stays unverified here.
+
+## Baseline decision
+
+**Untouched.** No file in `tools/quality_baseline.json` grew; every new file
+(`svgpreview.ts` 240 lines, `SvgPreview.tsx` 73) is inside the 300-line file
+ideal and every new function is inside LOC ≤ 30 / params ≤ 4 / CC ≤ 10 /
+nesting ≤ 4 without an override, so there is nothing to re-record.
+
+## Debt removed on the way
+
+`src/svg/rowmodel.ts` held a byte-identical copy of `lib/svgfile`'s
+`newestValid` (jscpd, 7 lines / 64 tokens). `toRow` and the runner event now
+call the lib owner and the duplicate is deleted — one owner for "newest valid
+version", which is what the preview and Copy both read.
+
+## Regression tests
+
+* `tests/svg_preview.test.ts` (new, 19 tests) — one test per defect and per
+  failure reason; each fails if `buildSvgPreview` is deleted.
+* `tests/svg_ui.test.tsx` (8 → 11 tests) — the row renders an inline `<svg>`
+  with `xmlns` + `100%` + `xMidYMid meet`, the frame's `data-version` equals
+  the version Copy puts on the clipboard, a truncated file shows "Preview
+  failed / not well-formed XML", a source with no SVG shows "No SVG".
+* `tests/svg_io.test.ts` — one scan bumps `rootToken` once.
