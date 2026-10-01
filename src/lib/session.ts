@@ -20,7 +20,7 @@ export const SESSION_VERSION = 1;
 
 export type TabId = "sheets" | "batch" | "selection" | "selectionV2" | "generateSvg";
 
-export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2"];
+export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2", "generateSvg"];
 
 /** Review list state shared by the Selection and Selection V2 tabs. */
 export interface SessionSelection {

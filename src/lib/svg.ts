@@ -22,6 +22,7 @@ export function validateSvg(raw: string): SvgCheck {
 
 export function nextSvgVersion(names: string[], base: string): number {
   const rx = new RegExp(`^${escapeRegex(base)}(?:_v(\\d+))?\\.svg$`, "i");
-  return Math.max(0, ...names.flatMap((name) => { const n = name.match(rx)?.[1]; return [n ? Number(n) : 1]; })) + 1;
+  const versions = names.flatMap((name) => { const n = name.match(rx)?.[1]; return [n ? Number(n) : 1]; });
+  return versions.length ? Math.max(...versions) + 1 : 1;
 }
 function escapeRegex(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

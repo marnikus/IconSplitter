@@ -18,6 +18,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "batch", label: "Batch folders", testid: "tab-batch" },
   { id: "selection", label: "Selection", testid: "tab-selection" },
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
+  { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
 ];
 
 export default function Workbench() {
