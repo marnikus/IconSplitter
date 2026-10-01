@@ -40,8 +40,8 @@ describe("mutations", () => {
   });
 
   it("patches only the V2 slice", () => {
-    patchV2({ checked: ["a"], scrollY: 40 });
-    expect(getAppState().v2).toEqual({ checked: ["a"], scrollY: 40 });
+    patchV2({ checked: ["a"], scrollY: 40, anchorId: "a" });
+    expect(getAppState().v2).toEqual({ checked: ["a"], scrollY: 40, anchorId: "a" });
     expect(getAppState().view.selectedId).toBeNull();
   });
 
@@ -65,8 +65,8 @@ describe("sessionOf — the projection that gets persisted", () => {
   it("keeps everything the restart needs", () => {
     setAppState({ tab: "selectionV2" });
     patchView({ selectedId: "pair_a" });
-    patchV2({ checked: ["pair_a"], scrollY: 12 });
-    expect(sessionOf(getAppState())).toEqual({ ...DEFAULT_SESSION, tab: "selectionV2", selection: { ...DEFAULT_SESSION.selection, selectedId: "pair_a" }, selectionV2: { checked: ["pair_a"], scrollY: 12 } });
+    patchV2({ checked: ["pair_a"], scrollY: 12, anchorId: "pair_a" });
+    expect(sessionOf(getAppState())).toEqual({ ...DEFAULT_SESSION, tab: "selectionV2", selection: { ...DEFAULT_SESSION.selection, selectedId: "pair_a" }, selectionV2: { checked: ["pair_a"], scrollY: 12, anchorId: "pair_a" } });
   });
 
   it("leaves prefs out, because prefsstore already owns them", () => {

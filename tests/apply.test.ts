@@ -38,11 +38,16 @@ describe("applyEntry", () => {
     expect(applyDecisionsSpy).not.toHaveBeenCalled();
   });
 
-  it("restores a checkbox selection", async () => {
-    await expect(applyEntry(entry("checked"), ["a", "b"])).resolves.toBe(true);
-    expect(getAppState().v2.checked).toEqual(["a", "b"]);
-    await expect(applyEntry(entry("checked"), ["a", 3])).resolves.toBe(false);
+  it("restores a selection together with its shift anchor", async () => {
+    await expect(applyEntry(entry("checked"), { ids: ["a", "b"], anchor: "b" })).resolves.toBe(true);
+    expect(getAppState().v2).toMatchObject({ checked: ["a", "b"], anchorId: "b" });
+    await expect(applyEntry(entry("checked"), { ids: ["a", 3], anchor: null })).resolves.toBe(false);
     expect(getAppState().v2.checked).toEqual(["a", "b"]); // refused, so unchanged
+  });
+
+  it("still applies an entry recorded before the anchor existed", async () => {
+    await expect(applyEntry(entry("checked"), ["c"])).resolves.toBe(true);
+    expect(getAppState().v2).toMatchObject({ checked: ["c"], anchorId: null });
   });
 
   it("applies only the view keys the entry carries", async () => {

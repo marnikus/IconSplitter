@@ -7,6 +7,14 @@ import type { Decision, ViewPair } from "../lib/reviewfilter";
 import type { SideThumbFor } from "../selection/thumbs";
 import ReviewRow from "./ReviewRow";
 
+/** The modifier keys of a row click — see lib/reviewselect.selectIntent. */
+export interface RowMods {
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+}
+
 export interface ReviewListProps {
   rows: ViewPair[];
   total: number;
@@ -15,7 +23,7 @@ export interface ReviewListProps {
   thumb: number;
   autoNext: boolean;
   thumbFor: SideThumbFor;
-  activate: (id: string) => void;
+  onRowClick: (id: string, mods: RowMods) => void;
   setAutoNext: (on: boolean) => void;
   toggleCheck: (id: string) => void;
   decide: (id: string, d: Decision) => void;

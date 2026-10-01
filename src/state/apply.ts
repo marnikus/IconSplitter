@@ -37,10 +37,30 @@ async function applyDecisions(ids: readonly string[], value: unknown): Promise<b
   return applyDecisionPatch(ids, patch);
 }
 
+interface SelectionPatch {
+  ids: string[];
+  anchor: string | null;
+  active: string | null;
+}
+
 function applyChecked(value: unknown): boolean {
-  if (!Array.isArray(value) || !value.every((id) => typeof id === "string")) return false;
-  patchV2({ checked: value as string[] });
+  const sel = toSelection(value);
+  if (!sel) return false;
+  patchV2({ checked: sel.ids, anchorId: sel.anchor });
+  patchView({ selectedId: sel.active }); // a row click carries its active row
   return true;
+}
+
+/** Entries recorded before the shift anchor existed stored a bare id array. */
+function toSelection(value: unknown): SelectionPatch | null {
+  const raw: unknown = Array.isArray(value) ? { ids: value } : value;
+  if (!isRecord(raw) || !Array.isArray(raw.ids)) return null;
+  if (!raw.ids.every((id) => typeof id === "string")) return null;
+  return {
+    ids: raw.ids as string[],
+    anchor: typeof raw.anchor === "string" ? raw.anchor : null,
+    active: typeof raw.active === "string" ? raw.active : null,
+  };
 }
 
 /** Refuse a value that carries nothing usable, so the cursor does not move. */

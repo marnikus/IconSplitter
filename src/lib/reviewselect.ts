@@ -29,3 +29,30 @@ export function checkedInView(visibleIds: readonly string[], checked: readonly s
   const on = new Set(checked);
   return visibleIds.filter((id) => on.has(id));
 }
+
+export type SelectIntent = "replace" | "range" | "toggle";
+
+/** File-Explorer modifiers: shift extends a range, ctrl/alt/meta toggles one row. */
+export function selectIntent(mods: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }): SelectIntent {
+  if (mods.shiftKey) return "range";
+  if (mods.ctrlKey || mods.altKey || mods.metaKey) return "toggle";
+  return "replace";
+}
+
+/** A plain click: this row alone. */
+export function selectOne(id: string): string[] {
+  return [id];
+}
+
+/**
+ * Shift+click: every row between the anchor and the target, in list order. With
+ * no usable anchor — first click, or an anchor a filter has hidden — this
+ * degrades to selecting the clicked row, never to an empty or wrong range.
+ */
+export function selectRange(order: readonly string[], anchor: string | null, id: string): string[] {
+  const to = order.indexOf(id);
+  const from = anchor === null ? -1 : order.indexOf(anchor);
+  if (to < 0 || from < 0) return selectOne(id);
+  const low = Math.min(from, to);
+  return order.slice(low, Math.max(from, to) + 1);
+}

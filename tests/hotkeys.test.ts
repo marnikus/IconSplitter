@@ -90,4 +90,25 @@ describe("isTextField", () => {
     expect(isTextField(document.body)).toBe(false);
     expect(isTextField(null)).toBe(false);
   });
+
+  it("does not treat a control that merely holds focus as a text field", () => {
+    // the zoom slider and the row checkboxes keep focus after use; Ctrl+Z there
+    // must still undo, or undo looks broken right after those two controls
+    for (const type of ["range", "checkbox", "radio", "button", "submit", "file", "color"]) {
+      const el = document.createElement("input");
+      el.type = type;
+      expect(isTextField(el)).toBe(false);
+    }
+  });
+
+  it("still swallows keys in every text-entry surface", () => {
+    for (const type of ["text", "search", "number", "email", "password", "url", "tel", "date", "month"]) {
+      const el = document.createElement("input");
+      el.type = type;
+      expect(isTextField(el)).toBe(true);
+    }
+    const editable = document.createElement("div");
+    editable.contentEditable = "true";
+    expect(isTextField(editable)).toBe(true);
+  });
 });

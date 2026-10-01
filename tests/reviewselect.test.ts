@@ -1,7 +1,9 @@
 // reviewselect.test.ts — RULE 8: checkbox selection is its own state, keyed
 // by stable pair id, and never leaks into review status (spec V2 §5/§9).
 import { describe, expect, it } from "vitest";
-import { checkState, checkedInView, setChecked, toggleChecked } from "../src/lib/reviewselect";
+import {
+  checkState, checkedInView, selectIntent, selectOne, selectRange, setChecked, toggleChecked,
+} from "../src/lib/reviewselect";
 
 describe("toggleChecked", () => {
   it("adds an id and removes it again", () => {
@@ -66,5 +68,39 @@ describe("checkedInView — what a bulk action may touch", () => {
 
   it("empty when nothing is checked", () => {
     expect(checkedInView(["p1"], [])).toEqual([]);
+  });
+});
+
+describe("explorer-style selection", () => {
+  const ORDER = ["a", "b", "c", "d"];
+
+  it("maps modifiers to an intent, shift winning over ctrl", () => {
+    expect(selectIntent({})).toBe("replace");
+    expect(selectIntent({ shiftKey: true })).toBe("range");
+    expect(selectIntent({ ctrlKey: true })).toBe("toggle");
+    expect(selectIntent({ altKey: true })).toBe("toggle");
+    expect(selectIntent({ metaKey: true })).toBe("toggle");
+    expect(selectIntent({ shiftKey: true, ctrlKey: true })).toBe("range");
+  });
+
+  it("a plain click selects that row alone", () => {
+    expect(selectOne("b")).toEqual(["b"]);
+  });
+
+  it("shift+click covers the range in either direction", () => {
+    expect(selectRange(ORDER, "a", "c")).toEqual(["a", "b", "c"]);
+    expect(selectRange(ORDER, "d", "b")).toEqual(["b", "c", "d"]);
+    expect(selectRange(ORDER, "b", "b")).toEqual(["b"]);
+  });
+
+  it("falls back to the single row when there is no usable anchor", () => {
+    expect(selectRange(ORDER, null, "c")).toEqual(["c"]);
+    expect(selectRange(ORDER, "gone", "c")).toEqual(["c"]);
+    expect(selectRange(ORDER, "a", "gone")).toEqual(["gone"]);
+  });
+
+  it("ctrl+click toggles one row and leaves the others alone", () => {
+    expect(toggleChecked(["a"], "b")).toEqual(["a", "b"]);
+    expect(toggleChecked(["a", "b"], "a")).toEqual(["b"]);
   });
 });

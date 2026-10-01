@@ -1,15 +1,19 @@
 // BulkBar.tsx — the bulk review bar (spec V2 §5/§6): header checkbox with an
 // indeterminate state, the selected/visible scope, select-visible and
-// deselect-all, the thumbnail zoom slider, the two approve actions and the two
-// reset-to-pending actions. Every bulk button carries its count and arms before
-// applying, so the number of affected items is visible before anything is
-// written, and each press is ONE undoable action.
+// deselect-all, the thumbnail zoom slider, and the three bulk actions.
+//
+// Every action applies to the SELECTION only — there is no "visible list"
+// action, so a bulk operation can never touch a row the user did not select.
+// Each button carries its count and arms before applying, so the number of
+// affected items is visible before anything is written, and each press is ONE
+// undoable action.
 
 import { useEffect, useState } from "react";
 import type { CheckState } from "../lib/reviewselect";
+import type { Decision } from "../lib/reviewfilter";
 import ZoomSlider from "./ZoomSlider";
 
-export type BulkScope = "selected" | "visible";
+export type BulkAction = "approve" | "decline" | "reset";
 
 export interface BulkBarProps {
   header: CheckState;
@@ -23,14 +27,28 @@ export interface BulkBarProps {
   onSelectVisible: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
-  onApprove: (scope: BulkScope) => void;
-  onReset: (scope: BulkScope) => void;
+  onDecide: (decision: Decision) => void;
+  onReset: () => void;
 }
 
+interface ActionSpec {
+  action: BulkAction;
+  label: string;
+  /** Glyph-free name for assistive tech. */
+  name: string;
+  confirm: string;
+  cls: string;
+}
+
+const ACTIONS: ActionSpec[] = [
+  { action: "approve", label: "✓ Approve selected", name: "Approve selected", confirm: "Confirm approve", cls: " success" },
+  { action: "decline", label: "✕ Decline selected", name: "Decline selected", confirm: "Confirm decline", cls: " danger" },
+  { action: "reset", label: "↺ Reset selected", name: "Reset selected to pending", confirm: "Confirm reset", cls: "" },
+];
+
 export default function BulkBar(p: BulkBarProps) {
-  const [armed, setArmed] = useState<BulkScope | null>(null);
-  const [armReset, setArmReset] = useState<BulkScope | null>(null);
-  useEscape(() => { setArmed(null); setArmReset(null); }, armed !== null || armReset !== null);
+  const [armed, setArmed] = useState<BulkAction | null>(null);
+  useEscape(() => setArmed(null), armed !== null);
   return (
     <div className="v2-bulk" data-testid="v2-bulk">
       <BulkLeft p={p} />
@@ -42,14 +60,18 @@ export default function BulkBar(p: BulkBarProps) {
             Cancel
           </button>
         )}
-        <ResetBtn scope="selected" label="Reset selected" count={p.affectedCount} armed={armReset} setArmed={setArmReset} onReset={p.onReset} />
-        <ResetBtn scope="visible" label="Reset visible list" count={p.visibleCount} armed={armReset} setArmed={setArmReset} onReset={p.onReset} />
-        <span className="v2-divider" aria-hidden="true" />
-        <ApproveBtn scope="selected" label="Approve selected" count={p.affectedCount} armed={armed} setArmed={setArmed} onApprove={p.onApprove} />
-        <ApproveBtn scope="visible" solid label="Approve visible list" count={p.visibleCount} armed={armed} setArmed={setArmed} onApprove={p.onApprove} />
+        {ACTIONS.map((a) => (
+          <BulkBtn key={a.action} spec={a} count={p.affectedCount} armed={armed} setArmed={setArmed} run={() => runAction(p, a.action)} />
+        ))}
       </div>
     </div>
   );
+}
+
+function runAction(p: BulkBarProps, action: BulkAction): void {
+  if (action === "approve") p.onDecide("approved");
+  else if (action === "decline") p.onDecide("declined");
+  else p.onReset();
 }
 
 function BulkLeft({ p }: { p: BulkBarProps }) {
@@ -73,61 +95,27 @@ function BulkLeft({ p }: { p: BulkBarProps }) {
   );
 }
 
-interface ApproveBtnProps {
-  scope: BulkScope;
-  label: string;
+interface BulkBtnProps {
+  spec: ActionSpec;
   count: number;
-  solid?: boolean;
-  armed: BulkScope | null;
-  setArmed: (s: BulkScope | null) => void;
-  onApprove: (s: BulkScope) => void;
+  armed: BulkAction | null;
+  setArmed: (a: BulkAction | null) => void;
+  run: () => void;
 }
 
-function ApproveBtn(p: ApproveBtnProps) {
-  const isArmed = p.armed === p.scope;
+function BulkBtn({ spec, count, armed, setArmed, run }: BulkBtnProps) {
+  const isArmed = armed === spec.action;
   const click = () => {
-    if (isArmed) {
-      p.setArmed(null);
-      p.onApprove(p.scope);
-      return;
-    }
-    p.setArmed(p.scope);
+    if (!isArmed) return setArmed(spec.action);
+    setArmed(null);
+    run();
   };
   return (
-    <button type="button" data-testid={`v2-approve-${p.scope}`} disabled={p.count === 0} onClick={click}
-      className={`v2-btn success${p.solid ? " solid" : ""}${isArmed ? " armed" : ""}`}
-      aria-label={`${p.label} — ${p.count} ${p.count === 1 ? "pair" : "pairs"}`}>
-      {isArmed ? `Confirm approve ${p.count}?` : `✓ ${p.label} (${p.count})`}
-    </button>
-  );
-}
-
-interface ResetBtnProps {
-  scope: BulkScope;
-  label: string;
-  count: number;
-  armed: BulkScope | null;
-  setArmed: (s: BulkScope | null) => void;
-  onReset: (s: BulkScope) => void;
-}
-
-/** Reset to pending — undoable, and honest about how many pairs it touches. */
-function ResetBtn(p: ResetBtnProps) {
-  const isArmed = p.armed === p.scope;
-  const click = () => {
-    if (isArmed) {
-      p.setArmed(null);
-      p.onReset(p.scope);
-      return;
-    }
-    p.setArmed(p.scope);
-  };
-  return (
-    <button type="button" data-testid={`v2-reset-${p.scope}`} disabled={p.count === 0} onClick={click}
-      className={`v2-btn${isArmed ? " armed" : ""}`}
-      title="Returns approved or declined pairs to pending. Undoable."
-      aria-label={`${p.label} — ${p.count} ${p.count === 1 ? "pair" : "pairs"}`}>
-      {isArmed ? `Confirm reset ${p.count}?` : `↺ ${p.label} (${p.count})`}
+    <button type="button" data-testid={`v2-${spec.action}-selected`} disabled={count === 0} onClick={click}
+      className={`v2-btn${spec.cls}${isArmed ? " armed" : ""}`}
+      title={spec.action === "reset" ? "Back to pending — undoable" : "Applies to the selected rows only"}
+      aria-label={`${spec.name} — ${count} ${count === 1 ? "pair" : "pairs"}`}>
+      {isArmed ? `${spec.confirm} ${count}?` : `${spec.label} (${count})`}
     </button>
   );
 }

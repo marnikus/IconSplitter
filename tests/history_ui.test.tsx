@@ -34,7 +34,8 @@ describe("the controls", () => {
     expect(h.btn("[data-testid='hist-undo']").disabled).toBe(true);
     expect(h.btn("[data-testid='hist-redo']").disabled).toBe(true);
     expect(h.q("[data-testid='hist-label']")?.textContent).toBe("Nothing to undo");
-    expect(h.q("[data-testid='hist-list-toggle']")?.textContent).toContain("0 actions");
+    expect(h.q("[data-testid='hist-open']")?.textContent).toContain("History (0)");
+    expect(h.q("[data-testid='hist-panel']")).toBeNull(); // closed until asked for
   });
 
   it("names the action an undo would reverse, in the label and the tooltip", () => {
@@ -79,6 +80,7 @@ describe("the controls", () => {
     act(() => sheetsEntry(SHEETS_12, "Padding 12%"));
     act(() => api.push({ type: "checked", label: "Select 3 rows", origin: "selectionV2", ids: ["a"], before: [], after: ["a"] }));
     await h.click("[data-testid='hist-undo']");
+    await h.click("[data-testid='hist-open']");
     const items = [...h.host.querySelectorAll("[data-testid^='hist-item-']")];
     expect(items.map((i) => i.textContent)).toEqual([
       expect.stringContaining("Select 3 rows"),
@@ -87,6 +89,42 @@ describe("the controls", () => {
     // after undoing the newest action the cursor sits on the entry before it
     expect(items[0].getAttribute("data-current")).toBeNull();
     expect(items[1].getAttribute("data-current")).not.toBeNull();
+  });
+});
+
+describe("the History window", () => {
+  it("opens on the button and closes on the close button or Escape", async () => {
+    await h.click("[data-testid='hist-open']");
+    expect(h.q("[data-testid='hist-panel']")).not.toBeNull();
+    expect(h.q("[data-testid='hist-panel']")?.getAttribute("role")).toBe("dialog");
+    await h.click("[data-testid='hist-close']");
+    expect(h.q("[data-testid='hist-panel']")).toBeNull();
+
+    await h.click("[data-testid='hist-open']");
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(h.q("[data-testid='hist-panel']")).toBeNull();
+  });
+
+  it("counts the changes and undoes/redoes from inside the window", async () => {
+    act(() => setAppState({ sheets: SHEETS_12 }));
+    act(() => sheetsEntry(SHEETS_12, "Padding 12%"));
+    await h.click("[data-testid='hist-open']");
+    expect(h.q("[data-testid='hist-panel-count']")?.textContent).toContain("1 change");
+    expect(h.q("[data-testid='hist-panel-items']")?.textContent).toContain("Padding 12%");
+
+    await h.click("[data-testid='hist-panel-undo']");
+    expect(pad()).toBe(6);
+    expect(h.btn("[data-testid='hist-panel-redo']").disabled).toBe(false);
+    await h.click("[data-testid='hist-panel-redo']");
+    expect(pad()).toBe(12);
+    expect(h.btn("[data-testid='hist-panel-undo']").disabled).toBe(false);
+  });
+
+  it("says so when there is nothing recorded yet", async () => {
+    await h.click("[data-testid='hist-open']");
+    expect(h.q("[data-testid='hist-panel-items']")?.textContent).toContain("No changes yet");
+    expect(h.btn("[data-testid='hist-panel-undo']").disabled).toBe(true);
+    expect(h.btn("[data-testid='hist-panel-redo']").disabled).toBe(true);
   });
 });
 

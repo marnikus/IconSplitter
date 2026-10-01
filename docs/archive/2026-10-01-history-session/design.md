@@ -165,3 +165,15 @@ Differences from the plan above, all deliberate:
 6. Sheets export settings moved into `lib/exportopts.ts` (sizes, defaults,
    validator) shared by `App.tsx` and the session parser — one owner, so a
    restored `size` is always one the `<select>` can show.
+7. **A row click is one history entry.** `selectRow(id, intent)` pushes a single
+   `checked` entry whose payload is `{ids, anchor, active}`; the earlier version
+   pushed `checked` + `view`, so the first `Ctrl+Z` only moved the highlight.
+8. **Bulk actions are selection-only.** Approve / decline / reset *selected*,
+   each armed first and each labelled with `checked ∩ visible ∩ complete`. The
+   visible-list approve and reset were removed (the review of 2026-10-01).
+9. **`isTextField` covers text surfaces, not every `<input>`.** `range` and
+   `checkbox` were being swallowed, which made undo dead after using the zoom
+   slider or a row checkbox — the two controls this tab uses most.
+10. **The History window is read-only.** Clicking an entry would apply several
+    changes at once; a failed apply must never move the cursor, so the list only
+    shows where the cursor is.

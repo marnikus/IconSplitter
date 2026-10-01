@@ -217,8 +217,8 @@ Bulk bar (`v2-bulk`):
 | `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
 | `v2-thumb` | `<input type="range">` | 48–240 px, step 4; `aria-label="Thumbnail maximum height"` |
 | `v2-thumb-value` | `<output>` | live `128 px` readout (RULE 24) |
-| `v2-approve-selected` / `v2-approve-visible` | buttons | label carries the affected count, then arms (`Confirm approve 3?`); disabled at 0 |
-| `v2-cancel-bulk` | button | shown while armed; Escape also disarms |
+| `v2-approve-selected` / `v2-decline-selected` / `v2-reset-selected` | buttons | the only bulk actions; every label carries the affected count and arms first (`Confirm approve`); disabled at 0. **No bulk action touches the visible list** — `v2-approve-visible` and `v2-reset-visible` were removed |
+| `v2-cancel-bulk` | button | shown while one action is armed; Escape also disarms |
 
 List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 
@@ -264,18 +264,40 @@ App-level, rendered by `ui/Workbench` above every panel (`ui/HistoryBar.tsx`):
 | `hist-undo` | button | `disabled` at the frontier; `title` = "Undo: <label> (Ctrl+Z)" |
 | `hist-redo` | button | `disabled` at the tip; `title` = "Redo: <label> (Ctrl+Shift+Z)" |
 | `hist-label` | text | "Undo: <label>" or "Nothing to undo" |
-| `hist-list` / `hist-list-toggle` | details / summary | "<n> actions" |
-| `hist-items` | ul | newest first |
-| `hist-item-<actionId>` | li | `data-current` marks the entry under the cursor |
+| `hist-open` | button | `History (<n>)`; toggles the History window (`aria-expanded`) |
 | `hist-error` | span `role="alert"` | shown when an undo/redo could not be applied |
+
+The History window (`ui/HistoryPanel.tsx`), opened by `hist-open`:
+
+| testid | element | notes |
+|---|---|---|
+| `hist-panel` | `aside role="dialog"` | fixed, top-right, below the bar |
+| `hist-panel-count` | text | "<n> change(s)" |
+| `hist-close` | button | `aria-label="Close history"`; Escape closes too |
+| `hist-panel-undo` / `hist-panel-redo` | buttons | `title` names the entry they reverse; same disabled rules as the bar |
+| `hist-panel-items` | ul | newest first; the list is read-only — jumping to an entry would mean applying several changes at once, which is not reversible |
+| `hist-item-<entryId>` | li | `data-current` marks the entry under the cursor |
+| `hist-panel-error` | p `role="alert"` | same error as `hist-error`, inside the window |
 
 Reset to pending:
 
 | testid | element | notes |
 |---|---|---|
 | `sel-reset` | button | single pair, comparison view; `disabled` while pending |
-| `v2-reset-selected` | button | arms first, then "Confirm reset <n>?" |
-| `v2-reset-visible` | button | arms first, then "Confirm reset <n>?" |
+| `v2-reset-selected` | button | the selected, complete pairs; arms first, then "Confirm reset" |
 
-Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo; ignored
-while the focus is in an input/select/textarea.
+Row selection (`v2-row-{pairId}`, File-Explorer style — the checkbox is the
+authoritative state, the clicks only produce it):
+
+| click | result |
+|---|---|
+| plain | select this row only (the shift anchor moves here) |
+| Shift | select the contiguous range from the anchor to this row |
+| Ctrl/Alt/Cmd | add or remove just this row; the anchor stays, so the next Shift still extends from it |
+
+Every selection change is one undoable `checked` entry, carrying the ids, the
+anchor and the row a plain click also made active.
+
+Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo. Ignored only
+while the focus is in a *text* surface — text-ish input, textarea, select or a
+contenteditable — so undo still works after using the zoom slider or a checkbox.

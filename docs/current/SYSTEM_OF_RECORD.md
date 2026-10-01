@@ -376,7 +376,7 @@ by `useAppState` / `useAppView` (`useSyncExternalStore`):
 | `tab` | the active tab | session |
 | `sheets` | `padding`, `size`, `transparent` | session |
 | `view` | `filter`, `sort`, `selectedId`, `collapsed`, `zoom`, `sync`, `autoNext` (shared by Selection and Selection V2) | session |
-| `v2` | `checked`, `scrollY` | session |
+| `v2` | `checked`, `scrollY`, `anchorId` (the Shift anchor) | session |
 | `prefs` | V2 `mode`, `thumbHeight` — held in memory only | `selectionv2/prefsstore` |
 
 One owner per value, so the session file deliberately does **not** duplicate: the
@@ -455,3 +455,35 @@ not record it.
 Both new payloads are validated field by field on read; a corrupt or
 foreign-version payload costs one ignored load and the defaults, never a broken
 startup (RULE 13).
+
+### 12.7 Selection is one gesture, one entry
+
+A row click used to push two entries (`checked`, then `view` for the active row),
+so the first `Ctrl+Z` only moved the highlight and the selection came back on the
+second press. `useSelectionV2.selectRow(id, intent)` now pushes **one** `checked`
+entry whose `before`/`after` is `{ids, anchor, active}`: `applyChecked` reads all
+three, and a bare array is still accepted so pre-anchor timelines undo cleanly.
+The intents come from `lib/reviewselect`: `selectIntent` reads the modifiers,
+`selectOne` and `selectRange` are pure, and `anchorId` lives in the session so a
+Shift+click survives a tab switch.
+
+The bulk bar is selection-only: **Approve selected**, **Decline selected** and
+**Reset selected to pending**, each armed before it applies and each labelled
+with the number of pairs that will really change
+(`checked ∩ visible ∩ complete`). The visible-list variants were removed — a
+bulk action reaching beyond the selection is exactly what the `v2-blocked` and
+`v2-hidden` warnings are there to prevent.
+
+The History window (`ui/HistoryPanel.tsx`, opened by `hist-open`) lists the whole
+timeline newest first, marks the cursor and offers the same Undo/Redo. It is
+read-only: clicking an entry would apply several changes at once, and a failed
+apply must never move the cursor.
+
+### 12.8 Undo must not depend on where the focus ended up
+
+`selection/hotkeys` only skips a keystroke for a *text* surface: a text-ish
+`<input>` (`text, search, number, email, password, url, tel, date, month, time,
+datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` or
+`checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
+the zoom slider or clicking a row checkbox — the previous "any input is a text
+field" test killed undo for the two controls the review tab uses most.

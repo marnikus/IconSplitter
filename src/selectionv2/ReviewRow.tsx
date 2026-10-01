@@ -20,10 +20,10 @@ export default function ReviewRow({ row, p }: { row: ViewPair; p: ReviewListProp
   return (
     <div ref={ref} role="listitem" data-testid={`v2-row-${row.pairId}`} tabIndex={active ? 0 : -1}
       aria-current={active ? "true" : undefined} className={rowClass(row.decision, active, checked)}
-      onClick={() => p.activate(row.pairId)}>
+      onClick={(e) => p.onRowClick(row.pairId, { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey })}>
       <input type="checkbox" className="v2-check" data-testid={`v2-check-${row.pairId}`} checked={checked}
-        aria-label={`Select ${row.base}`} onClick={(e) => e.stopPropagation()}
-        onChange={() => p.toggleCheck(row.pairId)} />
+        aria-label={`Select ${row.base}`} title="Ctrl+click a row to add it, Shift+click to select a range"
+        onClick={(e) => e.stopPropagation()} onChange={() => p.toggleCheck(row.pairId)} />
       <ThumbPair row={row} maxH={p.thumb} thumbFor={p.thumbFor} onDims={setDims} />
       <FileCell row={row} />
       <div className="v2-cell" data-testid={`v2-created-${row.pairId}`}>{fmtDate(row.created)}<small>{fmtTime(row.created)} local</small></div>

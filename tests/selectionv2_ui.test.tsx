@@ -195,13 +195,16 @@ describe("Selection V2 panel", () => {
     expect(text(el, "[data-testid='v2-count-approved']")).toContain("2");
   });
 
-  it("approves the whole visible list", async () => {
+  it("declines the selected rows in one operation, and reports the blocked one", async () => {
     const { el } = await mount(makeRoot());
-    const btn = q(el, "[data-testid='v2-approve-visible']") as HTMLButtonElement;
-    expect(btn.textContent).toBe("✓ Approve visible list (4)");
+    await click(q(el, "[data-testid='v2-select-visible']")!);
+    // the incomplete pair is checked but never in the bulk scope — said out loud
+    expect(text(el, "[data-testid='v2-blocked']")).toBe("1 checked pair incomplete — never approved");
+    const btn = q(el, "[data-testid='v2-decline-selected']") as HTMLButtonElement;
+    expect(btn.textContent).toBe("✕ Decline selected (3)");
     await click(btn);
-    await click(q(el, "[data-testid='v2-approve-visible']")!);
-    expect(text(el, "[data-testid='v2-toast']")).toBe("3 pairs approved · 1 skipped (incomplete or gone)");
+    await click(q(el, "[data-testid='v2-decline-selected']")!);
+    expect(text(el, "[data-testid='v2-toast']")).toBe("3 pairs declined");
     expect(text(el, `[data-testid='v2-status-${DUNES}']`)).toContain("AI result missing");
   });
 
@@ -293,7 +296,9 @@ describe("Selection V2 panel", () => {
   it("labels the review controls for keyboard and screen-reader users", async () => {
     const { el } = await mount(makeRoot());
     expect((q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement).getAttribute("aria-label")).toBe("Select fog");
-    expect(q(el, "[data-testid='v2-approve-visible']")?.getAttribute("aria-label")).toBe("Approve visible list — 4 pairs");
+    expect(q(el, "[data-testid='v2-approve-selected']")?.getAttribute("aria-label")).toBe("Approve selected — 0 pairs");
+    expect(q(el, "[data-testid='v2-decline-selected']")?.getAttribute("aria-label")).toBe("Decline selected — 0 pairs");
+    expect(q(el, "[data-testid='v2-reset-selected']")?.getAttribute("aria-label")).toBe("Reset selected to pending — 0 pairs");
     expect(q(el, "[data-testid='v2-check-all']")?.getAttribute("aria-label")).toBe("Select all visible image pairs");
     expect(q(el, "[data-testid='v2-rows']")?.getAttribute("aria-label")).toBe("Image review pairs");
     expect(q(el, "[data-testid='v2-list'] kbd")?.textContent).toBe("A");

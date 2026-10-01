@@ -23,7 +23,7 @@ const FULL = {
     selectedId: "pair_a", collapsed: true,
     zoom: "full" as const, sync: false, autoNext: false,
   },
-  selectionV2: { checked: ["pair_a", "pair_b"], scrollY: 240 },
+  selectionV2: { checked: ["pair_a", "pair_b"], scrollY: 240, anchorId: "pair_b" },
 };
 
 const asText = (over: Record<string, unknown>): string => JSON.stringify({ ...FULL, ...over });
@@ -58,6 +58,7 @@ describe("parseSession", () => {
     expect(s.selection.autoNext).toBe(false);
     expect(s.selectionV2.checked).toEqual(["pair_a", "pair_b"]);
     expect(s.selectionV2.scrollY).toBe(240);
+    expect(s.selectionV2.anchorId).toBe("pair_b");
   });
 
   it("replaces an unknown tab with the default instead of rendering nothing", () => {
@@ -68,10 +69,11 @@ describe("parseSession", () => {
   it("clamps or defaults broken numbers and booleans", () => {
     const s = parseSession(asText({
       sheets: { padding: "wide", size: -5, transparent: "yes" },
-      selectionV2: { checked: [], scrollY: Number.NaN },
+      selectionV2: { checked: [], scrollY: Number.NaN, anchorId: 7 },
     }));
     expect(s.sheets).toEqual(DEFAULT_SESSION.sheets);
     expect(s.selectionV2.scrollY).toBe(0);
+    expect(s.selectionV2.anchorId).toBeNull();
   });
 
   it("clamps an out-of-range padding into the usable range", () => {
@@ -87,7 +89,7 @@ describe("parseSession", () => {
   });
 
   it("drops non-string ids from lists", () => {
-    const s = parseSession(asText({ selectionV2: { checked: ["ok", 7, null], scrollY: 0 } }));
+    const s = parseSession(asText({ selectionV2: { checked: ["ok", 7, null], scrollY: 0, anchorId: null } }));
     expect(s.selectionV2.checked).toEqual(["ok"]);
   });
 

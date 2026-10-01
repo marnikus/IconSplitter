@@ -49,9 +49,20 @@ function neighbour(
   return visible[visible.findIndex((p) => p.pairId === id) + step];
 }
 
-/** True when the keystroke belongs to a text field, not to review (a11y §14). */
+/** Input types that hold text the user is composing — everything else is a control. */
+const TEXT_TYPES = new Set([
+  "text", "search", "number", "email", "password", "url", "tel", "date", "month", "time", "datetime-local",
+]);
+
+/**
+ * True when the keystroke belongs to text entry, not to review (a11y §14).
+ *
+ * Only text surfaces count: a slider, checkbox or button keeps focus after use,
+ * and swallowing Ctrl+Z there made undo look broken right after the two controls
+ * people reach for most — the zoom slider and the row checkboxes.
+ */
 export function isTextField(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement
-    || target instanceof HTMLSelectElement
-    || target instanceof HTMLTextAreaElement;
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
+  if (target instanceof HTMLInputElement) return TEXT_TYPES.has(target.type.toLowerCase());
+  return target instanceof HTMLElement && target.isContentEditable;
 }

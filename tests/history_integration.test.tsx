@@ -107,14 +107,15 @@ describe("reset to pending", () => {
   it("resets the visible list in one action that one undo restores", async () => {
     const root = makeRoot();
     await mountPanel(root);
-    await click(q("[data-testid='v2-approve-visible']"));
-    await click(q("[data-testid='v2-approve-visible']")); // arm, then confirm
+    await click(q("[data-testid='v2-select-visible']"));
+    await click(q("[data-testid='v2-approve-selected']"));
+    await click(q("[data-testid='v2-approve-selected']")); // arm, then confirm
     await settle();
     expect(storedDecisions(root)).toHaveLength(3);
     expect(api.entries.at(-1)?.label).toBe("Approve 3 pairs");
 
-    await click(q("[data-testid='v2-reset-visible']"));
-    await click(q("[data-testid='v2-reset-visible']"));
+    await click(q("[data-testid='v2-reset-selected']"));
+    await click(q("[data-testid='v2-reset-selected']"));
     await settle();
     expect(storedDecisions(root)).toEqual([]); // pending owns no record (I-13)
     expect(text("[data-testid='v2-toast']")).toContain("3 pairs reset to pending");
@@ -147,8 +148,9 @@ describe("cross-tab undo", () => {
   it("reaches the decision file after the panel that made the change is gone", async () => {
     const root = makeRoot();
     await mountPanel(root);
-    await click(q("[data-testid='v2-approve-visible']"));
-    await click(q("[data-testid='v2-approve-visible']"));
+    await click(q("[data-testid='v2-select-visible']"));
+    await click(q("[data-testid='v2-approve-selected']"));
+    await click(q("[data-testid='v2-approve-selected']"));
     await settle();
     expect(storedDecisions(root)).toHaveLength(3);
 
@@ -165,7 +167,9 @@ describe("cross-tab undo", () => {
     await click(q("[data-testid='hist-undo']"));
     await settle();
     expect(storedDecisions(root)).toEqual([]); // written without any panel mounted
-    expect(loadHistory().index).toBe(-1);
+    const back = loadHistory();
+    expect(back.index).toBe(back.entries.length - 2); // one step back from the tip
+    expect(back.entries[back.index].type).toBe("checked"); // the selection is what an undo would take next
 
     await click(q("[data-testid='hist-redo']"));
     await settle();
@@ -189,11 +193,12 @@ describe("restart", () => {
     saveSessionState({
       ...DEFAULT_SESSION, tab: "selectionV2",
       selection: { ...DEFAULT_SESSION.selection, filter: { ...DEFAULT_SESSION.selection.filter, status: "approved" } },
-      selectionV2: { checked: [FOG, COURT], scrollY: 80 },
+      selectionV2: { checked: [FOG, COURT], scrollY: 80, anchorId: COURT },
     }, "2026-10-01T12:00:00.000Z");
     bootStores();
     expect(getAppState().v2.checked).toEqual([FOG, COURT]);
     expect(getAppState().v2.scrollY).toBe(80);
+    expect(getAppState().v2.anchorId).toBe(COURT);
     expect(getAppState().view.filter.status).toBe("approved");
   });
 });

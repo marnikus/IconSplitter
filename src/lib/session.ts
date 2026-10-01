@@ -38,6 +38,8 @@ export interface SessionSelection {
 export interface SessionV2 {
   checked: string[];
   scrollY: number;
+  /** Shift+click anchor — the row the next range starts from. */
+  anchorId: string | null;
 }
 
 export interface SessionState {
@@ -54,7 +56,7 @@ export const DEFAULT_SELECTION: SessionSelection = {
 
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
-  selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0 },
+  selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
 };
 
 /**
@@ -114,5 +116,6 @@ function parseV2(raw: unknown): SessionV2 {
   return {
     checked: Array.isArray(raw.checked) ? raw.checked.filter((id): id is string => typeof id === "string") : [],
     scrollY: typeof scroll === "number" && Number.isFinite(scroll) && scroll > 0 ? scroll : 0,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
 }

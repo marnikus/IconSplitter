@@ -7,14 +7,14 @@ import { useEffect } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { attentionInfo } from "../lib/pairing";
 import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
-import { checkedInView } from "../lib/reviewselect";
+import { selectIntent } from "../lib/reviewselect";
 import CompareView from "../selection/CompareView";
 import { copyPathText } from "../selection/copypath";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
 import { CorruptNote, Overlays, WriteBanner } from "../selection/Surfaces";
 import { useSideThumbs, type SideThumbFor } from "../selection/thumbs";
-import BulkBar, { type BulkScope } from "./BulkBar";
+import BulkBar from "./BulkBar";
 import FilterGrid from "./FilterGrid";
 import ReviewList from "./ReviewList";
 import SourceBar from "./SourceBar";
@@ -65,30 +65,15 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
         blockedCount={v.blockedCount} hiddenCount={v.hiddenCount} visibleCount={v.core.visible.length}
         thumb={v.prefs.thumbHeight}
         onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckAll())} onSelectVisible={v.checkVisible}
-        onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onApprove={(scope) => approve(v, scope)}
-        onReset={(scope) => reset(v, scope)} />
+        onDeselectAll={v.uncheckAll} onThumb={v.setThumb}
+        onDecide={(d) => v.core.decideBulk(v.affected, d)} onReset={() => v.core.resetBulk(v.affected)} />
       <ReviewList rows={v.core.visible} total={v.core.s.pairs.length} activeId={v.core.s.selectedId}
         checked={v.checked} thumb={v.prefs.thumbHeight} autoNext={v.core.s.autoNext} thumbFor={thumbFor}
-        setAutoNext={(on) => v.core.patch({ autoNext: on })} activate={v.core.select}
+        setAutoNext={(on) => v.core.patch({ autoNext: on })} onRowClick={(id, mods) => v.selectRow(id, selectIntent(mods))}
         toggleCheck={v.toggleCheck} decide={v.core.decide} openSide={(r) => openSide(v, r)}
         clearFilters={() => v.core.setFilter(ALL_FILTER)} />
     </div>
   );
-}
-
-/** Bulk approve: checked ∩ visible, or the whole visible list (spec V2 §6). */
-function approve(v: SelectionV2Api, scope: BulkScope): void {
-  const ids = scope === "selected" ? v.affected : v.core.visible.map((p) => p.pairId);
-  v.core.decideBulk(ids, "approved");
-}
-
-/**
- * Reset to pending over the same scopes. Unlike approve it also applies to
- * incomplete pairs — a decision on one can always be taken back.
- */
-function reset(v: SelectionV2Api, scope: BulkScope): void {
-  const visibleIds = v.core.visible.map((p) => p.pairId);
-  v.core.resetBulk(scope === "selected" ? checkedInView(visibleIds, v.checked) : visibleIds);
 }
 
 function openSide(v: SelectionV2Api, relPath: string): void {

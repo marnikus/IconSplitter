@@ -312,3 +312,54 @@ or nesting 4 (the gate enforces all four and passes).
   are UI state, not user data, and writing them into the user's image folder
   would leave stray files. The atomic tmp-verify-overwrite writer remains the
   only path for `review-decisions.json`.
+
+# Quality re-check — 2026-10-01 (selection review fixes)
+
+## What changed
+
+Four fixes on the Selection V2 review surface: undo/redo dead after using a
+control (`selection/hotkeys.ts` — `isTextField` only skipped text surfaces
+before, now it skips only text-ish inputs, textarea, select and contenteditable);
+the History window (`ui/HistoryPanel.tsx`, opened by `hist-open` in
+`ui/HistoryBar.tsx`); the bulk bar reduced to the selection
+(`selectionv2/BulkBar.tsx` — approve / decline / reset **selected**, the
+visible-list buttons removed); and explorer-style multi-selection
+(`lib/reviewselect.ts` — `selectIntent`, `selectOne`, `selectRange`; `anchorId`
+in `lib/session.ts`; one `checked` entry per click carrying `{ids, anchor,
+active}`, read back by `state/apply.ts`). Touched: `ReviewRow`, `ReviewList`,
+`SelectionV2Panel`, `useSelectionV2`.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 42 files / 325 | **43 files / 346** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.58 / 93.10 / 96.58 / 97.02 | 96.58 / 93.10 / 96.58 / 97.02 |
+| build `dist/index.html` | 485.14 kB / gzip 144.73 kB | 487.73 kB / gzip 145.65 kB |
+| jscpd | 2 clones / 12 lines | 2 clones / 12 lines — both pre-existing (`lib/detect.ts` self-clone, `SelectBox` in `FilterBar`/`FilterGrid`); neither file was touched |
+
+`npm run verify` → **ALL LANES PASSED**.
+
+## RULE 18 — ideal sizes
+
+`ui/HistoryPanel.tsx` 98 lines (five components: the dialog shell, header,
+action row, list, `useEscape`), `ui/HistoryBar.tsx` 57 (bar + `StepButton`),
+`selectionv2/BulkBar.tsx` 122. Nothing new exceeds 150 lines, and the gate
+confirms no function crosses 30 body lines, 4 parameters, CC 10 or nesting 4.
+The bar and the window were both split into sub-components after the first gate
+run flagged `HistoryBar` at 36 and `HistoryPanel` at 42 body lines.
+
+## Accepted debt / notes
+
+- The `v2` selection payload grew from a bare array to `{ids, anchor, active}`;
+  `applyChecked` still accepts the array form, so timelines written before this
+  change undo without a migration.
+- Three tests had to move with the code, not because they were wrong about the
+  old behaviour: `approves the whole visible list` (that button is gone —
+  replaced by a decline-selected test asserting the same skip accounting), the
+  a11y label test (the visible-list aria-label is gone) and the cross-tab undo
+  assertion, which hard-coded a one-entry timeline and now asserts one step back
+  from the tip instead of `index === -1`.

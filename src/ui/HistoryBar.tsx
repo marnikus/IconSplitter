@@ -1,68 +1,54 @@
-// HistoryBar.tsx — the app-level undo/redo, in one consistent place above every
-// tab (design doc §5): real disabled states, the next action named in the label
-// and tooltip, and a compact list so the order an undo follows is visible.
-// The list is read-only on purpose — jumping to an arbitrary point would mean
-// applying several entries at once, which is not something this app can promise
-// to do safely (a failed apply must never move the cursor).
+// HistoryBar.tsx — the always-visible undo affordance (design doc §4): one global
+// timeline, two buttons, and a History window that lists the changes behind them.
+// It sits in the Workbench chrome so it is on screen for every tab, including
+// the Sheets editor. The labels come from the entry under the cursor: "Undo:
+// Approve pair_a" tells you what will be reversed before you do it.
 
-import { fmtTime } from "../selection/fmt";
+import { useState } from "react";
 import { useHistory } from "../state/HistoryProvider";
+import HistoryPanel from "./HistoryPanel";
 
-const BTN = "rounded-lg border border-white/10 px-3 py-1 text-sm text-slate-200 transition"
+const BTN = "rounded-lg border border-white/10 px-2 py-1 text-sm text-slate-200 transition"
   + " enabled:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
 
 export default function HistoryBar() {
   const h = useHistory();
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-wrap items-center gap-2" data-testid="history-bar">
-      <button
-        type="button" data-testid="hist-undo" onClick={h.undo} disabled={!h.canUndo} className={BTN}
-        title={h.undoLabel ? `Undo: ${h.undoLabel} (Ctrl+Z)` : "Nothing to undo (Ctrl+Z)"}
-      >
-        <span aria-hidden="true">↶</span> Undo
-      </button>
-      <button
-        type="button" data-testid="hist-redo" onClick={h.redo} disabled={!h.canRedo} className={BTN}
-        title={h.redoLabel ? `Redo: ${h.redoLabel} (Ctrl+Shift+Z)` : "Nothing to redo (Ctrl+Shift+Z)"}
-      >
-        <span aria-hidden="true">↷</span> Redo
-      </button>
+    <div data-testid="history-bar" className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-2 py-1 text-sm">
+      <StepButton testid="hist-undo" glyph="↶" text="Undo" hint="Ctrl+Z"
+        label={h.undoLabel} enabled={h.canUndo} onClick={h.undo} />
+      <StepButton testid="hist-redo" glyph="↷" text="Redo" hint="Ctrl+Shift+Z"
+        label={h.redoLabel} enabled={h.canRedo} onClick={h.redo} />
       <span className="text-xs text-slate-400" data-testid="hist-label">
         {h.undoLabel ? `Undo: ${h.undoLabel}` : "Nothing to undo"}
       </span>
-      <HistoryList />
-      {h.error && (
-        <span role="alert" data-testid="hist-error" className="text-xs text-amber-300">
-          {h.error}
-        </span>
-      )}
+      <button type="button" data-testid="hist-open" onClick={() => setOpen(!open)} aria-expanded={open}
+        aria-controls="hist-panel" className={BTN} title="Show the change history">
+        History ({h.entries.length})
+      </button>
+      {h.error && <p role="alert" data-testid="hist-error" className="text-xs text-amber-300">{h.error}</p>}
+      {open && <HistoryPanel onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-function HistoryList() {
-  const h = useHistory();
+interface StepProps {
+  testid: string;
+  glyph: string;
+  text: string;
+  hint: string;
+  /** Label of the entry this button would reverse, null when there is none. */
+  label: string | null;
+  enabled: boolean;
+  onClick: () => void;
+}
+
+function StepButton(p: StepProps) {
   return (
-    <details className="relative" data-testid="hist-list">
-      <summary data-testid="hist-list-toggle" className="cursor-pointer text-xs text-slate-400 hover:text-slate-200">
-        {h.entries.length} {h.entries.length === 1 ? "action" : "actions"}
-      </summary>
-      <ul
-        data-testid="hist-items"
-        className="absolute right-0 z-20 mt-1 max-h-64 w-72 overflow-auto rounded-lg border border-white/10 bg-slate-900 p-1 text-xs shadow-xl"
-      >
-        {h.entries.length === 0 && <li className="p-2 text-slate-500">No actions yet</li>}
-        {[...h.entries].reverse().map((e) => (
-          <li
-            key={e.id} data-testid={`hist-item-${e.id}`} data-current={h.entries[h.index]?.id === e.id || undefined}
-            className="flex gap-2 rounded px-2 py-1 data-[current]:bg-indigo-500/20"
-          >
-            <span className="text-slate-500">{fmtTime(Date.parse(e.at))}</span>
-            <span className="flex-1 truncate text-slate-200">{e.label}</span>
-            <span className="text-slate-500">{e.origin}</span>
-          </li>
-        ))}
-      </ul>
-    </details>
+    <button type="button" data-testid={p.testid} onClick={p.onClick} disabled={!p.enabled} className={BTN}
+      title={p.label ? `${p.text}: ${p.label} (${p.hint})` : `Nothing to ${p.text.toLowerCase()} (${p.hint})`}>
+      <span aria-hidden="true">{p.glyph}</span> {p.text}
+    </button>
   );
 }

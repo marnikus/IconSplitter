@@ -8,9 +8,12 @@
 import { useMemo } from "react";
 import { clampThumb, type ReviewPrefs, type ViewMode } from "../lib/reviewprefs";
 import { bulkScope } from "../lib/reviewbulk";
-import { checkState, setChecked, toggleChecked, type CheckState } from "../lib/reviewselect";
+import {
+  checkState, selectOne, selectRange, setChecked, toggleChecked,
+  type CheckState, type SelectIntent,
+} from "../lib/reviewselect";
 import { useSelection, type SelectionApi } from "../selection/useSelection";
-import { getAppState, patchV2, setAppState } from "../state/appstore";
+import { getAppState, patchV2, patchView, setAppState } from "../state/appstore";
 import { useAppState } from "../state/useAppState";
 import { useHistory, type HistoryApi } from "../state/HistoryProvider";
 
@@ -23,6 +26,8 @@ export interface SelectionV2Api {
   blockedCount: number; // checked + visible, but an incomplete pair
   hiddenCount: number; // checked, but filtered out of the current view
   scrollY: number;
+  /** Explorer-style row selection: plain, shift-range or ctrl/alt toggle. */
+  selectRow: (id: string, intent: SelectIntent) => void;
   setMode: (mode: ViewMode) => void;
   setThumb: (px: number) => void;
   setScroll: (y: number) => void;
@@ -35,7 +40,7 @@ export function useSelectionV2(): SelectionV2Api {
   const core = useSelection();
   const hist = useHistory();
   const app = useAppState();
-  const { checked, scrollY } = app.v2;
+  const { checked, scrollY, anchorId } = app.v2;
   const visibleIds = useMemo(() => core.visible.map((p) => p.pairId), [core.visible]);
   const scope = bulkScope(core.visible, checked);
   return {
@@ -47,25 +52,54 @@ export function useSelectionV2(): SelectionV2Api {
     setMode: (mode) => editPrefs(hist, { mode }, `View mode: ${mode}`, false),
     setThumb: (px) => editPrefs(hist, { thumbHeight: clampThumb(px) }, `Thumbnail ${clampThumb(px)} px`, true),
     setScroll: (y) => patchV2({ scrollY: y }),
-    toggleCheck: (id) => editChecked(hist, toggleChecked(checked, id)),
-    checkVisible: () => editChecked(hist, setChecked(checked, visibleIds, true)),
-    uncheckAll: () => editChecked(hist, []),
+    selectRow: (id, intent) => applySelect({ hist, visibleIds, checked, anchorId, id, intent }),
+    toggleCheck: (id) => editSelection(hist, toggleChecked(checked, id), anchorId),
+    checkVisible: () => editSelection(hist, setChecked(checked, visibleIds, true), anchorId),
+    uncheckAll: () => editSelection(hist, [], null),
   };
 }
 
-/** One checkbox gesture = one entry naming every row it ends up selecting. */
-function editChecked(hist: HistoryApi, next: string[]): void {
-  const before = getAppState().v2.checked;
-  patchV2({ checked: next });
+interface SelectArgs {
+  hist: HistoryApi;
+  visibleIds: string[];
+  checked: string[];
+  anchorId: string | null;
+  id: string;
+  intent: SelectIntent;
+}
+
+/**
+ * Resolves one row click into the selection it produces (lib/reviewselect) and
+ * makes the clicked row the active one. Both halves land in ONE entry, so one
+ * undo reverses the whole click instead of leaving half of it behind.
+ */
+function applySelect(a: SelectArgs): void {
+  const ids = a.intent === "range"
+    ? selectRange(a.visibleIds, a.anchorId, a.id)
+    : a.intent === "toggle" ? toggleChecked(a.checked, a.id) : selectOne(a.id);
+  // ctrl/alt keeps the anchor, so the next shift+click still extends from it
+  editSelection(a.hist, ids, a.intent === "toggle" ? a.anchorId : a.id, a.id);
+}
+
+/** One selection gesture = one entry holding the whole selection, so one undo
+ *  restores every row it touched, not just the last one. `active` is set by a
+ *  row click; the checkbox and header controls leave the active row alone. */
+function editSelection(hist: HistoryApi, ids: string[], anchor: string | null, active?: string): void {
+  const before = getAppState().v2;
+  const beforeActive = getAppState().view.selectedId;
+  const nextActive = active ?? beforeActive;
+  patchV2({ checked: ids, anchorId: anchor });
+  if (active !== undefined) patchView({ selectedId: active });
   hist.push({
-    type: "checked", label: checkedLabel(next), origin: getAppState().tab,
-    ids: next, before, after: next,
+    type: "checked", label: selectionLabel(ids), origin: getAppState().tab, ids,
+    before: { ids: before.checked, anchor: before.anchorId, active: beforeActive },
+    after: { ids, anchor, active: nextActive },
   });
 }
 
-function checkedLabel(next: string[]): string {
-  if (next.length === 0) return "Clear selection";
-  return `Select ${next.length} row${next.length === 1 ? "" : "s"}`;
+function selectionLabel(ids: string[]): string {
+  if (ids.length === 0) return "Clear selection";
+  return `Select ${ids.length} row${ids.length === 1 ? "" : "s"}`;
 }
 
 /** Prefs stay in the store; prefsstore remains their only writer (see boot). */
