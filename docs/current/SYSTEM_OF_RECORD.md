@@ -6,7 +6,7 @@ Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.m
 
 ## 1. What this is
 
-A browser app with two modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with three modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -15,6 +15,10 @@ A browser app with two modes (top tabs, `src/ui/Workbench.tsx`):
    folder, recursively scan every `*_AI*` image, review and select them, split
    each into its own organised output tree beside the sources, with presets
    and per-reference JSON status tracking.
+3. **Selection** (Chrome/Edge only, File System Access API) — recursively pair
+   every original image with its `*_AI*` result, review them side by side and
+   approve or decline each pair; decisions live in `review-decisions.json` in
+   the split root and survive rescans and restarts.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
@@ -53,6 +57,34 @@ Batch folders:
 * "Open in File Explorer" is impossible from a browser — the action copies the
   path and says so honestly (RULE 4/9).
 
+Selection (image review):
+
+* Pick the split root (readwrite) — the choice is remembered in IndexedDB and
+  re-offered on the next visit (permission re-requested).
+* The scan walks the root recursively (ignoring `_split_output`) and pairs each
+  original with its `*_AI` / `*_AI_N` result; one pair per AI file, several AI
+  variants of one base share the original. Unpaired sides are listed as
+  "AI result missing" / "Original missing" — never hidden.
+* List rows: thumbnail, file name, relative folder, creation date (newest side
+  mtime) and review status. Counters show total / pending / approved / declined
+  and double as the status filter.
+* Filters: all images, one month (`YYYY-MM`) or a custom From/To range;
+  sorting by creation date, review status, filename or folder path, both
+  directions; one click clears every filter.
+* Comparison window: Original and AI result side by side, large and
+  aspect-preserving, each labelled with dimensions, format, size and path, each
+  with "Open in File Explorer" (browser-safe path copy). Approve/Decline sit
+  above the AI result; `A`/`D` are the hotkeys, arrows walk the list, Esc
+  closes, and after every decision the window rolls on to the next pending pair
+  (when none is left it closes and says so).
+* Decisions are stored in `<root>/review-decisions.json` (`pair_id`, `source`,
+  `ai_result`, `decision`, `reviewed_at`). A missing file is created with every
+  pair pending; a corrupt file is reported, left untouched and never silently
+  overwritten — the user may retry or explicitly back it up
+  (`review-decisions.corrupt-<stamp>.json`) and start a fresh file.
+* Review status is only what that file says: a `processed` batch status never
+  counts as approved.
+
 Everything runs client-side; nothing is uploaded anywhere.
 
 ## 3. State model
@@ -88,6 +120,23 @@ deleted`; file changed → `changed` (re-selectable); file gone at scan → `mis
 (retained in JSON); gone during processing → `deleted` (skipped safely, batch
 continues).
 
+Review model (`useReview.ts`):
+
+```
+root                  FileSystemDirectoryHandle (restored from IndexedDB)
+items: ReviewItem[]   ReviewPair + status(pending|approved|declined) + reviewedAt
+orphans               decision records whose files are gone (kept, listed)
+counts                total / pending / approved / declined
+query                 scope(all|month|range) + status filter + sort(key, dir)
+selectedId            pair open in the comparison window (null = closed)
+fileStatus/fileNote   ok | corrupt | write-error + the honest message
+busy / toast          progress and reporting surfaces (RULE 2/5)
+```
+
+Pair identity: lowercased `folder/base` plus `#variant` for `_AI_N`
+(`category-a/star`, `category-a/star#2`) — stable across rescans while the pair
+is unchanged, independent of which side is currently on disk.
+
 ## 4. Core flows
 
 Single sheets:
@@ -114,6 +163,25 @@ Batch:
 * **Presets:** save/load/delete in localStorage; directory handles persisted
   in IndexedDB per preset name; last-used preset auto-restores on open.
 
+Selection:
+
+* **Scan:** root handle → `readDirTree` (ignore list) → `walkTree` →
+  `buildPairs` → `loadAndSync` (reads/creates `review-decisions.json`,
+  reconciles it with the scan) → `applyDecisions` → rows + counters; the rescan
+  note reports `+added / −removed / ~changed / renamed / unchanged`.
+* **Review:** clicking a row opens the comparison window; `useCompare` loads
+  both sides (dimensions/format/size through `loadImageFile`) and revokes the
+  object URLs on change (RULE 20). A/D (or the buttons) call `decide`, which
+  updates the list and counters immediately (RULE 24), writes the JSON and
+  selects the next pending pair.
+* **Persistence:** every write merges the in-memory decisions into the stored
+  file first, so records of vanished pairs survive; the write itself goes to a
+  temp file and is renamed with `move()` when available, else
+  `createWritable()` replaces the file atomically on close (RULE 23).
+* **Errors:** a failed write keeps the decisions in the list and shows an
+  actionable retry; a corrupt file blocks automatic writing and offers backup +
+  fresh start.
+
 ## 5. Invariants
 
 * **I-1 (RULE 6):** every export contains exactly the currently included boxes
@@ -137,6 +205,18 @@ Batch:
   are replaced with fresh valid state, never fatal.
 * **I-11 (batch, RULE 1/3):** pixel math in batch mode reuses `lib/detect` +
   `lib/render` through `splitSheet` — no second detection implementation.
+* **I-12 (review, RULE 3/4):** a pair is exactly one AI file plus its original;
+  a source with no AI file and an AI file with no source stay visible with an
+  explicit "missing" label — an empty result is never reported as success.
+* **I-13 (review, RULE 13):** `review-decisions.json` is validated on read; a
+  corrupt payload is reported and left on disk, and no automatic write may
+  replace it (explicit backup + reset only).
+* **I-14 (review, RULE 24):** approve/decline updates the row, the counters and
+  the selection in the same render; a decision is never pending on a later
+  interaction to become visible.
+* **I-15 (review, RULE 23):** a decision write either lands completely (temp
+  file + move, or swap-and-replace on close) or the previous file stays intact;
+  a failed write is reported with a retry, never silently dropped.
 
 ## 6. Storage map
 
@@ -146,6 +226,9 @@ Batch:
 | localStorage `iconSplitter.lastPreset.v1` | last-used preset name | restores on boot |
 | IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
+| `<root>/review-decisions.json` | review decisions per pair (spec §8) | created when missing; corrupt payloads are never auto-overwritten |
+| `<root>/review-decisions.corrupt-<stamp>.json` | backup of an unreadable review file | written once, on explicit user request; never overwritten |
+| IndexedDB `iconSplitter/handles` key `review.root.v1` | last reviewed root | permission re-requested on restore |
 | `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
@@ -165,12 +248,18 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
+| Review pairing | `src/lib/review.ts` | `pairId`, `buildPairs`, `diffPairs` |
+| Review decisions | `src/lib/reviewfile.ts`, `src/lib/reviewmerge.ts` | record model + strict parse; items, decisions, counters, orphans |
+| Review query | `src/lib/reviewquery.ts`, `src/lib/reviewformat.ts`, `src/lib/text.ts` | month/range/status filters, sorts, display text, shared comparison |
+| Review IO | `src/lib/reviewio.ts`, `src/lib/reviewkeys.ts`, `src/lib/fs.ts` | atomic JSON read/write/backup, hotkey map, handle/path adapters |
+| Review UI | `src/review/useReview.ts`, `useCompare.ts`, `persist.ts`, `scan.ts`, `store.ts`, `detail.ts`, `ReviewPanel.tsx`, `ReviewList.tsx`, `ReviewFilters.tsx`, `ReviewCounters.tsx`, `CompareView.tsx`, `StatusBadge.tsx` | orchestration, comparison window, list, filters |
+| Shared UI | `src/ui/Workbench.tsx`, `Overlays.tsx`, `Thumb.tsx`, `useThumbnails.ts` | tab shell, busy/toast surfaces, thumbnail cache (RULE 20) |
 
 Direction: UI → batch → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 14 files / 68 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 22 files / 164 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
@@ -187,6 +276,14 @@ in-memory fakes implement the FS handle interfaces):
 * `process.test.ts` — full output tree, deleted/failed isolation, stop, ref copy
 * `statewrite.test.ts` — per-reference JSON write, missing retention, corrupt replace
 * `store.test.ts` — preset persistence, corrupt rejection, last-used name
+* `review_pairs.test.ts` — recursive pairing, duplicates, unpaired sides, pair diff, roll-over
+* `review_file.test.ts` — pending/blank/missing, corrupt rejection, upsert, sync history
+* `review_merge.test.ts` — decisions, changed decisions, counters, orphans, restart
+* `review_query.test.ts` — month/range filters, every sort mode + direction, notes
+* `review_io.test.ts` — missing/ok/corrupt, atomic move, fallback, write failure, backup
+* `review_flow.test.ts` — scan → decide → restart → rescan (+/−/~/rename) → corrupt → failure
+* `review_ui.test.tsx` — status text+icons, comparison markup, rows, counters, hotkeys, tab order
+* `review_ui_flow.test.tsx` — DOM flow: pick folder, review, A/D, counters, JSON, rescan
 
 Must exist before the matching change ships:
 
@@ -203,7 +300,7 @@ Must exist before the matching change ships:
 | Cyclomatic complexity | > 10 | same + eslint warn |
 | Nesting | > 4 | same + eslint warn |
 | File lines | > 300 (warn), ratchet growth fails | same |
-| Coverage `src/lib` | lines ≥ 80%, never decrease | vitest v8 |
+| Coverage `src/lib` | lines ≥ 80%, never decrease (now 97.8%) | vitest v8 |
 | Anti-gaming | `partN` helpers always fail | same |
 
 Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.md`.
@@ -216,12 +313,15 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
 * 2026-10-01 — batch processing designed TDD-first:
   `docs/archive/2026-10-01-batch-processing/design.md` (module map, browser
   constraints, rule budget, negative tests).
+* 2026-10-01 — image review / Selection tab designed TDD-first:
+  `docs/archive/2026-10-01-review-selection/design.md` (pairing rules, decision
+  file, rescan semantics, atomic write, rule budget).
 
 ## 11. Current UI — control inventory
 
 Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
 
-* Workbench: `tab-sheets`, `tab-batch`.
+* Workbench: `tab-sheets`, `tab-batch`, `tab-review` (Selection).
 * Sheets mode: header (upload + 3 export buttons), Sheets, Export settings
   (padding/size/transparent), Detection (merge slider + reset), Boundary
   overlay, Result grid, busy overlay, toast.
@@ -229,3 +329,11 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
   info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
   reference warnings, busy overlay, toast.
+* Selection mode: header (`review-root`, `review-refresh`), counters that double
+  as the status filter (`counter-*`), filters (`scope-*`, `filter-month`,
+  `filter-from`, `filter-to`, `sort-key`, `sort-dir`, `filters-clear`), list
+  (`review-list`, `review-row-{pairId}`, `status-*`), comparison window
+  (`compare-view`, `compare-original`, `compare-ai`, `review-approve`,
+  `review-decline`, `compare-close`), file warnings (`review-file-warning`,
+  `review-file-retry`, `review-file-reset`), orphan history (`review-orphans`),
+  busy overlay and toast.

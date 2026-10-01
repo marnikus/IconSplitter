@@ -33,19 +33,27 @@ export interface StoredHandles {
   dest?: DirHandleLike;
 }
 
-/** Persists picked directory handles for a preset (best effort). */
-export async function saveHandles(presetName: string, handles: StoredHandles): Promise<void> {
+/** Generic key-value persistence in the app's IndexedDB store (best effort). */
+export async function saveStored(key: string, value: unknown): Promise<void> {
   const db = await openDb();
   if (!db) return;
-  await tx(db, "readwrite", (store) => store.put(handles, presetName));
+  await tx(db, "readwrite", (store) => store.put(value, key));
+}
+
+export async function loadStored<T>(key: string): Promise<T | null> {
+  const db = await openDb();
+  if (!db) return null;
+  return (await tx<T>(db, "readonly", (store) => store.get(key))) ?? null;
+}
+
+/** Persists picked directory handles for a preset (best effort). */
+export async function saveHandles(presetName: string, handles: StoredHandles): Promise<void> {
+  await saveStored(presetName, handles);
 }
 
 /** Loads persisted handles; null when nothing stored or IDB unavailable. */
 export async function loadHandles(presetName: string): Promise<StoredHandles | null> {
-  const db = await openDb();
-  if (!db) return null;
-  const value = await tx<StoredHandles>(db, "readonly", (store) => store.get(presetName));
-  return value ?? null;
+  return loadStored<StoredHandles>(presetName);
 }
 
 function openDb(): Promise<IDBDatabase | null> {

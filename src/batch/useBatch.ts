@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { linkReferences, collectAiImages, walkTree, type AiImageEntry } from "../lib/scan";
-import { readDirTree, ensureDirPath, probePath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
+import { readDirTree, ensureDirPath, resolveFileHandle, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { defaultPreset, type Preset } from "../lib/presets";
 import { parseAiName } from "../lib/naming";
 import { pickDirectory, fsSupported, ensurePermission } from "./picker";
@@ -103,7 +103,7 @@ function useViewActions(ctx: Ctx, setS: Setter) {
   const thumbUrl = useCallback(async (relPath: string) => {
     const root = ctx.root.current;
     if (!root) throw new Error("No folder selected");
-    return URL.createObjectURL(await (await resolveFile(root, relPath)).getFile());
+    return URL.createObjectURL(await (await resolveFileHandle(root, relPath)).getFile());
   }, [ctx]);
 
   return { toggle, selectAll, thumbUrl };
@@ -241,20 +241,14 @@ async function buildItems(root: DirHandleLike, rows: Row[]): Promise<BatchItem[]
 async function toItem(root: DirHandleLike, r: Row): Promise<BatchItem> {
   return {
     source: { relPath: r.relPath, name: r.name, relDir: r.dirPath, refRelPath: r.refRelPath },
-    file: await resolveFile(root, r.relPath),
+    file: await resolveFileHandle(root, r.relPath),
     refFile: r.refRelPath ? await tryResolve(root, r.refRelPath) : null,
   };
 }
 
-async function resolveFile(root: DirHandleLike, relPath: string): Promise<FileHandleLike> {
-  const idx = relPath.lastIndexOf("/");
-  const dir = idx < 0 ? root : (await probePath(root, relPath.slice(0, idx)))!;
-  return dir.getFileHandle(relPath.slice(idx + 1), { create: false });
-}
-
 async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHandleLike | null> {
   try {
-    return await resolveFile(root, relPath);
+    return await resolveFileHandle(root, relPath);
   } catch {
     return null;
   }

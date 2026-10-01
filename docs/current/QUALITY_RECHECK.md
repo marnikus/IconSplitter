@@ -129,3 +129,62 @@ Same two items as 2026-09-30 (`App` split on first functional touch;
 `detect()` cc 32 extraction). No new debt accepted — all batch code is
 gate-clean at introduction, including RULE 18 (no file > 300 lines, no function
 > 30 LOC, context objects instead of >4 params).
+
+---
+
+# Quality re-check — 2026-10-01 (image review Selection tab, TDD)
+
+Third re-check: the Selection tab shipped (design:
+`docs/archive/2026-10-01-review-selection/design.md`), written test-first in
+8 cycles (R7 lib, R8 DOM flow). Sheets mode untouched; the batch feature only
+reused the new shared pieces (`src/ui/Overlays.tsx`, `src/ui/Thumb.tsx`,
+`src/ui/useThumbnails.ts`, `resolveFileHandle`) and shrank.
+
+## What changed
+
+* `src/lib/` +9: `review.ts`, `reviewfile.ts`, `reviewmerge.ts`, `reviewquery.ts`,
+  `reviewio.ts`, `reviewkeys.ts`, `reviewformat.ts`, `text.ts` (+
+  `resolveFileHandle` added to `fs.ts`)
+* `src/review/` +14: `useReview.ts`, `useCompare.ts`, `persist.ts`, `scan.ts`,
+  `store.ts`, `detail.ts`, `ReviewPanel.tsx`, `ReviewList.tsx`,
+  `ReviewFilters.tsx`, `ReviewCounters.tsx`, `CompareView.tsx`, `StatusBadge.tsx`
+* `src/ui/` +2 and reworked: `Overlays.tsx`, `Thumb.tsx`, `useThumbnails.ts`;
+  `Workbench.tsx` gained the `tab-review` tab; `BatchPanel.tsx`/`ScanTable.tsx`
+  now share the overlays/thumbnails (both files shrank, no test change needed)
+* `tests/` +8 files: `review_pairs`, `review_file`, `review_merge`,
+  `review_query`, `review_io`, `review_flow`, `review_ui`, `review_ui_flow`
+  (+ `tests/helpers/review.ts`)
+
+## The numbers (measured, not estimated)
+
+| File | Lines | Functions | Gate state |
+|---|---:|---:|---|
+| `src/App.tsx` | 588 | 70 | LEGACY held — App 552 LOC, cc 14 |
+| `src/lib/detect.ts` | 307 | 15 | LEGACY held — analyze 92/cc 11, label 42/cc 14/nest 5, detect 97/cc 32 |
+| `src/lib/render.ts` | 106 | 8 | LEGACY held — renderIcon 74 LOC, 7 params, cc 9 |
+| `src/lib/review.ts` | 197 | 36 | `[OK]` |
+| `src/lib/reviewfile.ts` | 163 | 21 | `[OK]` |
+| `src/review/useReview.ts` | 240 | 60 | `[OK]` |
+| `src/review/CompareView.tsx` | 219 | 18 | `[OK]` |
+| 24 further new files | ≤ 157 each | — | all `[OK]` — no violations |
+
+* Tests: **164 passed** (22 files; was 68 tests / 14 files)
+* Coverage `src/lib`: **lines 97.78%, branches 92.29%** (up from 94.76% / 90.4%)
+* Lanes: tsc ✓ · eslint 0 errors / 8 legacy warnings (unchanged) · full gate
+  `node tools/quality.mjs --allow-legacy` **GATE PASSED** · jscpd 1 clone
+  (pre-existing `App.tsx` ↔ `PresetBar.tsx`, 0.18%) · build ✓
+* `dist/index.html` single-file build: 410.66 kB (gzip 122.51 kB)
+
+## Baseline decision
+
+**Not re-recorded.** No legacy file grew (`App.tsx` unchanged at 588,
+`BatchPanel.tsx` 125 → 112 and `ScanTable.tsx` 94 → 75 after the shared
+extraction), and every new file passes the hard lines standalone.
+
+## Known debt carried
+
+Same two items as 2026-09-30/2026-10-01 (`App` split on first functional touch;
+`detect()` cc 32 extraction). New debt accepted: none. Note for the integrator —
+`node tools/quality.mjs --changed` needs a real `origin/main` merge base; in a
+single-commit clone the fallback `HEAD~1` does not exist, so the full run above
+was used instead.

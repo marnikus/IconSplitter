@@ -46,4 +46,9 @@ export class FakeDir implements DirHandleLike {
   async *entries(): AsyncIterableIterator<[string, FakeDir | FakeFile]> {
     for (const [k, v] of this.children) yield [k, v] as [string, FakeDir | FakeFile];
   }
+  /** Real browsers expose removeEntry; the review writer cleans its temp file with it. */
+  async removeEntry(name: string): Promise<void> {
+    if (!this.children.has(name)) throw new DOMException("Not found", "NotFoundError");
+    this.children.delete(name);
+  }
 }

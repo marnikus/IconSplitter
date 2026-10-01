@@ -128,6 +128,14 @@ export async function probePath(root: DirHandleLike, relPath: string): Promise<D
   return cur;
 }
 
+/** Resolves a root-relative file path to its handle (never creates). */
+export async function resolveFileHandle(root: DirHandleLike, relPath: string): Promise<FileHandleLike> {
+  const cut = relPath.lastIndexOf("/");
+  const dir = cut < 0 ? root : await probePath(root, relPath.slice(0, cut));
+  if (!dir) throw new Error(`Folder not found for ${relPath}`);
+  return dir.getFileHandle(relPath.slice(cut + 1), { create: false });
+}
+
 /** Names of every child (dirs and files) of a directory. */
 export async function listChildNames(dir: DirHandleLike): Promise<string[]> {
   const out: string[] = [];

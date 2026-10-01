@@ -3,11 +3,13 @@
 
 import { useBatch } from "./useBatch";
 import PresetBar from "./PresetBar";
-import ScanTable, { useThumbCache } from "./ScanTable";
+import ScanTable from "./ScanTable";
+import { BusyOverlay, Toast } from "../ui/Overlays";
+import { useThumbnails, type Thumbs } from "../ui/useThumbnails";
 
 export default function BatchPanel() {
   const b = useBatch();
-  const thumbFor = useThumbCache(b.thumbUrl);
+  const thumbs = useThumbnails(b.thumbUrl);
   return (
     <div className="space-y-4">
       {!b.supported && (
@@ -16,13 +18,13 @@ export default function BatchPanel() {
         </p>
       )}
       <HeaderControls b={b} />
-      <MainGrid b={b} thumbFor={thumbFor} />
+      <MainGrid b={b} thumbs={thumbs} />
       <Overlays b={b} />
     </div>
   );
 }
 
-function MainGrid({ b, thumbFor }: { b: Batch; thumbFor: (r: string) => Promise<string> }) {
+function MainGrid({ b, thumbs }: { b: Batch; thumbs: Thumbs }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
       <div className="space-y-4">
@@ -36,7 +38,7 @@ function MainGrid({ b, thumbFor }: { b: Batch; thumbFor: (r: string) => Promise<
         <RefWarnings count={b.s.refWarnings.length} />
         <ScanTable
           rows={b.s.rows} toggle={b.toggle} selectAll={b.selectAll}
-          copyPath={(rel) => copyPath(b, rel)} thumbFor={thumbFor}
+          copyPath={(rel) => copyPath(b, rel)} thumbs={thumbs}
         />
       </div>
     </div>
@@ -47,12 +49,8 @@ function Overlays({ b }: { b: Batch }) {
   if (!b.s.busy && !b.s.toast) return null;
   return (
     <>
-      {b.s.busy && <BusyOverlay msg={b.s.busy} cancel={b.cancel} />}
-      {b.s.toast && (
-        <div data-testid="batch-toast" className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${b.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>
-          {b.s.toast.msg}
-        </div>
-      )}
+      {b.s.busy && <BusyOverlay msg={b.s.busy} testid="batch-busy" onCancel={b.cancel} />}
+      {b.s.toast && <Toast toast={b.s.toast} testid="batch-toast" />}
     </>
   );
 }
@@ -102,18 +100,6 @@ function RefWarnings({ count }: { count: number }) {
       ⚠ {count} image{count === 1 ? " has" : "s have"} no reference file. You can deselect {count === 1 ? "it" : "them"} to skip,
       or continue — exports will simply omit the reference copy.
     </p>
-  );
-}
-
-function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
-  return (
-    <div data-testid="batch-busy" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-        <span className="text-sm">{msg}</span>
-        <button className="btn-mini" onClick={cancel}>Stop</button>
-      </div>
-    </div>
   );
 }
 

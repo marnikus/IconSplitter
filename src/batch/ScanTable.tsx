@@ -2,16 +2,17 @@
 // relative path, per-row selection, select all / deselect all, and the
 // "Open in File Explorer" action (browser-safe substitute, RULE 9).
 
-import { useCallback, useEffect, useState } from "react";
 import type { Row } from "./useBatch";
 import type { SourceStatus } from "../lib/statefile";
+import Thumb from "../ui/Thumb";
+import type { Thumbs } from "../ui/useThumbnails";
 
 export interface ScanTableProps {
   rows: Row[];
   toggle: (relPath: string) => void;
   selectAll: (on: boolean) => void;
   copyPath: (relPath: string) => void;
-  thumbFor: (relPath: string) => Promise<string>;
+  thumbs: Thumbs;
 }
 
 const BADGE: Record<SourceStatus, { label: string; cls: string }> = {
@@ -43,7 +44,7 @@ export default function ScanTable(props: ScanTableProps) {
   );
 }
 
-function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, copyPath, thumbs }: { r: Row } & ScanTableProps) {
   const badge = BADGE[r.status];
   const disabled = r.status === "missing" || r.status === "deleted";
   return (
@@ -53,7 +54,7 @@ function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps)
         onChange={() => toggle(r.relPath)} className="h-4 w-4 accent-indigo-500"
         data-testid={`row-select-${r.relPath}`}
       />
-      <Thumb relPath={r.relPath} thumbFor={thumbFor} />
+      <Thumb relPath={r.relPath} thumbs={thumbs} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
           {r.name}
@@ -70,25 +71,4 @@ function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps)
       </button>
     </li>
   );
-}
-
-function Thumb({ relPath, thumbFor }: { relPath: string; thumbFor: (r: string) => Promise<string> }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void thumbFor(relPath).then((u) => alive && setSrc(u)).catch(() => {});
-    return () => { alive = false; };
-  }, [relPath, thumbFor]);
-  return src
-    ? <img src={src} alt="" className="h-10 w-10 rounded-md bg-white object-contain" />
-    : <div className="h-10 w-10 animate-pulse rounded-md bg-white/10" />;
-}
-
-export function useThumbCache(getUrl: (relPath: string) => Promise<string>) {
-  const [cache] = useState(() => new Map<string, string>());
-  return useCallback((relPath: string) => {
-    const hit = cache.get(relPath);
-    if (hit) return Promise.resolve(hit);
-    return getUrl(relPath).then((u) => { cache.set(relPath, u); return u; });
-  }, [cache, getUrl]);
 }

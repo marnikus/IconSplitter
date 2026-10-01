@@ -2,7 +2,7 @@
 // The fakes implement the same interfaces the browser File System Access API
 // satisfies, so the adapter logic really executes — no mocks of the code itself.
 import { describe, expect, it } from "vitest";
-import { copyFileTo, ensureDirPath, nameExists, readDirTree, writeFileNew } from "../src/lib/fs";
+import { copyFileTo, ensureDirPath, nameExists, readDirTree, resolveFileHandle, writeFileNew } from "../src/lib/fs";
 import { FakeDir } from "./helpers/fakefs";
 
 describe("readDirTree — recursive snapshot with size/mtime and ignore list", () => {
@@ -49,5 +49,22 @@ describe("ensureDirPath / nameExists / copyFileTo", () => {
     expect(dstDir.children.has("ref.png")).toBe(true);
     await expect(copyFileTo(f, dstDir, "ref.png")).rejects.toThrow(/exists/i);
     expect(await nameExists("file", dstDir, "ref.png")).toBe(true);
+  });
+});
+
+describe("resolveFileHandle — root-relative lookup for review sides", () => {
+  it("finds a file at the root and inside nested folders", async () => {
+    const root = new FakeDir("root");
+    await root.getFileHandle("top_AI.png", { create: true });
+    const deep = await ensureDirPath(root, "a/b");
+    await deep.getFileHandle("star.png", { create: true });
+    expect((await resolveFileHandle(root, "top_AI.png")).name).toBe("top_AI.png");
+    expect((await resolveFileHandle(root, "a/b/star.png")).name).toBe("star.png");
+  });
+
+  it("reports a vanished folder or file as a plain error, never a crash", async () => {
+    const root = new FakeDir("root");
+    await expect(resolveFileHandle(root, "a/b/star.png")).rejects.toThrow(/folder not found/i);
+    await expect(resolveFileHandle(root, "star.png")).rejects.toThrow(/not found/i);
   });
 });

@@ -7,7 +7,7 @@ for tests (RULE 8) and any future UI automation. Every `data-testid` below
 exists in source — Sheets handles verified in `src/App.tsx` (2026-09-30);
 Workbench + Batch handles verified in `src/ui/Workbench.tsx`,
 `src/batch/BatchPanel.tsx`, `src/batch/ScanTable.tsx`, `src/batch/PresetBar.tsx`
-(2026-10-01).
+(2026-10-01); Selection handles verified in `src/review/*` (2026-10-01).
 
 Priority per RULE 21: **semantic** (role / label / text) > **structural** >
 **class fragment** (Tailwind utilities are last resort, never primary).
@@ -105,6 +105,7 @@ doc in the same change (RULE 17).
 |---|---|---|
 | `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with `tab-batch` |
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
+| `tab-review` | `Selection` | mounts `ReviewPanel`; sits directly after `tab-batch` (spec §12) |
 
 Semantic fallback: button role + visible text.
 
@@ -153,6 +154,51 @@ Review window (scan table) — `scan-table` panel:
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.
 
+## M. Selection tab — `src/review/*`
+
+Header and review file:
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `review-root` | `Choose split root…` → `Root: {name}` | directory picker; restores the last root from IndexedDB |
+| `review-refresh` | `↺ Rescan` | re-walks the root, re-reads the JSON, keeps unchanged decisions |
+| `review-summary` | e.g. `4 pairs · +1 new · −1 removed` | rescan diff line |
+| `review-counters` / `counter-{all\|pending\|approved\|declined}` | `Total 12`, `Approved 8`… | counters double as the status filter (`aria-pressed`) |
+| `review-fs-warning` | amber banner | File System Access unsupported (non-Chromium) |
+| `review-unpaired` | amber note | count of entries with a missing side |
+| `review-file-warning`, `review-file-retry`, `review-file-reset` | warning + buttons | corrupt/unwritable review file; reset backs the payload up first |
+| `review-orphans` | `<details>` | decisions for files no longer on disk |
+
+Filters and sorting (`review-filters`):
+
+| Test id | Control | Values |
+|---|---|---|
+| `scope-all` / `scope-month` / `scope-range` | toggle buttons | date scope; `aria-pressed` mirrors the active one |
+| `filter-month` | `<input type="month">` | `YYYY-MM` |
+| `filter-from`, `filter-to` | `<input type="datetime-local">` | inclusive custom range |
+| `sort-key` | `<select>` | `date` / `status` / `name` / `path` |
+| `sort-dir` | button | ascending ⇄ descending |
+| `filters-clear` | button | disabled when nothing is filtered |
+
+List and comparison window:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `review-list` | `<ul>` (scrollable) | rows are `<button>`s → Tab + Enter (RULE 21 level 1) |
+| `review-row-{pairId}` | row button | `pairId` = lowercased `folder/base[#variant]` |
+| `review-empty` | paragraph | no images / no matches |
+| `status-{pending\|approved\|declined}` | badge | text + icon + colour, `aria-label="Review status: …"` |
+| `thumb-placeholder` | div | loading or `Preview unavailable` when the read failed |
+| `compare-view` | overlay | `role="dialog"`, `aria-modal`, label "Image comparison" |
+| `compare-original`, `compare-ai` | panes | titles "Original" / "AI result"; `object-contain` previews |
+| `review-approve`, `review-decline` | buttons above the AI pane | `aria-pressed` reflects the current decision |
+| `compare-close` | button | `aria-label="Close comparison"` (also Esc) |
+| `review-busy`, `review-toast` | overlays | shared `src/ui/Overlays.tsx` surfaces |
+
+Hotkeys inside the comparison window: `A` approve, `D` decline, `←`/`→`
+previous/next, `Esc` close — suppressed while focus is in an input/select
+(`src/lib/reviewkeys.ts`).
+
 ## J. Handles still needed (to be added on demand)
 
 | Handle | Where | Needed when |
@@ -162,6 +208,7 @@ the data `relPath`, so tests should build handles from the scanned entry.
 | `empty-result-note` | "No icons selected…" paragraph | empty-state assertions |
 | `row-status-{relPath}` | scan table status cell | first test asserting per-row status text |
 | `ref-warn-{relPath}` | per-row missing-reference note | first test of per-row warning detail |
+| `review-thumb-{pairId}` | review thumbnail image | first test asserting a loaded thumbnail source |
 
 Nothing fetches these yet — they are the discovery list, kept honest like the
 source doc's "Missing Selectors" section.
