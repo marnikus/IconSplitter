@@ -62,9 +62,17 @@ Selection:
 * Recursive scan pairs `name.ext` with `name_AI.ext` incl. numeric tails
   (`name_AI_9_01.ext`; stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
   "AI result missing" / "Original missing", never silently dropped.
-* Review list: thumbnail, filename, relative folder, creation date, status
-  chip with text + glyph; search, month / custom-range date filters, status
-  filter, sorting by date/status/name/path in both directions, counters.
+* Review list: two labelled thumbnails per row (O original / A AI result,
+  placeholders when missing), filename, relative folder, creation date, status
+  chip with text + glyph, checkbox multi-select with tri-state header and bulk
+  Approve/Decline over selected *visible* pairs (one save, one summary);
+  search, month / custom-range date filters, "All decisions" shows every
+  status, sorting by date/status/name/path in both directions; counters mirror
+  the visible set.
+* Navigation: ↑/W and ↓/S step the active row through the filtered+sorted
+  order across pending *and* reviewed rows, no wrap unless the Wrap setting is
+  on; active row scrolls into view and stays highlighted over status tints;
+  A/D decide, Space zoom, Ctrl+K search; shortcuts inert inside form fields.
 * Comparison: side-by-side panes with preserved aspect ratio, dims / format /
   size / path per side, 1:1 zoom with synced scrolling, hotkeys A/D/arrows/
   Space/Ctrl+K, auto-advance to the next pending after each decision.
@@ -204,9 +212,10 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 23 files / 123 tests; canvas shims serve synthetic pixels,
-in-memory fakes implement the FS handle interfaces, one happy-dom smoke test
-renders the Selection panel and drives it with hotkeys):
+Exists (`tests/`, 25 files / 141 tests; canvas shims serve synthetic pixels,
+in-memory fakes implement the FS handle interfaces, two happy-dom component
+tests render the Selection panel and drive it with hotkeys, checkboxes and
+bulk buttons):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
@@ -230,6 +239,10 @@ renders the Selection panel and drives it with hotkeys):
 * `selection_state.test.ts` — applyScan/withDecision/nextPending/counters
 * `handles.test.ts`, `fmt.test.ts` — path resolution, formatters
 * `selection_ui.test.tsx` — DOM smoke: pick → list → A/D hotkeys → text chips
+* `selection_nav.test.ts` — W/S + arrow navigation, wrap setting, bulk,
+  selection set, active-row reconciliation, All-decisions contract
+* `selection_bulk_ui.test.tsx` — paired thumbs, indeterminate select-all,
+  bulk approve summary, disabled bulk, status filters in the DOM
 
 Must exist before the matching change ships:
 

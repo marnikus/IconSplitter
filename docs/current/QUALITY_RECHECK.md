@@ -167,3 +167,40 @@ lines standalone (largest new file 153 LOC).
 ## Known debt carried
 
 Same two legacy items; nothing new.
+
+---
+
+# Quality re-check — 2026-10-01 (Selection navigation, bulk decisions, filter fix)
+
+Fourth re-check, same day: review-navigation hardening (W/S + arrows across
+reviewed rows, wrap setting, active-row reconciliation after filter changes),
+checkbox multi-select with tri-state header and bulk Approve/Decline, paired
+O/A thumbnails per row, visible-set counters, and the All-decisions filter
+contract locked by tests.
+
+## What changed
+
+* `src/selection/state.ts` +`toggleSelect` / `selectVisible` / `bulkDecide` /
+  `moveActive` / `reconcileActive`; `SelState` grew `selectedIds`, `wrap`,
+  `thumbSize`; rescan prunes stale selection ids
+* `src/lib/reviewmeta.ts` — W/S keys; mapping table keeps CC at 2
+* `src/selection/ListControls.tsx` (new), `PairList.tsx` rewritten around
+  paired thumbs + checkbox rows; `useSelection` +`bulk`/`move` actions and the
+  reconcile effect; header counters now mirror the visible set
+
+## The numbers (measured, not estimated)
+
+* Tests: **141 passed** (25 files; was 123 / 23)
+* Lanes: tsc ✓ · eslint 0 errors (legacy warnings only) ·
+  `--changed --allow-legacy` **GATE PASSED** after refactoring three first-pass
+  offenders (keyToAction cc 13 → map; ListControls 32 → BulkBtns; Row/SideThumb
+  31/32 → RowText/ThumbFace)
+* Largest new file 180 LOC; RULE 18 honoured.
+
+## Baseline decision
+
+**Not re-recorded** — legacy values untouched; new code passes standalone.
+
+## Known debt carried
+
+Same two legacy items; nothing new.
