@@ -14,7 +14,8 @@ import { pickDirectory, fsSupported } from "../batch/picker";
 import { loadHandles, saveHandles } from "../batch/store";
 import { loadDecisions, saveDecisions } from "./reviewstore";
 import {
-  applyScan, initialSelState, nextPendingId, withDecision, type SelState,
+  applyScan, bulkDecide, initialSelState, moveActive, nextPendingId,
+  reconcileActive, selectVisible, toggleSelect, withDecision, type SelState,
 } from "./state";
 
 const HANDLE_KEY = "__selection__";
@@ -34,12 +35,21 @@ export function useSelection() {
   useWatcher(ctx, s.watcher, s.rootName, setS);
   useToastClear(s.toast, setS);
   const visible = useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort), [s.pairs, s.filter, s.sort]);
+  const visibleKey = useMemo(() => visible.map((v) => v.pairId).join(","), [visible]);
+  useEffect(() => { // keep the active row valid across filter/sort changes
+    const ids = visibleKey === "" ? [] : visibleKey.split(",");
+    setS((p) => reconcileActive(p, ids));
+  }, [visibleKey]);
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
   return {
     s, visible, say, supported: fsSupported(), rootRef: ctx.root,
     chooseRoot: useCallback(() => chooseRoot(ctx, setS, say), [ctx, setS, say]),
     rescan: useCallback(() => rescan(ctx, setS, say), [ctx, setS, say]),
     decide: useCallback((id: string, d: Decision) => decide(ctx, setS, id, d), [ctx, setS]),
+    bulk: useCallback((d: Decision) => bulk(ctx, setS, say, d), [ctx, setS, say]),
+    move: useCallback((dir: 1 | -1) => move(ctx, setS, dir), [ctx, setS]),
+    toggle: useCallback((id: string) => setS((p) => toggleSelect(p, id)), []),
+    selectVis: useCallback((ids: string[], on: boolean) => setS((p) => selectVisible(p, ids, on)), []),
     retryWrite: useCallback(() => retryWrite(ctx, setS), [ctx, setS]),
     select: useCallback((id: string) => setS((p) => ({ ...p, selectedId: id })), []),
     setFilter: useCallback((f: ListFilter) => setS((p) => ({ ...p, filter: f })), []),
@@ -98,6 +108,24 @@ function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   const next = rolled ? { ...merged, selectedId: rolled } : merged;
   setS(next);
   void persist(ctx, setS, next);
+}
+
+/** One decision over the selected *visible* pairs; one save, one summary. */
+function bulk(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void, d: Decision): void {
+  const s = ctx.state.current;
+  const visibleIds = new Set(sortPairs(applyFilters(s.pairs, s.filter), s.sort).map((v) => v.pairId));
+  const affected = s.selectedIds.filter((id) => visibleIds.has(id));
+  if (affected.length === 0) return;
+  const next = bulkDecide(s, affected, d, new Date().toISOString());
+  setS(next);
+  say(`${d === "approved" ? "Approved" : "Declined"} ${affected.length} pair${affected.length === 1 ? "" : "s"}`);
+  void persist(ctx, setS, next);
+}
+
+function move(ctx: Ctx, setS: Setter, dir: 1 | -1): void {
+  const s = ctx.state.current;
+  const visibleIds = sortPairs(applyFilters(s.pairs, s.filter), s.sort).map((v) => v.pairId);
+  setS((p) => moveActive(p, visibleIds, dir));
 }
 
 async function persist(ctx: Ctx, setS: Setter, s: SelState): Promise<void> {

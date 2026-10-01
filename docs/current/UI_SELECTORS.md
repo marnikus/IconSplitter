@@ -173,7 +173,14 @@ Filter bar (`sel-filterbar`): `sel-date-all` / `sel-date-month` / `sel-date-cust
 Review list (`sel-list`): `sel-search` (Ctrl+K focuses), `sel-attention`
 ("N NEED ATTENTION"), `sel-expand` / `sel-collapse`, `sel-row-{pairId}`
 (rows carry text status chips — never colour alone), `sel-empty`,
-`sel-clear-empty`.
+`sel-clear-empty`. Each row: `sel-check-{pairId}` checkbox plus two labelled
+thumb buttons `sel-thumb-src-{pairId}` (O) / `sel-thumb-ai-{pairId}` (A);
+clicking a thumb opens that pair's preview.
+
+Multi-select + bulk (`ListControls`): `sel-check-all` (tri-state header
+checkbox), `sel-select-all`, `sel-selcount`, `sel-bulk-approve` /
+`sel-bulk-decline` (disabled at 0, label shows affected count), `sel-wrap`
+(navigation wrap setting), `sel-thumbsize` (S/L row thumbnails).
 
 Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (1:1 fit/full,
 Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,

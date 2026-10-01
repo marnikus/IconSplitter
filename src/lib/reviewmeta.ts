@@ -18,15 +18,16 @@ export function statusInfo(d: Decision): StatusMeta {
 
 export type HotAction = "approve" | "decline" | "next" | "prev" | "zoom";
 
+const KEY_MAP: Record<string, HotAction> = {
+  a: "approve", A: "approve",
+  d: "decline", D: "decline",
+  ArrowDown: "next", s: "next", S: "next",
+  ArrowUp: "prev", w: "prev", W: "prev",
+  " ": "zoom",
+};
+
 /** Maps a raw KeyboardEvent.key to a review action; null = not a review key. */
 export function keyToAction(key: string, inField: boolean): HotAction | null {
   if (inField) return null;
-  switch (key) {
-    case "a": case "A": return "approve";
-    case "d": case "D": return "decline";
-    case "ArrowDown": return "next";
-    case "ArrowUp": return "prev";
-    case " ": return "zoom";
-    default: return null;
-  }
+  return KEY_MAP[key] ?? null;
 }

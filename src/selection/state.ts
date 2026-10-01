@@ -26,6 +26,9 @@ export interface SelState {
   filter: ListFilter;
   sort: SortState;
   selectedId: string | null;
+  selectedIds: string[]; // checkbox multi-selection (stable pair ids)
+  wrap: boolean; // navigation wraps at list ends when on
+  thumbSize: "sm" | "lg";
   corrupt: boolean;
   writeWarn: string | null;
   awaitingRetry: number;
@@ -42,6 +45,7 @@ export function initialSelState(): SelState {
   return {
     rootName: "", pairs: [], records: [], lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
+    selectedIds: [], wrap: false, thumbSize: "sm",
     corrupt: false, writeWarn: null, awaitingRetry: 0, watcher: true,
     collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
   };
@@ -66,6 +70,7 @@ export function applyScan(s: SelState, scanned: ReviewPair[], load: ScanLoad, no
   return {
     ...s, pairs, records: recordsFromViews(pairs, orphans),
     lastDiff: diff, lastRescanAt: now, selectedId, corrupt: load.corrupt,
+    selectedIds: s.selectedIds.filter((id) => viewIds.has(id)),
   };
 }
 
@@ -120,4 +125,53 @@ export function counters(pairs: ViewPair[]): Counters {
     if (attentionInfo(p)) c.attention++;
   }
   return c;
+}
+
+/** Checkbox toggle for one pair (stable id, never a row position). */
+export function toggleSelect(s: SelState, id: string): SelState {
+  const on = s.selectedIds.includes(id);
+  return { ...s, selectedIds: on ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id] };
+}
+
+/** Select / deselect exactly the visible ids; hidden selection is untouched. */
+export function selectVisible(s: SelState, visibleIds: string[], on: boolean): SelState {
+  const vis = new Set(visibleIds);
+  const kept = s.selectedIds.filter((x) => !vis.has(x));
+  return { ...s, selectedIds: on ? [...kept, ...visibleIds] : kept };
+}
+
+/** One decision over many pairs; replaces old decisions, single record each. */
+export function bulkDecide(s: SelState, ids: string[], decision: Decision, nowIso: string): SelState {
+  const want = new Set(ids);
+  const pairs = s.pairs.map((p) => (want.has(p.pairId) ? { ...p, decision, reviewedAt: nowIso } : p));
+  if (pairs === s.pairs) return s;
+  return { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) };
+}
+
+/** Step the active row through the visible order; wraps only when enabled. */
+export function moveActive(s: SelState, visibleIds: string[], dir: 1 | -1): SelState {
+  if (visibleIds.length === 0) return s;
+  const at = visibleIds.indexOf(s.selectedId ?? "");
+  if (at === -1) return { ...s, selectedId: dir === 1 ? visibleIds[0] : visibleIds[visibleIds.length - 1] };
+  const next = at + dir;
+  if (next < 0 || next >= visibleIds.length) {
+    if (!s.wrap) return s;
+    return { ...s, selectedId: visibleIds[(next + visibleIds.length) % visibleIds.length] };
+  }
+  return { ...s, selectedId: visibleIds[next] };
+}
+
+/** Keep the active pair when visible; else the nearest visible by raw order. */
+export function reconcileActive(s: SelState, visibleIds: string[]): SelState {
+  if (visibleIds.length === 0) return s.selectedId === null ? s : { ...s, selectedId: null };
+  if (s.selectedId && visibleIds.includes(s.selectedId)) return s;
+  const raw = new Map(s.pairs.map((p, i) => [p.pairId, i]));
+  const at = s.selectedId ? (raw.get(s.selectedId) ?? 0) : 0;
+  let best = visibleIds[0];
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const id of visibleIds) {
+    const d = Math.abs((raw.get(id) ?? 0) - at);
+    if (d < bestDist) { bestDist = d; best = id; }
+  }
+  return { ...s, selectedId: best };
 }

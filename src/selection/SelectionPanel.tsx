@@ -8,6 +8,7 @@ import { ALL_FILTER } from "../lib/reviewfilter";
 import CompareView from "./CompareView";
 import FilterBar from "./FilterBar";
 import HeaderRow from "./HeaderRow";
+import ListControls from "./ListControls";
 import PairList from "./PairList";
 import StatusFooter from "./StatusFooter";
 import { counters } from "./state";
@@ -24,7 +25,7 @@ export default function SelectionPanel() {
   if (!api.supported) return <UnsupportedNote onPick={api.chooseRoot} />;
   return (
     <div className="space-y-3">
-      <HeaderRow rootName={api.s.rootName} watcher={api.s.watcher} pairs={api.s.pairs}
+      <HeaderRow rootName={api.s.rootName} watcher={api.s.watcher} pairs={api.visible}
         chooseRoot={api.chooseRoot} rescan={api.rescan} patch={api.patch} />
       <Banners api={api} />
       {api.s.rootName !== "" && (
@@ -77,12 +78,18 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
   const selected = api.visible.find((v) => v.pairId === api.s.selectedId)
     ?? api.s.pairs.find((v) => v.pairId === api.s.selectedId) ?? null;
   const copyPath = (relPath: string) => { void copy(relPath, api); };
+  const visibleIds = api.visible.map((v) => v.pairId);
   return (
-    <div className="grid items-start gap-3 lg:grid-cols-[22rem_1fr]">
-      <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}
-        selectedId={api.s.selectedId} collapsed={api.s.collapsed} search={search}
-        select={api.select} setSearch={setSearch} patch={api.patch}
-        clearFilters={() => { setSearch(""); api.setFilter(ALL_FILTER); }} thumbFor={thumbFor} />
+    <div className="grid items-start gap-3 lg:grid-cols-[24rem_1fr]">
+      <div className="space-y-2">
+        <ListControls visibleIds={visibleIds} selectedIds={api.s.selectedIds} wrap={api.s.wrap}
+          thumbSize={api.s.thumbSize} toggle={api.toggle} selectVis={api.selectVis} bulk={api.bulk} patch={api.patch} />
+        <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}
+          selectedId={api.s.selectedId} selectedIds={api.s.selectedIds} thumbSize={api.s.thumbSize}
+          collapsed={api.s.collapsed} search={search}
+          select={api.select} setSearch={setSearch} toggle={api.toggle} patch={api.patch}
+          clearFilters={() => { setSearch(""); api.setFilter(ALL_FILTER); }} thumbFor={thumbFor} />
+      </div>
       <CompareView pair={selected} rootName={api.s.rootName} rootRef={api.rootRef}
         zoom={api.s.zoom} sync={api.s.sync} autoNext={api.s.autoNext}
         patch={api.patch} decide={api.decide} copyPath={copyPath} />
@@ -142,9 +149,7 @@ function handle(act: NonNullable<ReturnType<typeof keyToAction>>, api: Selection
   if (act === "approve" && id) return api.decide(id, "approved");
   if (act === "decline" && id) return api.decide(id, "declined");
   if (act === "zoom") return api.patch({ zoom: api.s.zoom === "fit" ? "full" : "fit" });
-  const at = api.visible.findIndex((v) => v.pairId === id);
-  const next = act === "next" ? api.visible[at + 1] : api.visible[at - 1];
-  if (next) api.select(next.pairId);
+  api.move(act === "next" ? 1 : -1);
 }
 
 async function copy(relPath: string, api: SelectionApi): Promise<void> {
