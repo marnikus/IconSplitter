@@ -13,7 +13,7 @@ function pair(id: string, created: number, generated: number | null, dir = "a", 
   };
 }
 
-const ALL: ListFilter = { date: { mode: "all" }, status: "all", search: "" };
+const ALL: ListFilter = { date: { mode: "all" }, status: "all", search: "", pairing: "all" };
 
 // Oct 1, Oct 15, Sep 20 pairs
 const P1 = pair("p1", T("2026-10-01T08:00:00Z"), T("2026-10-01T09:00:00Z"));
@@ -59,8 +59,28 @@ describe("applyFilters", () => {
   });
 
   it("filters combine with AND semantics", () => {
-    const f: ListFilter = { date: { mode: "month", month: "2026-10" }, status: "approved", search: "" };
+    const f: ListFilter = { date: { mode: "month", month: "2026-10" }, status: "approved", search: "", pairing: "all" };
     expect(applyFilters(PAIRS, f).map((p) => p.pairId)).toEqual(["p2"]);
+  });
+});
+
+describe("pairing filter — missing-pair states (spec V2 §8)", () => {
+  it("all keeps complete and incomplete pairs", () => {
+    expect(applyFilters(PAIRS, { ...ALL, pairing: "all" })).toHaveLength(3);
+  });
+
+  it("incomplete keeps only pairs with a missing side", () => {
+    expect(applyFilters(PAIRS, { ...ALL, pairing: "incomplete" }).map((p) => p.pairId)).toEqual(["p3"]);
+  });
+
+  it("complete drops pairs with a missing side", () => {
+    expect(applyFilters(PAIRS, { ...ALL, pairing: "complete" }).map((p) => p.pairId)).toEqual(["p1", "p2"]);
+  });
+
+  it("combines with the status filter (declined AND incomplete)", () => {
+    const f: ListFilter = { ...ALL, status: "declined", pairing: "incomplete" };
+    expect(applyFilters(PAIRS, f).map((p) => p.pairId)).toEqual(["p3"]);
+    expect(applyFilters(PAIRS, { ...f, status: "approved" })).toHaveLength(0);
   });
 });
 

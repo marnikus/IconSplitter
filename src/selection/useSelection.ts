@@ -12,17 +12,20 @@ import { sortPairs, type SortState } from "../lib/reviewsort";
 import type { Decision } from "../lib/reviewfilter";
 import { pickDirectory, fsSupported } from "../batch/picker";
 import { loadHandles, saveHandles } from "../batch/store";
+import { bulkMessage } from "../lib/reviewbulk";
 import { loadDecisions, saveDecisions } from "./reviewstore";
 import { loadUndoSave, saveUndoSave } from "./undostore";
 import {
   applyScan, applyUndoOut, bulkDecide, bulkReset,
   initialSelState, moveActive, nextPendingId, pushUndo, reconcileActive,
-  selectVisible, toggleSelect, withDecision, type SelState,
+  selectVisible, toggleSelect, withBulkDecision, withDecision,
+  type BulkOut, type SelState,
 } from "./state";
 import { redoOnce, undoOnce } from "../lib/undo";
 
 const HANDLE_KEY = "__selection__";
 const WATCH_MS = 30_000;
+const WRITE_WARN = "Decision file could not be written. Your pending change is retained in memory.";
 
 interface Ctx {
   root: { current: DirHandleLike | null };
@@ -57,6 +60,7 @@ function useFlowActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     rescan: useCallback(() => rescan(ctx, setS, say), [ctx, setS, say]),
     decide: useCallback((id: string, d: Decision) => decide(ctx, setS, id, d), [ctx, setS]),
     bulk: useCallback((d: Decision) => bulk(ctx, setS, say, d), [ctx, setS, say]),
+    decideBulk: useCallback((ids: string[], d: Decision) => decideBulk(ctx, setS, ids, d), [ctx, setS]),
     reset: useCallback((id: string) => resetFlow(ctx, setS, say, [id]), [ctx, setS, say]),
     bulkResetSel: useCallback(() => resetFlow(ctx, setS, say, selectedVisible(ctx)), [ctx, setS, say]),
     undo: useCallback(() => stepHistory(ctx, setS, "undo"), [ctx, setS]),
@@ -200,23 +204,49 @@ function bulk(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void, d: 
   void persist(ctx, setS, next);
 }
 
+/** V2 bulk: one transition, one write, ONE toast (spec V2 §6); also recorded
+ * on the global timeline so it stays undoable like every other change. */
+function decideBulk(ctx: Ctx, setS: Setter, ids: string[], d: Decision): void {
+  const out = withBulkDecision(ctx.state.current, ids, d, new Date().toISOString());
+  if (out.applied.length === 0) {
+    setS(out.state);
+    return nothingApplied(setS, out, d); // honest no-op, never a fake success
+  }
+  const next = pushUndo(out.state, "decisions", out.state.records);
+  commitTimeline(ctx, setS, next);
+  void reportBulk(ctx, setS, { state: next, out }, d);
+}
+
+function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
+  const msg = bulkMessage({ decision: d, applied: 0, skipped: out.skipped.length, saved: true });
+  setS((p) => ({ ...p, toast: { msg, err: true } }));
+}
+
+interface BulkJob { state: SelState; out: BulkOut }
+
+async function reportBulk(ctx: Ctx, setS: Setter, job: BulkJob, d: Decision): Promise<void> {
+  const saved = await persist(ctx, setS, job.state);
+  const msg = bulkMessage({ decision: d, applied: job.out.applied.length, skipped: job.out.skipped.length, saved });
+  setS((p) => ({ ...p, toast: { msg, err: !saved } }));
+}
+
 function move(ctx: Ctx, setS: Setter, dir: 1 | -1): void {
   const s = ctx.state.current;
   const visibleIds = sortPairs(applyFilters(s.pairs, s.filter), s.sort).map((v) => v.pairId);
   setS((p) => moveActive(p, visibleIds, dir));
 }
 
-async function persist(ctx: Ctx, setS: Setter, s: SelState): Promise<void> {
+/** Writes the decision file; resolves false when memory and disk disagree. */
+async function persist(ctx: Ctx, setS: Setter, s: SelState): Promise<boolean> {
   const root = ctx.root.current;
-  if (!root) return;
+  if (!root) return true; // no root yet: in-memory review only
   try {
     await saveDecisions(root, s.records);
     setS((p) => ({ ...p, writeWarn: null, awaitingRetry: 0 }));
+    return true;
   } catch {
-    setS((p) => ({
-      ...p, writeWarn: "Decision file could not be written. Your pending change is retained in memory.",
-      awaitingRetry: p.awaitingRetry + 1,
-    }));
+    setS((p) => ({ ...p, writeWarn: WRITE_WARN, awaitingRetry: p.awaitingRetry + 1 }));
+    return false;
   }
 }
 

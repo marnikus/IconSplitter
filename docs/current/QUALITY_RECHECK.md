@@ -251,3 +251,120 @@ standalone.
 ## Known debt carried
 
 Same two legacy items (`App.tsx`, `detect.ts`); nothing new.
+
+---
+
+# Quality re-check — 2026-10-01 (Selection review V2)
+
+Full re-check after adding the fourth Workbench mode (Selection V2), the three
+new pure lib modules and the shared surfaces extracted out of V1.
+
+## What changed
+
+* New: `src/selectionv2/*` (11 files) — template-driven list review, bulk bar,
+  zoom slider, filter grid, pair rows with both thumbnails.
+* New pure lib: `reviewselect.ts` (checkbox selection), `reviewbulk.ts`
+  (eligibility, bulk scope, one summary line), `reviewprefs.ts` (zoom range +
+  persisted view prefs).
+* Extracted from V1 into shared modules (no second copy): `Surfaces.tsx`
+  (banner / corrupt note / toast / busy), `hotkeys.ts` (A/D/arrows/Space),
+  `copypath.ts` (Explorer-path fallback). `SelectionPanel.tsx` 158 → 109 lines.
+* Extended: `reviewfilter.ts` (`pairing` filter), `selection/state.ts`
+  (`withBulkDecision`), `useSelection.ts` (`decideBulk`, `persist` → boolean),
+  `thumbs.ts` (`useSideThumbs`), `fmt.ts` (`fmtDate` / `fmtTime`),
+  `StatusFooter.tsx` (skin class), `Workbench.tsx` (4th tab), `index.css`
+  (+460 lines of V2 design tokens/classes; CSS is outside the TS gate).
+* TDD: 7 new + 2 extended test files, written before the code they cover.
+
+## The numbers (measured)
+
+| Lane | Command | Result |
+|---|---|---|
+| Types | `npx tsc --noEmit` | clean |
+| Lint | `npm run lint` | 0 errors, 8 warnings — all pre-existing (`App.tsx` cc 15, `detect.ts` cc 11/14/32, `no-explicit-any` ×2) |
+| Quality gate | `node tools/quality.mjs --allow-legacy` (ALL files) | **GATE PASSED** |
+| Tests | `npm test` | **30 files / 207 tests passed** (was 23 / 126) |
+| Coverage | `npm run coverage` | `src/lib` lines **96.55%**, branches 91.78% (threshold 80%) |
+| Build | `npm run build` | single-file `dist/index.html` 467.99 kB (gzip 139.26 kB) |
+| Duplication | `npx jscpd src --min-tokens 60` | 1 clone — the pre-existing `SIZES` table in `App.tsx` / `PresetBar.tsx` |
+| Dead code | `npx knip` | **blocked** — `oxc-parser` dies with `RangeError: Array buffer allocation failed` in this sandbox; substituted an export-by-export consumer check (every new export has a consumer outside its own module) |
+
+New/changed files, all inside the RULE 16 fail lines and the RULE 18 ideals:
+
+| File | Lines | Fns | File | Lines | Fns |
+|---|---:|---:|---|---:|---:|
+| `lib/reviewselect.ts` | 32 | 7 | `selectionv2/ThumbPair.tsx` | 93 | 10 |
+| `lib/reviewbulk.ts` | 64 | 9 | `selectionv2/ReviewRow.tsx` | 99 | 15 |
+| `lib/reviewprefs.ts` | 66 | 7 | `selectionv2/BulkBar.tsx` | 110 | 12 |
+| `lib/reviewfilter.ts` | 71 | 10 | `selectionv2/FilterGrid.tsx` | 147 | 23 |
+| `selection/copypath.ts` | 18 | 1 | `selectionv2/SelectionV2Panel.tsx` | 156 | 27 |
+| `selection/hotkeys.ts` | 58 | 5 | `selectionv2/ReviewList.tsx` | 83 | 6 |
+| `selection/Surfaces.tsx` | 68 | 3 | `selectionv2/SourceBar.tsx` | 69 | 6 |
+| `selectionv2/prefsstore.ts` | 20 | 2 | `selectionv2/useSelectionV2.ts` | 60 | 20 |
+| `selectionv2/SegButton.tsx` | 20 | 1 | `selectionv2/ZoomSlider.tsx` | 26 | 2 |
+
+New `src/lib` modules are at **100%** statements / branches / lines. The
+`src/lib` average sits below the historical "100%" note above because of
+pre-existing gaps this change did not touch (`dom.ts` 0%, `naming.ts` 88%,
+`output.ts` 88%); every file this change added or edited in `src/lib` is at
+100%.
+
+## Baseline decision
+
+**Untouched.** `tools/quality_baseline.json` records only the legacy hotspots
+(`App.tsx`, `lib/detect.ts`, `lib/render.ts`, `main.tsx`, `utils/cn.ts`) and
+none of them grew — `App.tsx` and `detect.ts` were not modified at all, and
+`SelectionPanel.tsx` shrank. No re-record was needed or performed.
+
+## Accepted debt / notes
+
+* `docs/current/SYSTEM_OF_RECORD.md` is now 361 lines, above the RULE 18 ideal
+  for context files. RULE 17 forbids a second current doc, so all four modes'
+  authoritative behaviour stays in one file; the reason is recorded in the file
+  header. Per-mode design detail lives in `docs/archive/` instead.
+* `node tools/quality.mjs --changed` needs a revision to diff against:
+  `git merge-base origin/main HEAD` fails in this checkout (unrelated
+  histories), so the gate falls back to `HEAD~1`. Both the full-tree gate and
+  `npm run verify` (which runs the `--changed` lane against the new commit's
+  parent) were run and passed.
+* The V2 rows use `role="list"` / `role="listitem"` rather than the template's
+  `role="listbox"` / `option`: an `option` may not contain the checkbox and
+  four buttons every row has. Recorded in
+  `docs/archive/2026-10-01-selection-v2/design.md`.
+
+---
+
+# Quality re-check — 2026-10-01 (merge: Selection V2 tab + undo timeline integration)
+
+Merged `arena/01a0f6f6-iconsplitter` (Selection V2) into this branch. The two
+features integrated instead of colliding:
+
+## What changed (integration work on top of both sides)
+
+* `useSelection.ts` — V2's `decideBulk` now pushes a `decisions` entry on the
+  global timeline before its one write + one toast (every change stays
+  undoable, RULE 12); `reportBulk` takes a `{state, out}` job (≤4 params)
+* `hotkeys.ts` — one owner gains `ctrlChord` (Ctrl+K search focus; Ctrl+Z /
+  Ctrl+Shift+Z / Ctrl+Y undo/redo, inert in fields) used by BOTH panels, and
+  `runHotAction` prefers the hook-level `move` when present so V1's wrap
+  setting keeps working (no-wrap fallback preserved for V2's tests)
+* `SelectionV2Panel.tsx` — passes V1's new `reset` prop to the shared
+  `CompareView`; Ctrl chords wired
+* `SelectionPanel.tsx`, README, SYSTEM_OF_RECORD, QUALITY_RECHECK stitched by
+  union; `pairing` filter rides in via `reviewfilter.ts`
+
+## The numbers (measured)
+
+* Tests: **245 passed** (35 files; was 164 / 28 here, 207 / 30 on V2)
+* Lanes: tsc ✓ · eslint 0 errors · `--changed --allow-legacy`
+  **GATE PASSED** after two first-pass fixes (runHotAction cc 11 → navigate
+  helper; reportBulk 5 → 4 params)
+* `npm run verify` — ALL LANES PASSED
+
+## Baseline decision
+
+**Not re-recorded** — no legacy hotspot grew.
+
+## Known debt carried
+
+Same two legacy items (`App.tsx`, `detect.ts`); nothing new.
