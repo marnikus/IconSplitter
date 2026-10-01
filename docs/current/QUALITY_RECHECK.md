@@ -345,9 +345,10 @@ active}`, read back by `state/apply.ts`). Touched: `ReviewRow`, `ReviewList`,
 
 ## RULE 18 — ideal sizes
 
-`ui/HistoryPanel.tsx` 98 lines (five components: the dialog shell, header,
-action row, list, `useEscape`), `ui/HistoryBar.tsx` 57 (bar + `StepButton`),
-`selectionv2/BulkBar.tsx` 122. Nothing new exceeds 150 lines, and the gate
+`ui/HistoryPanel.tsx` 87 lines (five components: the dialog shell, header,
+action row, list, `useEscape`), `ui/HistoryBar.tsx` 54 (bar + `StepButton`),
+`selectionv2/BulkBar.tsx` 133, `selectionv2/useSelectionV2.ts` 113,
+`lib/reviewselect.ts` 58. Nothing touched exceeds 150 lines, and the gate
 confirms no function crosses 30 body lines, 4 parameters, CC 10 or nesting 4.
 The bar and the window were both split into sub-components after the first gate
 run flagged `HistoryBar` at 36 and `HistoryPanel` at 42 body lines.
