@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has two modes:
+It has four modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -18,6 +18,13 @@ It has two modes:
   sort) and survives reloads. Filters by month/date range/status, sorting,
   search, and hotkeys: A/D decide, ↑↓/W/S navigate, Space zoom, Ctrl+K search,
   Ctrl+Z / Ctrl+Shift+Z undo/redo. Also Chrome/Edge only.
+* **Selection V2** — the same review data in a denser, table-like layout:
+  a full-width list where every row shows the original and the AI result side
+  by side, a thumbnail zoom slider (48–240 px, remembered between sessions),
+  checkboxes with select-all, and **Approve selected** / **Approve visible
+  list** for bulk decisions. A second layout switches to the large
+  side-by-side comparison. Shares the global undo/redo timeline (Ctrl+Z works
+  here too). Also Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
@@ -139,6 +146,45 @@ removed between runs are detected and reported.
 
 ---
 
+## Selection V2 (Chrome / Edge only)
+
+The **Selection V2** tab reviews the same pairs as **Selection**, but as a
+fast bulk-review table. Both tabs share one root folder, one set of decisions
+and one `review-decisions.json`.
+
+1. **Choose source folder** (or **↻ Rescan**) — the folder is walked
+   recursively; every `name.ext` is paired with its `name_AI.ext`. Files
+   without a partner stay visible as **AI result missing** / **Original
+   missing** instead of disappearing.
+2. **Zoom** — drag the `ZOOM` slider to set the maximum thumbnail height in
+   pixels (48–240, default 84). Row height and both thumbnails resize while
+   you drag, the aspect ratio is preserved, and the value is remembered the
+   next time you open the app.
+3. **Select** — tick individual rows, use the header checkbox (it shows a
+   mixed state when only some rows are ticked), **Select visible** or
+   **Deselect all**. Selection is independent of the review status and
+   survives filtering and sorting; rows hidden by a filter are counted and
+   never changed behind your back.
+4. **Approve in bulk** — **✓ Approve selected (n)** or **✓ Approve visible
+   list (n)**. The count is part of the button, the button asks you to confirm
+   before writing, and the whole batch produces a single message such as
+   `12 pairs approved · 2 skipped (incomplete or gone)`.
+5. **Decide one by one** — click a row to make it the *active* row (highlighted
+   with a violet bar), then press **A** to approve or **D** to decline. With
+   **Next pending after a decision** on, the active row jumps to the next
+   unreviewed pair; **↑ / ↓** move it manually.
+6. **Filter and sort** — date mode (All / Month / Range with From and To),
+   status, pairing (complete or missing pair), sort by created date, status,
+   filename or path, and **× Clear filters**.
+7. **Comparison layout** — switch to *Comparison* for a large side-by-side
+   view of the active pair with dimensions, format, size and path per side.
+
+Decisions are written to `review-decisions.json` in the source folder. If the
+file cannot be written, the decisions stay in memory, a warning explains what
+happened, and **↻ Retry write** saves them once the folder is writable again.
+
+---
+
 ## Project rules (code quality)
 
 Every change to this codebase must follow the code-quality rules in
@@ -167,8 +213,10 @@ IconSplitter/
 ├── src/
 │   ├── main.tsx             # React bootstrap
 │   ├── App.tsx              # Single-sheets UI
-│   ├── ui/Workbench.tsx     # Mode shell — Single sheets / Batch folders tabs
+│   ├── ui/Workbench.tsx     # Mode shell — sheets / batch / selection / V2 tabs
 │   ├── batch/               # Batch mode (store, process, presets, UI)
+│   ├── selection/           # Selection review (state, decision IO, V1 UI)
+│   ├── selectionv2/         # Selection V2 (list review, bulk bar, zoom)
 │   ├── lib/                 # Pure logic: detect, render, naming, scan, fs,
 │   │                        # statefile, presets, output plan, batchsplit
 │   └── lib/render.ts        # Cropping / resizing / export logic

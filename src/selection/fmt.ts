@@ -14,6 +14,17 @@ export function fmtLong(ts: number): string {
   return `${mon} ${String(d.getDate()).padStart(2, "0")}, ${d.getFullYear()} at ${hhmm(d)}:${ss(d)}`;
 }
 
+/** "2026-09-28" — V2 row date cell. */
+export function fmtDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** "14:12" — V2 row time sub-line (24-hour local clock). */
+export function fmtTime(ts: number): string {
+  return hhmm(new Date(ts));
+}
+
 /** "18.6 MB" / "512 KB". */
 export function fmtBytes(n: number): string {
   if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;

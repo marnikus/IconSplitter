@@ -103,8 +103,10 @@ doc in the same change (RULE 17).
 
 | Test id | Visible text | Notes |
 |---|---|---|
-| `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with `tab-batch` |
+| `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with the others |
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
+| `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
+| `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` (template design, §N) |
 
 Semantic fallback: button role + visible text.
 
@@ -196,6 +198,59 @@ Surfaces: `sel-writewarn` + `sel-retry` (atomic-write failure banner),
 `sel-corrupt`, `sel-toast`, `sel-busy`, `sel-footer` with `sel-rescan-age`,
 `sel-diff` (+new/renamed/removed/unchanged), `sel-retry-count`,
 `sel-progress`; empty-root states `sel-root-empty`, `sel-unsupported`.
+
+## N. Selection review V2 — `src/selectionv2/*` (verified 2026-10-01)
+
+Source bar + layout switch:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `v2-root` | path pill button | shows the root name, opens the picker; label mirrors state (RULE 24) |
+| `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
+| `v2-watcher` | watcher pill | toggles the 30 s auto-rescan |
+| `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
+| `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
+
+Filter grid (`v2-filters`): `v2-date-all` / `v2-date-month` / `v2-date-range`,
+`v2-from` (month **or** datetime-local, disabled when the mode is All),
+`v2-to` (Range only), `v2-status`, `v2-pairing` (all / complete / missing
+pair), `v2-sort`, `v2-dir`, `v2-shown` ("Showing N pairs"), `v2-clear`.
+
+Bulk bar (`v2-bulk`):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `v2-check-all` | header checkbox | checked / unchecked / **indeterminate** |
+| `v2-selected-count` | `N selected` | checked rows, independent of the filters |
+| `v2-scope` | `across N visible pairs` | the scope "Select visible" and bulk act on |
+| `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
+| `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
+| `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
+| `v2-thumb` | `<input type="range">` | 48–240 px, step 4; `aria-label="Thumbnail maximum height"` |
+| `v2-thumb-value` | `<output>` | live `128 px` readout (RULE 24) |
+| `v2-approve-selected` / `v2-approve-visible` | buttons | label carries the affected count, then arms (`Confirm approve 3?`); disabled at 0 |
+| `v2-cancel-bulk` | button | shown while armed; Escape also disarms |
+
+List review (`v2-list`, rows in `v2-rows` with `role="list"`):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `v2-row-{pairId}` | row (`role="listitem"`) | `aria-current="true"` + roving `tabIndex` on the active row |
+| `v2-check-{pairId}` | row checkbox | `aria-label="Select {base}"`; checking does not move the active row |
+| `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers | each carries an `Original` / `AI result` tag; missing side or decode failure → `role="img"` placeholder with an aria-label |
+| `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
+| `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
+| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copy-path fallback |
+| `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
+| `v2-autonext` | checkbox | advance to the next pending after a decision |
+| `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
+
+Comparison layout: `v2-pair-picker` (labelled `<select>` of the visible pairs)
+plus the V1 `sel-compare` handles (§M). Shared surfaces keep their `sel-*`
+handles in both tabs: `sel-footer`, `sel-diff`, `sel-rescan-age`,
+`sel-retry-count`, `sel-progress`; V2 skins its own banners and overlays with
+`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy`, and the
+empty-root states `v2-root-empty` / `v2-unsupported`.
 
 ## J. Handles still needed (to be added on demand)
 
