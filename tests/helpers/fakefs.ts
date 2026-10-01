@@ -46,4 +46,14 @@ export class FakeDir implements DirHandleLike {
   async *entries(): AsyncIterableIterator<[string, FakeDir | FakeFile]> {
     for (const [k, v] of this.children) yield [k, v] as [string, FakeDir | FakeFile];
   }
+  async removeEntry(n: string): Promise<void> {
+    if (!this.children.delete(n)) throw new DOMException("Not found", "NotFoundError");
+  }
+}
+
+/** FakeFile whose createWritable rejects — for failure-path tests. */
+export class BrokenFile extends FakeFile {
+  async createWritable(): Promise<never> {
+    throw new Error("disk full");
+  }
 }

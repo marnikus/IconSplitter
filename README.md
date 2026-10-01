@@ -11,6 +11,10 @@ It has two modes:
 * **Batch folders** — point the app at a folder tree of `*_AI` sheets and let
   it scan, review, split and write everything in one pass, preserving your
   folder hierarchy (see below). Batch mode requires **Chrome or Edge**.
+* **Selection** — review every original next to its `_AI` result, approve or
+  decline each pair, and keep the decisions in `review-decisions.json`
+  (filters by month/date range, sorting, search, hotkeys A/D). Also
+  Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

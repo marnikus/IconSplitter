@@ -4,8 +4,9 @@
 import { useState } from "react";
 import App from "../App";
 import BatchPanel from "../batch/BatchPanel";
+import SelectionPanel from "../selection/SelectionPanel";
 
-type Mode = "sheets" | "batch";
+type Mode = "sheets" | "batch" | "selection";
 
 export default function Workbench() {
   const [mode, setMode] = useState<Mode>("sheets");
@@ -15,9 +16,12 @@ export default function Workbench() {
         <div className="mx-auto flex max-w-7xl gap-2">
           <TabBtn active={mode === "sheets"} onClick={() => setMode("sheets")} testid="tab-sheets" label="Single sheets" />
           <TabBtn active={mode === "batch"} onClick={() => setMode("batch")} testid="tab-batch" label="Batch folders" />
+          <TabBtn active={mode === "selection"} onClick={() => setMode("selection")} testid="tab-selection" label="Selection" />
         </div>
       </nav>
-      {mode === "sheets" ? <App /> : <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
+      {mode === "sheets" && <App />}
+      {mode === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
+      {mode === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
     </div>
   );
 }

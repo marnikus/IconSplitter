@@ -23,6 +23,7 @@ export interface DirHandleLike {
   getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandleLike>;
   getFileHandle(name: string, opts?: { create?: boolean }): Promise<FileHandleLike>;
   entries(): AsyncIterable<[string, DirHandleLike | FileHandleLike]>;
+  removeEntry?(name: string): Promise<void>; // real FS handles provide this
 }
 
 /** Recursively snapshots a directory into a TreeNode (files get size/mtime). */

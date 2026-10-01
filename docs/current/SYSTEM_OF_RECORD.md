@@ -6,7 +6,7 @@ Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.m
 
 ## 1. What this is
 
-A browser app with two modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with three modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -15,6 +15,9 @@ A browser app with two modes (top tabs, `src/ui/Workbench.tsx`):
    folder, recursively scan every `*_AI*` image, review and select them, split
    each into its own organised output tree beside the sources, with presets
    and per-reference JSON status tracking.
+3. **Selection** (Chrome/Edge only) — recursively scan a root, pair every
+   original with its `_AI` result, review them side by side and store an
+   approve/decline decision per pair in `review-decisions.json`.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
@@ -52,6 +55,26 @@ Batch folders:
   scan and batch; corrupt payloads are rejected and rebuilt (RULE 13).
 * "Open in File Explorer" is impossible from a browser — the action copies the
   path and says so honestly (RULE 4/9).
+
+Selection:
+
+* Recursive scan pairs `name.ext` with `name_AI.ext` / `name_AI_<n>.ext`
+  (stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
+  "AI result missing" / "Original missing", never silently dropped.
+* Review list: thumbnail, filename, relative folder, creation date, status
+  chip with text + glyph; search, month / custom-range date filters, status
+  filter, sorting by date/status/name/path in both directions, counters.
+* Comparison: side-by-side panes with preserved aspect ratio, dims / format /
+  size / path per side, 1:1 zoom with synced scrolling, hotkeys A/D/arrows/
+  Space/Ctrl+K, auto-advance to the next pending after each decision.
+* Decisions persist in `<root>/review-decisions.json` (atomic tmp-verify-
+  overwrite protocol); missing file is created pending; corrupt file raises a
+  warning and previous in-memory decisions are kept; write failures keep the
+  change in memory with a Retry action.
+* Rescan diffs added/renamed/removed/unchanged; decisions travel across
+  renames via size+mtime identity; orphan records are retained so a
+  transiently missing file never destroys a decision.
+* A watcher re-scans every 30 s while a root is open (toggleable).
 
 Everything runs client-side; nothing is uploaded anywhere.
 
@@ -137,6 +160,12 @@ Batch:
   are replaced with fresh valid state, never fatal.
 * **I-11 (batch, RULE 1/3):** pixel math in batch mode reuses `lib/detect` +
   `lib/render` through `splitSheet` — no second detection implementation.
+* **I-12 (selection, RULE 13):** a corrupt or unwritable decision file never
+  destroys decisions — in-memory records win, the user is warned, retry offered.
+* **I-13 (selection, RULE 4):** "generated" never implies "approved"; a pair
+  without a stored decision is pending, always.
+* **I-14 (selection, a11y):** every status is text + glyph first; colour is
+  reinforcement, never the only signal.
 
 ## 6. Storage map
 
@@ -147,6 +176,8 @@ Batch:
 | IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
 | `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
+| `<root>/review-decisions.json` | selection approve/decline records | atomic write; corrupt → warn + keep memory (I-12) |
+| IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle | permission re-requested on restore |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -165,13 +196,16 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
+| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing, filters, sorts, status/hotkey semantics, decision records |
+| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, review UI |
 
-Direction: UI → batch → lib, never upwards (RULE 1, RULE 3).
+Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 14 files / 68 tests; canvas shims serve synthetic pixels,
-in-memory fakes implement the FS handle interfaces):
+Exists (`tests/`, 23 files / 123 tests; canvas shims serve synthetic pixels,
+in-memory fakes implement the FS handle interfaces, one happy-dom smoke test
+renders the Selection panel and drives it with hotkeys):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
@@ -187,6 +221,14 @@ in-memory fakes implement the FS handle interfaces):
 * `process.test.ts` — full output tree, deleted/failed isolation, stop, ref copy
 * `statewrite.test.ts` — per-reference JSON write, missing retention, corrupt replace
 * `store.test.ts` — preset persistence, corrupt rejection, last-used name
+* `pairing.test.ts` — nested pairing, variants, duplicates, unpaired sides, ids
+* `reviewfilter.test.ts` — month/custom ranges (inclusive, either anchor), status+search
+* `reviewsort.test.ts` — all sort modes × directions, status meta, hotkeys
+* `reviewfile.test.ts` — corrupt/valid parse, orphans, rename carry, diff
+* `reviewstore.test.ts` — missing/corrupt load, atomic write + failure path
+* `selection_state.test.ts` — applyScan/withDecision/nextPending/counters
+* `handles.test.ts`, `fmt.test.ts` — path resolution, formatters
+* `selection_ui.test.tsx` — DOM smoke: pick → list → A/D hotkeys → text chips
 
 Must exist before the matching change ships:
 
@@ -216,6 +258,9 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
 * 2026-10-01 — batch processing designed TDD-first:
   `docs/archive/2026-10-01-batch-processing/design.md` (module map, browser
   constraints, rule budget, negative tests).
+* 2026-10-01 — Selection review designed TDD-first:
+  `docs/archive/2026-10-01-selection-review/design.md` (pairing model, atomic
+  decision protocol, rename carry, hotkeys, a11y).
 
 ## 11. Current UI — control inventory
 
@@ -229,3 +274,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
   info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
   reference warnings, busy overlay, toast.
+* Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
+  help), FilterBar (date modes + From/To, status, sort, order, clear), review
+  list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,
+  Approve/Decline, 1:1/SYNC, per-side Open-in-Explorer), status footer
+  (`sel-footer`), write/corrupt banners, busy + toast.

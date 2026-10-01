@@ -16,4 +16,10 @@
   .panel-title {
     @apply mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300;
   }
+  .sel-input {
+    @apply ml-1 rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-xs text-slate-100 focus:outline-2 focus:outline-indigo-400;
+  }
+  .sel-focus {
+    @apply focus:outline-2 focus:outline-indigo-400;
+  }
 }

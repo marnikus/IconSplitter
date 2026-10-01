@@ -129,3 +129,41 @@ Same two items as 2026-09-30 (`App` split on first functional touch;
 `detect()` cc 32 extraction). No new debt accepted — all batch code is
 gate-clean at introduction, including RULE 18 (no file > 300 lines, no function
 > 30 LOC, context objects instead of >4 params).
+
+---
+
+# Quality re-check — 2026-10-01 (Selection review, TDD)
+
+Third re-check, same day: the Selection mode shipped (design:
+`docs/archive/2026-10-01-selection-review/design.md`), test-first. 5 new pure
+lib modules, 12 new selection modules, 10 new test files (incl. one happy-dom
+component smoke).
+
+## What changed
+
+* `src/lib/` +5: `pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`,
+  `reviewmeta.ts`, `reviewfile.ts`; `fs.ts` grew an optional `removeEntry`
+* `src/selection/` +12: `state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`,
+  `thumbs.ts`, `useSelection.ts`, six components
+* `src/ui/Workbench.tsx` — third tab `tab-selection` ("Selection")
+* Legacy hotspots untouched (App.tsx still 588 lines).
+
+## The numbers (measured, not estimated)
+
+* Tests: **123 passed** (23 files; was 68 / 14)
+* Coverage `src/lib`: **lines 95.76%** (threshold ≥ 80%)
+* Lanes: tsc ✓ · eslint 0 errors (warnings only in legacy App/detect) ·
+  gate strict run fails only the 3 baseline-held files ·
+  `--changed --allow-legacy` **GATE PASSED** · build ✓
+* `dist/index.html`: 409.55 kB (gzip 122.03 kB)
+* First-pass gate violations on new code (validRecord cc 11, three JSX fns
+  34–39 LOC) were refactored in the same change until the gate passed.
+
+## Baseline decision
+
+**Not re-recorded** — legacy values unchanged; all new files pass the hard
+lines standalone (largest new file 153 LOC).
+
+## Known debt carried
+
+Same two legacy items; nothing new.

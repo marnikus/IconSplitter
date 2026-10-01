@@ -153,6 +153,39 @@ Review window (scan table) — `scan-table` panel:
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.
 
+## M. Selection review — `src/selection/*` (verified 2026-10-01)
+
+Header + status:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `sel-root` | root picker button | label mirrors state (`Root: {name}`), RULE 24 |
+| `sel-rescan` | `↺ Rescan` | re-walks the root |
+| `sel-watcher` | watcher pill | toggles the 30 s auto-rescan |
+| `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
+| `sel-help` | `?` popover | keyboard reference |
+
+Filter bar (`sel-filterbar`): `sel-date-all` / `sel-date-month` / `sel-date-custom`,
+`sel-month` (month input), `sel-from` / `sel-to` (datetime-local, inclusive),
+`sel-status`, `sel-sort` (date/status/name/path), `sel-dir` (newest/oldest),
+`sel-clear`, `sel-shown` ("Showing N pairs").
+
+Review list (`sel-list`): `sel-search` (Ctrl+K focuses), `sel-attention`
+("N NEED ATTENTION"), `sel-expand` / `sel-collapse`, `sel-row-{pairId}`
+(rows carry text status chips — never colour alone), `sel-empty`,
+`sel-clear-empty`.
+
+Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (1:1 fit/full,
+Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,
+`sel-autonext`, `sel-open-src` / `sel-open-ai` (copy-path fallback),
+`sel-missing` (absent side / decode failure), `sel-discovery`
+(created/generated line).
+
+Surfaces: `sel-writewarn` + `sel-retry` (atomic-write failure banner),
+`sel-corrupt`, `sel-toast`, `sel-busy`, `sel-footer` with `sel-rescan-age`,
+`sel-diff` (+new/renamed/removed/unchanged), `sel-retry-count`,
+`sel-progress`; empty-root states `sel-root-empty`, `sel-unsupported`.
+
 ## J. Handles still needed (to be added on demand)
 
 | Handle | Where | Needed when |
