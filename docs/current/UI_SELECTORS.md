@@ -362,7 +362,7 @@ Bulk bar (`svg-bulk`):
 | `svg-thumb` | `input[type=range]` | thumbnail height; `svg-thumb-value` is the live readout |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
+| `svg-generate-selected` | button | opens the confirm dialog (`svg-confirm`, below) — nothing is sent until its **Generate now**; disabled at 0 selected or while a run is in flight |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress |
 
@@ -398,7 +398,7 @@ Dialogs:
 |---|---|
 | `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
 | `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
-| `svg-confirm-sampling` | text | the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") |
+| `svg-confirm-sampling` | text — the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") |
 | `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |

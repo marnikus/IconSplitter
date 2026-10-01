@@ -22,6 +22,8 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 | `archive/2026-10-01-generate-svg/design.md` | Generate SVG: approved-only discovery, contact-sheet batching, validation, sidecar versioning |
 | `archive/2026-10-01-svg-preview-cost/design.md` | SVG preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |
 | `archive/2026-10-01-svg-preview-rendering/design.md` | SVG preview: root cause of "copies but paints nothing", the sanitize/fit/inline pipeline, id scoping, rejected alternatives |
+| `archive/2026-10-01-history-session/design.md` | Session restore, reset-to-pending and the one global undo timeline (§12 of the system of record) |
+| `archive/2026-10-01-svg-confirm-global-log/design.md` | **Design only — not implemented.** SVG confirm popup that shows the exact request (one builder, preview = payload) and a global docked log (ownership, schema, redaction, retention, follow-scroll, TDD plan); seven sibling files in the same folder |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

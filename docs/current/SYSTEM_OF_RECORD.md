@@ -476,6 +476,10 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   `docs/archive/2026-10-01-svg-preview-cost/design.md` (preview-only frame and
   the contrast rule, one cost decision with a versioned rate card, cost basis +
   pricing version in the sidecar).
+* 2026-10-01 — SVG confirmation preview + global log **designed, not implemented**
+  (TDD-first): `docs/archive/2026-10-01-svg-confirm-global-log/design.md` (one builder so
+  the popup shows the exact request, a module-scope redacting log with a docked UI,
+  module budgets, test plan). Nothing in this document changes until it ships.
 
 ## 11. Current UI — control inventory
 
