@@ -1,7 +1,7 @@
 // TDD cycle 2 — scan: recursive walk with ignore list, AI eligibility,
 // reference linking, and diff of two scans (added/changed/kept/missing).
 import { describe, expect, it } from "vitest";
-import { collectAiImages, diffScan, linkReferences, walkTree, type TreeNode } from "../src/lib/scan";
+import { collectAiImages, countFolders, diffScan, linkReferences, walkTree, type TreeNode } from "../src/lib/scan";
 
 const file = (name: string, size = 100, mtime = 1): TreeNode => ({ name, dir: false, size, mtime });
 const dir = (name: string, ...children: TreeNode[]): TreeNode => ({ name, dir: true, children });
@@ -79,5 +79,12 @@ describe("diffScan — added / changed / kept / missing (spec §6)", () => {
     const curr = linkReferences(collectAiImages(entries), entries);
     const d = diffScan([rec("icon-award-ribbon_AI.png", 101, 999)], curr);
     expect(d.changed).toHaveLength(1);
+  });
+});
+
+describe("countFolders — the 'Recursive · N nested folders' figure (design)", () => {
+  it("counts nested folders and skips the ignored ones", () => {
+    expect(countFolders(tree, [])).toBe(3); // Category-A, Category-A/_split_output, empty
+    expect(countFolders(tree, ["_split_output"])).toBe(2);
   });
 });

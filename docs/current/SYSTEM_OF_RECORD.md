@@ -6,7 +6,8 @@ Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.m
 
 ## 1. What this is
 
-A browser app with three modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with three modes (top bar, `src/ui/Workbench.tsx` — brand
+"Image Operator", tabs, the mode's status pill and a help popover):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -65,18 +66,27 @@ Selection (image review):
   original with its `*_AI` / `*_AI_N` result; one pair per AI file, several AI
   variants of one base share the original. Unpaired sides are listed as
   "AI result missing" / "Original missing" — never hidden.
-* List rows: thumbnail, file name, relative folder, creation date (newest side
-  mtime) and review status. Counters show total / pending / approved / declined
-  and double as the status filter.
+* Header row: the split root, Rescan, "Recursive · N nested folders" and the
+  read-only counters (total / pending / approved / declined).
+* Filter row: DATE FILTER (All / Month / Custom with always-visible From and To
+  datetime controls, prefilled from the data when Custom is first picked),
+  STATUS select, SORT BY select, ORDER select and "Showing N pairs" + Clear
+  filters.
 * Filters: all images, one month (`YYYY-MM`) or a custom From/To range;
   sorting by creation date, review status, filename or folder path, both
   directions; one click clears every filter.
-* Comparison window: Original and AI result side by side, large and
-  aspect-preserving, each labelled with dimensions, format, size and path, each
+* List panel: search (⌘K / Ctrl+K, Esc clears), the sort/filter summary, the
+  "N need attention" figure (missing side or failed thumbnail), rows with
+  thumbnail, file name, relative folder, date and an icon+text badge
+  (Pending / Approved / Declined, or AI result missing / Original missing /
+  Thumbnail failed), plus a footer with Clear filters.
+* Comparison card (inline beside the list): Original and AI result side by side,
+  equal panes, aspect-preserving (`object-contain`) or true pixels at 1:1, each
+  labelled with dimensions, format, size and its full root-relative path, each
   with "Open in File Explorer" (browser-safe path copy). Approve/Decline sit
-  above the AI result; `A`/`D` are the hotkeys, arrows walk the list, Esc
-  closes, and after every decision the window rolls on to the next pending pair
-  (when none is left it closes and says so).
+  above the AI result, the header shows the pair's stable token (`pair_xxxxxxxx`)
+  and a FIT/1:1 sync badge, "Next pending" decides whether a decision rolls on.
+  `A`/`D` decide, `↑`/`↓` walk the list, `Space` toggles fit/1:1, `Esc` closes.
 * Decisions are stored in `<root>/review-decisions.json` (`pair_id`, `source`,
   `ai_result`, `decision`, `reviewed_at`). A missing file is created with every
   pair pending; a corrupt file is reported, left untouched and never silently
@@ -84,6 +94,11 @@ Selection (image review):
   (`review-decisions.corrupt-<stamp>.json`) and start a fresh file.
 * Review status is only what that file says: a `processed` batch status never
   counts as approved.
+* Status bar: index state (ready / watcher paused / scanning), "Last rescan: N
+  seconds ago", the rescan diff (`+new · renamed · removed · unchanged`),
+  decisions still awaiting a write and the "N / M reviewed" progress bar.
+* Watcher: while this tab is open the root is re-scanned every 15 s (toggle in
+  the top bar); a change only raises a toast when something actually changed.
 
 Everything runs client-side; nothing is uploaded anywhere.
 
@@ -124,13 +139,19 @@ Review model (`useReview.ts`):
 
 ```
 root                  FileSystemDirectoryHandle (restored from IndexedDB)
-items: ReviewItem[]   ReviewPair + status(pending|approved|declined) + reviewedAt
-orphans               decision records whose files are gone (kept, listed)
-counts                total / pending / approved / declined
-query                 scope(all|month|range) + status filter + sort(key, dir)
-selectedId            pair open in the comparison window (null = closed)
-fileStatus/fileNote   ok | corrupt | write-error + the honest message
-busy / toast          progress and reporting surfaces (RULE 2/5)
+items               ReviewPair + status(pending|approved|declined) + reviewedAt
+orphans             decision records whose files are gone (kept, listed)
+counts              total / pending / approved / declined
+query               search + scope(all|month|range) + status + sort(key, dir)
+selectedId          pair shown in the comparison card (null = closed)
+zoom                "fit" (object-contain) | "100" (true pixels)
+autoNext            roll on to the next pending pair after a decision
+watcher             auto-rescan every 15 s while the tab is open
+lastScanAt / delta  when the last scan ran and what it changed
+folders             nested folders found (header line)
+unsaved             decisions waiting for a retry write
+fileStatus/fileNote ok | missing | corrupt | write-error + the honest message
+busy / toast        progress and reporting surfaces (RULE 2/5)
 ```
 
 Pair identity: lowercased `folder/base` plus `#variant` for `_AI_N`
@@ -165,15 +186,17 @@ Batch:
 
 Selection:
 
-* **Scan:** root handle → `readDirTree` (ignore list) → `walkTree` →
-  `buildPairs` → `loadAndSync` (reads/creates `review-decisions.json`,
-  reconciles it with the scan) → `applyDecisions` → rows + counters; the rescan
-  note reports `+added / −removed / ~changed / renamed / unchanged`.
-* **Review:** clicking a row opens the comparison window; `useCompare` loads
-  both sides (dimensions/format/size through `loadImageFile`) and revokes the
-  object URLs on change (RULE 20). A/D (or the buttons) call `decide`, which
-  updates the list and counters immediately (RULE 24), writes the JSON and
-  selects the next pending pair.
+* **Scan:** root handle → `scanRoot` (`readDirTree` + `walkTree` + `countFolders`
+  → `buildPairs`) → `loadAndSync` (reads/creates `review-decisions.json`,
+  reconciles it with the scan) → `applyDecisions` → rows, counters, delta; the
+  rescan note and the status bar report `+added / −removed / ~changed /
+  renamed / unchanged`.`
+* **Review:** clicking a row opens the comparison card; `useCompare` loads both
+  sides (dimensions/format/size through `loadImageFile`) and revokes the object
+  URLs on change (RULE 20). `Hotkeys` maps A/D/↑/↓/Space/Esc (never inside a
+  field, and Space stays a button's own key when a button has focus).
+  A decision updates list, counters and progress immediately (RULE 24), writes
+  the JSON and — when "Next pending" is on — selects the next pending pair.
 * **Persistence:** every write merges the in-memory decisions into the stored
   file first, so records of vanished pairs survive; the write itself goes to a
   temp file and is renamed with `move()` when available, else
@@ -252,8 +275,9 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Review decisions | `src/lib/reviewfile.ts`, `src/lib/reviewmerge.ts` | record model + strict parse; items, decisions, counters, orphans |
 | Review query | `src/lib/reviewquery.ts`, `src/lib/reviewformat.ts`, `src/lib/text.ts` | month/range/status filters, sorts, display text, shared comparison |
 | Review IO | `src/lib/reviewio.ts`, `src/lib/reviewkeys.ts`, `src/lib/fs.ts` | atomic JSON read/write/backup, hotkey map, handle/path adapters |
-| Review UI | `src/review/useReview.ts`, `useCompare.ts`, `persist.ts`, `scan.ts`, `store.ts`, `detail.ts`, `ReviewPanel.tsx`, `ReviewList.tsx`, `ReviewFilters.tsx`, `ReviewCounters.tsx`, `CompareView.tsx`, `StatusBadge.tsx` | orchestration, comparison window, list, filters |
-| Shared UI | `src/ui/Workbench.tsx`, `Overlays.tsx`, `Thumb.tsx`, `useThumbnails.ts` | tab shell, busy/toast surfaces, thumbnail cache (RULE 20) |
+| Review UI | `src/review/ReviewPanel.tsx`, `RootBar.tsx`, `FilterBar.tsx`, `PairList.tsx`, `PairRow.tsx`, `DetailPane.tsx`, `DetailHead.tsx`, `SidePane.tsx`, `StatusBar.tsx`, `Warnings.tsx`, `StatusBadge.tsx`, `OrphanHistory.tsx`, `Hotkeys.tsx` | layout and presentation of the Selection tab |
+| Review state | `src/review/useReview.ts`, `useCompare.ts`, `persist.ts`, `scan.ts`, `detail.ts`, `store.ts`, `api.ts`, `sides.ts` | orchestration, side loading, JSON sync, IndexedDB root |
+| Shared UI | `src/ui/Workbench.tsx`, `Brand.tsx`, `HelpButton.tsx`, `AppChrome.tsx`, `Glyph.tsx`, `Overlays.tsx`, `Thumb.tsx`, `useThumbnails.ts`, `useTick.ts` | shell + status slot, icon set, busy/toast surfaces, thumbnails (RULE 20), clock |
 
 Direction: UI → batch → lib, never upwards (RULE 1, RULE 3).
 
@@ -282,8 +306,9 @@ in-memory fakes implement the FS handle interfaces):
 * `review_query.test.ts` — month/range filters, every sort mode + direction, notes
 * `review_io.test.ts` — missing/ok/corrupt, atomic move, fallback, write failure, backup
 * `review_flow.test.ts` — scan → decide → restart → rescan (+/−/~/rename) → corrupt → failure
-* `review_ui.test.tsx` — status text+icons, comparison markup, rows, counters, hotkeys, tab order
-* `review_ui_flow.test.tsx` — DOM flow: pick folder, review, A/D, counters, JSON, rescan
+* `review_format.test.ts` — pair token, long/short dates, relative time, Windows path, zoom badge
+* `review_ui.test.tsx` — badges (icon+text), comparison card, list panel, filter bar, bars, hotkeys
+* `review_ui_flow.test.tsx` — DOM flow through the real shell: pick folder, review, A/D, Space, arrows, search, JSON, rescan delta
 
 Must exist before the matching change ships:
 

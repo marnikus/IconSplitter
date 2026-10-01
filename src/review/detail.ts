@@ -4,7 +4,7 @@
 
 import { loadImageFile } from "../lib/dom";
 import { resolveFileHandle, type DirHandleLike } from "../lib/fs";
-import type { SideInfo, SideView } from "./CompareView";
+import type { SideInfo, SideView } from "./sides";
 
 export async function readSide(root: DirHandleLike, relPath: string): Promise<SideView> {
   try {

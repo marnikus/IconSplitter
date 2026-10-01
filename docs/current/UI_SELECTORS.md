@@ -154,50 +154,88 @@ Review window (scan table) — `scan-table` panel:
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.
 
-## M. Selection tab — `src/review/*`
+## M. Selection tab — `src/review/*` (design build, 2026-10-01)
 
-Header and review file:
+App bar and shell (`src/ui/Workbench.tsx`):
 
 | Test id | Visible text | Notes |
 |---|---|---|
-| `review-root` | `Choose split root…` → `Root: {name}` | directory picker; restores the last root from IndexedDB |
-| `review-refresh` | `↺ Rescan` | re-walks the root, re-reads the JSON, keeps unchanged decisions |
-| `review-summary` | e.g. `4 pairs · +1 new · −1 removed` | rescan diff line |
-| `review-counters` / `counter-{all\|pending\|approved\|declined}` | `Total 12`, `Approved 8`… | counters double as the status filter (`aria-pressed`) |
-| `review-fs-warning` | amber banner | File System Access unsupported (non-Chromium) |
-| `review-unpaired` | amber note | count of entries with a missing side |
-| `review-file-warning`, `review-file-retry`, `review-file-reset` | warning + buttons | corrupt/unwritable review file; reset backs the payload up first |
-| `review-orphans` | `<details>` | decisions for files no longer on disk |
+| `app-brand` | `Image Operator` | brand mark + wordmark |
+| `tab-sheets` / `tab-batch` / `tab-review` | `Single sheets` / `Batch folders` / `Selection` | active tab carries an underline + `aria-current="page"` |
+| `app-status-slot` | — | where a panel publishes its status (the Selection tab puts the watcher pill here) |
+| `watcher-pill` | `Watcher active` ⇄ `Watcher paused` | toggles the 15 s auto-rescan; `aria-pressed` |
+| `help-button`, `help-card` | `?` | hotkeys + honest browser limits |
 
-Filters and sorting (`review-filters`):
+Root bar and counters:
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `review-rootbar` | — | header row |
+| `review-root` | `Choose split root…` → `Root: {name}` | directory picker; last root restored from IndexedDB |
+| `review-refresh` | `↺ Rescan` | manual rescan (decisions of unchanged pairs survive) |
+| `review-recursive` | `Recursive · 16 nested folders` | folder count from the walk |
+| `review-counters`, `count-total`, `count-pending`, `count-approved`, `count-declined` | `184 total`, … | read-only figures (`role="status"`, `aria-live`) |
+
+Filter row (`review-filters`):
 
 | Test id | Control | Values |
 |---|---|---|
-| `scope-all` / `scope-month` / `scope-range` | toggle buttons | date scope; `aria-pressed` mirrors the active one |
-| `filter-month` | `<input type="month">` | `YYYY-MM` |
-| `filter-from`, `filter-to` | `<input type="datetime-local">` | inclusive custom range |
-| `sort-key` | `<select>` | `date` / `status` / `name` / `path` |
-| `sort-dir` | button | ascending ⇄ descending |
+| `scope-all` / `scope-month` / `scope-range` | segmented buttons | `All` / `Month` / `Custom` (`aria-pressed`) |
+| `filter-month` | `<input type="month">` | shown only in Month mode |
+| `filter-from`, `filter-to` | `<input type="datetime-local">` | always visible; enabled only in Custom mode; prefilled from the data range |
+| `filter-status` | select | `All decisions` / `Pending only` / `Approved only` / `Declined only` |
+| `sort-key` | select | `Creation date` / `Review status` / `Filename` / `Folder / path` (label carries the `date / status / name / path` hint) |
+| `sort-dir` | select | labels follow the key (`Newest first`/`Oldest first`, `Pending first`/`Declined first`, `A → Z`/`Z → A`) |
+| `review-showing` | text | `Showing N pairs` |
 | `filters-clear` | button | disabled when nothing is filtered |
 
-List and comparison window:
+List panel (`review-list-panel`):
 
 | Test id | Element | Notes |
 |---|---|---|
-| `review-list` | `<ul>` (scrollable) | rows are `<button>`s → Tab + Enter (RULE 21 level 1) |
-| `review-row-{pairId}` | row button | `pairId` = lowercased `folder/base[#variant]` |
+| `list-collapse` | icon button | collapses the list body (`aria-expanded`) |
+| `list-widen` | icon button | widens the list column (400 px → 620 px) |
+| `review-search` | search input | `⌘K` / `Ctrl+K` focuses it, `Esc` clears |
+| `review-summary` | text | `newest first · all decisions` |
+| `review-attention` | amber text | `N need attention` (missing side or failed thumbnail) |
+| `review-list`, `review-row-{pairId}` | rows | row = button; `aria-current` marks the open pair |
+| `thumb-placeholder` | div | loading, or dashed + amber when the thumbnail failed |
+| `status-{pending\|approved\|declined}` | badge | icon + text + `aria-label="Review status: …"` |
+| `issue-ai-missing`, `issue-source-missing`, `issue-thumbnail-failed` | amber badge | `AI result missing` / `Original missing` / `Thumbnail failed` |
 | `review-empty` | paragraph | no images / no matches |
-| `status-{pending\|approved\|declined}` | badge | text + icon + colour, `aria-label="Review status: …"` |
-| `thumb-placeholder` | div | loading or `Preview unavailable` when the read failed |
-| `compare-view` | overlay | `role="dialog"`, `aria-modal`, label "Image comparison" |
-| `compare-original`, `compare-ai` | panes | titles "Original" / "AI result"; `object-contain` previews |
-| `review-approve`, `review-decline` | buttons above the AI pane | `aria-pressed` reflects the current decision |
-| `compare-close` | button | `aria-label="Close comparison"` (also Esc) |
+| `list-clear-filters` | footer button | same action as `filters-clear` |
+
+Comparison card (`compare-view`, right column; no modal overlay):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `detail-name` | heading | AI file name (or the source when there is no AI result) |
+| `detail-pair` | text | `pair_74b08f3a · campaigns/october/coastal` |
+| `zoom-badge` | badge | `FIT SYNC` / `1:1 SYNC` (Space toggles) |
+| `review-decline`, `review-approve` | buttons above the AI pane | `aria-pressed` marks the current decision |
+| `next-pending` | checkbox | roll on to the next pending pair after a decision |
+| `compare-original`, `compare-ai` | panes | labelled `Original` / `AI result`, each with `Open in File Explorer` |
+| `detail-discovery` | text | `Created … · Generated …` plus the matching note |
+| `detail-empty` | paragraph | nothing selected |
+
+Status bar (`review-statusbar`) and warnings:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `status-index` | dot + text | `Recursive index ready` / `Watcher paused` / the busy message / `No folder selected` |
+| `status-delta` | text | `+3 new · 1 renamed · 0 removed · 180 unchanged` |
+| `status-unsaved` | amber text | `N decisions awaiting retry` |
+| `status-progress` | text + `role="progressbar"` | `121 / 184 reviewed` |
+| `review-file-warning`, `review-file-retry`, `review-file-reset` | banner + buttons | corrupt (`Retry read`, backup & reset) / unwritable (`Retry write`) |
+| `review-unpaired` | amber note | count of entries with a missing side |
+| `review-fs-warning` | amber banner | File System Access unsupported (non-Chromium) |
+| `review-orphans` | expandable section | decisions for files no longer on disk |
 | `review-busy`, `review-toast` | overlays | shared `src/ui/Overlays.tsx` surfaces |
 
-Hotkeys inside the comparison window: `A` approve, `D` decline, `←`/`→`
-previous/next, `Esc` close — suppressed while focus is in an input/select
-(`src/lib/reviewkeys.ts`).
+Hotkeys inside the tab (only while a pair is open, never in a text field and
+never hijacking Space from a focused button — `src/lib/reviewkeys.ts`):
+`A` approve, `D` decline, `↑`/`↓` (and `←`/`→`) navigate, `Space` fit / 100 %,
+`Esc` close.
 
 ## J. Handles still needed (to be added on demand)
 

@@ -54,6 +54,20 @@ export function tally(items: ReviewItem[]): Counts {
   };
 }
 
+/** Entries that cannot be compared: a missing side, or a failed thumbnail. */
+export function needsAttention(items: ReviewItem[], failedThumbs: Set<string>): number {
+  return items.filter((item) => item.kind !== "paired" || failedThumbs.has(thumbPath(item))).length;
+}
+
+/** How many pairs carry a decision — the progress bar figure (design). */
+export function reviewedCount(counts: Counts): number {
+  return counts.approved + counts.declined;
+}
+
+function thumbPath(item: ReviewItem): string {
+  return item.ai?.relPath ?? item.source?.relPath ?? "";
+}
+
 /** Records whose pair is no longer on disk — kept visible, never dropped. */
 export function orphanRecords(records: DecisionRecord[], pairs: ReviewPair[]): DecisionRecord[] {
   const live = new Set(pairs.map((p) => p.id.toLowerCase()));

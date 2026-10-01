@@ -6,6 +6,8 @@ import {
   type QueryPatch, type ReviewQuery,
 } from "../src/lib/reviewquery";
 import { formatBytes, formatStamp, rescanNote, stampName } from "../src/lib/reviewformat";
+import { dataRange, sortDirLabels } from "../src/lib/reviewquery";
+import { needsAttention, reviewedCount } from "../src/lib/reviewmerge";
 import { item, pair } from "./helpers/review";
 
 const at = (y: number, m: number, d: number, h = 12, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -157,5 +159,55 @@ describe("filters and sorting combine (spec §3 + §4)", () => {
       sort: { key: "name", dir: "desc" },
     });
     expect(applyQuery([SEPT, OCT_EARLY, OCT_LATE], q).map((i) => i.id)).toEqual(["oct-late", "oct-early"]);
+  });
+});
+
+describe("search, data range and order labels (design filter bar)", () => {
+  const three = [
+    item("campaigns/october/coastal/fog_architecture_042", "pending", { mtime: at(2026, 10, 1, 8) }),
+    item("campaigns/september/architecture/courtyard_shadow_011", "declined", { mtime: at(2026, 9, 30, 22) }),
+    item("archive/imports/camera-02/breakwater_003", "pending", { mtime: at(2026, 9, 28, 6) }),
+  ];
+
+  it("matches the search text against filename and folder, case-insensitively", () => {
+    expect(applyQuery(three, query({ search: "fog" })).map((i) => i.base)).toEqual(["fog_architecture_042"]);
+    expect(applyQuery(three, query({ search: "CAMPAIGNS" })).map((i) => i.base)).toEqual(["fog_architecture_042", "courtyard_shadow_011"]);
+    expect(applyQuery(three, query({ search: "nothing" }))).toEqual([]);
+    expect(applyQuery(three, query({ search: "  " }))).toHaveLength(3);
+  });
+
+  it("combines search with status and date filters", () => {
+    const q = query({ search: "campaigns", status: "declined" });
+    expect(applyQuery(three, q).map((i) => i.base)).toEqual(["courtyard_shadow_011"]);
+  });
+
+  it("reports the data range so From/To can be prefilled", () => {
+    expect(dataRange(three)).toEqual({ from: at(2026, 9, 28, 6), to: at(2026, 10, 1, 8) });
+    expect(dataRange([])).toBeNull();
+  });
+
+  it("labels the order select for each sort key", () => {
+    expect(sortDirLabels("date")).toEqual({ asc: "Oldest first", desc: "Newest first" });
+    expect(sortDirLabels("name")).toEqual({ asc: "A → Z", desc: "Z → A" });
+    expect(sortDirLabels("status").desc).toBe("Declined first");
+    expect(sortDirLabels("path").asc).toBe("A → Z");
+  });
+});
+
+describe("attention and progress (design list header + status bar)", () => {
+  it("counts entries that cannot be compared as needing attention", () => {
+    const items = [
+      item("ok", "pending"),
+      item("solo-src", "pending", { ai: false }),
+      item("solo-ai", "pending", { source: false }),
+      item("broken", "pending"),
+    ];
+    expect(needsAttention(items, new Set(["broken_AI.png"]))).toBe(3); // thumb path of "broken"
+    expect(needsAttention(items, new Set())).toBe(2);
+  });
+
+  it("counts reviewed pairs for the progress bar", () => {
+    expect(reviewedCount({ total: 184, pending: 63, approved: 108, declined: 13 })).toBe(121);
+    expect(reviewedCount({ total: 0, pending: 0, approved: 0, declined: 0 })).toBe(0);
   });
 });

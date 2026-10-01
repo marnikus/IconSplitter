@@ -107,3 +107,23 @@ extracted from `src/batch/ScanTable.tsx` and reused by both modes:
 RULE 20) and `src/ui/Overlays.tsx`. Tests: 8 new files, including a DOM-driven
 flow test (`tests/review_ui_flow.test.tsx`) that picks a folder, reviews with
 the A/D hotkeys and asserts the decision in the JSON on disk.
+
+## 8. Design rebuild (same day, after the supplied screen)
+
+The supplied screen redefined the layout; the pure core stayed, the presentation
+was rewritten:
+
+* `Workbench` became the app bar: brand ("Image Operator"), tabs, a status slot
+  a panel can publish into (`src/ui/AppChrome.tsx` — the Selection tab puts the
+  watcher pill there) and a help popover (hotkeys + browser limits).
+* The comparison window moved **inline** beside the list (no modal), so
+  `CompareView.tsx` became `DetailPane.tsx` + `DetailHead.tsx` + `SidePane.tsx`
+  and `Hotkeys.tsx` took over the keyboard map for the whole tab.
+* New filter row (All/Month/Custom with always-visible From/To), search with
+  ⌘K, per-status/attention badges with icons (`Glyph.tsx`), counters as header
+  chips, and the bottom status bar (index state, last rescan, delta, retry
+  count, progress).
+* Zoom: `Space` toggles `fit` (object-contain) ↔ `100` (true pixels), shown as
+  `FIT SYNC` / `1:1 SYNC`.
+* Watcher: while the tab is open the root is re-scanned every 15 s; the toast
+  only fires when the scan actually changed something.

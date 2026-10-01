@@ -141,22 +141,30 @@ Switch to the **Selection** tab to review finished images.
 
 1. **Choose split root** — the app walks the folder recursively (skipping
    `_split_output`), pairs every `image.ext` with its `image_AI[_n].ext`
-   result and keeps the relative folder of each pair. Unpaired files are shown
-   as *AI result missing* / *Original missing* instead of being hidden. The
-   chosen folder is remembered for the next session.
-2. **Review the list** — thumbnail, file name, relative folder, creation date
-   and status per row; counters show total / pending / approved / declined and
-   double as a status filter. Filter by one month or a custom **From/To** date
-   range, sort by date, status, name or folder path (ascending/descending), and
-   clear all filters with one click.
-3. **Compare** — click a row to open the comparison window: **Original** and
-   **AI result** side by side (aspect ratio kept), each labelled with
-   dimensions, format, file size and path, each with *Open in File Explorer*
-   (copies the full path — browsers cannot launch Explorer directly).
+   result and keeps the relative folder of each pair. The header shows the
+   folder, a Rescan button, the number of nested folders and the counters
+   (total / pending / approved / declined); a watcher re-scans every 15 s while
+   the tab is open. Unpaired files are shown as *AI result missing* /
+   *Original missing* instead of being hidden. The chosen folder is remembered
+   for the next session.
+2. **Review the list** — search by file name or folder (`⌘K` / `Ctrl+K`),
+   filter by date (all / one month / a custom **From/To** range), filter by
+   status and sort by date, status, name or folder path in either direction.
+   Each row carries a thumbnail, file name, relative folder, date and an icon +
+   text badge (Pending / Approved / Declined, or a warning such as
+   *Thumbnail failed*). The header counts what still needs attention and the
+   bottom bar tracks “N / M reviewed”.
+3. **Compare** — click a row to open the comparison card next to the list:
+   **Original** and **AI result** side by side in equal panes (aspect ratio
+   kept, or true pixels with `Space` to switch between fit and 1:1), each
+   labelled with dimensions, format, file size and full path, each with
+   *Open in File Explorer* (copies the full path — browsers cannot launch
+   Explorer directly).
 4. **Decide** — **Approve** / **Decline** above the AI result, or the hotkeys
-   **A** / **D**, `←`/`→` to walk the list and `Esc` to close. After each
-   decision the window rolls on to the next pending image, so a whole folder
-   can be reviewed with A, D, Z… Changing a decision later is allowed.
+   **A** / **D**; `↑`/`↓` walk the list and `Esc` closes the card. With
+   *Next pending* ticked (default) each decision rolls on to the next pending
+   image, so a whole folder can be reviewed with one hand. Changing a decision
+   later is allowed.
 
 Decisions live in `<split root>/review-decisions.json`
 (`pair_id`, `source`, `ai_result`, `decision`, `reviewed_at`). A missing file is

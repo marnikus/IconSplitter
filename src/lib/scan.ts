@@ -78,6 +78,16 @@ function toEntry(node: TreeNode, dirPath: string): FileEntry {
   };
 }
 
+/** Number of nested folders the walk visits (ignored folders do not count). */
+export function countFolders(tree: TreeNode, ignore: string[]): number {
+  return (tree.children ?? []).reduce((n, child) => n + countChild(child, ignore), 0);
+}
+
+function countChild(node: TreeNode, ignore: string[]): number {
+  if (!node.dir || isIgnored(node.name, ignore)) return 0;
+  return 1 + countFolders(node, ignore);
+}
+
 /** Keeps only files whose name parses as an eligible _AI image. */
 export function collectAiImages(entries: FileEntry[]): AiImageEntry[] {
   return entries.flatMap((e) => {

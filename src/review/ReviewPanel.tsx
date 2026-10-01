@@ -1,148 +1,112 @@
-// ReviewPanel.tsx — layout of the Selection tab (spec §1–§10): root picker,
-// rescan, counters, filters, the scrollable list, the file warnings, the
-// history of vanished pairs and the comparison window.
+// ReviewPanel.tsx — the Selection tab layout (design): app-bar watcher pill,
+// root bar, filter bar, list beside the comparison card, warning banners, the
+// orphan history and the bottom status bar.
 
-import { useReview, type ReviewApi } from "./useReview";
-import CompareView, { type CompareActions, type CompareProps } from "./CompareView";
-import ReviewCounters from "./ReviewCounters";
-import ReviewFilters from "./ReviewFilters";
-import ReviewList from "./ReviewList";
-import StatusBadge from "./StatusBadge";
+import { useMemo, useState } from "react";
+import { needsAttention } from "../lib/reviewmerge";
+import { filtersCleared } from "../lib/reviewquery";
+import { useAppChrome } from "../ui/AppChrome";
 import { BusyOverlay, Toast } from "../ui/Overlays";
+import DetailPane from "./DetailPane";
+import Hotkeys from "./Hotkeys";
+import FilterBar from "./FilterBar";
+import OrphanHistory from "./OrphanHistory";
+import PairList from "./PairList";
+import RootBar from "./RootBar";
+import StatusBar from "./StatusBar";
+import Warnings from "./Warnings";
+import { useReview } from "./useReview";
+import type { ReviewApi } from "./api";
+import type { Decision } from "../lib/reviewfile";
+import type { Thumbs } from "../ui/useThumbnails";
+import type { ReviewItem } from "../lib/reviewmerge";
 
 export default function ReviewPanel() {
   const r = useReview();
+  const view = useListControls(r);
+  useAppChrome(<WatcherPill on={r.s.watcher} root={r.s.rootName} onToggle={r.toggleWatcher} />, [r.s.watcher, r.s.rootName]);
   return (
-    <div className="space-y-4">
-      <Header r={r} />
-      <Notices r={r} />
-      <section className="panel space-y-3">
-        <ReviewCounters counts={r.s.counts} active={r.s.query.status} onPick={(status) => r.setQuery({ status })} />
-        <p className="text-xs text-slate-400" data-testid="review-summary">{summaryOf(r)}</p>
-      </section>
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        <ReviewFilters query={r.s.query} patch={r.setQuery} clear={r.clearFilters} />
-        <ReviewList
-          items={r.view}
-          emptyNote={emptyNote(r)}
-          selection={{ id: r.s.selectedId, thumbs: r.thumbs }}
-          onOpen={r.openItem}
-        />
-      </div>
-      <Orphans r={r} />
-      <Comparison r={r} />
+    <div className="space-y-3">
+      <RootBar r={r} folders={r.s.folders} />
+      <FilterBar r={r} items={r.s.items} shown={r.s.showing} />
+      <Warnings r={r} />
+      <Workspace r={r} view={view} />
+      <Hotkeys enabled={r.item !== null} handlers={hotkeyHandlers(r)} />
+      <OrphanHistory records={r.s.orphans} />
+      <StatusBar rootName={r.s.rootName} busy={r.s.busy} lastScanAt={r.s.lastScanAt} delta={r.s.delta}
+        unsaved={r.s.unsaved} counts={r.s.counts} watcher={r.s.watcher} />
       <Overlays r={r} />
     </div>
   );
 }
 
-function Header({ r }: { r: ReviewApi }) {
+/** List-panel controls: collapse, widen and the shared "needs attention" figure. */
+function useListControls(r: ReviewApi) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [wide, setWide] = useState(false);
+  const attention = useAttention(r.s.items, r.view, r.thumbs);
+  return { collapsed, wide, attention, toggleCollapse: () => setCollapsed((v) => !v), toggleWide: () => setWide((v) => !v) };
+}
+
+type ListControls = ReturnType<typeof useListControls>;
+
+function Workspace({ r, view: c }: { r: ReviewApi; view: ListControls }) {
   return (
-    <section className="panel flex flex-wrap items-center gap-2">
-      <button type="button" data-testid="review-root" className="btn-primary" onClick={r.pickRoot}>
-        {r.s.rootName ? `Root: ${r.s.rootName}` : "Choose split root…"}
-      </button>
-      <button type="button" data-testid="review-refresh" className="btn-ghost" onClick={r.rescan}>↺ Rescan</button>
-      <span className="ml-auto text-xs text-slate-400">
-        {r.s.items.length} image pair{r.s.items.length === 1 ? "" : "s"} · review-decisions.json
-      </span>
-    </section>
-  );
-}
-
-function summaryOf(r: ReviewApi): string {
-  const filtered = r.view.length === r.s.items.length ? "" : ` · ${r.view.length} shown with the current filter`;
-  return `${r.s.scanNote}${filtered}`;
-}
-
-function emptyNote(r: ReviewApi): string {
-  if (r.s.items.length === 0) return "No images found in this folder — choose a folder or rescan.";
-  return "No images match the current filter — clear the filters to see all of them.";
-}
-
-function Notices({ r }: { r: ReviewApi }) {
-  const unpaired = r.s.items.filter((i) => i.kind !== "paired").length;
-  return (
-    <>
-      {!r.supported && (
-        <p data-testid="review-fs-warning" className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-          Selection review needs Chrome or Edge (File System Access API) to read images and write the review file.
-        </p>
-      )}
-      {(r.s.fileStatus === "corrupt" || r.s.fileStatus === "write-error") && <FileWarning r={r} />}
-      {unpaired > 0 && (
-        <p data-testid="review-unpaired" className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
-          {unpaired} entr{unpaired === 1 ? "y has" : "ies have"} no matching side — each is listed with “AI result missing” or “Original missing”.
-        </p>
-      )}
-    </>
-  );
-}
-
-function FileWarning({ r }: { r: ReviewApi }) {
-  const corrupt = r.s.fileStatus === "corrupt";
-  return (
-    <div data-testid="review-file-warning" className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
-      <p className="font-semibold">{corrupt ? "⚠ The review file could not be read" : "⚠ Decisions could not be saved"}</p>
-      <p className="mt-1 text-amber-200/90">
-        {r.s.fileNote ?? "Unknown error"}
-        {corrupt
-          ? " — the file is left untouched; decisions made now are kept for this session only."
-          : " — your decisions are still in the list; retry once the folder is writable."}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" className="btn-mini" data-testid="review-file-retry" onClick={r.retry}>↻ Retry</button>
-        {corrupt && (
-          <button type="button" className="btn-mini" data-testid="review-file-reset" onClick={r.resetFile}>
-            Back up the corrupt file &amp; start fresh
-          </button>
-        )}
-      </div>
+    <div className={`grid gap-3 ${c.wide ? "xl:grid-cols-[620px_1fr]" : "xl:grid-cols-[400px_1fr]"}`}>
+      <PairList
+        items={r.view} total={r.s.counts.total} thumbs={r.thumbs} selectedId={r.s.selectedId}
+        search={r.s.search} summary={summaryOf(r)} attention={c.attention} emptyNote={emptyNote(r)}
+        canClear={!filtersCleared(r.s.query)} collapsed={c.collapsed} onSearch={(search) => r.patch({ search })}
+        onOpen={r.openItem} onToggleCollapse={c.toggleCollapse} onWiden={c.toggleWide} onClear={r.clearFilters}
+      />
+      {r.item ? <Detail r={r} /> : <EmptyDetail anyPairs={r.s.items.length > 0} />}
     </div>
   );
 }
 
-function Orphans({ r }: { r: ReviewApi }) {
-  if (r.s.orphans.length === 0) return null;
+function Detail({ r }: { r: ReviewApi }) {
+  if (!r.item) return null;
   return (
-    <details className="panel" data-testid="review-orphans">
-      <summary className="cursor-pointer text-sm text-slate-300">
-        Decisions for files no longer on disk ({r.s.orphans.length}) — kept in the review file
-      </summary>
-      <ul className="mt-2 space-y-1 text-xs text-slate-400">
-        {r.s.orphans.slice(0, 50).map((record) => (
-          <li key={record.pair_id} className="flex items-center gap-2">
-            <StatusBadge status={record.decision} />
-            <span className="truncate">{record.source || record.ai_result || record.pair_id}</span>
-          </li>
-        ))}
-      </ul>
-    </details>
+    <DetailPane item={r.item} rootName={r.s.rootName} sides={{ ...r.detail.sides, busy: r.detail.busy }}
+      zoom={r.s.zoom} autoNext={r.s.autoNext} decide={(d) => decide(r, d)} setAutoNext={r.setAutoNext} openPath={r.openPath} />
   );
 }
 
-function Comparison({ r }: { r: ReviewApi }) {
-  if (!r.item) return null;
-  return <CompareView {...compareProps(r, r.item)} />;
-}
-
-function compareProps(r: ReviewApi, item: ReviewApi["s"]["items"][number]): CompareProps {
+function hotkeyHandlers(r: ReviewApi) {
   return {
-    item,
-    position: { index: r.view.findIndex((i) => i.id === item.id) + 1, total: r.view.length, root: r.s.rootName },
-    sides: { source: r.detail.sides.source, ai: r.detail.sides.ai, busy: r.detail.busy },
-    actions: compareActions(r, item),
-  };
-}
-
-function compareActions(r: ReviewApi, item: ReviewApi["s"]["items"][number]): CompareActions {
-  return {
-    decide: (decision) => r.decide(item.id, decision),
-    close: () => r.openItem(null),
-    prev: () => r.step(-1),
+    approve: () => decide(r, "approved"),
+    decline: () => decide(r, "declined"),
     next: () => r.step(1),
-    openPath: r.openPath,
+    prev: () => r.step(-1),
+    zoom: r.toggleZoom,
+    close: () => r.openItem(null),
   };
+}
+
+function decide(r: ReviewApi, decision: Decision): void {
+  if (r.item) r.decide(r.item.id, decision);
+}
+
+function WatcherPill({ on, root, onToggle }: { on: boolean; root: string; onToggle: () => void }) {
+  return (
+    <button type="button" data-testid="watcher-pill" aria-pressed={on} onClick={onToggle}
+      className="inline-flex items-center gap-2 rounded-full px-2 py-1 text-xs text-slate-300 transition hover:bg-white/10"
+      title={on ? "Auto-rescan every 15 s while this tab is open" : "Auto-rescan is off"}>
+      <span className={`h-2 w-2 rounded-full ${on ? "bg-emerald-400" : "bg-slate-500"}`} aria-hidden="true" />
+      {on ? "Watcher active" : "Watcher paused"}
+      {root === "" && <span className="text-slate-500">· no root</span>}
+    </button>
+  );
+}
+
+function EmptyDetail({ anyPairs }: { anyPairs: boolean }) {
+  return (
+    <section className="panel grid place-items-center p-10 text-center text-sm text-slate-400" data-testid="detail-empty">
+      {anyPairs
+        ? "Select an image pair on the left to compare the original with its AI result."
+        : "No images found in this folder — choose a folder or rescan."}
+    </section>
+  );
 }
 
 function Overlays({ r }: { r: ReviewApi }) {
@@ -153,4 +117,30 @@ function Overlays({ r }: { r: ReviewApi }) {
       {r.s.toast && <Toast toast={r.s.toast} testid="review-toast" />}
     </>
   );
+}
+
+function summaryOf(r: ReviewApi): string {
+  const order = r.s.query.sort.dir === "desc" ? "newest first" : "oldest first";
+  const status = r.s.query.status === "all" ? "all decisions" : `${r.s.query.status} only`;
+  return `${order} · ${status}`;
+}
+
+function emptyNote(r: ReviewApi): string {
+  if (r.s.items.length === 0) return "No images found in this folder — choose a folder or rescan.";
+  if (r.s.search.trim() !== "") return `Nothing matches “${r.s.search.trim()}”.`;
+  return "No images match the current filter — clear the filters to see all of them.";
+}
+
+/** Entries that cannot be compared: a missing side or a failed thumbnail. */
+function useAttention(items: ReviewItem[], view: ReviewItem[], thumbs: Thumbs): number {
+  return useMemo(() => needsAttention(items, failedThumbs(view, thumbs)), [items, view, thumbs]);
+}
+
+function failedThumbs(view: ReviewItem[], thumbs: Thumbs): Set<string> {
+  const out = new Set<string>();
+  for (const item of view) {
+    const path = item.ai?.relPath ?? item.source?.relPath ?? "";
+    if (thumbs.errorFor(path)) out.add(path);
+  }
+  return out;
 }

@@ -188,3 +188,62 @@ Same two items as 2026-09-30/2026-10-01 (`App` split on first functional touch;
 `node tools/quality.mjs --changed` needs a real `origin/main` merge base; in a
 single-commit clone the fallback `HEAD~1` does not exist, so the full run above
 was used instead.
+
+---
+
+# Quality re-check — 2026-10-01 (Selection UI rebuilt to the supplied design)
+
+Fourth re-check: the Selection tab was rebuilt to match the design screen
+(watcher, filter row with From/To, search, badges with icons, inline comparison
+card, status bar). Pure logic gained only formatting/query helpers; the layout
+files were replaced, the old ones deleted.
+
+## What changed
+
+* `src/lib/` — `reviewformat.ts` (+ pair token, long/short dates, relative time,
+  Windows path, datetime-local value, zoom label), `reviewquery.ts` (+ search,
+  data range, per-key order labels), `reviewmerge.ts` (+ attention/progress),
+  `reviewkeys.ts` (+ Space/zoom, ↑↓), `scan.ts` (+ `countFolders`), `text.ts`
+* `src/review/` — new: `RootBar`, `FilterBar`, `PairList`, `PairRow`,
+  `DetailPane`, `DetailHead`, `SidePane`, `StatusBar`, `Warnings`,
+  `OrphanHistory`, `Hotkeys`, `sides.ts`, `api.ts`; `useReview.ts` gained the
+  watcher, scan delta, unsaved-retry counter, zoom and search.
+  Deleted (replaced): `CompareView.tsx`, `ReviewList.tsx`, `ReviewFilters.tsx`,
+  `ReviewCounters.tsx`
+* `src/ui/` — new: `Brand.tsx`, `HelpButton.tsx`, `AppChrome.tsx` (status slot),
+  `Glyph.tsx`, `useTick.ts`; `Workbench.tsx` grew the app bar (still 90 lines),
+  `Thumb.tsx` redrawn
+* `tests/` — 2 new files (`review_format`, `review_ui_flow` rewritten),
+  `review_ui.test.tsx` rewritten: **190 tests / 23 files** (was 164 / 22)
+
+## The numbers (measured, not estimated)
+
+| File | Lines | Functions | Gate state |
+|---|---:|---:|---|
+| `src/review/useReview.ts` | 268 | 78 | `[OK]` — grouped `ScanOutcome` instead of 6 params |
+| `src/review/ReviewPanel.tsx` | 145 | 26 | `[OK]` — list controls extracted to `useListControls` |
+| `src/review/PairList.tsx` | 123 | 8 | `[OK]` |
+| `src/review/DetailPane.tsx` | 84 | 5 | `[OK]` |
+| `src/ui/Workbench.tsx` | 90 | 5 | `[OK]` |
+| 20 further changed files | ≤ 110 each | — | all `[OK]` |
+| `src/App.tsx`, `src/lib/detect.ts`, `src/lib/render.ts` | unchanged | — | LEGACY held |
+
+* Tests: **190 passed** (23 files)
+* Coverage `src/lib`: **lines 97.91%, branches 92.12%** (was 97.78% / 92.29%)
+* Lanes: tsc ✓ · eslint 0 errors / 8 legacy warnings (unchanged) · full gate
+  `node tools/quality.mjs --allow-legacy` **GATE PASSED** · build ✓
+* `dist/index.html` single-file build: 430.17 kB (gzip 128.36 kB)
+
+## Baseline decision
+
+**Not re-recorded.** No legacy file grew; the new `useReview`/`ReviewPanel`
+violations found during the first gate run were fixed by grouping and extracting
+(no overrides). Two legacy warnings (`Complexity` on `detect`, nesting in
+`label`) are untouched.
+
+## Known debt carried
+
+Same two items as before (`App` split on first functional touch; `detect()`
+cc 32 extraction). New debt accepted: none. The design's "Open in File Explorer"
+stays a clipboard-path substitute because no browser API can open Explorer
+(RULE 9 fail-open, documented in the help popover).

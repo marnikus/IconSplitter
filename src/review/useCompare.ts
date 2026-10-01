@@ -4,18 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import type { ReviewItem } from "../lib/reviewmerge";
-import type { SideView } from "./CompareView";
+import type { CompareDetail, CompareSides } from "./sides";
 import { readSide, releaseSide } from "./detail";
-
-export interface CompareSides {
-  source: SideView | null;
-  ai: SideView | null;
-}
-
-export interface CompareDetail {
-  sides: CompareSides;
-  busy: boolean;
-}
 
 const EMPTY: CompareSides = { source: null, ai: null };
 
