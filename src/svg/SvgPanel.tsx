@@ -6,6 +6,7 @@
 // that makes them one screen.
 
 import { modelLabel } from "../lib/svgconfig";
+import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
@@ -47,7 +48,7 @@ export default function SvgPanel() {
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
   if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
   const actions: SvgRowActions = {
-    activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootRef,
+    activeId: g.activeId, checked: g.checked, thumb: g.thumb, bg: g.bg, rootRef,
     toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
     decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
     openLocation: g.openLocation,
@@ -56,10 +57,10 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
     <>
       {g.progress !== null && <SvgBatchStrip progress={g.progress} onCancel={g.cancelRun} />}
       <SvgBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
-        decidableCount={decidableCount(g)} thumb={g.thumb} model={modelLabel(g.config.model)} totals={g.totals}
+        decidableCount={decidableCount(g)} thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
         progress={g.progress} running={g.running}
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
-        onDeselectAll={g.deselectAll} onThumb={g.setThumb} onGenerate={() => g.requestGenerate(g.checked)}
+        onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       <SvgList g={g} actions={actions} />
     </>
@@ -137,7 +138,7 @@ function SvgStatus({ g }: { g: SvgGenApi }) {
     <footer className="svg-statusbar" data-testid="svg-statusbar">
       <div className="svg-status-group">
         <span>{g.rootName === "" ? "No folder picked yet" : `Root ${g.rootName}`}</span>
-        <span data-testid="svg-status-totals">visible usage {g.totals.tokens ?? "—"} tokens · {g.totals.cost ?? "—"}</span>
+        <span data-testid="svg-status-totals">visible usage {g.totals.tokens ?? "—"} tokens · {costText({ reported: g.totals.cost, estimated: g.totals.estimated })}</span>
         <span data-testid="svg-status-progress">{done} / {g.rows.length} generated</span>
       </div>
       <div className="svg-status-group">

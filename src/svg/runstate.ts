@@ -3,7 +3,7 @@
 // after a run so versions and decisions are exact, and the ONE summary line a
 // run reports instead of one toast per file (RULE 5).
 
-import { fmtCost, fmtTokens } from "../lib/svgusage";
+import { costText, fmtTokens } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import type { DirHandleLike } from "../lib/fs";
 import type { RunEvent, RunSummary } from "./runner";
@@ -55,5 +55,6 @@ export async function reloadSidecars(refs: SvgRefs, sources: SvgSource[], s: Run
 export function summaryLine(summary: RunSummary): string {
   const parts = [`${summary.saved} saved`, `${summary.invalid} invalid`, `${summary.missing} missing`];
   if (summary.cancelled) parts.push("cancelled");
-  return `SVG generation: ${parts.join(" · ")} · ${fmtTokens(summary.usage.total)} tokens · ${fmtCost(summary.usage.cost)}`;
+  const cost = costText({ reported: summary.usage.cost, estimated: summary.estimated });
+  return `SVG generation: ${parts.join(" · ")} · ${fmtTokens(summary.usage.total)} tokens · ${cost}`;
 }

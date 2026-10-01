@@ -151,7 +151,8 @@ function rec(version: number, over: Partial<SvgVersion> = {}): SvgVersion {
     version, svgPath: `a/icon_AI_v${version}.svg`, status: "generated", review: "pending",
     prompt: "p", provider: "Requesty", model: "openai/gpt-6.1-sol", requestedAt: "2026-10-01T10:00:00.000Z",
     completedAt: "2026-10-01T10:00:09.000Z",
-    usage: { input: 100, output: 200, total: 300 }, cost: { actual: 0.01, estimated: null, currency: "USD", pricing: null },
+    usage: { input: 100, output: 200, total: 300 },
+    cost: { actual: 0.01, estimated: null, currency: "USD", pricing: "requesty-2026-10-01", basis: "provider" },
     validation: { ok: true, errors: [], warnings: [], icons: 4 }, batch: null, error: null, requestId: null,
     ...over,
   };
@@ -259,11 +260,11 @@ describe("svgusage", () => {
     expect(fmtTokens(null)).toBe("—");
     expect(fmtCost(0.036)).toBe("$0.0360");
     expect(fmtCost(null)).toBe("—");
-    expect(usageLine({ input: 1, output: 2, total: 3, cost: 0.01, currency: "USD" })).toBe("1 in · 2 out · 3 total · $0.0100 actual");
+    expect(usageLine({ input: 1, output: 2, total: 3, cost: 0.01, currency: "USD" })).toBe("1 in · 2 out · 3 total · $0.0100 reported");
     expect(usageLine({ input: null, output: null, total: null, cost: null, currency: "USD" })).toContain("no cost reported");
   });
 
-  it("sums a batch and labels an allocated split as an estimate", () => {
+  it("sums a batch and labels an allocated split as Estimated", () => {
     const sum = sumUsage([
       { input: 10, output: 20, total: 30, cost: 0.01, currency: "USD" },
       { input: null, output: null, total: null, cost: null, currency: "USD" },
@@ -273,7 +274,7 @@ describe("svgusage", () => {
       .toMatchObject({ input: null, cost: null });
     const per = allocateUsage({ input: 40, output: 80, total: 120, cost: 0.04, currency: "USD" }, 4);
     expect(per).toMatchObject({ input: 10, output: 20, total: 30, cost: null, estimated: 0.01 });
-    expect(usageLine(per)).toContain("estimated");
+    expect(usageLine(per)).toContain("Estimated");
     expect(allocateUsage({ input: 1, output: 1, total: 1, cost: null, currency: "USD" }, 0).input).toBeNull();
   });
 });

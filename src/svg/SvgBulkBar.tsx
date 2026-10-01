@@ -1,14 +1,16 @@
-// SvgBulkBar.tsx — the bulk bar of the Generate SVG tab (prompt §2/§15/§17).
+// SvgBulkBar.tsx — the bulk bar of the Generate SVG tab (prompt §2/§15/§16/§17).
 // Header checkbox with an indeterminate state, the selected/visible scope,
-// select-visible and deselect-all, the thumbnail zoom slider, the estimate
-// line, and the three bulk actions: Generate, Approve, Decline. There is no
-// "approve visible" action — every bulk operation applies to the SELECTION
-// only, and Approve/Decline stay disabled until a selected row has a valid
-// SVG. While a run is in flight the bar shows the live batch progress and a
-// Cancel that keeps everything already saved.
+// select-visible and deselect-all, the two PREVIEW settings (thumbnail zoom and
+// the frame background — one control per decision, RULE 10), the estimate line,
+// and the three bulk actions: Generate, Approve, Decline. There is no "approve
+// visible" action — every bulk operation applies to the SELECTION only, and
+// Approve/Decline stay disabled until a selected row has a valid SVG. While a
+// run is in flight the bar shows the live batch progress and a Cancel that
+// keeps everything already saved.
 
+import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import { clampThumb, THUMB_MAX, THUMB_MIN, THUMB_STEP, thumbLabel } from "../lib/reviewprefs";
-import { fmtCost, fmtTokens } from "../lib/svgusage";
+import { costText, fmtTokens } from "../lib/svgusage";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -17,14 +19,16 @@ export interface SvgBulkBarProps {
   visibleCount: number;
   decidableCount: number;
   thumb: number;
+  bg: PreviewBackground;
   model: string;
-  totals: { tokens: number | null; cost: number | null };
+  totals: { tokens: number | null; cost: number | null; estimated: number | null };
   progress: RunProgress | null;
   running: boolean;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
+  onBg: (bg: PreviewBackground) => void;
   onGenerate: () => void;
   onDecide: (decision: "approved" | "declined") => void;
   onCancel: () => void;
@@ -57,6 +61,8 @@ function BulkLeft({ p }: { p: SvgBulkBarProps }) {
 function BulkRight({ p }: { p: SvgBulkBarProps }) {
   return (
       <div className="svg-bulk-right">
+        <PreviewBg bg={p.bg} onBg={p.onBg} />
+        <span className="svg-divider" aria-hidden="true" />
         <div className="svg-zoom">
           <label htmlFor="svg-thumb">ZOOM</label>
           <span aria-hidden="true">{THUMB_MIN}</span>
@@ -83,12 +89,32 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
 
 /** The estimate line doubles as the live batch counter while a run is in flight. */
 function Estimate({ p }: { p: SvgBulkBarProps }) {
+  const cost = costText({ reported: p.totals.cost, estimated: p.totals.estimated });
   return (
     <div className="svg-estimate" data-testid="svg-estimate">
       <strong>{p.checkedCount} images · {p.model}</strong>
       {p.progress === null
-        ? <span>visible usage {fmtTokens(p.totals.tokens)} tokens · {fmtCost(p.totals.cost)} actual</span>
+        ? <span>visible usage {fmtTokens(p.totals.tokens)} tokens · {cost}</span>
         : <span data-testid="svg-batch-progress">batch {p.progress.batchId} · {p.progress.saved} saved · {p.progress.failed} failed · {p.progress.missing} missing</span>}
+    </div>
+  );
+}
+
+/** Presets + one custom colour = ONE decision: the preview frame background. */
+function PreviewBg({ bg, onBg }: { bg: PreviewBackground; onBg: (bg: PreviewBackground) => void }) {
+  return (
+    <div className="svg-bg" data-testid="svg-bg">
+      <label htmlFor="svg-bg-custom">PREVIEW BG</label>
+      {BG_PRESETS.map((preset) => (
+        <button key={preset.id} type="button" className={`svg-swatch${bg.preset === preset.id ? " on" : ""}`}
+          data-testid={`svg-bg-${preset.id}`} title={`Preview background: ${preset.label}`}
+          aria-label={`Preview background ${preset.label}`} aria-pressed={bg.preset === preset.id}
+          style={{ background: preset.color }} onClick={() => onBg(selectPreset(bg, preset.id))} />
+      ))}
+      <input id="svg-bg-custom" data-testid="svg-bg-custom" type="color" value={bg.custom}
+        aria-label="Custom preview background" onChange={(e) => onBg(selectCustom(bg, e.target.value))} />
+      <output className="svg-bg-value" data-testid="svg-bg-value" htmlFor="svg-bg-custom"
+        title="Preview only — saved SVG files and their code are never changed">{backgroundLabel(bg)}</output>
     </div>
   );
 }

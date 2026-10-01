@@ -12,7 +12,8 @@ import {
   newSidecar, nextVersion, sidecarName, svgFileName, svgStem, withVersion,
   type BatchRef, type SvgSidecar, type SvgVersion,
 } from "../lib/svgfile";
-import type { Usage } from "../lib/svgrequest";
+import { NO_USAGE, type Usage } from "../lib/svgrequest";
+import { costInfoFor } from "../lib/svgpricing";
 import { listSvgFiles } from "./sidecar";
 import type { SvgSource } from "./sources";
 
@@ -80,7 +81,7 @@ function toRecord(args: SaveArgs, saved: { version: number; svgPath: string; ico
     requestedAt: args.requestedAt,
     completedAt: new Date().toISOString(),
     usage: { input: args.usage.input, output: args.usage.output, total: args.usage.total },
-    cost: { actual: args.usage.cost, estimated: null, currency: args.usage.currency, pricing: null },
+    cost: costInfoFor(args.model, args.usage),
     validation: { ok: true, errors: [], warnings: saved.warnings, icons: saved.icons },
     batch: args.batch,
     error: null,
@@ -119,7 +120,7 @@ export function recordFailure(args: FailArgs): SvgVersion {
     requestedAt: args.requestedAt,
     completedAt: new Date().toISOString(),
     usage: args.usage ? { input: args.usage.input, output: args.usage.output, total: args.usage.total } : { input: null, output: null, total: null },
-    cost: { actual: args.usage?.cost ?? null, estimated: null, currency: "USD", pricing: null },
+    cost: costInfoFor(args.model, args.usage ?? NO_USAGE),
     validation: { ok: false, errors: [args.error], warnings: [], icons: 0 },
     batch: args.batch ?? null,
     error: args.error,

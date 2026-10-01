@@ -342,6 +342,7 @@ Bulk bar (`svg-bulk`):
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
 | `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
 | `svg-thumb` | `input[type=range]` | thumbnail height; `svg-thumb-value` is the live readout |
+| `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
@@ -354,12 +355,13 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-row-{sourceId}` | row `role="listitem"` | keyed by the stable pair id, never a row index |
 | `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"` |
 | `svg-ai-{sourceId}` / `svg-prev-{sourceId}` | thumbnails | the approved AI image and the newest valid SVG; missing → placeholder with an aria-label |
+| `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the AI thumbnail is never inside it |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the version history; disabled with no SVG / no versions |
 | `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
-| `svg-usage-{sourceId}` | text | tokens as reported, "—" when the provider sent none |
+| `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-persist-{sourceId}` | text | "Not saved" until the sidecar is written; `error` class on failure |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
@@ -379,7 +381,7 @@ Dialogs:
 | `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
 | `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done` |
-| `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-close`, `svg-history-done` |
+| `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
 
 Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / lost AI image / save
 failure), `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
