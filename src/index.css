@@ -866,6 +866,31 @@
   font-size: 8px;
 }
 
+.svg-thumb.missing.error {
+  color: var(--v2-red);
+  border-color: #6b2a2a;
+  background: #1c1013;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* The inline preview frame: a fixed square the artwork is fitted into and
+   centred on (preserveAspectRatio="xMidYMid meet" does the fitting, so strokes
+   scale uniformly). The checkerboard is a transparency cue — dark AND light
+   artwork stay visible without tinting the artwork itself. */
+.svg-preview {
+  flex: none;
+  overflow: hidden;
+  border: 1px solid #35405e;
+  border-radius: 5px;
+  background-color: #39415e;
+  background-image:
+    linear-gradient(45deg, #232b45 25%, transparent 25%, transparent 75%, #232b45 75%),
+    linear-gradient(45deg, #232b45 25%, transparent 25%, transparent 75%, #232b45 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 5px 5px;
+}
+
 .svg-thumb-tag {
   position: absolute;
   left: 4px;
@@ -1085,6 +1110,20 @@
   font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
   resize: vertical;
   white-space: pre;
+}
+
+/* The code dialog shows the artwork beside the document it will copy. */
+.svg-code-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: var(--v2-surface);
+  font-size: 10px;
+  color: #a9b4ca;
 }
 
 .svg-history { width: 100%; border-collapse: collapse; font-size: 10px; color: #aab4cb; }

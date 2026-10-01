@@ -9,6 +9,12 @@ import { getAppState, patchSvg } from "../state/appstore";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 
+/** The newest valid version: what the row previews AND what Copy reads. */
+export interface SvgTarget {
+  version: number;
+  svgPath: string;
+}
+
 export function toRow(source: SvgSource, sidecar: SvgSidecar | null, corrupt: boolean): SvgRow {
   const newest = newestValidOf(sidecar);
   const failed = (sidecar?.versions ?? []).some((v) => v.status !== "generated");
@@ -23,6 +29,17 @@ export function toRow(source: SvgSource, sidecar: SvgSidecar | null, corrupt: bo
 export function newestValidOf(sidecar: SvgSidecar | null): SvgVersion | null {
   const list = (sidecar?.versions ?? []).filter((v) => v.status === "generated" && v.validation.ok);
   return list.length > 0 ? list[list.length - 1] : null;
+}
+
+/**
+ * The ONE version the row previews, copies and shows code for. Both halves
+ * read it, so the preview can never show a different version than Copy hands
+ * to the clipboard.
+ */
+export function previewTargetOf(row: SvgRow): SvgTarget | null {
+  const version = row.newest;
+  if (version === null || version.svgPath === "") return null;
+  return { version: version.version, svgPath: version.svgPath };
 }
 
 export function toListRow(row: SvgRow): SvgListRow {

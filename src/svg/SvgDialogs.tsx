@@ -10,6 +10,7 @@ import type { SvgConfig } from "../lib/svgconfig";
 import { fmtCost, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { buildComposite, type BuiltComposite } from "./composite";
+import SvgPreviewBox from "./SvgPreview";
 import { toBatchSource } from "./sources";
 import type { SvgVersion } from "../lib/svgfile";
 import type { Dialog, SvgRow } from "./types";
@@ -138,18 +139,26 @@ function Fact({ label, value, testid }: { label: string; value: string; testid?:
   );
 }
 
-function CodeDialog({ row, version, p }: { row: SvgRow; version: number; p: SvgDialogsProps }) {
+/** Loads the version's document and owns the textarea + copy that use it. */
+function useCodeDoc(p: SvgDialogsProps, id: string, version: number): {
+  code: string | null; ref: React.RefObject<HTMLTextAreaElement | null>; copy: () => void;
+} {
   const [code, setCode] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     let live = true;
-    void p.readCode(row.source.id, version).then((t) => live && setCode(t));
+    void p.readCode(id, version).then((t) => live && setCode(t));
     return () => { live = false; };
-  }, [p, row.source.id, version]);
+  }, [p, id, version]);
   const copy = () => {
     const text = ref.current?.value ?? "";
     void navigator.clipboard.writeText(text).then(() => undefined, () => undefined);
   };
+  return { code, ref, copy };
+}
+
+function CodeDialog({ row, version, p }: { row: SvgRow; version: number; p: SvgDialogsProps }) {
+  const { code, ref, copy } = useCodeDoc(p, row.source.id, version);
   return (
     <div className="svg-backdrop" data-testid="svg-code-dialog">
       <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="svg-code-title">
@@ -160,11 +169,25 @@ function CodeDialog({ row, version, p }: { row: SvgRow; version: number; p: SvgD
         <div className="svg-modal-body">
           {code === null
             ? <p className="svg-note" data-testid="svg-code-missing">This version has no readable SVG file.</p>
-            : <textarea ref={ref} className="svg-code" data-testid="svg-code-block" readOnly spellCheck={false}
-              aria-label={`SVG code for ${row.source.stem} version ${version}`} value={code} />}
+            : <>
+              <CodeDrawing code={code} stem={row.source.stem} version={version} />
+              <textarea ref={ref} className="svg-code" data-testid="svg-code-block" readOnly spellCheck={false}
+                aria-label={`SVG code for ${row.source.stem} version ${version}`} value={code} />
+            </>}
           <CodeActions code={code} ref={ref} copy={copy} onDone={p.onDismiss} />
         </div>
       </section>
+    </div>
+  );
+}
+
+/** The artwork of the version whose code sits underneath it. */
+function CodeDrawing({ code, stem, version }: { code: string; stem: string; version: number }) {
+  return (
+    <div className="svg-code-preview">
+      <SvgPreviewBox code={code} size={140} version={version} testid="svg-code-art"
+        label={`${stem} version ${version} preview`} />
+      <span data-testid="svg-code-preview-note">What this version draws — Copy hands over this exact document.</span>
     </div>
   );
 }

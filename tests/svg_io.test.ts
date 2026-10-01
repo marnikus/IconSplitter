@@ -1,6 +1,6 @@
 // svg_io.test.ts — the SVG tab's IO layer executes for real (RULE 8): scanning
 // the picked root for approved pairs, the row model, the runner-event mapping,
-// the review decision + its undo path, the state reducer, the preview rule and
+// the review decision + its undo path, the state reducer, the root token and
 // the write order that makes a bad result harmless. Each test fails if the
 // module it covers is deleted.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +15,6 @@ import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
 import type { SvgRow } from "../src/svg/types";
-import { hasPreview, svgPreviewUrl } from "../src/svg/preview";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
@@ -60,7 +59,7 @@ function decisionsJson(...approved: string[]): string {
 
 /** Minimal setters object that records what a scan wrote. */
 function setters() {
-  const out = { name: "", rows: [] as unknown[], discovery: null as unknown, busy: null as unknown, said: [] as string[] };
+  const out = { name: "", rows: [] as unknown[], discovery: null as unknown, busy: null as unknown, said: [] as string[], tokens: 0 };
   return {
     out,
     api: {
@@ -68,6 +67,7 @@ function setters() {
       setRows: (r: unknown[]) => { out.rows = r; },
       setDiscovery: (d: unknown) => { out.discovery = d; },
       setBusy: (b: unknown) => { out.busy = b; },
+      setRootToken: () => { out.tokens += 1; },
       say: (m: string) => { out.said.push(m); },
     },
   };
@@ -128,6 +128,8 @@ describe("scanSources", () => {
     await scanSources(r, s.api);
     expect(s.out.rows).toHaveLength(2);
     expect(s.out.busy).toBeNull();
+    // one bumped token per scan: a row's preview re-reads the file it shows
+    expect(s.out.tokens).toBe(1);
     const rows = s.out.rows as { source: { id: string }; sidecar: unknown }[];
     expect(rows.every((row) => row.sidecar === null)).toBe(true);
     expect(r.sidecars.size).toBe(2);
@@ -353,10 +355,11 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "dialog", dialog: null }).dialog).toBeNull();
   });
 
-  it("only previews a document that starts like an SVG", () => {
-    expect(hasPreview("<svg xmlns=\"http://www.w3.org/2000/svg\"/>")).toBe(true);
-    expect(hasPreview("not svg")).toBe(false);
-    expect(hasPreview(null)).toBe(false);
-    expect(svgPreviewUrl("<svg/>")).toBe("data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E");
+  it("bumps the root token so no preview can outlive its folder", () => {
+    expect(initialModel({ baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 }, "prompt", 84).rootToken).toBe(0);
+    const start = initialModel({ baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 }, "prompt", 84);
+    expect(reduceState(start, { type: "root-token" }).rootToken).toBe(1);
+    expect(reduceState(reduceState(start, { type: "root-token" }), { type: "root-token" }).rootToken).toBe(2);
+    expect(reduceState(start, { type: "root", name: "split_root" }).rootToken).toBe(1);
   });
 });

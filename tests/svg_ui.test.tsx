@@ -235,3 +235,107 @@ describe("Generate SVG panel", () => {
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("Pending");
   });
 });
+
+// The preview is the one surface that used to lie: the code copied fine while
+// the row painted nothing. These three cases drive the real DOM (RULE 8).
+describe("SVG row preview", () => {
+  // Stroke-only, no xmlns — renders inline, was invisible as an <img> (D1/D4).
+  const V1 = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16"/></svg>`;
+  const V2 = `<svg viewBox="0 0 64 32" fill="none" stroke="#7dd3fc" stroke-width="3"><path d="M2 16h60"/></svg>`;
+  const BROKEN = `<svg viewBox="0 0 24 24"><path d="M2 2h20v20H2z"`;
+  const copied: string[] = [];
+
+  beforeEach(() => {
+    copied.length = 0;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: (text: string) => { copied.push(text); return Promise.resolve(); } },
+    });
+  });
+
+  /** fog carries v1+v2 (v2 newest); court carries nothing; harbor is broken. */
+  async function makePreviewRoot(): Promise<FakeDir> {
+    const root = new FakeDir("split_root");
+    const arch = new FakeDir("architecture");
+    const svgVersion = (version: number, path: string) => ({
+      version, svgPath: path, status: "generated", review: "pending",
+      prompt: "p", provider: "Requesty", model: "openai/gpt-6.1-sol",
+      requestedAt: "2026-10-01T10:00:00.000Z", completedAt: "2026-10-01T10:00:05.000Z",
+      usage: { input: 100, output: 200, total: 300 },
+      cost: { actual: 0.01, estimated: null, currency: "USD", pricing: null },
+      validation: { ok: true, errors: [], warnings: [], icons: 1 },
+      batch: null, error: null, requestId: null,
+    });
+    for (const [id, name] of [[FOG, "fog"], [COURT, "court"]] as const) {
+      arch.children.set(`${name}.png`, new FakeFile(`${name}.png`, 12, 3000, "a"));
+      arch.children.set(`${name}_AI.png`, new FakeFile(`${name}_AI.png`, 20, 3100, "b"));
+      void id;
+    }
+    arch.children.set("fog_AI.svg", new FakeFile("fog_AI.svg", V1.length, 3200, V1));
+    arch.children.set("fog_AI_v2.svg", new FakeFile("fog_AI_v2.svg", V2.length, 3300, V2));
+    arch.children.set("fog_AI.svg.json", new FakeFile("fog_AI.svg.json", 10, 3300, JSON.stringify({
+      v: 1,
+      source: { relPath: "architecture/fog_AI.png", name: "fog_AI.png", fingerprint: "20:3100" },
+      versions: [svgVersion(1, "architecture/fog_AI.svg"), svgVersion(2, "architecture/fog_AI_v2.svg")],
+    })));
+    const coast = new FakeDir("coastal");
+    coast.children.set("harbor.png", new FakeFile("harbor.png", 12, 1000, "e"));
+    coast.children.set("harbor_AI.png", new FakeFile("harbor_AI.png", 20, 1100, "f"));
+    coast.children.set("harbor_AI.svg", new FakeFile("harbor_AI.svg", BROKEN.length, 1200, BROKEN));
+    coast.children.set("harbor_AI.svg.json", new FakeFile("harbor_AI.svg.json", 10, 1200, JSON.stringify({
+      v: 1,
+      source: { relPath: "coastal/harbor_AI.png", name: "harbor_AI.png", fingerprint: "20:1100" },
+      versions: [svgVersion(1, "coastal/harbor_AI.svg")],
+    })));
+    root.children.set("architecture", arch);
+    root.children.set("coastal", coast);
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({
+      records: [FOG, COURT, pairId("coastal", "harbor", "")].map((id) => ({
+        pair_id: id, source: `${id}.png`, ai_result: `${id}_AI.png`,
+        decision: "approved", reviewed_at: "2026-10-01T09:00:00.000Z",
+      })),
+    })));
+    return root;
+  }
+
+  const HARBOR = pairId("coastal", "harbor", "");
+  const frame = (id: string) => q(`[data-testid=svg-prev-${id}]`) as HTMLElement | null;
+  const inlineSvg = (id: string) => frame(id)?.shadowRoot?.querySelector("svg") ?? null;
+
+  it("renders the newest SVG inline, fitted and centred, xmlns and all", async () => {
+    await mount(await makePreviewRoot());
+    const svg = inlineSvg(FOG);
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("xmlns")).toBe("http://www.w3.org/2000/svg");
+    // fit + centre: the document fills the frame and keeps its own ratio
+    expect(svg?.getAttribute("width")).toBe("100%");
+    expect(svg?.getAttribute("height")).toBe("100%");
+    expect(svg?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+    // v2 is the newest version, so v2 is what the frame shows (64x32 box)
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 64 32");
+    expect(frame(FOG)?.dataset.version).toBe("2");
+    // a stroke-only icon paints with currentColor, so the preview must give it
+    // an ink — without one it drew black on a near-black frame (D4).
+    expect(svg?.getAttribute("style") ?? "").toContain("color:");
+  });
+
+  it("previews and copies the SAME version", async () => {
+    await mount(await makePreviewRoot());
+    expect(frame(FOG)?.dataset.version).toBe("2");
+    expect(q(`[data-testid=svg-usage-${FOG}]`)?.textContent).toContain("v2");
+    await act(async () => { (q(`[data-testid=svg-copy-${FOG}]`) as HTMLButtonElement).click(); });
+    await settle();
+    expect(copied).toEqual([V2]);
+  });
+
+  it("says why a saved SVG cannot be previewed — empty stays empty (RULE 4)", async () => {
+    await mount(await makePreviewRoot());
+    const broken = frame(HARBOR);
+    expect(broken?.textContent).toContain("Preview failed");
+    expect(broken?.dataset.error).toBe("not well-formed XML");
+    expect(inlineSvg(HARBOR)).toBeNull();
+    // court has no SVG at all: that is empty, not broken
+    expect(frame(COURT)?.textContent).toBe("No SVG");
+    expect(frame(COURT)?.dataset.error).toBeUndefined();
+  });
+});

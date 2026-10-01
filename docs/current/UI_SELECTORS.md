@@ -353,7 +353,8 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 |---|---|---|
 | `svg-row-{sourceId}` | row `role="listitem"` | keyed by the stable pair id, never a row index |
 | `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"` |
-| `svg-ai-{sourceId}` / `svg-prev-{sourceId}` | thumbnails | the approved AI image and the newest valid SVG; missing → placeholder with an aria-label |
+| `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>`); missing → placeholder |
+| `svg-prev-{sourceId}` | preview frame | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame sized by `svg-thumb`; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the version history; disabled with no SVG / no versions |
 | `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
@@ -378,7 +379,7 @@ Dialogs:
 | `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
 | `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
 | `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
-| `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done` |
+| `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-close`, `svg-history-done` |
 
 Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / lost AI image / save

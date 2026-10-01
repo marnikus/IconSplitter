@@ -19,6 +19,8 @@ export interface ScanSetters {
   setRows: (rows: SvgRow[]) => void;
   setDiscovery: (d: Discovery | null) => void;
   setBusy: (b: string | null) => void;
+  /** Called once per scan: every row re-reads the SVG it previews. */
+  setRootToken: () => void;
   say: (msg: string, err?: boolean) => void;
 }
 
@@ -43,6 +45,7 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
     }
     s.setRows(rows);
     s.setDiscovery(found);
+    s.setRootToken();
     saveSourceIndex(found.sources.map(toIndexEntry));
     pruneChecked(rows);
     reportScan(found, s.say);

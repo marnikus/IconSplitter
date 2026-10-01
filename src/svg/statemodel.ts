@@ -26,6 +26,8 @@ export interface SvgModel {
   /** Masked key for display; the key itself lives in svg/keystore. */
   keyMask: string;
   keySet: boolean;
+  /** Bumped by every pick and scan so a preview cannot outlive its folder. */
+  rootToken: number;
   thumb: number;
   filter: SvgListFilter;
   sort: SvgSort;
@@ -44,6 +46,7 @@ export type SvgAction =
   | { type: "config"; config: SvgConfig }
   | { type: "prompt"; prompt: string }
   | { type: "key"; key: string | null }
+  | { type: "root-token" }
   | { type: "thumb"; px: number }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
@@ -54,7 +57,7 @@ export type SvgAction =
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
-  root: (m, a) => ({ ...m, rootName: (a as { name: string }).name }),
+  root: (m, a) => ({ ...m, rootName: (a as { name: string }).name, rootToken: m.rootToken + 1 }),
   rows: (m, a) => ({ ...m, rows: (a as { rows: SvgRow[] }).rows }),
   "rows-fn": (m, a) => ({ ...m, rows: (a as { fn: (r: SvgRow[]) => SvgRow[] }).fn(m.rows) }),
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: Discovery | null }).discovery }),
@@ -63,6 +66,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   config: (m, a) => ({ ...m, config: (a as { config: SvgConfig }).config }),
   prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
+  "root-token": (m) => ({ ...m, rootToken: m.rootToken + 1 }),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
   sort: (m, a) => ({ ...m, sort: (a as { sort: SvgSort }).sort }),
@@ -90,7 +94,7 @@ function mask(key: string): string {
 export function initialModel(config: SvgConfig, prompt: string, thumb: number): SvgModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
-    config, prompt, keyMask: "not set", keySet: false, thumb,
+    config, prompt, keyMask: "not set", keySet: false, rootToken: 0, thumb,
     filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false,
   };
 }
