@@ -7,7 +7,8 @@
 
 import { useEffect, useRef } from "react";
 import type { ReviewStatus } from "../lib/svgfile";
-import { costLabel, fmtCost, fmtTokens } from "../lib/svgusage";
+import type { PreviewBackground } from "../lib/svgbackground";
+import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import SvgThumbs from "./SvgThumbs";
 import type { SvgRow } from "./types";
@@ -16,6 +17,7 @@ export interface SvgRowActions {
   activeId: string | null;
   checked: string[];
   thumb: number;
+  bg: PreviewBackground;
   rootRef: { current: DirHandleLike | null };
   toggleCheck: (id: string) => void;
   setActive: (id: string) => void;
@@ -40,7 +42,7 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`} checked={checked}
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
-      <SvgThumbs rootRef={a.rootRef} row={row} thumb={a.thumb} />
+      <SvgThumbs rootRef={a.rootRef} row={row} thumb={a.thumb} bg={a.bg} />
       <FileCell row={row} />
       <StatusCell row={row} />
       <ReviewCell row={row} />
@@ -129,14 +131,18 @@ function ReviewCell({ row }: { row: SvgRow }) {
   );
 }
 
+/** Version, tokens and cost of the newest version — reported or Estimated. */
 function UsageCell({ row }: { row: SvgRow }) {
   const v = row.newest;
-  const usage = v ? { input: v.usage.input, output: v.usage.output, total: v.usage.total, cost: v.cost.actual, currency: v.cost.currency, estimated: v.cost.estimated } : null;
   return (
     <div className="svg-cell svg-usage" data-testid={`svg-usage-${row.source.id}`}>
       <strong>{v ? `v${v.version}` : "—"}</strong>
-      {usage === null ? <small>no usage</small> : <small>{fmtTokens(usage.total)} tokens</small>}
-      {usage === null ? <small>{fmtCost(null)}</small> : <small>{costLabel(usage)}</small>}
+      {v === null
+        ? <small>no usage</small>
+        : <small>{fmtTokens(v.usage.total)} tokens</small>}
+      <small title={v === null ? undefined : costNote(v.model, v.cost)}>
+        {v === null ? costLabel({ actual: null, estimated: null, currency: "USD", pricing: "", basis: "none" }) : costLabel(v.cost)}
+      </small>
     </div>
   );
 }

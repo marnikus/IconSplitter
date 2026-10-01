@@ -140,10 +140,12 @@ function useModelSync(model: SvgModel, dispatch: Dispatch<SvgAction>, say: SvgCt
   }, [key]);
 }
 
-/** Zoom, the card's minimized state and the prompt are remembered (RULE 6). */
+/** Zoom, the card's minimized state, the preview background and the prompt are
+    remembered locally (RULE 6). */
 function useSvgPersist(model: SvgModel): void {
-  useEffect(() => saveSvgPrefs({ thumbHeight: model.thumb, providerOpen: model.providerOpen }),
-    [model.thumb, model.providerOpen]);
+  useEffect(() => saveSvgPrefs({
+    thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg,
+  }), [model.thumb, model.providerOpen, model.bg]);
   useEffect(() => saveConfig(model.config), [model.config]);
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
 }

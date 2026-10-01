@@ -15,7 +15,7 @@ import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
 import { DEFAULT_SVG_PREFS, SVG_PREFS_KEY, loadSvgPrefs, parseSvgPrefs, saveSvgPrefs } from "../src/svg/prefsstore";
-import { THUMB_DEFAULT } from "../src/lib/reviewprefs";
+import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { hasPreview, svgPreviewUrl } from "../src/svg/preview";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
@@ -286,13 +286,13 @@ describe("runner events and the review decision", () => {
   it("summarises a run in one line with the real usage", () => {
     const line = summaryLine({
       batches: 2, saved: 3, failed: 1, missing: 0, invalid: 1, cancelled: false,
-      usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" }, problems: [],
+      usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" }, estimated: null, problems: [],
     });
-    expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500");
+    expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500 reported");
     expect(summaryLine({
-      batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true,
+      batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true, estimated: 0.02,
       usage: { input: null, output: null, total: null, cost: null, currency: "USD" }, problems: [],
-    })).toContain("cancelled");
+    })).toContain("$0.0200 Estimated");
   });
 
   it("approves the newest version of every named source and pushes ONE entry", async () => {
@@ -338,10 +338,11 @@ describe("runner events and the review decision", () => {
 });
 
 const CFG = { baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 };
+const VIEW_PREFS = { thumb: 84, providerOpen: true, bg: { preset: "white", custom: "#808080" } } as const;
 
 describe("state reducer and preview", () => {
   it("starts from the documented defaults and applies every action once", () => {
-    const start = initialModel(CFG, "prompt", 84);
+    const start = initialModel(CFG, "prompt", VIEW_PREFS);
     expect(start.filter).toEqual({ generation: "all", review: "all", search: "" });
     expect(start.keyMask).toBe("not set");
     expect(reduceState(start, { type: "key", key: "not-a-real-key-value-1234" }).keySet).toBe(true);
@@ -357,28 +358,28 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "dialog", dialog: null }).dialog).toBeNull();
   });
 
-  it("remembers the zoom and whether the model card is minimized", () => {
+  it("remembers the zoom, the card's state and the preview background", () => {
     localStorage.setItem(SVG_PREFS_KEY, JSON.stringify({ thumbHeight: 132, providerOpen: false }));
-    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false });
-    saveSvgPrefs({ thumbHeight: 96, providerOpen: false });
-    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false, previewBg: DEFAULT_PREVIEW_BACKGROUND });
+    saveSvgPrefs({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
     localStorage.removeItem(SVG_PREFS_KEY);
   });
 
   it("shows the model card when the stored value is missing or not a boolean", () => {
-    expect(parseSvgPrefs({})).toEqual({ thumbHeight: THUMB_DEFAULT, providerOpen: true });
-    expect(parseSvgPrefs({ providerOpen: "closed" })).toEqual({ thumbHeight: THUMB_DEFAULT, providerOpen: true });
-    expect(parseSvgPrefs({ thumbHeight: 140 })).toEqual({ thumbHeight: 140, providerOpen: true });
+    expect(parseSvgPrefs({})).toEqual({ ...DEFAULT_SVG_PREFS, providerOpen: true });
+    expect(parseSvgPrefs({ providerOpen: "closed" })).toEqual({ ...DEFAULT_SVG_PREFS, providerOpen: true });
+    expect(parseSvgPrefs({ thumbHeight: 140 })).toEqual({ ...DEFAULT_SVG_PREFS, thumbHeight: 140, providerOpen: true });
     expect(parseSvgPrefs(null)).toEqual(DEFAULT_SVG_PREFS);
   });
 
   it("minimizes and restores the model card through one action", () => {
-    const start = initialModel(CFG, "prompt", 84);
+    const start = initialModel(CFG, "prompt", VIEW_PREFS);
     expect(start.providerOpen).toBe(true);
     const closed = reduceState(start, { type: "provider-open", open: false });
     expect(closed.providerOpen).toBe(false);
     expect(closed.config).toBe(start.config); // nothing else moved
-    expect(initialModel(CFG, "prompt", 84, false).providerOpen).toBe(false);
+    expect(initialModel(CFG, "prompt", { ...VIEW_PREFS, providerOpen: false }).providerOpen).toBe(false);
   });
 
   it("only previews a document that starts like an SVG", () => {

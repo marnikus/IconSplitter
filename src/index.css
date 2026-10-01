@@ -838,6 +838,27 @@
 
 .svg-rows { min-height: 0; overflow: auto; scrollbar-color: #313b58 #0c1222; }
 
+.svg-bg { display: flex; align-items: center; gap: 4px; }
+.svg-bg > label {
+  color: var(--v2-muted-2);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
+.svg-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #35405e;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.svg-swatch.on { outline: 2px solid var(--v2-purple-2); outline-offset: 1px; }
+.svg-bg input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
+.svg-bg-value { color: var(--v2-muted); font-size: 9px; white-space: nowrap; }
+
 .svg-row {
   position: relative;
   min-height: calc(var(--svg-thumb) + 22px);
@@ -874,6 +895,15 @@
   background: #05070f;
   object-fit: contain;
   transition: height 0.15s;
+}
+
+/* Preview frame: the user's background colour sits BEHIND the SVG (the image
+   itself keeps a transparent background), and a dark frame adds a light
+   outline around the artwork so black strokes cannot disappear. Preview only —
+   the saved document is never touched. */
+.svg-preview-frame .svg-thumb { background: transparent; }
+.svg-preview-frame.contrast .svg-thumb {
+  filter: drop-shadow(0 0 1px rgb(255 255 255 / 92%)) drop-shadow(0 0 2px rgb(255 255 255 / 55%));
 }
 
 .svg-thumb.missing {
@@ -1094,6 +1124,8 @@
 
 .svg-composite { margin: 10px 0; }
 .svg-composite-img { max-width: 100%; max-height: 320px; border: 1px solid var(--v2-line-strong); border-radius: 7px; background: #05070f; }
+
+.svg-history-cost small { display: block; color: var(--v2-muted-2); font-size: 8px; }
 
 .svg-code {
   width: 100%;

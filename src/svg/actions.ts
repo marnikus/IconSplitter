@@ -7,6 +7,7 @@
 import { useCallback, useRef, type Dispatch } from "react";
 import type { ReviewStatus } from "../lib/svgfile";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
+import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import type { DirHandleLike } from "../lib/fs";
@@ -63,6 +64,7 @@ export interface SvgActions {
   chooseRoot: () => void;
   rescan: () => void;
   setThumb: (px: number) => void;
+  setPreviewBg: (bg: PreviewBackground) => void;
   setFilter: (patch: Partial<SvgListFilter>) => void;
   setSort: (sort: SvgSort) => void;
   setConfig: (patch: Partial<SvgConfig>) => void;
@@ -126,10 +128,12 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   return { chooseRoot, rescan };
 }
 
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setFilter" | "setSort" | "setPrompt" | "resetPrompt" | "setProviderOpen"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setProviderOpen" | "setFilter" | "setSort" | "setPrompt" | "resetPrompt"> {
   const latest = useRef(ctx);
   latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
+  // validated on the way in as well as on the way out (RULE 13)
+  const setPreviewBg = useCallback((bg: PreviewBackground) => latest.current.dispatch({ type: "bg", bg: parsePreviewBackground(bg) }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
@@ -139,7 +143,7 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setFilter" | "setSort"
     c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
     c.say("Default prompt restored");
   }, []);
-  return { setThumb, setFilter, setSort, setProviderOpen, setPrompt, resetPrompt };
+  return { setThumb, setPreviewBg, setProviderOpen, setFilter, setSort, setPrompt, resetPrompt };
 }
 
 /**

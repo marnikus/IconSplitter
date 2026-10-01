@@ -13,6 +13,7 @@ import {
   type SamplingParams,
 } from "../lib/modelcaps";
 import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import type { PreviewBackground } from "../lib/svgbackground";
 import type { Discovery } from "./sources";
 import type { Dialog, RunProgress, SvgRow } from "./types";
 
@@ -44,6 +45,8 @@ export interface SvgModel {
   thumb: number;
   /** false while the provider card is minimized to its header line. */
   providerOpen: boolean;
+  /** Preview-frame background — an app setting, never part of an SVG. */
+  bg: PreviewBackground;
   filter: SvgListFilter;
   sort: SvgSort;
   dialog: Dialog | null;
@@ -67,6 +70,7 @@ export type SvgAction =
   | { type: "key"; key: string | null }
   | { type: "thumb"; px: number }
   | { type: "provider-open"; open: boolean }
+  | { type: "bg"; bg: PreviewBackground }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
   | { type: "dialog"; dialog: Dialog | null }
@@ -91,6 +95,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
+  bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
   sort: (m, a) => ({ ...m, sort: (a as { sort: SvgSort }).sort }),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: Dialog | null }).dialog }),
@@ -113,17 +118,25 @@ function mask(key: string): string {
   return `${key.slice(0, 8)}${"•".repeat(10)}${key.slice(-4)}`;
 }
 
+/** The persisted view values a fresh tab opens with (RULE 13: already parsed). */
+export interface ViewPrefs {
+  thumb: number;
+  providerOpen: boolean;
+  bg: PreviewBackground;
+}
+
 /** The model a fresh tab opens with (persisted values are merged in boot). */
-export function initialModel(config: SvgConfig, prompt: string, thumb: number, providerOpen = true): SvgModel {
+export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs): SvgModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, keyMask: "not set", keySet: false, thumb, providerOpen,
+    prompt, keyMask: "not set", keySet: false,
+    thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
     filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false,
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
-export function useSvgModel(config: SvgConfig, prompt: string, thumb: number, providerOpen: boolean): [SvgModel, Dispatch<SvgAction>] {
-  return useReducer(reduceState, config, (c) => initialModel(c, prompt, thumb, providerOpen));
+export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs): [SvgModel, Dispatch<SvgAction>] {
+  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs));
 }

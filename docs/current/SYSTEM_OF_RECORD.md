@@ -151,12 +151,24 @@ that makes a network call, only when the user asks it to):
   = pending; a corrupt sidecar warns and never destroys the SVG files. Each
   version records the source path/fingerprint, the SVG path/version, the
   generation and review status, the exact prompt, provider+model, request and
-  completion timestamps, input/output/total tokens when reported, the
-  provider-reported cost + currency when reported, the validation result and
-  a redacted error.
-* Tokens & cost: per-version usage is shown as reported; a batch total is
-  split across its images and labelled **estimated**; a missing number is
-  shown as "—" and never invented.
+  completion timestamps, input/output/total tokens when reported, the cost with
+  its currency, basis and **pricing version**, the validation result and a
+  redacted error.
+* Tokens & cost: every task/version shows tokens **and** the cost beside them —
+  in the row, in the version history and in the run summary. A provider-reported
+  number is shown as "reported"; a calculated one is always labelled
+  **Estimated** and names its pricing version. The calculation is either the
+  image's share of a batch total or, when no cost was reported at all, the
+  versioned rate card (`lib/svgpricing`, verified Requesty rates). Neither is
+  ever presented as provider-reported, and a missing number is shown as "—" and
+  never invented.
+* Preview background (prompt §16): the SVG preview sits in a frame whose colour
+  the user picks — White / Black / Gray / Green / Red plus a custom colour —
+  applied as a CSS background of the wrapper, so **no SVG document, fill,
+  sidecar or export is ever modified** by it. The choice is persisted with the
+  tab's view prefs and restored on the next visit. Where the chosen colour
+  leaves black artwork under 3:1 contrast (WCAG non-text), the frame adds a
+  light outline around the artwork so black strokes stay visible.
 * Review: a new valid SVG starts **pending**; Approve/Decline act on the
   selection (one history entry per gesture, undoable). The approved version
   is identified in the row; regenerating adds a new pending version without
@@ -275,6 +287,12 @@ Batch:
 * **I-16 (selection V2, RULE 24):** the zoom slider, the row height and the
   thumbnail height are one value; moving the slider changes all three in the
   same render, and the stored value survives a restart.
+* **I-17 (SVG preview, RULE 3/14):** the preview background is an app setting —
+  it lives in the frame around the preview and never in the SVG text, the
+  sidecar or an export; the code dialog always shows the saved bytes.
+* **I-18 (SVG cost, RULE 4):** a version's cost is either provider-reported or a
+  labelled estimate; the two are never merged, never relabelled and never
+  invented, and both survive a restart through the sidecar.
 
 ## 6. Storage map
 
@@ -289,7 +307,7 @@ Batch:
 | IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle (shared by both Selection tabs) | permission re-requested on restore |
 | localStorage `iconSplitter.selectionV2.prefs.v1` | V2 view prefs `{ mode, thumbHeight }` | validated + clamped on read (RULE 13) |
 | IndexedDB `iconSplitter/handles["__svg__"]` | Generate SVG root handle | falls back to the Selection handle |
-| localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight, providerOpen }` | clamped on read; a missing/non-boolean `providerOpen` keeps the model card open |
+| localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read (RULE 13); a missing/non-boolean `providerOpen` keeps the model card open |
 | localStorage `iconSplitter.svg.prompt.v1` | generation prompt | empty/missing → documented default |
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, timeout, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
@@ -317,7 +335,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
-| SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgsecret.ts`, `modelcaps.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, icon count, sidecar model + versioning, list filters/sort/totals, request + error classification, token/cost formatting, secret masking, per-model capability rules (temperature / token field / effort tiers) + value sanitising |
+| SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `modelcaps.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request + error classification, token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, per-model capability rules (temperature / token field / effort tiers) + value sanitising |
 | SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery, sidecar IO, key store, the generation run, row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `preview.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews, batch strip, dialogs, hotkeys, the three sampling controls |
 
@@ -366,6 +384,16 @@ and `data-testid` handles):
   model id, prompt/manifest text, response split + name/title matching,
   validation/security, icon count, sidecar model + versioning, batch plan,
   composite layout, request payload, error classification, usage formatting
+* `svg_bg.test.ts`, `svg_cost.test.ts` — the preview-background rules (presets,
+  hex validation, stored-payload fallback, the black-vs-background contrast
+  rule) and the cost rules (verified rate card + version, provider-reported vs
+  batch share vs rate card, the wording every surface uses, reported and
+  estimated totals kept apart)
+* `svg_cost_io.test.ts` — cost through the real write path: provider-reported
+  numbers stored as reported, a batch share stored as Estimated, the rate card
+  used only when nothing was reported, a charged-but-invalid result keeping its
+  usage, the sidecar read back after a "restart", and a legacy record without
+  cost reading as unknown instead of crashing a row
 * `svg_io.test.ts` — the SVG IO layer: approved-only discovery + corrupt /
   missing / unreadable reporting, scan + remembered root, row model, the
   write order (validate first, never overwrite, failure records), runner
@@ -413,6 +441,10 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   `docs/archive/2026-10-01-generate-svg/design.md` (approved-only discovery,
   contact-sheet batching, name+title matching, validate-before-write,
   per-source sidecar versioning, token/cost honesty, RULE 20 key handling).
+* 2026-10-01 — preview background + task cost designed TDD-first:
+  `docs/archive/2026-10-01-svg-preview-cost/design.md` (preview-only frame and
+  the contrast rule, one cost decision with a versioned rate card, cost basis +
+  pricing version in the sidecar).
 
 ## 11. Current UI — control inventory
 
@@ -452,12 +484,16 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-filter-review`, `svg-sort`, `svg-search`, `svg-shown`,
   `svg-clear-filters`), bulk bar (`svg-check-all`, `svg-selected-count`,
   `svg-select-visible`, `svg-deselect`, `svg-thumb` + `svg-thumb-value`,
-  `svg-estimate`, `svg-generate-selected`, `svg-approve-selected`,
+  preview background (`svg-bg`, `svg-bg-{white,black,gray,green,red}`,
+  `svg-bg-custom`, `svg-bg-value`), `svg-estimate`,
+  `svg-generate-selected`, `svg-approve-selected`,
   `svg-decline-selected`, `svg-cancel-run`), list (`svg-list`, `svg-rows`,
-  `svg-row-*`, `svg-check-*`, `svg-ai-*` / `svg-prev-*`, `svg-status-*`,
+  `svg-row-*`, `svg-check-*`, `svg-ai-*` / `svg-prev-*`,
+  `svg-prev-frame-*` (the coloured frame), `svg-status-*`,
   `svg-review-*`, `svg-usage-*`, `svg-persist-*`, `svg-generate-*`,
   `svg-approve-*`, `svg-decline-*`, `svg-location-*`, `svg-copy-*`,
-  `svg-code-*`, `svg-history-*`, `svg-empty`), batch strip (`svg-batch`,
+  `svg-code-*`, `svg-history-*` + `svg-history-cost-{n}`, `svg-empty`),
+  batch strip (`svg-batch`,
   `svg-batch-composite`, `svg-batch-grid`, `svg-batch-counts`), dialogs
   (`svg-confirm`, `svg-manifest`, `svg-composite`, `svg-code-dialog`,
   `svg-history-dialog`), banners (`svg-warn-*`), status bar
