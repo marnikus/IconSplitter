@@ -108,7 +108,8 @@ Switch to the **Batch folders** tab to process a whole directory tree of
 sheets in one go.
 
 1. **Choose source folder** — the app walks the folder recursively, keeps your
-   relative paths, and collects every `*_AI` / `*_AI_<n>` image. Each source
+   relative paths, and collects every `*_AI` image with a numeric tail
+   (`*_AI_7`, `*_AI_9_01`, …). Each source
    gets a status file `<base>.json` next to its reference image, tracking
    `unprocessed / processed / changed / missing / deleted` per record.
 2. **Review** — a table shows thumbnails, filenames, relative paths and

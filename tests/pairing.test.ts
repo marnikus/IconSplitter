@@ -50,6 +50,18 @@ describe("pairEntries", () => {
     expect(new Set(pairs.map((p) => p.pairId)).size).toBe(2);
   });
 
+  it("pairs the real-world layout: reference + multi-tail _AI_9_01 result", () => {
+    const pairs = pairEntries([
+      file("", "icon-airplane-landing.png", 5, 111),
+      file("", "icon-airplane-landing_AI_9_01.png", 9, 222),
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].base).toBe("icon-airplane-landing");
+    expect(pairs[0].source?.relPath).toBe("icon-airplane-landing.png");
+    expect(pairs[0].ai?.relPath).toBe("icon-airplane-landing_AI_9_01.png");
+    expect(attentionInfo(pairs[0])).toBeNull();
+  });
+
   it("never emits the same pair twice for duplicated input", () => {
     const e = [file("", "d.png"), file("", "d_AI.png"), file("", "d_AI.png")];
     const pairs = pairEntries(e);

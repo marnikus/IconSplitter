@@ -54,7 +54,7 @@ function addAiPair(e: FileEntry, sources: SourceMap, out: Map<string, ReviewPair
   if (!ai || !isImageExt(ai.ext)) return;
   const src = sources.get(srcPath(e, ai.base, ai.ext)) ?? null;
   const pair: ReviewPair = {
-    pairId: pairId(e.dirPath, ai.base, ai.variant),
+    pairId: pairId(e.dirPath, ai.base, ai.suffix),
     base: ai.base,
     relDir: e.dirPath,
     source: src ? toSide(src) : null,
@@ -70,8 +70,8 @@ function addOrphanSources(entries: FileEntry[], sources: SourceMap, out: Map<str
   for (const e of entries) {
     if (!sources.has(e.relPath.toLowerCase()) || pairedSrc.has(e.relPath.toLowerCase())) continue;
     const base = stem(e.name);
-    out.set(pairId(e.dirPath, base, null), {
-      pairId: pairId(e.dirPath, base, null),
+    out.set(pairId(e.dirPath, base, ""), {
+      pairId: pairId(e.dirPath, base, ""),
       base,
       relDir: e.dirPath,
       source: toSide(e),
@@ -83,7 +83,7 @@ function addOrphanSources(entries: FileEntry[], sources: SourceMap, out: Map<str
 }
 
 function srcPath(e: FileEntry, base: string, ext: string): string {
-  const name = referenceName({ base, variant: null, ext });
+  const name = referenceName({ base, suffix: "", ext });
   return e.dirPath ? `${e.dirPath}/${name}` : name;
 }
 
@@ -96,10 +96,9 @@ function stem(name: string): string {
   return i > 0 ? name.slice(0, i) : name;
 }
 
-/** Stable id: hash of dir + base (+variant); same content, same id. */
-export function pairId(dirPath: string, base: string, variant: number | null): string {
-  const v = variant === null ? "" : `_v${variant}`;
-  return `pair_${fnv1a32(`${dirPath}/${base}${v}`.toLowerCase()).toString(16).padStart(8, "0")}`;
+/** Stable id: hash of dir + base (+AI suffix); same content, same id. */
+export function pairId(dirPath: string, base: string, suffix: string): string {
+  return `pair_${fnv1a32(`${dirPath}/${base}${suffix}`.toLowerCase()).toString(16).padStart(8, "0")}`;
 }
 
 /** Rename/move identity: size+mtime of the surviving side (source preferred). */

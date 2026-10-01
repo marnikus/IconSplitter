@@ -6,24 +6,32 @@ import {
 
 describe("parseAiName — eligibility (spec §4)", () => {
   it("accepts plain _AI and numbered variants", () => {
-    expect(parseAiName("icon-award-ribbon_AI.png")).toEqual({ base: "icon-award-ribbon", variant: null, ext: ".png" });
-    expect(parseAiName("icon-award-ribbon_AI_7.png")).toEqual({ base: "icon-award-ribbon", variant: 7, ext: ".png" });
+    expect(parseAiName("icon-award-ribbon_AI.png")).toEqual({ base: "icon-award-ribbon", suffix: "", ext: ".png" });
+    expect(parseAiName("icon-award-ribbon_AI_7.png")).toEqual({ base: "icon-award-ribbon", suffix: "_7", ext: ".png" });
+  });
+  it("accepts multi-part numeric tails like batch outputs (_AI_9_01)", () => {
+    expect(parseAiName("icon-airplane-landing_AI_9_01.png")).toEqual({
+      base: "icon-airplane-landing", suffix: "_9_01", ext: ".png",
+    });
+    expect(parseAiName("x_AI_1_2_3.webp")).toEqual({ base: "x", suffix: "_1_2_3", ext: ".webp" });
   });
   it("is case-insensitive on the suffix and keeps base text untouched", () => {
-    expect(parseAiName("Logo_ai.JPG")).toEqual({ base: "Logo", variant: null, ext: ".JPG" });
+    expect(parseAiName("Logo_ai.JPG")).toEqual({ base: "Logo", suffix: "", ext: ".JPG" });
     expect(parseAiName("x_AI_12.webp")?.base).toBe("x");
   });
-  it("rejects references, non-numeric variants and non-AI names", () => {
+  it("rejects references, non-numeric tails and non-AI names", () => {
     expect(parseAiName("icon-award-ribbon.png")).toBeNull();
     expect(parseAiName("icon_AI_x.png")).toBeNull();
+    expect(parseAiName("icon_AI_9_a.png")).toBeNull(); // tail must stay numeric
     expect(parseAiName("icon-ai.png")).toBeNull(); // 'ai' inside the word is not the suffix
     expect(parseAiName("noext_AI")).toBeNull();
   });
 });
 
 describe("referenceName / split names (spec §4, §5)", () => {
-  it("derives the reference file from the parsed AI name", () => {
-    expect(referenceName({ base: "icon-award-ribbon", variant: 7, ext: ".png" })).toBe("icon-award-ribbon.png");
+  it("derives the reference file from the parsed AI name, ignoring the tail", () => {
+    expect(referenceName({ base: "icon-award-ribbon", suffix: "_7", ext: ".png" })).toBe("icon-award-ribbon.png");
+    expect(referenceName({ base: "icon-airplane-landing", suffix: "_9_01", ext: ".png" })).toBe("icon-airplane-landing.png");
   });
   it("folder = source name without extension", () => {
     expect(splitFolderName("icon-award-ribbon_AI.png")).toBe("icon-award-ribbon_AI");

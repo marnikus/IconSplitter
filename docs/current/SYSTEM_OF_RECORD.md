@@ -39,7 +39,8 @@ Batch folders:
 
 * Pick a source root (readwrite handle). Recursively scans all images; the
   output folder `_split_output` is ignored during scans (configurable list).
-* Only `name_AI.ext` / `name_AI_<n>.ext` images are eligible; the reference
+* Only `name_AI.ext` images with an optional numeric tail (`name_AI_7.ext`,
+  `name_AI_9_01.ext` — the shapes batch outputs use) are eligible; the reference
   `name.ext` is linked, never processed, and copied into every `split_NN`
   subfolder. Missing reference → warning + user may skip or continue.
 * Review window: thumbnail, filename, relPath, status badge
@@ -58,8 +59,8 @@ Batch folders:
 
 Selection:
 
-* Recursive scan pairs `name.ext` with `name_AI.ext` / `name_AI_<n>.ext`
-  (stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
+* Recursive scan pairs `name.ext` with `name_AI.ext` incl. numeric tails
+  (`name_AI_9_01.ext`; stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
   "AI result missing" / "Original missing", never silently dropped.
 * Review list: thumbnail, filename, relative folder, creation date, status
   chip with text + glyph; search, month / custom-range date filters, status

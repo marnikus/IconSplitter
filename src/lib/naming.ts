@@ -4,18 +4,18 @@
 
 export interface AiName {
   base: string; // without _AI and without extension
-  variant: number | null; // _AI_7 -> 7; plain _AI -> null
+  suffix: string; // numeric tail after _AI: "" | "_7" | "_9_01" (batch outputs)
   ext: string; // includes the dot, original case
 }
 
-const AI_RE = /^(.+)_AI(?:_(\d+))?(\.[A-Za-z0-9]+)$/i;
+const AI_RE = /^(.+)_AI((?:_\d+)*)(\.[A-Za-z0-9]+)$/i;
 const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"];
 
-/** Parses `name_AI.ext` / `name_AI_7.ext`; null when not an eligible AI image. */
+/** Parses `name_AI.ext` / `name_AI_7.ext` / `name_AI_9_01.ext`; null when not eligible. */
 export function parseAiName(fileName: string): AiName | null {
   const m = AI_RE.exec(fileName);
   if (!m) return null;
-  return { base: m[1], variant: m[2] === undefined ? null : Number(m[2]), ext: m[3] };
+  return { base: m[1], suffix: m[2], ext: m[3] };
 }
 
 /** Eligible = parseable AI name with an image extension. */
