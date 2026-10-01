@@ -3,7 +3,7 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, type SvgSidecar, type SvgVersion } from "../lib/svgfile";
+import { approvedVersion, newestValid, type SvgSidecar, type SvgVersion } from "../lib/svgfile";
 import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { SvgSource } from "./sources";
@@ -16,19 +16,13 @@ export interface SvgTarget {
 }
 
 export function toRow(source: SvgSource, sidecar: SvgSidecar | null, corrupt: boolean): SvgRow {
-  const newest = newestValidOf(sidecar);
+  const newest = newestValid(sidecar);
   const failed = (sidecar?.versions ?? []).some((v) => v.status !== "generated");
   return {
     source, sidecar, corrupt, newest, approved: approvedVersion(sidecar), running: false,
     status: newest ? "generated" : failed ? "failed" : "not-generated",
     error: (sidecar?.versions ?? []).filter((v) => v.error).at(-1)?.error ?? null,
   };
-}
-
-/** The version the preview shows: newest generated AND valid. */
-export function newestValidOf(sidecar: SvgSidecar | null): SvgVersion | null {
-  const list = (sidecar?.versions ?? []).filter((v) => v.status === "generated" && v.validation.ok);
-  return list.length > 0 ? list[list.length - 1] : null;
 }
 
 /**

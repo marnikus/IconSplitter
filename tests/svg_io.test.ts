@@ -5,12 +5,12 @@
 // module it covers is deleted.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { newSidecar, parseSidecar, serializeSidecar, withVersion } from "../src/lib/svgfile";
+import { newSidecar, newestValid, parseSidecar, serializeSidecar, withVersion } from "../src/lib/svgfile";
 import { saveSvgVersion, recordFailure } from "../src/svg/saveversion";
 import { loadSidecar, readSvgText, listSvgFiles, saveSidecar } from "../src/svg/sidecar";
 import { discoverApprovedSources, toBatchSource } from "../src/svg/sources";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
-import { headerState, newestValidOf, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
+import { headerState, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
@@ -187,7 +187,7 @@ describe("row model", () => {
     const row = toRow(source, loaded.sidecar, loaded.corrupt);
     expect(row.status).toBe("generated");
     expect(row.newest?.version).toBe(1);
-    expect(newestValidOf(loaded.sidecar)?.version).toBe(1);
+    expect(newestValid(loaded.sidecar)?.version).toBe(1);
     expect(toListRow(row).tokens).toBe(300);
     expect(toListRow(row).cost).toBe(0.01);
     expect(await readSvgText(root, first.ok ? first.svgPath : "")).toBe(svg);

@@ -9,7 +9,7 @@ import type { DirHandleLike } from "../lib/fs";
 import type { RunEvent, RunSummary } from "./runner";
 import { loadSidecar } from "./sidecar";
 import { toRow } from "./rowmodel";
-import { newestValidOf } from "./rowmodel";
+import { newestValid } from "../lib/svgfile";
 import type { RunProgress, SvgRefs, SvgRow } from "./types";
 import type { SvgSource } from "./sources";
 
@@ -24,7 +24,7 @@ export function onRunEvent(event: RunEvent, s: RunSetters): void {
     s.setProgressFn((prev) => (prev ? { ...prev, saved: event.saved, failed: event.failed, missing: event.missing } : prev));
   } else if (event.kind === "item-saved") {
     s.setRowsFn((rows) => rows.map((r) => (r.source.id === event.sourceId
-      ? { ...r, sidecar: event.sidecar, newest: newestValidOf(event.sidecar), status: "generated", running: false, error: null }
+      ? { ...r, sidecar: event.sidecar, newest: newestValid(event.sidecar), status: "generated", running: false, error: null }
       : r)));
   } else if (event.kind === "item-failed") {
     s.setRowsFn((rows) => rows.map((r) => (r.source.id === event.sourceId
