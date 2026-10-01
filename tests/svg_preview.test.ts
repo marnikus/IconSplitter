@@ -30,8 +30,13 @@ describe("buildSvgPreview — documents that copy but did not paint", () => {
 
   it("accepts an XML prolog, a doctype and a leading comment (D2)", () => {
     const prolog = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "svg11.dtd">\n<!-- made by hand -->\n${STROKE_ONLY}`;
-    expect(preview(prolog).ok).toBe(true);
-    expect(preview(prolog).viewBox).toBe("0 0 24 24");
+    const p = preview(prolog);
+    expect(p.ok).toBe(true);
+    expect(p.viewBox).toBe("0 0 24 24");
+    // only the drawing is inlined — a prolog inlined into HTML is junk
+    expect(p.html.startsWith("<svg")).toBe(true);
+    expect(p.html).not.toContain("<?xml");
+    expect(p.html).not.toContain("DOCTYPE");
   });
 
   it("repairs an unbound xlink prefix instead of rejecting the document", () => {

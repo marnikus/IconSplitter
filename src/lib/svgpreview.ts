@@ -51,7 +51,8 @@ export function buildSvgPreview(code: string | null): SvgPreview {
   scopeIds(root, idPrefix(code ?? ""));
   return {
     ok: true,
-    html: new XMLSerializer().serializeToString(parsed.doc),
+    // The root element alone: a prolog or doctype is not markup to inline.
+    html: new XMLSerializer().serializeToString(root),
     viewBox: box.viewBox,
     ratio: box.ratio,
     error: null,
