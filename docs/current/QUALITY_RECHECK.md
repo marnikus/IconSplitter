@@ -269,7 +269,7 @@ tabs (`state/appstore.ts` + `useAppState`, `boot`, `useSessionAutosave`,
 | `tsc --noEmit` | clean | clean |
 | eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
 | `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
-| tests | 30 files / 207 | **41 files / 322** |
+| tests | 30 files / 207 | **42 files / 325** |
 | coverage `src/lib` (stmts/branch/funcs/lines) | 96.11 / 91.78 / 95.78 / 96.55 | **96.53 / 92.91 / 96.53 / 96.99** |
 | build `dist/index.html` | 467.97 kB / gzip 139.25 kB | 485.14 kB / gzip 144.73 kB |
 | jscpd | 2 clones (both pre-existing) | 2 clones, 12 lines — `lib/detect.ts` self-clone and `SelectBox` in `FilterBar`/`FilterGrid`; neither file was touched by this change |
