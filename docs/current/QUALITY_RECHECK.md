@@ -190,7 +190,7 @@ new pure lib modules and the shared surfaces extracted out of V1.
   `thumbs.ts` (`useSideThumbs`), `fmt.ts` (`fmtDate` / `fmtTime`),
   `StatusFooter.tsx` (skin class), `Workbench.tsx` (4th tab), `index.css`
   (+460 lines of V2 design tokens/classes; CSS is outside the TS gate).
-* TDD: 8 new/extended test files written before the code they cover.
+* TDD: 7 new + 2 extended test files, written before the code they cover.
 
 ## The numbers (measured)
 
@@ -199,9 +199,9 @@ new pure lib modules and the shared surfaces extracted out of V1.
 | Types | `npx tsc --noEmit` | clean |
 | Lint | `npm run lint` | 0 errors, 8 warnings — all pre-existing (`App.tsx` cc 15, `detect.ts` cc 11/14/32, `no-explicit-any` ×2) |
 | Quality gate | `node tools/quality.mjs --allow-legacy` (ALL files) | **GATE PASSED** |
-| Tests | `npm test` | **31 files / 207 tests passed** (was 23 / 126) |
+| Tests | `npm test` | **30 files / 207 tests passed** (was 23 / 126) |
 | Coverage | `npm run coverage` | `src/lib` lines **96.55%**, branches 91.78% (threshold 80%) |
-| Build | `npm run build` | single-file `dist/index.html` 468.16 kB (gzip 139.29 kB) |
+| Build | `npm run build` | single-file `dist/index.html` 467.99 kB (gzip 139.26 kB) |
 | Duplication | `npx jscpd src --min-tokens 60` | 1 clone — the pre-existing `SIZES` table in `App.tsx` / `PresetBar.tsx` |
 | Dead code | `npx knip` | **blocked** — `oxc-parser` dies with `RangeError: Array buffer allocation failed` in this sandbox; substituted an export-by-export consumer check (every new export has a consumer outside its own module) |
 
@@ -238,10 +238,11 @@ none of them grew — `App.tsx` and `detect.ts` were not modified at all, and
   for context files. RULE 17 forbids a second current doc, so all four modes'
   authoritative behaviour stays in one file; the reason is recorded in the file
   header. Per-mode design detail lives in `docs/archive/` instead.
-* `node tools/quality.mjs --changed` cannot run in this checkout:
-  `git merge-base origin/main HEAD` fails (unrelated histories) and the repo
-  has a single commit, so the `HEAD~1` fallback is not a revision. The
-  full-tree gate (a strict superset) was run instead.
+* `node tools/quality.mjs --changed` needs a revision to diff against:
+  `git merge-base origin/main HEAD` fails in this checkout (unrelated
+  histories), so the gate falls back to `HEAD~1`. Both the full-tree gate and
+  `npm run verify` (which runs the `--changed` lane against the new commit's
+  parent) were run and passed.
 * The V2 rows use `role="list"` / `role="listitem"` rather than the template's
   `role="listbox"` / `option`: an `option` may not contain the checkbox and
   four buttons every row has. Recorded in

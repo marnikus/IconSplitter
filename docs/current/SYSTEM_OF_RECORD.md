@@ -257,7 +257,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 31 files / 207 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 30 files / 207 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, one happy-dom smoke test
 renders the Selection panel and drives it with hotkeys):
 

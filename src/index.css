@@ -58,9 +58,12 @@
   color: var(--v2-text);
 }
 
+/* Flex column, not a fixed-row grid: the write/corrupt banners are conditional
+   children, so a fixed grid-template-rows would push the workspace off its 1fr
+   row the moment a banner appears. */
 .v2 {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: calc(100vh - 3rem);
 }
@@ -229,6 +232,7 @@
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 8px;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -452,7 +456,7 @@
   font-size: 8px;
 }
 
-.v2-empty { grid-column: 1 / -1; padding: 28px 14px; text-align: center; color: var(--v2-muted); font-size: 11px; }
+.v2-empty { padding: 28px 14px; text-align: center; color: var(--v2-muted); font-size: 11px; }
 
 .v2-center {
   grid-template-rows: none;
