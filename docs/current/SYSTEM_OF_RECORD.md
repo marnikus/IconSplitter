@@ -292,7 +292,7 @@ Batch:
 | localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight }` | clamped on read |
 | localStorage `iconSplitter.svg.prompt.v1` | generation prompt | empty/missing → documented default |
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, timeout, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
-| IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20) |
+| IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
 | `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
 

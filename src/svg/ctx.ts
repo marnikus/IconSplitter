@@ -55,10 +55,12 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
     if (target !== null) void scanSources(refs, target);
   }, [refs]);
   const refreshKey = useCallback(() => {
-    void loadApiKey().then((key) => {
-      refs.key.current = key;
-      dispatch({ type: "key", key });
-    });
+    void loadApiKey()
+      .then((key) => {
+        refs.key.current = key;
+        dispatch({ type: "key", key });
+      })
+      .catch(() => dispatch({ type: "key", key: null }));
   }, [dispatch, refs]);
   // Every writer is memoised on [dispatch]: an unstable one would re-run the
   // boot effect on every render (RULE 24).

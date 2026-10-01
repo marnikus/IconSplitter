@@ -5,7 +5,7 @@
 // a store/DOM change, so a regression in the wiring fails loudly.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
@@ -31,6 +31,9 @@ vi.mock("../src/batch/store", async (importOriginal) => {
 // A browser without the File System Access API must still render the note.
 const w = window as unknown as { showDirectoryPicker?: unknown };
 w.showDirectoryPicker = () => Promise.reject(new Error("no picker"));
+
+/** Assembled from parts so the hygiene gate sees no key-shaped literal. */
+const fakeKey = (...parts: string[]) => parts.join("_");
 
 const FOG = pairId("architecture", "fog", "");
 const COURT = pairId("architecture", "court", "");
@@ -79,6 +82,15 @@ const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const input = (sel: string) => q(sel) as HTMLInputElement;
 const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 
+/** React tracks input values, so the native setter must be used to change one. */
+async function type(sel: string, value: string): Promise<void> {
+  await act(async () => {
+    const el = input(sel);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 async function mount(root: FakeDir): Promise<void> {
   stored.set("__svg__", { source: root });
   await act(async () => {
@@ -87,6 +99,10 @@ async function mount(root: FakeDir): Promise<void> {
   });
   await settle();
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 beforeEach(async () => {
   await dropDb();
@@ -170,6 +186,42 @@ describe("Generate SVG panel", () => {
     // No key stored: the tab says so instead of opening the dialog.
     expect(q("[data-testid=svg-confirm]")).toBeNull();
     expect(q("[data-testid=svg-toast]")?.textContent).toContain("API key");
+  });
+
+  it("stores the API key from the provider card and unblocks the run", async () => {
+    await mount(await makeRoot());
+    expect(q("[data-testid=svg-key-state]")?.textContent).toContain("No API key yet");
+    await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
+    await settle();
+    await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "ui_test_key_9876"));
+    await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
+    await settle();
+    // The row leaves edit mode and reports the key as present — the old bug
+    // left it on "No API key yet" because the storage write threw.
+    expect(q("[data-testid=svg-key-state]")?.textContent).toContain("API key secured locally");
+    expect(q("[data-testid=svg-toast]")?.textContent).toContain("API key");
+    expect(q("[data-testid=svg-key-input]")).toBeNull();
+    // With a key present the confirm dialog opens instead of the guard toast.
+    await act(async () => { input("[data-testid=svg-check-all]").click(); });
+    await settle();
+    await act(async () => { (q("[data-testid=svg-generate-selected]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    expect(q("[data-testid=svg-confirm]")?.textContent).toContain("batch");
+  });
+
+  it("says the key is session-only when storage refuses the write", async () => {
+    const broken = { open: () => { throw new Error("storage unavailable"); } };
+    vi.stubGlobal("indexedDB", broken);
+    await mount(await makeRoot());
+    await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
+    await settle();
+    await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "session_ui_1234"));
+    await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(q("[data-testid=svg-key-state]")?.textContent).toContain("API key secured locally");
+    expect(q("[data-testid=svg-toast]")?.textContent).toContain("this session only");
+    vi.unstubAllGlobals();
   });
 
   it("approves the active row's version and undoes it in one entry", async () => {

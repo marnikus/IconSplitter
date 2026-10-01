@@ -439,3 +439,63 @@ run flagged the monolithic version.
 - The API key never enters a history entry, a preset, a report or the
   repository: `svg/keystore.ts` writes IndexedDB `secrets`, `lib/svgsecret.ts`
   masks and redacts (RULE 20). `tests/secret_hygiene.test.ts` enforces this.
+
+---
+
+# Quality re-check — 2026-10-01 (Generate SVG: the API key save did nothing)
+
+Reported: pasting a key into the provider card and pressing **Save** changed
+nothing — no toast, the row stayed on "No API key yet" — and no request could
+ever be sent afterwards.
+
+## What changed
+
+`src/batch/store.ts` — the `iconSplitter` database was opened at **version 1**,
+the version the batch/selection features shipped. That database holds only the
+`handles` object store, and opening an existing database at the version it
+already has never runs `onupgradeneeded`, so the `secrets` store the SVG key
+needs did not exist. Every `idbPut("secrets", …)` threw `NotFoundError`, the
+`saveKey` promise rejected, and the state update plus the toast after the
+`await` never ran — a dead Save button with no error anywhere. The database now
+opens at **version 2** (the upgrade creates the missing store for exactly those
+installs), `onblocked` resolves to "no storage" instead of leaving the promise
+pending when another tab holds version 1 open, and `idbPut`/`idbDelete` report
+whether the write really happened.
+
+`src/svg/keystore.ts` — no keystore call can throw any more, and `saveApiKey`
+returns `false` when only the in-memory copy could be kept.
+
+`src/svg/actions.ts` — `saveKey` always updates the key, the model and the UI,
+and says which of the two things happened: "API key stored on this device only"
+or "API key kept for this session only — browser storage refused it". A silent
+failure is what made the button look broken, so the honesty is the fix.
+
+`src/svg/ctx.ts` — the boot key refresh swallows a rejection instead of
+producing an unhandled one.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 50 files / 426 | **51 files / 431** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.29 / 91.62 / 95.43 / 96.96 | 96.29 / 91.62 / 95.43 / 96.96 |
+| build `dist/index.html` | 575.68 kB / gzip 169.31 kB | 575.92 kB / gzip 169.40 kB |
+
+`npm run verify` → **ALL LANES PASSED**.
+
+## Regression tests
+
+* `tests/svg_keystore.test.ts` (new, 3 tests, `fake-indexeddb` as the only new
+  devDependency) seeds a **version-1 database holding only `handles`** — the
+  state an existing install is in — then saves, reads back, checks and clears
+  the key. This test fails with `NotFoundError: No objectStore named secrets in
+  this database` on the old code. It also proves the session-only fallback when
+  `indexedDB.open` throws, and that the batch handle store still round-trips.
+* `tests/svg_ui.test.tsx` (6 → 8 tests) drives the real provider card: it types
+  a key, presses Save, asserts the row flips to "API key secured locally", and
+  that the confirm dialog now opens instead of the "add your key" guard toast.
+  The second new test stubs a storage that refuses the write and asserts the
+  session-only message.

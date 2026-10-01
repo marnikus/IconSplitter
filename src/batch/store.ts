@@ -44,17 +44,31 @@ export async function loadHandles(presetName: string): Promise<StoredHandles | n
   return (await idbGet<StoredHandles>(DB_STORE, presetName)) ?? null;
 }
 
+/**
+ * Version 2 added the `secrets` object store (RULE 20). Anyone who used the
+ * app before it shipped already has a version-1 database holding only
+ * `handles`, and opening it at the same version never runs `onupgradeneeded` —
+ * so every key write would fail. Bumping the version is what creates the store
+ * for them.
+ */
+const DB_VERSION = 2;
+
 function openDb(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === "undefined") return Promise.resolve(null);
   return new Promise((resolve) => {
     try {
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
-        if (!req.result.objectStoreNames.contains(DB_STORE)) req.result.createObjectStore(DB_STORE);
-        if (!req.result.objectStoreNames.contains(SECRET_STORE)) req.result.createObjectStore(SECRET_STORE);
+        const db = req.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+        if (!db.objectStoreNames.contains(SECRET_STORE)) db.createObjectStore(SECRET_STORE);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
+      // Another tab still holds version 1 open, so the upgrade has to wait for
+      // it. Reporting "no storage" keeps the caller moving (memory fallback)
+      // instead of never settling at all.
+      req.onblocked = () => resolve(null);
     } catch {
       resolve(null);
     }
@@ -72,12 +86,14 @@ function tx<T>(db: IDBDatabase, store: string, mode: IDBTransactionMode, use: (s
 
 /**
  * Generic IndexedDB put/get used by the local secret store (RULE 20: the API
- * key never touches localStorage, a preset or the repository).
+ * key never touches localStorage, a preset or the repository). Both report
+ * whether the write really happened, so a caller can be honest about it.
  */
-export async function idbPut(store: string, key: string, value: unknown): Promise<void> {
+export async function idbPut(store: string, key: string, value: unknown): Promise<boolean> {
   const db = await openDb();
-  if (!db) return;
+  if (!db) return false;
   await tx(db, store, "readwrite", (s) => s.put(value, key));
+  return true;
 }
 
 export async function idbGet<T>(store: string, key: string): Promise<T | null> {
@@ -86,8 +102,9 @@ export async function idbGet<T>(store: string, key: string): Promise<T | null> {
   return tx<T>(db, store, "readonly", (s) => s.get(key));
 }
 
-export async function idbDelete(store: string, key: string): Promise<void> {
+export async function idbDelete(store: string, key: string): Promise<boolean> {
   const db = await openDb();
-  if (!db) return;
+  if (!db) return false;
   await tx(db, store, "readwrite", (s) => s.delete(key));
+  return true;
 }

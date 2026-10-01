@@ -13,21 +13,40 @@ const KEY = "requesty-api-key";
 /** Session-only fallback for browsers without IndexedDB. */
 let memory: string | null = null;
 
-export async function saveApiKey(key: string): Promise<void> {
+/**
+ * Writes the key. Returns false when only the in-memory copy could be kept
+ * (private mode, a blocked upgrade, a refused write) — the caller must say so
+ * honestly instead of claiming the key was stored on this device. A throw here
+ * would leave the save button looking dead, which is exactly how the bug this
+ * guards against presented.
+ */
+export async function saveApiKey(key: string): Promise<boolean> {
   memory = key.trim() === "" ? null : key.trim();
-  await idbPut(STORE, KEY, { key: memory });
+  try {
+    return await idbPut(STORE, KEY, { key: memory });
+  } catch {
+    return false;
+  }
 }
 
 export async function loadApiKey(): Promise<string | null> {
-  const stored = await idbGet<{ key?: unknown }>(STORE, KEY);
-  const key = stored?.key;
-  if (typeof key === "string" && key.trim() !== "") return key;
+  try {
+    const stored = await idbGet<{ key?: unknown }>(STORE, KEY);
+    const key = stored?.key;
+    if (typeof key === "string" && key.trim() !== "") return key;
+  } catch {
+    // Unreadable storage is not a lost key: fall through to the memory copy.
+  }
   return memory;
 }
 
 export async function clearApiKey(): Promise<void> {
   memory = null;
-  await idbDelete(STORE, KEY);
+  try {
+    await idbDelete(STORE, KEY);
+  } catch {
+    // Nothing to do: the key is already out of memory.
+  }
 }
 
 /** True when a key is available for a request right now. */

@@ -164,10 +164,14 @@ function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
     void (async () => {
       const c = latest.current;
       const trimmed = value.trim();
-      await saveApiKey(trimmed);
+      // Never throws, and reports whether the write really persisted — a
+      // silent failure here is what made the Save button look broken.
+      const stored = await saveApiKey(trimmed);
       c.refs.key.current = trimmed === "" ? null : trimmed;
       c.dispatch({ type: "key", key: c.refs.key.current });
-      c.say(trimmed === "" ? "API key cleared from this device" : "API key stored on this device only");
+      if (trimmed === "") c.say("API key cleared from this device");
+      else if (stored) c.say("API key stored on this device only");
+      else c.say("API key kept for this session only — browser storage refused it", true);
     })();
   }, []);
   const forgetKey = useCallback(() => {
