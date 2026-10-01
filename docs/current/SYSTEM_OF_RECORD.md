@@ -487,3 +487,31 @@ datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` o
 `checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
 the zoom slider or clicking a row checkbox — the previous "any input is a text
 field" test killed undo for the two controls the review tab uses most.
+
+## 13. Generate SVG tab (2026-10-01)
+
+Design record: `docs/archive/2026-10-01-generate-svg/design.md`. UI template:
+`design temp/SVG tab generation/`.
+
+The tab lists exactly the approved Selection pairs that have an AI image and
+maps each to a per-file sidecar (`<base>.svg.json`, D4). Generation batches
+sources into the smallest square contact sheet (`lib/svggrid`,
+`svggen/composite`), sends one Requesty chat-completions request per batch with
+an ordered manifest (`lib/svgmanifest`), splits the reply into `<svg>` roots and
+maps them back by fence number then `<title>` — never by appearance
+(`lib/svgextract`). Validation (`lib/svgvalidate`) is the gate: unsafe or broken
+SVG is recorded as failed and never previewed or saved as valid; ≠4 icon
+clusters warns without failing (D6).
+
+Writes are versioned and atomic: version *n* is `<base>.v{n}.svg` (never
+overwritten), the sidecar is tmp→verify→overwrite→delete like
+`review-decisions.json`, and a sidecar write failure surfaces as
+"awaiting retry" without losing the SVG (§10). Provider usage is stored as
+reported; absent usage stays null and computed costs would be labelled
+estimated. The API key lives in localStorage (D3), masked in the UI and
+redacted from every error message (`lib/secrets`).
+
+State: rows/selection/filters are derived in `svggen/rows.ts` (pure) and glued
+by `svggen/useSvgGen.ts`; IO lives in `svggen/browserdeps.ts`. Not undoable:
+generation and SVG review are external-world actions; the global timeline still
+covers Selection decisions (RULE 12 unchanged).

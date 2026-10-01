@@ -5,7 +5,6 @@
 // which this app cannot promise to do safely (a failed apply must never move the
 // cursor).
 
-import { useEffect } from "react";
 import { fmtTime } from "../selection/fmt";
 import { useHistory } from "../state/HistoryProvider";
 
@@ -76,12 +75,4 @@ function EntryList() {
   );
 }
 
-function useEscape(onClose: () => void): void {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-}
+import { useEscape } from "./useEscape";

@@ -301,3 +301,26 @@ anchor and the row a plain click also made active.
 Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo. Ignored only
 while the focus is in a *text* surface — text-ish input, textarea, select or a
 contenteditable — so undo still works after using the zoom slider or a checkbox.
+
+## Generate SVG tab (`svggen`, 2026-10-01)
+
+| testid | element | notes |
+|---|---|---|
+| `tab-svggen` | tab button | "Generate SVG" |
+| `sg-unsupported` / `sg-root-empty` / `sg-pick-root` | gates | no FS API / no folder / picker |
+| `sg-rescan` | button | reuses Selection rescan |
+| `sg-key-input` / `sg-key-save` / `sg-key` | key controls | stored locally; display is masked only |
+| `sg-prompt` / `sg-reset-prompt` | textarea / button | saved locally, resettable |
+| `sg-filter-gen` / `sg-filter-review` / `sg-sort` / `sg-search` / `sg-clear-filters` | filter row | |
+| `sg-select-visible` / `sg-selected-count` / `sg-deselect` | bulk selection | |
+| `sg-generate-selected` / `sg-approve-selected` / `sg-decline-selected` | bulk actions | disabled at 0 selected |
+| `sg-count` / `sg-rows` / `sg-empty` | list chrome | one row per approved AI source |
+| `sg-row-{pairId}` | row | |
+| `sg-check-{pairId}` | checkbox | `aria-label="Select {name}"` |
+| `sg-gen-{pairId}` / `sg-review-{pairId}` | badges | glyph and text |
+| `sg-copy/code/history-{pairId}` | buttons | disabled without a valid version |
+| `sg-generate/approve/decline-{pairId}` | row actions | |
+| `sg-confirm-modal` / `sg-confirm-count` / `sg-confirm-go` | confirm dialog | count + model + prompt before send |
+| `sg-code-modal` / `sg-code-block` / `sg-copy-code` | code dialog | complete validated SVG |
+| `sg-history-modal` / `sg-version-{n}` | versions dialog | read-only |
+| `sg-toast` | status | |

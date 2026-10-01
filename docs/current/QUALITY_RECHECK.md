@@ -364,3 +364,38 @@ run flagged `HistoryBar` at 36 and `HistoryPanel` at 42 body lines.
   a11y label test (the visible-list aria-label is gone) and the cross-tab undo
   assertion, which hard-coded a one-entry timeline and now asserts one step back
   from the tip instead of `index === -1`.
+
+# Quality re-check — 2026-10-01 (Generate SVG tab)
+
+## What changed
+
+New pure libs: `svggrid`, `svgextract`, `svgvalidate`, `svgmanifest`,
+`svgsidecar`, `svgbatch`, `svgcomposite`, `secrets`, `requesty`; new state:
+`svggen/{runner,generateflow,applyplan,sidecarstore,composite,configstore,
+promptstore,keystore,rows,useSvgGen,browserdeps}`; UI: `svggen/{GeneratePanel,
+GenRow,GenModals}`; shared `ui/useEscape`; tab registered in `Workbench` +
+`session.ts`.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 11 warnings (pre-existing surfaces) |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 43 files / 346 | **59 files / 453** |
+| coverage (all files) | 96.58 / 93.10 / 96.58 / 97.02 | 96.09 / 90.89 / 97.16 / 97.15 |
+| build | 487.73 kB / gzip 145.65 kB | 527.41 kB / gzip 157.21 kB |
+| jscpd | 2 clones / 12 lines | 2 clones / 12 lines — both pre-existing; a third (useEscape) was extracted to `ui/useEscape.ts` |
+
+`npm run verify` → **ALL LANES PASSED**.
+
+## Accepted debt / notes
+
+- RULE 20 is user-overridden for this tab only (design D1): images are sent to
+  the provider solely on confirmed generation.
+- The key is in localStorage, not an OS credential store — a browser tool has
+  none; documented in design D3.
+- Config (timeout/retries/concurrency/perRequest) is clamped on read and
+  editable via the config store; a per-control settings UI is the next step.
+- Composite PNGs are transient; persisting them for diagnostics is deferred.
