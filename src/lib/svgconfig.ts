@@ -17,6 +17,13 @@ export const DEFAULT_MODEL = "openai/gpt-6.1-sol";
 export const DEFAULT_MODEL_LABEL = "GPT 6.1 Sol";
 
 export const DEFAULT_TIMEOUT_MS = 90_000;
+/**
+ * The longest a single request may be waited for. Providers that proxy OpenAI
+ * cap one chat completion at ten minutes, so a derived budget past this point
+ * would only ever end in a gateway error — `lib/svgbudget` shrinks the batch
+ * instead of asking for time that cannot exist.
+ */
+export const TIMEOUT_CEILING_MS = 600_000;
 export const DEFAULT_RETRIES = 2;
 export const DEFAULT_CONCURRENCY = 4;
 /** Output ceiling sent with each request (0 = let the provider decide). */

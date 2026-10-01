@@ -43,6 +43,15 @@ export function estimateFromTokens(model: string, tokens: { input: number | null
 }
 
 /** The one place that decides where a version's cost comes from. */
+/**
+ * The calculated part of a whole run: null when nothing had to be estimated.
+ * Reported money is never merged into it (svgusage keeps the two apart).
+ */
+export function sumEstimated(model: string, usages: readonly Usage[]): number | null {
+  const parts = usages.map((u) => costInfoFor(model, u)).flatMap((c) => (c.estimated === null ? [] : [c.estimated]));
+  return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) : null;
+}
+
 export function costInfoFor(model: string, usage: Usage): CostInfo {
   const base = { currency: usage.currency, pricing: PRICING_VERSION };
   if (usage.cost !== null) return { ...base, actual: usage.cost, estimated: null, basis: "provider" };

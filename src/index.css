@@ -887,9 +887,11 @@
 .svg-thumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .svg-thumb-wrap { position: relative; min-width: 0; display: inline-flex; }
 
+/* One geometry for both thumbnails: the element is the square the zoom asked
+   for (width + height come from SvgThumbs) and object-fit contains the image
+   inside it, exactly like the SVG frame's xMidYMid meet. A per-side pixel cap
+   here is what stopped the AI image growing while the frame kept growing. */
 .svg-thumb {
-  width: auto;
-  max-width: 116px;
   border: 1px solid #35405e;
   border-radius: 5px;
   background: #05070f;
@@ -911,7 +913,6 @@
 .svg-thumb.missing {
   display: grid;
   place-items: center;
-  width: 96px;
   color: var(--v2-yellow);
   border-style: dashed;
   border-color: #5b4624;

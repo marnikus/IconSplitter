@@ -60,7 +60,7 @@ function ConfirmDialog({ ids, batches, perRequest, p }: { ids: string[]; batches
             is resent while a request&apos;s outcome is unknown.
           </p>
           <Manifest plans={plans} />
-          <CompositePreview p={p} picked={picked} />
+          <CompositePreview p={p} picked={picked} perRequest={perRequest} />
           <div className="svg-modal-actions">
             <button type="button" className="svg-btn" data-testid="svg-confirm-cancel" onClick={p.onDismiss}>Cancel</button>
             <button type="button" className="svg-btn primary" data-testid="svg-confirm-generate" onClick={p.onConfirm}>Generate now</button>
@@ -106,11 +106,12 @@ function Manifest({ plans }: { plans: ReturnType<typeof planBatches> }) {
 }
 
 /** Builds and shows the contact sheet of the first batch — memory only. */
-function CompositePreview({ p, picked }: { p: SvgDialogsProps; picked: SvgRow[] }) {
+function CompositePreview({ p, picked, perRequest }: { p: SvgDialogsProps; picked: SvgRow[]; perRequest: number }) {
   const [built, setBuilt] = useState<BuiltComposite | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const first = picked.slice(0, p.config.imagesPerRequest);
-  const requests = Math.max(1, Math.ceil(picked.length / p.config.imagesPerRequest));
+  // The same derived batch size the run will use, so request 1 is request 1.
+  const first = picked.slice(0, perRequest);
+  const requests = Math.max(1, Math.ceil(picked.length / perRequest));
   const build = () => {
     const root = p.rootRef.current;
     if (root === null) return setError("Pick the source folder first");
@@ -125,15 +126,23 @@ function CompositePreview({ p, picked }: { p: SvgDialogsProps; picked: SvgRow[] 
         <button type="button" className="svg-link" data-testid="svg-composite-build" onClick={build}>Build preview</button>
       </div>
       {error !== null && <p className="svg-note error" data-testid="svg-composite-error">{error}</p>}
-      {built === null
-        ? <p className="svg-note">Built in memory only — never written into your SVG output folder.</p>
-        : <>
-          <img className="svg-composite-img" data-testid="svg-composite-img" src={built.dataUrl} alt="Contact sheet sent with the first request" />
-          <p className="svg-note" data-testid="svg-composite-meta">
-            {built.layout.cols}×{built.layout.rows} grid · {built.layout.size}px · {built.layout.empty.length} empty cell(s) · hash {built.hash.slice(0, 12)}
-          </p>
-        </>}
+      <CompositeBody built={built} />
     </div>
+  );
+}
+
+/** The contact sheet once it exists, or the note that nothing was written. */
+function CompositeBody({ built }: { built: BuiltComposite | null }) {
+  if (built === null) {
+    return <p className="svg-note">Built in memory only — never written into your SVG output folder.</p>;
+  }
+  return (
+    <>
+      <img className="svg-composite-img" data-testid="svg-composite-img" src={built.dataUrl} alt="Contact sheet sent with the first request" />
+      <p className="svg-note" data-testid="svg-composite-meta">
+        {built.layout.cols}×{built.layout.rows} grid · {built.layout.size}px · {built.layout.empty.length} empty cell(s) · hash {built.hash.slice(0, 12)}
+      </p>
+    </>
   );
 }
 

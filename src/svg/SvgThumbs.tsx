@@ -65,9 +65,12 @@ interface ThumbProps {
 }
 
 function Thumb({ url, alt, height, testid }: ThumbProps) {
+  // The same square the SVG frame is (RULE 4: both sides of a row are one
+  // decision), so the zoom reaches the AI image too — an aspect-driven box with
+  // a pixel cap stopped growing while the frame kept growing.
   return url === null
-    ? <span className="svg-thumb missing" style={{ height }} data-testid={testid}>Unreadable</span>
-    : <img className="svg-thumb" src={url} alt={alt} height={height} loading="lazy" data-testid={testid} />;
+    ? <span className="svg-thumb missing" style={{ width: height, height }} data-testid={testid}>Unreadable</span>
+    : <img className="svg-thumb" src={url} alt={alt} width={height} height={height} loading="lazy" data-testid={testid} />;
 }
 
 /** Object URL for the AI image, cached for the session (RULE 10). */

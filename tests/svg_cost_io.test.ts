@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NO_COST, newSidecar, parseSidecar, serializeSidecar } from "../src/lib/svgfile";
 import { PRICING_VERSION } from "../src/lib/svgpricing";
-import { NO_USAGE } from "../src/lib/svgrequest";
+import { NO_USAGE, TRUNCATED_MESSAGE } from "../src/lib/svgrequest";
 import { allocateUsage, costLabel } from "../src/lib/svgusage";
 import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
 import { DEFAULT_PARAMS, capsFor } from "../src/lib/modelcaps";
@@ -40,8 +40,27 @@ function root(): FakeDir {
   const arch = new FakeDir("architecture");
   arch.children.set("fog_AI.png", new FakeFile("fog_AI.png", 20, 3100, "b"));
   arch.children.set("court_AI.png", new FakeFile("court_AI.png", 20, 2100, "d"));
+  arch.children.set("keep_AI.png", new FakeFile("keep_AI.png", 20, 1100, "f"));
+  arch.children.set("lane_AI.png", new FakeFile("lane_AI.png", 20, 1000, "g"));
   dir.children.set("architecture", arch);
   return dir;
+}
+
+const courtSource: SvgSource = { ...source, id: "pair_court", name: "court_AI.png", stem: "court_AI", relPath: "architecture/court_AI.png" };
+const keepSource: SvgSource = { ...source, id: "pair_keep", name: "keep_AI.png", stem: "keep_AI", relPath: "architecture/keep_AI.png" };
+const laneSource: SvgSource = { ...source, id: "pair_lane", name: "lane_AI.png", stem: "lane_AI", relPath: "architecture/lane_AI.png" };
+
+/** The same fake transport, recording every request body it was handed. */
+function stubFetchCapture(content: string, usage: Record<string, unknown>): { bodies: Record<string, unknown>[] } {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content } }], usage }),
+      { status: 200, headers: { "content-type": "application/json", "x-request-id": "req_1" } },
+    );
+  }));
+  return { bodies };
 }
 
 function saveArgs(usage = NO_USAGE, model = DEFAULT_CONFIG.model) {
@@ -155,6 +174,59 @@ describe("cost in the sidecar", () => {
     expect(split.ok && costLabel(split.sidecar.versions[0].cost)).toBe("$0.0200 Estimated");
     const empty = parseSidecar(withOldCost('{ "actual": null, "estimated": null }'));
     expect(empty.ok && empty.sidecar.versions[0].cost).toEqual(NO_COST);
+  });
+});
+
+describe("runGeneration request budget (reasoning effort)", () => {
+  it("keeps the user's batch at medium effort and sends the room the reasoning is paid out of", async () => {
+    stubCanvas();
+    const answer = [source, courtSource].map((s) => block(s.stem, "<path d=\"M2 2h20v20H2z\"/>")).join("\n");
+    const { bodies } = stubFetchCapture(answer, { prompt_tokens: 40, completion_tokens: 80, total_tokens: 120, cost: 0.04, currency: "USD" });
+    const sidecars = new Map();
+    const summary = await runGeneration({
+      root: root(), apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 4, retries: 0 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: { ...DEFAULT_PARAMS, effort: "medium" },
+      prompt: "p", sources: [source, courtSource], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
+    });
+    expect(summary.saved).toBe(2);
+    // 4 images per request is still what medium effort may carry...
+    expect(bodies).toHaveLength(1);
+    // ...and the ceiling is the user's 32 000 plus the medium reasoning share.
+    expect(bodies[0].max_completion_tokens).toBe(64_000);
+    expect(bodies[0].reasoning_effort).toBe("medium");
+  });
+
+  it("shrinks the batch when high effort cannot finish a full one inside the gateway limit", async () => {
+    stubCanvas();
+    const all = [source, courtSource, keepSource, laneSource];
+    const answer = all.map((s) => block(s.stem, "<path d=\"M2 2h20v20H2z\"/>")).join("\n");
+    const { bodies } = stubFetchCapture(answer, { prompt_tokens: 40, completion_tokens: 80, total_tokens: 120, cost: 0.04, currency: "USD" });
+    const sidecars = new Map();
+    const summary = await runGeneration({
+      root: root(), apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 4, retries: 0 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: { ...DEFAULT_PARAMS, effort: "high" },
+      prompt: "p", sources: all, sidecars, signal: new AbortController().signal, onEvent: () => undefined,
+    });
+    expect(summary.saved).toBe(4);
+    // 4 images at high effort would outlive the gateway limit: 3 + 1 instead.
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].max_completion_tokens).toBe(128_000);
+  });
+
+  it("fails a cut-off answer as a budget problem, not as a missing icon", async () => {
+    stubCanvas();
+    const cut = { choices: [{ message: { content: block("fog_AI", "<path d=\"M2 2h20v20H2z\"/>") }, finish_reason: "length" }], usage: { prompt_tokens: 900, completion_tokens: 32_000, total_tokens: 32_900 } };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(cut), { status: 200, headers: { "content-type": "application/json" } })));
+    const sidecars = new Map();
+    const problems: string[] = [];
+    const summary = await runGeneration({
+      root: root(), apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: { ...DEFAULT_PARAMS, effort: "medium" },
+      prompt: "p", sources: [source], sidecars, signal: new AbortController().signal,
+      onEvent: (e) => { if (e.kind === "item-failed") problems.push(e.error); },
+    });
+    expect(summary.saved).toBe(0);
+    expect(problems).toEqual([TRUNCATED_MESSAGE]);
   });
 });
 

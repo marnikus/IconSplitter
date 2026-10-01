@@ -6,6 +6,7 @@
 // that makes them one screen.
 
 import { modelLabel } from "../lib/svgconfig";
+import { budgetFor, type RequestBudget } from "../lib/svgbudget";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
@@ -40,12 +41,20 @@ export default function SvgPanel() {
   );
 }
 
+/** The budget the current effort will be sent with, for the controls' limits. */
+function budgetOf(g: SvgGenApi): RequestBudget {
+  return budgetFor(g.params.effort, {
+    images: g.config.imagesPerRequest, maxTokens: g.params.maxTokens,
+    timeoutMs: g.config.timeoutMs, tokenCeiling: g.caps.maxTokens.max,
+  });
+}
+
 /** The control block, wired straight from the api — one place to read it. */
 function Controls({ g }: { g: SvgGenApi }) {
   return (
     <SvgControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
       prompt={g.prompt} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
-      paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} providerOpen={g.providerOpen}
+      budget={budgetOf(g)} paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} providerOpen={g.providerOpen}
       filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
       onChooseRoot={g.chooseRoot} onRescan={g.rescan} onPrompt={g.setPrompt} onResetPrompt={g.resetPrompt}
       onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}

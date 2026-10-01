@@ -5,6 +5,7 @@
 // result can always be mapped back to its file.
 
 import { clampImagesPerRequest } from "./svgconfig";
+import type { BatchRef } from "./svgfile";
 
 /** One source image inside one request. */
 export interface BatchItem {
@@ -83,6 +84,16 @@ export function emptyPositions(plan: BatchPlan): number[] {
   const used = new Set(plan.items.map((i) => i.position));
   const all = Array.from({ length: plan.cols * plan.rows }, (_, i) => i + 1);
   return all.filter((p) => !used.has(p));
+}
+
+/**
+ * The batch reference one saved version records: which batch it came from,
+ * which position inside it, and the manifest that was sent. The runner no
+ * longer builds this by hand — the manifest is the one the batch already has.
+ */
+export function batchRefOf(plan: BatchPlan, position: number, compositeHash: string): BatchRef {
+  const manifest = plan.items.map((m) => `${m.position} — ${m.name}`).join("\n");
+  return { batchId: plan.id, position, compositeHash, manifest };
 }
 
 /** Row/column of a position in the grid (0-based), reading order. */

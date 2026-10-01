@@ -18,6 +18,7 @@ import { useKeyActions } from "./keyactions";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
+import { requestBudgetFor } from "../lib/svgbudget";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
@@ -209,7 +210,12 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     const c = latest.current;
     const why = guard(c, ids);
     if (why !== null) return c.say(why, true);
-    const perRequest = c.m.config.imagesPerRequest;
+    // The confirmed count is the count that will be sent: the reasoning effort
+    // decides how many images one request may carry (lib/svgbudget).
+    const perRequest = requestBudgetFor(c.m.params.effort, {
+      images: c.m.config.imagesPerRequest, maxTokens: c.m.params.maxTokens,
+      timeoutMs: c.m.config.timeoutMs, tokenCeiling: c.m.caps.maxTokens.max,
+    }).imagesPerRequest;
     const dialog: Dialog = { kind: "confirm", ids, batches: Math.ceil(ids.length / perRequest), perRequest };
     c.dispatch({ type: "dialog", dialog });
   }, []);

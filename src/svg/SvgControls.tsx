@@ -10,6 +10,7 @@ import { IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, clampImagesPerRequest, 
 import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
+import { type RequestBudget } from "../lib/svgbudget";
 import SvgSampling from "./SvgSampling";
 import type { Discovery } from "./sources";
 
@@ -23,6 +24,8 @@ export interface SvgControlsProps {
   config: SvgConfig;
   caps: ModelCaps;
   params: SamplingParams;
+  /** The budget this effort will actually be sent with (lib/svgbudget). */
+  budget: RequestBudget;
   paramNote: string | null;
   keySet: boolean;
   keyMask: string;
@@ -61,7 +64,7 @@ export default function SvgControls(p: SvgControlsProps) {
         onChooseRoot={p.onChooseRoot} onRescan={p.onRescan} />
       <div className="svg-toolbar">
         <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />
-        <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params}
+        <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params} budget={p.budget}
           paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask} open={p.providerOpen}
           onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
           onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} onToggleOpen={p.onProviderOpen} />
@@ -118,8 +121,9 @@ function PromptZone({ prompt, onPrompt, onReset }: { prompt: string; onPrompt: (
   );
 }
 
-function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, open, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey, onToggleOpen }: {
-  provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams; paramNote: string | null;
+function ProviderCard({ provider, config, caps, params, budget, paramNote, keySet, keyMask, open, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey, onToggleOpen }: {
+  provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams;
+  budget: RequestBudget; paramNote: string | null;
   keySet: boolean; keyMask: string; open: boolean;
   onConfig: (patch: Partial<SvgConfig>) => void; onParams: (patch: Partial<SamplingParams>) => void;
   onRefreshModels: () => void; onDismissNote: () => void; onSaveKey: (key: string) => void;
@@ -127,7 +131,7 @@ function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMa
 }) {
   return (
     <div className={`svg-provider${open ? "" : " closed"}`} data-testid="svg-provider-card">
-      <ProviderHead provider={provider} config={config} open={open} onToggleOpen={onToggleOpen} />
+      <ProviderHead provider={provider} config={config} budget={budget} open={open} onToggleOpen={onToggleOpen} />
       {open && (
         <>
           <ProviderFields config={config} onConfig={onConfig} />
@@ -158,13 +162,13 @@ function ProviderFields({ config, onConfig }: { config: SvgConfig; onConfig: (pa
 }
 
 /** The one line that survives minimizing: who, which limits, and the toggle. */
-function ProviderHead({ provider, config, open, onToggleOpen }: {
-  provider: string; config: SvgConfig; open: boolean; onToggleOpen: (open: boolean) => void;
+function ProviderHead({ provider, config, budget, open, onToggleOpen }: {
+  provider: string; config: SvgConfig; budget: RequestBudget; open: boolean; onToggleOpen: (open: boolean) => void;
 }) {
   return (
     <div className="svg-provider-top">
       <span><strong data-testid="svg-provider">{provider}</strong> · OpenAI-compatible</span>
-      <span data-testid="svg-limits">timeout {Math.round(config.timeoutMs / 1000)}s · {config.retries} retries · {config.imagesPerRequest} per request</span>
+      <span data-testid="svg-limits">timeout {Math.round(budget.timeoutMs / 1000)}s · {config.retries} retries · {budget.imagesPerRequest} per request</span>
       <button type="button" className="svg-link" data-testid="svg-provider-toggle" aria-expanded={open}
         aria-label={open ? "Minimize model settings" : "Restore model settings"}
         onClick={() => onToggleOpen(!open)}>{open ? "Minimize" : "Restore"}</button>

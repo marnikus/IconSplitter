@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG, type SvgConfig } from "../src/lib/svgconfig";
 import { capsFor, type SamplingParams } from "../src/lib/modelcaps";
-import { buildChatRequest, sendChatRequest, type FetchLike } from "../src/lib/svgrequest";
+import { buildChatRequest, sendChatRequest, TRUNCATED_MESSAGE, type FetchLike } from "../src/lib/svgrequest";
 import { redact } from "../src/lib/svgsecret";
 
 // Assembled from parts so no key-shaped literal is committed (hygiene test).
@@ -122,6 +122,28 @@ describe("sendChatRequest", () => {
     const empty: FetchLike = async () => jsonOut({ choices: [{ message: { content: "" } }] });
     const none = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: empty });
     expect(none.ok === false && none.failure.kind).toBe("malformed");
+  });
+
+  it("treats a cut-off answer as a budget failure, never as a missing answer", async () => {
+    // finish_reason "length" means the provider spent the whole completion
+    // ceiling — at medium/high effort the reasoning is paid out of it, so the
+    // last icons of a batch simply never arrive.
+    const cut: FetchLike = async () => jsonOut({
+      choices: [{ message: { content: "<svg>1</svg><svg>2</svg" }, finish_reason: "length" }],
+      usage: { prompt_tokens: 900, completion_tokens: 32_000, total_tokens: 32_900 },
+    });
+    const out = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: cut });
+    expect(out.ok).toBe(false);
+    if (out.ok) throw new Error("expected failure");
+    expect(out.failure.kind).toBe("truncated");
+    expect(out.failure.message).toBe(TRUNCATED_MESSAGE);
+    expect(out.failure.retryable).toBe(false); // the tokens are already spent
+  });
+
+  it("still succeeds on a complete answer (finish_reason stop)", async () => {
+    const done: FetchLike = async () => jsonOut({ choices: [{ message: { content: "<svg/>" }, finish_reason: "stop" }], usage: okBody.usage });
+    const out = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "low" } }), fetch: done });
+    expect(out.ok).toBe(true);
   });
 
   it("treats a timeout as uncertain (never auto-retried)", async () => {

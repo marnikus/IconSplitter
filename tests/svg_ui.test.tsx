@@ -561,6 +561,23 @@ describe("SVG row preview", () => {
     expect(svg?.getAttribute("style") ?? "").not.toContain("color:");
   });
 
+  it("zooms BOTH thumbnails: the AI image and the SVG frame stay the same size", async () => {
+    await mount(await makeRoot());
+    const ai = () => q(`[data-testid=svg-ai-${FOG}]`) as HTMLImageElement | null;
+    const prev = () => q(`[data-testid=svg-prev-${FOG}]`) as HTMLElement | null;
+    expect(ai()?.getAttribute("height")).toBe("84");
+    expect(prev()?.style.height).toBe("84px");
+
+    // 200px is past the old 116px cap: the AI image used to stop growing there
+    // while the SVG frame kept growing, so the pair no longer matched.
+    await type("[data-testid=svg-thumb]", "200");
+    await settle();
+    expect(ai()?.getAttribute("width")).toBe("200");
+    expect(ai()?.getAttribute("height")).toBe("200");
+    expect(prev()?.style.width).toBe("200px");
+    expect(prev()?.style.height).toBe("200px");
+  });
+
   it("previews and copies the SAME version", async () => {
     await mount(await makePreviewRoot());
     expect(frame(FOG)?.dataset.version).toBe("2");

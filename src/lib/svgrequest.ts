@@ -101,6 +101,14 @@ export function readContent(raw: unknown): string | null {
   return typeof content === "string" && content.trim() !== "" ? content : null;
 }
 
+/** choices[0].finish_reason — "stop", "length", "tool_calls"…, or null. */
+export function readFinishReason(raw: unknown): string | null {
+  if (!isRecord(raw) || !Array.isArray(raw.choices) || raw.choices.length === 0) return null;
+  const first: unknown = raw.choices[0];
+  if (!isRecord(first)) return null;
+  return typeof first.finish_reason === "string" ? first.finish_reason : null;
+}
+
 export function readRequestId(headers: HeadersLike): string | null {
   return headerOf(headers, "x-request-id") ?? headerOf(headers, "request-id");
 }
@@ -126,7 +134,7 @@ export function readRetryAfterMs(headers: HeadersLike | undefined): number | nul
   return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
 }
 
-export type FailKind = "auth" | "rate_limit" | "model" | "malformed" | "provider" | "network" | "timeout" | "aborted" | "payload";
+export type FailKind = "auth" | "rate_limit" | "model" | "malformed" | "provider" | "network" | "timeout" | "aborted" | "payload" | "truncated";
 
 export interface Failure {
   kind: FailKind;
@@ -170,6 +178,14 @@ export function classifyTransport(error: unknown, timedOut: boolean, aborted: bo
   if (timedOut) return { kind: "timeout", message: "request timed out", retryAfterMs: null, retryable: false, status: null };
   const message = error instanceof Error ? error.message : "network error";
   return { kind: "network", message, retryAfterMs: null, retryable: true, status: null };
+}
+
+/** A cut-off answer is a budget problem, not a model problem - say which. */
+export const TRUNCATED_MESSAGE = "the answer was cut off at the token ceiling: raise the output tokens or lower the reasoning effort";
+
+/** `finish_reason: "length"`: the provider spent the whole completion budget. */
+export function classifyTruncation(status: number | null, retryAfterMs: number | null): Failure {
+  return { kind: "truncated", message: TRUNCATED_MESSAGE, retryAfterMs, retryable: false, status };
 }
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -223,6 +239,11 @@ async function toOut(response: Response): Promise<SendOut> {
   const text = await response.text();
   if (!response.ok) return { ok: false, failure: classifyHttp(response.status, parseJson(text), retryAfterMs) };
   const body = parseJson(text);
+  // Truncation is checked BEFORE the content: what arrived is partial, and the
+  // tokens that would finish it were already spent, so it is never retried.
+  if (readFinishReason(body) === "length") {
+    return { ok: false, failure: classifyTruncation(response.status, retryAfterMs) };
+  }
   const content = readContent(body);
   if (content === null) {
     return { ok: false, failure: { kind: "malformed", message: "no message content in response", retryAfterMs, retryable: false, status: response.status } };

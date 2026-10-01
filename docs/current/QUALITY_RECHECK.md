@@ -734,3 +734,80 @@ by RULE 17 — one current doc per app, with design detail pushed to
   renders inline, fitted and centred with its own colours.
 * `tests/svg_bg.test.ts` — unchanged and still green: the Bg colour frames the
   preview and changes nothing else.
+
+---
+
+# Quality re-check — 2026-10-02 (thumbnail zoom + effort-aware request budget)
+
+Two reported defects, two root causes, one new module each. Designs:
+[`docs/archive/2026-10-02-svg-thumb-zoom/design.md`](../archive/2026-10-02-svg-thumb-zoom/design.md),
+[`docs/archive/2026-10-02-effort-request-budget/design.md`](../archive/2026-10-02-effort-request-budget/design.md).
+
+## What changed
+
+**The zoom reached only one thumbnail.** The SVG frame is a square of the zoom
+size, so it grew; the AI `<img>` was `width:auto; max-width:116px` with
+`object-fit:contain`, so above ~116 px it was letterboxed and stopped growing
+while the frame kept growing. Both are now the same square of the zoom size
+(`SvgThumbs.tsx` gives the `<img>` an explicit `width`, the CSS loses its
+per-side cap), which is also what makes thin strokes legible at all.
+
+**A flat request budget at every effort.** `max_completion_tokens` is a combined
+ceiling — the reasoning is paid out of it — and `timeoutMs` was one flat 90 s
+regardless of the batch or the effort. `src/lib/svgbudget.ts` (new, 100 lines)
+derives all three numbers from the effort weights (`low 1 · medium 2 · high 4 ·
+xhigh 8`, calibrated on the reported behaviour with 2× head-room): the ceiling
+`user × weight` clamped to the model's maximum, the timeout
+`user × weight ÷ 2 × images` clamped to `[user, TIMEOUT_CEILING_MS]`, and the
+batch size = the largest one whose timeout still fits the gateway limit. The
+runner plans and sends with it; the confirm dialog and the provider limits line
+state the derived numbers. `svgrequest.ts` reads `finish_reason` and classifies
+`"length"` as the new `truncated` failure with an actionable sentence, so a
+cut-off batch is never reported as four missing icons.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 57 files / 517 | **58 files / 534** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.85 / 92.68 / 96.22 / 97.47 | **96.79 / 92.63 / 96.13 / 97.51** |
+| jscpd `src --min-tokens 60` | 11 clones | 11 clones (unchanged) |
+| build `dist/index.html` | 601.97 kB / gzip 176.88 kB | **603.54 kB / gzip 177.31 kB** |
+
+## RULE 18 / RULE 16 re-check
+
+`bash tools/pre_push_check.sh` → **ALL LANES PASSED** (6/6).
+
+Changed production files: `svgbudget.ts` 108, `svgbatch.ts` 104,
+`svgpricing.ts` 66, `svgconfig.ts` 141, `svgrequest.ts` 267,
+`runner.ts` 300, `SvgDialogs.tsx` 275, `SvgControls.tsx` 276,
+`SvgPanel.tsx` 191, `SvgThumbs.tsx` 105, `actions.ts` 278, `index.css`. Every
+new function is inside the RULE 16 caps (30 lines / 4 params / CC 10 / nesting
+4) and no file is over the 300-line limit.
+
+Two RULE 19 fixes were needed on the way, both real rather than cosmetic:
+`runner.ts` reached 315 lines, so the three helpers that had a better owner
+moved — `zeroUsage` was a byte-identical copy of `svgrequest`'s `NO_USAGE`
+(deleted, one owner for "no usage reported"), `sumEstimated` went to
+`lib/svgpricing.ts` beside the rate card it uses, and `toBatchRef` became
+`batchRefOf` in `lib/svgbatch.ts`, which already owns the manifest it serialises
+(and dropped a parameter at the call site). `CompositePreview` hit 31 LOC, so
+the built-contact-sheet markup became its own `CompositeBody`.
+
+Baseline: **untouched** — the gate passes against the existing
+`tools/quality_baseline.json`, so the ratchet does not move.
+
+## Regression tests (RULE 8 — each fails if its feature is deleted)
+
+* `tests/svg_budget.test.ts` (new, 11) — the weights, all three derivations and
+  their clamps, and the batch size per tier.
+* `tests/svg_send.test.ts` — `finish_reason: "length"` fails as `truncated` with
+  the actionable message and is not retried; `stop` still succeeds.
+* `tests/svg_cost_io.test.ts` — the real runner against a fake transport: medium
+  keeps 4 images and sends a 64 000-token ceiling, high shrinks 4 images into
+  3 + 1 with 128 000, and a cut-off answer fails the item with that sentence.
+* `tests/svg_ui.test.tsx` — at a zoom past the old 116 px cap, the AI thumbnail
+  and the SVG frame report the same square size (width **and** height).
