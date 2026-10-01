@@ -25,8 +25,11 @@ export default function SvgList({ g, actions }: SvgListProps) {
   return (
     <div className="svg-panel" data-testid="svg-list" style={style}>
       <ListHead shown={g.visible.length} running={running} attention={attention} />
-      <Columns />
       <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
+        {/* Inside the scroll area and sticky: a zoomed row is wider than the
+            panel, so the header has to travel with it instead of being clipped
+            by the panel's own overflow. */}
+        <Columns />
         {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={actions} />)}
         {g.visible.length === 0 && <p className="svg-empty" data-testid="svg-empty">No approved source matches these filters.</p>}
       </div>

@@ -840,7 +840,7 @@ gap, identical for the column header and every row, at every zoom step. The row'
 | `tsc --noEmit` | clean | clean |
 | eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
 | `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED |
-| tests | 58 files / 534 | **59 files / 537** |
+| tests | 58 files / 534 | **59 files / 539** |
 | coverage (all files, stmts/branch/funcs/lines) | 96.79 / 92.63 / 96.13 / 97.51 | **96.79 / 92.63 / 96.13 / 97.51** |
 | build `dist/index.html` | 603.54 kB / gzip 177.31 kB | **603.69 kB / gzip 177.37 kB** |
 
@@ -848,7 +848,7 @@ gap, identical for the column header and every row, at every zoom step. The row'
 
 ## RULE 18 / RULE 16 re-check
 
-`SvgList.tsx` 68 lines / 5 functions. Adding the zoom variable pushed
+`SvgList.tsx` 73 lines / 6 functions. Adding the zoom variable pushed
 `SvgList` itself to 35 LOC, so its head became `ListHead` — the same split
 `selectionv2/ReviewList.tsx` already makes, not a line-shaving one.
 
@@ -857,10 +857,13 @@ Baseline: **untouched** — the gate passes against the existing
 
 ## Regression tests
 
-* `tests/svg_layout.test.ts` (new, 3) — the shared grid template derives the
-  thumbnails column from `--svg-thumb` (and never from a fixed width), the file
-  column stays flexible, the fixed columns stay where the design put them, and
-  the row height reads the same variable. Verified red against the old
-  `220px` column.
+* `tests/svg_layout.test.ts` (new, 5) — the shared grid template derives the
+  thumbnails column from `--svg-thumb` (and never from a fixed width) at BOTH
+  breakpoints — the `max-width: 1360px` override carried the same fixed
+  `200px` and would have kept the overlap on a narrow screen — the file column
+  stays flexible, the fixed columns stay where the design put them, the row
+  height reads the same variable, and the column header is sticky inside the
+  scroll area so it cannot be clipped. Verified red against the old `220px`
+  column.
 * `tests/svg_ui.test.tsx` — at a 200px zoom the list publishes
   `--svg-thumb: 200px`, and both thumbnails are the same 200px square.

@@ -27,6 +27,20 @@ describe("SVG row layout", () => {
     expect(gridTemplate()).not.toMatch(/\b220px\b/);
   });
 
+  it("derives the column the same way at the narrow breakpoint", () => {
+    const narrow = /@media \(max-width: 1360px\)\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(narrow).not.toBeNull();
+    const columns = narrow?.[1].match(/grid-template-columns:\s*([^;]+);/)?.[1].trim() ?? "";
+    expect(columns).toContain("calc(var(--svg-thumb) * 2 + 6px)");
+    expect(columns).not.toMatch(/\b200px\b/);
+  });
+
+  it("keeps the column header inside the scroll area, so it cannot be clipped", () => {
+    // A zoomed row is wider than the panel; the header has to travel with it.
+    expect(css).toMatch(/\.svg-columns\s*\{[^}]*position:\s*sticky/);
+    expect(css).toMatch(/\.svg-panel\s*\{[^}]*grid-template-rows:\s*42px 1fr 40px/);
+  });
+
   it("keeps the file column flexible and the fixed columns where the design put them", () => {
     const columns = gridTemplate().split(/\s+(?![^(]*\))/);
     expect(columns[0]).toBe("34px");

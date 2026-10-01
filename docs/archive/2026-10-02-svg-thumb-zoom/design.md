@@ -77,6 +77,19 @@ row was already wider than a laptop screen before the zoom existed.
 cascade regression is invisible to a DOM assertion; `tests/svg_ui.test.tsx`
 asserts the variable reaches the DOM at the zoomed value.
 
+## And the header that labels those columns
+
+A row wider than the panel is scrolled by `.svg-rows` (`overflow: auto`) — the
+row was already wider than a laptop screen before the zoom existed. The column
+header, however, sat in its own 30px grid row of `.svg-panel`, which is
+`overflow: hidden`: at a zoomed width its right-hand labels were simply cut off
+while the rows scrolled underneath them. The header now lives **inside** the
+scroll area as a `position: sticky` first child, so it travels with the rows it
+labels at every width, and the panel reserves one row less. Both the base
+template and the `max-width: 1360px` override derive their column from the same
+variable — the override carried the same fixed `200px`, and a narrow screen
+would have kept the overlap.
+
 ## About the colour report
 
 The previous round removed the only colour the app injected

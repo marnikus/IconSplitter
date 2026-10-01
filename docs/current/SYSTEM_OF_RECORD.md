@@ -165,7 +165,9 @@ that makes a network call, only when the user asks it to):
   like the frame's `xMidYMid meet`), so the zoom reaches both sides and thin
   strokes stay legible. The list publishes the zoom as `--svg-thumb`, and the row
   grid's second column is `calc(var(--svg-thumb) * 2 + 8px)` — the thumbnails
-  can never overflow into the text columns beside them. Design + root cause:
+  can never overflow into the text columns beside them. The column header is a
+  sticky child of the scroll area, so a zoomed row wider than the panel takes
+  its labels with it. Design + root cause:
   `docs/archive/2026-10-01-svg-preview-rendering/design.md`,
   `docs/archive/2026-10-02-svg-thumb-zoom/design.md`.
 * Per-file metadata: `<stem>.svg.json` beside the AI image (no global SVG

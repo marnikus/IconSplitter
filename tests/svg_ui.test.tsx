@@ -580,6 +580,9 @@ describe("SVG row preview", () => {
     // one variable the grid column and the row height read, so the thumbnails
     // can never overflow into the text columns beside them.
     expect(q("[data-testid=svg-list]")?.style.getPropertyValue("--svg-thumb")).toBe("200px");
+    // The column header rides inside the scroll area, so a row wider than the
+    // panel takes its labels with it instead of being clipped.
+    expect(q("[data-testid=svg-rows]")?.querySelector(".svg-columns")).not.toBeNull();
   });
 
   it("previews and copies the SAME version", async () => {
