@@ -4,9 +4,13 @@ Current behaviour, invariants and flows. If code and this doc disagree, one of
 them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
 Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.md`.
 
+<!-- ideal-size: 357 lines reason=RULE 17 forbids a second current doc, so all four
+     modes' authoritative behaviour lives in this one file; per-mode design detail
+     stays in docs/archive/ instead of growing here. -->
+
 ## 1. What this is
 
-A browser app with three modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with four modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -18,6 +22,11 @@ A browser app with three modes (top tabs, `src/ui/Workbench.tsx`):
 3. **Selection** (Chrome/Edge only) — recursively scan a root, pair every
    original with its `_AI` result, review them side by side and store an
    approve/decline decision per pair in `review-decisions.json`.
+4. **Selection V2** (Chrome/Edge only) — the same discovery, decisions and
+   decision file as mode 3, presented as the template-driven
+   `design temp/selection tab V2/v2 selection tab.html` design: a full-width
+   **list review** with paired thumbnails, a thumbnail zoom slider, real
+   multi-selection and bulk approve, plus a switchable **comparison** layout.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
@@ -77,6 +86,29 @@ Selection:
   transiently missing file never destroys a decision.
 * A watcher re-scans every 30 s while a root is open (toggleable).
 
+Selection V2 (adds to, never replaces, the rules above):
+
+* Two layouts over one state: **List review** (full width, no comparison
+  panel, one pair per row showing BOTH an Original and an AI result thumbnail,
+  each labelled) and **Comparison** (the V1 `CompareView` panes + a pair
+  picker). Layout, filters, selection and decisions survive switching.
+* Thumbnail zoom: range slider **48–240 px, step 4, default 84** with a live
+  "128 px" readout and both bounds shown; row and thumbnail height follow it
+  while dragging, width comes from the image's own aspect ratio (never
+  stretched, never upscaled past natural height). Persisted across restarts.
+* Checkbox selection is separate state keyed by `pair_<hash>`, so sorting and
+  filtering never lose it: header checkbox (checked / unchecked /
+  indeterminate), Select visible, Deselect all, and live counts for selected,
+  visible, checked-but-hidden and checked-but-incomplete.
+* Bulk review — **Approve selected** / **Approve visible list**: the affected
+  count is shown and the button arms before applying (Escape or Cancel
+  disarms); one operation = one transition, one file write, one toast. A
+  failed write keeps the change in memory with Retry.
+* The **active row** (keyboard target, `aria-current`, scrolled into view) is
+  distinct from a **checked row** (bulk target). `A` / `D` decide the active
+  row; "Next pending after a decision" advances it.
+* Extra filter: **Pairing** = all / complete / missing pair.
+
 Everything runs client-side; nothing is uploaded anywhere.
 
 ## 3. State model
@@ -111,6 +143,18 @@ Status transitions per source record: `unprocessed → processed | skipped |
 deleted`; file changed → `changed` (re-selectable); file gone at scan → `missing`
 (retained in JSON); gone during processing → `deleted` (skipped safely, batch
 continues).
+
+Selection V2 model (`useSelectionV2` wraps `useSelection`, so decision,
+filter and persistence state are V1's and stay single-owned):
+
+```
+core: SelectionApi      discovery, pairs + decisions, filter, sort,
+                        active row (core.selectedId), write status
+checked: string[]       checkbox selection (pair ids) — never a decision
+prefs: ReviewPrefs      { mode: "list"|"compare", thumbHeight: 48..240 }
+derived                 header check state, bulk scope
+                        { affected, blocked, hidden }
+```
 
 ## 4. Core flows
 
@@ -167,6 +211,12 @@ Batch:
   without a stored decision is pending, always.
 * **I-14 (selection, a11y):** every status is text + glyph first; colour is
   reinforcement, never the only signal.
+* **I-15 (selection V2, RULE 6/4):** a bulk decision touches exactly
+  `checked ∩ visible ∩ complete`; hidden checks are counted and reported,
+  never applied, and an incomplete pair is never approved silently.
+* **I-16 (selection V2, RULE 24):** the zoom slider, the row height and the
+  thumbnail height are one value; moving the slider changes all three in the
+  same render, and the stored value survives a restart.
 
 ## 6. Storage map
 
@@ -178,7 +228,8 @@ Batch:
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
 | `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
 | `<root>/review-decisions.json` | selection approve/decline records | atomic write; corrupt → warn + keep memory (I-12) |
-| IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle | permission re-requested on restore |
+| IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle (shared by both Selection tabs) | permission re-requested on restore |
+| localStorage `iconSplitter.selectionV2.prefs.v1` | V2 view prefs `{ mode, thumbHeight }` | validated + clamped on read (RULE 13) |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -198,13 +249,15 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing, filters, sorts, status/hotkey semantics, decision records |
-| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, review UI |
+| Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
+| Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
+| Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 23 files / 123 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 31 files / 207 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, one happy-dom smoke test
 renders the Selection panel and drives it with hotkeys):
 
@@ -230,6 +283,15 @@ renders the Selection panel and drives it with hotkeys):
 * `selection_state.test.ts` — applyScan/withDecision/nextPending/counters
 * `handles.test.ts`, `fmt.test.ts` — path resolution, formatters
 * `selection_ui.test.tsx` — DOM smoke: pick → list → A/D hotkeys → text chips
+* `reviewselect.test.ts`, `reviewbulk.test.ts`, `reviewprefs.test.ts`,
+  `selection_bulk.test.ts`, `hotkeys.test.ts`, `copypath.test.ts` — V2 rules:
+  selection incl. indeterminate, bulk scope + one summary line, zoom clamp /
+  no-upscale / corrupt prefs, bulk reducer, shared hotkeys, path fallback
+* `selectionv2_ui.test.tsx` — DOM: recursive scan + both thumbnails, layout
+  switch, active row + A/D + auto-next, zoom bounds/value/persistence,
+  selection across filter + sort, approve selected/visible, incomplete pairs
+  out of scope, save failure + retry, empty/no-match, corrupt JSON, rescan,
+  restart persistence, a11y labels
 
 Must exist before the matching change ships:
 
@@ -262,6 +324,10 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
 * 2026-10-01 — Selection review designed TDD-first:
   `docs/archive/2026-10-01-selection-review/design.md` (pairing model, atomic
   decision protocol, rename carry, hotkeys, a11y).
+* 2026-10-01 — Selection review V2 designed TDD-first from the prepared HTML
+  template: `docs/archive/2026-10-01-selection-v2/design.md` (layering, list
+  review rows, zoom slider, selection vs decision state, bulk scope, a11y
+  deviation from the template's `role="listbox"`).
 
 ## 11. Current UI — control inventory
 
@@ -280,3 +346,16 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,
   Approve/Decline, 1:1/SYNC, per-side Open-in-Explorer), status footer
   (`sel-footer`), write/corrupt banners, busy + toast.
+* Selection V2 mode: source bar (`v2-root`, `v2-rescan`, `v2-watcher`,
+  `v2-mode-list` / `v2-mode-compare`, `v2-count-*`), filter grid (`v2-date-*`,
+  `v2-from` / `v2-to`, `v2-status`, `v2-pairing`, `v2-sort`, `v2-dir`,
+  `v2-shown`, `v2-clear`), bulk bar (`v2-check-all`, `v2-selected-count`,
+  `v2-scope`, `v2-blocked`, `v2-hidden`, `v2-select-visible`, `v2-deselect`,
+  `v2-thumb` + `v2-thumb-value`, `v2-approve-selected`, `v2-approve-visible`),
+  list (`v2-list`, `v2-rows`, `v2-row-*`, `v2-check-*`, `v2-thumb-src` /
+  `v2-thumb-ai`, `v2-status-*`, `v2-open-{src,ai}-*`, `v2-decline-*` /
+  `v2-approve-row-*`, `v2-autonext`, `v2-empty`, `v2-nomatch`), comparison
+  (`v2-pair-picker` + the V1 `sel-compare` handles), shared surfaces
+  (`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy` and the
+  shared `sel-footer` / `sel-diff` / `sel-retry-count`). Full table:
+  `UI_SELECTORS.md` §N.

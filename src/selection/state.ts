@@ -4,6 +4,7 @@
 // stay unit-tested (RULE 8).
 
 import { attentionInfo, type ReviewPair } from "../lib/pairing";
+import { planBulk } from "../lib/reviewbulk";
 import {
   carryRenamed, diffPairs, type PairDiff, type ReviewRecord,
 } from "../lib/reviewfile";
@@ -93,6 +94,28 @@ export function withDecision(s: SelState, pairId: string, decision: Decision, no
 function orphanOnly(records: ReviewRecord[], views: ViewPair[]): ReviewRecord[] {
   const ids = new Set(views.map((v) => v.pairId));
   return records.filter((r) => !ids.has(r.pair_id));
+}
+
+export interface BulkOut {
+  state: SelState;
+  applied: string[];
+  skipped: string[];
+}
+
+/**
+ * One transition for a whole batch (spec V2 §6): records are rebuilt once and
+ * incomplete pairs are skipped instead of silently approved (RULE 4).
+ */
+export function withBulkDecision(s: SelState, ids: string[], decision: Decision, nowIso: string): BulkOut {
+  const plan = planBulk(s.pairs, ids);
+  if (plan.eligible.length === 0) return { state: s, applied: [], skipped: plan.skipped };
+  const touch = new Set(plan.eligible);
+  const pairs = s.pairs.map((p) => (touch.has(p.pairId) ? { ...p, decision, reviewedAt: nowIso } : p));
+  return {
+    state: { ...s, pairs, records: recordsFromViews(pairs, orphanOnly(s.records, pairs)) },
+    applied: plan.eligible,
+    skipped: plan.skipped,
+  };
 }
 
 /** Next pending pair after fromId, wrapping; null when all reviewed. */

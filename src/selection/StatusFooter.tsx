@@ -1,10 +1,12 @@
 // StatusFooter.tsx — bottom status bar: rescan age, diff counts, retry
-// warning, reviewed progress bar (RULE 5/24 honest surfaces).
+// warning, reviewed progress bar (RULE 5/24 honest surfaces). Shared by both
+// Selection surfaces; `className` swaps the skin, never the semantics.
 
 import { useEffect, useState } from "react";
+import { cn } from "../utils/cn";
 import { counters, type SelState } from "./state";
 
-export default function StatusFooter({ s }: { s: SelState }) {
+export default function StatusFooter({ s, className }: { s: SelState; className?: string }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 5000);
@@ -15,7 +17,7 @@ export default function StatusFooter({ s }: { s: SelState }) {
   const pct = c.total ? Math.round((reviewed / c.total) * 100) : 0;
   const age = s.lastRescanAt ? Math.max(0, Math.round((Date.now() - s.lastRescanAt) / 1000)) : null;
   return (
-    <footer className="panel flex flex-wrap items-center gap-3 text-xs text-slate-400" data-testid="sel-footer">
+    <footer className={cn("panel flex flex-wrap items-center gap-3 text-xs text-slate-400", className)} data-testid="sel-footer">
       <span className="text-emerald-300">●</span> Recursive index ready
       {age !== null && <span data-testid="sel-rescan-age">Last rescan: {age} seconds ago</span>}
       <span data-testid="sel-diff">

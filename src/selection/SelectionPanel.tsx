@@ -6,12 +6,14 @@ import { useEffect, useState } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { ALL_FILTER } from "../lib/reviewfilter";
 import CompareView from "./CompareView";
+import { CorruptNote, Overlays, WriteBanner } from "./Surfaces";
 import FilterBar from "./FilterBar";
 import HeaderRow from "./HeaderRow";
 import PairList from "./PairList";
 import StatusFooter from "./StatusFooter";
 import { counters } from "./state";
-import { fullPathText } from "./handles";
+import { copyPathText } from "./copypath";
+import { hotTarget, isTextField, runHotAction } from "./hotkeys";
 import { useThumbFor } from "./thumbs";
 import { useSelection, type SelectionApi } from "./useSelection";
 
@@ -35,7 +37,7 @@ export default function SelectionPanel() {
         ? <PickRootNote onPick={api.chooseRoot} />
         : <MainGrid api={api} search={search} setSearch={setSearch} thumbFor={thumbFor} />}
       <StatusFooter s={api.s} />
-      <Overlays api={api} />
+      <Overlays s={api.s} />
     </div>
   );
 }
@@ -44,28 +46,7 @@ function Banners({ api }: { api: SelectionApi }) {
   return (
     <>
       {api.s.writeWarn && <WriteBanner warn={api.s.writeWarn} retry={api.retryWrite} />}
-      {api.s.corrupt && (
-        <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="sel-corrupt">
-          ⚠ review-decisions.json was corrupt — previous decisions were kept in memory.
-        </p>
-      )}
-    </>
-  );
-}
-
-function Overlays({ api }: { api: SelectionApi }) {
-  return (
-    <>
-      {api.s.toast && (
-        <div data-testid="sel-toast" className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${api.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>
-          {api.s.toast.msg}
-        </div>
-      )}
-      {api.s.busy && (
-        <div data-testid="sel-busy" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
-          <span className="rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 text-sm">{api.s.busy}</span>
-        </div>
-      )}
+      {api.s.corrupt && <CorruptNote />}
     </>
   );
 }
@@ -76,7 +57,7 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
 }) {
   const selected = api.visible.find((v) => v.pairId === api.s.selectedId)
     ?? api.s.pairs.find((v) => v.pairId === api.s.selectedId) ?? null;
-  const copyPath = (relPath: string) => { void copy(relPath, api); };
+  const copyPath = (relPath: string) => { void copyPathText(api.s.rootName, relPath, api.say); };
   return (
     <div className="grid items-start gap-3 lg:grid-cols-[22rem_1fr]">
       <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}
@@ -87,15 +68,6 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
         zoom={api.s.zoom} sync={api.s.sync} autoNext={api.s.autoNext}
         patch={api.patch} decide={api.decide} copyPath={copyPath} />
     </div>
-  );
-}
-
-function WriteBanner({ warn, retry }: { warn: string; retry: () => void }) {
-  return (
-    <p className="flex items-center gap-3 rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="sel-writewarn">
-      ⚠ {warn} <code className="text-xs">review-decisions.json</code>
-      <button className="btn-mini ml-auto sel-focus" data-testid="sel-retry" onClick={retry}>↻ Retry write</button>
-    </p>
   );
 }
 
@@ -125,34 +97,12 @@ function useHotkeys(api: SelectionApi): void {
         (document.querySelector("[data-testid='sel-search']") as HTMLInputElement | null)?.focus();
         return;
       }
-      const t = e.target as HTMLElement;
-      const inField = t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement;
-      const act = keyToAction(e.key, inField);
+      const act = keyToAction(e.key, isTextField(e.target));
       if (!act) return;
       e.preventDefault();
-      handle(act, api);
+      runHotAction(act, hotTarget(api));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [api]);
-}
-
-function handle(act: NonNullable<ReturnType<typeof keyToAction>>, api: SelectionApi): void {
-  const id = api.s.selectedId;
-  if (act === "approve" && id) return api.decide(id, "approved");
-  if (act === "decline" && id) return api.decide(id, "declined");
-  if (act === "zoom") return api.patch({ zoom: api.s.zoom === "fit" ? "full" : "fit" });
-  const at = api.visible.findIndex((v) => v.pairId === id);
-  const next = act === "next" ? api.visible[at + 1] : api.visible[at - 1];
-  if (next) api.select(next.pairId);
-}
-
-async function copy(relPath: string, api: SelectionApi): Promise<void> {
-  const text = fullPathText(api.s.rootName, relPath);
-  try {
-    await navigator.clipboard.writeText(text);
-    api.say(`Path copied — browsers can't open Explorer directly: ${text}`);
-  } catch {
-    api.say("Could not copy the path", true);
-  }
 }

@@ -1,9 +1,9 @@
 // reviewfilter.ts — pure list filtering for Selection review (RULE 3, RULE 8).
-// Owns: date modes (all / month / custom range), decision status filter and
-// free-text search. A pair anchors on BOTH created and generated timestamps:
-// it passes a range when either of them falls inside it (spec §3).
+// Owns: date modes (all / month / custom range), decision status filter,
+// missing-pair filter and free-text search. A pair anchors on BOTH created and
+// generated timestamps: it passes a range when either of them falls inside it.
 
-import type { ReviewPair } from "./pairing";
+import { attentionInfo, type ReviewPair } from "./pairing";
 
 export type Decision = "pending" | "approved" | "declined";
 
@@ -18,16 +18,26 @@ export type DateFilter =
   | { mode: "month"; month: string } // "YYYY-MM"
   | { mode: "custom"; from: number; to: number }; // epoch ms, inclusive
 
+/** Missing-pair states (spec V2 §8): incomplete = one side is absent. */
+export type PairingFilter = "all" | "complete" | "incomplete";
+
 export interface ListFilter {
   date: DateFilter;
   status: "all" | Decision;
   search: string;
+  pairing: PairingFilter;
 }
 
-export const ALL_FILTER: ListFilter = { date: { mode: "all" }, status: "all", search: "" };
+export const ALL_FILTER: ListFilter = { date: { mode: "all" }, status: "all", search: "", pairing: "all" };
 
 export function applyFilters(pairs: ViewPair[], f: ListFilter): ViewPair[] {
-  return pairs.filter((p) => inDate(p, f.date) && inStatus(p, f.status) && inSearch(p, f.search));
+  return pairs.filter((p) => inDate(p, f.date) && inStatus(p, f.status)
+    && inSearch(p, f.search) && inPairing(p, f.pairing));
+}
+
+function inPairing(p: ViewPair, f: PairingFilter): boolean {
+  if (f === "all") return true;
+  return (attentionInfo(p) === null) === (f === "complete");
 }
 
 function inDate(p: ViewPair, d: DateFilter): boolean {

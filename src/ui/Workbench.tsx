@@ -1,12 +1,14 @@
-// Workbench.tsx — top-level mode switch: single sheets (original tool) or the
-// recursive batch processor. Kept tiny so App.tsx (legacy) does not grow.
+// Workbench.tsx — top-level mode switch: single sheets (original tool), the
+// recursive batch processor and the two Selection review surfaces (V1 and the
+// template-driven V2). Kept tiny so App.tsx (legacy) does not grow.
 
 import { useState } from "react";
 import App from "../App";
 import BatchPanel from "../batch/BatchPanel";
 import SelectionPanel from "../selection/SelectionPanel";
+import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 
-type Mode = "sheets" | "batch" | "selection";
+type Mode = "sheets" | "batch" | "selection" | "selectionV2";
 
 export default function Workbench() {
   const [mode, setMode] = useState<Mode>("sheets");
@@ -17,11 +19,13 @@ export default function Workbench() {
           <TabBtn active={mode === "sheets"} onClick={() => setMode("sheets")} testid="tab-sheets" label="Single sheets" />
           <TabBtn active={mode === "batch"} onClick={() => setMode("batch")} testid="tab-batch" label="Batch folders" />
           <TabBtn active={mode === "selection"} onClick={() => setMode("selection")} testid="tab-selection" label="Selection" />
+          <TabBtn active={mode === "selectionV2"} onClick={() => setMode("selectionV2")} testid="tab-selection-v2" label="Selection V2" />
         </div>
       </nav>
       {mode === "sheets" && <App />}
       {mode === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
       {mode === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
+      {mode === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
     </div>
   );
 }

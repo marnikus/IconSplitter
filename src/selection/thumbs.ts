@@ -33,3 +33,17 @@ export function sideUrl(rootRef: { current: DirHandleLike | null }, relPath: str
     return URL.createObjectURL(await fh.getFile());
   })();
 }
+
+export type SideThumbFor = (relPath: string) => Promise<string>;
+
+/** Cached per-side resolver — V2 rows show BOTH sides of a pair (spec V2 §3). */
+export function useSideThumbs(rootRef: { current: DirHandleLike | null }): SideThumbFor {
+  const cache = useRef(new Map<string, string>());
+  return useCallback(async (relPath: string) => {
+    const hit = cache.current.get(relPath);
+    if (hit) return hit;
+    const url = await sideUrl(rootRef, relPath);
+    cache.current.set(relPath, url);
+    return url;
+  }, [rootRef]);
+}

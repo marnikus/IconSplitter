@@ -12,13 +12,16 @@ import { sortPairs, type SortState } from "../lib/reviewsort";
 import type { Decision } from "../lib/reviewfilter";
 import { pickDirectory, fsSupported } from "../batch/picker";
 import { loadHandles, saveHandles } from "../batch/store";
+import { bulkMessage } from "../lib/reviewbulk";
 import { loadDecisions, saveDecisions } from "./reviewstore";
 import {
-  applyScan, initialSelState, nextPendingId, withDecision, type SelState,
+  applyScan, initialSelState, nextPendingId, withBulkDecision, withDecision,
+  type BulkOut, type SelState,
 } from "./state";
 
 const HANDLE_KEY = "__selection__";
 const WATCH_MS = 30_000;
+const WRITE_WARN = "Decision file could not be written. Your pending change is retained in memory.";
 
 interface Ctx {
   root: { current: DirHandleLike | null };
@@ -40,6 +43,7 @@ export function useSelection() {
     chooseRoot: useCallback(() => chooseRoot(ctx, setS, say), [ctx, setS, say]),
     rescan: useCallback(() => rescan(ctx, setS, say), [ctx, setS, say]),
     decide: useCallback((id: string, d: Decision) => decide(ctx, setS, id, d), [ctx, setS]),
+    decideBulk: useCallback((ids: string[], d: Decision) => decideBulk(ctx, setS, ids, d), [ctx, setS]),
     retryWrite: useCallback(() => retryWrite(ctx, setS), [ctx, setS]),
     select: useCallback((id: string) => setS((p) => ({ ...p, selectedId: id })), []),
     setFilter: useCallback((f: ListFilter) => setS((p) => ({ ...p, filter: f })), []),
@@ -100,17 +104,36 @@ function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   void persist(ctx, setS, next);
 }
 
-async function persist(ctx: Ctx, setS: Setter, s: SelState): Promise<void> {
+/** One bulk operation: one transition, one write, ONE toast (spec V2 §6). */
+function decideBulk(ctx: Ctx, setS: Setter, ids: string[], d: Decision): void {
+  const out = withBulkDecision(ctx.state.current, ids, d, new Date().toISOString());
+  setS(out.state);
+  if (out.applied.length === 0) return nothingApplied(setS, out, d);
+  void reportBulk(ctx, setS, out, d);
+}
+
+function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
+  const msg = bulkMessage({ decision: d, applied: 0, skipped: out.skipped.length, saved: true });
+  setS((p) => ({ ...p, toast: { msg, err: true } })); // honest no-op, never a fake success
+}
+
+async function reportBulk(ctx: Ctx, setS: Setter, out: BulkOut, d: Decision): Promise<void> {
+  const saved = await persist(ctx, setS, out.state);
+  const msg = bulkMessage({ decision: d, applied: out.applied.length, skipped: out.skipped.length, saved });
+  setS((p) => ({ ...p, toast: { msg, err: !saved } }));
+}
+
+/** Writes the decision file; resolves false when memory and disk disagree. */
+async function persist(ctx: Ctx, setS: Setter, s: SelState): Promise<boolean> {
   const root = ctx.root.current;
-  if (!root) return;
+  if (!root) return true; // no root yet: in-memory review only
   try {
     await saveDecisions(root, s.records);
     setS((p) => ({ ...p, writeWarn: null, awaitingRetry: 0 }));
+    return true;
   } catch {
-    setS((p) => ({
-      ...p, writeWarn: "Decision file could not be written. Your pending change is retained in memory.",
-      awaitingRetry: p.awaitingRetry + 1,
-    }));
+    setS((p) => ({ ...p, writeWarn: WRITE_WARN, awaitingRetry: p.awaitingRetry + 1 }));
+    return false;
   }
 }
 
