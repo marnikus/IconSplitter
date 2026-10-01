@@ -11,7 +11,7 @@ import { fsSupported } from "../batch/picker";
 import { loadConfig, loadPrompt } from "./promptstore";
 import { loadSvgPrefs } from "./prefsstore";
 import { useSvgCtx } from "./ctx";
-import { useSvgModel, type SvgModel } from "./statemodel";
+import { useSvgModel, type SvgModel, type ViewPrefs } from "./statemodel";
 import { useSvgActions, type SvgActions, type SvgCtx } from "./actions";
 
 /** What the panel sees: the model plus every action, flattened (RULE 24). */
@@ -29,7 +29,7 @@ export type SvgGenApi = SvgModel & SvgActions & {
 
 export function useSvgGen(): SvgGenApi {
   const boot = useRef(loadBoot()).current;
-  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.thumb);
+  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs);
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
   const { visible, checked, activeId, header, affected, totals, provider, refs } = ctx;
@@ -42,10 +42,11 @@ export function useSvgGen(): SvgGenApi {
 interface Boot {
   config: ReturnType<typeof loadConfig>;
   prompt: string;
-  thumb: number;
+  prefs: ViewPrefs;
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */
 function loadBoot(): Boot {
-  return { config: loadConfig(), prompt: loadPrompt(), thumb: loadSvgPrefs().thumbHeight };
+  const prefs = loadSvgPrefs();
+  return { config: loadConfig(), prompt: loadPrompt(), prefs: { thumb: prefs.thumbHeight, bg: prefs.previewBg } };
 }

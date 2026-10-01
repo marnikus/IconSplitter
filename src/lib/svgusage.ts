@@ -1,8 +1,11 @@
 // svgusage.ts — token and cost reporting for SVG generation (prompt §14).
-// Owns: formatting provider-reported numbers, summing a batch, and splitting a
-// batch total across its images as a clearly-labelled ESTIMATE. A number the
-// provider did not report is shown as "—", never invented.
+// Owns: formatting provider-reported numbers, summing a batch, splitting a
+// batch total across its images as a clearly-labelled ESTIMATE, and the wording
+// every cost surface uses. A number the provider did not report is shown as
+// "—", never invented; a calculated number always carries "Estimated".
 
+import type { CostBasis, CostInfo } from "./svgfile";
+import { costInfoFor } from "./svgpricing";
 import type { Usage } from "./svgrequest";
 
 export const NO_NUMBER = "—";
@@ -16,20 +19,54 @@ export function fmtTokens(value: number | null): string {
 
 /** "$0.076" — four decimals, because a single icon costs fractions of a cent. */
 export function fmtCost(cost: number | null): string {
-  if (cost === null || !Number.isFinite(cost)) return NO_NUMBER;
-  return cost === 0 ? "$0.00" : `$${cost.toFixed(4)}`;
+  return fmtCostIn(cost, "USD");
 }
 
-/** One line for a row: totals first, then the cost with its actual/estimate tag. */
+/** Four decimals with the currency code for anything that is not USD. */
+export function fmtCostIn(cost: number | null, currency: string): string {
+  if (cost === null || !Number.isFinite(cost)) return NO_NUMBER;
+  const amount = cost === 0 ? "0.00" : cost.toFixed(4);
+  return currency === "" || currency === "USD" ? `$${amount}` : `${amount} ${currency}`;
+}
+
+/** One line for a row: totals first, then the cost with its reported tag. */
 export function usageLine(u: Usage): string {
   const tokens = `${fmtTokens(u.input)} in · ${fmtTokens(u.output)} out · ${fmtTokens(u.total)} total`;
-  return `${tokens} · ${costLabel(u)}`;
+  return `${tokens} · ${costLabel(costInfoFor("", u))}`;
 }
 
-export function costLabel(u: Usage): string {
-  if (u.cost !== null) return `${fmtCost(u.cost)} actual`;
-  if (u.estimated !== undefined && u.estimated !== null) return `${fmtCost(u.estimated)} estimated`;
+/** One version's cost: provider-reported wins, a calculation says Estimated. */
+export function costLabel(cost: CostInfo): string {
+  if (cost.actual !== null) return `${fmtCostIn(cost.actual, cost.currency)} reported`;
+  if (cost.estimated !== null) return `${fmtCostIn(cost.estimated, cost.currency)} Estimated`;
   return "no cost reported";
+}
+
+/** Sums a set of versions; reported and estimated money are never merged. */
+export interface CostSummary {
+  reported: number | null;
+  estimated: number | null;
+}
+
+/** The audit line under a cost: which model, currency and pricing version. */
+export function costNote(model: string, cost: CostInfo): string {
+  const pricing = cost.pricing === "" ? "pricing unknown" : `pricing ${cost.pricing}`;
+  return `${model} · ${cost.currency} · ${pricing} · ${BASIS_NOTE[cost.basis]}`;
+}
+
+const BASIS_NOTE: Record<CostBasis, string> = {
+  provider: "provider reported",
+  "batch-split": "share of a batch total",
+  "rate-card": "rate card calculation",
+  none: "nothing reported",
+};
+
+/** "Sum of what was reported" beside "sum of what was calculated". */
+export function costText(sum: CostSummary, currency = "USD"): string {
+  const parts: string[] = [];
+  if (sum.reported !== null) parts.push(`${fmtCostIn(sum.reported, currency)} reported`);
+  if (sum.estimated !== null) parts.push(`${fmtCostIn(sum.estimated, currency)} Estimated`);
+  return parts.length > 0 ? parts.join(" · ") : "no cost reported";
 }
 
 /** Totals for a set of requests; a field stays null when every part is null. */
@@ -66,11 +103,13 @@ function finish(acc: Acc, seen: Seen): Usage {
 }
 
 /**
- * Splits one batch's reported usage across its images. The result is an
- * estimate: it is stored with `estimated` set and `cost` null so it can never
- * be mistaken for a provider-reported number.
+ * Splits one batch's reported usage across its images. A share of one IS the
+ * reported usage, so it stays reported; any other share is an estimate, stored
+ * with `estimated` set and `cost` null so it can never be mistaken for a
+ * provider-reported number.
  */
 export function allocateUsage(u: Usage, count: number): Usage {
+  if (count === 1) return { ...u };
   if (count <= 0) return { ...u, input: null, output: null, total: null, cost: null };
   const per = (n: number | null) => (n === null ? null : n / count);
   return {

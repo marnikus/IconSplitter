@@ -24,8 +24,10 @@ export interface SvgListRow {
   review: ReviewFilter;
   /** Newest generation timestamp in epoch ms, or null when never generated. */
   generatedAt: number | null;
-  /** Actual provider-reported cost of the newest version, or null. */
+  /** Newest version's cost: provider-reported when reported, else calculated. */
   cost: number | null;
+  /** True when `cost` is a calculated number and must show as Estimated. */
+  costEstimated: boolean;
   /** Total tokens of the newest version, or null when not reported. */
   tokens: number | null;
   version: number;
@@ -81,28 +83,42 @@ export function shownLabel(shown: number, total: number): string {
   return `Showing ${shown} of ${total} approved sources`;
 }
 
-/** Totals for the footer: tokens and actual cost across the visible rows. */
+/** Totals for the footer: tokens, reported cost and estimated cost, never merged. */
 export interface UsageTotals {
   tokens: number | null;
   cost: number | null;
+  estimated: number | null;
   generated: number;
   approved: number;
   failed: number;
 }
 
+interface Parts {
+  tokens: number;
+  cost: number;
+  estimated: number;
+  generated: number;
+  approved: number;
+  failed: number;
+  anyTokens: boolean;
+  anyCost: boolean;
+  anyEstimated: boolean;
+}
+
 export function usageTotals(rows: readonly SvgListRow[]): UsageTotals {
-  const totals = { tokens: 0, cost: 0, generated: 0, approved: 0, failed: 0, anyTokens: false, anyCost: false };
-  for (const r of rows) countRow(totals, r);
+  const parts: Parts = { tokens: 0, cost: 0, estimated: 0, generated: 0, approved: 0, failed: 0, anyTokens: false, anyCost: false, anyEstimated: false };
+  for (const r of rows) countRow(parts, r);
   return {
-    tokens: totals.anyTokens ? totals.tokens : null,
-    cost: totals.anyCost ? totals.cost : null,
-    generated: totals.generated,
-    approved: totals.approved,
-    failed: totals.failed,
+    tokens: parts.anyTokens ? parts.tokens : null,
+    cost: parts.anyCost ? parts.cost : null,
+    estimated: parts.anyEstimated ? parts.estimated : null,
+    generated: parts.generated,
+    approved: parts.approved,
+    failed: parts.failed,
   };
 }
 
-function countRow(t: { tokens: number; cost: number; generated: number; approved: number; failed: number; anyTokens: boolean; anyCost: boolean }, r: SvgListRow): void {
+function countRow(t: Parts, r: SvgListRow): void {
   if (r.generation === "generated") t.generated++;
   if (r.generation === "failed") t.failed++;
   if (r.review === "approved") t.approved++;
@@ -110,7 +126,11 @@ function countRow(t: { tokens: number; cost: number; generated: number; approved
     t.tokens += r.tokens;
     t.anyTokens = true;
   }
-  if (r.cost !== null) {
+  if (r.cost === null) return;
+  if (r.costEstimated) {
+    t.estimated += r.cost;
+    t.anyEstimated = true;
+  } else {
     t.cost += r.cost;
     t.anyCost = true;
   }

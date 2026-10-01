@@ -10,10 +10,11 @@ import { batchPrompt, singlePrompt } from "../lib/svgprompt";
 import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
 import { buildChatRequest, sendChatRequest, type Failure, type Usage } from "../lib/svgrequest";
 import { allocateUsage, sumUsage } from "../lib/svgusage";
+import { costInfoFor } from "../lib/svgpricing";
 import { redact } from "../lib/svgsecret";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
-import type { SvgSidecar } from "../lib/svgfile";
+import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { recordFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import { saveSidecar } from "./sidecar";
@@ -48,6 +49,8 @@ export interface RunSummary {
   invalid: number;
   cancelled: boolean;
   usage: Usage;
+  /** Sum of the calculated (rate-card) parts; reported money is never merged in. */
+  estimated: number | null;
   /** Per-source error lines, already redacted. */
   problems: string[];
 }
@@ -70,8 +73,15 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
     invalid: state.invalid,
     cancelled: args.signal.aborted,
     usage: sumUsage(state.usages),
+    estimated: sumEstimated(args.config.model, state.usages),
     problems: state.problems,
   };
+}
+
+/** The calculated part of a run's cost: null when nothing had to be estimated. */
+function sumEstimated(model: string, usages: readonly Usage[]): number | null {
+  const parts = usages.map((u) => costInfoFor(model, u)).flatMap((c) => (c.estimated === null ? [] : [c.estimated]));
+  return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) : null;
 }
 
 interface Tally {
@@ -174,6 +184,7 @@ async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<v
   }
 }
 
+
 /** A position the provider did not answer stays pending — never guessed at. */
 async function missOne(ctx: BatchCtx, item: SvgSource, position: number): Promise<void> {
   const { state, plan, tally } = ctx;
@@ -216,11 +227,13 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
   ctx.tally.failed++;
   state.invalid++;
   state.problems.push(`${item.name}: ${error}`);
+  // A charged attempt keeps its share of the usage, and a source without a
+  // sidecar gets one so no task can vanish without its cost.
   const rec = recordFailure({
     source: item, prompt: state.args.prompt, provider: "Requesty", model: state.args.config.model,
-    requestedAt: new Date().toISOString(), error, sidecar,
+    requestedAt: new Date().toISOString(), error, sidecar, usage: ctx.usage ?? zeroUsage(),
   });
-  const next = sidecar ? { ...sidecar, versions: [...sidecar.versions, rec] } : null;
+  const next = withVersion(sidecar ?? newSidecar({ relPath: item.relPath, name: item.name, fingerprint: item.fingerprint }), rec);
   await persist(state, item, next);
   state.args.onEvent({ kind: "item-failed", batchId: plan.id, position, sourceId: item.id, error, failure: "malformed", retryAfterMs: null });
 }

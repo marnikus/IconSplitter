@@ -499,3 +499,107 @@ producing an unhandled one.
   that the confirm dialog now opens instead of the "add your key" guard toast.
   The second new test stubs a storage that refuses the write and asserts the
   session-only message.
+
+# Quality re-check — 2026-10-01 (SVG preview background + task cost, TDD)
+
+Feature prompt: a background-colour control for SVG previews (presets White,
+Black, Gray, Green, Red plus a custom colour) that belongs to **the web app
+only** — it must never modify an SVG's fills or its saved code — and the cost
+shown **beside the token usage of every generation task/version**, using the
+provider-reported number when there is one and labelling any calculated value
+**Estimated**, with cost, currency, model and pricing version stored in the
+per-file sidecar. Design: `docs/archive/2026-10-01-svg-preview-cost/design.md`.
+
+## What changed
+
+* `src/lib/svgbackground.ts` (new, 115 lines) — the preview background as a pure
+  module: the five presets + their colours, `parsePreviewBg` (anything corrupt or
+  unknown falls back to the default, RULE 13), `normalizeHex`, and
+  `previewFrame` → `{ color, outline }`. The outline is the honest answer to
+  "black strokes stay visible": a background the artwork's black strokes would
+  vanish into gets a light hairline around the artwork. Nothing in the module
+  can or does touch an SVG document.
+* `src/lib/svgpricing.ts` (new, 56 lines) — `PRICING_TABLE` keyed by model +
+  `PRICING_VERSION`, `estimateFromTokens` (needs a known model **and** both token
+  counts, otherwise no number is invented) and the single cost decision
+  `costInfoFor(model, usage)`: a provider-reported cost wins; the per-image share
+  of a reported batch total stays an estimate; a token-only response is priced
+  from the rate card and labelled Estimated; an unknown model yields "no cost
+  reported".
+* `src/lib/svgfile.ts` (198 → 275) — `CostInfo` gains `basis` and
+  `pricing: string | null`; `parseSidecar` normalises each cost field on read, so
+  a hand-edited or older sidecar can never break a row.
+* `src/lib/svgusage.ts` (96 → 123), `src/lib/svglist.ts` (117 → 137) — the cost
+  formatters (`costLabel` / `costText`) are the only place cost wording is
+  produced, and the totals keep reported and estimated money apart.
+* `src/svg/` — the row, the version history, the bulk bar and the status bar all
+  use that formatter; `saveversion.ts` writes `costInfoFor(...)`, and
+  `rejectOne` keeps the usage of a request that was charged even though its SVG
+  was rejected; `prefsstore.ts` persists the background with the zoom.
+* `src/index.css` — the preview frame, the swatches and the history cost note.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 51 files / 431 | **54 files / 456** |
+| coverage stmts / branch / funcs / lines | 96.29 / 91.62 / 95.43 / 96.96 | 96.51 / 92.12 / 95.79 / 97.14 |
+| build `dist/index.html` | 575.92 kB / gzip 169.40 kB | 582.79 kB / gzip 171.54 kB |
+
+Lane 3 is recorded twice on purpose. `npm run verify` reports **ALL LANES
+PASSED** (tsc, eslint, changed-file gate, 54/456 tests, coverage, build), and
+the gate was additionally run over **all** files (`GATE PASSED`). The all-files
+pass is the stronger evidence here: this checkout has no usable `origin/main`
+merge base, so `--changed` falls back to `git diff HEAD~1`, and on a branch with
+a single commit that base does not exist at all — a changed-file pass alone
+would have been vacuous or dead.
+
+## RULE 18 size re-check
+
+Every changed production file is inside the 150–300-line ideal or justified by a
+single responsibility: `svgfile.ts` 275, `runner.ts` 290, `SvgDialogs.tsx` 238,
+`actions.ts` 259, `SvgPanel.tsx` 169, `SvgRow.tsx` 153 (154 per the gate's
+counter), `saveversion.ts` 142, `svglist.ts` 137, `svgusage.ts` 123,
+`SvgBulkBar.tsx` 120, `svgbackground.ts` 115, `statemodel.ts` 112, `ctx.ts` 111,
+`SvgThumbs.tsx` 88, `rowmodel.ts` 70, `runstate.ts` 60, `svgpricing.ts` 56,
+`useSvgGen.ts` 52, `prefsstore.ts` 40 — none ≥ 300, and `tools/quality.mjs`
+reports every function inside the RULE 16 caps (30 lines / 4 params / CC 10 /
+nesting 4). `rejectOne` had to lose its fifth parameter and read the usage from
+its context instead — a real fix, not a re-hosted call (§16.2).
+
+Accepted test-file debt: `tests/svg_ui.test.tsx` grew 237 → 329 lines (over the
+300 ideal, no gate applies to `tests/`). It stays one file on purpose — one
+mounted SVG panel exercises the whole journey, and splitting the mount would
+duplicate the fake filesystem + IndexedDB fixtures four ways. `tests/svg_io.test.ts`
+was already 362 lines before this change.
+
+Baseline: **untouched** — the gate passes against the existing
+`tools/quality_baseline.json`, so no re-record is needed and the ratchet does not
+move.
+
+## Regression tests (RULE 8 — each fails if its feature is deleted)
+
+* `tests/svg_bg.test.ts` (new, 6) — presets and their colours, hex
+  normalisation (3/6 digits, with/without `#`, garbage → `null`), corrupt prefs
+  falling back to White, the label of a custom colour, the outline rule (Black
+  and a dark custom colour need it, White/Gray/Green/Red do not), and
+  "frames the preview with a colour and nothing else — the SVG never changes".
+* `tests/svg_cost.test.ts` (new, 9) — the rate card and its version, both token
+  counts + a known model required before anything is priced, the provider number
+  preferred over any calculation, the batch share and rate-card branches of the
+  cost decision, and the exact wording every surface shows.
+* `tests/svg_cost_io.test.ts` (new, 7) — cost through the real save path: the
+  provider-reported number stored with currency + model + pricing version, read
+  back after a simulated restart, a batch share stored as an estimate and never
+  as a reported number, a token-only response priced from the rate card, a
+  charged-but-invalid response still recording its share, and a legacy sidecar
+  reading as "no cost reported" instead of crashing a row.
+* `tests/svg_ui.test.tsx` (8 → 11) — frames the preview and keeps black strokes
+  visible while the code dialog still shows the file's own bytes, proves the
+  saved SVG **and its sidecar** are byte-identical after every background click
+  (the colour is the app's, not the document's), remembers the background across
+  a restart, and shows the cost beside the tokens with the Estimated label and
+  the model + pricing version in the history.

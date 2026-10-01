@@ -34,11 +34,13 @@ export function toListRow(row: SvgRow): SvgListRow {
 }
 
 /** The newest version's list fields; nothing generated means nothing to show. */
-function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "cost" | "tokens" | "version"> {
-  if (v === null) return { generatedAt: null, cost: null, tokens: null, version: 0 };
+function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "cost" | "costEstimated" | "tokens" | "version"> {
+  if (v === null) return { generatedAt: null, cost: null, costEstimated: false, tokens: null, version: 0 };
   return {
     generatedAt: Date.parse(v.completedAt ?? v.requestedAt),
-    cost: v.cost.actual, tokens: v.usage.total, version: v.version,
+    cost: v.cost.actual ?? v.cost.estimated,
+    costEstimated: v.cost.actual === null && v.cost.estimated !== null,
+    tokens: v.usage.total, version: v.version,
   };
 }
 

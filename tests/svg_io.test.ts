@@ -284,13 +284,13 @@ describe("runner events and the review decision", () => {
   it("summarises a run in one line with the real usage", () => {
     const line = summaryLine({
       batches: 2, saved: 3, failed: 1, missing: 0, invalid: 1, cancelled: false,
-      usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" }, problems: [],
+      usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" }, estimated: null, problems: [],
     });
-    expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500");
+    expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500 reported");
     expect(summaryLine({
-      batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true,
+      batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true, estimated: 0.02,
       usage: { input: null, output: null, total: null, cost: null, currency: "USD" }, problems: [],
-    })).toContain("cancelled");
+    })).toContain("$0.0200 Estimated");
   });
 
   it("approves the newest version of every named source and pushes ONE entry", async () => {
@@ -337,7 +337,7 @@ describe("runner events and the review decision", () => {
 
 describe("state reducer and preview", () => {
   it("starts from the documented defaults and applies every action once", () => {
-    const start = initialModel({ baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 }, "prompt", 84);
+    const start = initialModel({ baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 }, "prompt", { thumb: 84, bg: { preset: "white", custom: "#808080" } });
     expect(start.filter).toEqual({ generation: "all", review: "all", search: "" });
     expect(start.keyMask).toBe("not set");
     expect(reduceState(start, { type: "key", key: "not-a-real-key-value-1234" }).keySet).toBe(true);

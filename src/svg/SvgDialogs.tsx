@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { planBatches } from "../lib/svgbatch";
 import type { SvgConfig } from "../lib/svgconfig";
-import { fmtCost, fmtTokens } from "../lib/svgusage";
+import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { toBatchSource } from "./sources";
@@ -221,7 +221,10 @@ function VersionTable({ row, versions, onShowCode }: {
             <td>{v.status === "generated" ? "generated" : v.status}{v.validation.ok ? "" : " ⚠"}</td>
             <td>{v.review}</td>
             <td>{fmtTokens(v.usage.total)}</td>
-            <td>{fmtCost(v.cost.actual)}</td>
+            <td className="svg-history-cost" data-testid={`svg-history-cost-${v.version}`}>
+              {costLabel(v.cost)}
+              <small className="svg-cost-note">{costNote(v.model, v.cost)}</small>
+            </td>
             <td>{v.completedAt === null ? "—" : v.completedAt.slice(0, 16).replace("T", " ")}</td>
             <td>
               <button type="button" className="svg-btn tiny" disabled={v.status !== "generated"}

@@ -86,9 +86,10 @@ function useSvgBoot(refs: SvgRefs, bridge: Pick<SvgCtx, "loadAll" | "refreshKey"
   }, [refs, loadAll, refreshKey, setRootName]);
 }
 
-/** Zoom, provider settings and the prompt are remembered locally (RULE 6). */
+/** Zoom, preview background, provider settings and the prompt are remembered
+    locally (RULE 6); the frame changes with the click, the write follows. */
 function useSvgPersist(model: SvgModel): void {
-  useEffect(() => saveSvgPrefs({ thumbHeight: model.thumb }), [model.thumb]);
+  useEffect(() => saveSvgPrefs({ thumbHeight: model.thumb, previewBg: model.bg }), [model.thumb, model.bg]);
   useEffect(() => saveConfig(model.config), [model.config]);
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
 }
