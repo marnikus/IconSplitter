@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Operator — Generate SVG</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b16;
+      --panel: #0c1222;
+      --panel-2: #10182b;
+      --panel-3: #151e34;
+      --line: #222d47;
+      --line-strong: #384563;
+      --text: #e9edf9;
+      --muted: #8792ad;
+      --muted-2: #626f8d;
+      --purple: #745cff;
+      --purple-2: #917cff;
+      --green: #35d58d;
+      --green-bg: #11372d;
+      --red: #ff5c7e;
+      --red-bg: #3c1726;
+      --yellow: #ffc25b;
+      --yellow-bg: #3a2e17;
+      --blue: #65a7ff;
+      --thumb-height: 68px;
+      --radius: 7px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1200px; min-height: 100vh; background: var(--bg); color: var(--text); }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--purple-2); outline-offset: 2px; }
+    input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--purple); }
+    kbd { border: 1px solid var(--line-strong); border-radius: 3px; background: #11192c; padding: 1px 4px; color: #cbd4ea; }
+
+    .app { min-height: 100vh; display: grid; grid-template-rows: 62px 200px 1fr 40px; }
+    .row, .header-left, .brand, .nav, .app-state, .source, .counts, .provider-status, .bulk-left, .bulk-right, .file-actions, .row-actions, .status-group, .modal-actions { display: flex; align-items: center; }
+
+    header { display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: #080d1b; border-bottom: 1px solid var(--line); }
+    .brand { gap: 9px; margin-right: 18px; font-size: 13px; font-weight: 750; }
+    .mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: linear-gradient(145deg, #9c84ff, #5d45ed); box-shadow: 0 0 18px rgb(116 92 255 / 27%); }
+    .mark::before { content: "◇"; color: white; font-size: 17px; }
+    .nav { align-self: stretch; gap: 2px; }
+    .nav button { border: 0; border-bottom: 2px solid transparent; padding: 0 14px; background: transparent; color: var(--muted); font-size: 11px; }
+    .nav button.active { color: white; border-color: var(--purple); background: linear-gradient(180deg, transparent 62%, rgb(116 92 255 / 10%)); }
+    .app-state { gap: 15px; color: var(--muted); font-size: 10px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px rgb(53 213 141 / 60%); }
+    .help { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--muted); }
+
+    .controls { padding: 10px 16px 8px; border-bottom: 1px solid var(--line); background: #090f1d; }
+    .controls-line { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .controls-line + .controls-line { border-top: 1px solid #151d31; }
+    .source { gap: 8px; min-width: 0; }
+    .path { max-width: 360px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: #bdc7dd; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .scope { color: var(--muted); font-size: 10px; }
+    .counts { gap: 7px; }
+    .counter { padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 9px; }
+    .counter b { margin-right: 5px; color: var(--text); font-size: 11px; }
+    .counter.good b { color: var(--green); }
+    .counter.bad b { color: var(--red); }
+
+    .prompt-zone { width: 100%; display: grid; grid-template-columns: 1fr 455px; gap: 12px; align-items: center; padding: 8px 12px; }
+    .field-label { display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--muted-2); font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .link-button { padding: 0; border: 0; background: transparent; color: var(--purple-2); font-size: 9px; }
+    textarea { width: 100%; height: 38px; resize: vertical; min-height: 38px; max-height: 96px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: #cbd4e9; font-size: 9px; line-height: 1.35; }
+    .provider-card { height: 46px; display: grid; grid-template-rows: 16px 30px; }
+    .provider-top { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; }
+    .provider-top strong { color: #ced6e8; }
+    .key-state { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 9px; }
+    .key-state strong { color: var(--green); }
+    .masked { font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; color: #aab5cc; }
+
+    .filter-line { display: grid; grid-template-columns: 145px 145px 175px 165px 1fr auto auto; gap: 9px; width: 100%; padding: 5px 10px; align-items: end; }
+    .field label { display: block; margin-bottom: 4px; color: var(--muted-2); font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    select, .search { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 0 9px; color: #cbd4e8; font-size: 10px; }
+    .result-copy { align-self: center; color: var(--muted); font-size: 9px; white-space: nowrap; }
+
+    .btn { min-height: 28px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: #c8d0e4; font-size: 9px; font-weight: 700; white-space: nowrap; }
+    .btn:hover { border-color: var(--line-strong); background: var(--panel-3); }
+    .btn.primary { background: var(--purple); border-color: var(--purple); color: white; }
+    .btn.success { background: var(--green-bg); border-color: #26604d; color: var(--green); }
+    .btn.success.solid { background: #159461; color: white; border-color: #1ab274; }
+    .btn.danger { background: var(--red-bg); border-color: #6b3047; color: var(--red); }
+    .btn:disabled { opacity: .42; cursor: not-allowed; }
+    .tiny { min-height: 25px; padding: 5px 7px; font-size: 8px; }
+
+    .workspace { min-height: 0; padding: 0 16px 8px; overflow: hidden; }
+    .warning { height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border: 1px solid #5b4523; border-radius: 6px; background: #211a12; color: #d9bd87; font-size: 9px; }
+    .warning strong { color: var(--yellow); }
+    .warning[hidden] { display: none; }
+    .bulk { height: 52px; margin-top: 8px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px 7px 0 0; background: var(--panel); }
+    .bulk-left, .bulk-right { gap: 8px; }
+    .selected { font-size: 10px; font-weight: 750; }
+    .selection-scope { color: var(--muted); font-size: 9px; }
+    .divider { width: 1px; height: 25px; background: var(--line); margin: 0 2px; }
+    .zoom { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }
+    .zoom input { width: 112px; accent-color: var(--purple); }
+    .zoom output { min-width: 52px; padding: 5px 7px; border-radius: 5px; background: var(--purple); color: white; text-align: center; font-weight: 800; }
+    .estimate { color: var(--muted); font-size: 8px; text-align: right; line-height: 1.35; }
+    .estimate strong { display: block; color: #bdc7dc; font-size: 9px; }
+
+    .list { height: calc(100% - 94px); display: grid; grid-template-rows: 40px 30px 1fr 46px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 7px 7px; background: var(--panel); overflow: hidden; }
+    .list-head { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); }
+    .list-title { display: flex; align-items: center; gap: 8px; }
+    .list-title h1 { margin: 0; font-size: 11px; letter-spacing: .04em; }
+    .head-badge { padding: 4px 6px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 8px; }
+    .attention { display: flex; gap: 12px; color: var(--muted); font-size: 8px; text-transform: uppercase; }
+    .attention .running { color: var(--purple-2); }
+    .attention .needs { color: var(--yellow); }
+    .columns, .svg-row { display: grid; grid-template-columns: 34px 211px minmax(340px, 1fr) 122px 115px 146px 127px 243px; gap: 10px; align-items: center; }
+    .columns { padding: 0 10px; border-bottom: 1px solid var(--line); color: var(--muted-2); font-size: 7px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .rows { min-height: 0; overflow: auto; scrollbar-color: #34405d var(--panel); }
+    .svg-row { min-height: calc(var(--thumb-height) + 20px); padding: 8px 10px; border-bottom: 1px solid #192139; transition: background .15s, min-height .15s; position: relative; }
+    .svg-row:hover { background: #10182b; }
+    .svg-row.active { background: #1d1945; box-shadow: inset 3px 0 0 var(--purple); }
+    .svg-row.checked:not(.active) { background: #111a30; }
+    .previews { display: flex; gap: 7px; align-items: center; }
+    .preview-wrap { position: relative; }
+    .preview { width: 96px; height: var(--thumb-height); border: 1px solid #35415f; border-radius: 5px; background: #11182a center / cover no-repeat; display: grid; place-items: center; overflow: hidden; transition: height .15s; }
+    .preview svg { width: 82%; height: 82%; }
+    .preview.empty { color: var(--muted-2); border-style: dashed; font-size: 8px; }
+    .tag { position: absolute; left: 4px; top: 4px; padding: 2px 4px; border-radius: 3px; background: rgb(3 7 18 / 78%); color: #dce4f5; font-size: 6px; font-weight: 800; text-transform: uppercase; }
+    .file { min-width: 0; }
+    .filename { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; }
+    .filepath { margin-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font: 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .persist { margin-top: 5px; color: var(--muted-2); font-size: 7px; }
+    .persist.error { color: var(--red); }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 999px; font-size: 7px; font-weight: 800; white-space: nowrap; }
+    .badge.generated, .badge.approved { color: var(--green); background: var(--green-bg); border-color: #285d4c; }
+    .badge.generating { color: var(--purple-2); background: #261e52; border-color: #514399; }
+    .badge.failed, .badge.declined { color: var(--red); background: var(--red-bg); border-color: #6b3047; }
+    .badge.pending, .badge.not-generated { color: var(--yellow); background: var(--yellow-bg); border-color: #665129; }
+    .usage { color: #b5bfd5; font-size: 8px; line-height: 1.5; }
+    .usage strong { color: var(--purple-2); }
+    .file-actions, .row-actions { gap: 4px; flex-wrap: wrap; }
+    .progress-mini { width: 88px; height: 4px; margin-top: 5px; border-radius: 999px; overflow: hidden; background: #222c45; }
+    .progress-mini span { display: block; height: 100%; background: var(--purple); }
+
+    .list-footer { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8px; }
+    .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--line); background: #080d1b; color: var(--muted); font-size: 8px; }
+    .status-group { gap: 13px; }
+    .bar { width: 92px; height: 5px; border-radius: 999px; overflow: hidden; background: #1b2540; }
+    .bar span { display: block; height: 100%; width: 66%; background: var(--purple); }
+
+    .modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: rgb(1 4 12 / 72%); backdrop-filter: blur(4px); z-index: 20; }
+    .modal-backdrop[hidden] { display: none; }
+    .modal { width: min(820px, 90vw); max-height: 84vh; overflow: auto; border: 1px solid var(--line-strong); border-radius: 10px; background: #0d1425; box-shadow: 0 24px 80px rgb(0 0 0 / 45%); }
+    .modal header { height: 52px; position: sticky; top: 0; z-index: 1; border-radius: 10px 10px 0 0; }
+    .modal-body { padding: 16px; }
+    .modal h2 { margin: 0; font-size: 14px; }
+    .modal p, .modal li { color: #a9b4ca; font-size: 10px; line-height: 1.6; }
+    .code { width: 100%; min-height: 340px; padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: #070b14; color: #b9c8e8; white-space: pre; overflow: auto; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .modal-actions { justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .confirmation { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .fact { padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+    .fact span { display: block; color: var(--muted); font-size: 8px; text-transform: uppercase; }
+    .fact strong { display: block; margin-top: 4px; font-size: 11px; }
+    .toast { position: fixed; right: 18px; bottom: 54px; max-width: 360px; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: 7px; background: #151e33; box-shadow: 0 18px 50px rgb(0 0 0 / 36%); color: #dce4f7; font-size: 9px; opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s; z-index: 30; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div class="header-left">
+        <div class="brand"><span class="mark"></span><span>Image Operator</span></div>
+        <nav class="nav" aria-label="Primary">
+          <button type="button">Single sheets</button><button type="button">Batch folders</button><button type="button">Selection</button><button class="active" type="button" aria-current="page">Generate SVG</button>
+        </nav>
+      </div>
+      <div class="app-state"><span class="row"><span class="dot"></span>&nbsp;Requesty connected</span><span class="row"><span class="dot"></span>&nbsp;Watcher active</span><button class="help" type="button">?</button></div>
+    </header>
+
+    <section class="controls">
+      <div class="controls-line">
+        <div class="source"><div class="path">📂 Root: test_processing / split_output</div><button class="btn primary" id="rescan">↻ Rescan approved</button><span class="scope">Approved Selection images only · recursive · 18 folders</span></div>
+        <div class="counts" id="counts"></div>
+      </div>
+      <div class="controls-line prompt-zone">
+        <div>
+          <div class="field-label"><span>Generation prompt · saved locally</span><button class="link-button" id="resetPrompt" type="button">Reset default</button></div>
+          <textarea id="prompt">Create 4 split SVG icons. Snap visually intended path connections mathematically to exact curves or anchors; never leave tiny gaps, floating endpoints, overshoots, or approximate joins. Preserve seamless geometry at every zoom level.</textarea>
+        </div>
+        <div class="provider-card">
+          <div class="provider-top"><span><strong>Requesty</strong> · OpenAI-compatible</span><span>timeout 90s · 2 retries · 4 concurrent</span></div>
+          <button class="key-state" id="keyState" type="button"><span>🛡</span><strong>API key secured locally</strong><span class="masked">rq_live_••••••••••4A2F</span><span>excluded from Git · logs · exports</span></button>
+        </div>
+      </div>
+      <div class="controls-line filter-line">
+        <div class="field"><label for="generationFilter">Generation</label><select id="generationFilter"><option value="all">All states</option><option value="not-generated">Not generated</option><option value="generating">Generating</option><option value="generated">Generated</option><option value="failed">Failed</option></select></div>
+        <div class="field"><label for="reviewFilter">Review</label><select id="reviewFilter"><option value="all">All reviews</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="declined">Declined</option></select></div>
+        <div class="field"><label for="sortBy">Sort by</label><select id="sortBy"><option value="date">Newest generated</option><option value="name">Filename</option><option value="generation">Generation status</option><option value="review">Review status</option><option value="cost">Cost</option></select></div>
+        <div class="field"><label for="model">Model</label><select id="model"><option>GPT 6.1 Sol</option><option>GPT 6.1 Sol · fallback</option></select></div>
+        <div class="field"><label for="search">Search</label><input class="search" id="search" type="search" placeholder="Search filename, folder, SVG version, or status…"></div>
+        <span class="result-copy" id="resultCount">Showing 0 sources</span><button class="btn" id="clearFilters" type="button">× Clear filters</button>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="warning" id="warning"><span>⚠ <strong>courtyard_shadow_011_AI.svg validated, but its sidecar could not be written.</strong> Recoverable output is retained.</span><button class="btn tiny" id="retrySave" type="button">↻ Retry file save</button></div>
+      <div class="bulk">
+        <div class="bulk-left"><input id="selectVisible" type="checkbox" aria-label="Select all visible"><span class="selected" id="selectedCount">0 selected</span><span class="selection-scope" id="selectionScope">across 0 approved sources</span><span class="divider"></span><button class="btn" id="selectAll" type="button">Select all visible</button><button class="btn" id="deselectAll" type="button">Deselect all</button></div>
+        <div class="bulk-right">
+          <div class="zoom"><span>ZOOM</span><span>48</span><input id="zoom" type="range" min="48" max="180" step="4" value="68"><span>180</span><output id="zoomValue">68 px</output></div>
+          <span class="divider"></span><div class="estimate"><strong id="estimate">0 images · GPT 6.1 Sol</strong>confirm prompt before send · est. max $0.00</div>
+          <button class="btn primary" id="generateSelected" type="button" disabled>✦ Generate selected</button><button class="btn success" id="approveSelected" type="button" disabled>✓ Approve selected</button><button class="btn danger" id="declineSelected" type="button" disabled>× Decline selected</button>
+        </div>
+      </div>
+
+      <div class="list">
+        <div class="list-head"><div class="list-title"><h1>APPROVED SOURCES / SVG OUTPUT</h1><span class="head-badge" id="rowCount">0</span><span class="head-badge">per-file sidecars</span></div><div class="attention"><span class="running" id="runningCount">0 generating</span><span class="needs" id="attentionCount">0 need attention</span></div></div>
+        <div class="columns"><span></span><span>Approved AI / newest SVG</span><span>File / path / persistence</span><span>Generation</span><span>Review</span><span>Version / tokens / cost</span><span>Files / code / history</span><span>Generate / decision</span></div>
+        <div class="rows" id="rows" role="listbox" aria-label="SVG generation sources"></div>
+        <footer class="list-footer"><span id="footerSummary">Showing 0 sources</span><span>↑↓ active row · <kbd>Space</kbd> select · <kbd>G</kbd> generate · <kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>V</kbd> code</span></footer>
+      </div>
+    </section>
+
+    <footer class="status-bar"><div class="status-group"><span class="row"><span class="dot"></span>&nbsp;Approved-source index ready</span><span id="lastScan">Last rescan: 24 seconds ago</span><span>+3 eligible · 1 moved · 0 unreadable · 105 unchanged</span><span>Requesty · GPT 6.1 Sol · 3 / 4 slots available</span></div><div class="status-group"><span id="saveStatus">1 sidecar awaiting retry</span><span id="usageTotal">Visible usage 0 tokens · $0.000</span><span id="progressLabel">0 / 0 generated</span><span class="bar"><span id="progressFill"></span></span></div></footer>
+  </main>
+
+  <div class="modal-backdrop" id="codeModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="codeTitle"><header><h2 id="codeTitle">SVG code</h2><button class="btn" data-close="codeModal" type="button">Close</button></header><div class="modal-body"><pre class="code" id="codeBlock"></pre><div class="modal-actions"><button class="btn" id="copyCode" type="button">Copy SVG code</button><button class="btn primary" data-close="codeModal" type="button">Done</button></div></div></section>
+  </div>
+
+  <div class="modal-backdrop" id="confirmModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><header><h2 id="confirmTitle">Confirm SVG generation</h2><button class="btn" data-close="confirmModal" type="button">Close</button></header><div class="modal-body"><div class="confirmation"><div class="fact"><span>Selected images</span><strong id="confirmCount">0</strong></div><div class="fact"><span>Provider / model</span><strong>Requesty · GPT 6.1 Sol</strong></div><div class="fact"><span>Estimated maximum</span><strong id="confirmCost">$0.00</strong></div><div class="fact"><span>Output policy</span><strong>Versioned SVG + per-file sidecar</strong></div></div><p>The saved local prompt will be sent with each selected image. Existing SVG versions will not be overwritten.</p><div class="modal-actions"><button class="btn" data-close="confirmModal" type="button">Cancel</button><button class="btn primary" id="confirmGenerate" type="button">Generate now</button></div></div></section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const defaultPrompt = "Create 4 split SVG icons. Snap visually intended path connections mathematically to exact curves or anchors; never leave tiny gaps, floating endpoints, overshoots, or approximate joins. Preserve seamless geometry at every zoom level.";
+    const svgFor = (seed) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><g fill="none" stroke="${["#9cc8ff","#a8f0ce","#ffc878","#d3a7ff","#ff9ab4"][seed % 5]}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 62L42 34l18 12 19-24 23 18"/><circle cx="47" cy="20" r="9"/><path d="M15 72h88M24 18h12"/></g></svg>`;
+    const imageFor = (seed) => {
+      const hue = [205,224,188,29,264,335][seed % 6];
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="180"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="hsl(${hue} 32% 20%)"/><stop offset="1" stop-color="hsl(${hue + 32} 45% 42%)"/></linearGradient></defs><rect width="240" height="180" fill="url(#g)"/><circle cx="${65 + seed * 17 % 110}" cy="48" r="25" fill="white" opacity=".25"/><path d="M0 150L52 102l32 22 46-69 50 61 34-38 26 26v76H0z" fill="#08101d" opacity=".7"/></svg>`;
+      return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    };
+    const sources = [
+      ["fog_architecture_041_AI.png","campaigns/september/architecture/","generated","approved",3,4810,.036],
+      ["lighthouse_winter_017_AI.png","campaigns/september/winter/","generated","approved",2,3290,.025],
+      ["courtyard_shadow_011_AI.png","campaigns/september/architecture/","generated","pending",4,5210,.041],
+      ["harbor_ruins_008_AI.png","campaigns/september/coastal/","failed","pending",1,0,0],
+      ["dunes_bliss_AI.png","campaigns/september/desert/","not-generated","pending",0,0,0],
+      ["monolith_storm_AI.png","campaigns/august/concepts/","generating","pending",1,1180,.009],
+      ["forest_station_091_AI.png","campaigns/july/forest/","generated","declined",2,4450,.033],
+      ["breakwater_066_AI.png","campaigns/august/coastal/","not-generated","pending",0,0,0]
+    ];
+    const state = { items: sources.map((s,i)=>({id:`src-${i+1}`,name:s[0],path:s[1],generation:s[2],review:s[3],version:s[4],tokens:s[5],cost:s[6],selected:i<3,seed:i,date:Date.now()-i*86400000,sidecarError:i===2})), activeId:"src-1", filtered:[], pendingGeneration:[] };
+    const $ = id => document.getElementById(id);
+    const toast = message => { $("toast").textContent=message; $("toast").classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>$("toast").classList.remove("show"),2200); };
+    const openModal = id => { $(id).hidden=false; $(id).querySelector("button")?.focus(); };
+    const closeModal = id => { $(id).hidden=true; };
+    document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>closeModal(b.dataset.close)));
+
+    const persist = () => {
+      localStorage.setItem("svg-review-state", JSON.stringify(Object.fromEntries(state.items.map(i=>[i.id,{generation:i.generation,review:i.review,version:i.version,tokens:i.tokens,cost:i.cost}]))));
+      $("saveStatus").textContent="All per-file sidecars saved";
+      $("warning").hidden=true;
+    };
+    const restored = JSON.parse(localStorage.getItem("svg-review-state")||"{}");
+    state.items.forEach(i=>Object.assign(i,restored[i.id]||{}));
+
+    const filter = () => {
+      const generation=$("generationFilter").value, review=$("reviewFilter").value, search=$("search").value.trim().toLowerCase(), sort=$("sortBy").value;
+      let items=state.items.filter(i=>(generation==="all"||i.generation===generation)&&(review==="all"||i.review===review)&&(!search||`${i.name} ${i.path} v${i.version} ${i.generation} ${i.review}`.toLowerCase().includes(search)));
+      const value=i=>sort==="name"?i.name:sort==="generation"?i.generation:sort==="review"?i.review:sort==="cost"?i.cost:i.date;
+      items.sort((a,b)=>typeof value(a)==="number"?value(b)-value(a):String(value(a)).localeCompare(String(value(b)))); state.filtered=items;
+    };
+    const label = v => v.split("-").map(x=>x[0].toUpperCase()+x.slice(1)).join(" ");
+    const rowSvg = item => item.generation==="generated"||item.generation==="generating" ? svgFor(item.seed) : "";
+
+    const render = () => {
+      filter(); const rows=$("rows"); rows.innerHTML="";
+      state.filtered.forEach(item=>{
+        const row=document.createElement("div"); row.className=`svg-row ${item.selected?"checked":""} ${item.id===state.activeId?"active":""}`; row.dataset.id=item.id; row.tabIndex=item.id===state.activeId?0:-1; row.setAttribute("role","option");
+        const svg=rowSvg(item), progress=item.generation==="generating"?`<div class="progress-mini"><span style="width:62%"></span></div>`:"";
+        row.innerHTML=`<input class="check" type="checkbox" ${item.selected?"checked":""} aria-label="Select ${item.name}">
+          <div class="previews"><div class="preview-wrap"><div class="preview" style="background-image:${imageFor(item.seed)}"></div><span class="tag">AI source</span></div><div class="preview-wrap"><div class="preview ${svg?"":"empty"}">${svg||"No SVG"}</div><span class="tag">Newest SVG</span></div></div>
+          <div class="file"><div class="filename">${item.name}</div><div class="filepath">${item.path}${item.name.replace(/\.png$/i,".svg")}</div><div class="persist ${item.sidecarError?"error":""}">${item.sidecarError?"Sidecar write awaiting retry":"Per-file sidecar saved"}</div></div>
+          <div><span class="badge ${item.generation}">${label(item.generation)}</span>${progress}</div>
+          <div><span class="badge ${item.review}">${label(item.review)}</span></div>
+          <div class="usage"><strong>${item.version?`v${item.version}`:"—"}</strong><br>${item.tokens?`${item.tokens.toLocaleString()} tokens`:"No usage"}<br>${item.cost?`$${item.cost.toFixed(3)} actual`:"—"}</div>
+          <div class="file-actions"><button class="btn tiny copy" ${!svg?"disabled":""}>Copy</button><button class="btn tiny view" ${!svg?"disabled":""}>Code</button><button class="btn tiny history" ${!item.version?"disabled":""}>History</button></div>
+          <div class="row-actions"><button class="btn tiny primary generate">${item.version?"Regenerate":"Generate"}</button><button class="btn tiny success approve" ${!svg?"disabled":""}>✓</button><button class="btn tiny danger decline" ${!svg?"disabled":""}>×</button></div>`;
+        row.addEventListener("click",e=>{if(e.target.closest("button,input"))return;state.activeId=item.id;render();document.querySelector(`[data-id="${item.id}"]`)?.focus();});
+        row.querySelector(".check").addEventListener("change",e=>{item.selected=e.target.checked;render();});
+        row.querySelector(".generate").addEventListener("click",()=>confirmGeneration([item]));
+        row.querySelector(".approve").addEventListener("click",()=>review([item],"approved"));
+        row.querySelector(".decline").addEventListener("click",()=>review([item],"declined"));
+        row.querySelector(".copy").addEventListener("click",()=>copySvg(item));
+        row.querySelector(".view").addEventListener("click",()=>showCode(item));
+        row.querySelector(".history").addEventListener("click",()=>toast(`${item.name}: ${item.version} saved version${item.version===1?"":"s"}`));
+        rows.appendChild(row);
+      }); updateChrome();
+    };
+    const review=(items,decision)=>{items.filter(i=>rowSvg(i)).forEach(i=>i.review=decision);persist();toast(`${items.length} source${items.length===1?"":"s"} marked ${decision}`);render();};
+    const showCode=item=>{$("codeTitle").textContent=`${item.name.replace(/\.png$/i,".svg")} · v${item.version}`;$('codeBlock').textContent=svgFor(item.seed);$('codeModal').dataset.item=item.id;openModal("codeModal");};
+    const copySvg=async item=>{try{await navigator.clipboard.writeText(svgFor(item.seed));toast("SVG code copied");}catch{toast("Clipboard unavailable — open Code and copy manually");}};
+    const confirmGeneration=items=>{state.pendingGeneration=items;$('confirmCount').textContent=items.length;$('confirmCost').textContent=`$${(items.length*.10).toFixed(2)} estimated maximum`;openModal("confirmModal");};
+    const generate=items=>{closeModal("confirmModal");items.forEach((item,index)=>{item.generation="generating";item.review="pending";setTimeout(()=>{item.generation="generated";item.version+=1;item.tokens=2800+item.seed*310;item.cost=.021+item.seed*.003;persist();render();toast(`${item.name} generated as v${item.version}`);},900+index*420);});render();};
+
+    const updateChrome=()=>{
+      const eligible=state.items.length, generated=state.items.filter(i=>i.generation==="generated").length, approved=state.items.filter(i=>i.review==="approved").length, failed=state.items.filter(i=>i.generation==="failed").length, selected=state.items.filter(i=>i.selected), visibleSelected=state.filtered.filter(i=>i.selected), running=state.items.filter(i=>i.generation==="generating").length, attention=state.items.filter(i=>i.generation==="failed"||i.sidecarError).length;
+      $("counts").innerHTML=`<span class="counter"><b>${eligible}</b>eligible</span><span class="counter"><b>${generated}</b>generated</span><span class="counter good"><b>${approved}</b>approved</span><span class="counter bad"><b>${failed}</b>failed</span>`;
+      $("resultCount").textContent=`Showing ${state.filtered.length} approved sources`;$("rowCount").textContent=state.filtered.length;$("selectedCount").textContent=`${selected.length} selected`;$("selectionScope").textContent=`across ${state.filtered.length} approved sources`;$("runningCount").textContent=`${running} generating`;$("attentionCount").textContent=`${attention} need attention`;$("generateSelected").disabled=!selected.length;$("approveSelected").disabled=!selected.some(i=>rowSvg(i));$("declineSelected").disabled=!selected.some(i=>rowSvg(i));$("estimate").textContent=`${selected.length} images · ${$("model").value}`;$("selectVisible").checked=state.filtered.length>0&&visibleSelected.length===state.filtered.length;$("selectVisible").indeterminate=visibleSelected.length>0&&visibleSelected.length<state.filtered.length;
+      const tokens=state.filtered.reduce((s,i)=>s+i.tokens,0), cost=state.filtered.reduce((s,i)=>s+i.cost,0);$("usageTotal").textContent=`Visible usage ${tokens.toLocaleString()} tokens · $${cost.toFixed(3)} actual`;$("progressLabel").textContent=`${generated} / ${eligible} generated`;$("progressFill").style.width=`${eligible?generated/eligible*100:0}%`;$("footerSummary").textContent=`Showing ${state.filtered.length} of ${eligible} approved sources · newest generated · all statuses · recursive folders`;
+    };
+
+    ["generationFilter","reviewFilter","sortBy","model"].forEach(id=>$(id).addEventListener("change",render));$("search").addEventListener("input",render);
+    $("clearFilters").addEventListener("click",()=>{$("generationFilter").value="all";$("reviewFilter").value="all";$("sortBy").value="date";$("search").value="";render();});
+    $("prompt").value=localStorage.getItem("svg-generation-prompt")||defaultPrompt;$("prompt").addEventListener("input",e=>localStorage.setItem("svg-generation-prompt",e.target.value));$("resetPrompt").addEventListener("click",()=>{$("prompt").value=defaultPrompt;localStorage.setItem("svg-generation-prompt",defaultPrompt);toast("Default prompt restored");});
+    $("selectVisible").addEventListener("change",e=>{state.filtered.forEach(i=>i.selected=e.target.checked);render();});$("selectAll").addEventListener("click",()=>{state.filtered.forEach(i=>i.selected=true);render();});$("deselectAll").addEventListener("click",()=>{state.items.forEach(i=>i.selected=false);render();});
+    $("generateSelected").addEventListener("click",()=>confirmGeneration(state.items.filter(i=>i.selected)));$("approveSelected").addEventListener("click",()=>review(state.items.filter(i=>i.selected),"approved"));$("declineSelected").addEventListener("click",()=>review(state.items.filter(i=>i.selected),"declined"));$("confirmGenerate").addEventListener("click",()=>generate(state.pendingGeneration));
+    $("zoom").addEventListener("input",e=>{document.documentElement.style.setProperty("--thumb-height",`${e.target.value}px`);$("zoomValue").textContent=`${e.target.value} px`;localStorage.setItem("svg-thumb-height",e.target.value);});
+    $("retrySave").addEventListener("click",()=>{state.items.forEach(i=>i.sidecarError=false);persist();render();toast("Per-file sidecar saved");});
+    $("rescan").addEventListener("click",()=>{$("rescan").disabled=true;$("rescan").textContent="Scanning…";setTimeout(()=>{$("rescan").disabled=false;$("rescan").textContent="↻ Rescan approved";$("lastScan").textContent="Last rescan: just now";toast("Approved-source index refreshed");},700);});
+    $("keyState").addEventListener("click",()=>toast("API key is stored locally and excluded from project files"));$("copyCode").addEventListener("click",()=>navigator.clipboard.writeText($("codeBlock").textContent).then(()=>toast("SVG code copied")).catch(()=>toast("Clipboard unavailable")));
+    document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".modal-backdrop:not([hidden])").forEach(m=>m.hidden=true);if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName))return;const active=state.items.find(i=>i.id===state.activeId);if(!active)return;if(e.key===" "){e.preventDefault();active.selected=!active.selected;render();}if(e.key.toLowerCase()==="g")confirmGeneration([active]);if(e.key.toLowerCase()==="a"&&rowSvg(active))review([active],"approved");if(e.key.toLowerCase()==="d"&&rowSvg(active))review([active],"declined");if(e.key.toLowerCase()==="v"&&rowSvg(active))showCode(active);if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();const x=state.filtered.findIndex(i=>i.id===active.id),next=state.filtered[x+(e.key==="ArrowDown"?1:-1)];if(next){state.activeId=next.id;render();document.querySelector(`[data-id="${next.id}"]`)?.scrollIntoView({block:"nearest"});}}});
+    const savedZoom=localStorage.getItem("svg-thumb-height");if(savedZoom){$("zoom").value=savedZoom;$("zoomValue").textContent=`${savedZoom} px`;document.documentElement.style.setProperty("--thumb-height",`${savedZoom}px`);} render();
+  </script>
+</body>
+</html>
