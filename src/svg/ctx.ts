@@ -15,7 +15,8 @@ import { bootSources, scanSources, type ScanSetters } from "./scan";
 import { headerState, toListRow, visibleRows } from "./rowmodel";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { SvgCtx, SvgSetters } from "./actions";
-import type { SvgRefs, SvgRow } from "./types";
+import type { Discovery } from "./sources";
+import type { RunProgress, SvgRefs, SvgRow } from "./types";
 
 export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCtx {
   const refs = useRef(newRefs()).current;
@@ -59,22 +60,19 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
       dispatch({ type: "key", key });
     });
   }, [dispatch, refs]);
-  setters.current = {
-    setRootName: (name) => dispatch({ type: "root", name }),
-    setRows: (rows) => dispatch({ type: "rows", rows }),
-    setDiscovery: (discovery) => dispatch({ type: "discovery", discovery }),
-    setBusy: (busy) => dispatch({ type: "busy", busy }),
-    say,
-  };
+  // Every writer is memoised on [dispatch]: an unstable one would re-run the
+  // boot effect on every render (RULE 24).
+  const setRootName = useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]);
+  const setDiscovery = useCallback((discovery: Discovery | null) => dispatch({ type: "discovery", discovery }), [dispatch]);
+  const setBusy = useCallback((busy: string | null) => dispatch({ type: "busy", busy }), [dispatch]);
+  const setRows = useCallback((rows: SvgRow[]) => dispatch({ type: "rows", rows }), [dispatch]);
+  const setRowsFn = useCallback((fn: (rows: SvgRow[]) => SvgRow[]) => dispatch({ type: "rows-fn", fn }), [dispatch]);
+  const setProgress = useCallback((progress: RunProgress | null) => dispatch({ type: "progress", progress }), [dispatch]);
+  const setProgressFn = useCallback((fn: (p: RunProgress | null) => RunProgress | null) => dispatch({ type: "progress-fn", fn }), [dispatch]);
+  setters.current = { setRootName, setRows, setDiscovery, setBusy, say };
   return {
-    loadAll, refreshKey, say,
-    setRootName: (name) => dispatch({ type: "root", name }),
-    setDiscovery: (discovery) => dispatch({ type: "discovery", discovery }),
-    setBusy: (busy) => dispatch({ type: "busy", busy }),
-    setRows: (rows) => dispatch({ type: "rows", rows }),
-    setRowsFn: (fn) => dispatch({ type: "rows-fn", fn }),
-    setProgress: (progress) => dispatch({ type: "progress", progress }),
-    setProgressFn: (fn) => dispatch({ type: "progress-fn", fn }),
+    loadAll, refreshKey, say, setRootName, setDiscovery, setBusy,
+    setRows, setRowsFn, setProgress, setProgressFn,
   };
 }
 

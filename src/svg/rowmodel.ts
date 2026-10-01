@@ -26,12 +26,19 @@ export function newestValidOf(sidecar: SvgSidecar | null): SvgVersion | null {
 }
 
 export function toListRow(row: SvgRow): SvgListRow {
+  const v = row.newest;
   return {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
-    generation: row.status, review: row.newest?.review ?? "pending",
-    generatedAt: row.newest ? Date.parse(row.newest.completedAt ?? row.newest.requestedAt) : null,
-    cost: row.newest?.cost.actual ?? null, tokens: row.newest?.usage.total ?? null,
-    version: row.newest?.version ?? 0,
+    generation: row.status, review: v?.review ?? "pending", ...versionFields(v),
+  };
+}
+
+/** The newest version's list fields; nothing generated means nothing to show. */
+function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "cost" | "tokens" | "version"> {
+  if (v === null) return { generatedAt: null, cost: null, tokens: null, version: 0 };
+  return {
+    generatedAt: Date.parse(v.completedAt ?? v.requestedAt),
+    cost: v.cost.actual, tokens: v.usage.total, version: v.version,
   };
 }
 

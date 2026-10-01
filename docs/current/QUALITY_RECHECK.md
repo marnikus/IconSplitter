@@ -364,3 +364,78 @@ run flagged `HistoryBar` at 36 and `HistoryPanel` at 42 body lines.
   a11y label test (the visible-list aria-label is gone) and the cross-tab undo
   assertion, which hard-coded a one-entry timeline and now asserts one step back
   from the tip instead of `index === -1`.
+
+---
+
+# Quality re-check — 2026-10-01 (Generate SVG tab, TDD)
+
+Design record: `docs/archive/2026-10-01-generate-svg/design.md`.
+
+## What changed
+
+A fifth Workbench tab (`Generate SVG`, `tab-generate-svg`) that turns
+**approved** Selection pairs into validated, versioned SVG files. Pure rules in
+`src/lib/svg*.ts` (provider settings, prompt + manifest, batch plan, composite
+geometry, canvas composite, response split/match, validation + security, icon
+count, sidecar model, versioning, list filters/sort/totals, request payload,
+error classification, usage/cost arithmetic, secret masking); IO + state in
+`src/svg/*.ts` (approved-only discovery, sidecar IO, the run, the review
+applier, the state reducer, the context bridge); the UI in `src/svg/Svg*.tsx`.
+New CSS block at the end of `src/index.css`, reusing the V2 token grammar.
+Touched outside the tab: `src/ui/Workbench.tsx` (one tab entry), and
+`src/svg/ctx.ts` — see the note below, it is the only behavioural fix made to
+an already-shipped module.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --allow-legacy` | GATE PASSED | GATE PASSED |
+| tests | 43 files / 346 | **50 files / 426** |
+| coverage (all files, stmts/branch/funcs/lines) | 96.58 / 93.10 / 96.58 / 97.02 | **96.29 / 91.62 / 95.43 / 96.96** |
+| coverage `src/lib` svg modules (stmts) | — | `svgbatch`/`svgcomposite`/`svgicons`/`svgprompt`/`svgsecret`/`svgusage` 100; `svgvalidate` 98.43; `svgfile` 98; `svgconfig`/`svgextract`/`svgrequest`/`svgcanvas` ≥ 96; `svglist` 85 |
+| build `dist/index.html` | 487.73 kB / gzip 145.65 kB | **575.68 kB / gzip 169.31 kB** |
+| jscpd `src` | 2 clones / 12 lines | **21 clones / 229 lines (1.84%)** |
+
+`npm run verify` → **ALL LANES PASSED**.
+
+The two coverage percentages move down because the tab adds ~2 700 statements of
+UI and IO code while the four SVG test files (49 tests) cover the pure and IO
+layers, not every branch of the dialog layer. `src/lib` — the lane the gate
+ratchets on — stays above the 80% floor on every new module, and the lowest new
+module (`svglist.ts`, 85% stmts) is above it too.
+
+## RULE 18 — ideal sizes
+
+Every new file is small and single-purpose; the largest is `src/svg/runner.ts`
+at 277 lines (the one writer: validate → version → SVG → sidecar) and
+`src/svg/actions.ts` at 251 (the command surface). `SvgControls.tsx` 213,
+`SvgDialogs.tsx` 235, `Svgfile.ts` 198 — all under the 300-line hard limit. No
+function exceeds 30 body lines, 4 parameters (every component takes one props
+object), CC 10 or nesting 4; the gate enforces all four and passes. The panel
+was split into `SvgControls` / `SvgBulkBar` / `SvgList` / `SvgRow` /
+`SvgThumbs` / `SvgBatchStrip` / `SvgDialogs` / `SvgHotkeys` after the first gate
+run flagged the monolithic version.
+
+## Accepted debt / notes
+
+- **`src/svg/ctx.ts` — the real bug fixed in this feature.** `useScanBridge`
+  returned inline arrow writers, so `useSvgBoot`'s dependency array changed on
+  every render and the boot effect re-ran forever (~3 600 dispatches per mount;
+  the symptom was a 5 s `act()` timeout only when a root was remembered). Every
+  writer is now `useCallback(…, [dispatch])`. Any future context hook that
+  returns callbacks must memoise them — this is a React rule, not a local quirk.
+- `lib/svglist.ts` search now also matches the file name (`row.name`), because
+  the toolbar promises filename search; the previous string only held the path.
+- jscpd's 21 clones are 18 CSS clones inside the **pre-existing** V2 block of
+  `index.css` (lines 114–473, untouched) plus 4 short TS clones, of which 3 are
+  pre-existing (`lib/detect.ts`, `selection/FilterBar.tsx`,
+  `selection/reviewstore.ts`) and one is new: `lib/svgfile.ts` 125–131, where
+  `newestValid` and `approvedVersion` differ only in their predicate. Kept as
+  two readable five-line functions rather than one higher-order helper; the
+  previous record's "2 clones" came from a narrower jscpd invocation.
+- The API key never enters a history entry, a preset, a report or the
+  repository: `svg/keystore.ts` writes IndexedDB `secrets`, `lib/svgsecret.ts`
+  masks and redacts (RULE 20). `tests/secret_hygiene.test.ts` enforces this.

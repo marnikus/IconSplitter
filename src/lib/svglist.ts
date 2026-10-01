@@ -46,7 +46,7 @@ function inReview(row: SvgListRow, want: ReviewFilter): boolean {
 
 function inSearch(row: SvgListRow, needle: string): boolean {
   if (needle === "") return true;
-  return `${row.relPath} v${row.version} ${row.generation} ${row.review}`.toLowerCase().includes(needle);
+  return `${row.name} ${row.relPath} v${row.version} ${row.generation} ${row.review}`.toLowerCase().includes(needle);
 }
 
 /** Sorts a copy — the caller's array is never reordered in place. */

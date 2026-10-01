@@ -4,6 +4,7 @@
 // unreadable file, corrupt decision file) instead of dropping it silently.
 // Stable pair ids are the file identity — never a row index.
 
+import type { BatchSource } from "../lib/svgbatch";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { walkTree } from "../lib/scan";
 import { attentionInfo, pairEntries, pairId } from "../lib/pairing";
@@ -42,19 +43,30 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
   const pairs = pairEntries(entries);
   const load = await loadDecisions(root);
   const { byId } = mergeDecisions(pairs, load.records);
+  const found = splitApproved(pairs, byId);
+  const unreadable = entries.filter((e) => e.size === 0 && e.name !== "").map((e) => e.relPath);
+  return {
+    sources: sortSources(found.sources), missing: found.missing, unreadable,
+    corruptDecisions: load.corrupt, approvedTotal: found.sources.length + found.missing.length,
+  };
+}
+
+/** Approved pairs only; a pair whose AI image is gone is reported, not listed. */
+function splitApproved(pairs: ReturnType<typeof pairEntries>, byId: Map<string, { decision: string } | undefined>): { sources: SvgSource[]; missing: string[] } {
   const sources: SvgSource[] = [];
   const missing: string[] = [];
   for (const pair of pairs) {
-    const view = byId.get(pair.pairId);
-    if (view?.decision !== "approved") continue;
-    if (attentionInfo(pair) !== null) {
-      missing.push(pair.base);
-      continue;
-    }
-    sources.push(toSource(pair.ai?.relPath ?? "", pair.ai?.size ?? 0, pair.ai?.mtime ?? 0, pair.pairId));
+    if (byId.get(pair.pairId)?.decision !== "approved") continue;
+    if (attentionInfo(pair) !== null) missing.push(pair.base);
+    else sources.push(sourceOf(pair));
   }
-  const unreadable = entries.filter((e) => e.size === 0 && e.name !== "").map((e) => e.relPath);
-  return { sources: sortSources(sources), missing, unreadable, corruptDecisions: load.corrupt, approvedTotal: sources.length + missing.length };
+  return { sources, missing };
+}
+
+/** The AI side of an approved pair, as a stable source identity. */
+function sourceOf(pair: { ai: { relPath: string; size: number; mtime: number } | null; pairId: string }): SvgSource {
+  const ai = pair.ai;
+  return toSource(ai?.relPath ?? "", ai?.size ?? 0, ai?.mtime ?? 0, pair.pairId);
 }
 
 function toSource(relPath: string, size: number, mtime: number, id: string): SvgSource {
@@ -73,6 +85,11 @@ function toSource(relPath: string, size: number, mtime: number, id: string): Svg
 /** Path order, so a rescan always yields the same list (prompt §2). */
 function sortSources(sources: SvgSource[]): SvgSource[] {
   return [...sources].sort((a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0));
+}
+
+/** The batch view of a source: stable identity beside the manifest name. */
+export function toBatchSource(s: SvgSource): BatchSource {
+  return { sourceId: s.id, name: s.stem, relPath: s.relPath, fingerprint: s.fingerprint };
 }
 
 /** The stable id a source keeps even if its folder is renamed away. */

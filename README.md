@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has four modes (tabs across the top):
+It has five modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -21,6 +21,13 @@ It has four modes (tabs across the top):
   checkboxes with select-all, and **Approve selected** / **Approve visible
   list** for bulk decisions. A second layout switches to the large
   side-by-side comparison. Also Chrome/Edge only.
+* **Generate SVG** — for the pairs Selection approved, sends the AI image
+  (alone, or as one square contact sheet of up to 9) to Requesty's
+  OpenAI-compatible chat endpoint with your own API key, and writes one
+  validated, versioned `<name>.svg` beside each AI image plus a
+  `<name>.svg.json` sidecar recording the prompt, model, token usage, cost,
+  validation and review state. Nothing is uploaded anywhere else and the key
+  never leaves the browser. Also Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

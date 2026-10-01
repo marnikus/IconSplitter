@@ -10,7 +10,7 @@ Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.m
 
 ## 1. What this is
 
-A browser app with four modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -27,6 +27,13 @@ A browser app with four modes (top tabs, `src/ui/Workbench.tsx`):
    `design temp/selection tab V2/v2 selection tab.html` design: a full-width
    **list review** with paired thumbnails, a thumbnail zoom slider, real
    multi-selection and bulk approve, plus a switchable **comparison** layout.
+5. **Generate SVG** (Chrome/Edge only) — recursively scans the same root and
+   keeps ONLY the pairs the Selection workflow approved, sends each approved
+   AI image (alone or as a square contact sheet of up to 9) to Requesty's
+   OpenAI-compatible chat endpoint, and saves one validated SVG per source
+   beside that source's AI image, versioned (`_v2`, `_v3`…) with a per-file
+   `<stem>.svg.json` sidecar. Nothing is uploaded anywhere; the API key lives
+   only in this browser.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
@@ -109,7 +116,58 @@ Selection V2 (adds to, never replaces, the rules above):
   row; "Next pending after a decision" advances it.
 * Extra filter: **Pairing** = all / complete / missing pair.
 
-Everything runs client-side; nothing is uploaded anywhere.
+Everything above runs client-side; nothing is uploaded anywhere.
+
+Generate SVG (adds to, never replaces, the rules above — and is the one mode
+that makes a network call, only when the user asks it to):
+
+* Discovery reuses the Selection scan and pairing: only pairs whose stored
+  decision is **approved** become sources, keyed by the same stable
+  `pair_<hash>` id (never a row index), in deterministic path order. Approved
+  pairs whose AI image disappeared are reported as "lost their AI image";
+  unreadable files are reported as skipped; a corrupt decision file warns and
+  keeps the in-memory decisions.
+* Generation: the editable prompt (stored locally, resettable to the
+  documented default) is sent with the approved AI image as a data-URL
+  `image_url` part. Batches of N images (1..9, default 4) are combined into
+  ONE square PNG contact sheet — `columns = ceil(sqrt(n))` cells, equal
+  squares, aspect preserved, centred, padded, unused cells empty — with an
+  ordered "position — name" manifest in the prompt. The response is split
+  into numbered SVG blocks and matched by **name AND SVG title**, never by
+  appearance; duplicate/missing/unknown/out-of-range positions are reported,
+  never guessed, and empty cells never produce output.
+* Every result is validated (well-formed XML, exactly one `<svg>` root, valid
+  `viewBox` or documented dimensions, no scripts/event handlers/unsafe
+  external URLs/executable content, visible geometry) before anything is
+  written. An invalid response stores a safe failure record and NO SVG file,
+  and the previous valid version stays exactly where it was.
+* Naming/versioning: the SVG sits beside the AI image with the same base
+  name; the first version is the plain `<stem>.svg`, each
+  regeneration takes the next free version from disk + sidecar and never
+  overwrites. The newest VALID version is previewed by default; every version
+  stays reachable through the history dialog.
+* Per-file metadata: `<stem>.svg.json` beside the AI image (no global SVG
+  decision file), written tmp → verify → overwrite → cleanup. Missing sidecar
+  = pending; a corrupt sidecar warns and never destroys the SVG files. Each
+  version records the source path/fingerprint, the SVG path/version, the
+  generation and review status, the exact prompt, provider+model, request and
+  completion timestamps, input/output/total tokens when reported, the
+  provider-reported cost + currency when reported, the validation result and
+  a redacted error.
+* Tokens & cost: per-version usage is shown as reported; a batch total is
+  split across its images and labelled **estimated**; a missing number is
+  shown as "—" and never invented.
+* Review: a new valid SVG starts **pending**; Approve/Decline act on the
+  selection (one history entry per gesture, undoable). The approved version
+  is identified in the row; regenerating adds a new pending version without
+  deleting old decisions or history.
+* Failures: a failed request keeps the previous SVG; a rate limit reports its
+  retry-after; cancellation stops unsent requests and keeps completed
+  results; a restart marks an interrupted request as interrupted/unknown and
+  never blindly resubmits; a save failure keeps the validated SVG recoverable.
+* The API key is user-provided, stored in the browser's IndexedDB secret
+  store (memory-only fallback), masked in the UI, redacted in every error and
+  excluded from presets/reports/exports (RULE 20).
 
 ## 3. State model
 
@@ -230,6 +288,13 @@ Batch:
 | `<root>/review-decisions.json` | selection approve/decline records | atomic write; corrupt → warn + keep memory (I-12) |
 | IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle (shared by both Selection tabs) | permission re-requested on restore |
 | localStorage `iconSplitter.selectionV2.prefs.v1` | V2 view prefs `{ mode, thumbHeight }` | validated + clamped on read (RULE 13) |
+| IndexedDB `iconSplitter/handles["__svg__"]` | Generate SVG root handle | falls back to the Selection handle |
+| localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight }` | clamped on read |
+| localStorage `iconSplitter.svg.prompt.v1` | generation prompt | empty/missing → documented default |
+| localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, timeout, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
+| IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20) |
+| `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
+| `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -252,14 +317,18 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
+| SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgsecret.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, icon count, sidecar model + versioning, list filters/sort/totals, request + error classification, token/cost formatting, secret masking |
+| SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts` | approved-source discovery, sidecar IO, key store, the generation run, row/event/review reducers, the undo bridge |
+| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `preview.ts` | the tab shell, controls, bulk bar, list, rows, previews, batch strip, dialogs, hotkeys |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 30 files / 207 tests; canvas shims serve synthetic pixels,
-in-memory fakes implement the FS handle interfaces, one happy-dom smoke test
-renders the Selection panel and drives it with hotkeys):
+Exists (`tests/`, 50 files / 426 tests; canvas shims serve synthetic pixels,
+in-memory fakes implement the FS handle interfaces, happy-dom mounts the
+Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
+and `data-testid` handles):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
@@ -292,6 +361,18 @@ renders the Selection panel and drives it with hotkeys):
   selection across filter + sort, approve selected/visible, incomplete pairs
   out of scope, save failure + retry, empty/no-match, corrupt JSON, rescan,
   restart persistence, a11y labels
+* `svg_lib.test.ts`, `svg_extract.test.ts`, `svg_send.test.ts`,
+  `svg_canvas.test.ts` — the SVG pure layer: provider defaults + the verified
+  model id, prompt/manifest text, response split + name/title matching,
+  validation/security, icon count, sidecar model + versioning, batch plan,
+  composite layout, request payload, error classification, usage formatting
+* `svg_io.test.ts` — the SVG IO layer: approved-only discovery + corrupt /
+  missing / unreadable reporting, scan + remembered root, row model, the
+  write order (validate first, never overwrite, failure records), runner
+  events, the review decision + its undo patch, the state reducer, preview
+* `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
+  bulk header checkbox + disabled bulk actions, filters, the code dialog and
+  its Escape close, the confirm-before-send guard, approve + undo
 
 Must exist before the matching change ships:
 
@@ -328,12 +409,17 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   template: `docs/archive/2026-10-01-selection-v2/design.md` (layering, list
   review rows, zoom slider, selection vs decision state, bulk scope, a11y
   deviation from the template's `role="listbox"`).
+* 2026-10-01 — Generate SVG designed TDD-first from the SVG-generation prompt:
+  `docs/archive/2026-10-01-generate-svg/design.md` (approved-only discovery,
+  contact-sheet batching, name+title matching, validate-before-write,
+  per-source sidecar versioning, token/cost honesty, RULE 20 key handling).
 
 ## 11. Current UI — control inventory
 
 Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
 
-* Workbench: `tab-sheets`, `tab-batch`.
+* Workbench: `tab-sheets`, `tab-batch`, `tab-selection`, `tab-selection-v2`,
+  `tab-generate-svg`.
 * Sheets mode: header (upload + 3 export buttons), Sheets, Export settings
   (padding/size/transparent), Detection (merge slider + reset), Boundary
   overlay, Result grid, busy overlay, toast.
@@ -359,6 +445,24 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   (`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy` and the
   shared `sel-footer` / `sel-diff` / `sel-retry-count`). Full table:
   `UI_SELECTORS.md` §N.
+* Generate SVG mode: source bar (`svg-root`, `svg-choose-root`, `svg-rescan`,
+  `svg-count-*`), prompt + provider card (`svg-prompt`, `svg-reset-prompt`,
+  `svg-provider`, `svg-limits`, `svg-per-request`, `svg-model`, `svg-key-state`
+  / `svg-key-input` / `svg-key-save`), filters (`svg-filter-generation`,
+  `svg-filter-review`, `svg-sort`, `svg-search`, `svg-shown`,
+  `svg-clear-filters`), bulk bar (`svg-check-all`, `svg-selected-count`,
+  `svg-select-visible`, `svg-deselect`, `svg-thumb` + `svg-thumb-value`,
+  `svg-estimate`, `svg-generate-selected`, `svg-approve-selected`,
+  `svg-decline-selected`, `svg-cancel-run`), list (`svg-list`, `svg-rows`,
+  `svg-row-*`, `svg-check-*`, `svg-ai-*` / `svg-prev-*`, `svg-status-*`,
+  `svg-review-*`, `svg-usage-*`, `svg-persist-*`, `svg-generate-*`,
+  `svg-approve-*`, `svg-decline-*`, `svg-location-*`, `svg-copy-*`,
+  `svg-code-*`, `svg-history-*`, `svg-empty`), batch strip (`svg-batch`,
+  `svg-batch-composite`, `svg-batch-grid`, `svg-batch-counts`), dialogs
+  (`svg-confirm`, `svg-manifest`, `svg-composite`, `svg-code-dialog`,
+  `svg-history-dialog`), banners (`svg-warn-*`), status bar
+  (`svg-statusbar`), toast + busy (`svg-toast`, `svg-busy`); review undo goes
+  through the shared `hist-*` handles. Full table: `UI_SELECTORS.md` §P.
 
 ## 12. Session restore, reset to pending & the global undo timeline (2026-10-01)
 

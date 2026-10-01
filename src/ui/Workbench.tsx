@@ -6,6 +6,7 @@ import App from "../App";
 import BatchPanel from "../batch/BatchPanel";
 import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
+import SvgPanel from "../svg/SvgPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppState } from "../state/useAppState";
@@ -18,6 +19,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "batch", label: "Batch folders", testid: "tab-batch" },
   { id: "selection", label: "Selection", testid: "tab-selection" },
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
+  { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
 ];
 
 export default function Workbench() {
@@ -50,6 +52,7 @@ function Shell() {
       {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
       {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
       {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
+      {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
     </div>
   );
 }

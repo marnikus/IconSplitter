@@ -17,7 +17,7 @@ import type { SvgSidecar } from "../lib/svgfile";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { recordFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import { saveSidecar } from "./sidecar";
-import type { SvgSource } from "./sources";
+import { toBatchSource, type SvgSource } from "./sources";
 
 export type RunEvent =
   | { kind: "batch-start"; batchId: string; count: number; batches: number; cols: number; rows: number; composite: string; hash: string }
@@ -253,7 +253,7 @@ function isSource(value: SvgSource | undefined): value is SvgSource {
 
 /** Selection order is the batch order: the scan's deterministic order. */
 function toBatchSources(sources: readonly SvgSource[]): BatchSource[] {
-  return sources.map((s) => ({ sourceId: s.id, name: s.stem, relPath: s.relPath, fingerprint: s.fingerprint }));
+  return sources.map(toBatchSource);
 }
 
 function message(error: unknown): string {

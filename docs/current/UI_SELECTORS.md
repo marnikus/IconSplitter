@@ -301,3 +301,88 @@ anchor and the row a plain click also made active.
 Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo. Ignored only
 while the focus is in a *text* surface — text-ish input, textarea, select or a
 contenteditable — so undo still works after using the zoom slider or a checkbox.
+
+## P. Generate SVG — `src/svg/*` (verified 2026-10-01)
+
+Source: `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`,
+`SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgPanel.tsx`.
+
+Source bar (only after a root is remembered; `svg-root-empty` /
+`svg-unsupported` are the two empty states and stay distinct):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-root` | path pill | the root name; `svg-choose-root` opens the picker |
+| `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
+| `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
+| `svg-count-{eligible,generated,approved,failed}` | counter chips | live counts |
+
+Prompt + provider card:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-reset-prompt` restores the documented default |
+| `svg-provider` | text | provider name + "OpenAI-compatible" |
+| `svg-limits` | text | "timeout Ns · N retries · N per request" |
+| `svg-per-request` | `input[type=number]` | images per request, 1–9 |
+| `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
+| `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
+| `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"` |
+
+Filters: `svg-filter-generation` (all / not generated / generating / generated
+/ failed), `svg-filter-review` (all / pending / approved / declined),
+`svg-sort` (date / name / generation / review / cost), `svg-search` (matches the
+file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
+
+Bulk bar (`svg-bulk`):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
+| `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
+| `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
+| `svg-thumb` | `input[type=range]` | thumbnail height; `svg-thumb-value` is the live readout |
+| `svg-estimate` | text | token estimate for the selection |
+| `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
+| `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
+| `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress |
+
+Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-row-{sourceId}` | row `role="listitem"` | keyed by the stable pair id, never a row index |
+| `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"` |
+| `svg-ai-{sourceId}` / `svg-prev-{sourceId}` | thumbnails | the approved AI image and the newest valid SVG; missing → placeholder with an aria-label |
+| `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
+| `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the version history; disabled with no SVG / no versions |
+| `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
+| `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" |
+| `svg-review-{sourceId}` | badge | pending / approved / declined |
+| `svg-usage-{sourceId}` | text | tokens as reported, "—" when the provider sent none |
+| `svg-persist-{sourceId}` | text | "Not saved" until the sidecar is written; `error` class on failure |
+
+List chrome: `svg-row-count` (visible rows), `svg-running-count`,
+`svg-attention-count` (rows needing attention), `svg-empty` ("No approved
+source matches these filters."), `svg-footer-summary` (`shownLabel`).
+
+Batch strip (`svg-batch`, shown while a batch is in flight):
+`svg-batch-composite` (the contact sheet actually sent), `svg-batch-id`,
+`svg-batch-grid` ("3×2 grid · 5 image(s)"), `svg-batch-counts` ("N saved · N
+failed · N missing"), `svg-batch-cancel`.
+
+Dialogs:
+
+| Test id | Notes |
+|---|---|
+| `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
+| `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
+| `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
+| `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done` |
+| `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-close`, `svg-history-done` |
+
+Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / lost AI image / save
+failure), `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
+`svg-status-totals` (visible tokens + cost, "—" when unknown),
+`svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
+through the global bar handles `hist-undo` / `hist-redo` (§O).
