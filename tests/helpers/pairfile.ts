@@ -3,6 +3,7 @@
 // a scan row's extra fields on top (helpers/svgpair), the Selection suites use
 // this directly, and both describe the same file a write would produce.
 import { newPairMeta, sideOf, withDecision, withVersion, type PairMeta } from "../../src/lib/pairmeta";
+import { withPreferred } from "../../src/lib/pairpreferred";
 import { pairId } from "../../src/lib/pairing";
 import { parseAiName } from "../../src/lib/naming";
 import type { Decision } from "../../src/lib/reviewfilter";
@@ -18,6 +19,8 @@ export interface FileOpts {
   decision?: Decision | null;
   reviewedAt?: string;
   versions?: readonly SvgVersion[];
+  /** The version the user chose to show (I-54); null/absent = the newest one. */
+  preferred?: number | null;
   /** File name of the reference image; null when the pair has only the AI face. */
   sourceName?: string | null;
 }
@@ -40,5 +43,6 @@ export function pairFile(dirPath: string, aiName: string, o: FileOpts = {}): Pai
   });
   // null keeps "nobody ever decided" — the file a legacy migration reads (I-42)
   const decided = decision === null ? written : withDecision(written, decision, o.reviewedAt ?? ISO);
-  return (o.versions ?? []).reduce((meta, v) => withVersion(meta, v), decided);
+  const chosen = o.preferred === undefined || o.preferred === null ? decided : withPreferred(decided, o.preferred);
+  return (o.versions ?? []).reduce((meta, v) => withVersion(meta, v), chosen);
 }

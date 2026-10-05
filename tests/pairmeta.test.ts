@@ -10,6 +10,7 @@ import {
   metaFileName, metaPathFor, newPairMeta, parsePairMeta, pairMetaFromLegacy, serializePairMeta,
   toRecord, withDecision, type PairMeta, type PairSide,
 } from "../src/lib/pairmeta";
+import { rebaseMeta } from "../src/lib/pairrebase";
 
 const SIDE_AI: PairSide = { relPath: "a/icon_AI.png", name: "icon_AI.png", fingerprint: "20:300" };
 const SIDE_SRC: PairSide = { relPath: "a/icon.png", name: "icon.png", fingerprint: "12:200" };
@@ -109,6 +110,44 @@ describe("the pair file's model", () => {
     raw.decision = "maybe";
     const back = parsePairMeta(JSON.stringify(raw));
     expect(back.ok && back.meta.decision).toBeNull();
+  });
+});
+
+describe("the chosen version is part of the pair file (I-54)", () => {
+  it("round-trips a choice and keeps the history and the decision intact", () => {
+    const written = meta({ decision: "approved", reviewedAt: "2026-10-05T17:02:11.000Z", preferred: 1, versions: [version(1), version(2)] });
+    const back = parsePairMeta(serializePairMeta(written));
+    expect(back.ok).toBe(true);
+    expect(back.ok && back.meta).toEqual(written); // nothing dropped, nothing invented
+    expect(back.ok && back.meta.versions.map((v) => v.version)).toEqual([1, 2]);
+    expect(back.ok && back.meta.decision).toBe("approved");
+  });
+
+  it("defaults to null: a file that predates the field means nobody chose", () => {
+    const raw = JSON.parse(serializePairMeta(meta({ versions: [version(1)] }))) as Record<string, unknown>;
+    delete raw.preferred; // exactly what an older build wrote
+    const back = parsePairMeta(JSON.stringify(raw));
+    expect(back.ok && back.meta.preferred).toBeNull();
+    expect(back.ok && back.meta.versions).toHaveLength(1);
+  });
+
+  it("refuses a nonsense preference instead of losing the file (RULE 13)", () => {
+    const base = JSON.parse(serializePairMeta(meta({ versions: [version(1)] }))) as Record<string, unknown>;
+    for (const bad of ["first", -1, 0, 1.5, {}]) {
+      const back = parsePairMeta(JSON.stringify({ ...base, preferred: bad }));
+      expect(back.ok).toBe(true); // the versions still parse...
+      expect(back.ok && back.meta.preferred).toBeNull(); // ...and the choice is simply absent
+    }
+  });
+
+  it("keeps v=2: an older build must not call a file with a choice corrupt (I-49)", () => {
+    expect((JSON.parse(serializePairMeta(meta({ preferred: 2 }))) as { v: number }).v).toBe(2);
+  });
+
+  it("carries the choice across a rebase into another root (I-49)", () => {
+    const moved = rebaseMeta(meta({ preferred: 2, versions: [version(1), version(2)] }), "copied");
+    expect(moved.preferred).toBe(2);
+    expect(moved.versions).toHaveLength(2);
   });
 });
 

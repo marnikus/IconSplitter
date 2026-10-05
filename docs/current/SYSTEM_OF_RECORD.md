@@ -116,10 +116,15 @@ Selection V2 (adds to, never replaces, the rules above):
   panel, one pair per row showing BOTH an Original and an AI result thumbnail,
   each labelled) and **Comparison** (the V1 `CompareView` panes + a pair
   picker). Layout, filters, selection and decisions survive switching.
-* Thumbnail zoom: range slider **48–240 px, step 4, default 84** with a live
+* Thumbnail zoom: range slider **48–800 px, step 4, default 84** with a live
   "128 px" readout and both bounds shown; row and thumbnail height follow it
   while dragging, width comes from the image's own aspect ratio (never
-  stretched, never upscaled past natural height). Persisted across restarts.
+  stretched, never upscaled past natural height, never capped). Persisted
+  across restarts. This and Generate SVG's `svg-thumb` are the SAME control:
+  the range, the clamp and the box rule live in `src/lib/zoom.ts`, the two-slot
+  layout in `src/ui/PairedThumbs.tsx`, and neither tab may compute a box of its
+  own (I-55) — an 800 px pair is honoured by letting the list scroll sideways,
+  which is why the preview column is `max-content` at every breakpoint.
 * Checkbox selection is separate state keyed by `pair_<hash>`, so sorting and
   filtering never lose it: header checkbox (checked / unchecked /
   indeterminate), Select visible, Deselect all, and live counts for selected,
@@ -797,13 +802,31 @@ and `data-testid` handles):
   `filter` on the artwork, the contrast hint as a frame outline), and a
   multicolour document (gradient stops, fills, strokes, dash, opacity) carried
   through with only its ids scoped
+* **I-54 — the preferred version.** A pair file may carry `"preferred": n`
+  beside its `versions[]` (`v` stays 2: the key is additive, and a reader that
+  predates it simply ignores it). It names the version the row SHOWS — preview,
+  Copy, Code, Approve/Decline, the list fields and the scan key all read it
+  through `chosenVersion(versions, preferred)`; nothing is ever deleted, so
+  every version stays re-choosable, and a nonsense or dangling number falls back
+  to "nobody chose" (the newest valid version). It is written through
+  `saveMetaAt` (tmp → verify → overwrite), off the undo timeline, and the
+  version chooser refuses honestly when it cannot be written.
+* **I-53 — the generation queue.** Confirming a batch while a run is in flight
+  APPENDS it; the run in flight is never interrupted and the button is never
+  disabled by it. `refs.queue` is the synchronous authority and `refs.abort`
+  (non-null) is what "a request is in flight" means, so a stale closure can
+  never start two runs or lose a batch. The queue is session-only — nothing
+  queued is ever sent after a restart — and Cancel stops the run AND drops the
+  whole queue, saying how many batches that was. A waiting batch is a scheduling
+  fact, never a row status: nothing about the files changes until its request
+  really starts, and the run that finished it says so in its final line.
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
   preview frame: inline `<svg>` with `xmlns` + `100%` + `xMidYMid meet`, the
   frame's `data-version` equal to the version Copy hands over, "Preview
   failed" + reason for a malformed file, "No SVG" for a source with none, the
-  one zoom slider resizing BOTH preview boxes in step at EVERY value 48…240,
+  one zoom slider resizing BOTH preview boxes in step at EVERY value 48…800,
   every preview background applied to the frame while the document stays
   byte-identical, and the model card + request estimate following all four
   tiers

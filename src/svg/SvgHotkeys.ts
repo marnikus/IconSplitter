@@ -6,6 +6,7 @@
 import { useEffect } from "react";
 import { isTextField } from "../selection/hotkeys";
 import type { ReviewStatus } from "../lib/svgfile";
+import { shownVersion } from "./rowmodel";
 import type { SvgRow } from "./types";
 
 export interface SvgHotActions {
@@ -43,9 +44,9 @@ function swallowed(e: KeyboardEvent): boolean {
 const ROW_KEYS: Record<string, (row: SvgRow, a: SvgHotActions) => void> = {
   " ": (row, a) => a.toggleCheck(row.source.id),
   g: (row, a) => a.generate([row.source.id]),
-  a: (row, a) => { if (row.newest !== null) a.decide([row.source.id], "approved"); },
-  d: (row, a) => { if (row.newest !== null) a.decide([row.source.id], "declined"); },
-  v: (row, a) => { if (row.newest !== null) a.showCode(row.source.id, row.newest.version); },
+  a: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "approved"); },
+  d: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "declined"); },
+  v: (row, a) => { const v = shownVersion(row); if (v !== null) a.showCode(row.source.id, v.version); },
 };
 
 function runRowKey(key: string, row: SvgRow, a: SvgHotActions): void {

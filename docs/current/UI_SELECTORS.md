@@ -222,7 +222,7 @@ Bulk bar (`v2-bulk`):
 | `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
 | `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
 | `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
-| `v2-thumb` | `<input type="range">` | 48–240 px, step 4; `aria-label="Thumbnail maximum height"` |
+| `v2-thumb` | `<input type="range">` | **48–800 px**, step 4; `aria-label="Thumbnail maximum height"`; sizes BOTH thumbnails of every row (I-55) |
 | `v2-thumb-value` | `<output>` | live `128 px` readout (RULE 24) |
 | `v2-approve-selected` / `v2-decline-selected` / `v2-reset-selected` | buttons | the only bulk actions; every label carries the affected count and arms first (`Confirm approve`); disabled at 0. **No bulk action touches the visible list** — `v2-approve-visible` and `v2-reset-visible` were removed |
 | `v2-cancel-bulk` | button | shown while one action is armed; Escape also disarms |
@@ -385,10 +385,10 @@ Bulk bar (`svg-bulk`):
 | `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
 | `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
-| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, 48–240 step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout |
+| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, **48–800** step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout. Same range, same rule and the same shared layout as Selection V2's `v2-thumb` (I-55 — one implementation, `lib/zoom` + `ui/PairedThumbs`) |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
+| `svg-generate-selected` | button | arms first (`Confirm generate`), then queues/sends; **stays enabled while a run is in flight** (I-53) and is disabled only at 0 selected |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
@@ -402,7 +402,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-prev-{sourceId}` | inline preview | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
-| `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the version history; disabled with no SVG / no versions |
+| `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
 | `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
@@ -414,6 +414,13 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved
 source matches these filters."), `svg-footer-summary` (`shownLabel`).
+
+Queue (waiting batches, I-53): `svg-queue` is absent when nothing waits; otherwise
+`svg-queue-count` ("N queued — they start as soon as the run in flight ends.
+Adding more never interrupts it."), `svg-queue-line-{n}` (1-based, "#n · <first
+file> + N more · N images · N requests") and `svg-queue-drop-{n}` ("× Drop", drops
+exactly that batch — the run in flight is untouched). `svg-confirm-generate` reads
+"Add to queue" while a run is in flight and `svg-confirm-queue-note` explains why.
 
 Batch strip (`svg-batch`, the request in flight and every finished request;
 it stays after the run ends so the record is readable): `svg-batch-composite`
@@ -435,13 +442,15 @@ Dialogs:
 | `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
+| `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
 | `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
 | `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
 | `svg-composite-building` / `svg-composite-error` | the honest in-progress and could-not-build states |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
-| `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
+| `svg-history-{sourceId}` | button | opens the **version chooser** (I-54); disabled when the pair has no recorded version |
+| `svg-history-dialog` | the version chooser: `svg-history-title`, `svg-history-shown` ("Showing v2 of 3 recorded versions — choosing another one keeps all of them"), `svg-history-note` (why a choice could not be saved; absent when it could), `svg-history-table`, `svg-history-v{n}` (one tile per version, class `shown` on the one the row shows), `svg-history-status-{n}`, `svg-history-art-{n}` (that version's own artwork, 96×96), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-use-{n}` ("Use this version"; disabled for an unusable tile or the one already shown), `svg-history-code-{n}`, `svg-history-close`, `svg-history-done` |
 
 Restart recovery: `svg-inflight` (the note about requests with no confirmed
 outcome, shown while `iconSplitter.svg.inflight.v1` has entries) with

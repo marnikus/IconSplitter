@@ -9,7 +9,7 @@
 // keeps everything already saved.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
-import { clampThumb, THUMB_MAX, THUMB_MIN, THUMB_STEP, thumbLabel } from "../lib/reviewprefs";
+import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import { costText, fmtTokens } from "../lib/svgusage";
 import Elapsed from "./Elapsed";
 import type { RunProgress } from "./types";
@@ -68,12 +68,12 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
         <span className="svg-divider" aria-hidden="true" />
         <div className="svg-zoom">
           <label htmlFor="svg-thumb">ZOOM</label>
-          <span aria-hidden="true">{THUMB_MIN}</span>
-          <input id="svg-thumb" data-testid="svg-thumb" type="range" min={THUMB_MIN} max={THUMB_MAX} step={THUMB_STEP}
+          <span aria-hidden="true">{ZOOM_MIN}</span>
+          <input id="svg-thumb" data-testid="svg-thumb" type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={ZOOM_STEP}
             value={p.thumb} aria-label="Thumbnail maximum height"
-            onChange={(e) => p.onThumb(clampThumb(Number(e.target.value)))} />
-          <span aria-hidden="true">{THUMB_MAX}</span>
-          <output className="svg-zoom-value" data-testid="svg-thumb-value" htmlFor="svg-thumb">{thumbLabel(p.thumb)}</output>
+            onChange={(e) => p.onThumb(clampZoom(Number(e.target.value)))} />
+          <span aria-hidden="true">{ZOOM_MAX}</span>
+          <output className="svg-zoom-value" data-testid="svg-thumb-value" htmlFor="svg-thumb">{zoomLabel(p.thumb)}</output>
         </div>
         <span className="svg-divider" aria-hidden="true" />
         <Estimate p={p} />
@@ -81,7 +81,7 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
           <button type="button" className="svg-btn" data-testid="svg-cancel-run" onClick={p.onCancel}>Cancel run</button>
         )}
         <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
-          disabled={p.checkedCount === 0 || p.running} onClick={p.onGenerate}>✦ Generate selected</button>
+          disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
         <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
           disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
         <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"

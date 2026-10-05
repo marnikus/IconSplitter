@@ -9,54 +9,54 @@ import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
 
 export interface SvgPreviewProps {
   code: string | null;
-  /** Side of the square frame, in px — the row's thumb size. */
-  size: number;
+  /** The frame's box in px — its own ratio at the row's zoom height (I-55). */
+  box: { width: number; height: number };
   testid: string;
   label: string;
   /** Recorded so a test can prove preview and Copy show the same version. */
   version: number;
 }
 
-export default function SvgPreviewBox({ code, size, testid, label, version }: SvgPreviewProps) {
+export default function SvgPreviewBox({ code, box, testid, label, version }: SvgPreviewProps) {
   const preview = useMemo(() => buildSvgPreview(code), [code]);
   if (code === null || code.trim() === "") {
-    return <Chip className="svg-thumb missing" size={size} testid={testid}>No SVG</Chip>;
+    return <Chip className="svg-thumb missing" box={box} testid={testid}>No SVG</Chip>;
   }
   if (!preview.ok) {
-    return <Chip className="svg-thumb missing error" size={size} testid={testid} error={preview.error}>Preview failed</Chip>;
+    return <Chip className="svg-thumb missing error" box={box} testid={testid} error={preview.error}>Preview failed</Chip>;
   }
-  return <ShadowSvg html={preview.html} size={size} testid={testid} label={label} version={version} />;
+  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} />;
 }
 
 interface ChipProps {
   className: string;
-  size: number;
+  box: { width: number; height: number };
   testid: string;
   error?: string | null;
   children: string;
 }
 
 /** The honest fallback: says which of the two failures it is. */
-function Chip({ className, size, testid, error, children }: ChipProps) {
+function Chip({ className, box, testid, error, children }: ChipProps) {
   return (
-    <span className={className} style={{ width: size, height: size }} title={error ?? undefined}
+    <span className={className} style={{ width: box.width, height: box.height }} title={error ?? undefined}
       data-testid={testid} data-error={error ?? undefined}>{children}</span>
   );
 }
 
 interface ShadowProps {
   html: string;
-  size: number;
+  box: { width: number; height: number };
   testid: string;
   label: string;
   version: number;
 }
 
-function ShadowSvg({ html, size, testid, label, version }: ShadowProps) {
+function ShadowSvg({ html, box, testid, label, version }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
   useShadowArt(html, host);
   return (
-    <div ref={host} className="svg-preview" style={{ width: size, height: size }}
+    <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height }}
       role="img" aria-label={label} data-testid={testid} data-version={version} />
   );
 }

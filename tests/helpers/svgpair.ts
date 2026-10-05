@@ -46,9 +46,13 @@ export function svgSource(id: string, o: SrcOpts = {}): SvgSource {
 }
 
 /** The pair file that belongs to a source row, with the versions given. */
-export function pairMetaFor(source: SvgSource, versions: readonly SvgVersion[] = [], decision: PairMeta["decision"] = "approved"): PairMeta {
+export function pairMetaFor(
+  source: SvgSource, versions: readonly SvgVersion[] = [],
+  decision: PairMeta["decision"] = "approved", preferred: number | null = null,
+): PairMeta {
   return pairFile(source.dirPath, source.name, {
-    id: source.id, decision, versions, sourceName: source.sourcePath === null ? null : source.sourcePath.split("/").pop(),
+    id: source.id, decision, preferred, versions,
+    sourceName: source.sourcePath === null ? null : source.sourcePath.split("/").pop(),
   });
 }
 
@@ -65,6 +69,8 @@ export interface VerOpts {
   icons?: number;
   error?: string | null;
   requestId?: string | null;
+  /** false = the document failed validation (no usable artwork to show). */
+  valid?: boolean;
 }
 
 /** One version record, with the fields every consumer reads filled in. */
@@ -82,7 +88,9 @@ export function svgVersion(svgPath: string, o: VerOpts = {}): SvgVersion {
     completedAt: ISO,
     usage: o.usage ?? { input: 1, output: 2, total: 3 },
     cost: o.cost ?? NO_COST,
-    validation: { ok: true, errors: [], warnings: [], icons: o.icons ?? 1 },
+    validation: o.valid === false
+      ? { ok: false, errors: ["invalid SVG"], warnings: [], icons: 0 }
+      : { ok: true, errors: [], warnings: [], icons: o.icons ?? 1 },
     batch: null,
     error: o.error ?? null,
     requestId: o.requestId ?? null,

@@ -6,7 +6,8 @@
 // switch and a restart and both are undoable.
 
 import { useMemo } from "react";
-import { clampThumb, type ReviewPrefs, type ViewMode } from "../lib/reviewprefs";
+import { type ReviewPrefs, type ViewMode } from "../lib/reviewprefs";
+import { clampZoom } from "../lib/zoom";
 import { bulkScope } from "../lib/reviewbulk";
 import {
   checkState, selectOne, selectRange, setChecked, toggleChecked,
@@ -50,7 +51,7 @@ export function useSelectionV2(): SelectionV2Api {
     hiddenCount: scope.hidden,
     header: checkState(visibleIds, checked),
     setMode: (mode) => editPrefs(hist, { mode }, `View mode: ${mode}`, false),
-    setThumb: (px) => editPrefs(hist, { thumbHeight: clampThumb(px) }, `Thumbnail ${clampThumb(px)} px`, true),
+    setThumb: (px) => editPrefs(hist, { thumbHeight: clampZoom(px) }, `Thumbnail ${clampZoom(px)} px`, true),
     setScroll: (y) => patchV2({ scrollY: y }),
     selectRow: (id, intent) => applySelect({ hist, visibleIds, checked, anchorId, id, intent }),
     toggleCheck: (id) => editSelection(hist, toggleChecked(checked, id), anchorId),

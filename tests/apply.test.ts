@@ -71,7 +71,7 @@ describe("applyEntry", () => {
 
   it("clamps restored prefs into the slider range", async () => {
     await expect(applyEntry(entry("prefs"), { mode: "compare", thumbHeight: 9999 })).resolves.toBe(true);
-    expect(getAppState().prefs).toEqual({ mode: "compare", thumbHeight: 240 });
+    expect(getAppState().prefs).toEqual({ mode: "compare", thumbHeight: 800 });
     await expect(applyEntry(entry("prefs"), [])).resolves.toBe(false);
   });
 

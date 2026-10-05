@@ -15,6 +15,7 @@ import {
 import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { Discovery } from "./sources";
+import type { QueueItem } from "./runqueue";
 import type { Dialog, RunProgress, SvgRow } from "./types";
 
 export interface Toast {
@@ -54,6 +55,8 @@ export interface SvgModel {
   dialog: Dialog | null;
   progress: RunProgress | null;
   running: boolean;
+  /** Batches waiting for their turn (I-53); the ref is the authority. */
+  queue: QueueItem[];
 }
 
 export type SvgAction =
@@ -79,7 +82,8 @@ export type SvgAction =
   | { type: "dialog"; dialog: Dialog | null }
   | { type: "progress"; progress: RunProgress | null }
   | { type: "progress-fn"; fn: (p: RunProgress | null) => RunProgress | null }
-  | { type: "running"; running: boolean };
+  | { type: "running"; running: boolean }
+  | { type: "queue"; queue: QueueItem[] };
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
@@ -106,6 +110,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   progress: (m, a) => ({ ...m, progress: (a as { progress: RunProgress | null }).progress }),
   "progress-fn": (m, a) => ({ ...m, progress: (a as { fn: (p: RunProgress | null) => RunProgress | null }).fn(m.progress) }),
   running: (m, a) => ({ ...m, running: (a as { running: boolean }).running }),
+  queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
 };
 
 export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
@@ -136,7 +141,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
     prompt, keyMask: "not set", keySet: false, rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
-    filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false,
+    filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false, queue: [],
   };
 }
 

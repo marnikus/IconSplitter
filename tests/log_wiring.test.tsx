@@ -105,7 +105,7 @@ describe("discovery is logged", () => {
   /** The refs a scan writes through: the ticket and the snapshot key included. */
   function refs(dir: FakeDir): SvgRefs {
     return {
-      root: { current: dir }, metas: new Map(), abort: { current: null }, key: { current: null },
+      root: { current: dir }, metas: new Map(), abort: { current: null }, queue: { current: [] }, key: { current: null },
       scanKey: { current: null }, seq: { current: SCAN_IDLE },
     };
   }

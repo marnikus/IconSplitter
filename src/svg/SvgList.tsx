@@ -29,18 +29,27 @@ export default function SvgList({ g, actions }: SvgListProps) {
           <span className="needs" data-testid="svg-attention-count">{attention} need attention</span>
         </div>
       </header>
-      <Columns />
-      <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
-        {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={actions} />)}
-        {g.visible.length === 0 && <p className="svg-empty" data-testid="svg-empty">No approved source matches these filters.</p>}
+      <div className="pair-table">
+        <Columns />
+        <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
+          {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={actions} />)}
+          {g.visible.length === 0 && <p className="svg-empty" data-testid="svg-empty">No approved source matches these filters.</p>}
+        </div>
       </div>
-      <footer className="svg-list-footer">
-        <span data-testid="svg-footer-summary">{shownLabel(g.visible.length, g.rows.length)}</span>
-        <span className="svg-hints">
-          ↑↓ active row · <kbd>Space</kbd> select · <kbd>G</kbd> generate · <kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>V</kbd> code
-        </span>
-      </footer>
+      <Footer shown={g.visible.length} total={g.rows.length} />
     </div>
+  );
+}
+
+/** What the list says under itself: how much is shown, and the hotkeys. */
+function Footer({ shown, total }: { shown: number; total: number }) {
+  return (
+    <footer className="svg-list-footer">
+      <span data-testid="svg-footer-summary">{shownLabel(shown, total)}</span>
+      <span className="svg-hints">
+        ↑↓ active row · <kbd>Space</kbd> select · <kbd>G</kbd> generate · <kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>V</kbd> code
+      </span>
+    </footer>
   );
 }
 

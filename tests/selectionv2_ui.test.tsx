@@ -204,24 +204,46 @@ describe("Selection V2 panel", () => {
     expect(active?.getAttribute("data-testid")).not.toBe(`v2-row-${FOG}`);
   });
 
-  it("zoom slider exposes its bounds, live value, row height and persistence", async () => {
+  it("zoom slider exposes its bounds, live value, pair box and persistence", async () => {
     const { el, ui } = await mount(makeRoot());
     const slider = q(el, "[data-testid='v2-thumb']") as HTMLInputElement;
-    expect([slider.min, slider.max, slider.step, slider.value]).toEqual(["48", "240", "4", "84"]);
+    expect([slider.min, slider.max, slider.step, slider.value]).toEqual(["48", "800", "4", "84"]);
     expect(slider.getAttribute("aria-label")).toBe("Thumbnail maximum height");
     expect(text(el, "[data-testid='v2-thumb-value']")).toBe("84 px");
     await slide(slider, "128");
     expect(text(el, "[data-testid='v2-thumb-value']")).toBe("128 px");
-    // row height + thumbnail height follow the slider immediately (never stretched)
+    // the row height AND the pair's own box follow the slider immediately
     expect(q(el, "[data-testid='v2-list']")?.getAttribute("style")).toContain("--v2-thumb: 128px");
-    const thumb = q(el, `[data-testid='v2-row-${FOG}'] [data-testid='v2-thumb-src']`)?.firstElementChild as HTMLElement;
-    expect(thumb.style.height).toBe("128px");
+    const row = q(el, `[data-testid='v2-row-${FOG}']`) as HTMLElement;
+    expect(box(row, "v2-thumb-src")).toEqual({ w: 128, h: 128 });
     expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).thumbHeight).toBe(128);
     await act(async () => { ui.unmount(); });
     const again = await mount(makeRoot());
     expect((q(again.el, "[data-testid='v2-thumb']") as HTMLInputElement).value).toBe("128");
     expect(text(again.el, "[data-testid='v2-thumb-value']")).toBe("128 px");
     await act(async () => { again.ui.unmount(); });
+  });
+
+  it("zooms to 800 px at each side's own ratio and never upscales a small source (I-55)", async () => {
+    const { el } = await mount(makeRoot());
+    const slider = q(el, "[data-testid='v2-thumb']") as HTMLInputElement;
+    const row = q(el, `[data-testid='v2-row-${FOG}']`) as HTMLElement;
+    const src = q(row, "[data-testid='v2-thumb-src'] img") as HTMLImageElement;
+    const ai = q(row, "[data-testid='v2-thumb-ai'] img") as HTMLImageElement;
+    await decode(src, 1600, 800); // a 2:1 original
+    await decode(ai, 300, 300); // a small square result
+    await slide(slider, "800");
+    expect(box(row, "v2-thumb-src")).toEqual({ w: 1600, h: 800 }); // 800 px tall, its own 2:1 width
+    expect(box(row, "v2-thumb-ai")).toEqual({ w: 300, h: 300 }); // a real box, never blown up
+    // the whole range really moves both sides: the same rule at 48 px
+    await slide(slider, "48");
+    expect(box(row, "v2-thumb-src")).toEqual({ w: 96, h: 48 });
+    expect(box(row, "v2-thumb-ai")).toEqual({ w: 48, h: 48 });
+    // and the pair is ONE flex row of two independent slots — no overlap by
+    // construction (each slot owns its real box; the CSS test pins the rest)
+    const thumbs = row.querySelector(".pair-thumbs") as HTMLElement;
+    expect([...thumbs.children].map((c) => (c as HTMLElement).dataset.testid))
+      .toEqual(["v2-thumb-src", "v2-thumb-ai"]);
   });
 
   it("selects one, many, all visible and none again, with an indeterminate header", async () => {
@@ -591,6 +613,19 @@ async function check(box: HTMLInputElement, on: boolean): Promise<void> {
     if (box.checked !== on) box.click();
   });
   await settle();
+}
+
+/** jsdom never decodes an image: give it real pixels and fire its load event. */
+async function decode(img: HTMLImageElement, w: number, h: number): Promise<void> {
+  Object.defineProperty(img, "naturalWidth", { value: w, configurable: true });
+  Object.defineProperty(img, "naturalHeight", { value: h, configurable: true });
+  await act(async () => { img.dispatchEvent(new Event("load")); });
+}
+
+/** The px box a preview slot was given — what the browser will lay out. */
+function box(scope: HTMLElement, testid: string): { w: number; h: number } {
+  const el = q(scope, `[data-testid='${testid}']`) as HTMLElement;
+  return { w: parseInt(el.style.width, 10), h: parseInt(el.style.height, 10) };
 }
 
 async function slide(input: HTMLInputElement, value: string): Promise<void> {

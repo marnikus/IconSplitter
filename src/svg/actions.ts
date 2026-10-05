@@ -7,12 +7,12 @@
 import { useCallback, useRef, type Dispatch } from "react";
 import { log } from "../log/logstore";
 import type { ReviewStatus } from "../lib/svgfile";
+import { message } from "./runner";
 import { validateBatchPlan } from "../lib/svgbatch";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
-import type { DirHandleLike } from "../lib/fs";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
@@ -22,10 +22,8 @@ import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
-import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
-import { message, runGeneration } from "./runner";
-import { withRunLog } from "./runlog";
 import { guard, perRequestOf, planOf } from "./runplan";
+import { confirmRun, dropQueueForCancel, dropWaiting, type CancelNote } from "./runcontrol";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
@@ -93,6 +91,10 @@ export interface SvgActions {
   dismissDialog: () => void;
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
+  /** Drops one batch that is still waiting (I-53); the run in flight is untouched. */
+  dropQueued: (itemId: string) => void;
+  /** Chooses the version a row shows (I-54); resolves the reason, or null. */
+  preferVersion: (id: string, version: number) => Promise<string | null>;
   copyCode: (id: string, version: number) => void;
   openLocation: (id: string) => void;
 }
@@ -110,6 +112,7 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
     ...useSelectActions(ctx),
     ...useKeyActions(ctx),
     ...useRunActions(ctx),
+    ...useQueueActions(ctx),
     ...useCodeActions(ctx),
   };
 }
@@ -217,7 +220,7 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
   return { toggleCheck, selectVisible, deselectAll, setActive, decide };
 }
 
-function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "confirmGenerate" | "dismissDialog"> {
+function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "dismissDialog"> {
   const latest = useRef(ctx);
   latest.current = ctx;
   const requestGenerate = useCallback((ids: string[]) => {
@@ -232,44 +235,39 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
     c.dispatch({ type: "dialog", dialog });
   }, []);
-  const cancelRun = useCallback(() => {
-    const c = latest.current;
-    log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "the user asked to cancel — finished results are kept" });
-    c.refs.abort.current?.abort();
-    c.say("Cancelling — finished results are kept");
-  }, []);
+  const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
+  return { requestGenerate, dismissDialog };
+}
+
+/**
+ * The queue's surface (I-53): confirming, cancelling and dropping a waiting
+ * batch. They share one rule — the queue is a scheduling matter, so none of
+ * them touches a row's status or the files, and the run in flight is never
+ * interrupted by adding work.
+ */
+function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "dropQueued"> {
+  const latest = useRef(ctx);
+  latest.current = ctx;
   const confirmGenerate = useCallback(() => {
     void confirmRun(latest.current);
   }, []);
-  const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
-  return { requestGenerate, cancelRun, confirmGenerate, dismissDialog };
-}
-
-/** One confirmation = one run: a second click while running is ignored. */
-async function confirmRun(ctx: SvgCtx): Promise<void> {
-  const dialog = ctx.m.dialog;
-  if (dialog === null || dialog.kind !== "confirm" || ctx.m.running) return;
-  const ids = dialog.ids;
-  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
-  ctx.dispatch({ type: "dialog", dialog: null });
-  const controller = new AbortController();
-  ctx.refs.abort.current = controller;
-  ctx.dispatch({ type: "running", running: true });
-  ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
-  const sources = ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source);
-  const summary = await runGeneration({
-    root: ctx.refs.root.current as DirHandleLike,
-    apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
-    metas: ctx.refs.metas, signal: controller.signal,
-    onEvent: withRunLog((event) => onRunEvent(event, ctx)),
-  });
-  ctx.dispatch({ type: "running", running: false });
-  // The finished run stays visible: its per-request outcomes are the record of
-  // what was sent, what it cost and what failed (the batch strip shows it).
-  ctx.refs.abort.current = null;
-  await reloadSidecars(ctx.refs, sources, ctx);
-  ctx.say(summaryLine(summary), summary.saved === 0 && summary.problems.length > 0);
+  const cancelRun = useCallback(() => {
+    const c = latest.current;
+    log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "the user asked to cancel — finished results are kept" });
+    // One gesture, one honest sentence: the run in flight stops AND the queue
+    // goes — there is no "cancel" that would leave work waiting to be sent.
+    const dropped = dropQueueForCancel(c);
+    // The count rides on the abort so the run's own final line can repeat it.
+    c.refs.abort.current?.abort({ dropped } satisfies CancelNote);
+    c.say(dropped === 0
+      ? "Cancelling — finished results are kept"
+      : `Cancelling — finished results are kept, ${dropped} queued batch${dropped === 1 ? "" : "es"} dropped`);
+  }, []);
+  const dropQueued = useCallback((itemId: string) => {
+    const c = latest.current;
+    c.say(`Queued batch dropped — ${dropWaiting(c, itemId)} still waiting`);
+  }, []);
+  return { confirmGenerate, cancelRun, dropQueued };
 }
 
 /** One selection gesture = one entry holding the whole selection (RULE 12). */

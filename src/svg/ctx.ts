@@ -172,7 +172,7 @@ function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" 
 function newRefs(): SvgRefs {
   return {
     root: { current: null }, metas: new Map(), abort: { current: null }, key: { current: null },
-    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+    queue: { current: [] }, scanKey: { current: null }, seq: { current: SCAN_IDLE },
   };
 }
 

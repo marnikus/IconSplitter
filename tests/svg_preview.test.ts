@@ -174,13 +174,18 @@ describe("buildSvgPreview — fit, centre and stroke width", () => {
   });
 
   it("keeps one zoom value behind both previews and the row they sit in", () => {
-    // One CSS variable: the box size of BOTH previews (inline px), the row's
-    // minimum height and the previews column width. That is what makes them
-    // resize in step without ever overlapping the next column.
+    // One rule (lib/zoom) sizes BOTH boxes in both tabs; the layout only lays
+    // them out. Nothing may cap the width of a preview — a cap while the height
+    // is fixed is clipping by another name (the measured V2 defect, I-55).
     const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
-    expect(css).toMatch(/\.svg-thumb\s*\{[^}]*object-fit:\s*contain/);
+    expect(css).toMatch(/\.pair-thumb > img\s*\{[^}]*object-fit:\s*contain/);
+    expect(css).toMatch(/\.pair-thumb\s*\{[^}]*flex:\s*none/);
+    expect(css).not.toMatch(/\.pair-thumb\s*\{[^}]*overflow:\s*hidden/);
+    expect(css).not.toMatch(/\.v2-thumb\s*\{[^}]*max-width/);
+    // The preview column reserves exactly the pair's own width, so a wider pair
+    // can never overlap the next column; the list scrolls instead of squeezing.
     expect(css).toMatch(/\.svg-row\s*\{[^}]*min-height:\s*calc\(var\(--svg-thumb\)/);
-    expect(css).toMatch(/grid-template-columns:\s*[^;]*calc\(var\(--svg-thumb\)\s*\*\s*2/);
+    expect(css).toMatch(/grid-template-columns:\s*34px max-content/);
   });
 
   it("drops the root's own width/height so the fit cannot be overridden", () => {
@@ -297,7 +302,7 @@ describe("previewTargetOf — one version for the preview and for Copy", () => {
 
   function rowWith(versions: SvgVersion[]): SvgRow {
     const meta: PairMeta = versions.reduce((acc, v) => withVersion(acc, v), pairMetaFor(source, []));
-    return { source, meta, corrupt: false, newest: versions.at(-1) ?? null, approved: null, status: "generated", error: null, running: false };
+    return { source, meta, corrupt: false, newest: versions.at(-1) ?? null, preferred: null, approved: null, status: "generated", error: null, running: false };
   }
 
   it("points at the newest valid version's file and number", () => {

@@ -1,15 +1,12 @@
 // reviewprefs.ts — persisted view preferences for Selection review V2
-// (spec V2 §2 view modes, §4 thumbnail zoom; RULE 13). Owns the zoom range
-// and the stored payload shape: values are clamped and validated on read, so
-// a corrupt or hand-edited payload costs one ignored load, never a broken
-// panel. The localStorage read/write lives in src/selectionv2/prefsstore.ts.
+// (spec V2 §2 view modes, §4 thumbnail zoom; RULE 13). Owns the stored payload
+// shape: values are clamped and validated on read, so a corrupt or hand-edited
+// payload costs one ignored load, never a broken panel. The zoom RANGE and the
+// size rule are shared with the Generate SVG tab and live in lib/zoom (I-55);
+// the localStorage read/write lives in src/selectionv2/prefsstore.ts.
 
 import { isRecord } from "./isrecord";
-
-export const THUMB_MIN = 48;
-export const THUMB_MAX = 240;
-export const THUMB_STEP = 4;
-export const THUMB_DEFAULT = 84;
+import { clampZoom, ZOOM_DEFAULT } from "./zoom";
 
 export type ViewMode = "list" | "compare";
 
@@ -21,27 +18,7 @@ export interface ReviewPrefs {
   thumbHeight: number;
 }
 
-export const DEFAULT_PREFS: ReviewPrefs = { mode: "list", thumbHeight: THUMB_DEFAULT };
-
-/** Clamps a zoom value into the slider range and snaps it onto its step. */
-export function clampThumb(value: number): number {
-  if (!Number.isFinite(value)) return THUMB_DEFAULT;
-  const snapped = Math.round(value / THUMB_STEP) * THUMB_STEP;
-  return Math.min(THUMB_MAX, Math.max(THUMB_MIN, snapped));
-}
-
-/**
- * Display height for a thumbnail: the slider value, but never upscaled past
- * the source pixels once they are known (spec V2 §4).
- */
-export function thumbHeight(maxPx: number, naturalHeight: number): number {
-  return naturalHeight > 0 ? Math.min(maxPx, naturalHeight) : maxPx;
-}
-
-/** Readout shown beside the slider, e.g. "128 px". */
-export function thumbLabel(px: number): string {
-  return `${px} px`;
-}
+export const DEFAULT_PREFS: ReviewPrefs = { mode: "list", thumbHeight: ZOOM_DEFAULT };
 
 export function serializePrefs(p: ReviewPrefs): string {
   return JSON.stringify(p);
@@ -55,7 +32,7 @@ export function parsePrefs(text: string | null): ReviewPrefs {
 /** Same validation for an in-memory value (a history entry being re-applied). */
 export function parsePrefsValue(raw: unknown): ReviewPrefs {
   if (!isRecord(raw)) return DEFAULT_PREFS;
-  return { mode: toMode(raw.mode), thumbHeight: clampThumb(Number(raw.thumbHeight ?? THUMB_DEFAULT)) };
+  return { mode: toMode(raw.mode), thumbHeight: clampZoom(Number(raw.thumbHeight ?? ZOOM_DEFAULT)) };
 }
 
 function toMode(value: unknown): ViewMode {

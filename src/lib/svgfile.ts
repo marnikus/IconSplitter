@@ -61,6 +61,22 @@ export function newestValid(versions: readonly SvgVersion[]): SvgVersion | null 
   return list.length > 0 ? list[list.length - 1] : null;
 }
 
+/**
+ * The version the row shows (I-54): the user's choice when that version is still
+ * there and usable, else the newest valid one. One function, so a stale choice
+ * (a file deleted by hand, a version that failed validation) can never leave a
+ * row painting nothing.
+ */
+export function chosenVersion(versions: readonly SvgVersion[], preferred: number | null): SvgVersion | null {
+  return preferredVersion(versions, preferred) ?? newestValid(versions);
+}
+
+/** The chosen version itself — null when the choice cannot be shown. */
+export function preferredVersion(versions: readonly SvgVersion[], preferred: number | null): SvgVersion | null {
+  if (preferred === null) return null;
+  return versions.find((v) => v.version === preferred && v.status === "generated" && v.validation.ok) ?? null;
+}
+
 /** The version currently carrying an approval, if any. */
 export function approvedVersion(versions: readonly SvgVersion[]): SvgVersion | null {
   const list = versions.filter((v) => v.review === "approved");

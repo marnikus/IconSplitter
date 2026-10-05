@@ -1,14 +1,16 @@
 // reviewact.ts — the SVG review decision and its undo path (prompt §15, RULE 12).
-// Owns: approving/declining the newest version of one or many sources, writing
+// Owns: approving/declining the version a row SHOWS (the user's choice when
+// there is one, else the newest valid — I-54) of one or many sources, writing
 // each pair's OWN file (versions + review stay beside the images, I-41), and
 // publishing ONE history entry for the whole operation so an undo reverses every
 // source it touched — never one at a time.
 
 import { useEffect, useRef } from "react";
 import { withVersion, type PairMeta } from "../lib/pairmeta";
-import type { ReviewStatus } from "../lib/svgmodel";
+import type { ReviewStatus, SvgVersion } from "../lib/svgmodel";
 import { getAppState } from "../state/appstore";
 import { saveMetaAt } from "../selection/pairstore";
+import { shownVersion, withMeta } from "./rowmodel";
 import { bindSvgReviewApplier, type SvgReviewPatch, type SvgReviewRec } from "./reviewundo";
 import { metaForSource } from "./sources";
 import type { DirHandleLike } from "../lib/fs";
@@ -46,13 +48,14 @@ export async function applyReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Pro
   let changed = false;
   for (const rec of patch.recs) {
     const row = s.rows.find((r) => r.source.id === rec.id);
-    if (!row?.newest) continue;
-    const next = withVersion(metaOf(row), { ...row.newest, review: rec.review });
+    // The undo names the version it reviewed; it is restored exactly, even when
+    // the user has chosen another one to show since (I-54).
+    const target = namedVersion(row, rec.version);
+    if (!row || !target) continue;
+    const next = withVersion(metaOf(row), { ...target, review: rec.review });
     s.refs.metas.set(rec.id, next);
     if (root) await saveMetaAt(root, row.source.metaPath, next);
-    s.setRowsFn((rows) => rows.map((r) => (r.source.id === rec.id
-      ? { ...r, meta: next, newest: { ...(r.newest as NonNullable<SvgRow["newest"]>), review: rec.review } }
-      : r)));
+    s.setRowsFn((rows) => rows.map((r) => (r.source.id === rec.id ? withMeta(r, next) : r)));
     changed = true;
   }
   return changed;
@@ -60,7 +63,7 @@ export async function applyReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Pro
 
 /** Approve / decline the newest version of every named source. */
 export async function decideReview(s: ReviewCtx, ids: string[], decision: ReviewStatus): Promise<void> {
-  const rows = ids.map((id) => rowOf(s, id)).filter(hasNewest);
+  const rows = ids.map((id) => rowOf(s, id)).filter(hasShown);
   if (rows.length === 0) return s.say("No generated SVG to review yet", true);
   const recs = rows.map((r) => recOf(r, decision));
   await writeAll(s, rows, decision);
@@ -68,16 +71,18 @@ export async function decideReview(s: ReviewCtx, ids: string[], decision: Review
   pushEntry(s, rows, decision, recs);
 }
 
-/** Keeps the newest version's status in step without touching other rows. */
+/** Keeps the reviewed version's status in step without touching other rows. */
 function patchRows(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): void {
+  void decision; // the new status is already inside the written pair file
   s.setRowsFn((all) => all.map((r) => {
     const hit = rows.find((x) => x.source.id === r.source.id);
-    return hit && r.newest ? { ...r, meta: s.refs.metas.get(r.source.id) ?? r.meta, newest: { ...r.newest, review: decision } } : r;
+    const meta = s.refs.metas.get(r.source.id);
+    return hit && meta ? withMeta(r, meta) : r;
   }));
 }
 
 function pushEntry(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus, recs: SvgReviewRec[]): void {
-  const before = rows.map((r) => recOf(r, r.newest?.review ?? "pending"));
+  const before = rows.map((r) => recOf(r, shownVersion(r)?.review ?? "pending"));
   const n = recs.length;
   s.say(`${n} SVG${n === 1 ? "" : "s"} marked ${decision}`);
   s.hist.push({
@@ -92,19 +97,26 @@ function rowOf(s: ReviewCtx, id: string): SvgRow | undefined {
   return s.rows.find((r) => r.source.id === id);
 }
 
-function hasNewest(row: SvgRow | undefined): row is SvgRow {
-  return row !== undefined && row.newest !== null;
+function hasShown(row: SvgRow | undefined): row is SvgRow {
+  return row !== undefined && shownVersion(row) !== null;
+}
+
+/** The version a patch names, when the row still has it. */
+function namedVersion(row: SvgRow | undefined, version: number): SvgVersion | null {
+  return row?.meta?.versions.find((v) => v.version === version) ?? (row ? shownVersion(row) : null);
 }
 
 function recOf(row: SvgRow, review: ReviewStatus): SvgReviewRec {
-  return { id: row.source.id, version: row.newest?.version ?? 0, review };
+  return { id: row.source.id, version: shownVersion(row)?.version ?? 0, review };
 }
 
 /** Writes one pair file per source; a failed write never blocks the others. */
 async function writeAll(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): Promise<void> {
   const root = s.refs.root.current as DirHandleLike | null;
   for (const row of rows) {
-    const next = withVersion(metaOf(row), { ...(row.newest as NonNullable<SvgRow["newest"]>), review: decision });
+    const shown = shownVersion(row);
+    if (shown === null) continue; // decided rows always have one; a rescan may race
+    const next = withVersion(metaOf(row), { ...shown, review: decision });
     s.refs.metas.set(row.source.id, next);
     try {
       if (root) await saveMetaAt(root, row.source.metaPath, next);

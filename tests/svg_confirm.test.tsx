@@ -68,6 +68,7 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
         caps={capsFor(DEFAULT_CONFIG.model)}
         params={{ temperature: null, maxTokens: 8_000, effort: opts.effort ?? null }}
         rootRef={{ current: new FakeDir("split_root") }}
+        running={false}
         onConfirm={() => undefined}
         onDismiss={() => undefined}
       />,
@@ -171,7 +172,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
       ui.render(
         <SvgConfirm ids={all.map((r) => r.source.id)} rows={all} config={DEFAULT_CONFIG}
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-          rootRef={{ current: new FakeDir("split_root") }} onConfirm={onConfirm} onDismiss={onDismiss} />,
+          rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={onConfirm} onDismiss={onDismiss} />,
       );
     });
     await settle();

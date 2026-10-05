@@ -25,6 +25,8 @@ export interface SvgConfirmProps {
   caps: ModelCaps;
   params: SamplingParams;
   rootRef: { current: DirHandleLike | null };
+  /** A request is in flight: confirming ADDS this batch to the queue (I-53). */
+  running: boolean;
   onConfirm: () => void;
   onDismiss: () => void;
 }
@@ -39,6 +41,12 @@ export default function SvgConfirm(p: SvgConfirmProps) {
           <button type="button" className="svg-btn" data-testid="svg-confirm-close" onClick={p.onDismiss}>Close</button>
         </header>
         <div className="svg-modal-body">
+          {p.running && (
+            <p className="svg-note" data-testid="svg-confirm-queue-note">
+              A run is in flight — confirming adds these {plan.picked.length} image(s) to the queue.
+              The run in flight is not interrupted, and nothing waits for the queue to be noticed.
+            </p>
+          )}
           <Facts plan={plan} p={p} />
           <PlanBody plan={plan} p={p} />
           <PolicyNote />
@@ -87,7 +95,9 @@ function Actions({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
     <div className="svg-modal-actions">
       <button type="button" className="svg-btn" data-testid="svg-confirm-cancel" onClick={p.onDismiss}>Cancel</button>
       <button type="button" className="svg-btn primary" data-testid="svg-confirm-generate"
-        disabled={plan.problems.length > 0 || plan.active === null} onClick={p.onConfirm}>Generate now</button>
+        disabled={plan.problems.length > 0 || plan.active === null} onClick={p.onConfirm}>
+        {p.running ? "Add to queue" : "Generate now"}
+      </button>
     </div>
   );
 }

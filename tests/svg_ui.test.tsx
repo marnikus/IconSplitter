@@ -109,6 +109,12 @@ async function click(el: HTMLElement): Promise<void> {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
+/** The px box a preview was given — the size the browser will really lay out. */
+function box(sel: string): { w: number; h: number } {
+  const el = q(sel) as HTMLElement;
+  return { w: parseInt(el.style.width, 10), h: parseInt(el.style.height, 10) };
+}
+
 function stubClipboard(value: string): void {
   Object.defineProperty(navigator, "clipboard", {
     value: { readText: async () => value, writeText: async () => undefined }, configurable: true,
@@ -766,55 +772,79 @@ describe("Generate SVG panel", () => {
     expect(SIDECAR).not.toContain("#c22f2f");
   });
 
-  it("resizes BOTH previews with the one zoom slider, in step and never cropped", async () => {
+  it("resizes BOTH previews with the one zoom slider, each at its own ratio (I-55)", async () => {
     await mount(await makeRoot());
     const panel = q(".svg") as HTMLElement;
-    const box = (sel: string) => {
-      const el = q(sel) as HTMLElement;
-      return { w: el.style.width, h: el.style.height };
-    };
-    const both = () => {
-      const ai = box(`[data-testid=svg-ai-${FOG}]`);
-      const svg = box(`[data-testid=svg-prev-${FOG}]`);
-      return { ai, svg };
-    };
-    // the slider value is the shared box size, and the row height reads it too
+    const both = () => ({
+      ai: box(`[data-testid=svg-ai-${FOG}]`),
+      svg: box(`[data-testid=svg-prev-frame-${FOG}]`),
+      host: box(`[data-testid=svg-prev-${FOG}]`),
+    });
+    // the slider value is the height of both boxes, and the row height reads it
     expect(panel.style.getPropertyValue("--svg-thumb")).toBe("84px");
-    expect(both()).toEqual({ ai: { w: "84px", h: "84px" }, svg: { w: "84px", h: "84px" } });
+    expect(both()).toEqual({ ai: { w: 84, h: 84 }, svg: { w: 84, h: 84 }, host: { w: 84, h: 84 } });
 
     await type("[data-testid=svg-thumb]", "240");
     await settle();
     expect(q("[data-testid=svg-thumb-value]")?.textContent).toBe("240 px");
     expect(panel.style.getPropertyValue("--svg-thumb")).toBe("240px");
-    expect(both()).toEqual({ ai: { w: "240px", h: "240px" }, svg: { w: "240px", h: "240px" } });
+    expect(both()).toEqual({ ai: { w: 240, h: 240 }, svg: { w: 240, h: 240 }, host: { w: 240, h: 240 } });
 
     await type("[data-testid=svg-thumb]", "48");
     await settle();
     expect(panel.style.getPropertyValue("--svg-thumb")).toBe("48px");
-    expect(both()).toEqual({ ai: { w: "48px", h: "48px" }, svg: { w: "48px", h: "48px" } });
+    expect(both()).toEqual({ ai: { w: 48, h: 48 }, svg: { w: 48, h: 48 }, host: { w: 48, h: 48 } });
   });
 
-  it("resizes both previews in step at EVERY slider value, never cropping one", async () => {
+  it("draws a wide document at its own ratio up to 800 px, framed exactly (I-55)", async () => {
+    const root = await makeRoot();
+    const wide = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 24"><rect width="48" height="24" fill="#123456"/></svg>';
+    (root.children.get("architecture") as FakeDir).children.set("fog_AI.svg", new FakeFile("fog_AI.svg", wide.length, 3200, wide));
+    await mount(root);
+    const slider = q("[data-testid=svg-thumb]") as HTMLInputElement;
+    expect([slider.min, slider.max, slider.step]).toEqual(["48", "800", "4"]);
+    await type("[data-testid=svg-thumb]", "800");
+    await settle();
+    expect(q("[data-testid=svg-thumb-value]")?.textContent).toBe("800 px");
+    // 800 px tall and 2:1 wide: the frame, the artwork host inside it and the
+    // box the row reserves all agree, so nothing is clipped and nothing overlaps
+    expect(box(`[data-testid=svg-prev-frame-${FOG}]`)).toEqual({ w: 1600, h: 800 });
+    expect(box(`[data-testid=svg-prev-${FOG}]`)).toEqual({ w: 1600, h: 800 });
+    expect(box(`[data-testid=svg-ai-${FOG}]`)).toEqual({ w: 800, h: 800 }); // pixels unknown yet
+    // the document itself is still the file's own bytes, in its own frame colour
+    const host = q(`[data-testid=svg-prev-${FOG}]`) as HTMLElement;
+    expect(host.shadowRoot?.innerHTML).toContain('viewBox="0 0 48 24"');
+    expect(host.closest(".svg-preview-frame")).toBe(q(`[data-testid=svg-prev-frame-${FOG}]`));
+    // both slots of the pair are siblings in the one shared layout
+    const thumbs = q(`[data-testid=svg-prev-frame-${FOG}]`)?.parentElement as HTMLElement;
+    expect(thumbs.className).toBe("pair-thumbs");
+    expect([...thumbs.children].map((c) => (c as HTMLElement).dataset.testid))
+      .toEqual([`svg-ai-${FOG}`, `svg-prev-frame-${FOG}`]);
+  });
+
+  it("sizes both previews by the one rule at EVERY slider value, never cropping one", async () => {
     await mount(await makeRoot());
     const panel = q(".svg") as HTMLElement;
     const box = (sel: string) => {
       const el = q(sel) as HTMLElement;
       return [el.style.width, el.style.height];
     };
-    const seen = new Set<string>();
-    for (let px = 48; px <= 240; px += 4) {
+    const seen = new Set<number>();
+    for (let px = 48; px <= 800; px += 4) {
       await type("[data-testid=svg-thumb]", String(px));
       await settle();
       const side = `${px}px`;
       expect(panel.style.getPropertyValue("--svg-thumb")).toBe(side);
       expect(q("[data-testid=svg-thumb-value]")?.textContent).toBe(`${px} px`);
-      // BOTH previews are the same square at every single step of the slider
+      // BOTH previews are sized by the one rule at every step of the slider:
+      // the square document and the square raster both come out px × px
       expect(box(`[data-testid=svg-ai-${FOG}]`)).toEqual([side, side]);
+      expect(box(`[data-testid=svg-prev-frame-${FOG}]`)).toEqual([side, side]);
       expect(box(`[data-testid=svg-prev-${FOG}]`)).toEqual([side, side]);
-      seen.add(side);
+      seen.add(px);
     }
-    // the whole documented range was really exercised: 48, 52, ... 240
-    expect(seen.size).toBe((240 - 48) / 4 + 1);
+    // the whole documented range was really exercised: 48, 52, ... 800
+    expect(seen.size).toBe((800 - 48) / 4 + 1);
   });
 
   it("puts every background behind the artwork and never into it", async () => {

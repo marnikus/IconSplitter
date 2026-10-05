@@ -9,8 +9,14 @@ import { clampImagesPerRequest } from "../lib/svgconfig";
 import { toBatchSource } from "./sources";
 import type { SvgCtx } from "./actions";
 
+/** What planning needs: the rows to split and the size the user configured. */
+export interface PlanCtx {
+  rows: SvgCtx["rows"];
+  m: Pick<SvgCtx["m"], "config">;
+}
+
 /** The one split the confirmation and the run both see (RUN-1). */
-export function planOf(c: SvgCtx, ids: string[]): BatchPlan[] {
+export function planOf(c: PlanCtx, ids: string[]): BatchPlan[] {
   const sources = c.rows.filter((r) => ids.includes(r.source.id)).map((r) => toBatchSource(r.source));
   return planBatches(sources, perRequestOf(c));
 }
@@ -19,7 +25,7 @@ export function planOf(c: SvgCtx, ids: string[]): BatchPlan[] {
  * Icons one request carries: the user's configured size, nothing else. The
  * reasoning tier changes only how long silence is tolerated (2026-10-05 D1).
  */
-export function perRequestOf(c: SvgCtx): number {
+export function perRequestOf(c: PlanCtx): number {
   return clampImagesPerRequest(c.m.config.imagesPerRequest);
 }
 

@@ -1,16 +1,16 @@
 // SvgDialogs.tsx — the overlays of the Generate SVG tab (prompt §2/§16): the
 // paginated confirmation (delegated to SvgConfirm, which owns the plan), the
 // code dialog (complete validated SVG, select-all + copy, scrollable) and the
-// version history. Escape closes any of them WITHOUT sending anything.
+// version chooser (VersionsDialog, I-54). Escape closes any of them WITHOUT
+// sending anything.
 
 import { useEffect, useRef, useState } from "react";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
-import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import SvgPreviewBox from "./SvgPreview";
 import SvgConfirm from "./SvgConfirm";
-import type { SvgVersion } from "../lib/svgfile";
+import VersionsDialog from "./VersionsDialog";
 import type { Dialog, SvgRow } from "./types";
 
 export interface SvgDialogsProps {
@@ -24,6 +24,10 @@ export interface SvgDialogsProps {
   onConfirm: () => void;
   onDismiss: () => void;
   onShowCode: (id: string, version: number) => void;
+  /** Chooses which version the row shows (I-54); resolves why it failed, or null. */
+  onUseVersion: (id: string, version: number) => Promise<string | null>;
+  /** A request is in flight, so a confirmation appends instead of starting (I-53). */
+  running: boolean;
 }
 
 export default function SvgDialogs(p: SvgDialogsProps) {
@@ -31,12 +35,13 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   if (dialog === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
-      rootRef={p.rootRef} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
+      rootRef={p.rootRef} running={p.running} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);
   if (!row) return null;
   if (dialog.kind === "code") return <CodeDialog row={row} version={dialog.version} p={p} />;
-  return <HistoryDialog row={row} p={p} />;
+  return <VersionsDialog row={row} readCode={p.readCode} onShowCode={p.onShowCode}
+    onUse={(version) => p.onUseVersion(row.source.id, version)} onDismiss={p.onDismiss} />;
 }
 
 /** Loads the version's document and owns the textarea + copy that use it. */
@@ -85,7 +90,7 @@ function CodeDialog({ row, version, p }: { row: SvgRow; version: number; p: SvgD
 function CodeDrawing({ code, stem, version }: { code: string; stem: string; version: number }) {
   return (
     <div className="svg-code-preview">
-      <SvgPreviewBox code={code} size={140} version={version} testid="svg-code-art"
+      <SvgPreviewBox code={code} box={{ width: 140, height: 140 }} version={version} testid="svg-code-art"
         label={`${stem} version ${version} preview`} />
       <span data-testid="svg-code-preview-note">What this version draws — Copy hands over this exact document.</span>
     </div>
@@ -105,57 +110,5 @@ function CodeActions({ code, ref, copy, onDone }: {
         disabled={code === null} onClick={copy}>Copy SVG code</button>
       <button type="button" className="svg-btn" data-testid="svg-code-done" onClick={onDone}>Done</button>
     </div>
-  );
-}
-
-function HistoryDialog({ row, p }: { row: SvgRow; p: SvgDialogsProps }) {
-  const versions = row.meta?.versions ?? [];
-  return (
-    <div className="svg-backdrop" data-testid="svg-history-dialog">
-      <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="svg-history-title">
-        <header className="svg-modal-head">
-          <h2 id="svg-history-title">{row.source.stem} · version history</h2>
-          <button type="button" className="svg-btn" data-testid="svg-history-close" onClick={p.onDismiss}>Close</button>
-        </header>
-        <div className="svg-modal-body">
-          {versions.length === 0
-            ? <p className="svg-note">No versions recorded yet — the pair’s file has no history, so this source is pending.</p>
-            : <VersionTable row={row} versions={versions} onShowCode={p.onShowCode} />}
-          <div className="svg-modal-actions">
-            <button type="button" className="svg-btn" data-testid="svg-history-done" onClick={p.onDismiss}>Done</button>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/** Every recorded version, failed ones included, with a code shortcut. */
-function VersionTable({ row, versions, onShowCode }: {
-  row: SvgRow; versions: SvgVersion[]; onShowCode: (id: string, version: number) => void;
-}) {
-  return (
-    <table className="svg-history" data-testid="svg-history-table">
-      <thead><tr><th>Version</th><th>Status</th><th>Review</th><th>Tokens</th><th>Cost</th><th>Saved</th><th>Code</th></tr></thead>
-      <tbody>
-        {versions.map((v) => (
-          <tr key={v.version} className={v.status === "generated" ? "" : "failed"} data-testid={`svg-history-v${v.version}`}>
-            <td>v{v.version}</td>
-            <td>{v.status === "generated" ? "generated" : v.status}{v.validation.ok ? "" : " ⚠"}</td>
-            <td>{v.review}</td>
-            <td>{fmtTokens(v.usage.total)}</td>
-            <td className="svg-history-cost" data-testid={`svg-history-cost-${v.version}`}>
-              {costLabel(v.cost)}
-              <small className="svg-cost-note">{costNote(v.model, v.cost)}</small>
-            </td>
-            <td>{v.completedAt === null ? "—" : v.completedAt.slice(0, 16).replace("T", " ")}</td>
-            <td>
-              <button type="button" className="svg-btn tiny" disabled={v.status !== "generated"}
-                onClick={() => onShowCode(row.source.id, v.version)}>Code</button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

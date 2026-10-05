@@ -13,9 +13,11 @@ import { OpenFolderButton } from "../ui/FolderBar";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
 import SvgBatchStrip from "./SvgBatchStrip";
+import SvgQueue from "./SvgQueue";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
+import { shownVersion } from "./rowmodel";
 import SvgList from "./SvgList";
 import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
@@ -38,7 +40,8 @@ export default function SvgPanel() {
       <SvgStatus g={g} />
       <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
         rootRef={rootRef} readCode={g.readCode}
-        onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode} />
+        onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode}
+        onUseVersion={g.preferVersion} running={g.running} />
       <Overlay g={g} />
     </div>
   );
@@ -72,6 +75,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
   return (
     <>
       {g.progress !== null && <SvgBatchStrip progress={g.progress} running={g.running} onCancel={g.cancelRun} />}
+      <SvgQueue queue={g.queue} onDrop={g.dropQueued} />
       <SvgBulkBar header={g.header} checkedCount={g.checked.length} requestCount={g.requests} visibleCount={g.visible.length}
         decidableCount={decidableCount(g)} thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
         progress={g.progress} running={g.running}
@@ -108,14 +112,14 @@ function countsOf(g: SvgGenApi): SvgCounts {
   return {
     eligible: rows.length,
     generated: rows.filter((r) => r.status === "generated").length,
-    approved: rows.filter((r) => r.newest?.review === "approved").length,
+    approved: rows.filter((r) => shownVersion(r)?.review === "approved").length,
     failed: rows.filter((r) => r.status === "failed").length,
   };
 }
 
 /** Selected rows that actually have a valid SVG to approve or decline. */
 function decidableCount(g: SvgGenApi): number {
-  return g.affected.filter((id) => g.rows.find((r) => r.source.id === id)?.newest != null).length;
+  return g.affected.filter((id) => { const r = g.rows.find((x) => x.source.id === id); return r !== undefined && shownVersion(r) !== null; }).length;
 }
 
 /** What the scan could not use — said out loud, and never by removing a row. */

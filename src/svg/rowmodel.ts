@@ -3,7 +3,7 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, newestValid } from "../lib/svgfile";
+import { approvedVersion, chosenVersion, newestValid, preferredVersion } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
@@ -19,13 +19,42 @@ export interface SvgTarget {
 
 export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean): SvgRow {
   const versions = meta?.versions ?? [];
-  const newest = newestValid(versions);
   const failed = versions.some((v) => v.status !== "generated");
+  const row = withMeta({
+    source, meta, corrupt, running: false, status: "not-generated", error: null,
+    newest: null, preferred: null, approved: null,
+  }, meta);
   return {
-    source, meta, corrupt, newest, approved: approvedVersion(versions), running: false,
-    status: newest ? "generated" : failed ? "failed" : "not-generated",
+    ...row,
+    status: row.newest ? "generated" : failed ? "failed" : "not-generated",
     error: versions.filter((v) => v.error).at(-1)?.error ?? null,
   };
+}
+
+/**
+ * The same row with a new pair file: everything derived from the history is
+ * re-read (newest, the chosen version, the approval), the live state the caller
+ * owns (running, generation status, error) is kept. One place, so a write can
+ * never leave the row's fields describing two different files.
+ */
+export function withMeta(row: SvgRow, meta: PairMeta | null): SvgRow {
+  const versions = meta?.versions ?? [];
+  return {
+    ...row, meta,
+    newest: newestValid(versions),
+    preferred: preferredVersion(versions, meta?.preferred ?? null),
+    approved: approvedVersion(versions),
+  };
+}
+
+/**
+ * The version the row SHOWS: the user's choice when it is usable, else the
+ * newest valid one (I-54). The preview, Copy, Code, the decision buttons, the
+ * hotkeys and the list's fields all ask this one question, so they can never
+ * disagree — and the history behind it stays complete and re-choosable.
+ */
+export function shownVersion(row: SvgRow): SvgVersion | null {
+  return chosenVersion(row.meta?.versions ?? [], row.meta?.preferred ?? null);
 }
 
 /**
@@ -34,13 +63,13 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
  * to the clipboard.
  */
 export function previewTargetOf(row: SvgRow): SvgTarget | null {
-  const version = row.newest;
+  const version = shownVersion(row);
   if (version === null || version.svgPath === "") return null;
   return { version: version.version, svgPath: version.svgPath };
 }
 
 export function toListRow(row: SvgRow): SvgListRow {
-  const v = row.newest;
+  const v = shownVersion(row);
   return {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
     generation: row.status, review: v?.review ?? "pending", ...versionFields(v),

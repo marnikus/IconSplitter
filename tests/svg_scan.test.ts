@@ -13,7 +13,9 @@ import type { SvgRefs, SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 import { serializePairMeta } from "../src/lib/pairmeta";
+import { withPreferred } from "../src/lib/pairpreferred";
 import { pairFile } from "./helpers/pairfile";
+import { svgVersion } from "./helpers/svgpair";
 
 const FOG = pairId("architecture", "fog", "");
 const COURT = pairId("architecture", "court", "");
@@ -77,7 +79,7 @@ class OneShotGate extends FakeFile {
 
 function refs(root: FakeDir): SvgRefs {
   return {
-    root: { current: root }, metas: new Map(), abort: { current: null }, key: { current: null },
+    root: { current: root }, metas: new Map(), abort: { current: null }, queue: { current: [] }, key: { current: null },
     scanKey: { current: null }, seq: { current: SCAN_IDLE },
   };
 }
@@ -295,8 +297,18 @@ describe("scanKey — what a commit would change (D7)", () => {
       expect(scanKey("other_root", discovery, rows)).not.toBe(key);
       const broken = [{ ...rows[0], status: "failed" as const }, rows[1]];
       expect(scanKey("split_root", discovery, broken)).not.toBe(key);
-      const versioned = [{ ...rows[0], newest: { version: 1, svgPath: "x.svg", status: "generated" as const, review: "pending" as const } as SvgRow["newest"] }, rows[1]];
-      expect(scanKey("split_root", discovery, versioned)).not.toBe(key);
+      // A row that gained a version shows something else: a new key.
+      const meta = pairFile("architecture", "fog_AI.png", {
+        versions: [svgVersion("architecture/fog_AI_v1.svg", { version: 1 }), svgVersion("architecture/fog_AI_v2.svg", { version: 2 })],
+        preferred: 2,
+      });
+      const versioned = [{ ...rows[0], meta }, rows[1]];
+      const versionedKey = scanKey("split_root", discovery, versioned);
+      expect(versionedKey).not.toBe(key);
+      // ...and so does the USER'S CHOICE among the versions it already has
+      // (I-54): the preference is what the panel shows, not a side note.
+      const chosen = [{ ...rows[0], meta: withPreferred(meta, 1) }, rows[1]];
+      expect(scanKey("split_root", discovery, chosen)).not.toBe(versionedKey);
     });
   });
 });

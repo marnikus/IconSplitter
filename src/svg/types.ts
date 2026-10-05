@@ -21,8 +21,10 @@ export interface SvgRow {
   meta: PairMeta | null;
   /** true when the pair file exists but could not be parsed (SVGs are kept). */
   corrupt: boolean;
-  /** Newest valid version — what the preview shows by default. */
+  /** Newest valid version — what exists in the history (I-54 never deletes it). */
   newest: SvgVersion | null;
+  /** The version the user chose (I-54), when it is still usable; else null. */
+  preferred: SvgVersion | null;
   /** The version currently carrying an approval, if any. */
   approved: SvgVersion | null;
   status: RowStatus;
@@ -53,6 +55,10 @@ export interface RunProgress {
   outcomes: BatchOutcome[];
 }
 
+import type { QueueItem } from "./runqueue";
+
+export type { QueueItem } from "./runqueue";
+
 export type Dialog =
   | { kind: "confirm"; ids: string[] }
   | { kind: "code"; id: string; version: number }
@@ -63,6 +69,12 @@ export interface SvgRefs {
   root: { current: unknown };
   metas: Map<string, PairMeta | null>;
   abort: { current: AbortController | null };
+  /**
+   * The queue in waiting order — the SYNCHRONOUS authority (I-53): a run in
+   * flight is `abort.current !== null`, and confirming while it runs appends
+   * here. `model.queue` mirrors it for rendering, one writer, no drift.
+   */
+  queue: { current: QueueItem[] };
   key: { current: string | null };
   /** The key of the committed snapshot: an unchanged scan commits nothing. */
   scanKey: { current: string | null };

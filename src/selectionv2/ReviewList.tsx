@@ -41,13 +41,15 @@ export default function ReviewList(p: ReviewListProps) {
   return (
     <section className="v2-panel" data-testid="v2-list" style={style}>
       <ListHead shown={p.rows.length} total={p.total} autoNext={p.autoNext} setAutoNext={p.setAutoNext} />
-      <div className="v2-columns" aria-hidden="true">
-        {COLUMNS.map((c) => <span key={c}>{c}</span>)}
-      </div>
-      <div className="v2-rows" role="list" aria-label="Image review pairs" data-testid="v2-rows">
-        {p.rows.length === 0
-          ? <ListEmpty total={p.total} clearFilters={p.clearFilters} />
-          : p.rows.map((row) => <ReviewRow key={row.pairId} row={row} p={p} />)}
+      <div className="pair-table">
+        <div className="v2-columns" aria-hidden="true">
+          {COLUMNS.map((c) => <span key={c}>{c}</span>)}
+        </div>
+        <div className="v2-rows" role="list" aria-label="Image review pairs" data-testid="v2-rows">
+          {p.rows.length === 0
+            ? <ListEmpty total={p.total} clearFilters={p.clearFilters} />
+            : p.rows.map((row) => <ReviewRow key={row.pairId} row={row} p={p} />)}
+        </div>
       </div>
       <footer className="v2-list-footer">
         <span data-testid="v2-footer">Showing {p.rows.length} of {p.total} pairs</span>

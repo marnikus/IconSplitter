@@ -1727,3 +1727,49 @@ Probe: `/tmp/probeenv/probe_path_capture.mjs`; screenshots
 `/home/user/path-capture-not-captured.png`,
 `/home/user/path-capture-real-clipboard.png` (sandbox-local).
 
+---
+
+## 2026-10-05 — I-53/54/55: the generation queue, the version chooser, 800 px zoom
+
+### What was verified
+
+* **Queue (I-53)** — `tests/svg_queue.test.ts` (6) pins the pure rules (append
+  order, head-gated start, shift, drop-by-id, dropAll, unique ids); the DOM suite
+  `tests/svg_queue_ui.test.tsx` (4) drives the REAL panel + scan + runner over the
+  shared fake transport: Generate stays enabled during an in-flight run, a second
+  confirmation shows `svg-confirm-queue-note` / "Add to queue" and sends
+  **nothing extra** (still exactly one request in flight), the waiting batch
+  starts **by itself** when the first answer lands (two requests, in order, both
+  SVGs written beside their sources), Cancel drops the queue and says how many,
+  and a single `× Drop` removes exactly one waiting batch.
+* **Preferred version (I-54)** — `tests/svg_versions_ui.test.tsx` (6): every
+  recorded version is listed as a tile, an OLDER version can be made preferred,
+  the choice is read back from the folder after a reload (not from memory), the
+  popup stays open and one line says what changed, a failed write claims nothing,
+  and a failed version offers no artwork. `tests/pairmeta.test.ts` +
+  `tests/pairpreferred.test.ts` pin the stored key (v stays 2, nonsense → no
+  choice) and `tests/svg_scan.test.ts` proves the CHOICE is part of what the panel
+  shows (its own scan key) — so a re-scan cannot silently undo it.
+* **Zoom (I-55)** — `tests/zoom.test.ts` (6) pins 48–800 step 4 (including
+  `clampZoom(803) → 800` and never upscaling a raster), `tests/paired_thumbs.test.tsx`
+  (8) pins the one shared layout: real px boxes per slot, label as an overlay,
+  `flex: none`, no `overflow: hidden`, and the stylesheet contract `max-content`
+  preview columns at every breakpoint (so an 800 px pair is never clipped and the
+  list scrolls instead). The tab suites then drive the real sliders: `svg_ui`
+  walks **every value 48…800 in step 4** on both previews at their own ratios,
+  and `selectionv2_ui` zooms to 800 px at each side's own ratio.
+
+### Gates (full run)
+
+`tools/pre_push_check.sh`: types ✅ · lint 0 errors (warnings under the 1000 cap) ·
+`quality.mjs --changed --allow-legacy` **PASSED** · `vitest run` **91 files / 938
+tests** ✅ · coverage ✅ · production build ✅.
+
+RULE 18 recheck — every file of this change is inside the ideals; the gate's
+`funcLoc 30 / params 4 / fileWarn 300` limits forced five honest extractions
+rather than any limit being waived: `pairmeta` → `lib/pairpreferred.ts` (the
+choice and its validation, 308 → ~300 lines), `actions.ts` → `useQueueActions`
+(the queue's own callbacks), `ThumbPair.slot` and `SvgThumbs.svgSlot` → one args
+object each (≤ 4 params), `SvgList` → `Footer`, `VersionsDialog` → `VersionList`
++ `VersionFacts`. `src/svg/runcontrol.ts` (139) holds the queue's async half so
+`runqueue.ts` (59) stays pure rules only; `actions.ts` is back to 283 lines.

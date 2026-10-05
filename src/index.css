@@ -307,12 +307,31 @@
 
 .v2-panel {
   display: grid;
-  grid-template-rows: 42px 30px 1fr 40px;
+  grid-template-rows: 42px minmax(0, 1fr) 40px;
   min-height: 0;
   border: 1px solid var(--v2-line);
   border-radius: 0 0 var(--v2-radius) var(--v2-radius);
   background: var(--v2-surface);
   overflow: hidden;
+}
+
+/* The one list scroller both tabs use (I-55): the header sticks while the rows
+   scroll vertically, and both scroll sideways together when a pair is wider
+   than the window — an 800 px zoom is honoured, never squeezed or clipped. */
+.pair-table {
+  display: grid;
+  grid-template-rows: 30px minmax(0, 1fr);
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: #313b58 #0c1222;
+}
+
+.pair-table > .v2-columns,
+.pair-table > .svg-columns {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--v2-surface);
 }
 
 .v2-head {
@@ -332,7 +351,9 @@
 .v2-columns,
 .v2-row {
   display: grid;
-  grid-template-columns: 34px minmax(230px, 0.8fr) minmax(320px, 1.35fr) 125px 125px 140px 142px 180px;
+  /* The preview column is max-content: its two boxes are sized by the zoom, so
+     the column is exactly as wide as the pair it holds (I-55). */
+  grid-template-columns: 34px max-content minmax(320px, 1fr) 125px 125px 140px 142px 180px;
   align-items: center;
   column-gap: 12px;
 }
@@ -347,7 +368,7 @@
   text-transform: uppercase;
 }
 
-.v2-rows { min-height: 0; overflow: auto; scrollbar-color: #313b58 #0c1222; }
+.v2-rows { min-height: 0; scrollbar-color: #313b58 #0c1222; }
 
 .v2-row {
   position: relative;
@@ -374,17 +395,45 @@
 
 .v2-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
-.v2-thumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.v2-thumb-wrap { position: relative; min-width: 0; display: inline-flex; }
+/* The pair layout BOTH tabs mount (I-55). Each slot has a real box — its own
+   artwork's ratio at the zoom height — so a wide pair is honestly wide and the
+   list scrolls; nothing is capped (a cap on width is clipping by another name),
+   stretched or painted over a neighbour. The label is an overlay inside the
+   slot, so it never changes the box or pushes the artwork. */
+.pair-thumbs { display: flex; align-items: flex-start; gap: 8px; }
+
+.pair-thumb {
+  position: relative;
+  flex: none;
+  display: block;
+  border-radius: 5px;
+}
+
+.pair-thumb-tag {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgb(3 7 18 / 78%);
+  color: #dbe3f5;
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.pair-thumb > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
 .v2-thumb {
-  width: auto;
-  max-width: 126px;
   border: 1px solid #35405e;
   border-radius: 5px;
   background: #05070f;
-  object-fit: contain;
-  transition: height 0.15s;
 }
 
 .v2-thumb.loading { background: #16203a; animation: v2-pulse 1.2s ease-in-out infinite; }
@@ -392,7 +441,8 @@
 .v2-thumb.missing {
   display: grid;
   place-items: center;
-  width: 96px;
+  width: 100%;
+  height: 100%;
   color: var(--v2-yellow);
   border-style: dashed;
   border-color: #5b4624;
@@ -897,7 +947,7 @@
 
 .svg-panel {
   display: grid;
-  grid-template-rows: 42px 30px 1fr 40px;
+  grid-template-rows: 42px minmax(0, 1fr) 40px;
   min-height: 0;
   border: 1px solid var(--v2-line);
   border-radius: 0 0 var(--v2-radius) var(--v2-radius);
@@ -924,10 +974,10 @@
 .svg-columns,
 .svg-row {
   display: grid;
-  /* Both preview boxes are --svg-thumb square, so the column is exactly two of
-     them plus the gap and padding: the row can never overlap the next column,
-     at any zoom value (RULE 24, invariant I-16). */
-  grid-template-columns: 34px calc(var(--svg-thumb) * 2 + 30px) minmax(280px, 1fr) 122px 118px 130px 158px 210px;
+  /* The preview column is max-content: both boxes come from the shared zoom
+     rule at the row's own ratios, so the column is exactly as wide as the pair
+     and a wider artwork can never overlap the next column (I-16, I-55). */
+  grid-template-columns: 34px max-content minmax(280px, 1fr) 122px 118px 130px 158px 210px;
   align-items: center;
   column-gap: 12px;
 }
@@ -942,7 +992,7 @@
   text-transform: uppercase;
 }
 
-.svg-rows { min-height: 0; overflow: auto; scrollbar-color: #313b58 #0c1222; }
+.svg-rows { min-height: 0; scrollbar-color: #313b58 #0c1222; }
 
 .svg-bg { display: flex; align-items: center; gap: 4px; }
 .svg-bg > label {
@@ -990,15 +1040,15 @@
 .svg-row.declined::after { background: var(--v2-red); }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
-.svg-thumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.svg-thumb-wrap { position: relative; min-width: 0; display: inline-flex; }
+.svg-preview-frame {
+  border-radius: 5px;
+  border: 1px solid #35405e;
+}
 
 .svg-thumb {
   border: 1px solid #35405e;
   border-radius: 5px;
   background: #05070f;
-  object-fit: contain;
-  transition: width 0.15s, height 0.15s;
 }
 
 /* Preview frame: the user's background colour sits BEHIND the artwork — the
@@ -1016,6 +1066,8 @@
 .svg-thumb.missing {
   display: grid;
   place-items: center;
+  width: 100%;
+  height: 100%;
   color: var(--v2-yellow);
   border-style: dashed;
   border-color: #5b4624;
@@ -1046,19 +1098,6 @@
     linear-gradient(45deg, #232b45 25%, transparent 25%, transparent 75%, #232b45 75%);
   background-size: 10px 10px;
   background-position: 0 0, 5px 5px;
-}
-
-.svg-thumb-tag {
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgb(3 7 18 / 78%);
-  color: #dbe3f5;
-  font-size: 7px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 .svg-file-main { min-width: 0; }
@@ -1312,7 +1351,10 @@
 
 @media (max-width: 1360px) {
   .svg-columns,
-  .svg-row { grid-template-columns: 32px calc(var(--svg-thumb) * 2 + 26px) minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
+  /* The preview column stays max-content even here: a width computed from
+     --svg-thumb would clip an 800 px pair (I-55) — the list scrolls instead. */
+  .svg-columns,
+  .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

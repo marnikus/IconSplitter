@@ -6,7 +6,7 @@
 // beside the images (I-41) — the legacy global file is only ever read (I-42).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { newestValid } from "../src/lib/svgfile";
+import { chosenVersion, newestValid } from "../src/lib/svgfile";
 import { metaFileName, parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
 import { saveSvgVersion, metaAfterFailure } from "../src/svg/saveversion";
 import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
@@ -14,7 +14,9 @@ import { loadMetaAt, saveMetaAt, LEGACY_FILE } from "../src/selection/pairstore"
 import { discoverApprovedSources, toBatchSource, type SvgSource } from "../src/svg/sources";
 import { SCAN_IDLE } from "../src/lib/scanseq";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
-import { headerState, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
+import { scanKey } from "../src/svg/scankey";
+import type { Discovery } from "../src/svg/sources";
+import { headerState, previewTargetOf, pruneChecked, shownVersion, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
@@ -116,7 +118,7 @@ function setters() {
 
 function refs(root: FakeDir | null = null) {
   return {
-    root: { current: root }, metas: new Map(), abort: { current: null }, key: { current: null },
+    root: { current: root }, metas: new Map(), abort: { current: null }, queue: { current: [] }, key: { current: null },
     scanKey: { current: null }, seq: { current: SCAN_IDLE },
   };
 }
@@ -430,6 +432,61 @@ describe("row model", () => {
     pruneChecked(rows);
     expect(getAppState().svg.checked).toEqual([FOG]);
     patchSvg({ checked: [] });
+  });
+});
+
+describe("the version a row shows is the user's choice (I-54)", () => {
+  const source = FOG_SRC;
+  const v1 = svgVersion("architecture/fog_AI.svg", { version: 1, usage: { input: 1, output: 2, total: 11 } });
+  const v2 = svgVersion("architecture/fog_AI_v2.svg", { version: 2, usage: { input: 1, output: 2, total: 22 } });
+  const failed3 = svgVersion("", { version: 3, status: "failed", valid: false, error: "invalid SVG" });
+  const discovery = (rows: SvgRow[]): Discovery => ({
+    sources: [], problems: [], excluded: [], unreadable: [], corruptDecisions: false,
+    metas: new Map(), corruptFiles: [],
+    audit: { files: 0, aiSources: 0, references: 0, missing: 0, duplicates: 0, rows: rows.length },
+  });
+
+  it("shows the newest valid version when nobody chose one", () => {
+    const row = toRow(source, pairMetaFor(source, [v1, v2], "approved", null), false);
+    expect(row.newest?.version).toBe(2);
+    expect(row.preferred).toBeNull();
+    expect(shownVersion(row)?.version).toBe(2);
+    expect(previewTargetOf(row)).toEqual({ version: 2, svgPath: "architecture/fog_AI_v2.svg" });
+    expect(toListRow(row)).toMatchObject({ version: 2, tokens: 22 });
+  });
+
+  it("shows the chosen version even when a newer one exists, and keeps the newer one", () => {
+    const row = toRow(source, pairMetaFor(source, [v1, v2], "approved", 1), false);
+    expect(row.newest?.version).toBe(2); // what exists is untouched...
+    expect(row.preferred?.version).toBe(1); // ...and what is SHOWN is the choice
+    expect(shownVersion(row)?.version).toBe(1);
+    expect(previewTargetOf(row)).toEqual({ version: 1, svgPath: "architecture/fog_AI.svg" });
+    expect(toListRow(row)).toMatchObject({ version: 1, tokens: 11 });
+    expect(row.meta?.versions.map((v) => v.version)).toEqual([1, 2]); // all re-choosable
+  });
+
+  it("falls back to the newest valid version when the choice cannot be shown", () => {
+    // a version number the history does not have (a file deleted by hand)
+    expect(chosenVersion([v1, v2], 9)?.version).toBe(2);
+    // a version that failed validation: its cost is recorded, its artwork is not
+    expect(chosenVersion([v1, v2, failed3], 3)?.version).toBe(2);
+    const row = toRow(source, pairMetaFor(source, [v1, v2, failed3], "approved", 3), false);
+    expect(row.preferred).toBeNull();
+    expect(shownVersion(row)?.version).toBe(2);
+    expect(toListRow(row).version).toBe(2);
+  });
+
+  it("always answers with a usable version or nothing at all", () => {
+    expect(chosenVersion([], 1)).toBeNull();
+    expect(chosenVersion([failed3], 3)).toBeNull();
+    expect(chosenVersion([failed3], null)).toBeNull();
+  });
+
+  it("re-commits the snapshot when the choice changes (D7)", () => {
+    const one = toRow(source, pairMetaFor(source, [v1, v2], "approved", 1), false);
+    const two = toRow(source, pairMetaFor(source, [v1, v2], "approved", 2), false);
+    const d = discovery([one]);
+    expect(scanKey("split_root", d, [one])).not.toBe(scanKey("split_root", d, [two]));
   });
 });
 

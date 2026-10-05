@@ -1,10 +1,10 @@
 // prefsstore.ts — Generate SVG view prefs (thumbnail zoom, preview background,
 // whether the provider card is minimized), persisted locally. The zoom range
-// and clamping stay in lib/reviewprefs so the SVG tab and the Selection V2 tab
+// and clamping stay in lib/zoom so the SVG tab and the Selection V2 tab
 // share ONE definition of "thumbnail height" (RULE 10); the background payload
 // is validated by lib/svgbackground.
 
-import { clampThumb, THUMB_DEFAULT } from "../lib/reviewprefs";
+import { clampZoom, ZOOM_DEFAULT } from "../lib/zoom";
 import { DEFAULT_PREVIEW_BACKGROUND, parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { readKey, writeKey } from "../state/safestorage";
 import { isRecord } from "../lib/isrecord";
@@ -19,13 +19,13 @@ export interface SvgPrefs {
 }
 
 export const DEFAULT_SVG_PREFS: SvgPrefs = {
-  thumbHeight: THUMB_DEFAULT, providerOpen: true, previewBg: DEFAULT_PREVIEW_BACKGROUND,
+  thumbHeight: ZOOM_DEFAULT, providerOpen: true, previewBg: DEFAULT_PREVIEW_BACKGROUND,
 };
 
 export function parseSvgPrefs(raw: unknown): SvgPrefs {
   if (!isRecord(raw)) return DEFAULT_SVG_PREFS;
   return {
-    thumbHeight: clampThumb(Number(raw.thumbHeight ?? THUMB_DEFAULT)),
+    thumbHeight: clampZoom(Number(raw.thumbHeight ?? ZOOM_DEFAULT)),
     // Anything that is not an explicit false keeps the card open.
     providerOpen: raw.providerOpen !== false,
     previewBg: parsePreviewBackground(raw.previewBg),

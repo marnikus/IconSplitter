@@ -7,6 +7,7 @@
 // transition rules only (RULE 1/3).
 
 import { isRecord } from "./isrecord";
+import { readPreferred } from "./pairpreferred";
 import { parseAiName } from "./naming";
 import { pairId } from "./pairing";
 import type { Decision } from "./reviewfilter";
@@ -47,6 +48,13 @@ export interface PairMeta extends PairIdentity {
   decision: Decision | null;
   reviewedAt: string | null;
   versions: SvgVersion[];
+  /**
+   * The version the user chose to show (I-54) — an ADDITIVE field, so `v` stays
+   * 2: a build that predates it ignores the key, and a file without the key
+   * means "nobody chose" (the newest valid version is shown). Never a delete
+   * switch — the history under `versions` is what makes every choice re-choosable.
+   */
+  preferred: number | null;
 }
 
 export type MetaParse = { ok: true; meta: PairMeta } | { ok: false };
@@ -57,7 +65,7 @@ export interface NewMetaArgs extends PairIdentity {
 }
 
 export function newPairMeta(args: NewMetaArgs): PairMeta {
-  return { v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null, versions: [] };
+  return { v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null, versions: [], preferred: null };
 }
 
 /** `<AI stem>.svg.json` — the name that has always lived beside the AI image. */
@@ -193,6 +201,9 @@ function toJson(meta: PairMeta): Record<string, unknown> {
     source: meta.source,
     decision: meta.decision,
     reviewedAt: meta.reviewedAt,
+    // Written even when null: the key's presence documents the choice, and a
+    // reader that predates it ignores an unknown key (I-54, no version bump).
+    preferred: meta.preferred,
     versions: meta.versions,
   };
 }
@@ -229,6 +240,7 @@ function readV2(raw: Record<string, unknown>): MetaParse {
       source: isRecord(raw.source) ? toSide(raw.source) : null,
       decision: toDecision(raw.decision),
       reviewedAt: nullableStr(raw.reviewedAt),
+      preferred: readPreferred(raw.preferred),
       versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
     },
   };
@@ -246,7 +258,7 @@ export function pairMetaFromLegacy(raw: Record<string, unknown>): MetaParse {
       v: PAIR_META_VERSION,
       id: pairId(dirPath, named.base, named.suffix),
       ...named, dirPath,
-      ai, source: null, decision: null, reviewedAt: null,
+      ai, source: null, decision: null, reviewedAt: null, preferred: null,
       versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
     },
   };

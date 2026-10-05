@@ -4,13 +4,14 @@
 // root token, no preview reload, no lost row state. Pure and order-aware, so
 // two scans of the same unchanged folder cannot produce two different keys.
 
+import { shownVersion } from "./rowmodel";
 import type { Discovery } from "./sources";
 import type { ScanAudit } from "./sourcelist";
 import type { SvgRow } from "./types";
 
 /** One row: which file, which problems, which pair-file versions, which status. */
 function rowKey(row: SvgRow): string {
-  const v = row.newest;
+  const v = shownVersion(row); // the choice is part of what the panel shows (I-54)
   return [
     row.source.id, row.source.relPath, row.source.fingerprint,
     row.source.problems.map((p) => p.kind).join("+"),

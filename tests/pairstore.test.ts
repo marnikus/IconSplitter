@@ -10,7 +10,7 @@ import { readDirTree } from "../src/lib/fs";
 import {
   metaPathFor, newPairMeta, serializePairMeta, withDecision, type PairMeta,
 } from "../src/lib/pairmeta";
-import { loadPairDecisions, savePairDecision } from "../src/selection/pairstore";
+import { loadMetaAt, loadPairDecisions, savePairDecision } from "../src/selection/pairstore";
 import { metaPathOf } from "../src/selection/pairrecord";
 import { FakeDir, FakeFile, BrokenFile } from "./helpers/fakefs";
 
@@ -204,6 +204,19 @@ describe("writing one pair's file", () => {
     const dir = root.children.get("split_01") as FakeDir;
     expect([...dir.children.keys()].filter((n) => n.includes("tmp"))).toEqual([]);
     expect(JSON.parse((dir.children.get("icon_AI_01.svg.json") as FakeFile).text).versions).toHaveLength(1);
+  });
+
+  it("carries a chosen version through the store, beside the images (I-54)", async () => {
+    const root = makeRoot();
+    const pair = pairEntries(await walk(root)).find((p) => p.pairId === PIECE)!;
+    const chosen = { ...pieceMeta("approved"), preferred: 1 };
+    await savePairDecision(root, pair, chosen);
+    const back = await loadMetaAt(root, "split_01/icon_AI_01.svg.json");
+    expect(back.meta?.preferred).toBe(1);
+    // the file itself carries the choice, and it still parses as v2
+    const file = (root.children.get("split_01") as FakeDir).children.get("icon_AI_01.svg.json") as FakeFile;
+    expect((JSON.parse(file.text) as { v: number }).v).toBe(2);
+    expect((JSON.parse(file.text) as { preferred: number }).preferred).toBe(1);
   });
 
   it("throws when the file cannot be written, so the caller keeps the decision", async () => {
