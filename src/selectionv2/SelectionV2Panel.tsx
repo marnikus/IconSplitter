@@ -28,9 +28,8 @@ export default function SelectionV2Panel() {
   return (
     <div className="v2" data-testid="v2-panel">
       <section className="v2-controls" aria-label="Review controls">
-        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode} watcher={v.core.s.watcher}
-          chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode}
-          toggleWatcher={() => v.core.patch({ watcher: !v.core.s.watcher })} />
+        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode}
+          chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode} />
         {v.core.s.rootName !== "" && (
           <FilterGrid filter={v.core.s.filter} sort={v.core.s.sort} shown={v.core.visible.length}
             setFilter={v.core.setFilter} setSort={v.core.setSort} />
@@ -58,7 +57,7 @@ function Banners({ v }: { v: SelectionV2Api }) {
 }
 
 function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
-  if (v.core.s.rootName === "") return <PickRootNote onPick={v.core.chooseRoot} />;
+  if (v.core.s.rootName === "") return <PickRootNote />;
   if (v.prefs.mode === "compare") return <CompareBody v={v} />;
   return (
     <div className="v2-workspace">
@@ -117,11 +116,12 @@ function pickerLabel(r: ViewPair): string {
   return warn ? `${r.base} — ${warn}` : `${r.base} — ${r.decision}`;
 }
 
-function PickRootNote({ onPick }: { onPick: () => void }) {
+/** The empty state points at the ONE picker above it — never a second button. */
+function PickRootNote() {
   return (
     <section className="v2-panel v2-center" data-testid="v2-root-empty">
       <p>Pick the folder that holds your originals and <code>_AI</code> results.</p>
-      <button type="button" className="v2-btn primary" onClick={onPick}>Choose source folder…</button>
+      <p>Press <strong>Open folder</strong> above and choose it.</p>
     </section>
   );
 }

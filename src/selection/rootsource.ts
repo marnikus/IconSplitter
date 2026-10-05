@@ -3,7 +3,7 @@
 // inside the RULE 18 size budget (it grew with the pick-time path capture).
 // Owns: the remembered handle at boot, the picker every tab goes through
 // (I-35: the picked folder's real path is captured from the clipboard), and the
-// ticket-guarded rescan (a stale scan never commits).
+// ticket-guarded rescan (a stale scan never commits, and only Rescan starts one).
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
@@ -31,7 +31,7 @@ export interface Ctx {
   root: { current: DirHandleLike | null };
   state: { current: SelState };
   hist: HistoryApi;
-  /** Which rescan may commit (see lib/scanseq) — the watcher can overlap one. */
+  /** Which rescan may commit (see lib/scanseq) — a second Rescan can overlap one. */
   seq: { current: ScanSeq };
 }
 
@@ -54,7 +54,6 @@ export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void
   });
   if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
   await rescan(ctx, setS, say);
-  if (picked.message !== null) say(picked.message);
 }
 
 export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
@@ -153,8 +152,8 @@ function reportReads(load: PairLoad, say: Say): void {
 }
 
 /**
- * Says the scope once per change — never on every watcher tick, so a 30 s
- * rescan stays quiet while a fresh pick explains why the list is short (I-40).
+ * Says the scope once per change — a plain rescan of the same tree stays quiet,
+ * while a fresh pick explains why the list is short (I-40).
  */
 function announce(before: ScanScope, scope: ScanScope, say: Say): void {
   if (before.split === scope.split && before.outside === scope.outside) return;

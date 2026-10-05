@@ -1473,3 +1473,80 @@ change (the notes reuse the existing warn tone).
 Probe script: `/tmp/probe_pair.mjs` (sandbox-local; the recipe — OPFS
 subdirectory as the picked root, `showDirectoryPicker` overridden in the page —
 is the one from the earlier probes).
+
+## 2026-10-05 — the folder control of Selection V2 + Generate SVG: one green button, one read-only path row
+
+Reported: *"Folder control is unclear and displays the folder name as the button.
+Obsolete Watcher and copied-path controls add noise. Full selected path is not
+presented clearly."* Design of record:
+`docs/archive/2026-10-05-folder-ui/design.md` (D1–D9; the four shape questions
+were answered by the reporter before coding: Watcher out **everywhere**, no row
+while the path is unknown, an exact leaf match only, capture kept). What changed:
+
+* **One control per tab** (I-30): a green `Open folder` button
+  (`v2-open-folder` / `svg-open-folder`) with hover/active/focus-visible states;
+  the name-as-label pills (`v2-root`, `svg-root`), the second `Change folder…`
+  button and the duplicate button in both empty states are gone.
+* **One read-only row** (I-36): `v2-root-path` / `svg-root-path` — a full-width
+  `<p>` directly below the controls, plain text, `title` = the whole path,
+  wrapping instead of truncating, rendered only while a path is known.
+* **Copied-path UI removed** (D2/D4): `ui/RootPathField.tsx` deleted with its
+  field, its status sentences, `Use copied path` and its CSS; `PathHow`,
+  `RootPathInfo`, `saveRootPathInfo` and the manual `saveRootPath` are gone;
+  `pathFromCopied` adopts a copied path only when its **leaf is exactly** the
+  picked folder's name (a parent is refused, never completed).
+* **Watcher removed everywhere** (D6): `SelState.watcher`, `WATCH_MS`,
+  `useWatcher`, `sel-watcher` and `v2-watcher`; Rescan is the only scan trigger.
+* **Rescan unchanged** (D7) in both tabs, and the pick-time clipboard capture is
+  kept but silent (`pickMessage` deleted; the row is the report).
+
+### Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing: `App.tsx`, `lib/detect.ts`) |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED (16 changed files) |
+| 4/6 Tests | **83 files / 831 tests, all green** (was 82 / 827) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 96.68 statements · 91.09 branches · 96.31 functions · 98.03 lines |
+| 6/6 Build | `dist/index.html` 651.04 kB / 192.70 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/ui/FolderBar.tsx` | 2 / 30 | **new, shared**: `OpenFolderButton` (the green action) + `RootPathRow` (`null` while unknown) |
+| `src/ui/pickroot.ts` | 2 / 42 | returns the handle; `pickMessage`/`capturedPath` deleted — nothing is announced, the row states the capture |
+| `src/ui/userootpath.ts` | 1 / 14 | `useRootPath(name): string`; `useRootLabel` deleted |
+| `src/lib/rootpath.ts` | 23 / 197 (was 28 / 247) | exact-leaf `pathFromCopied`, `saveRootPath` as the only writer, legacy payloads still read; `PathHow`/`RootPathInfo`/`saveRootPathInfo`/`looksLikeFile` deleted |
+| `src/lib/clipboardpath.ts` | 2 / 34 (was 4 / 55) | `adoptCopiedText` returns the stored path or `""`; `adoptCopiedPath` deleted |
+| `src/selectionv2/SourceBar.tsx` | 6 / 76 | green button + Rescan + scope chip, the path row below; watcher/pill/field props gone |
+| `src/svg/SourceLine.tsx` | 3 / 67 | the same button and row for Generate SVG; `PickButton`/pill deleted |
+| `src/selection/useSelection.ts` | 53 / 248 (was 54 / 262) | `useWatcher` + `WATCH_MS` deleted |
+| `src/selection/state.ts` | 36 / 240 | `SelState.watcher` deleted |
+| `src/selection/HeaderRow.tsx` | 4 / 64 | watcher pill + its `patch` prop deleted |
+| `src/selectionv2/SelectionV2Panel.tsx`, `src/svg/SvgPanel.tsx` | 27 / 153 · 34 / 261 | empty states point at the ONE picker; no second button |
+| `src/svg/actions.ts`, `src/batch/useBatch.ts`, `src/selection/rootsource.ts` | 39 / 286 · 76 / 278 · 19 / 170 | pickers return the handle; no path message is said any more |
+| `src/index.css` | 1370 (was 1393) | `.folder-open` (+ `:hover`/`:active`/`:focus-visible`), `.folder-path`; `.pathfield*`, `.v2-path-pill`, `.svg-path-pill` deleted |
+| `src/ui/RootPathField.tsx` | **deleted** (88 lines) | the field, `Use copied path` and the status sentences |
+
+Baseline: **untouched** (no `--write-baseline` run; nothing moved above a
+threshold). New debt accepted: none.
+
+### Verification (no browser probe this time — stated, not skipped silently)
+
+The sandbox this change was made in has **no Chromium, Puppeteer or Playwright**
+(`which chromium`, `~/.cache/ms-playwright` and both packages absent), so the
+usual headless probe could not run. What was verified instead:
+
+| Lane | Result |
+|---|---|
+| DOM-level suites (happy-dom, the real panels, RULE 8) | `folderbar` (6 tests: the button is a real `<button>` labelled `Open folder` that fires, its `.folder-open` hover/active/focus rules exist, the row is text with no `input`/`button`, hidden for `""`) plus the updated `selectionv2_ui` (row under the controls, hidden while unknown, no `v2-watcher`/`v2-root-path-use`/`v2-root`) and `svg_ui` (row survives a restart, a copied parent is refused) — 61 tests green |
+| Lib suites | `rootpath` (27), `clipboardpath` (7), `pickroot` (9), `copypath` (3) — all green |
+| Live preview | the dev server is handed to the user as a live preview; folder picking needs a top-level Chrome/Edge window (the File System Access API refuses cross-origin iframes), so the picking flow itself must be confirmed in the user's own browser |
+
+The one behaviour this cannot prove in-sandbox — `showDirectoryPicker()`
+returning a real folder and the clipboard read succeeding during that click's
+user activation — is exactly what the user's own browser confirms on the first
+pick; the unit tests pin the capture protocol around it (pre-read → pick →
+conditional re-read, nothing stored on cancel).

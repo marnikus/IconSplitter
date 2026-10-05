@@ -178,10 +178,18 @@ so a folder keeps its approvals when it is renamed, moved or opened on its own.
 An older `review-decisions.json` at the root is still **read** as a fallback for
 pairs that have no file of their own, and is never written again.
 
-1. **Choose source folder** (or **↻ Rescan**) — the folder is walked
+1. **Open folder** (or **↻ Rescan**) — the folder is walked
    recursively; every `name.ext` is paired with its `name_AI.ext`. Files
    without a partner stay visible as **AI result missing** / **Original
-   missing** instead of disappearing.
+   missing** instead of disappearing. **Rescan** re-walks the same folder when
+   files were added or removed; nothing is scanned on a timer.
+   *Seeing the complete folder path:* a browser is told only the folder's
+   **name**, never the drive above it, so the app reads the path from the
+   clipboard at the moment you open the folder. Copy the folder in Explorer
+   first (**Ctrl+Shift+C**, or right-click → *Copy as path*) and its full path
+   appears in the read-only row under the controls; the same button and row are
+   in the **Generate SVG** tab, and both tabs share one remembered path per
+   folder name. With nothing copied, no row is shown and nothing is guessed.
 2. **Zoom** — drag the `ZOOM` slider to set the maximum thumbnail height in
    pixels (48–240, default 84). Row height and both thumbnails resize while
    you drag, the aspect ratio is preserved, and the value is remembered the

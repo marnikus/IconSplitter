@@ -162,8 +162,7 @@ Header + status:
 | Test id | Element | Notes |
 |---|---|---|
 | `sel-root` | root picker button | label mirrors state (`Root: {name}`), RULE 24 |
-| `sel-rescan` | `↺ Rescan` | re-walks the root |
-| `sel-watcher` | watcher pill | toggles the 30 s auto-rescan |
+| `sel-rescan` | `↺ Rescan` | re-walks the root; the ONE scan control (the watcher pill is gone — no auto-rescan anywhere) |
 | `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
 | `sel-help` | `?` popover | keyboard reference |
@@ -199,9 +198,9 @@ Source bar + layout switch:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `v2-root` | path pill button | shows the root name, opens the picker; label mirrors state (RULE 24) |
-| `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
-| `v2-watcher` | watcher pill | toggles the 30 s auto-rescan |
+| `v2-open-folder` | **green `Open folder` button** | the ONE picker control of this tab (I-30); label is never the folder's name (shared `ui/FolderBar`, design 2026-10-05-folder-ui) |
+| `v2-root-path` | read-only `<p>` row below the toolbar | the picked folder's **complete path**, captured from the clipboard when the folder is opened (I-35) and remembered per folder name (I-29); rendered only while a path is known — no field, no button, nothing to copy or press |
+| `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom; unchanged by the folder-UI change |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
 
@@ -235,8 +234,7 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 | `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers | each carries an `Original` / `AI result` tag; missing side or decode failure → `role="img"` placeholder with an aria-label |
 | `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
 | `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
-| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
-| `v2-root-path` | `Full path for copies` field | the shared `ui/RootPathField`, same memory as the Generate SVG tab's field (§Q); `v2-root-path-note` marks it unset |
+| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the captured full path when one is remembered (I-28; the folder control is shared, `ui/FolderBar`) |
 | `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
 | `v2-autonext` | checkbox | advance to the next pending after a decision |
 | `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
@@ -332,10 +330,9 @@ Source bar (only after a root is remembered; `svg-root-empty` /
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-root` | path pill | the root's label: its **full path** once one was captured (I-36), else the folder name |
-| `svg-choose-root` | `Choose source folder…` / `Change folder…` | the picker, offered whether or not a root is loaded (I-30) |
-| `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so it is captured from the clipboard when the folder is picked (I-35) or pasted here; normalised and remembered per folder name (I-29). `svg-root-path-label` is the label; `svg-root-path-use` is `Use copied path` (adopt what Explorer copied, no typing); `svg-root-path-note` names the state: "✓ every copy uses this path" / "completed from the copied folder — check it" / "not set — Chrome can't read the drive path; copy the folder in Explorer, then press “Use copied path”", or the button's own feedback ("Nothing path-like on the clipboard…") |
-| `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
+| `svg-open-folder` | **green `Open folder` button** | the ONE picker control of this tab (I-30), offered whether or not a root is loaded; label is never the folder's name (shared `ui/FolderBar`) |
+| `svg-root-path` | read-only `<p>` row below the toolbar | the picked folder's **complete path** — a browser cannot read the drive, so it is captured from the clipboard when the folder is opened (I-35) and remembered per folder name (I-29); rendered only while a path is known, as plain text (no field, no `Use copied path`, no status sentence) |
+| `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt; unchanged by the folder-UI change |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |
 | `svg-count-{eligible,generated,approved,failed}` | counter chips | live counts |

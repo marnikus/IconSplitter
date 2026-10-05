@@ -20,6 +20,7 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 | `archive/2026-10-01-selection-review/design.md` | Selection V1: pairing model, atomic decision protocol, hotkeys, a11y |
 | `archive/2026-10-01-selection-v2/design.md` | Selection V2: template-driven list review, zoom, selection vs decision state, bulk scope |
 | `archive/2026-10-01-generate-svg/design.md` | Generate SVG: approved-only discovery, contact-sheet batching, validation, pair-file versioning |
+| `archive/2026-10-05-folder-ui/design.md` | Selection V2 + Generate SVG folder UI: the green **Open folder** button and the read-only full-path row that replace the name-as-button pill and the paste field, the Watcher's removal (state, 30 s timer and both pills), the exact-leaf-only path adoption, and Rescan left unchanged (D1–D9) |
 | `archive/2026-10-05-per-pair-metadata/design.md` | one JSON per pair: the pair's approval + its SVG history in the folder that holds the images; the read-only legacy fallback (I-41…I-43) |
 | `archive/2026-10-01-svg-batches-limits-preview/design.md` | Generate SVG fixes: one request per batch with a paginated confirmation, reasoning-tier caps + timeout floors, per-request outcomes, one zoom value, layout-only preview stylesheet |
 | `archive/2026-10-01-svg-preview-cost/design.md` | SVG preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |

@@ -76,7 +76,6 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     const picked = await pickFolderFor((h) => { ctx.root.current = h; });
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     await scan(ctx, setS, say);
-    if (picked.message !== null) say(picked.message);
   }, [ctx, setS, say]);
 
   // The destination is not a scan root: no copy action names it, so its path is

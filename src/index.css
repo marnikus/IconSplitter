@@ -144,19 +144,38 @@
 .v2-toolbar-right { gap: 14px; flex-wrap: wrap; }
 .v2-summary { gap: 8px; flex-wrap: wrap; }
 
-.v2-path-pill {
-  min-width: 220px;
-  max-width: 380px;
+/* The shared folder control (Selection V2 + Generate SVG): ONE green button and
+   the picked folder's full path as read-only text in its own full-width row
+   (design 2026-10-05-folder-ui). */
+.folder-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 8px 14px;
+  border: 1px solid #1fae72;
+  border-radius: 6px;
+  background: #159361;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.folder-open:hover { background: #1ab274; border-color: #2ac384; }
+.folder-open:active { background: #0f7a4f; border-color: #0d6642; }
+.folder-open:focus-visible { outline: 2px solid #7ff0c0; outline-offset: 2px; }
+
+.folder-path {
+  width: 100%;
   padding: 8px 11px;
   border: 1px solid var(--v2-line);
   border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #b7c1d9;
+  background: #090f1d;
+  color: #c6cee2;
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
+.v2-toolbar + .folder-path { margin-top: 10px; }
 
 .v2-recursive { color: var(--v2-muted); font-size: 11px; }
 
@@ -573,50 +592,8 @@
 .svg-source { display: flex; align-items: center; gap: 9px; min-width: 0; flex-wrap: wrap; }
 .svg-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.svg-path-pill {
-  min-width: 220px;
-  max-width: 380px;
-  padding: 8px 11px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #b7c1d9;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .svg-recursive { color: var(--v2-muted); font-size: 11px; }
 .svg-audit { color: var(--v2-muted); font-size: 10px; }
-
-/* The root's real full path, pasted once (the browser only knows its name). */
-.pathfield { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.pathfield > span { color: var(--v2-muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
-.pathfield > input {
-  min-width: 260px;
-  max-width: 460px;
-  padding: 7px 9px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: #090f1d;
-  color: #c6cee2;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.pathfield > em { color: var(--v2-muted); font-size: 10px; font-style: normal; }
-.pathfield > em.ok { color: #7fbf9a; }
-.pathfield > em.warn { color: #d8b26a; }
-.pathfield-use {
-  padding: 7px 9px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #c6cee2;
-  font-size: 10px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.pathfield-use:hover { background: #16203a; }
 
 .svg-chip {
   display: inline-flex;

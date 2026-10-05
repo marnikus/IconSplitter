@@ -61,7 +61,7 @@ function Controls({ g }: { g: SvgGenApi }) {
 
 /** Everything that only exists once a root is picked. */
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
-  if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
+  if (g.rootName === "") return <PickRoot />;
   const actions: SvgRowActions = {
     activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootToken: g.rootToken, bg: g.bg, rootRef,
     toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
@@ -240,11 +240,12 @@ function SvgStatus({ g }: { g: SvgGenApi }) {
   );
 }
 
-function PickRoot({ onPick }: { onPick: () => void }) {
+/** The empty state points at the ONE picker above it — never a second button. */
+function PickRoot() {
   return (
     <section className="svg-panel svg-center" data-testid="svg-root-empty">
       <p>Pick the folder that holds your originals, <code>_AI</code> results and <code>review-decisions.json</code>.</p>
-      <button type="button" className="svg-btn primary" onClick={onPick}>Choose source folder…</button>
+      <p>Press <strong>Open folder</strong> above and choose it.</p>
     </section>
   );
 }

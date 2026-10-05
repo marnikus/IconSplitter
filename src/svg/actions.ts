@@ -127,10 +127,10 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
         void rememberRoot(h);
       });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
-      const captured = picked.message === null ? "" : " · full path captured";
-      log({ feature: "svg", action: "root-picked", detail: picked.handle.name + captured });
+      // the capture itself is silent; the tab's path row states what it got (I-36)
+      log({ feature: "svg", action: "root-picked", detail: picked.name });
       await scanSources(c.refs, c);
-      c.say(picked.message ?? `Approved sources scanned from ${picked.handle.name}`);
+      c.say(`Approved sources scanned from ${picked.name}`);
     })();
   }, []);
   const rescan = useCallback(() => {

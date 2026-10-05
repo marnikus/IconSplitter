@@ -6,7 +6,7 @@
 // gains a review-decisions.json (I-42).
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { LEGACY_FILE } from "../src/selection/pairstore";
@@ -74,6 +74,12 @@ describe("Selection V2 panel", () => {
     await dropDb();
   });
 
+  // A stubbed clipboard must not leak: a later test's pick would capture a path
+  // it never asked for (the row would then show when it should not).
+  afterEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+  });
+
   it("lists only the batch's split output, and says why the list is short", async () => {
     const { el } = await mount(makeBatchRoot());
     // the split piece is a row; the unsplit sheet the batch was given is not
@@ -110,14 +116,16 @@ describe("Selection V2 panel", () => {
     expect((q(el, `[data-testid='v2-open-ai-${DUNES}']`) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("copies the FOLDER of the pasted full path from a row's open button", async () => {
+  it("copies the FOLDER of the path captured at pick time from a row's open button", async () => {
     const written: string[] = [];
     Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: async (t: string) => { written.push(t); } }, configurable: true,
+      value: {
+        readText: async () => `"F:\\Stocks 2026\\icons\\split_root\\"`,
+        writeText: async (t: string) => { written.push(t); },
+      },
+      configurable: true,
     });
-    const { el } = await mount(makeRoot());
-    // The browser cannot read the drive, so the user pastes the path once here.
-    await type(el, "[data-testid='v2-root-path']", `"F:\\Stocks 2026\\icons\\split_root\\`);
+    const { el } = await mount(makeRoot()); // the pick captures the path (I-35)
     const row = rows(el)[0];
     const pair = row.getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
     await click(q(el, `[data-testid='v2-open-ai-${pair}']`) as HTMLElement);
@@ -126,22 +134,32 @@ describe("Selection V2 panel", () => {
     expect(text(el, "[data-testid='v2-toast']")).toContain("Folder path copied");
   });
 
-  it("keeps the picked root name when the scan commits in the same batch", async () => {
+  it("keeps the picked root when the scan commits in the same batch", async () => {
     const { el } = await mount(makeRoot());
     // The scan commit is built from a state snapshot; a snapshot taken before
-    // the pick used to win and the pill fell back to "Choose source folder…".
-    expect(text(el, "[data-testid='v2-root']")).toBe("split_root");
+    // the pick used to win and the panel fell back to "no folder picked yet".
+    expect(q(el, "[data-testid='v2-root-empty']")).toBeNull();
     expect(rows(el).length).toBeGreaterThan(0);
   });
 
-  it("shows the full path in the pill once it is captured, without a reload", async () => {
-    const { el } = await mount(makeRoot());
-    const before = rows(el).length;
+  it("shows the captured full path in a read-only row below the controls", async () => {
     stubClipboard("F:\\Stocks 2026\\icons\\split_root\\");
-    await click(q(el, "[data-testid='v2-root-path-use']")!);
-    expect(text(el, "[data-testid='v2-root']")).toBe("F:\\Stocks 2026\\icons\\split_root");
-    expect(input(el, "[data-testid='v2-root-path']").value).toBe("F:\\Stocks 2026\\icons\\split_root");
-    expect(rows(el).length).toBe(before); // the list is untouched by a path capture
+    const { el } = await mount(makeRoot());
+    const row = q(el, "[data-testid='v2-root-path']")!;
+    expect(row.tagName).toBe("P"); // text, not a field
+    expect(row.textContent).toBe("F:\\Stocks 2026\\icons\\split_root");
+    expect(row.getAttribute("title")).toBe("F:\\Stocks 2026\\icons\\split_root");
+    expect(row.querySelector("input, button")).toBeNull();
+    // the row is the source bar's next sibling — full width, under the controls
+    expect(q(el, "[data-testid='v2-open-folder']")?.parentElement?.parentElement?.nextElementSibling).toBe(row);
+  });
+
+  it("hides the row while the full path is unknown, and carries no copied-path or watcher controls", async () => {
+    const { el } = await mount(makeRoot()); // nothing on the clipboard this time
+    expect(q(el, "[data-testid='v2-root-path']")).toBeNull();
+    for (const gone of ["v2-root-path-use", "v2-root-path-note", "v2-watcher", "v2-root"]) {
+      expect(q(el, `[data-testid='${gone}']`)).toBeNull();
+    }
   });
 
   it("loads both sides of a pair as real object-URL thumbnails", async () => {
@@ -417,16 +435,12 @@ async function mount(root: FakeDir): Promise<{ el: HTMLElement; ui: Root }> {
   document.body.appendChild(el);
   const ui = createRoot(el);
   await act(async () => { ui.render(<HistoryProvider><PrefsHost><SelectionV2Panel /></PrefsHost></HistoryProvider>); });
-  await click(q(el, "[data-testid='v2-root']")!);
+  await click(q(el, "[data-testid='v2-open-folder']")!);
   return { el, ui };
 }
 
 function q(el: HTMLElement, sel: string): HTMLElement | null {
   return el.querySelector(sel);
-}
-
-function input(el: HTMLElement, sel: string): HTMLInputElement {
-  return q(el, sel) as HTMLInputElement;
 }
 
 function stubClipboard(value: string): void {
@@ -441,16 +455,6 @@ function rows(el: HTMLElement): Element[] {
 
 function text(el: HTMLElement, sel: string): string {
   return q(el, sel)?.textContent ?? "";
-}
-
-/** React tracks input values, so the native setter must be used to change one. */
-async function type(el: HTMLElement, sel: string, value: string): Promise<void> {
-  await act(async () => {
-    const node = q(el, sel) as HTMLInputElement;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(node, value);
-    node.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await settle();
 }
 
 async function click(node: HTMLElement): Promise<void> {

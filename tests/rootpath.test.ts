@@ -1,6 +1,6 @@
 // rootpath.test.ts — RULE 2/9/13: the copy gives a FOLDER, as the picked
-// folder's real path with backslashes, and the full path is a value the user
-// supplies once (the browser only ever knows the folder's name). The example
+// folder's real path with backslashes, and the full path is captured when the
+// folder is picked (the browser only ever knows the folder's name). The example
 // the user gave drives the batch rule: a file deep inside a run's output tree
 // copies the run's folder, because that is the one a human opens in Explorer.
 import { beforeEach, describe, expect, it } from "vitest";
@@ -9,14 +9,12 @@ import {
   folderCopyText,
   isFolderPathText,
   loadRootPath,
-  loadRootPathInfo,
   normalizeRootPath,
   pathFromCopied,
   pathLeaf,
   rememberedRootPath,
   rootPathRevision,
   saveRootPath,
-  saveRootPathInfo,
   subscribeRootPaths,
 } from "../src/lib/rootpath";
 
@@ -63,13 +61,15 @@ describe("the remembered full path", () => {
     expect(rememberedRootPath(ROOT)).toBe(ROOT);
   });
 
-  it("remembers each folder separately and forgets a cleared one", () => {
+  it("remembers each folder separately, and refuses to forget one with junk", () => {
     saveRootPath("a", "F:\\one");
     saveRootPath("b", "D:\\two");
     expect(rememberedRootPath("a")).toBe("F:\\one");
     expect(rememberedRootPath("b")).toBe("D:\\two");
-    saveRootPath("a", "");
-    expect(loadRootPath("a")).toBe("");
+    // the path row has no field to clear it with, so nothing may clear it by
+    // accident either — an empty value is a refusal, not a delete
+    expect(saveRootPath("a", "")).toBe(false);
+    expect(loadRootPath("a")).toBe("F:\\one");
   });
 
   it("treats a corrupt or hand-edited payload as no memory (RULE 13)", () => {
@@ -114,7 +114,7 @@ describe("folderCopyText", () => {
     expect(text.endsWith("icon-airplane-landing")).toBe(false);
   });
 
-  it("falls back to the folder's own name when no full path was pasted", () => {
+  it("falls back to the folder's own name when no full path was captured", () => {
     expect(folderCopyText(ROOT, "Category-A/icon_AI.png")).toBe(`${ROOT}\\Category-A`);
     expect(folderCopyText(ROOT, "_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
       .toBe(`${ROOT}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
@@ -137,54 +137,48 @@ describe("pathLeaf", () => {
 
 describe("pathFromCopied — the picked folder's real path (I-35)", () => {
   it("adopts a copied path whose leaf is the picked folder, whatever the styling", () => {
-    expect(pathFromCopied(`"${FULL}\\"`, ROOT)).toEqual({ path: FULL, how: "copied" });
-    expect(pathFromCopied(FULL.toUpperCase(), ROOT)).toEqual({ path: FULL.toUpperCase(), how: "copied" });
-    expect(pathFromCopied("F:/Stocks 2026/icons testing/single/test_processing", ROOT))
-      .toEqual({ path: FULL, how: "copied" });
+    expect(pathFromCopied(`"${FULL}\\"`, ROOT)).toBe(FULL);
+    expect(pathFromCopied(FULL.toUpperCase(), ROOT)).toBe(FULL.toUpperCase());
+    expect(pathFromCopied("F:/Stocks 2026/icons testing/single/test_processing", ROOT)).toBe(FULL);
   });
 
-  it("completes the path when the user copied the parent it lives in", () => {
-    expect(pathFromCopied("F:\\Stocks 2026\\icons testing\\single", ROOT))
-      .toEqual({ path: FULL, how: "completed" });
-    expect(pathFromCopied("F:", ROOT)).toEqual({ path: `F:\\${ROOT}`, how: "completed" });
+  it("refuses the parent folder — the app never completes a path by guessing", () => {
+    expect(pathFromCopied("F:\\Stocks 2026\\icons testing\\single", ROOT)).toBe("");
+    expect(pathFromCopied("F:", ROOT)).toBe("");
+    expect(pathFromCopied("\\\\server\\share\\icons", ROOT)).toBe("");
   });
 
   it("refuses a file path, a bare word and an empty clipboard — never invents a path", () => {
-    expect(pathFromCopied("F:\\icons\\icon-airplane-landing.png", ROOT)).toEqual({ path: "", how: null });
-    expect(pathFromCopied("hello", ROOT)).toEqual({ path: "", how: null });
-    expect(pathFromCopied(ROOT, ROOT)).toEqual({ path: "", how: null }); // a name with no drive
-    expect(pathFromCopied("", ROOT)).toEqual({ path: "", how: null });
-    expect(pathFromCopied(FULL, "")).toEqual({ path: "", how: null });
-  });
-
-  it("keeps UNC shares intact when completing them", () => {
-    expect(pathFromCopied("\\\\server\\share\\icons", ROOT))
-      .toEqual({ path: `\\\\server\\share\\icons\\${ROOT}`, how: "completed" });
+    expect(pathFromCopied("F:\\icons\\icon-airplane-landing.png", ROOT)).toBe("");
+    expect(pathFromCopied("hello", ROOT)).toBe("");
+    expect(pathFromCopied(ROOT, ROOT)).toBe(""); // a name with no drive
+    expect(pathFromCopied("", ROOT)).toBe("");
+    expect(pathFromCopied(FULL, "")).toBe("");
   });
 });
 
-describe("the stored record and its revision (I-36)", () => {
-  it("remembers how the path was obtained, and reads a legacy string as pasted", () => {
-    saveRootPathInfo(ROOT, FULL, "completed");
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "completed" });
+describe("the stored value and its revision (I-36)", () => {
+  it("reads every payload written by earlier builds, and rejects junk", () => {
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: FULL, how: "completed" } }));
+    expect(loadRootPath(ROOT)).toBe(FULL); // the object shape, whatever `how` says
     localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: FULL })); // written before `how`
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "pasted" });
+    expect(loadRootPath(ROOT)).toBe(FULL);
     localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: 42, how: "copied" } }));
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+    expect(loadRootPath(ROOT)).toBe("");
   });
 
   it("notifies subscribers on a real change, and stays quiet on an identical save", () => {
     let notifications = 0;
     const stop = subscribeRootPaths(() => { notifications++; });
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPath(ROOT, FULL);
     expect(notifications).toBe(1);
-    saveRootPathInfo(ROOT, FULL, "copied"); // nothing moved
+    saveRootPath(ROOT, FULL); // nothing moved
     expect(notifications).toBe(1);
-    saveRootPathInfo(ROOT, "F:\\elsewhere", "pasted"); // a real change
+    saveRootPath(ROOT, "F:\\elsewhere"); // a real change
     expect(notifications).toBe(2);
     expect(rootPathRevision()).toBeGreaterThan(0);
     stop();
-    saveRootPathInfo(ROOT, "");
+    saveRootPath(ROOT, "F:\\third");
     expect(notifications).toBe(2); // unsubscribed
   });
 });
@@ -220,30 +214,30 @@ describe("isFolderPathText — what Explorer can hand over, and nothing else", (
   });
 });
 
-describe("the guard at every entry point (I-39)", () => {
-  it("refuses to remember markup pasted into the field, and keeps the old value", () => {
+describe("the guard on every write (I-39)", () => {
+  it("refuses to remember markup, keeps the old value, and never forgets it", () => {
     saveRootPath(ROOT, FULL);
     expect(saveRootPath(ROOT, SVG)).toBe(false);
-    expect(loadRootPath(ROOT)).toBe(FULL);       // unchanged, not "the last thing typed"
+    expect(loadRootPath(ROOT)).toBe(FULL);       // unchanged, not "the last thing written"
     expect(saveRootPath(ROOT, URL)).toBe(false);
     expect(saveRootPath(ROOT, "hello")).toBe(false);
-    expect(saveRootPath(ROOT, "")).toBe(true);   // an empty value still forgets
-    expect(loadRootPath(ROOT)).toBe("");
+    expect(saveRootPath(ROOT, "")).toBe(false);  // no field, so nothing clears it either
+    expect(loadRootPath(ROOT)).toBe(FULL);
   });
 
   it("forgets a junk value written by an older build, instead of showing it", () => {
     localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: SVG, how: "copied" } }));
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+    expect(loadRootPath(ROOT)).toBe("");
     localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: URL }));
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+    expect(loadRootPath(ROOT)).toBe("");
     // with no trustworthy memory the copy falls back to the folder's own name —
     // never to the junk, and never to a path the app guessed
     expect(folderCopyText(ROOT, "set_A/a_AI.png")).toBe(`${ROOT}\\set_A`);
   });
 
   it("never adopts markup or a URL from the clipboard as the picked folder's path", () => {
-    expect(pathFromCopied(SVG, ROOT)).toEqual({ path: "", how: null });
-    expect(pathFromCopied(URL, ROOT)).toEqual({ path: "", how: null });
-    expect(pathFromCopied(`${SVG}"${FULL}"`, ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied(SVG, ROOT)).toBe("");
+    expect(pathFromCopied(URL, ROOT)).toBe("");
+    expect(pathFromCopied(`${SVG}"${FULL}"`, ROOT)).toBe("");
   });
 });

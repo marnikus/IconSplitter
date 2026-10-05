@@ -1,13 +1,15 @@
 // rootpath.ts — the full path of a picked root, and the copy text built from it
 // (feature §2). Why a memory: the File System Access API gives a page only the
-// picked folder's NAME ("test_processing") — the drive and the folders above it
-// are invisible to the browser for privacy, so a pasteable Windows path has to
-// come from the user. It is captured when they pick a folder (the clipboard
-// normally still holds Explorer's "Copy as path"), remembered per folder name,
-// reused by every tab, and never invented (I-35): with no memory the copy falls
-// back to the name. Only ever an Explorer FOLDER path — markup, URLs and words
-// are refused at every entry point (I-39). `pickroot`/`clipboardpath` do the capturing; this file owns
-// the string rules and the one storage.
+// picked folder's NAME — the drive and the folders above it are invisible to the
+// browser, so a usable Windows path has to come from the user. It is captured
+// from the clipboard when they open the folder (ui/pickroot, I-35), remembered
+// per folder name, reused by every tab, and never invented or completed by
+// guessing (I-29/I-35). Only ever an Explorer FOLDER path — markup, URLs, words
+// and file names are refused on the way in and again on the way out (I-39). The
+// path is shown as read-only text in one row per tab (ui/FolderBar,
+// design 2026-10-05-folder-ui); nothing up here accepts a typed path any more.
+// `clipboardpath` does the capturing; this file owns the string rules and the
+// one storage.
 //
 // The copy itself names a FOLDER, never a file (the user's request): inside a
 // run's output tree it stops at the batch folder — the one a human opens in
@@ -16,24 +18,13 @@
 import { readKey, writeKey } from "../state/safestorage";
 import { isRecord } from "./isrecord";
 
-/** `{ [folderName]: { path, how } }`; one key so a root has one path everywhere. */
+/** `{ [folderName]: path }`; one key so a root has one path everywhere. */
 export const ROOT_PATH_KEY = "iconSplitter.rootpaths.v1";
 
 /** The app's own output tree: `_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>`. */
 const MONTH = /^\d{4}-\d{2}$/;
 const STAMP = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
 const OUTPUT_DIR = "_split_output";
-
-/** How a remembered path was obtained (I-36 — the UI says which one it is). */
-export type PathHow = "copied" | "completed" | "pasted";
-
-export interface RootPathInfo {
-  path: string;
-  /** null only when no path is known at all. */
-  how: PathHow | null;
-}
-
-const UNKNOWN: RootPathInfo = { path: "", how: null };
 
 /**
  * The path as Explorer would show it: no surrounding quotes (its "Copy as
@@ -79,86 +70,45 @@ function hasControl(path: string): boolean {
   return [...path].some((ch) => ch.charCodeAt(0) < 0x20);
 }
 
-/** A tail that looks like a file name — a folder path never ends in one. */
-function looksLikeFile(path: string): boolean {
-  return /\.[A-Za-z0-9]{1,8}$/.test(path);
-}
-
 /**
- * The real path of the folder named `folderName`, as told by a copied path
- * (I-35/I-39): text whose leaf IS the folder name is adopted as it is; a folder
- * path whose leaf is something else — the parent the user copied — gets the
- * picked name appended and is marked `completed`, so the UI can ask for a second
- * look. Anything that is not an Explorer folder path (markup, a URL, a word, a
- * file) is refused: nothing is invented, and a wrong path is worse than none.
+ * The real path of the folder named `folderName`, as told by copied text
+ * (I-35/I-39): adopted only when the copied path's leaf IS that folder's name,
+ * so "the folder I copied" and "the folder I opened" are provably the same one.
+ * Everything else — the parent it lives in, a file, a word, markup — is refused
+ * with "", because the app never invents or completes a drive path.
  */
-export function pathFromCopied(copied: string, folderName: string): RootPathInfo {
-  if (folderName === "" || !isFolderPathText(copied)) return UNKNOWN;
+export function pathFromCopied(copied: string, folderName: string): string {
+  if (folderName === "" || !isFolderPathText(copied)) return "";
   const path = normalizeRootPath(copied);
-  if (pathLeaf(path).toLowerCase() === folderName.toLowerCase()) return { path, how: "copied" };
-  return looksLikeFile(path) ? UNKNOWN : { path: `${path}\\${folderName}`, how: "completed" };
+  return pathLeaf(path).toLowerCase() === folderName.toLowerCase() ? path : "";
 }
 
 /** The remembered full path of a root, or "" when none was captured. */
 export function loadRootPath(rootName: string): string {
-  return loadRootPathInfo(rootName).path;
+  const path = normalizeRootPath(storedText(readPaths()[rootName]));
+  return path !== "" && isFolderPathText(path) ? path : "";
 }
 
-/** The remembered path with the way it was obtained (I-36). */
-export function loadRootPathInfo(rootName: string): RootPathInfo {
-  const value = readPaths()[rootName];
-  if (typeof value === "string") return fromString(value); // written before `how` existed
-  if (!isRecord(value)) return UNKNOWN;
-  const path = typeof value.path === "string" ? normalizeRootPath(value.path) : "";
-  return valid(path) ? { path, how: readHow(value.how) } : UNKNOWN;
-}
-
-function fromString(value: string): RootPathInfo {
-  const path = normalizeRootPath(value);
-  return valid(path) ? { path, how: "pasted" } : UNKNOWN;
+/** Both payloads an earlier build could have written: `{ path, … }` or a string. */
+function storedText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!isRecord(value)) return "";
+  return typeof value.path === "string" ? value.path : "";
 }
 
 /**
- * A stored value is only believed while it is a folder path: one written by an
- * older build (or by hand) that is markup, a URL or a relative word counts as no
- * memory, so it can never reach a pill, a status or a copy (I-39).
- */
-function valid(path: string): boolean {
-  return path !== "" && isFolderPathText(path);
-}
-
-function readHow(value: unknown): PathHow {
-  return value === "copied" || value === "completed" || value === "pasted" ? value : "pasted";
-}
-
-/**
- * Remembers (or, with an empty value, forgets) a root's full path. Returns the
- * stored info unchanged when nothing moved, so a caller can stay quiet about a
- * repeat.
- */
-export function saveRootPathInfo(rootName: string, text: string, how: PathHow = "pasted"): RootPathInfo {
-  if (rootName === "") return UNKNOWN;
-  const path = normalizeRootPath(text);
-  if (path !== "" && !isFolderPathText(path)) return loadRootPathInfo(rootName); // refused
-  const info: RootPathInfo = path === "" ? UNKNOWN : { path, how };
-  const before = loadRootPathInfo(rootName);
-  if (before.path === info.path && before.how === info.how) return info;
-  const all = readPaths();
-  if (info.path === "") delete all[rootName];
-  else all[rootName] = { path: info.path, how: info.how };
-  writePaths(all);
-  return info;
-}
-
-/**
- * Remembers a pasted path (the field's own action). False when the text is not
- * an Explorer folder path — the caller says so and nothing is written (I-39);
- * an empty value is not a refusal, it clears the memory.
+ * Remembers a root's full path — the only writer, so the guard runs on every
+ * write (I-39). Anything that is not an Explorer folder path (markup, a URL, a
+ * bare word, a file name, empty text) is refused and the previous value is
+ * kept: no memory beats a wrong one. Returns true when the memory holds `text`.
  */
 export function saveRootPath(rootName: string, text: string): boolean {
-  if (rootName === "") return false;
-  if (normalizeRootPath(text) !== "" && !isFolderPathText(text)) return false;
-  saveRootPathInfo(rootName, text, "pasted");
+  const path = normalizeRootPath(text);
+  if (rootName === "" || path === "" || !isFolderPathText(path)) return false;
+  if (loadRootPath(rootName) === path) return true; // nothing moved: stay quiet
+  const all = readPaths();
+  all[rootName] = path;
+  writePaths(all);
   return true;
 }
 
@@ -168,9 +118,9 @@ export function rememberedRootPath(rootName: string): string {
 }
 
 /**
- * Revision + subscribers: the root pills show the full path, and a path captured
+ * Revision + subscribers: the path rows show the full path, and a path captured
  * at pick time must reach them without a reload (I-36). Same-origin tabs notify
- * each other too, so the other tab's pill is right as well.
+ * each other too, so the other tab's row is right as well.
  */
 let revision = 0;
 const listeners = new Set<() => void>();

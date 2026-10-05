@@ -37,7 +37,6 @@ export interface SelState {
   retryIds: string[];
   writeWarn: string | null;
   awaitingRetry: number;
-  watcher: boolean;
   collapsed: boolean;
   zoom: "fit" | "full";
   sync: boolean;
@@ -51,7 +50,7 @@ export function initialSelState(): SelState {
     rootName: "", scope: { split: false, outside: 0 }, pairs: [], records: [],
     lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
-    corrupt: false, corruptFiles: [], retryIds: [], writeWarn: null, awaitingRetry: 0, watcher: true,
+    corrupt: false, corruptFiles: [], retryIds: [], writeWarn: null, awaitingRetry: 0,
     collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
   };
 }

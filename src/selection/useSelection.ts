@@ -22,7 +22,6 @@ import {
   withReset, type BulkOut, type SelState,
 } from "./state";
 
-const WATCH_MS = 30_000;
 const WRITE_WARN = "A pair file could not be written. Your pending change is retained in memory — Retry writes exactly those pairs.";
 
 const ACTION_WORD: Record<Decision, string> = { pending: "Reset", approved: "Approve", declined: "Decline" };
@@ -40,7 +39,6 @@ export function useSelection() {
   const hist = useHistory();
   const ctx = useCtx(useMerged(core, view), hist);
   useEffect(() => { void boot(ctx, setCore); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useWatcher(ctx, ctx.state.current.watcher, ctx.state.current.rootName, setCore);
   useToastClear(ctx.state.current.toast, setCore);
   useDecisionApplier(ctx, setCore);
   const s = ctx.state.current;
@@ -236,14 +234,6 @@ async function writeChanged(root: DirHandleLike, s: SelState, changed: readonly 
 async function retryWrite(ctx: Ctx, setS: Setter): Promise<void> {
   const ids = ctx.state.current.retryIds;
   await persist(ctx, setS, ctx.state.current, ids.length > 0 ? ids : ctx.state.current.pairs.map((p) => p.pairId));
-}
-
-function useWatcher(ctx: Ctx, on: boolean, rootName: string, setS: Setter): void {
-  useEffect(() => {
-    if (!on || !rootName) return;
-    const t = setInterval(() => { void rescan(ctx, setS, () => undefined); }, WATCH_MS);
-    return () => clearInterval(t);
-  }, [on, rootName, ctx, setS]);
 }
 
 function useToastClear(toast: SelState["toast"], setS: Setter): void {
