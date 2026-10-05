@@ -25,6 +25,8 @@ export interface SvgConfirmProps {
   caps: ModelCaps;
   params: SamplingParams;
   rootRef: { current: DirHandleLike | null };
+  /** A run is in flight: this batch waits its turn instead of interrupting it. */
+  queued?: boolean;
   onConfirm: () => void;
   onDismiss: () => void;
 }
@@ -104,6 +106,11 @@ function Facts({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
       <Fact label="Stall window" value={stallLabel(p.config.timeoutMs, p.caps, p.params)} testid="svg-confirm-timeout" />
       <Fact label="Streaming" value="on — a live request is never cut, however long it runs" testid="svg-confirm-streaming" />
       {note !== null && <p className="svg-note warn" data-testid="svg-confirm-limit">{note}</p>}
+      {p.queued === true && (
+        <p className="svg-note" data-testid="svg-confirm-queued">
+          A run is in flight — this batch will be queued and start when the current one finishes.
+        </p>
+      )}
     </div>
   );
 }

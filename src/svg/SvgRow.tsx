@@ -31,6 +31,8 @@ export interface SvgRowActions {
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
   openLocation: (id: string) => void;
+  /** Source ids with a confirmed batch waiting for its turn (RUN-2). */
+  queued: string[];
 }
 
 export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }) {
@@ -48,7 +50,7 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
         onChange={() => a.toggleCheck(id)} />
       <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg} />
       <FileCell row={row} />
-      <StatusCell row={row} />
+      <StatusCell row={row} queued={a.queued.includes(id)} />
       <ReviewCell row={row} />
       <UsageCell row={row} />
       <FileActions row={row} a={a} />
@@ -135,13 +137,14 @@ function ProblemLine({ row }: { row: SvgRow }) {
 }
 
 /**
- * The SVG this row owns: the newest version's real path (already root-relative),
- * or — while nothing exists yet — the path generation will write. Never the
- * pair-file name: `<stem>.svg.json` is metadata BESIDE the SVG, and showing it
- * the artifact made a not-yet-generated row look like a double extension.
+ * The SVG this row owns: the path of the version it previews and copies — the
+ * user's preferred one when they chose one, else the newest valid (RUN-3) — or,
+ * while nothing exists yet, the path generation will write. Never the pair-file
+ * name: `<stem>.svg.json` is metadata BESIDE the SVG, and showing it the
+ * artifact made a not-yet-generated row look like a double extension.
  */
 function targetPath(row: SvgRow): string {
-  const path = row.newest?.svgPath;
+  const path = previewTargetOf(row)?.svgPath;
   return path ? path : joinPath(row.source.dirPath, `${row.source.stem}${SVG_EXT}`);
 }
 
@@ -155,10 +158,11 @@ function joinPath(dir: string, name: string): string {
   return dir === "" ? name : `${dir}/${name}`;
 }
 
-function StatusCell({ row }: { row: SvgRow }) {
+function StatusCell({ row, queued }: { row: SvgRow; queued: boolean }) {
   return (
     <div className="svg-cell" data-testid={`svg-status-${row.source.id}`}>
       <span className={`svg-badge ${row.status}`}>{label(row.status)}</span>
+      {queued && <span className="svg-badge queued" data-testid={`svg-queued-${row.source.id}`}>Queued</span>}
       {row.running && <span className="svg-progress-mini" aria-hidden="true"><span /></span>}
       {row.error !== null && <small className="svg-error" title={row.error}>{row.error}</small>}
     </div>

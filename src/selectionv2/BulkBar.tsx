@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import type { CheckState } from "../lib/reviewselect";
 import type { Decision } from "../lib/reviewfilter";
-import ZoomSlider from "./ZoomSlider";
+import ZoomSlider from "../ui/ZoomSlider";
 
 export type BulkAction = "approve" | "decline" | "reset";
 
@@ -53,7 +53,7 @@ export default function BulkBar(p: BulkBarProps) {
     <div className="v2-bulk" data-testid="v2-bulk">
       <BulkLeft p={p} />
       <div className="v2-bulk-right">
-        <ZoomSlider value={p.thumb} onChange={p.onThumb} />
+        <ZoomSlider id="v2-thumb" className="v2-zoom" value={p.thumb} onChange={p.onThumb} />
         <span className="v2-divider" aria-hidden="true" />
         {armed && (
           <button type="button" className="v2-btn ghost" data-testid="v2-cancel-bulk" onClick={() => setArmed(null)}>

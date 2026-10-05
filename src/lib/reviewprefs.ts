@@ -7,7 +7,8 @@
 import { isRecord } from "./isrecord";
 
 export const THUMB_MIN = 48;
-export const THUMB_MAX = 240;
+/** One maximum for both tabs: Selection V2 and Generate SVG share this range. */
+export const THUMB_MAX = 800;
 export const THUMB_STEP = 4;
 export const THUMB_DEFAULT = 84;
 
@@ -36,6 +37,34 @@ export function clampThumb(value: number): number {
  */
 export function thumbHeight(maxPx: number, naturalHeight: number): number {
   return naturalHeight > 0 ? Math.min(maxPx, naturalHeight) : maxPx;
+}
+
+/** The box one thumbnail occupies, in px — what the slider really sets. */
+export interface ThumbSize {
+  width: number;
+  height: number;
+}
+
+/**
+ * The box a raster thumbnail occupies: the slider value as its height, but
+ * never upscaled past the source's own pixels, and its width from that source's
+ * aspect ratio. While the natural size is not known yet (still loading, or a
+ * side that is missing) the box is the honest square the value names.
+ */
+export function thumbBox(maxPx: number, natural: { width: number; height: number }): ThumbSize {
+  const height = thumbHeight(maxPx, natural.height);
+  if (natural.width <= 0 || natural.height <= 0) return { width: height, height };
+  return { width: Math.round((height * natural.width) / natural.height), height };
+}
+
+/**
+ * The box an SVG preview occupies: a vector scales to the full slider height —
+ * there are no source pixels to protect — and its width comes from the
+ * document's own viewBox ratio. An unusable ratio falls back to a square.
+ */
+export function vectorThumbBox(maxPx: number, ratio: number): ThumbSize {
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  return { width: Math.round(maxPx * r), height: maxPx };
 }
 
 /** Readout shown beside the slider, e.g. "128 px". */

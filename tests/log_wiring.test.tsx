@@ -9,6 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { SCAN_IDLE } from "../src/lib/scanseq";
+import { newQueueRefs } from "../src/svg/runqueue";
 import { getLogState, resetLogStore } from "../src/log/logstore";
 import { scanSources } from "../src/svg/scan";
 import { withRunLog } from "../src/svg/runlog";
@@ -106,7 +107,7 @@ describe("discovery is logged", () => {
   function refs(dir: FakeDir): SvgRefs {
     return {
       root: { current: dir }, metas: new Map(), abort: { current: null }, key: { current: null },
-      scanKey: { current: null }, seq: { current: SCAN_IDLE },
+      scanKey: { current: null }, seq: { current: SCAN_IDLE }, queue: newQueueRefs(),
     };
   }
 

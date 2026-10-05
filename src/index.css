@@ -332,7 +332,9 @@
 .v2-columns,
 .v2-row {
   display: grid;
-  grid-template-columns: 34px minmax(230px, 0.8fr) minmax(320px, 1.35fr) 125px 125px 140px 142px 180px;
+  /* The previews column may SHRINK (minmax(0, …)): at a large zoom the pair
+     wraps and its boxes cap themselves instead of pushing the row off-screen. */
+  grid-template-columns: 34px minmax(230px, 0.8fr) minmax(0, 1.35fr) 125px 125px 140px 142px 180px;
   align-items: center;
   column-gap: 12px;
 }
@@ -374,17 +376,16 @@
 
 .v2-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
-.v2-thumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.v2-thumb-wrap { position: relative; min-width: 0; display: inline-flex; }
-
+/* The box itself carries the zoom value (inline width/height from
+   lib/reviewprefs); the artwork is contained inside it, so a box the column
+   narrows letterboxes the image instead of stretching or cropping it. */
 .v2-thumb {
-  width: auto;
-  max-width: 126px;
+  max-width: 100%;
   border: 1px solid #35405e;
   border-radius: 5px;
   background: #05070f;
   object-fit: contain;
-  transition: height 0.15s;
+  transition: width 0.15s, height 0.15s;
 }
 
 .v2-thumb.loading { background: #16203a; animation: v2-pulse 1.2s ease-in-out infinite; }
@@ -392,7 +393,6 @@
 .v2-thumb.missing {
   display: grid;
   place-items: center;
-  width: 96px;
   color: var(--v2-yellow);
   border-style: dashed;
   border-color: #5b4624;
@@ -401,19 +401,6 @@
 
 @keyframes v2-pulse {
   50% { opacity: 0.45; }
-}
-
-.v2-thumb-tag {
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgb(3 7 18 / 78%);
-  color: #dbe3f5;
-  font-size: 7px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 .v2-file-main { min-width: 0; }
@@ -503,11 +490,50 @@
 @media (max-width: 1320px) {
   .v2-columns,
   .v2-row {
-    grid-template-columns: 32px minmax(205px, 0.8fr) minmax(260px, 1.2fr) 110px 110px 124px 126px 165px;
+    grid-template-columns: 32px minmax(205px, 0.8fr) minmax(0, 1.2fr) 110px 110px 124px 126px 165px;
     column-gap: 8px;
   }
 
   .v2-filters { grid-template-columns: auto 130px 130px 120px 128px 138px 110px 1fr auto; }
+}
+
+/* ══ ONE zoom, ONE pair shell (2026-10-05) — rendered by BOTH review surfaces
+   (`ui/ThumbPair`, `ui/ZoomSlider`). A pair is two labelled previews sized from
+   the single zoom value: side by side while they fit, stacked when they do not,
+   each box capped by its column (`max-width: 100%` + `object-fit: contain` /
+   `xMidYMid meet`), so a thumbnail is never stretched, clipped or painted over
+   the next column — at 48 px and at 800 px alike. ══ */
+
+.thumb-pair {
+  display: flex;
+  align-items: flex-start;
+  /* At a large zoom the two previews wrap onto their own lines instead of
+     overflowing the row's previews column and overlapping the next column. */
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.thumb-cell {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.thumb-tag {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgb(3 7 18 / 78%);
+  color: #dbe3f5;
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
 /* ══ Generate SVG — ported from `design temp/SVG tab generation/SVG generation Tab.html`.
@@ -813,6 +839,33 @@
 }
 
 .svg-bulk-left, .svg-bulk-right { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+/* What waits for its turn (RUN-2): the batches confirmed while a run is in
+   flight, oldest first, each named with the plan it will send. */
+.svg-queue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border: 1px solid var(--v2-line);
+  border-top: 0;
+  background: #141a2c;
+  font-size: 11px;
+}
+.svg-queue-title {
+  padding: 3px 8px;
+  border: 1px solid #514399;
+  border-radius: 999px;
+  color: var(--v2-purple-2);
+  background: #261e52;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.svg-queue-list { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+.svg-queue-item { display: flex; align-items: center; gap: 7px; padding: 3px 7px; border: 1px solid var(--v2-line); border-radius: 8px; background: var(--v2-surface); }
+.svg-queue-names { color: var(--v2-ink); font-weight: 650; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svg-queue-plan { color: var(--v2-dim); white-space: nowrap; }
 .svg-selected-copy { font-size: 11px; font-weight: 700; }
 .svg-scope-copy { color: var(--v2-muted); font-size: 10px; }
 .svg-divider { width: 1px; height: 25px; background: var(--v2-line); }
@@ -924,10 +977,11 @@
 .svg-columns,
 .svg-row {
   display: grid;
-  /* Both preview boxes are --svg-thumb square, so the column is exactly two of
-     them plus the gap and padding: the row can never overlap the next column,
-     at any zoom value (RULE 24, invariant I-16). */
-  grid-template-columns: 34px calc(var(--svg-thumb) * 2 + 30px) minmax(280px, 1fr) 122px 118px 130px 158px 210px;
+  /* The previews column asks for two boxes of --svg-thumb plus the gap and
+     padding, and may SHRINK below that (minmax(0, …)): at a large zoom the pair
+     wraps and the boxes cap themselves, so the row never overlaps the next
+     column and never pushes the row off-screen (RULE 24, invariant I-16). */
+  grid-template-columns: 34px minmax(0, calc(var(--svg-thumb) * 2 + 30px)) minmax(280px, 1fr) 122px 118px 130px 158px 210px;
   align-items: center;
   column-gap: 12px;
 }
@@ -990,10 +1044,8 @@
 .svg-row.declined::after { background: var(--v2-red); }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
-.svg-thumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.svg-thumb-wrap { position: relative; min-width: 0; display: inline-flex; }
-
 .svg-thumb {
+  max-width: 100%;
   border: 1px solid #35405e;
   border-radius: 5px;
   background: #05070f;
@@ -1037,6 +1089,7 @@
    artwork stay visible without tinting the artwork itself. */
 .svg-preview {
   flex: none;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid #35405e;
   border-radius: 5px;
@@ -1046,19 +1099,6 @@
     linear-gradient(45deg, #232b45 25%, transparent 25%, transparent 75%, #232b45 75%);
   background-size: 10px 10px;
   background-position: 0 0, 5px 5px;
-}
-
-.svg-thumb-tag {
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgb(3 7 18 / 78%);
-  color: #dbe3f5;
-  font-size: 7px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 .svg-file-main { min-width: 0; }
@@ -1101,6 +1141,7 @@
 
 .svg-badge.generated, .svg-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
+.svg-badge.queued { color: var(--v2-cyan, #67d5e8); background: #16333c; border-color: #2b6472; }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
 .svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 
@@ -1275,6 +1316,13 @@
 .svg-history th, .svg-history td { padding: 6px 8px; border-bottom: 1px solid var(--v2-line); text-align: left; }
 .svg-history th { color: var(--v2-muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: 0.07em; }
 .svg-history tr.failed td { color: var(--v2-red); }
+/* The version the pair previews and copies (RUN-3): marked, never the only one
+   selectable — every other valid version keeps its own button. */
+.svg-history tr.preferred td { background: #16233a; }
+.svg-preferred-mark { color: var(--v2-green); font-weight: 750; }
+.svg-version-actions { display: flex; align-items: center; gap: 6px; }
+.svg-history .svg-preview { background: #0d1322; border-radius: 4px; }
+.svg-thumb.loading { display: inline-block; border: 1px dashed var(--v2-line); border-radius: 4px; opacity: 0.6; }
 
 .svg-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
@@ -1312,7 +1360,7 @@
 
 @media (max-width: 1360px) {
   .svg-columns,
-  .svg-row { grid-template-columns: 32px calc(var(--svg-thumb) * 2 + 26px) minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
+  .svg-row { grid-template-columns: 32px minmax(0, calc(var(--svg-thumb) * 2 + 26px)) minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

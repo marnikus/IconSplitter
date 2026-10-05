@@ -54,7 +54,7 @@ export interface RunSetters {
 }
 
 /** Re-reads the pair files after a run so history, versions and review are exact. */
-export async function reloadSidecars(refs: SvgRefs, sources: SvgSource[], s: RunSetters): Promise<void> {
+export async function reloadSidecars(refs: SvgRefs, sources: readonly SvgSource[], s: RunSetters): Promise<void> {
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
   for (const source of sources) {

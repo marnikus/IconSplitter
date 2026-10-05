@@ -207,7 +207,8 @@ describe("Selection V2 panel", () => {
   it("zoom slider exposes its bounds, live value, row height and persistence", async () => {
     const { el, ui } = await mount(makeRoot());
     const slider = q(el, "[data-testid='v2-thumb']") as HTMLInputElement;
-    expect([slider.min, slider.max, slider.step, slider.value]).toEqual(["48", "240", "4", "84"]);
+    // 48–800: ONE range, shared with the Generate SVG tab (ui/ZoomSlider).
+    expect([slider.min, slider.max, slider.step, slider.value]).toEqual(["48", "800", "4", "84"]);
     expect(slider.getAttribute("aria-label")).toBe("Thumbnail maximum height");
     expect(text(el, "[data-testid='v2-thumb-value']")).toBe("84 px");
     await slide(slider, "128");
@@ -408,6 +409,49 @@ describe("Selection V2 panel", () => {
     expect(q(el, "[data-testid='v2-rows']")?.getAttribute("aria-label")).toBe("Image review pairs");
     expect(q(el, "[data-testid='v2-list'] kbd")?.textContent).toBe("A");
   });
+  /** The pixels the browser would have measured for a decoded image (RULE 8). */
+  function defineNatural(img: HTMLImageElement, width: number, height: number): void {
+    Object.defineProperty(img, "naturalWidth", { value: width, configurable: true });
+    Object.defineProperty(img, "naturalHeight", { value: height, configurable: true });
+  }
+
+  function thumbEl(el: HTMLElement, id: string, tag: "src" | "ai"): HTMLElement {
+    return q(el, `[data-testid='v2-row-${id}'] [data-testid='v2-thumb-${tag}']`)?.firstElementChild as HTMLElement;
+  }
+
+  it("reaches 800 px and resizes BOTH paired thumbnails in step (never clipped)", async () => {
+    const { el } = await mount(makeRoot());
+    await slide(q(el, "[data-testid='v2-thumb']") as HTMLInputElement, "800");
+    expect(text(el, "[data-testid='v2-thumb-value']")).toBe("800 px");
+    expect(q(el, "[data-testid='v2-list']")?.getAttribute("style")).toContain("--v2-thumb: 800px");
+    for (const tag of ["src", "ai"] as const) {
+      const box = thumbEl(el, FOG, tag);
+      expect([box.style.width, box.style.height]).toEqual(["800px", "800px"]);
+      // a box wider than its column shrinks (the artwork is contained) — it may
+      // never spill over the next column
+      expect(box.style.maxWidth).toBe("100%");
+    }
+    expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).thumbHeight).toBe(800);
+  });
+
+  it("sizes each box from its own aspect ratio, so a wide pair is never stretched", async () => {
+    const { el } = await mount(makeRoot());
+    const wide = thumbEl(el, FOG, "src") as HTMLImageElement;
+    defineNatural(wide, 1200, 400);
+    await act(async () => { wide.dispatchEvent(new Event("load")); });
+    expect([wide.style.width, wide.style.height]).toEqual(["252px", "84px"]); // 84 px tall, 3:1 wide
+    // the other side keeps its own box: one zoom value, two honest sizes
+    expect(thumbEl(el, FOG, "ai").style.height).toBe("84px");
+  });
+
+  it("keeps both boxes inside the pair: the two previews wrap, they never overlap", () => {
+    const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+    expect(css).toMatch(/\.thumb-pair \{[^}]*flex-wrap: wrap/);
+    expect(css).toMatch(/\.thumb-cell \{[^}]*max-width: 100%/);
+    // the fixed width cap that clipped a wide thumbnail at high zoom is gone
+    expect(css).not.toContain("max-width: 126px");
+  });
+
 });
 
 describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {

@@ -18,6 +18,8 @@ import { resetNote, resolveModelParams } from "./modelparams";
 import { saveConfig, savePrompt } from "./promptstore";
 import { saveSvgPrefs } from "./prefsstore";
 import { bootSources, scanSources, type ScanSetters } from "./scan";
+import { newQueueRefs } from "./runqueue";
+import type { QueuedBatch } from "./queue";
 import { headerState, toListRow, visibleRows } from "./rowmodel";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { SvgCtx, SvgSetters } from "./actions";
@@ -44,6 +46,7 @@ export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCt
     setDiscovery: bridge.setDiscovery, setBusy: bridge.setBusy, setRootToken: bridge.setRootToken,
     setRows: bridge.setRows, setRowsFn: bridge.setRowsFn,
     setProgress: bridge.setProgress, setProgressFn: bridge.setProgressFn,
+    setQueue: bridge.setQueue,
     ...derived,
   };
 }
@@ -56,9 +59,25 @@ function useSay(dispatch: Dispatch<SvgAction>): (msg: string, err?: boolean) => 
   }, [dispatch]);
 }
 
+/** One memoised dispatch writer per model key — the plain half of the bridge. */
+function useWriters(dispatch: Dispatch<SvgAction>) {
+  return {
+    setRootName: useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]),
+    setDiscovery: useCallback((discovery: Discovery | null) => dispatch({ type: "discovery", discovery }), [dispatch]),
+    setBusy: useCallback((busy: string | null) => dispatch({ type: "busy", busy }), [dispatch]),
+    setRootToken: useCallback(() => dispatch({ type: "root-token" }), [dispatch]),
+    setRows: useCallback((rows: SvgRow[]) => dispatch({ type: "rows", rows }), [dispatch]),
+    setRowsFn: useCallback((fn: (rows: SvgRow[]) => SvgRow[]) => dispatch({ type: "rows-fn", fn }), [dispatch]),
+    setProgress: useCallback((progress: RunProgress | null) => dispatch({ type: "progress", progress }), [dispatch]),
+    setProgressFn: useCallback((fn: (p: RunProgress | null) => RunProgress | null) => dispatch({ type: "progress-fn", fn }), [dispatch]),
+    setQueue: useCallback((queue: QueuedBatch[]) => dispatch({ type: "queue", queue }), [dispatch]),
+  };
+}
+
 /** The setters a scan writes through, plus the two bridges the boot needs. */
 function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx["say"]): SvgSetters {
   const setters = useRef<ScanSetters | null>(null);
+  const writers = useWriters(dispatch);
   const loadAll = useCallback(() => {
     const target = setters.current;
     if (target !== null) void scanSources(refs, target);
@@ -73,19 +92,9 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
   }, [dispatch, refs]);
   // Every writer is memoised on [dispatch]: an unstable one would re-run the
   // boot effect on every render (RULE 24).
-  const setRootName = useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]);
-  const setDiscovery = useCallback((discovery: Discovery | null) => dispatch({ type: "discovery", discovery }), [dispatch]);
-  const setBusy = useCallback((busy: string | null) => dispatch({ type: "busy", busy }), [dispatch]);
-  const setRootToken = useCallback(() => dispatch({ type: "root-token" }), [dispatch]);
-  const setRows = useCallback((rows: SvgRow[]) => dispatch({ type: "rows", rows }), [dispatch]);
-  const setRowsFn = useCallback((fn: (rows: SvgRow[]) => SvgRow[]) => dispatch({ type: "rows-fn", fn }), [dispatch]);
-  const setProgress = useCallback((progress: RunProgress | null) => dispatch({ type: "progress", progress }), [dispatch]);
-  const setProgressFn = useCallback((fn: (p: RunProgress | null) => RunProgress | null) => dispatch({ type: "progress-fn", fn }), [dispatch]);
-  setters.current = { setRootName, setRows, setDiscovery, setBusy, setRootToken, say };
-  return {
-    loadAll, refreshKey, say, setRootName, setDiscovery, setBusy, setRootToken,
-    setRows, setRowsFn, setProgress, setProgressFn,
-  };
+  setters.current = { setRootName: writers.setRootName, setRows: writers.setRows, setDiscovery: writers.setDiscovery,
+    setBusy: writers.setBusy, setRootToken: writers.setRootToken, say };
+  return { loadAll, refreshKey, say, ...writers };
 }
 
 /**
@@ -172,7 +181,7 @@ function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" 
 function newRefs(): SvgRefs {
   return {
     root: { current: null }, metas: new Map(), abort: { current: null }, key: { current: null },
-    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+    scanKey: { current: null }, seq: { current: SCAN_IDLE }, queue: newQueueRefs(),
   };
 }
 

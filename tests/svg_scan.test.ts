@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { beginScan, isCurrent, SCAN_IDLE } from "../src/lib/scanseq";
+import { newQueueRefs } from "../src/svg/runqueue";
 import { scanKey } from "../src/svg/scankey";
 import { scanSources } from "../src/svg/scan";
 import { setAppState } from "../src/state/appstore";
@@ -78,7 +79,7 @@ class OneShotGate extends FakeFile {
 function refs(root: FakeDir): SvgRefs {
   return {
     root: { current: root }, metas: new Map(), abort: { current: null }, key: { current: null },
-    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+    scanKey: { current: null }, seq: { current: SCAN_IDLE }, queue: newQueueRefs(),
   };
 }
 

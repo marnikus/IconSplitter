@@ -3,6 +3,8 @@
 // the filters, the code dialog and its Escape close, the confirm dialog that
 // must precede any send, and the undoable review decision. Everything here is
 // a store/DOM change, so a regression in the wiring fails loudly.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,6 +72,26 @@ const SIDECAR = JSON.stringify({
     batch: null, error: "invalid SVG: unsafe <script> element", requestId: null,
   }],
 });
+
+/**
+ * A v1 sidecar for the court pair, so a WIDE saved document can be previewed
+ * beside its AI image (the ratio rule is what this fixture proves).
+ */
+function sidecarForCourt(): string {
+  return JSON.stringify({
+    v: 1,
+    source: { relPath: "architecture/court_AI.png", name: "court_AI.png", fingerprint: "20:2100" },
+    versions: [{
+      version: 1, svgPath: "architecture/court_AI.svg", status: "generated", review: "pending",
+      prompt: "p", provider: "Requesty", model: "openai/gpt-6.1-sol",
+      requestedAt: "2026-10-01T10:00:00.000Z", completedAt: "2026-10-01T10:00:05.000Z",
+      usage: { input: 1, output: 2, total: 3 },
+      cost: { actual: 0.01, estimated: null, currency: "USD", pricing: "", basis: "provider" },
+      validation: { ok: true, errors: [], warnings: [], icons: 1 },
+      batch: null, error: null, requestId: null,
+    }],
+  });
+}
 
 let host: HTMLDivElement;
 let ui: Root;
@@ -788,6 +810,13 @@ describe("Generate SVG panel", () => {
     expect(panel.style.getPropertyValue("--svg-thumb")).toBe("240px");
     expect(both()).toEqual({ ai: { w: "240px", h: "240px" }, svg: { w: "240px", h: "240px" } });
 
+    // 800 px: the new maximum, and BOTH previews follow it in step
+    await type("[data-testid=svg-thumb]", "800");
+    await settle();
+    expect(q("[data-testid=svg-thumb-value]")?.textContent).toBe("800 px");
+    expect(panel.style.getPropertyValue("--svg-thumb")).toBe("800px");
+    expect(both()).toEqual({ ai: { w: "800px", h: "800px" }, svg: { w: "800px", h: "800px" } });
+
     await type("[data-testid=svg-thumb]", "48");
     await settle();
     expect(panel.style.getPropertyValue("--svg-thumb")).toBe("48px");
@@ -802,7 +831,7 @@ describe("Generate SVG panel", () => {
       return [el.style.width, el.style.height];
     };
     const seen = new Set<string>();
-    for (let px = 48; px <= 240; px += 4) {
+    for (let px = 48; px <= 800; px += 4) {
       await type("[data-testid=svg-thumb]", String(px));
       await settle();
       const side = `${px}px`;
@@ -813,8 +842,36 @@ describe("Generate SVG panel", () => {
       expect(box(`[data-testid=svg-prev-${FOG}]`)).toEqual([side, side]);
       seen.add(side);
     }
-    // the whole documented range was really exercised: 48, 52, ... 240
-    expect(seen.size).toBe((240 - 48) / 4 + 1);
+    // the whole documented range was really exercised: 48, 52, ... 800
+    expect(seen.size).toBe((800 - 48) / 4 + 1);
+  });
+
+  it("sizes each preview from its own ratio: a wide document gets a wide box, both from one zoom", async () => {
+    const root = await makeRoot();
+    const arch = root.children.get("architecture") as FakeDir;
+    const wide = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 48 24\"><path d=\"M2 2h44v20H2z\"/></svg>";
+    arch.children.set("court_AI.svg", new FakeFile("court_AI.svg", wide.length, 3300, wide));
+    arch.children.set("court_AI.svg.json", new FakeFile("court_AI.svg.json", 10, 3300, sidecarForCourt()));
+    await mount(root);
+    // The vector side: full slider height, twice that wide (2:1 viewBox), and
+    // capped by its column so it can never overlap the next one.
+    const svgBox = q(`[data-testid=svg-prev-${COURT}]`) as HTMLElement;
+    expect([svgBox.style.width, svgBox.style.height, svgBox.style.maxWidth]).toEqual(["168px", "84px", "100%"]);
+    // The raster side: the pixels the browser would have measured for a 3:1 AI
+    // image — same height, its own width (RULE 8: the real onLoad path).
+    const ai = q(`[data-testid=svg-ai-${COURT}]`) as HTMLImageElement;
+    Object.defineProperty(ai, "naturalWidth", { value: 1200, configurable: true });
+    Object.defineProperty(ai, "naturalHeight", { value: 400, configurable: true });
+    await act(async () => { ai.dispatchEvent(new Event("load")); });
+    expect([ai.style.width, ai.style.height]).toEqual(["252px", "84px"]);
+  });
+
+  it("wraps the pair instead of clipping it: both previews stay inside their column", () => {
+    const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+    expect(css).toMatch(/\.thumb-pair \{[^}]*flex-wrap: wrap/);
+    expect(css).toMatch(/\.thumb-cell \{[^}]*max-width: 100%/);
+    // the previews column asks for two boxes AND may shrink below them
+    expect(css).toContain("minmax(0, calc(var(--svg-thumb) * 2 + 30px))");
   });
 
   it("puts every background behind the artwork and never into it", async () => {

@@ -6,6 +6,7 @@ import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import type { ScanSeq } from "../lib/scanseq";
 import type { BatchOutcome } from "../lib/svgbatch";
+import type { QueueRefs } from "./runqueue";
 import type { SvgSource } from "./sources";
 
 /**
@@ -68,4 +69,6 @@ export interface SvgRefs {
   scanKey: { current: string | null };
   /** Which scan may commit (see lib/scanseq). */
   seq: { current: ScanSeq };
+  /** The generation queue as the worker sees it (svg/runqueue). */
+  queue: QueueRefs;
 }

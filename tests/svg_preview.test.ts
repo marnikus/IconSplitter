@@ -9,9 +9,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildSvgPreview, PREVIEW_CSS, STANDALONE_INK } from "../src/lib/svgpreview";
-import { previewTargetOf } from "../src/svg/rowmodel";
-import { withVersion, type PairMeta } from "../src/lib/pairmeta";
+import { isPreferredTarget, previewTargetOf, targetVersionOf } from "../src/svg/rowmodel";
+import { withPreference, withVersion, type PairMeta } from "../src/lib/pairmeta";
 import type { SvgVersion } from "../src/lib/svgmodel";
+import { toRow } from "../src/svg/rowmodel";
 import type { SvgRow } from "../src/svg/types";
 import { pairMetaFor, svgSource } from "./helpers/svgpair";
 
@@ -308,5 +309,50 @@ describe("previewTargetOf — one version for the preview and for Copy", () => {
   it("is null when there is nothing valid to preview or to copy", () => {
     expect(previewTargetOf(rowWith([]))).toBeNull();
     expect(previewTargetOf(rowWith([version(3, "")]))).toBeNull();
+  });
+});
+
+describe("the preferred version drives preview, Copy and review (2026-10-05)", () => {
+  const source = svgSource("fog", { dir: "a", name: "fog_AI.png" });
+
+  function version(v: number, svgPath: string, ok = true): SvgVersion {
+    return {
+      version: v, svgPath, status: "generated", review: "pending", prompt: "p", provider: "Requesty",
+      model: "m", requestedAt: "2026-10-01T10:00:00.000Z", completedAt: "2026-10-01T10:00:05.000Z",
+      usage: { input: 1, output: 2, total: 3 },
+      cost: { actual: 0.01, estimated: null, currency: "USD", pricing: "", basis: "provider" },
+      validation: { ok, errors: [], warnings: [], icons: 1 },
+      batch: null, error: null, requestId: null,
+    };
+  }
+
+  /** A row exactly as a scan builds it, with the pair's own file. */
+  function rowWith(versions: SvgVersion[], preferred: number | null): SvgRow {
+    const withVersions = versions.reduce((acc, v) => withVersion(acc, v), pairMetaFor(source, []));
+    return toRow(source, withPreference(withVersions, preferred), false);
+  }
+
+  it("previews the chosen version instead of the newest one", () => {
+    const row = rowWith([version(1, "a/fog_AI.svg"), version(2, "a/fog_AI_v2.svg")], 1);
+    expect(previewTargetOf(row)).toEqual({ version: 1, svgPath: "a/fog_AI.svg" });
+    expect(isPreferredTarget(row)).toBe(true);
+    expect(targetVersionOf(row)?.version).toBe(1);
+  });
+
+  it("falls back to the newest valid version when no choice was made", () => {
+    const row = rowWith([version(1, "a/fog_AI.svg"), version(2, "a/fog_AI_v2.svg")], null);
+    expect(previewTargetOf(row)).toEqual({ version: 2, svgPath: "a/fog_AI_v2.svg" });
+    expect(isPreferredTarget(row)).toBe(false);
+  });
+
+  it("never previews a preferred version that stopped being valid (RULE 4)", () => {
+    const row = rowWith([version(1, "a/fog_AI.svg", false), version(2, "a/fog_AI_v2.svg")], 1);
+    expect(previewTargetOf(row)).toEqual({ version: 2, svgPath: "a/fog_AI_v2.svg" });
+    expect(isPreferredTarget(row)).toBe(false);
+  });
+
+  it("keeps the choice when the version it names is not in the file", () => {
+    const row = rowWith([version(1, "a/fog_AI.svg")], 7);
+    expect(previewTargetOf(row)).toEqual({ version: 1, svgPath: "a/fog_AI.svg" });
   });
 });

@@ -13,6 +13,7 @@ import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
 import { loadMetaAt, saveMetaAt, LEGACY_FILE } from "../src/selection/pairstore";
 import { discoverApprovedSources, toBatchSource, type SvgSource } from "../src/svg/sources";
 import { SCAN_IDLE } from "../src/lib/scanseq";
+import { newQueueRefs } from "../src/svg/runqueue";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
 import { headerState, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
@@ -117,7 +118,7 @@ function setters() {
 function refs(root: FakeDir | null = null) {
   return {
     root: { current: root }, metas: new Map(), abort: { current: null }, key: { current: null },
-    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+    scanKey: { current: null }, seq: { current: SCAN_IDLE }, queue: newQueueRefs(),
   };
 }
 

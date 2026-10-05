@@ -15,10 +15,11 @@ import type { HistoryEntry } from "../lib/history";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
+import { applySvgPreferPatch, type SvgPreferPatch } from "../svg/preferundo";
 import { patchV2, patchView, setAppState } from "./appstore";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgReview"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgReview", "svgPrefer"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
@@ -29,6 +30,7 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
     case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
+    case "svgPrefer": return applySvgPreferPatch(toPreferPatch(value));
     default: return false; // an entry from a future schema: refuse, do not guess
   }
 }
@@ -44,6 +46,19 @@ function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
   if (!isRecord(value)) return false;
   return typeof value.id === "string" && Number.isInteger(value.version)
     && (value.review === "pending" || value.review === "approved" || value.review === "declined");
+}
+
+/** Refuses a payload that is not a list of version preferences (RULE 13). */
+function toPreferPatch(value: unknown): SvgPreferPatch {
+  if (!isRecord(value) || !Array.isArray(value.recs)) return { recs: [] };
+  const recs = value.recs.flatMap((r) => (isPreferRec(r) ? [r] : []));
+  return { recs };
+}
+
+function isPreferRec(value: unknown): value is SvgPreferPatch["recs"][number] {
+  if (!isRecord(value) || typeof value.id !== "string") return false;
+  const v = value.version;
+  return v === null || (Number.isInteger(v) && (v as number) > 0);
 }
 
 async function applyDecisions(ids: readonly string[], value: unknown): Promise<boolean> {

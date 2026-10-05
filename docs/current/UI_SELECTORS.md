@@ -222,7 +222,7 @@ Bulk bar (`v2-bulk`):
 | `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
 | `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
 | `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
-| `v2-thumb` | `<input type="range">` | 48–240 px, step 4; `aria-label="Thumbnail maximum height"` |
+| `v2-thumb` | `<input type="range">` | 48–800 px, step 4; `aria-label="Thumbnail maximum height"`; the same `ui/ZoomSlider` Generate SVG renders (RUN-4) |
 | `v2-thumb-value` | `<output>` | live `128 px` readout (RULE 24) |
 | `v2-approve-selected` / `v2-decline-selected` / `v2-reset-selected` | buttons | the only bulk actions; every label carries the affected count and arms first (`Confirm approve`); disabled at 0. **No bulk action touches the visible list** — `v2-approve-visible` and `v2-reset-visible` were removed |
 | `v2-cancel-bulk` | button | shown while one action is armed; Escape also disarms |
@@ -233,7 +233,7 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 |---|---|---|
 | `v2-row-{pairId}` | row (`role="listitem"`) | `aria-current="true"` + roving `tabIndex` on the active row |
 | `v2-check-{pairId}` | row checkbox | `aria-label="Select {base}"`; checking does not move the active row |
-| `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers | each carries an `Original` / `AI result` tag; missing side or decode failure → `role="img"` placeholder with an aria-label |
+| `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers (`.thumb-cell` of the shared `ui/ThumbPair` shell) | each carries an `Original` / `AI result` tag; the `<img>` inside takes the slider height and its own aspect ratio, a box wider than its column shrinks (`max-width: 100%`), and the pair wraps instead of overlapping; missing side or decode failure → `role="img"` placeholder with an aria-label |
 | `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
 | `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
 | `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
@@ -385,12 +385,23 @@ Bulk bar (`svg-bulk`):
 | `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
 | `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
-| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, 48–240 step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout |
+| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, 48–800 step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout; the same `ui/ZoomSlider` Selection V2 renders (RUN-4) |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
+| `svg-generate-selected` | button | arms first (`Confirm generate`), then sends/queues; disabled only at 0 selected — **never** while a run is in flight (RUN-2) |
+| `svg-cancel-run` | button, while running | Cancel = stop: aborts the request in flight AND drops every waiting batch, saying both in the toast |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
-| `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
+| `svg-batch-progress` | while running | per-request progress in the estimate line; it carries the same ticking `svg-bulk-elapsed` as the strip |
+
+Queue bar (`src/svg/SvgQueueBar.tsx`, RUN-2; rendered only while batches wait —
+a run in flight is NOT listed):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-queue` | section | the waiting batches in send order, with `svg-queue-count` ("N queued") and `svg-queue-clear` |
+| `svg-queue-item-{ticket}` | list item | the frozen plan: the sources' stems (`svg-queue-names`) and the label ("2 sources · 1 request · openai/gpt-6.1-sol") |
+| `svg-queue-remove-{ticket}` | button | drops that one waiter; the run in flight is untouched |
+| `svg-queued-{sourceId}` | row badge | "Queued" on every row a waiting batch names |
 
 Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 
@@ -435,13 +446,14 @@ Dialogs:
 | `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
+| `svg-confirm-queued` | shown while a run is in flight: "A run is in flight — this batch will be queued and start when the current one finishes." (RUN-2) |
 | `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
 | `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
 | `svg-composite-building` / `svg-composite-error` | the honest in-progress and could-not-build states |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
-| `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
+| `svg-history-dialog` | every version (`src/svg/VersionsDialog.tsx`, RUN-3): `svg-preferred-note` (which version Preview/Code/Copy hand out), `svg-history-table`, `svg-history-v{n}` (one row per version, class `preferred` on the chosen one with the `· Preferred` mark), `svg-version-art-{n}` (that version's own sanitized document; absent for a failed one), `svg-prefer-{n}` ("Use this version" — disabled for a failed version or the current choice), `svg-prefer-newest` (clears the choice), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done`; each row also has its own Code button |
 
 Restart recovery: `svg-inflight` (the note about requests with no confirmed
 outcome, shown while `iconSplitter.svg.inflight.v1` has entries) with

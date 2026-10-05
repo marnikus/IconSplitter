@@ -8,7 +8,7 @@ import type { Decision } from "../src/lib/reviewfilter";
 import { NO_COST, type SvgVersion } from "../src/lib/svgfile";
 import {
   metaFileName, metaPathFor, newPairMeta, parsePairMeta, pairMetaFromLegacy, serializePairMeta,
-  toRecord, withDecision, type PairMeta, type PairSide,
+  toRecord, withDecision, withPreference, preferredVersionOf, type PairMeta, type PairSide,
 } from "../src/lib/pairmeta";
 
 const SIDE_AI: PairSide = { relPath: "a/icon_AI.png", name: "icon_AI.png", fingerprint: "20:300" };
@@ -171,5 +171,52 @@ describe("a pair file reads back as a decision even after a move", () => {
     const back = parsePairMeta(JSON.stringify(moved));
     expect(back.ok && back.meta.decision).toBe("approved");
     expect(back.ok && back.meta.id).toBe(pairId("a", "icon", ""));
+  });
+});
+
+describe("the preferred version (2026-10-05 — pick any version, keep them all)", () => {
+  it("defaults to no preference, so nothing changes for an existing pair", () => {
+    expect(meta().preferredVersion).toBeNull();
+    expect(preferredVersionOf(meta())).toBeNull();
+  });
+
+  it("round-trips a chosen version and keeps every version on disk", () => {
+    const written = { ...meta({ preferredVersion: 1 }), versions: [version(1), version(2)] };
+    const back = parsePairMeta(serializePairMeta(written));
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(back.meta.preferredVersion).toBe(1);
+    expect(back.meta.versions.map((v) => v.version)).toEqual([1, 2]);
+    expect(preferredVersionOf(back.meta)).toBe(1);
+  });
+
+  it("rechoosing keeps the previous choice reachable (a change, never a deletion)", () => {
+    const first = withPreference(meta({ versions: [version(1), version(2)] }), 1);
+    const second = withPreference(first, 2);
+    expect(preferredVersionOf(second)).toBe(2);
+    expect(second.versions).toHaveLength(2);
+    expect(withPreference(second, null).preferredVersion).toBeNull();
+  });
+
+  it("reads a v2 file written before the field existed (no preference, versions intact)", () => {
+    const v2 = JSON.stringify({
+      v: 2,
+      pair: { id: pairId("a", "icon", ""), base: "icon", suffix: "", dir: "a" },
+      ai: SIDE_AI, source: SIDE_SRC, decision: "approved", reviewedAt: "2026-10-05T10:00:00.000Z",
+      versions: [version(1)],
+    });
+    const back = parsePairMeta(v2);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(back.meta.preferredVersion).toBeNull();
+    expect(back.meta.versions).toHaveLength(1);
+    expect(back.meta.decision).toBe("approved");
+  });
+
+  it("never invents a preference: a non-numeric or unknown value reads back as none", () => {
+    const raw = JSON.parse(serializePairMeta(meta({ versions: [version(1)] }))) as Record<string, unknown>;
+    raw.preferredVersion = "newest";
+    const back = parsePairMeta(JSON.stringify(raw));
+    expect(back.ok && back.meta.preferredVersion).toBeNull();
   });
 });

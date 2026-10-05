@@ -9,15 +9,19 @@
 import { isRecord } from "./isrecord";
 import { parseAiName } from "./naming";
 import { pairId } from "./pairing";
+import { svgStem } from "./svgfile";
 import type { Decision } from "./reviewfilter";
 import type { ReviewRecord } from "./reviewfile";
-import { svgStem } from "./svgfile";
+import { pairMetaFromLegacy, LEGACY_VERSION } from "./pairmetalegacy";
 import { parseVersion, type SvgVersion } from "./svgmodel";
 import type { ReviewPair, SideRef } from "./pairing";
 
+export { pairMetaFromLegacy } from "./pairmetalegacy";
+
 /** Bump when the stored shape changes; a reader must understand both. */
-export const PAIR_META_VERSION = 2;
-const LEGACY_VERSION = 1;
+export const PAIR_META_VERSION = 3;
+/** v2 carried no preferred version (2026-10-05); it reads as "no preference". */
+const PREVIOUS_VERSION = 2;
 
 /** One image face as the pair file records it. */
 export interface PairSide {
@@ -46,6 +50,11 @@ export interface PairMeta extends PairIdentity {
   source: PairSide | null;
   decision: Decision | null;
   reviewedAt: string | null;
+  /**
+   * The version the user picked to preview (2026-10-05); null = the newest
+   * valid one. A choice, never a deletion: every version stays in `versions`.
+   */
+  preferredVersion: number | null;
   versions: SvgVersion[];
 }
 
@@ -57,7 +66,20 @@ export interface NewMetaArgs extends PairIdentity {
 }
 
 export function newPairMeta(args: NewMetaArgs): PairMeta {
-  return { v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null, versions: [] };
+  return {
+    v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null,
+    preferredVersion: null, versions: [],
+  };
+}
+
+/** The preferred version of a stored pair file; null means "newest valid". */
+export function preferredVersionOf(meta: PairMeta): number | null {
+  return meta.preferredVersion;
+}
+
+/** Choosing a version leaves the versions themselves exactly as they were. */
+export function withPreference(meta: PairMeta, version: number | null): PairMeta {
+  return { ...meta, preferredVersion: version };
 }
 
 /** `<AI stem>.svg.json` — the name that has always lived beside the AI image. */
@@ -193,6 +215,7 @@ function toJson(meta: PairMeta): Record<string, unknown> {
     source: meta.source,
     decision: meta.decision,
     reviewedAt: meta.reviewedAt,
+    preferredVersion: meta.preferredVersion,
     versions: meta.versions,
   };
 }
@@ -212,10 +235,12 @@ export function parsePairMeta(text: string): MetaParse {
   }
   if (!isRecord(raw) || !Array.isArray(raw.versions)) return { ok: false };
   if (raw.v === LEGACY_VERSION) return pairMetaFromLegacy(raw);
-  if (raw.v !== PAIR_META_VERSION || !isRecord(raw.pair)) return { ok: false };
+  if (raw.v !== PAIR_META_VERSION && raw.v !== PREVIOUS_VERSION) return { ok: false };
+  if (!isRecord(raw.pair)) return { ok: false };
   return readV2(raw);
 }
 
+/** The v2/v3 shape; `preferredVersion` is only present in a v3 file. */
 function readV2(raw: Record<string, unknown>): MetaParse {
   const pair = raw.pair as Record<string, unknown>;
   const id = str(pair.id);
@@ -229,34 +254,10 @@ function readV2(raw: Record<string, unknown>): MetaParse {
       source: isRecord(raw.source) ? toSide(raw.source) : null,
       decision: toDecision(raw.decision),
       reviewedAt: nullableStr(raw.reviewedAt),
+      preferredVersion: toPreferred(raw.preferredVersion),
       versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
     },
   };
-}
-
-/** v1 -> v2: the old file's `source` WAS the AI image (design §2.1). */
-export function pairMetaFromLegacy(raw: Record<string, unknown>): MetaParse {
-  const ai = toSide(raw.source);
-  if (ai.relPath === "") return { ok: false };
-  const dirPath = dirOf(ai.relPath);
-  const named = nameParts(ai.relPath);
-  return {
-    ok: true,
-    meta: {
-      v: PAIR_META_VERSION,
-      id: pairId(dirPath, named.base, named.suffix),
-      ...named, dirPath,
-      ai, source: null, decision: null, reviewedAt: null,
-      versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
-    },
-  };
-}
-
-/** The pair's base and suffix, read from the AI image's own name. */
-function nameParts(aiRelPath: string): { base: string; suffix: string } {
-  const name = aiRelPath.split("/").pop() ?? "";
-  const parsed = parseAiName(name);
-  return { base: parsed?.base ?? stem(name), suffix: parsed?.suffix ?? "" };
 }
 
 function toSide(raw: unknown): PairSide {
@@ -264,17 +265,13 @@ function toSide(raw: unknown): PairSide {
   return { relPath: str(r.relPath), name: str(r.name), fingerprint: str(r.fingerprint) };
 }
 
+/** Only a positive integer names a version; anything else is no preference. */
+function toPreferred(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 function toDecision(value: unknown): Decision | null {
   return value === "pending" || value === "approved" || value === "declined" ? value : null;
-}
-
-function dirOf(relPath: string): string {
-  const at = relPath.lastIndexOf("/");
-  return at < 0 ? "" : relPath.slice(0, at);
-}
-
-function stem(name: string): string {
-  return svgStem(name);
 }
 
 function str(value: unknown): string {

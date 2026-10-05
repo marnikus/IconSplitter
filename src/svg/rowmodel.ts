@@ -3,7 +3,7 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, newestValid } from "../lib/svgfile";
+import { approvedVersion, newestValid, preferredValid } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
@@ -29,14 +29,29 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
 }
 
 /**
+ * The version this row shows, copies, shows code for and reviews: the one the
+ * user PICKED as preferred when it is still valid, else the newest valid one
+ * (2026-10-05). One owner for all of them, so no two surfaces can disagree.
+ */
+export function targetVersionOf(row: SvgRow): SvgVersion | null {
+  const preferred = preferredValid(row.meta?.versions ?? [], row.meta?.preferredVersion ?? null);
+  return preferred ?? row.newest;
+}
+
+/**
  * The ONE version the row previews, copies and shows code for. Both halves
  * read it, so the preview can never show a different version than Copy hands
  * to the clipboard.
  */
 export function previewTargetOf(row: SvgRow): SvgTarget | null {
-  const version = row.newest;
+  const version = targetVersionOf(row);
   if (version === null || version.svgPath === "") return null;
   return { version: version.version, svgPath: version.svgPath };
+}
+
+/** True when the row shows a version the user chose — not merely the newest. */
+export function isPreferredTarget(row: SvgRow): boolean {
+  return preferredValid(row.meta?.versions ?? [], row.meta?.preferredVersion ?? null) !== null;
 }
 
 export function toListRow(row: SvgRow): SvgListRow {

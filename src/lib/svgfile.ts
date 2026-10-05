@@ -56,9 +56,25 @@ export function tallyReviews(versions: readonly SvgVersion[]): ReviewTally {
   return out;
 }
 
+/** Previewable = generated AND validated; a failed attempt is never shown. */
+export function isUsableVersion(v: SvgVersion): boolean {
+  return v.status === "generated" && v.validation.ok;
+}
+
 export function newestValid(versions: readonly SvgVersion[]): SvgVersion | null {
-  const list = versions.filter((v) => v.status === "generated" && v.validation.ok);
+  const list = versions.filter(isUsableVersion);
   return list.length > 0 ? list[list.length - 1] : null;
+}
+
+/**
+ * The version the user chose as preferred (2026-10-05), or null when there is
+ * no choice, the version is gone, or it stopped being previewable — the row
+ * then falls back to the newest valid version instead of showing a broken one.
+ */
+export function preferredValid(versions: readonly SvgVersion[], preferred: number | null): SvgVersion | null {
+  if (preferred === null) return null;
+  const found = versions.find((v) => v.version === preferred);
+  return found !== undefined && isUsableVersion(found) ? found : null;
 }
 
 /** The version currently carrying an approval, if any. */

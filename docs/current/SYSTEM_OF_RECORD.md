@@ -116,10 +116,13 @@ Selection V2 (adds to, never replaces, the rules above):
   panel, one pair per row showing BOTH an Original and an AI result thumbnail,
   each labelled) and **Comparison** (the V1 `CompareView` panes + a pair
   picker). Layout, filters, selection and decisions survive switching.
-* Thumbnail zoom: range slider **48–240 px, step 4, default 84** with a live
+* Thumbnail zoom: range slider **48–800 px, step 4, default 84** with a live
   "128 px" readout and both bounds shown; row and thumbnail height follow it
   while dragging, width comes from the image's own aspect ratio (never
   stretched, never upscaled past natural height). Persisted across restarts.
+  It is the SAME control Generate SVG renders (`ui/ZoomSlider`, RUN-4), and an
+  artwork wider than its column shrinks to fit instead of clipping or pushing
+  the pair over the next one.
 * Checkbox selection is separate state keyed by `pair_<hash>`, so sorting and
   filtering never lose it: header checkbox (checked / unchecked /
   indeterminate), Select visible, Deselect all, and live counts for selected,
@@ -211,12 +214,26 @@ that makes a network call, only when the user asks it to):
   fact across a restart: the rows come back as **Unknown** with the id and the
   elapsed time, and the panel offers an explicit "Retry these" through the
   normal confirmation — never an automatic resend.
-* Zoom: ONE value (`svg-thumb`, 48..240 px, step 4, default 84) sizes BOTH
+* Queue (2026-10-05, RUN-2): pressing Generate during a run is never refused
+  and never interrupts it — the confirmation appends that batch to a visible
+  queue (`svg-queue`), frozen at the moment of confirmation (its sources,
+  config, caps, params and prompt are what will be sent). A run in flight is
+  NOT in the list; each waiting batch shows its stems and its "N sources · M
+  requests · model" plan, can be removed one by one, and the row badges say
+  `Queued`. The worker (`src/svg/runqueue.ts`) drains the oldest first and
+  never has two requests in flight; the next batch starts by itself the moment
+  the current one settles. Cancel run means stop: it aborts the flight AND
+  drops the waiting queue, saying both. The queue is in-memory only — a reload
+  never resends anything and restart truth stays the in-flight journal (I-20).
+* Zoom: ONE value (`svg-thumb`, 48..800 px, step 4, default 84) sizes BOTH
   the AI thumbnail and the SVG preview box, the row's minimum height and the
-  previews column (inline `--svg-thumb`). Both boxes are the same square and
-  each artwork is contained inside it (`object-fit: contain` for the image,
-  `xMidYMid meet` for the SVG), so the two previews resize in step, keep
-  their aspect ratio and never overlap the next column.
+  previews column (inline `--svg-thumb`). Both previews take their height from
+  it and their width from their own aspect ratio (`lib/reviewprefs.thumbBox`
+  for the raster, `vectorThumbBox` for the SVG's `viewBox`), so they resize in
+  step and nothing is stretched; a box wider than its column shrinks
+  (`max-width: 100%`) and the pair WRAPS rather than clipping or overlapping
+  the next column. The same shared shell, slider and sizing rules drive
+  Selection V2 (`ui/ZoomSlider`, `ui/ThumbPair`, RUN-4).
 * Every result is validated (well-formed XML, exactly one `<svg>` root, valid
   `viewBox` or documented dimensions, no scripts/event handlers/unsafe
   external URLs/executable content, visible geometry) before anything is
@@ -225,8 +242,19 @@ that makes a network call, only when the user asks it to):
 * Naming/versioning: the SVG sits beside the AI image with the same base
   name; the first version is the plain `<stem>.svg`, each
   regeneration takes the next free version from disk + sidecar and never
-  overwrites. The newest VALID version is previewed by default; every version
-  stays reachable through the history dialog.
+  overwrites. The newest VALID version is previewed by default unless the user
+  chose a preferred one (below); every version stays reachable through the
+  versions popup.
+* Preferred version (2026-10-05, RUN-3): the versions popup (`svg-history-*`,
+  `src/svg/VersionsDialog.tsx`) lists EVERY recorded version of one icon —
+  failed attempts included, each valid one drawing its own sanitized preview —
+  and "Use this version" writes `preferredVersion` into that pair's own file.
+  It is a choice, never a deletion: the versions array is untouched, every
+  other valid version keeps its own button, `Use the newest version` clears the
+  preference, and the whole thing is ONE undoable step (`svgPrefer`). The row
+  preview, its target path, its Code button and Copy all read the same
+  `previewTargetOf` (RUN-3), so they can never disagree; a preference that is
+  missing from disk or no longer valid falls back to the newest valid version.
 * Previewing a saved SVG (`src/lib/svgpreview.ts`, rendered by
   `src/svg/SvgPreview.tsx`): the saved text is parsed with the real XML parser,
   repaired once when a namespace is missing, sanitized (no scripts, no event
@@ -327,7 +355,7 @@ filter and persistence state are V1's and stay single-owned):
 core: SelectionApi      discovery, pairs + decisions, filter, sort,
                         active row (core.selectedId), write status
 checked: string[]       checkbox selection (pair ids) — never a decision
-prefs: ReviewPrefs      { mode: "list"|"compare", thumbHeight: 48..240 }
+prefs: ReviewPrefs      { mode: "list"|"compare", thumbHeight: 48..800 }
 derived                 header check state, bulk scope
                         { affected, blocked, hidden }
 ```
@@ -395,9 +423,12 @@ Batch:
 * **I-15 (selection V2, RULE 6/4):** a bulk decision touches exactly
   `checked ∩ visible ∩ complete`; hidden checks are counted and reported,
   never applied, and an incomplete pair is never approved silently.
-* **I-16 (selection V2, RULE 24):** the zoom slider, the row height and the
-  thumbnail height are one value; moving the slider changes all three in the
-  same render, and the stored value survives a restart.
+* **I-16 (both review tabs, RULE 24 — RUN-4):** the zoom slider, the row height
+  and both thumbnail heights are one value, capped at 800 px; moving the slider
+  changes them in the same render, in Selection V2 and Generate SVG alike —
+  through the same `ui/ZoomSlider` + `ui/ThumbPair` + `lib/reviewprefs` rules —
+  and the stored value survives a restart. A preview's width follows its own
+  aspect ratio; nothing is stretched, clipped or overlapped at any value.
 * **I-17 (SVG preview, RULE 3/14):** the preview background is an app setting —
   it lives in the frame around the preview and never in the SVG text, the
   sidecar or an export; the code dialog always shows the saved bytes.
@@ -569,6 +600,26 @@ Batch:
   scan never touches the clipboard. The read reports a state, not just text
   (`lib/clipboardpath.ClipRead`: `text` / `empty` / `blocked` / `unsupported`),
   which is what lets the toast name the reason and the row name both ways out.
+* **I-53 (the queue is an append-only promise, RULE 4/24 — RUN-2):** pressing
+  Generate while a run is in flight appends the confirmed batch to a visible
+  queue instead of interrupting the run, being refused or overwriting a waiting
+  one; the queue is frozen at confirmation time, drains strictly one request at
+  a time, and the next batch starts by itself when the current one settles. A
+  waiting batch can be removed (and Cancel drops them all) without touching the
+  run in flight; nothing queued is ever sent twice, and a reload never resends
+  anything (the in-flight journal stays the only restart truth).
+* **I-54 (a preference is a choice, never a deletion, RULE 3/13/12 — RUN-3):**
+  the versions popup lists every version of one icon; "Use this version" writes
+  `preferredVersion` into that pair's own file, leaves every version record and
+  file exactly where it was, keeps every other valid version re-choosable,
+  refuses an unusable one, can be reset to "newest", and is ONE undoable step.
+  The row preview, the row's target path, Code and Copy all hand out the
+  preferred (else newest valid) version — never two different answers.
+* **I-55 (one zoom behaviour, two tabs, RULE 3/24 — RUN-4):** Selection V2 and
+  Generate SVG render the same slider (`ui/ZoomSlider`) and the same two-preview
+  shell (`ui/ThumbPair`), sized by the same pure rules (`lib/reviewprefs`), so
+  "one zoom value, both previews, own aspect ratio, never clipped or
+  overlapping" is enforced once and cannot drift between the tabs.
 * **I-49 (a pair file is read from where it sits, RULE 3/13):** every read of a
   pair file rebases it onto the root doing the reading — `dirPath` is the file's
   own directory, each face's `relPath` is that directory plus the name the file
@@ -637,7 +688,7 @@ Batch:
 | IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle (shared by both Selection tabs) | permission re-requested on restore |
 | localStorage `iconSplitter.selectionV2.prefs.v1` | V2 view prefs `{ mode, thumbHeight }` | validated + clamped on read (RULE 13) |
 | IndexedDB `iconSplitter/handles["__svg__"]` | Generate SVG root handle | falls back to the Selection handle |
-| localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read (RULE 13); a missing/non-boolean `providerOpen` keeps the model card open |
+| localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight (48–800), providerOpen, previewBg }` | clamped/validated on read (RULE 13); a missing/non-boolean `providerOpen` keeps the model card open |
 | localStorage `iconSplitter.svg.prompt.v1` | generation prompt | empty/missing → documented default |
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, stall window, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.svg.inflight.v1` | the in-flight journal: run/batch id, source ids + names, model, start time, provider request id — no key, no prompt, no answer | validated on read; corrupt = empty; cleared when a request gets a confirmed outcome |
@@ -645,7 +696,7 @@ Batch:
 | localStorage `iconSplitter.rootpaths.v1` | the picked roots' real full paths, `{ [folderName]: path }` | normalised + validated on read (I-29); used only to build copy text; never leaves the browser |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
-| `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
+| `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + the chosen `preferredVersion` (null = newest valid) + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -670,19 +721,20 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
-| Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
+| Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar (rendering the shared zoom), prefs IO |
+| Shared view controls | `src/ui/ZoomSlider.tsx`, `src/ui/ThumbPair.tsx` | the ONE thumbnail-zoom input and the ONE two-preview shell both review tabs render (RUN-4), sized by `lib/reviewprefs` |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
 | The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) and `lib/rootpath` (where a copy stops, I-28/I-48) |
 | The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named and the derivation from one of them (`resolve()` segments, I-51), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
-| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
-| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
+| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `runactions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts`, `queue.ts`, `runqueue.ts`, `preferact.ts`, `preferundo.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, the API-key actions, the append-only generation queue (model + worker, RUN-2) and the preferred-version write + its undo bridge (RUN-3) |
+| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgQueueBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `VersionsDialog.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, the queue bar, list, rows, previews (AI thumb + inline SVG frame in the user's background, both sized by the shared zoom), batch strip, the paginated confirmation, the code dialog, the versions popup with its preferred-version pick, hotkeys, the three sampling controls |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 75 files / 704 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 88 files / 935 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -803,10 +855,30 @@ and `data-testid` handles):
   preview frame: inline `<svg>` with `xmlns` + `100%` + `xMidYMid meet`, the
   frame's `data-version` equal to the version Copy hands over, "Preview
   failed" + reason for a malformed file, "No SVG" for a source with none, the
-  one zoom slider resizing BOTH preview boxes in step at EVERY value 48…240,
+  one zoom slider resizing BOTH preview boxes in step at EVERY value 48…800,
+  a wide document getting its own wide box beside a square AI image,
   every preview background applied to the frame while the document stays
   byte-identical, and the model card + request estimate following all four
   tiers
+* `svg_queue.test.ts` — the queue's pure model: append never reorders or drops
+  what waits, the oldest is next, remove/clear touch only the waiting list, the
+  ticket is unique, and the label names sources, requests and model (including
+  `no model`)
+* `svg_queue_ui.test.tsx` — the queue end to end in the real panel with a
+  runner held open by hand: Generate stays available while a run is in flight,
+  a confirmed second batch is APPENDED (the run in flight is never aborted),
+  the queue bar names the waiting stems and the `Queued` badge lands on the
+  right row, the next batch starts by itself when the first settles (strictly
+  one run at a time, in order), Remove drops one waiter without touching the
+  run, Cancel aborts the flight AND drops the queue saying both, and the
+  confirmation states that a batch will wait its turn
+* `svg_variants_ui.test.tsx` — the versions popup: every version listed with
+  its own artwork (failed ones included, not preferrable), choosing an older
+  version writes `preferredVersion` into the pair file while deleting nothing
+  and leaving every other version re-choosable, the row preview + target path +
+  Copy hand out exactly that document, the choice survives a restart, `Use the
+  newest version` returns to the newest, and Undo restores the previous choice
+  in one step
 * `log_lib.test.ts` — the log's pure core: the entry shape, key/data-URL
   redaction on write, the cap clamp (0/12→50, 250→200, 600→500, 99999→1000),
   the ring buffer, `formatEntry`/`formatLogText` and a damaged or foreign stored

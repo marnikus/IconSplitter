@@ -70,8 +70,9 @@ describe("applyEntry", () => {
   });
 
   it("clamps restored prefs into the slider range", async () => {
+    // 9999 is refused by clampThumb and lands on the maximum the slider offers
     await expect(applyEntry(entry("prefs"), { mode: "compare", thumbHeight: 9999 })).resolves.toBe(true);
-    expect(getAppState().prefs).toEqual({ mode: "compare", thumbHeight: 240 });
+    expect(getAppState().prefs).toEqual({ mode: "compare", thumbHeight: 800 });
     await expect(applyEntry(entry("prefs"), [])).resolves.toBe(false);
   });
 
@@ -84,6 +85,6 @@ describe("applyEntry", () => {
 
   it("refuses a kind it does not know instead of guessing", async () => {
     await expect(applyEntry(entry("deleteFiles"), { all: true })).resolves.toBe(false);
-    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "view", "prefs", "sheets", "svgReview"]);
+    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "view", "prefs", "sheets", "svgReview", "svgPrefer"]);
   });
 });

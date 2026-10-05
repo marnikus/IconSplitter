@@ -7,28 +7,26 @@
 import { useCallback, useRef, type Dispatch } from "react";
 import { log } from "../log/logstore";
 import type { ReviewStatus } from "../lib/svgfile";
-import { validateBatchPlan } from "../lib/svgbatch";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
-import type { DirHandleLike } from "../lib/fs";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { useKeyActions } from "./keyactions";
+import { message } from "./runner";
+import { useRunActions } from "./runactions";
+import type { QueuedBatch } from "./queue";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
-import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
-import { message, runGeneration } from "./runner";
-import { withRunLog } from "./runlog";
-import { guard, perRequestOf, planOf } from "./runplan";
+import { preferVersion, usePreferApplier } from "./preferact";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
-import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
+import type { RunProgress, SvgRefs, SvgRow } from "./types";
 import type { Discovery } from "./sources";
 
 /** Everything an action may touch. One object, passed everywhere. */
@@ -58,12 +56,14 @@ export interface SvgCtx {
   setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void;
   setProgress: (p: RunProgress | null) => void;
   setProgressFn: (fn: (p: RunProgress | null) => RunProgress | null) => void;
+  /** Mirrors the worker's waiting list into the model, for the queue bar. */
+  setQueue: (queue: QueuedBatch[]) => void;
 }
 
 /** The write half of the context, wired by svg/ctx from the reducer. */
 export type SvgSetters = Pick<SvgCtx,
   "say" | "loadAll" | "refreshKey" | "setRootName" | "setDiscovery" | "setBusy"
-  | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn">;
+  | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn" | "setQueue">;
 
 /** The public action surface of the tab, in the order the panel uses them. */
 export interface SvgActions {
@@ -89,10 +89,16 @@ export interface SvgActions {
   decide: (ids: string[], decision: ReviewStatus) => void;
   requestGenerate: (ids: string[]) => void;
   cancelRun: () => void;
+  /** Drops one batch that is still waiting (never the one in flight). */
+  removeQueued: (id: string) => void;
+  /** Drops every waiting batch; the run in flight keeps going. */
+  clearQueue: () => void;
   confirmGenerate: () => void;
   dismissDialog: () => void;
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
+  /** The version this pair previews and copies; null = the newest valid one. */
+  prefer: (id: string, version: number | null) => void;
   copyCode: (id: string, version: number) => void;
   openLocation: (id: string) => void;
 }
@@ -103,6 +109,7 @@ export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 /** The undo path must live where the model does (RULE 12). */
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
+  usePreferApplier(ctx);
   return {
     ...useSourceActions(ctx),
     ...useViewActions(ctx),
@@ -110,8 +117,20 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
     ...useSelectActions(ctx),
     ...useKeyActions(ctx),
     ...useRunActions(ctx),
+    ...usePreferActions(ctx),
     ...useCodeActions(ctx),
   };
+}
+
+/** Choosing the version a pair previews and copies (RUN-3, preferact.ts). */
+function usePreferActions(ctx: SvgCtx): Slice<"prefer"> {
+  const latest = useRef(ctx);
+  latest.current = ctx;
+  const prefer = useCallback((id: string, version: number | null) => {
+    log({ feature: "svg", action: "version-preferred", detail: version === null ? `${id} → newest` : `${id} → v${version}` });
+    void preferVersion(latest.current, id, version);
+  }, []);
+  return { prefer };
 }
 
 function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
@@ -215,61 +234,6 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
     void decideReview(latest.current, ids, decision);
   }, []);
   return { toggleCheck, selectVisible, deselectAll, setActive, decide };
-}
-
-function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "confirmGenerate" | "dismissDialog"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const requestGenerate = useCallback((ids: string[]) => {
-    const c = latest.current;
-    const why = guard(c, ids);
-    if (why !== null) return c.say(why, true);
-    // The plan the user confirms is the plan the runner will send (RULE 10):
-    // one splitter, one effective per-request size, validated before the dialog.
-    const problems = validateBatchPlan(planOf(c, ids), perRequestOf(c));
-    if (problems.length > 0) return c.say(problems[0], true);
-    const dialog: Dialog = { kind: "confirm", ids };
-    log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
-    c.dispatch({ type: "dialog", dialog });
-  }, []);
-  const cancelRun = useCallback(() => {
-    const c = latest.current;
-    log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "the user asked to cancel — finished results are kept" });
-    c.refs.abort.current?.abort();
-    c.say("Cancelling — finished results are kept");
-  }, []);
-  const confirmGenerate = useCallback(() => {
-    void confirmRun(latest.current);
-  }, []);
-  const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
-  return { requestGenerate, cancelRun, confirmGenerate, dismissDialog };
-}
-
-/** One confirmation = one run: a second click while running is ignored. */
-async function confirmRun(ctx: SvgCtx): Promise<void> {
-  const dialog = ctx.m.dialog;
-  if (dialog === null || dialog.kind !== "confirm" || ctx.m.running) return;
-  const ids = dialog.ids;
-  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
-  ctx.dispatch({ type: "dialog", dialog: null });
-  const controller = new AbortController();
-  ctx.refs.abort.current = controller;
-  ctx.dispatch({ type: "running", running: true });
-  ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
-  const sources = ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source);
-  const summary = await runGeneration({
-    root: ctx.refs.root.current as DirHandleLike,
-    apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
-    metas: ctx.refs.metas, signal: controller.signal,
-    onEvent: withRunLog((event) => onRunEvent(event, ctx)),
-  });
-  ctx.dispatch({ type: "running", running: false });
-  // The finished run stays visible: its per-request outcomes are the record of
-  // what was sent, what it cost and what failed (the batch strip shows it).
-  ctx.refs.abort.current = null;
-  await reloadSidecars(ctx.refs, sources, ctx);
-  ctx.say(summaryLine(summary), summary.saved === 0 && summary.problems.length > 0);
 }
 
 /** One selection gesture = one entry holding the whole selection (RULE 12). */

@@ -17,6 +17,8 @@ import SvgControls, { type SvgCounts } from "./SvgControls";
 import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import SvgList from "./SvgList";
+import SvgQueueBar from "./SvgQueueBar";
+import { queuedSourceIds } from "./queue";
 import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
 import { exclusionSummary } from "./sourcelist";
@@ -37,8 +39,8 @@ export default function SvgPanel() {
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
       <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
-        rootRef={rootRef} readCode={g.readCode}
-        onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode} />
+        rootRef={rootRef} readCode={g.readCode} queued={g.running}
+        onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode} onPrefer={g.prefer} />
       <Overlay g={g} />
     </div>
   );
@@ -67,7 +69,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
     activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootToken: g.rootToken, bg: g.bg, rootRef,
     toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
     decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
-    openLocation: g.openLocation,
+    openLocation: g.openLocation, queued: queuedSourceIds(g.queue),
   };
   return (
     <>
@@ -78,6 +80,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
+      <SvgQueueBar queue={g.queue} onRemove={g.removeQueued} onClear={g.clearQueue} />
       <SvgList g={g} actions={actions} />
     </>
   );
