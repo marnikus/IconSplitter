@@ -13,7 +13,7 @@ import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackgr
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import type { DirHandleLike } from "../lib/fs";
-import { pickDirectory } from "../batch/picker";
+import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { useKeyActions } from "./keyactions";
@@ -120,14 +120,17 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const chooseRoot = useCallback(() => {
     void (async () => {
       const c = latest.current;
-      const handle = await pickDirectory();
-      if (!handle) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
-      c.refs.root.current = handle;
-      c.dispatch({ type: "root", name: handle.name });
-      log({ feature: "svg", action: "root-picked", detail: handle.name });
-      await rememberRoot(handle);
+      const picked = await pickFolderFor((h) => {
+        c.refs.root.current = h;
+        c.dispatch({ type: "root", name: h.name });
+
+        void rememberRoot(h);
+      });
+      if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
+      const captured = picked.message === null ? "" : " · full path captured";
+      log({ feature: "svg", action: "root-picked", detail: picked.handle.name + captured });
       await scanSources(c.refs, c);
-      c.say(`Approved sources scanned from ${handle.name}`);
+      c.say(picked.message ?? `Approved sources scanned from ${picked.handle.name}`);
     })();
   }, []);
   const rescan = useCallback(() => {

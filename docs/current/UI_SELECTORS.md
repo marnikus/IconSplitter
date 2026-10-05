@@ -324,9 +324,9 @@ Source bar (only after a root is remembered; `svg-root-empty` /
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-root` | path pill | the root name |
+| `svg-root` | path pill | the root's label: its **full path** once one was captured (I-36), else the folder name |
 | `svg-choose-root` | `Choose source folder…` / `Change folder…` | the picker, offered whether or not a root is loaded (I-30) |
-| `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so the user pastes it once (Explorer's address bar or "Copy as path"); normalised and remembered per folder name (I-29). `svg-root-path-label` is the label, `svg-root-path-note` says when nothing is set |
+| `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so it is captured from the clipboard when the folder is picked (I-35) or pasted here; normalised and remembered per folder name (I-29). `svg-root-path-label` is the label; `svg-root-path-use` is `Use copied path` (adopt what Explorer copied, no typing); `svg-root-path-note` names the state: "✓ every copy uses this path" / "completed from the copied folder — check it" / "not set — Chrome can't read the drive path; copy the folder in Explorer, then press “Use copied path”", or the button's own feedback ("Nothing path-like on the clipboard…") |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |

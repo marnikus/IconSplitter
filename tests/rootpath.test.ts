@@ -8,9 +8,15 @@ import {
   ROOT_PATH_KEY,
   folderCopyText,
   loadRootPath,
+  loadRootPathInfo,
   normalizeRootPath,
+  pathFromCopied,
+  pathLeaf,
   rememberedRootPath,
+  rootPathRevision,
   saveRootPath,
+  saveRootPathInfo,
+  subscribeRootPaths,
 } from "../src/lib/rootpath";
 
 const ROOT = "test_processing";
@@ -117,5 +123,67 @@ describe("folderCopyText", () => {
     saveRootPath(ROOT, FULL);
     expect(folderCopyText(ROOT, "sub/_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
       .toBe(`${FULL}\\sub\\_split_output\\2026-10\\2026-10-01_10-24-31`);
+  });
+});
+
+describe("pathLeaf", () => {
+  it("names the last folder, forgiving quotes and the trailing separator", () => {
+    expect(pathLeaf(`"${FULL}\\"`)).toBe(ROOT);
+    expect(pathLeaf("F:\\")).toBe("F:");
+    expect(pathLeaf("")).toBe("");
+  });
+});
+
+describe("pathFromCopied — the picked folder's real path (I-35)", () => {
+  it("adopts a copied path whose leaf is the picked folder, whatever the styling", () => {
+    expect(pathFromCopied(`"${FULL}\\"`, ROOT)).toEqual({ path: FULL, how: "copied" });
+    expect(pathFromCopied(FULL.toUpperCase(), ROOT)).toEqual({ path: FULL.toUpperCase(), how: "copied" });
+    expect(pathFromCopied("F:/Stocks 2026/icons testing/single/test_processing", ROOT))
+      .toEqual({ path: FULL, how: "copied" });
+  });
+
+  it("completes the path when the user copied the parent it lives in", () => {
+    expect(pathFromCopied("F:\\Stocks 2026\\icons testing\\single", ROOT))
+      .toEqual({ path: FULL, how: "completed" });
+    expect(pathFromCopied("F:", ROOT)).toEqual({ path: `F:\\${ROOT}`, how: "completed" });
+  });
+
+  it("refuses a file path, a bare word and an empty clipboard — never invents a path", () => {
+    expect(pathFromCopied("F:\\icons\\icon-airplane-landing.png", ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied("hello", ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied(ROOT, ROOT)).toEqual({ path: "", how: null }); // a name with no drive
+    expect(pathFromCopied("", ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied(FULL, "")).toEqual({ path: "", how: null });
+  });
+
+  it("keeps UNC shares intact when completing them", () => {
+    expect(pathFromCopied("\\\\server\\share\\icons", ROOT))
+      .toEqual({ path: `\\\\server\\share\\icons\\${ROOT}`, how: "completed" });
+  });
+});
+
+describe("the stored record and its revision (I-36)", () => {
+  it("remembers how the path was obtained, and reads a legacy string as pasted", () => {
+    saveRootPathInfo(ROOT, FULL, "completed");
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "completed" });
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: FULL })); // written before `how`
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "pasted" });
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: 42, how: "copied" } }));
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+  });
+
+  it("notifies subscribers on a real change, and stays quiet on an identical save", () => {
+    let notifications = 0;
+    const stop = subscribeRootPaths(() => { notifications++; });
+    saveRootPathInfo(ROOT, FULL, "copied");
+    expect(notifications).toBe(1);
+    saveRootPathInfo(ROOT, FULL, "copied"); // nothing moved
+    expect(notifications).toBe(1);
+    saveRootPathInfo(ROOT, "F:\\elsewhere", "pasted"); // a real change
+    expect(notifications).toBe(2);
+    expect(rootPathRevision()).toBeGreaterThan(0);
+    stop();
+    saveRootPathInfo(ROOT, "");
+    expect(notifications).toBe(2); // unsubscribed
   });
 });

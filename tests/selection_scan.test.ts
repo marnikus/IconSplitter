@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { SCAN_IDLE } from "../src/lib/scanseq";
 import { pairId } from "../src/lib/pairing";
 import { initialSelState, type SelState } from "../src/selection/state";
-import { rescan } from "../src/selection/useSelection";
+import { rescan } from "../src/selection/rootsource";
 import { setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";

@@ -87,6 +87,24 @@ describe("Selection V2 panel", () => {
     expect(text(el, "[data-testid='v2-toast']")).toContain("Folder path copied");
   });
 
+  it("keeps the picked root name when the scan commits in the same batch", async () => {
+    const { el } = await mount(makeRoot());
+    // The scan commit is built from a state snapshot; a snapshot taken before
+    // the pick used to win and the pill fell back to "Choose source folder…".
+    expect(text(el, "[data-testid='v2-root']")).toBe("split_root");
+    expect(rows(el).length).toBeGreaterThan(0);
+  });
+
+  it("shows the full path in the pill once it is captured, without a reload", async () => {
+    const { el } = await mount(makeRoot());
+    const before = rows(el).length;
+    stubClipboard("F:\\Stocks 2026\\icons\\split_root\\");
+    await click(q(el, "[data-testid='v2-root-path-use']")!);
+    expect(text(el, "[data-testid='v2-root']")).toBe("F:\\Stocks 2026\\icons\\split_root");
+    expect(input(el, "[data-testid='v2-root-path']").value).toBe("F:\\Stocks 2026\\icons\\split_root");
+    expect(rows(el).length).toBe(before); // the list is untouched by a path capture
+  });
+
   it("loads both sides of a pair as real object-URL thumbnails", async () => {
     const { el } = await mount(makeRoot());
     const row = q(el, `[data-testid='v2-row-${FOG}']`)!;
@@ -341,6 +359,16 @@ async function mount(root: FakeDir): Promise<{ el: HTMLElement; ui: Root }> {
 
 function q(el: HTMLElement, sel: string): HTMLElement | null {
   return el.querySelector(sel);
+}
+
+function input(el: HTMLElement, sel: string): HTMLInputElement {
+  return q(el, sel) as HTMLInputElement;
+}
+
+function stubClipboard(value: string): void {
+  Object.defineProperty(navigator, "clipboard", {
+    value: { readText: async () => value, writeText: async () => undefined }, configurable: true,
+  });
 }
 
 function rows(el: HTMLElement): Element[] {

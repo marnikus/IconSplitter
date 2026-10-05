@@ -6,6 +6,7 @@
 
 import { auditText } from "./sourcelist";
 import RootPathField from "../ui/RootPathField";
+import { useRootLabel } from "../ui/userootpath";
 import type { Discovery } from "./sources";
 
 export interface SvgCounts {
@@ -25,12 +26,15 @@ export interface SourceLineProps {
 }
 
 export default function SourceLine({ rootName, discovery, busy, counts, onChooseRoot, onRescan }: SourceLineProps) {
+  // The pill names the folder's real path as soon as one is known, so the user
+  // never has to open a dialog to find out what a copy will hand over (I-36).
+  const label = useRootLabel(rootName);
   return (
     <div className="svg-toolbar">
       <div className="svg-source">
         {rootName === "" ? <PickButton label="Choose source folder…" onClick={onChooseRoot} /> : (
           <>
-            <span className="svg-path-pill" data-testid="svg-root" title={rootName}>📂 Root: {rootName}</span>
+            <span className="svg-path-pill" data-testid="svg-root" title={label}>📂 Root: {label}</span>
             <PickButton label="Change folder…" onClick={onChooseRoot} />
             <RescanButton busy={busy} onClick={onRescan} />
             <RootPathField key={rootName} rootName={rootName} testid="svg-root-path" />

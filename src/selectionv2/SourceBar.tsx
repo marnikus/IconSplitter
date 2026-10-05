@@ -5,6 +5,7 @@ import type { ViewMode } from "../lib/reviewprefs";
 import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
 import RootPathField from "../ui/RootPathField";
+import { useRootLabel } from "../ui/userootpath";
 import SegButton from "./SegButton";
 
 export interface SourceBarProps {
@@ -19,11 +20,12 @@ export interface SourceBarProps {
 }
 
 export default function SourceBar(p: SourceBarProps) {
+  const label = useRootLabel(p.rootName); // the full path once it is known (I-36)
   return (
     <div className="v2-toolbar">
       <div className="v2-source">
-        <button className="v2-path-pill" data-testid="v2-root" onClick={p.chooseRoot} title={p.rootName || undefined}>
-          {p.rootName || "Choose source folder…"}
+        <button className="v2-path-pill" data-testid="v2-root" onClick={p.chooseRoot} title={label || undefined}>
+          {label || "Choose source folder…"}
         </button>
         <button className="v2-btn primary" data-testid="v2-rescan" onClick={p.rescan}>↻ Rescan</button>
         <button className="v2-btn ghost" data-testid="v2-watcher" onClick={p.toggleWatcher} title="Auto-rescan every 30 s">

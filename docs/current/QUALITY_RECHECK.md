@@ -1293,3 +1293,65 @@ more than once; now:
 | layout, both tabs | 3 scroll positions each: the dock covered **0 of 11** (SVG) and **0 of 15** (V2) visible row controls, **0** blocked hit-tests, the window itself never scrolls, and a real mouse click on the last row's control toggles it (`false → true`) |
 
 New debt accepted: none.
+
+## 2026-10-05 — the picked folder's full path, captured at pick time
+
+Reported: *"why it build the folder path not from my selected folder directly but
+ask to put my full path folder manually? make it build full path from selecting
+folder to scan. and give full path of selected folder visible."* The honest
+answer is a browser boundary, not a bug: `showDirectoryPicker()` returns a handle
+whose only identity is `{ kind, name }` — no drive, no folders above; a `File`
+from a handle has an empty `path`, a folder `input` gives only a path relative to
+the picked folder, and `startIn`/`id` remember a dialog's folder without
+reporting it. What the app can do is take the path from the clipboard at the
+moment of the pick (Explorer's "Copy as path"), match it against the folder that
+was really picked, and never invent one. Full record:
+`archive/2026-10-05-root-path-at-pick/design.md`.
+
+The chosen process was boxed in the picker:
+`ui/pickroot.pickRootWithPath()`/`pickFolderFor()` (read the clipboard before the
+dialog, once more only if that read was empty, then adopt), `lib/clipboardpath`
+(guarded read + match + save), `lib/rootpath` (the string rules, `{ path, how }`
+per folder name, a revision + subscribers), `ui/userootpath` (the live React
+view) and `ui/RootPathField` (field, the three-state status, `Use copied path`).
+Both root pills show the full path the moment it is known. Invariants I-35…I-37.
+
+### Lanes run (`npm run verify`, `/tmp/verify16.log`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing baseline) — GATE PASSED |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED |
+| 4/6 Tests | **79 files / 763 tests, all green** (was 77 / 737) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 97.2 statements · 92.09 branches · 97.3 functions · 98.48 lines |
+| 6/6 Build | `dist/index.html` 646.54 kB / 191.17 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/lib/rootpath.ts` | 26 / 219 | the path string rules + the one storage; `{ path, how }` with a legacy-string read |
+| `src/lib/clipboardpath.ts` | 3 / 41 | **new**: guarded clipboard read, the match, the save |
+| `src/ui/pickroot.ts` | 3 / 62 | **new**: `pickRootWithPath` + the shared `pickFolderFor` every tab uses |
+| `src/ui/userootpath.ts` | 2 / 25 | **new**: `useRootPath`/`useRootLabel` (storage as a live value) |
+| `src/ui/RootPathField.tsx` | 10 / 85 | the field, the status line, `Use copied path` |
+| `src/selection/rootsource.ts` | 11 / 93 | **new**: boot / pick / rescan, moved out of `useSelection` (it had reached 302 lines with the change — split, not squeezed) |
+| `src/batch/outcomes.ts` | 7 / 38 | **new**: item → status records + tally, moved out of `useBatch` (303 → 279) |
+| `src/selection/useSelection.ts` | 53 / 232 | the root flow now comes from `rootsource` |
+| `src/svg/SourceLine.tsx` / `src/selectionv2/SourceBar.tsx` | 4 / 76 · 6 / 73 | the pill shows the full path when known |
+
+Baseline: **untouched**. New debt accepted: none. The extraction also fixed the
+`rescan` root-name race found by the V2 suite (state snapshots could win over the
+pick and blank the root name) — pinned by a regression test.
+
+### Browser verification (headless Chromium, 1440×900, 22 checks green)
+
+| Scenario | Result |
+|---|---|
+| pick with `"F:\Stocks 2026\icons testing\single\test_processing\" ` copied | pill and field show that path, status "✓ every copy uses this path", toast "Full path taken from your clipboard: …", memory `{ path, how: "copied" }` |
+| a row's copy action | clipboard `F:\Stocks 2026\icons testing\single\test_processing\set_A` |
+| pick with `hello` copied | nothing stored; pill `test_processing`; status "not set — Chrome can't read the drive path; copy the folder in Explorer, then press "Use copied path""; the button answers "Nothing path-like on the clipboard" |
+| pick with the copied **parent** | completed to `…\test_processing`, status "completed from the copied folder — check it" |
+| V2 pick, then the Generate SVG tab | both pills show the captured path without a reload |
+| layout with the long path in the bar | toolbar 107 px / rows band 606 px / dock 237 px; 3 scroll positions per tab: 0 controls under the dock, 0 blocked hit-tests |

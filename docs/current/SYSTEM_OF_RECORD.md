@@ -465,6 +465,22 @@ Batch:
   itself at a folder — the picker is offered whether or not a root is loaded,
   because the Selection tab's handle is a fallback for the first run, not a
   lock — and each tab has exactly one picker control.
+* **I-35 (the pick captures the path, RULE 4/13):** every way of pointing the app
+  at a folder to scan goes through `ui/pickroot.pickRootWithPath()`, which
+  captures the picked folder's real path from the clipboard when that text names
+  the folder (exactly, or completed from its parent) and remembers it. The app
+  never invents a path: text that does not name the folder is not stored, and
+  what was captured is stated to the user.
+* **I-36 (the path is visible, RULE 12):** wherever a root is shown, its full
+  path is shown with it once known — both root pills, the field, and a status
+  line naming the state the value is in (*copied or typed*, *completed from the
+  copied folder — check it*, *not set*). A user never has to open a dialog to
+  find out what a copy will hand over, and a capture in one tab reaches the
+  others without a reload.
+* **I-37 (the boundary is stated, RULE 9):** the reason the app cannot read the
+  drive itself ("Chrome can't read the drive path") is written in the UI next to
+  the action that fixes it (`Use copied path`), instead of leaving the user to
+  wonder why the app asks for something it "should" know.
 * **I-31 (SVG list, RULE 3/4):** a Generate SVG row is an **existing canonical
   AI output** whose path an approved decision names — never an invented `_AI`
   name, never a reference image, never a path that is not on disk. A source that
@@ -534,6 +550,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
+| The picked root's path | `src/ui/pickroot.ts`, `src/ui/userootpath.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/RootPathField.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the live React view of it, and the control (field + status + `Use copied path`) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
@@ -1053,7 +1070,46 @@ item's own folder; the file name is dropped in both cases. Four surfaces use it:
 the Batch scan table's row action, Selection V1's and V2's "original / AI
 result" buttons and Generate SVG's "open location".
 
-### 14.3 The Generate SVG tab can be pointed by hand
+### 14.3 The path is captured at pick time (2026-10-05, I-35…I-37)
+
+Reported: *"why it build the folder path not from my selected folder directly but
+ask to put my full path folder manually? make it build full path from selecting
+folder to scan. and give full path of selected folder visible."* The browser is
+never told the path — `showDirectoryPicker()` yields `{ kind, name }` and nothing
+else; a `File` from a handle has an empty `path`, a folder `input` gives only a
+path *inside* the picked folder, and `startIn`/`id` remember a dialog's folder
+without reporting it. What the column of the Explorer window does have is the
+path on the clipboard ("Copy as path", `Ctrl+Shift+C`), and that is what the app
+now takes:
+
+* **One way to point the app at a folder to scan**: `ui/pickroot.pickRootWithPath()`,
+  used by all three tabs' pickers. It reads the clipboard before the dialog (the
+  click's activation is freshest there) and once more only if that read was empty
+  (the other natural order: copy after picking), then matches the text against
+  the folder that was really picked: the same leaf → adopted as *copied*; the
+  copied parent → the picked name appended and flagged *completed*; a file path
+  or a bare word → **nothing** is stored (I-29: no memory beats a guess).
+* **The full path is visible with the root** (I-36): both pills show it once
+  known, the field shows it, and the status line says which state the value is in
+  — *✓ every copy uses this path*, *completed from the copied folder — check it*,
+  or *not set — Chrome can't read the drive path; copy the folder in Explorer,
+  then press “Use copied path”*. The pills follow the storage
+  (`ui/userootpath`, a subscription), so a capture in one tab is visible in the
+  other without a reload.
+* **`Use copied path`** (`svg-root-path-use`, `v2-root-path-use`) applies the
+  same rule on demand and reports at once: adopted, completed, or "Nothing
+  path-like on the clipboard".
+* The storage keeps one entry per folder name and records *how* the path was
+  obtained (`{ path, how }`, `how ∈ copied|completed|pasted`); a value written
+  before this change (a bare string) is read as `pasted`, so no memory is lost.
+* The bug the pick-time capture exposed is fixed with it: a scan commit is built
+  from a state snapshot, and when React batched it with the pick's own update the
+  snapshot carried the **old** (empty) root name and won — the pill fell back to
+  "Choose source folder…". `rescan` now takes the root's name from the handle it
+  just walked, which is the only authoritative source. Regression-tested
+  (`selectionv2_ui`: the pill shows the picked folder after the mount pick).
+
+### 14.4 The Generate SVG tab can be pointed by hand
 
 The picker used to render only while no root existed, so a tab that had
 inherited the Selection tab's remembered handle had no way to choose a folder of

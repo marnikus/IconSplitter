@@ -7,9 +7,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { linkReferences, collectAiImages, walkTree, type AiImageEntry } from "../lib/scan";
 import { readDirTree, ensureDirPath, probePath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { defaultPreset, type Preset } from "../lib/presets";
-import { parseAiName } from "../lib/naming";
 import { pickDirectory, fsSupported, ensurePermission } from "./picker";
-import { syncAndCollect, applyOutcomes, type StateKey, type Outcome } from "./statewrite";
+import { pickFolderFor } from "../ui/pickroot";
+import { syncAndCollect, applyOutcomes, type StateKey } from "./statewrite";
+import { tally, toOutcomes } from "./outcomes";
 import { processItems, type BatchItem, type ItemResult } from "./process";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
@@ -72,12 +73,14 @@ function useCtx(s: BatchState): Ctx {
 
 function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   const chooseRoot = useCallback(async () => {
-    const h = await pickDirectory();
-    if (!h) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
-    ctx.root.current = h;
+    const picked = await pickFolderFor((h) => { ctx.root.current = h; });
+    if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     await scan(ctx, setS, say);
+    if (picked.message !== null) say(picked.message);
   }, [ctx, setS, say]);
 
+  // The destination is not a scan root: no copy action names it, so its path is
+  // not captured (only the root's is — I-35).
   const chooseDest = useCallback(async () => {
     const h = await pickDirectory();
     if (!h) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
@@ -262,7 +265,8 @@ async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHan
 
 /** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24). */
 async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter): Promise<void> {
-  const outcomes = toOutcomes(results, selected);
+  const dirs = new Map(selected.map((r) => [r.relPath.toLowerCase(), r.dirPath]));
+  const outcomes = toOutcomes(results, dirs);
   await applyOutcomes(root, outcomes, new Date().toISOString());
   const byPath = new Map(outcomes.map((o) => [o.relPath.toLowerCase(), o.status]));
   const c = tally(results);
@@ -271,29 +275,4 @@ async function finalize(root: DirHandleLike, results: ItemResult[], selected: Ro
     rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, selected: false })),
     toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
-}
-
-function toOutcomes(results: ItemResult[], selected: Row[]): Outcome[] {
-  const rowsByPath = new Map(selected.map((r) => [r.relPath.toLowerCase(), r]));
-  return results.flatMap((r) => outcomeFor(r, rowsByPath.get(r.relPath.toLowerCase())));
-}
-
-function outcomeFor(r: ItemResult, row: Row | undefined): Outcome[] {
-  const parsed = parseAiName(r.relPath.split("/").pop() ?? "");
-  if (!row || !parsed) return [];
-  return [{ dirPath: row.dirPath, base: parsed.base, relPath: r.relPath, status: outcomeStatus(r) }];
-}
-
-function outcomeStatus(r: ItemResult): SourceStatus {
-  if (r.outcome === "processed") return "processed";
-  if (r.outcome === "failed") return "unprocessed"; // retryable next run
-  return r.message?.match(/missing/i) ? "deleted" : "skipped";
-}
-
-function tally(results: ItemResult[]) {
-  return {
-    done: results.filter((r) => r.outcome === "processed").length,
-    skipped: results.filter((r) => r.outcome === "skipped").length,
-    failed: results.filter((r) => r.outcome === "failed").length,
-  };
 }

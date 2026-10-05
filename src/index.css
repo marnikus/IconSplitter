@@ -604,6 +604,19 @@
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .pathfield > em { color: var(--v2-muted); font-size: 10px; font-style: normal; }
+.pathfield > em.ok { color: #7fbf9a; }
+.pathfield > em.warn { color: #d8b26a; }
+.pathfield-use {
+  padding: 7px 9px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: var(--v2-surface);
+  color: #c6cee2;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pathfield-use:hover { background: #16203a; }
 
 .svg-chip {
   display: inline-flex;

@@ -5,24 +5,19 @@
 // it; decisions stay here and on disk, which is their own source of truth.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { readDirTree, type DirHandleLike } from "../lib/fs";
-import { walkTree } from "../lib/scan";
-import { beginScan, isCurrent, SCAN_IDLE, type ScanSeq } from "../lib/scanseq";
-import { pairEntries } from "../lib/pairing";
-import { applyFilters, filterLabel, type Decision, type ListFilter, type ViewPair } from "../lib/reviewfilter";
+import { applyFilters, filterLabel, type Decision, type ListFilter } from "../lib/reviewfilter";
 import { sortLabel, sortPairs, type SortState } from "../lib/reviewsort";
-import type { ReviewRecord } from "../lib/reviewfile";
-import { pruneIds } from "../lib/session";
-import { pickDirectory, fsSupported } from "../batch/picker";
-import { loadHandles, saveHandles } from "../batch/store";
 import { bulkMessage } from "../lib/reviewbulk";
-import { getAppState, patchV2, patchView } from "../state/appstore";
+import type { ReviewRecord } from "../lib/reviewfile";
+import { fsSupported } from "../batch/picker";
 import { useAppView } from "../state/useAppState";
 import { useHistory, type HistoryApi } from "../state/HistoryProvider";
-import { loadDecisions, saveDecisions } from "./reviewstore";
-import { bindDecisionApplier, SELECTION_HANDLE_KEY, type DecisionPatch } from "./offline";
+import { getAppState, patchView } from "../state/appstore";
+import { SCAN_IDLE } from "../lib/scanseq";
+import { bindDecisionApplier, type DecisionPatch } from "./offline";
+import { saveDecisions } from "./reviewstore";
 import {
-  applyScan, initialSelState, nextPendingId, withBulkDecision, withDecision, withRecords,
+  initialSelState, nextPendingId, withBulkDecision, withDecision, withRecords,
   withReset, type BulkOut, type SelState,
 } from "./state";
 
@@ -36,15 +31,7 @@ const VIEW_TOGGLES: Record<string, string> = {
   collapsed: "Sidebar", zoom: "Detail zoom", sync: "Sync selection", autoNext: "Auto-advance",
 };
 
-interface Ctx {
-  root: { current: DirHandleLike | null };
-  state: { current: SelState };
-  hist: HistoryApi;
-  /** Which rescan may commit (see lib/scanseq) — the watcher can overlap one. */
-  seq: { current: ScanSeq };
-}
-
-type Setter = React.Dispatch<React.SetStateAction<SelState>>;
+import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";
 
 export function useSelection() {
   const view = useAppView();
@@ -81,56 +68,6 @@ function useCtx(s: SelState, hist: HistoryApi): Ctx {
   const stateRef = useRef(s);
   stateRef.current = s; // render-mirror for async callbacks (RULE 24)
   return { root: useRef(null), state: stateRef, hist, seq: useRef(SCAN_IDLE) };
-}
-
-async function boot(ctx: Ctx, setS: Setter): Promise<void> {
-  const stored = await loadHandles(SELECTION_HANDLE_KEY);
-  const h = stored?.source ?? null;
-  if (!h) return;
-  setRoot(ctx, setS, h);
-  await rescan(ctx, setS, () => undefined);
-}
-
-async function chooseRoot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
-  const h = await pickDirectory();
-  if (!h) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
-  setRoot(ctx, setS, h);
-  void saveHandles(SELECTION_HANDLE_KEY, { source: h });
-  await rescan(ctx, setS, say);
-}
-
-function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
-  ctx.root.current = h;
-  setS((p) => ({ ...p, rootName: h.name }));
-}
-
-export async function rescan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
-  const root = ctx.root.current;
-  if (!root) return;
-  const ticket = beginScan(ctx.seq.current);
-  ctx.seq.current = ticket.seq;
-  setS((p) => ({ ...p, busy: "Scanning folders…" }));
-  try {
-    const tree = await readDirTree(root, []);
-    const pairs = pairEntries(walkTree(tree, []));
-    const load = await loadDecisions(root);
-    if (!isCurrent(ctx.seq.current, ticket.id)) return; // a newer scan took over
-    const next = applyScan(ctx.state.current, pairs, load, Date.now());
-    setS(next);
-    patchView({ selectedId: next.selectedId });
-    pruneChecked(next.pairs); // a restored check must not point at a removed pair
-    if (load.corrupt) say("review-decisions.json is corrupt — kept previous decisions in memory", true);
-  } catch {
-    if (isCurrent(ctx.seq.current, ticket.id)) say("Rescan failed — the folder may be unreadable", true);
-  } finally {
-    if (isCurrent(ctx.seq.current, ticket.id)) setS((p) => ({ ...p, busy: null }));
-  }
-}
-
-function pruneChecked(pairs: ViewPair[]): void {
-  const checked = getAppState().v2.checked;
-  const kept = pruneIds(checked, new Set(pairs.map((p) => p.pairId)));
-  if (kept.length !== checked.length) patchV2({ checked: kept });
 }
 
 function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
