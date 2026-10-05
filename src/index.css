@@ -805,6 +805,11 @@
 }
 
 .svg-batch-list li.failed { color: var(--v2-red); }
+/* A request nobody has an outcome for is not a failure — it is unknown. */
+.svg-batch-list li.unknown { color: var(--v2-yellow); }
+
+/* The ticking elapsed time: tabular digits so the number never jiggles. */
+.svg-elapsed { font-variant-numeric: tabular-nums; color: var(--v2-text); }
 
 /* The paginated confirmation: one page per request. */
 .svg-modal.wide { width: min(760px, 94vw); }

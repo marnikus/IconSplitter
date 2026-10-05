@@ -898,8 +898,9 @@ elapsed time with a Cancel control. Design record:
   failure, and is never retried.
 * UI — `svg-batch-elapsed` (ticking, shared with the bulk bar via
   `src/svg/Elapsed.tsx`), the confirmation's streaming fact + stall-window
-  wording + the user's batch size ("2 × 4 max" at medium effort), and the
-  recovery note (`svg-inflight*`).
+  wording + the user's batch size ("2 × 4 max" at medium effort), the recovery
+  note (`svg-inflight*`), and the CSS for the ticking clock (tabular digits) and
+  for `li.unknown` (an unknown outcome is not painted like a failure).
 * `src/lib/svgclock.ts` (new) — `fmtElapsed` (seconds → m:ss → h:mm:ss).
 
 ## The numbers (measured)
@@ -912,7 +913,7 @@ elapsed time with a Cancel control. Design record:
 | tests | 61 files / 574 | **66 files / 614** |
 | coverage (all files, stmts/branch/funcs/lines) | 97.34 / 92.85 / 96.94 / 98.11 | 97.14 / 92.30 / 96.95 / 98.09 |
 | jscpd `src --min-tokens 60` | 12 clones | 12 clones (no new clone) |
-| build `dist/index.html` | 608.20 kB / gzip 178.81 kB | 617.47 kB / gzip 181.98 kB |
+| build `dist/index.html` | 608.20 kB / gzip 178.81 kB | 617.59 kB / gzip 182.02 kB |
 
 Coverage moved down marginally because the new reader/journal/recovery code adds
 branches that only a real socket (or fake timers) can reach; it stays far above
