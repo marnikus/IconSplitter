@@ -1070,3 +1070,93 @@ Regression tests (RULE 8 — each fails if its fix is deleted):
   into the root.
 * `tests/svg_ui.test.tsx` (29) — a pair whose AI image is gone is still a row,
   with its status and the full reason in the banner.
+
+# Quality re-check — 2026-10-05 (the global log, ported from arena/01a0f967-iconsplitter)
+
+Design: [`docs/archive/2026-10-05-global-log-port/design.md`](../archive/2026-10-05-global-log-port/design.md).
+The log was designed and first shipped on branch `arena/01a0f967-iconsplitter` (`694ceb3`) together with a
+confirmation-preview feature that did NOT come here; this branch keeps its own confirmation dialog and its
+long-request runner. The shipped contract is `SYSTEM_OF_RECORD.md` §13; the new rule is RULE 25. Requested
+test-first, in five green phases (pure libs → store/IO → dock → taps → run story + docs).
+
+## What changed
+
+**Feature — the global log.** A module-scope store with one sanitising writer, three redaction layers,
+fold → flood → ring, debounced persistence within 256 KB, a dock on every tab with follow-scroll, and taps
+for the tab, the history, every toast, batch processing, the key, the model, the rules (length + hash), the
+scan, the confirmation and every stage of a run — under the journal's run id, on top of this branch's
+streaming runner (`request-sent/-ok/-retry` wire events added to `runtypes.ts`, emitted by `runbatch.ts`).
+
+**The port's own fix — the checkbox bug.** The source branch's dock was a fixed overlay plus a shell padding
+variable; in a real browser it covered the last rows of the selection lists, so checkboxes there were
+unclickable. Here `LogDock` renders an **in-flow spacer** (`log-dock-spacer`, `height: var(--log-dock-h)`)
+directly above the fixed panel, so every tab's scrollable content ends before the dock begins; the five fixed
+toasts/busy chips clear it with `calc(var(--log-dock-h) + …)`. Pinned by `tests/log_layout.test.tsx`, with the
+checkbox suites themselves green while the dock is open.
+
+**Extractions to hold the gate** (RULE 16/19, concept not size): `src/svg/runflow.ts` out of `actions.ts`
+(the run half: guard, plan, confirmation, one-run lifecycle split into `beginRun`/`finishRun`), `src/batch/batchlog.ts`
+out of `useBatch.ts` (process.start/done/stop), `src/svg/batchrequest.ts` out of `runbatch.ts` (the one request
+a batch posts). Behaviour-preserving; the suites below exercise all three paths.
+
+## The numbers (measured)
+
+| lane | before (`dbc0fe0`) | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings (none added) |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED, `quality_baseline.json` untouched |
+| full strict gate | fails on 3 legacy files (App.tsx, detect.ts, render.ts) | the same 3, unchanged by this work |
+| tests | 68 files / 647 | **82 files / 924** |
+| coverage (all files, stmts/branch/funcs/lines) | 97.16 / 92.12 / 97.05 / 98.20 | **97.32 / 92.49 / 97.45 / 98.34** |
+| jscpd `src --min-tokens 60` | 12 clones / 158 lines | 12 clones / 158 lines — none added |
+| build `dist/index.html` | 622.30 kB / gzip 183.56 kB | **651.69 kB / gzip 193.74 kB** (+29.39 / +10.18) |
+
+`bash tools/pre_push_check.sh` (`npm run verify`) → **ALL LANES PASSED** (6/6). `npx knip` still cannot run in
+this sandbox (`oxc-parser` fails to allocate its `ArrayBuffer`); in its place every export of the new modules
+was checked for a production caller.
+
+## Deviations from the source design (A-1…A-10, full table in the design doc)
+
+* **A-1** dock also renders the in-flow spacer — the checkbox fix above (source had overlay + padding only).
+* **A-2** `svg/runbatch.ts` (this branch's sender) emits the wire events and pre-redacts retry errors — this
+  branch has no `send.ts`; `tests/log_boundaries.test.ts` polices `runbatch.ts` accordingly (A-10).
+* **A-3/A-4** no `PreparedRun`, no fingerprints here: `svg.confirm.accept` carries `selected` + `requests`
+  only; `svg.request.sent` carries the composite `hash` the batch already computes.
+* **A-5** the run id is the journal's `newRunId()` (`run_<36>-<random>`) — one id for recovery and the log.
+* **A-6** `svg.run.cancel` reads the id from `refs.run.current` (armed by `confirmRun`, cleared on done).
+* **A-7** `svg.scan.done` `missing` = `problems.length` (this branch lists per-file problems).
+* **A-8/A-9** `svg.batch.done` wraps the runner's `BatchOutcome` — a stall says *outcome unknown*;
+  `logRunDone` takes this branch's `RunSummary` (with `perRequest`/`unknown`/`outcomes`).
+* The source's confirmation also edited the rules in the popup (`svg-confirm-rules`); this branch's dialog has
+  no rules editor, so `svg.rules.edit` is tapped from the tab textarea only.
+* **Runner fix found by the port:** a user Cancel during the initial header wait was classified `stalled`
+  (`raceStall` mapped every rejection to the stall branch). It is now `aborted` — this branch's own rule
+  "never calls a user cancel a stall" now holds before the first byte too (`lib/svgstreamread`,
+  `tests/svg_stream_read.test.ts` + `log_svg_flow`).
+
+## How it was tested (RULE 8 — RED before GREEN in every phase)
+
+* `tests/log_entry`, `log_redact`, `log_buffer`, `log_format`, `log_scroll`, `log_store` — the pure core and
+  the store, verbatim from the source (schema, the three redaction layers, fold/flood/ring, Copy-all words,
+  follow-scroll, debounce/quota/restore/corrupt).
+* `tests/log_ui.test.tsx` (dock on every tab, follow-scroll, copy/clear/max), `tests/log_layout.test.tsx`
+  (the spacer fix + toast clearance — NEW for this port).
+* `tests/log_taps.test.tsx` — every toast mirrored once (the four `say`s + the direct writes), history/tab,
+  batch process, key, model, rules.
+* `tests/svg_runlog.test.ts` — the RunEvent → entry table rewritten for this branch's event shapes;
+  `tests/log_boundaries.test.ts` — layering, `runbatch.ts` the only sender, nothing in the log can name the key.
+* `tests/log_svg_flow.test.tsx` — the real panel: scan, key save/clear, model change, rules edit, a whole run
+  in order under one run id, Cancel of the dialog, Cancel of a running run, a failed request;
+  `tests/log_secret_flow.test.tsx` — a provider echoing the key, an `Authorization` header and a data URL
+  leaves NONE of them in the log, in storage or in Copy-all (401 and 500 with retries), and a key pasted into
+  the rules is logged by length and hash only.
+
+## RULE 16.7 / RULE 18 (final, measured)
+
+No new function > 30 lines, no new file > 300 lines (largest new modules: `src/lib/logredact.ts` 174,
+`src/log/logstore.ts` 154, `src/svg/runlog.ts` 151, `src/svg/runflow.ts` 114), no function > 4 params,
+CC ≤ 10 / nesting ≤ 4 on everything new or edited — enforced by the gate on every changed file. The three
+strict-gate failures (App.tsx, detect.ts, render.ts) pre-date this work and are unchanged by it. Baseline
+untouched. `SYSTEM_OF_RECORD.md` §6/§7/§8/§10/§11 + new §13, `UI_SELECTORS.md` §P fix + new §Q,
+`AGENT_RULES.md` RULE 25 appended (the 24 numbers never change), `docs/README.md` map updated.

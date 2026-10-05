@@ -364,7 +364,7 @@ Bulk bar (`svg-bulk`):
 | `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, 48–240 step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
+| `svg-generate-selected` | button | opens the confirm dialog (`svg-confirm`, below) — nothing is sent until its **Generate now**; disabled at 0 selected or while a run is in flight |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
@@ -433,3 +433,28 @@ approved pairs that need attention, with the first reasons spelled out /
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
+
+## Q. Global log dock — `src/log/*` (verified 2026-10-05)
+
+Semantic handles first (RULE 21): the region named **"Application log"**; buttons named **"Copy all"**,
+**"Clear"**, **"Minimize log"** / **"Restore log"**, **"Jump to latest"**; the select labelled
+**"Max entries"**. Rendered by `ui/Workbench` as the last child of the shell content, so it is present on
+every tab; its in-flow spacer keeps it from covering the last rows of the scrollable content.
+
+| Test id | Notes |
+|---|---|
+| `log-dock` | the `<section aria-label="Application log">`; class `min` when minimised |
+| `log-dock-spacer` | the in-flow spacer (`height: var(--log-dock-h, 0px)`) directly above the fixed panel — the structural fix for the dock covering the last checkbox rows |
+| `log-toggle` | minimise/restore button, `aria-expanded`, `aria-controls="log-panel"` |
+| `log-count` | "N entries" — visible when minimised too |
+| `log-badge`, `log-errors` | "● N new" and "✖ N": entries / errors that arrived while the user was not looking at the end (also shown minimised) |
+| `log-list` | the scroll container, `role="log"`, `aria-live="off"`, `tabindex=0` |
+| `log-row` | one entry (`data-entry-id`): `<time title=ISO>`, level word + glyph (`ⓘ INFO`, `▲ WARN`, `✖ ERROR`), feature, action, message, muted details, `×N` |
+| `log-session` | the break drawn where the session id changes (`role="separator"`) |
+| `log-empty`, `log-restore`, `log-persist`, `log-dropped` | the honest notes: no entries yet / the previous log could not be read / not saved to this browser / N entries could not be recorded — four different situations |
+| `log-copy`, `log-clear`, `log-max` | Copy all · Clear (no confirmation, leaves one `log.clear` row) · the max-entries `<select>` (100 / 250 / 500 / 1 000 / 2 000 / 5 000) |
+| `log-status` | `role="status"`: "Copied N entries", the blocked-clipboard message, or "N new entries" — announced at most once a second |
+| `log-jump` | "↓ N new — Jump to latest", only while following is paused |
+
+Text and ids of the rows are the facts of `SYSTEM_OF_RECORD.md` §13.2; a row never contains a key, rules text,
+image data or an SVG.

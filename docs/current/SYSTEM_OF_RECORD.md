@@ -4,9 +4,9 @@ Current behaviour, invariants and flows. If code and this doc disagree, one of
 them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
 Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.md`.
 
-<!-- ideal-size: 357 lines reason=RULE 17 forbids a second current doc, so all four
-     modes' authoritative behaviour lives in this one file; per-mode design detail
-     stays in docs/archive/ instead of growing here. -->
+<!-- ideal-size: 960 lines reason=RULE 17 forbids a second current doc, so every mode's
+     authoritative behaviour (and, since 2026-10-05, the global-log contract of §13)
+     lives in this one file; design detail stays in docs/archive/ instead of growing here. -->
 
 ## 1. What this is
 
@@ -435,6 +435,8 @@ Batch:
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, stall window, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.svg.inflight.v1` | the in-flight journal: run/batch id, source ids + names, model, start time, provider request id — no key, no prompt, no answer | validated on read; corrupt = empty; cleared when a request gets a confirmed outcome |
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
+| localStorage `iconSplitter.log.v1` | the global log `{v, savedAt, entries}`: the newest entries that fit 256 KB and the chosen maximum | every entry is shape-checked AND re-sanitised on read (RULE 13/20), so a tampered payload cannot bring a secret back; written 500 ms after the last append, at once for an error, on `pagehide`/`visibilitychange → hidden`; a refused write retries with half the budget |
+| localStorage `iconSplitter.log.prefs.v1` | log dock prefs `{v, max, minimized}` | `max` only from the fixed choices 100/250/500/1 000/2 000/5 000 (default 1 000); the dock opens by default |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
 | `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
 
@@ -461,14 +463,20 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
-| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved pair listed, with per-file problems), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
+| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `runlog.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved pair listed, with per-file problems), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
+| Log pure rules | `src/lib/logentry.ts`, `logredact.ts`, `logbuffer.ts`, `logformat.ts`, `logscroll.ts`, `logprefs.ts` | schema + shape guard + parse/serialise; the three redaction layers; fold → flood → ring; the words of a row and of Copy-all; the follow-scroll machine; prefs |
+| Log state + IO | `src/log/secrets.ts`, `session.ts`, `logstorage.ts`, `logstore.ts`, `logger.ts`, `boot.ts` | secret registry; session id + clock; the two keys + debounced saver; the ONE writer; the facade features import; boot |
+| Log UI | `src/log/LogDock.tsx`, `LogToolbar.tsx`, `LogList.tsx`, `useLog.ts`, `useStickyScroll.ts`, `log.css` | the dock mounted by `ui/Workbench.tsx` as the last child of the shell content: an in-flow spacer + the fixed panel |
+| Shell taps | `src/state/statelog.ts`, `src/ui/useToast.ts` | tab + history entries; the sheets toast with its mirror |
 
-Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
+Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3). The log adds one rule, enforced by
+`tests/log_boundaries.test.ts`: features reach it through `log/logger` and `log/secrets` only; `lib/log*` is pure;
+`svg/runbatch.ts` is the only module that emits the request wire events.
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 61 files / 574 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 82 files / 924 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -593,6 +601,29 @@ and `data-testid` handles):
   every preview background applied to the frame while the document stays
   byte-identical, and the model card + request estimate following all four
   tiers
+* `log_entry`, `log_redact`, `log_buffer`, `log_format`, `log_scroll` — the
+  pure log: schema/parse/budget/prefs, the three redaction layers (idempotent,
+  never throws, false-positive guard), fold → flood → ring, row = Copy-all
+  words, the follow-scroll table as numbers
+* `log_store.test.ts` — the real store with an in-memory Storage and fake
+  timers: stamping, ring at every choice, debounce/flush rules, quota failure,
+  restore, corrupt, clear, secrets, `log()` never failing
+* `log_ui.test.tsx`, `log_layout.test.tsx` — the dock on every tab with its
+  follow-scroll; the in-flow spacer that keeps the dock from covering the last
+  rows of the scrollable content, and the toast/busy clearance
+* `log_taps.test.tsx` — every toast mirrored once (the four `say`s and the
+  direct writes), history/tab, batch process, key, model, rules (length +
+  hash), scan
+* `svg_runlog.test.ts`, `log_boundaries.test.ts` — the RunEvent → entry table
+  of `svg/runlog`; the log's layering, `runbatch.ts` the only sender, and that
+  nothing in the log modules can name the key
+* `log_svg_flow.test.tsx`, `log_secret_flow.test.tsx` — a whole run under one
+  run id through the real panel (confirm, run, cancel, failed request); a
+  provider echoing the key, an `Authorization` header and a data URL leaves
+  none of them in the log, in storage or in Copy-all (401 and 500 with
+  retries), and a key pasted into the rules is logged by length and hash only
+* `sheets_toast.test.tsx` — characterisation of the sheets toast, written
+  before `ui/useToast.ts` was extracted from `App.tsx`
 
 Must exist before the matching change ships:
 
@@ -649,6 +680,13 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   window replacing every total timeout, four distinct outcomes with a stall
   reported as *outcome unknown*, kept request ids, the in-flight journal and
   its explicit restart recovery, ticking elapsed + Cancel).
+* 2026-10-05 — the global log, designed on branch `arena/01a0f967-iconsplitter`
+  (`694ceb3`, archive folder `2026-10-01-svg-confirm-global-log/` there, which
+  also designed the confirmation preview that did NOT come here) and PORTED to
+  this branch: `docs/archive/2026-10-05-global-log-port/design.md` (what was
+  carried over, the dock-overlay checkbox bug and its in-flow-spacer fix, the
+  ten adaptations to the long-request runner). The contract as shipped is §13
+  below; the deviations are in `QUALITY_RECHECK.md` (2026-10-05, the port).
 
 ## 11. Current UI — control inventory
 
@@ -719,6 +757,12 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-inflight-retry`, `svg-inflight-dismiss`), status bar
   (`svg-statusbar`), toast + busy (`svg-toast`, `svg-busy`); review undo goes
   through the shared `hist-*` handles. Full table: `UI_SELECTORS.md` §P.
+* Global log dock (2026-10-05), on every tab below the shell content:
+  `log-dock` (+ its in-flow `log-dock-spacer`), `log-toggle`, `log-count`,
+  `log-badge` / `log-errors`, `log-list` with `log-row` / `log-session`, the
+  honest notes `log-empty` / `log-restore` / `log-persist` / `log-dropped`,
+  `log-copy` / `log-clear` / `log-max`, `log-status`, `log-jump`. Full table:
+  `UI_SELECTORS.md` §Q.
 
 ## 12. Session restore, reset to pending & the global undo timeline (2026-10-01)
 
@@ -847,3 +891,110 @@ datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` o
 `checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
 the zoom slider or clicking a row checkbox — the previous "any input is a text
 field" test killed undo for the two controls the review tab uses most.
+
+## 13. The global log (2026-10-05)
+
+Port record: `docs/archive/2026-10-05-global-log-port/design.md` (designed on branch
+`arena/01a0f967-iconsplitter`, adapted to this branch's long-request runner). This section is
+the contract **as shipped** here.
+
+### 13.1 What it is
+
+Toasts clear themselves in 3–4 s and live in four unrelated places; the undo timeline holds only
+undoable edits. Tab switches, folder picks, batch runs, exports, every API request, retry, token
+and cost were recorded nowhere. The log is that record. It is **telemetry, not state**: no feature
+reads it, it is not undoable, and it never leaves the browser except as the user's own Copy-all
+(RULE 20).
+
+### 13.2 Ownership
+
+One module-scope store (`log/logstore`) outside React: no tab, panel or unmount can lose it. It
+has ONE writer, which sanitises before it stores. Features import only `log/logger` (`log`,
+`logger(feature)`, `logStatus`) and `log/secrets` (`watchSecret`/`forgetSecret`); the shell calls
+`log/boot` once (`state/boot.ts`) and `ui/Workbench` mounts `LogDock`; `lib/log*` is pure.
+`tests/log_boundaries.test.ts` enforces it. The runner and `svg/runbatch.ts` emit `RunEvent`s and
+know nothing of the log; `svg/runlog.ts` is the tap — a table from each event kind to one entry.
+
+**Entry** (`lib/logentry`): `{ v: 1, id: "<sid>-<n>", at (ISO UTC, ms), sid, level: info | warn |
+error, feature: app | history | log | sheets | batch | selection | svg, action (dotted lowercase,
+≤ 40), message (one line, ≤ 240), ids { run, batch, request, source, hist } (≤ 64 each), data
+(≤ 24 allow-listed keys `LOG_DATA_KEYS`, primitives, strings ≤ 160), usage? { input, output,
+total, cost, estimated, currency }, repeat? }`, ≤ 2 KB serialised. `cost` is provider-reported and
+`estimated` is calculated: never merged (I-18), and a row says "reported" or "Estimated".
+
+**Vocabulary** (`feature.action`): `app.boot` · `app.tab.open` · `app.storage.failed` ·
+`history.entry.push` / `undo` / `redo` / `apply.failed` · `<tab>.status` for sheets, batch,
+selection and svg (every toast, level from `err`) · `batch.process.start` / `done` / `stop` ·
+`svg.scan.done` · `svg.key.save` / `clear` (`where` only) · `svg.model.change` · `svg.rules.edit`
+(`chars` and `hash` only) · `svg.confirm.open` / `cancel` / `accept` · `svg.run.start` / `done` /
+`cancel` · `svg.batch.start` / `done` · `svg.request.sent` / `ok` / `retry` / `failed` ·
+`svg.item.saved` / `failed` · `log.clear` / `max` / `copy` / `flood` / `restore.failed`.
+
+**Run ids.** One confirmation = one run: `confirmRun` takes the id from the journal's
+`newRunId()` (`run_<36>-<random>`), holds it in `refs.run` for the Cancel path, and every
+run/batch/request/item entry carries it. `svg.request.sent` carries the composite `hash` (the
+batch's own fingerprint of its contact sheet) — this branch has no preview fingerprints
+(deviation A-3/A-4 of the port record). `svg.batch.done` wraps the runner's `BatchOutcome`, so a
+stalled batch says *outcome unknown* instead of inventing certainty (A-8).
+
+### 13.3 Redaction (`lib/logredact`; on write, on read and on Copy-all)
+
+Three layers. *Structure:* keys outside the allow-list, nested values and extra ids are dropped,
+usage is numeric-only — a secret has no field to live in. *Value scrub* of every string:
+registered secrets of any shape, Requesty and `sk-` key shapes, `Bearer …`, `name=value` where the
+name ends in key/token/secret/password/auth/credential/cookie/session, URL credentials and
+sensitive query values, JWTs, hex runs of 32+ digits, `data:` URLs and base64 runs of 120+
+characters (→ `‹blob N chars›`), and any string over 64 KB. *Caps:* the lengths above. Idempotent;
+never throws. **Never logged by construction:** the API key and header, rules or prompt text
+(length + hash), image data, SVG documents, provider bodies (status + kind + the redacted reason —
+`runbatch.ts` redacts with the key before emitting), file contents, handles. *Honest limit:*
+scrubbing is defence in depth — a secret of unknown shape typed into a field that is logged
+verbatim would pass layer 2; the guarantee is layer 1 plus adapters that hand the log facts only.
+The provider key is registered by `svg/keystore` when it is saved and when it is loaded, so a key
+of no known shape is masked too, and a replaced key stays masked for the session.
+
+### 13.4 Retention and persistence
+
+Max entries is ONE control, stored and displayed: 100 / 250 / 500 / 1 000 / 2 000 / 5 000,
+default 1 000; lowering it trims at once and records `log.max`. *Fold:* the same fold key
+(feature · action · level · message · ids) as the previous entry within 2 s → `repeat + 1`,
+content refreshed; the rules edit folds under `svg.rules.edit`. *Flood:* more than 100 admissions
+in a second (folds count) are dropped and one `log.flood` records how many. *Persisted:* the
+newest entries that fit 256 KB in `iconSplitter.log.v1`, debounced 500 ms, at once for an error,
+flushed on `pagehide` / hidden; sessions are told apart by `sid`. *Clear* empties memory and
+storage and leaves one `log.clear` breadcrumb. A refused write sets `persist: "unavailable"`, the
+dock says so, one `app.storage.failed` is recorded and the next write retries with half the
+budget. A corrupt stored log starts empty with one `log.restore.failed` — different from a first
+run. `log()` never throws; what it could not record is counted in `dropped`, which the dock shows.
+
+### 13.5 The dock (`log/LogDock`)
+
+At the bottom of every tab (z-index 10: under the SVG dialogs, above the content). It renders an
+**in-flow spacer** (`log-dock-spacer`, `height: var(--log-dock-h)`) directly above the fixed
+panel, so the scrollable content of every tab ends before the dock begins — the port's fix for
+the source branch's dock covering the last checkbox rows (A-1). Minimise/restore is persisted and,
+minimised (32 px), it still counts entries and unseen errors; it publishes `--log-dock-h` and the
+five fixed toasts/busy chips clear it with `calc(var(--log-dock-h) + …)`. *Follow-scroll*
+(`lib/logscroll`, 4 px tolerance): pinned to the newest entry while the user is at the bottom;
+paused at once on wheel-up, PageUp, ArrowUp, Home or a scroll away from the bottom; what arrives
+meanwhile is counted ("↓ N new — Jump to latest"); following resumes at the bottom or on End /
+Jump; Clear starts over. *Copy all* copies exactly what is stored (`formatAll`, scrubbed again
+with the secrets known now); a blocked clipboard says so. `role="log"` with `aria-live="off"`, and
+a separate status line that announces at most once a second.
+
+| id | Invariant |
+|---|---|
+| L-1 | No entry is stored unsanitised: the store is the only writer and sanitises first |
+| L-2 | `log()` never throws or blocks a feature; internal failures are counted and shown |
+| L-3 | The log is not a timeline: not undoable, never read by a feature |
+| L-4 | Every toast is mirrored 1:1, text and level from `err` — the four `say`s and the direct writes |
+| L-5 | Reported and Estimated money are never merged; the basis is in the text |
+| L-6 | Stored = displayed = copied: one maximum, one array |
+| L-7 | The log survives tab switches and unmounts: a run keeps logging after its panel is gone |
+| L-8 | Local only: no network call; the one export is the user's clipboard |
+| L-9 | After a restart the entries return within the limits; a corrupt payload costs one warning |
+
+**Adding a tap.** A new toast goes through the tab's `say`, which logs it. A new state change
+worth reconstructing calls `logger(feature)` with facts. A new run stage is a row in
+`svg/runlog.ts`'s table and a case in `tests/svg_runlog.test.ts`. A new `data` key goes into
+`LOG_DATA_KEYS` with a test — an unknown key is dropped by design.

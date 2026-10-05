@@ -3,7 +3,7 @@
 What an AI agent (or a human) **MUST** follow when adding or changing code here.
 This file is the **detailed code-quality rules** for Icon Splitter, adapted from
 `Process-Images-in-Areana/docs/current/AGENT_RULES.md` (24 rules) to this
-React + Vite + TypeScript browser app.
+React + Vite + TypeScript browser app; RULE 25 is this project's own.
 
 * Current behaviour, invariants and flows: [`SYSTEM_OF_RECORD.md`](SYSTEM_OF_RECORD.md)
 * Verification workflow before every push: [`CODE_VERIFICATION.md`](CODE_VERIFICATION.md)
@@ -38,6 +38,7 @@ React + Vite + TypeScript browser app.
 | 22 | Export output must be traceable to its source | data | PIA RULE 22 — correlation token |
 | 23 | Delivery is atomic; never a partial file | data | PIA RULE 23 — atomic save |
 | 24 | LIVE SYNC: the UI mirrors the stored value at the moment of change | behaviour | PIA RULE 24 |
+| 25 | The confirmation IS the request, and what happened is on the record | behaviour | Icon Splitter, 2026-10-05 (not in the sister project) |
 
 ---
 
@@ -331,3 +332,27 @@ Adapted from the correlation-token rule:
 * Every value the user can SEE or EDIT must display the current state IMMEDIATELY when it changes — from any source: adding a sheet, re-detecting, toggling exclusion, moving a slider. No visible value may wait for a re-render triggered by something else.
 * Every mutation goes through state setters with fresh derived values (`useMemo` over current state) — never a cached copy of boxes or previews that can drift from the source of truth.
 * Anti-pattern (banned): "it is in state, it will show after some other interaction". If a user action needs another action to become visible, the sync is broken.
+
+## RULE 25 — The confirmation IS the request, and what happened is on the record
+
+Added 2026-10-05 with the global log port (`SYSTEM_OF_RECORD.md` §13,
+`docs/archive/2026-10-05-global-log-port/design.md`).
+
+* **One plan, one send.** What the user confirms is derived by the SAME single splitter
+  (`planOf` / `planBatches` with the one effective per-request size) that the runner consults at
+  the moment of confirmation — never a second builder that "should" produce the same batches. A
+  plan that cannot be mapped is refused before the dialog opens, and the refusal says why.
+* **Fail closed.** Anything that cannot be proven safe to send (an unmappable plan, an
+  unbuildable contact sheet, a cancelled run) sends nothing for that batch, says why, and lets
+  the rest continue (RULE 5/7). A stall is reported as *outcome unknown* — never invented
+  certainty.
+* **Say it, and record it.** Every status the user is told is also recorded in the global log
+  through `log/logger` — the tab's `say` does it, so a new toast cannot skip it — and every state
+  change worth reconstructing later (tab, history, a run's stages, a request and its retries, an
+  error, tokens and cost) calls `logger(feature)`. The log holds **facts only**: counts, ids,
+  hashes, the already-redacted reason; never a key, a credential, rules or prompt text, or image
+  bytes. A secret has no field in the schema — the redactor is the second line of defence, not the
+  first (RULE 20).
+* **The log is a record, not a timeline.** No feature reads it, it is not undoable, and logging
+  never throws or blocks the feature that logs (RULE 9); a failure to log is counted and shown
+  (RULE 2).
