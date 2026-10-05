@@ -10,10 +10,12 @@ export function readKey(key: string): string | null {
   }
 }
 
-export function writeKey(key: string, text: string): void {
+/** False when the browser refused (private mode, quota): the caller may say so; most callers need not. */
+export function writeKey(key: string, text: string): boolean {
   try {
     localStorage.setItem(key, text);
+    return true;
   } catch {
-    // nothing persists this run; the app keeps working in memory
+    return false; // nothing persists this run; the app keeps working in memory
   }
 }
