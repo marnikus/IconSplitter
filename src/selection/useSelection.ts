@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { walkTree } from "../lib/scan";
+import { beginScan, isCurrent, SCAN_IDLE, type ScanSeq } from "../lib/scanseq";
 import { pairEntries } from "../lib/pairing";
 import { applyFilters, filterLabel, type Decision, type ListFilter, type ViewPair } from "../lib/reviewfilter";
 import { sortLabel, sortPairs, type SortState } from "../lib/reviewsort";
@@ -39,6 +40,8 @@ interface Ctx {
   root: { current: DirHandleLike | null };
   state: { current: SelState };
   hist: HistoryApi;
+  /** Which rescan may commit (see lib/scanseq) — the watcher can overlap one. */
+  seq: { current: ScanSeq };
 }
 
 type Setter = React.Dispatch<React.SetStateAction<SelState>>;
@@ -77,7 +80,7 @@ function useMerged(core: SelState, view: ReturnType<typeof useAppView>): SelStat
 function useCtx(s: SelState, hist: HistoryApi): Ctx {
   const stateRef = useRef(s);
   stateRef.current = s; // render-mirror for async callbacks (RULE 24)
-  return { root: useRef(null), state: stateRef, hist };
+  return { root: useRef(null), state: stateRef, hist, seq: useRef(SCAN_IDLE) };
 }
 
 async function boot(ctx: Ctx, setS: Setter): Promise<void> {
@@ -104,20 +107,23 @@ function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
 export async function rescan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
+  const ticket = beginScan(ctx.seq.current);
+  ctx.seq.current = ticket.seq;
   setS((p) => ({ ...p, busy: "Scanning folders…" }));
   try {
     const tree = await readDirTree(root, []);
     const pairs = pairEntries(walkTree(tree, []));
     const load = await loadDecisions(root);
+    if (!isCurrent(ctx.seq.current, ticket.id)) return; // a newer scan took over
     const next = applyScan(ctx.state.current, pairs, load, Date.now());
     setS(next);
     patchView({ selectedId: next.selectedId });
     pruneChecked(next.pairs); // a restored check must not point at a removed pair
     if (load.corrupt) say("review-decisions.json is corrupt — kept previous decisions in memory", true);
   } catch {
-    say("Rescan failed — the folder may be unreadable", true);
+    if (isCurrent(ctx.seq.current, ticket.id)) say("Rescan failed — the folder may be unreadable", true);
   } finally {
-    setS((p) => ({ ...p, busy: null }));
+    if (isCurrent(ctx.seq.current, ticket.id)) setS((p) => ({ ...p, busy: null }));
   }
 }
 

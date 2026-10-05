@@ -12,6 +12,7 @@ const img = (dirPath: string, name: string, base: string, ref: string | null = `
   dirPath,
   size: 10,
   mtime: 1,
+  error: null,
   ai: { base, suffix: "", ext: ".png" },
   refRelPath: ref,
 });

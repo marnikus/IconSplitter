@@ -50,5 +50,6 @@ export function sourceFromIndex(entry: IndexEntry): SvgSource {
     relPath: entry.relPath,
     dirPath: slash > 0 ? entry.relPath.slice(0, slash) : "",
     fingerprint: entry.fingerprint,
+    problems: [], // a cached index entry carries no scan problems; a scan re-derives them
   };
 }

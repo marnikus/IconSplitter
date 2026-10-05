@@ -10,13 +10,15 @@ const REC: ReviewRecord = {
 };
 
 describe("loadDecisions", () => {
-  it("missing file -> missing flag, empty records, file created pending", async () => {
+  it("missing file -> missing flag, empty records, and nothing created", async () => {
     const root = new FakeDir("root");
     const out = await loadDecisions(root);
     expect(out.missing).toBe(true);
     expect(out.corrupt).toBe(false);
     expect(out.records).toEqual([]);
-    expect(root.children.has(DECISIONS_FILE)).toBe(true);
+    // 2026-10-05: a read must not write — a scan cannot mutate the folder it
+    // scans (design D5). The first save creates the file instead.
+    expect(root.children.has(DECISIONS_FILE)).toBe(false);
   });
 
   it("corrupt file -> corrupt flag, no records, file left untouched", async () => {

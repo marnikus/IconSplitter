@@ -193,6 +193,24 @@ describe("Generate SVG panel", () => {
     expect(q(`[data-testid=svg-persist-${FOG}]`)?.textContent).toBe("Per-file sidecar saved");
   });
 
+  it("keeps a pair whose AI image is gone, as a row that says what is missing", async () => {
+    const root = await makeRoot();
+    const arch = await root.getDirectoryHandle("architecture");
+    await arch.removeEntry("court_AI.png");
+    await mount(root);
+    // both rows are listed: absence is a status, never a silent removal
+    expect(host.querySelectorAll(".svg-row")).toHaveLength(2);
+    expect(q(`[data-testid=svg-row-${COURT}]`)).not.toBeNull();
+    expect(q(`[data-testid=svg-problem-${COURT}]`)?.textContent).toBe("AI image missing");
+    expect(q(`[data-testid=svg-problem-${FOG}]`)).toBeNull();
+    // the row still names the SVG generation would write for it
+    expect(q(`[data-testid=svg-target-${COURT}]`)?.textContent).toBe("architecture/court_AI.svg");
+    // and the banner names the file and the reason, not just a count
+    expect(q("[data-testid=svg-warn-problems]")?.textContent).toContain("1 approved pair(s) need attention");
+    expect(q("[data-testid=svg-warn-problems]")?.textContent)
+      .toContain("no AI result (court_AI.png) beside architecture/court.png");
+  });
+
   it("bulk selection: header checkbox, select-visible, deselect-all, disabled bulk actions", async () => {
     await mount(await makeRoot());
     expect(q("[data-testid=svg-selected-count]")?.textContent).toBe("0 selected");

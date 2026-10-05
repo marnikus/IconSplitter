@@ -1,7 +1,9 @@
 // scan.ts — pure scanning logic over an abstract tree (RULE 3, RULE 8).
-// Owns: recursive walk with ignore list, AI-image eligibility, reference
-// linking, and diff between a previous scan and the current one.
+// Owns: recursive walk with ignore list, canonical order, AI-image eligibility,
+// reference linking, and diff between a previous scan and the current one.
 // The tree (TreeNode) is produced by src/lib/fs.ts from real directory handles.
+// Order is a property of THIS walk, never of the filesystem: the File System
+// spec promises nothing about directory iteration order (design D1).
 
 import { isImageExt, parseAiName, referenceName, type AiName } from "./naming";
 
@@ -10,6 +12,8 @@ export interface TreeNode {
   dir: boolean;
   size?: number;
   mtime?: number;
+  /** "unreadable" when getFile() failed; a zero size alone is NOT an error. */
+  error?: string | null;
   children?: TreeNode[];
 }
 
@@ -20,6 +24,8 @@ export interface FileEntry {
   dirPath: string; // "Category-A" ("" at root)
   size: number;
   mtime: number;
+  /** "unreadable" when the read failed; the size is then not evidence. */
+  error: string | null;
 }
 
 /** An eligible AI source image plus its parsed name and linked reference. */
@@ -39,6 +45,8 @@ export interface ScanDiff {
   added: AiImageEntry[];
   changed: AiImageEntry[];
   kept: AiImageEntry[];
+  /** Present but not readable this scan (locked / being written) — unknown. */
+  unreadable: AiImageEntry[];
   missing: PrevRecord[];
 }
 
@@ -49,8 +57,21 @@ export function walkTree(tree: TreeNode, ignore: string[]): FileEntry[] {
   return out;
 }
 
+/** Children in canonical order — one gate for every TreeNode producer. */
+function inOrder(node: TreeNode): TreeNode[] {
+  return [...(node.children ?? [])].sort((a, b) => compareNames(a.name, b.name));
+}
+
+/** Case-insensitive name order with a code-unit tiebreak (platform-independent). */
+export function compareNames(a: string, b: string): number {
+  const la = a.toLowerCase();
+  const lb = b.toLowerCase();
+  if (la !== lb) return la < lb ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function collect(node: TreeNode, parentPath: string, ignore: string[], out: FileEntry[]): void {
-  for (const child of node.children ?? []) {
+  for (const child of inOrder(node)) {
     if (child.dir) {
       if (isIgnored(child.name, ignore)) continue;
       collect(child, joinPath(parentPath, child.name), ignore, out);
@@ -75,6 +96,7 @@ function toEntry(node: TreeNode, dirPath: string): FileEntry {
     dirPath,
     size: node.size ?? 0,
     mtime: node.mtime ?? 0,
+    error: node.error ?? null,
   };
 }
 
@@ -102,7 +124,7 @@ function findRef(img: AiImageEntry, existing: Set<string>): string | null {
 export function diffScan(prev: PrevRecord[], curr: AiImageEntry[]): ScanDiff {
   const byPath = new Map(prev.map((p) => [p.relPath.toLowerCase(), p]));
   const seen = new Set<string>();
-  const diff: ScanDiff = { added: [], changed: [], kept: [], missing: [] };
+  const diff: ScanDiff = { added: [], changed: [], kept: [], unreadable: [], missing: [] };
   classifyCurrent(curr, byPath, seen, diff);
   collectMissing(prev, seen, diff);
   return diff;
@@ -114,11 +136,17 @@ function classifyCurrent(
   for (const img of curr) {
     const key = img.relPath.toLowerCase();
     seen.add(key);
-    const prev = byPath.get(key);
-    if (!prev) diff.added.push(img);
-    else if (prev.size !== img.size || prev.mtime !== img.mtime) diff.changed.push(img);
-    else diff.kept.push(img);
+    // An unreadable pair keeps its slot: it is neither new, nor changed, nor gone.
+    if (img.error !== null) diff.unreadable.push(img);
+    else classify(img, key, byPath, diff);
   }
+}
+
+function classify(img: AiImageEntry, key: string, byPath: Map<string, PrevRecord>, diff: ScanDiff): void {
+  const prev = byPath.get(key);
+  if (!prev) diff.added.push(img);
+  else if (prev.size !== img.size || prev.mtime !== img.mtime) diff.changed.push(img);
+  else diff.kept.push(img);
 }
 
 function collectMissing(prev: PrevRecord[], seen: Set<string>, diff: ScanDiff): void {

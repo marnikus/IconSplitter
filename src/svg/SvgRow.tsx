@@ -12,7 +12,7 @@ import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { previewTargetOf } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
-import type { SvgSource } from "./sources";
+import { PROBLEM_LABEL, type SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 
 export interface SvgRowActions {
@@ -110,10 +110,26 @@ function FileCell({ row }: { row: SvgRow }) {
     <div className="svg-file-main">
       <div className="svg-file-name" title={row.source.name}>{row.source.name}</div>
       <div className="svg-file-sub" data-testid={`svg-target-${row.source.id}`} title={target}>{target}</div>
+      <ProblemLine row={row} />
       <div className={`svg-persist${row.corrupt ? " error" : ""}`} data-testid={`svg-persist-${row.source.id}`}
         title={sidecarPathOf(row.source)}>
         {row.corrupt ? "Sidecar unreadable — SVGs on disk are kept" : row.sidecar ? "Per-file sidecar saved" : "Not generated yet"}
       </div>
+    </div>
+  );
+}
+
+/**
+ * What the scan could not fully use, on the row itself (design D8): one status
+ * line per reason, so a pair that needs attention is never just a count in a
+ * banner and never silently absent from the list.
+ */
+function ProblemLine({ row }: { row: SvgRow }) {
+  if (row.source.problems.length === 0) return null;
+  return (
+    <div className="svg-file-problem" data-testid={`svg-problem-${row.source.id}`}
+      title={row.source.problems.map((p) => p.reason).join(" · ")}>
+      {row.source.problems.map((p) => PROBLEM_LABEL[p.kind]).join(" · ")}
     </div>
   );
 }

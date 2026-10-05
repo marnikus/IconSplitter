@@ -51,6 +51,27 @@ export class FakeDir implements DirHandleLike {
   }
 }
 
+/** FakeFile whose read fails the first n times — a file being replaced mid-scan. */
+export class FlakyFile extends FakeFile {
+  constructor(name: string, private failures = 1) {
+    super(name);
+  }
+  async getFile(): Promise<File> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new DOMException("file changed on disk", "NotReadableError");
+    }
+    return super.getFile();
+  }
+}
+
+/** FakeFile that can never be read — a locked file. */
+export class LockedFile extends FakeFile {
+  async getFile(): Promise<never> {
+    throw new DOMException("locked", "NotReadableError");
+  }
+}
+
 /** FakeFile whose createWritable rejects — for failure-path tests. */
 export class BrokenFile extends FakeFile {
   async createWritable(): Promise<never> {

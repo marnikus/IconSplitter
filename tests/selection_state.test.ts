@@ -8,9 +8,9 @@ import type { ReviewRecord } from "../src/lib/reviewfile";
 
 function pair(id: string, size: number, mtime: number, dir = "a"): ReviewPair {
   return {
-    pairId: id, base: id, relDir: dir,
-    source: { relPath: `${dir}/${id}.png`, size, mtime },
-    ai: { relPath: `${dir}/${id}_AI.png`, size: size + 1, mtime: mtime + 1 },
+    pairId: id, base: id, suffix: "", relDir: dir,
+    source: { relPath: `${dir}/${id}.png`, size, mtime, error: null },
+    ai: { relPath: `${dir}/${id}_AI.png`, size: size + 1, mtime: mtime + 1, error: null },
     created: mtime, generated: mtime + 1,
   };
 }

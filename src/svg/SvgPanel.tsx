@@ -17,6 +17,7 @@ import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import SvgList from "./SvgList";
 import type { SvgRowActions } from "./SvgRow";
+import type { Discovery, SourceProblem } from "./sources";
 
 export default function SvgPanel() {
   const g = useSvgGen();
@@ -115,7 +116,7 @@ function decidableCount(g: SvgGenApi): number {
   return g.affected.filter((id) => g.rows.find((r) => r.source.id === id)?.newest != null).length;
 }
 
-/** What the scan could not use, said out loud instead of dropped silently. */
+/** What the scan could not use — said out loud, and never by removing a row. */
 function Banners({ g }: { g: SvgGenApi }) {
   const d = g.discovery;
   const corrupt = g.rows.filter((r) => r.corrupt).length;
@@ -123,11 +124,8 @@ function Banners({ g }: { g: SvgGenApi }) {
     banner("decisions", d?.corruptDecisions === true,
       "review-decisions.json could not be read.",
       " The decisions held in memory are used for this session; no file was changed."),
-    banner("missing", (d?.missing.length ?? 0) > 0,
-      `${d?.missing.length ?? 0} approved pair(s) lost their AI image`,
-      " since the last scan — they are not listed until the file is back."),
-    banner("unreadable", (d?.unreadable.length ?? 0) > 0,
-      `${d?.unreadable.length ?? 0} file(s) could not be read`, " and were skipped."),
+    problemNote(d),
+    unreadableNote(d),
     banner("sidecar", corrupt > 0,
       `${corrupt} sidecar(s) could not be parsed.`,
       " The SVG files on disk are untouched — regenerate to record a new version."),
@@ -138,6 +136,35 @@ function Banners({ g }: { g: SvgGenApi }) {
       {notes.map((n) => <Banner key={n.id} note={n} />)}
     </>
   );
+}
+
+/** Every approved pair that needs attention, with the first reasons spelled out. */
+function problemNote(d: Discovery | null): Note | null {
+  const problems = d?.problems ?? [];
+  if (problems.length === 0) return null;
+  return {
+    id: "problems",
+    strong: `${problems.length} approved pair(s) need attention`,
+    rest: ` — ${problemSummary(problems)}. They stay listed with their status.`,
+  };
+}
+
+/** Files that could not be read this scan — unreadable, never "missing". */
+function unreadableNote(d: Discovery | null): Note | null {
+  const files = d?.unreadable ?? [];
+  if (files.length === 0) return null;
+  return {
+    id: "unreadable",
+    strong: `${files.length} file(s) could not be read`,
+    rest: " this scan (locked or still being written) — they are marked unreadable, never missing.",
+  };
+}
+
+/** The reasons of the first few problems, so the banner names the actual files. */
+function problemSummary(problems: SourceProblem[]): string {
+  const shown = problems.slice(0, 3).map((p) => p.reason);
+  const more = problems.length > shown.length ? ` (+${problems.length - shown.length} more)` : "";
+  return `${shown.join("; ")}${more}`;
 }
 
 /**

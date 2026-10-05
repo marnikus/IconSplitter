@@ -81,3 +81,54 @@ describe("diffScan — added / changed / kept / missing (spec §6)", () => {
     expect(d.changed).toHaveLength(1);
   });
 });
+
+// 2026-10-05 — recursion must be a function of the file set, not of the
+// filesystem's enumeration order (design: recursive-scan-determinism D1/D3).
+describe("walkTree — canonical order and read state", () => {
+  it("sorts every directory by name, case-insensitively, whatever the input order", () => {
+    const a = dir("root",
+      file("zeta_AI.png"),
+      dir("Beta", file("b_AI.png")),
+      file("Alpha_AI.png"),
+      file("alpha_AI.png"),
+    );
+    const b = dir("root",
+      file("alpha_AI.png"),
+      dir("Beta", file("b_AI.png")),
+      file("Alpha_AI.png"),
+      file("zeta_AI.png"),
+    );
+    const paths = walkTree(a, []).map((e) => e.relPath);
+    expect(paths).toEqual(["Alpha_AI.png", "alpha_AI.png", "Beta/b_AI.png", "zeta_AI.png"]);
+    expect(walkTree(b, []).map((e) => e.relPath)).toEqual(paths);
+  });
+
+  it("carries a failed read as error — a zero size alone is not one", () => {
+    const tree = dir("root",
+      { name: "locked_AI.png", dir: false, size: 0, mtime: 0, error: "unreadable" },
+      file("empty_AI.png", 0, 0),
+    );
+    const by = Object.fromEntries(walkTree(tree, []).map((e) => [e.name, e]));
+    expect(by["locked_AI.png"].error).toBe("unreadable");
+    expect(by["empty_AI.png"].error).toBeNull();
+    expect(by["empty_AI.png"].size).toBe(0);
+  });
+});
+
+describe("diffScan — an unreadable file is unknown, not changed or lost", () => {
+  const rec = (relPath: string, size: number, mtime: number) =>
+    ({ relPath, name: relPath.split("/").pop()!, size, mtime });
+
+  it("buckets unreadable entries separately instead of reporting a phantom change", () => {
+    const entries = walkTree(dir("root",
+      file("x_AI.png"),
+      { name: "y_AI.png", dir: false, size: 0, mtime: 0, error: "unreadable" },
+    ), []);
+    const curr = linkReferences(collectAiImages(entries), entries);
+    const d = diffScan([rec("x_AI.png", 100, 1), rec("y_AI.png", 200, 2)], curr);
+    expect(d.kept.map((x) => x.relPath)).toEqual(["x_AI.png"]);
+    expect(d.changed).toEqual([]);
+    expect(d.missing).toEqual([]);
+    expect(d.unreadable.map((x) => x.relPath)).toEqual(["y_AI.png"]);
+  });
+});

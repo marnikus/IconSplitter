@@ -5,7 +5,7 @@ import {
   applyDecisionPatch, bindDecisionApplier, hasLiveApplier, SELECTION_HANDLE_KEY,
   type DecisionPatch,
 } from "../src/selection/offline";
-import { loadDecisions, saveDecisions } from "../src/selection/reviewstore";
+import { DECISIONS_FILE, loadDecisions, saveDecisions } from "../src/selection/reviewstore";
 import { loadHandles } from "../src/batch/store";
 import { FakeDir } from "./helpers/fakefs";
 import type { DirHandleLike } from "../src/lib/fs";
@@ -82,5 +82,21 @@ describe("the file path", () => {
     } as unknown as DirHandleLike;
     handlesSpy.mockResolvedValue({ source: denied, dest: undefined });
     await expect(applyDecisionPatch(["a"], PATCH)).resolves.toBe(false);
+  });
+});
+
+// 2026-10-05 — a scan must not write to the folder it scans (design D5).
+describe("loadDecisions is read-only", () => {
+  it("reports a missing decision file instead of creating one", async () => {
+    const root = new FakeDir("fresh-root");
+    const load = await loadDecisions(root);
+    expect(load).toEqual({ records: [], missing: true, corrupt: false });
+    expect(root.children.has(DECISIONS_FILE)).toBe(false);
+  });
+
+  it("still creates it on the first save", async () => {
+    const root = new FakeDir("fresh-root");
+    await saveDecisions(root, []);
+    expect(root.children.has(DECISIONS_FILE)).toBe(true);
   });
 });

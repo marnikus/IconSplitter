@@ -385,6 +385,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the sidecar name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
 | `svg-persist-{sourceId}` | text | "Per-file sidecar saved" / "Not generated yet" / "Sidecar unreadable — SVGs on disk are kept"; the `title` names the sidecar itself ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it); `error` class on failure |
+| `svg-problem-{sourceId}` | text | the row's scan status when a file needs attention: "AI image missing" / "Reference missing" / "Unreadable file" / "Files missing" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). Present means the row is still listed — absence is a status, never a removal |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved
@@ -425,8 +426,10 @@ been resent"), `svg-inflight-retry` (opens the normal confirmation for exactly
 those sources — the only way to resend, always a deliberate user action) and
 `svg-inflight-dismiss` (acknowledges the note and clears the journal).
 
-Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / lost AI image / save
-failure), `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
+Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / `problems` — the
+approved pairs that need attention, with the first reasons spelled out /
+`unreadable` — the files that could not be read this scan / save failure),
+`svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).

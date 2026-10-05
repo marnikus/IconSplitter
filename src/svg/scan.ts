@@ -1,14 +1,19 @@
 // scan.ts — scanning the picked root for the Generate SVG tab (prompt §1).
 // Owns: restoring the remembered root handle, recursive approved-source
-// discovery, loading every sidecar, and the honest report of what could not be
-// used (missing AI image, unreadable file, corrupt decision file).
+// discovery, loading every sidecar, and committing ONE complete snapshot.
+// The whole snapshot is built before any state is touched, an unchanged
+// snapshot commits nothing, only the newest scan may commit, and the cache
+// write can no longer half-commit a scan (design D6/D7).
 
 import type { DirHandleLike } from "../lib/fs";
+import { beginScan, isCurrent } from "../lib/scanseq";
 import { loadHandles, saveHandles } from "../batch/store";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
+import { scanKey } from "./scankey";
 import { loadSidecar } from "./sidecar";
 import { saveSourceIndex, type IndexEntry } from "./sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
+import type { SvgSidecar } from "../lib/svgfile";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -30,36 +35,77 @@ export interface BootArgs {
   refreshKey: () => void;
 }
 
-/** Scans the root, loads every sidecar and reports what could not be used. */
+/** Scans the root, loads every sidecar and commits one complete snapshot. */
 export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> {
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
+  const ticket = beginScan(refs.seq.current);
+  refs.seq.current = ticket.seq;
   s.setBusy("Scanning approved sources…");
   try {
     const found = await discoverApprovedSources(root);
-    const rows: SvgRow[] = [];
-    for (const source of found.sources) {
-      const load = await loadSidecar(root, source);
-      refs.sidecars.set(source.id, load.sidecar);
-      rows.push(toRow(source, load.sidecar, load.corrupt));
-    }
-    s.setRows(rows);
-    s.setDiscovery(found);
-    s.setRootToken();
-    saveSourceIndex(found.sources.map(toIndexEntry));
-    pruneChecked(rows);
+    const loaded = await loadRows(root, found.sources);
+    if (!isCurrent(refs.seq.current, ticket.id)) return; // a newer scan took over
+    const key = scanKey(root.name, found, loaded.rows);
+    if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
+    commit({ refs, setters: s, discovery: found, loaded, key });
     reportScan(found, s.say);
   } catch {
-    s.say("Rescan failed — the folder may be unreadable", true);
+    if (isCurrent(refs.seq.current, ticket.id)) s.say("Rescan failed — the folder may be unreadable", true);
   } finally {
-    s.setBusy(null);
+    if (isCurrent(refs.seq.current, ticket.id)) s.setBusy(null);
+  }
+}
+
+interface LoadedRows {
+  rows: SvgRow[];
+  sidecars: [string, SvgSidecar | null][];
+}
+
+/** Reads every sidecar into memory first — no state is touched while reading. */
+async function loadRows(root: DirHandleLike, sources: SvgSource[]): Promise<LoadedRows> {
+  const rows: SvgRow[] = [];
+  const sidecars: [string, SvgSidecar | null][] = [];
+  for (const source of sources) {
+    const load = await loadSidecar(root, source);
+    sidecars.push([source.id, load.sidecar]);
+    rows.push(toRow(source, load.sidecar, load.corrupt));
+  }
+  return { rows, sidecars };
+}
+
+/** Everything one commit needs, so the commit stays one parameter (RULE 16). */
+interface Commit {
+  refs: SvgRefs;
+  setters: ScanSetters;
+  discovery: Discovery;
+  loaded: LoadedRows;
+  key: string;
+}
+
+/** The single commit: state first, then the cache that must never fail a scan. */
+function commit(c: Commit): void {
+  for (const [id, sidecar] of c.loaded.sidecars) c.refs.sidecars.set(id, sidecar);
+  c.setters.setRows(c.loaded.rows);
+  c.setters.setDiscovery(c.discovery);
+  c.setters.setRootToken();
+  c.refs.scanKey.current = c.key;
+  pruneChecked(c.loaded.rows);
+  saveIndex(c.discovery.sources);
+}
+
+function saveIndex(sources: SvgSource[]): void {
+  try {
+    saveSourceIndex(sources.map(toIndexEntry));
+  } catch {
+    // the index is a cache: its failure is not a scan failure
   }
 }
 
 function reportScan(found: Discovery, say: (m: string, e?: boolean) => void): void {
   if (found.corruptDecisions) say("review-decisions.json is corrupt — kept the previous decisions in memory", true);
-  if (found.missing.length > 0) say(`${found.missing.length} approved pair(s) lost their AI image since the last scan`, true);
-  if (found.unreadable.length > 0) say(`${found.unreadable.length} file(s) could not be read and were skipped`, true);
+  if (found.problems.length > 0) say(`${found.problems.length} approved pair(s) need attention — the reason is on the row`, true);
+  if (found.unreadable.length > 0) say(`${found.unreadable.length} file(s) could not be read and are marked unreadable`, true);
 }
 
 /** Restores the remembered root: this tab's handle, else the Selection tab's. */

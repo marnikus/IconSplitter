@@ -3,7 +3,7 @@
 // useSelection hook only wires IO + React onto these reducers so the rules
 // stay unit-tested (RULE 8).
 
-import { attentionInfo, type ReviewPair } from "../lib/pairing";
+import { attentionInfo, type ReviewPair, type SideRef } from "../lib/pairing";
 import { planBulk } from "../lib/reviewbulk";
 import {
   carryRenamed, diffPairs, type PairDiff, type ReviewRecord,
@@ -53,8 +53,15 @@ export interface ScanLoad {
   corrupt: boolean;
 }
 
-/** Rescan result -> new state: carry decisions, diff, counters stay derived. */
+/**
+ * Rescan result -> new state. An unchanged pair set keeps `pairs` and `records`
+ * by reference: the scan found the same snapshot, so the list must not be
+ * rebuilt (design D7 — no churn, no lost row state, nothing to re-render).
+ */
 export function applyScan(s: SelState, scanned: ReviewPair[], load: ScanLoad, now: number): SelState {
+  if (samePairs(s.pairs, scanned)) {
+    return { ...s, lastDiff: diffPairs(s.pairs, scanned), lastRescanAt: now, corrupt: load.corrupt };
+  }
   const records = load.corrupt ? s.records : load.records;
   const recMap = new Map(records.map((r) => [r.pair_id, r]));
   const carry = carryRenamed(s.pairs, scanned, recMap);
@@ -68,6 +75,17 @@ export function applyScan(s: SelState, scanned: ReviewPair[], load: ScanLoad, no
     ...s, pairs, records: recordsFromViews(pairs, orphans),
     lastDiff: diff, lastRescanAt: now, selectedId, corrupt: load.corrupt,
   };
+}
+
+/** True when a rescan found exactly the sides the state already shows. */
+function samePairs(prev: ViewPair[], curr: ReviewPair[]): boolean {
+  if (prev.length !== curr.length) return false;
+  return prev.every((p, i) => p.pairId === curr[i].pairId
+    && sideKey(p.source) === sideKey(curr[i].source) && sideKey(p.ai) === sideKey(curr[i].ai));
+}
+
+function sideKey(side: SideRef | null): string {
+  return side === null ? "-" : `${side.relPath}@${side.size}:${side.mtime}${side.error === null ? "" : "!"}`;
 }
 
 /** Serialize-worthy records: reviewed pairs + untouched orphans (RULE 13). */

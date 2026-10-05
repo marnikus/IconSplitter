@@ -3,6 +3,7 @@
 // speak the same language without importing each other.
 
 import type { SvgSidecar, SvgVersion } from "../lib/svgfile";
+import type { ScanSeq } from "../lib/scanseq";
 import type { BatchOutcome } from "../lib/svgbatch";
 import type { SvgSource } from "./sources";
 
@@ -62,4 +63,8 @@ export interface SvgRefs {
   sidecars: Map<string, SvgSidecar | null>;
   abort: { current: AbortController | null };
   key: { current: string | null };
+  /** The key of the committed snapshot: an unchanged scan commits nothing. */
+  scanKey: { current: string | null };
+  /** Which scan may commit (see lib/scanseq). */
+  seq: { current: ScanSeq };
 }

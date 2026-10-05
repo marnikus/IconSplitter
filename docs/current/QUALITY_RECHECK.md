@@ -998,3 +998,75 @@ Lanes: `tsc` clean, eslint 0 errors (8 pre-existing warnings), quality gate
 PASSED, **66 files / 615 tests**, coverage unchanged at 97.14/92.30/96.95/98.09,
 build 617.75 kB / gzip 182.06 kB. Baseline untouched; `UI_SELECTORS.md` §P and
 `SYSTEM_OF_RECORD.md` §11 updated with the handle.
+
+## 2026-10-05 (later, larger): the recursive scan is deterministic and atomic
+
+Reported by the user: reloading the same unchanged folder returned different
+missing-AI counts (4, then 5), and some approved pairs disappeared from the
+list. Design: `docs/archive/2026-10-05-recursive-scan-determinism/design.md`.
+
+Diagnosis (each proved by a probe or a test before any fix):
+
+* the filesystem's own enumeration order was the algorithm's input
+  (`dir.entries()` → `walkTree` → first-writer-wins pairing), and
+  `parseAiName("x_AI_8_01.svg")` parses — so a split folder holding
+  `…_01.png` **and** `…_01.svg` gave the same pair id a *different* AI side per
+  reload. The WHATWG File System spec says the order is intentionally
+  unspecified;
+* `splitApproved` moved an approved pair whose file needed attention out of the
+  list into `missing: string[]` (base names only) — the "disappearing pairs";
+* `fileNode` mapped a failed `getFile()` to `size: 0/mtime: 0` and `unreadable`
+  was `size === 0`, so a locked/being-written file read as changed or empty;
+* `loadDecisions` *created* `review-decisions.json` during a scan — a scan
+  mutating the folder it scanned;
+* no ticket, no in-flight guard: an older scan could resolve last and win;
+* every scan replaced every row, even when nothing had changed.
+
+Fix: canonical order imposed by `walkTree` (`compareNames`); `pairEntries`
+order-independent (raster beats the `.svg` artifact, list sorted by
+folder/base/suffix, version artifacts ignored); a failed read is a retryable
+state (`error: "unreadable"`, one immediate retry) and never a size; every
+approved pair stays listed with per-file reasons (`problemsOf` →
+`SvgSource.problems` → the row's `svg-problem-{id}` line and the
+`svg-warn-problems` banner), including a record-only pair ("Files missing");
+`loadDecisions` is read-only; a monotonic ticket (`lib/scanseq`) lets only the
+newest scan commit; the whole snapshot is compared through `scanKey`
+(`src/svg/scankey.ts`) and committed once, with the id→path cache write last and
+best-effort; `applyScan` keeps `pairs`/`records` by reference when the pair set
+is unchanged.
+
+Lanes: `tsc` clean, eslint 0 errors / 8 warnings (all pre-existing; an earlier
+`Banners` complexity-12 warning was removed by splitting its note builders out),
+quality gate PASSED, **68 files / 647 tests**, coverage 97.16/92.12/97.05/98.2,
+build 622.30 kB / gzip 183.56 kB, jscpd unchanged. Baseline untouched; sizes stay in RULE 18's ideal band (largest
+touched module: `src/lib/pairing.ts` 209 lines; the two new modules are
+`src/svg/scankey.ts` 33 lines and `src/lib/scanseq.ts` 25 lines; every new
+function is ≤ 20 lines).
+
+Regression tests (RULE 8 — each fails if its fix is deleted):
+
+* `tests/scan.test.ts` (9) — canonical order whatever the input order; a read
+  failure travels as `error` while a zero-size file is not an error;
+  `diffScan` buckets an unreadable file separately instead of calling it
+  changed or lost.
+* `tests/pairing.test.ts` (20) — the same file set yields byte-identical pairs
+  for the plain, reversed and six shuffled enumeration orders; the raster wins
+  over the `.svg` artifact; `…_AI_8_v2.svg` is ignored; a case-only collision
+  resolves the same way twice; `problemsOf` names each missing/unreadable file.
+* `tests/fs.test.ts` (6) — a transient failure is retried, a locked file is
+  listed as unreadable.
+* `tests/reviewstore.test.ts` (5) — loading a missing decision file creates
+  nothing.
+* `tests/svg_scan.test.ts` (7) — one commit per change (rows, discovery, root
+  token), a fresh boot rebuilding identical rows, nothing committed for an
+  identical rescan, and an overlapping older scan committing nothing.
+* `tests/selection_scan.test.ts` (4) — `rescan` keeps `pairs`/`records` by
+  reference when nothing changed, commits a deletion once (the pair stays with
+  `ai: null`), carries a decision through a folder rename once, and drops a
+  superseded result.
+* `tests/svg_io.test.ts` (29) — every approved pair is listed with its reason
+  (AI image gone, unreadable file, record-only pair), the discovery is
+  byte-identical for a mirrored enumeration order, and a scan writes nothing
+  into the root.
+* `tests/svg_ui.test.tsx` (29) — a pair whose AI image is gone is still a row,
+  with its status and the full reason in the banner.

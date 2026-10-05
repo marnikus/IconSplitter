@@ -51,7 +51,7 @@ function fixture(n: number): { root: FakeDir; sources: SvgSource[] } {
     const name = `icon-${i}_AI.png`;
     const relPath = `architecture/${name}`;
     arch.children.set(name, new FakeFile(name, 20, 3000 + i, "png"));
-    sources.push({ id: `pair_${i}`, name, stem: `icon-${i}_AI`, relPath, dirPath: "architecture", fingerprint: `20:${3000 + i}` });
+    sources.push({ id: `pair_${i}`, name, stem: `icon-${i}_AI`, relPath, dirPath: "architecture", fingerprint: `20:${3000 + i}`, problems: [] });
   }
   root.children.set("architecture", arch);
   return { root, sources };

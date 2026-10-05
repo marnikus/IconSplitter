@@ -3,7 +3,7 @@
 // satisfies, so the adapter logic really executes — no mocks of the code itself.
 import { describe, expect, it } from "vitest";
 import { copyFileTo, ensureDirPath, nameExists, readDirTree, writeFileNew } from "../src/lib/fs";
-import { FakeDir } from "./helpers/fakefs";
+import { FakeDir, FlakyFile, LockedFile } from "./helpers/fakefs";
 
 describe("readDirTree — recursive snapshot with size/mtime and ignore list", () => {
   it("builds the tree and skips ignored folders", async () => {
@@ -49,5 +49,27 @@ describe("ensureDirPath / nameExists / copyFileTo", () => {
     expect(dstDir.children.has("ref.png")).toBe(true);
     await expect(copyFileTo(f, dstDir, "ref.png")).rejects.toThrow(/exists/i);
     expect(await nameExists("file", dstDir, "ref.png")).toBe(true);
+  });
+});
+
+// 2026-10-05 — a read that fails is a state, never a fabricated size
+// (design: recursive-scan-determinism D3).
+describe("readDirTree — read state is honest", () => {
+  it("retries a transient failure instead of downgrading the file", async () => {
+    const root = new FakeDir("root");
+    root.children.set("a_AI.png", new FlakyFile("a_AI.png"));
+    const [node] = (await readDirTree(root, [])).children!;
+    expect(node.error).toBeNull();
+    expect(node.size).toBe(4); // "data"
+    expect(node.mtime).toBe(1000);
+  });
+
+  it("marks a file that never reads as unreadable and still lists it", async () => {
+    const root = new FakeDir("root");
+    root.children.set("locked_AI.png", new LockedFile("locked_AI.png"));
+    const tree = await readDirTree(root, []);
+    expect(tree.children!.map((c) => c.name)).toEqual(["locked_AI.png"]);
+    expect(tree.children![0].error).toBe("unreadable");
+    expect(tree.children![0].size).toBe(0);
   });
 });

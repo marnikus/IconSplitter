@@ -1320,3 +1320,10 @@
 .svg-provider-foot { flex-wrap: wrap; }
 .svg-provider-foot .svg-key-state { flex: 1 1 180px; min-width: 0; }
 .svg-provider-foot .svg-link { white-space: nowrap; }
+
+/* A scan problem is a status on the row, never a reason to hide it (D8). */
+.svg-file-problem {
+  color: #f0b429;
+  font-size: 11px;
+  line-height: 1.4;
+}

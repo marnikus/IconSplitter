@@ -8,9 +8,9 @@ const T = (s: string) => new Date(s).getTime();
 
 function pair(id: string, created: number, generated: number | null, dir = "a", status: ViewPair["decision"] = "pending"): ViewPair {
   return {
-    pairId: id, base: id, relDir: dir,
-    source: { relPath: `${dir}/${id}.png`, size: 1, mtime: created },
-    ai: generated === null ? null : { relPath: `${dir}/${id}_AI.png`, size: 2, mtime: generated },
+    pairId: id, base: id, suffix: "", relDir: dir,
+    source: { relPath: `${dir}/${id}.png`, size: 1, mtime: created, error: null },
+    ai: generated === null ? null : { relPath: `${dir}/${id}_AI.png`, size: 2, mtime: generated, error: null },
     created, generated, decision: status, reviewedAt: null,
   };
 }

@@ -2,7 +2,8 @@
 // The file lives at <root>/review-decisions.json. Browsers offer no rename,
 // so "atomic" = write sidecar tmp -> read back + verify -> overwrite main ->
 // delete tmp. Any failed step throws; the caller keeps in-memory records and
-// offers Retry (spec §8/§10). A missing file is created empty (all pending).
+// offers Retry (spec §8/§10). Loading never writes: a scan must not mutate the
+// folder it scans (design D5) — the first save creates the file.
 
 import type { DirHandleLike } from "../lib/fs";
 import { tryGetFile, writeFileOverwrite } from "../lib/fs";
@@ -19,19 +20,10 @@ export interface LoadOut {
 
 export async function loadDecisions(root: DirHandleLike): Promise<LoadOut> {
   const fh = await tryGetFile(root, DECISIONS_FILE);
-  if (!fh) return await createEmpty(root);
+  if (!fh) return { records: [], missing: true, corrupt: false };
   const parsed = parseDecisions(await (await fh.getFile()).text());
   if (!parsed.ok) return { records: [], missing: false, corrupt: true };
   return { records: parsed.records, missing: false, corrupt: false };
-}
-
-async function createEmpty(root: DirHandleLike): Promise<LoadOut> {
-  try {
-    await writeFileOverwrite(root, DECISIONS_FILE, new Blob([serializeDecisions([])]));
-  } catch {
-    // read-only root: review still works in memory; saves will surface errors
-  }
-  return { records: [], missing: true, corrupt: false };
 }
 
 export async function saveDecisions(root: DirHandleLike, records: ReviewRecord[]): Promise<void> {

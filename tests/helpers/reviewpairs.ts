@@ -19,9 +19,10 @@ export function reviewPair(id: string, o: PairOpts = {}): ReviewPair {
   return {
     pairId: id,
     base: id,
+    suffix: "",
     relDir: dir,
-    source: o.noSource ? null : { relPath: `${dir}/${id}.png`, size: 11, mtime: created },
-    ai: o.noAi || generated === null ? null : { relPath: `${dir}/${id}_AI.png`, size: 22, mtime: generated },
+    source: o.noSource ? null : { relPath: `${dir}/${id}.png`, size: 11, mtime: created, error: null },
+    ai: o.noAi || generated === null ? null : { relPath: `${dir}/${id}_AI.png`, size: 22, mtime: generated, error: null },
     created,
     generated,
   };

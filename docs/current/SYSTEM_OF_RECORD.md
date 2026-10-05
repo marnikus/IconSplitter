@@ -78,6 +78,22 @@ Selection:
 * Recursive scan pairs `name.ext` with `name_AI.ext` incl. numeric tails
   (`name_AI_9_01.ext`; stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
   "AI result missing" / "Original missing", never silently dropped.
+* **The scan is deterministic and atomic (2026-10-05).** `walkTree` sorts
+  every folder itself (case-insensitive name order), so the filesystem's own
+  enumeration order — which the File System spec explicitly leaves
+  unspecified — never reaches the algorithm. `pairEntries` is a function of
+  the file *set*: for one pair id the raster result beats the `.svg` artifact,
+  the list comes out in `(folder, base, suffix)` order, and a versioned output
+  (`X_AI_v2.svg`) is ignored rather than invented as a source row.
+* A read that fails (locked / being replaced mid-write) is **not** data: the
+  walk retries once, then marks the file `unreadable` with its path — `size 0`
+  alone is never evidence, an unreadable file is never reported as changed or
+  gone, and a scan performs **zero writes** inside the root (the decision file
+  is created by the first save, not by opening a folder).
+* One scan may commit: a monotonic ticket (`lib/scanseq`) means an older scan
+  that resolves later commits nothing, and an unchanged snapshot commits
+  nothing at all (no row replacement, no churn). A completed scan is committed
+  in one block, after which only the best-effort id→path cache write is left.
 * Review list: thumbnail, filename, relative folder, creation date, status
   chip with text + glyph; search, month / custom-range date filters, status
   filter, sorting by date/status/name/path in both directions, counters.
@@ -85,9 +101,10 @@ Selection:
   size / path per side, 1:1 zoom with synced scrolling, hotkeys A/D/arrows/
   Space/Ctrl+K, auto-advance to the next pending after each decision.
 * Decisions persist in `<root>/review-decisions.json` (atomic tmp-verify-
-  overwrite protocol); missing file is created pending; corrupt file raises a
-  warning and previous in-memory decisions are kept; write failures keep the
-  change in memory with a Retry action.
+  overwrite protocol); a missing file is reported (not created — reading never
+  writes; the first save creates it); corrupt file raises a warning and
+  previous in-memory decisions are kept; write failures keep the change in
+  memory with a Retry action.
 * Rescan diffs added/renamed/removed/unchanged; decisions travel across
   renames via size+mtime identity; orphan records are retained so a
   transiently missing file never destroys a decision.
@@ -123,10 +140,14 @@ that makes a network call, only when the user asks it to):
 
 * Discovery reuses the Selection scan and pairing: only pairs whose stored
   decision is **approved** become sources, keyed by the same stable
-  `pair_<hash>` id (never a row index), in deterministic path order. Approved
-  pairs whose AI image disappeared are reported as "lost their AI image";
-  unreadable files are reported as skipped; a corrupt decision file warns and
-  keeps the in-memory decisions.
+  `pair_<hash>` id (never a row index), in deterministic path order. **Every
+  approved pair stays in the list** — a pair is never removed because a file
+  needs attention (2026-10-05): a missing AI image, a missing reference, an
+  unreadable file and a pair only its decision record still remembers are all
+  listed with a status on the row (`svg-problem-*`, one reason per file) and
+  counted in `Discovery.problems`; `Discovery.unreadable` names the files that
+  could not be read this scan. A corrupt decision file warns and keeps the
+  in-memory decisions.
 * Generation: the editable prompt (stored locally, resettable to the
   documented default) is sent with the approved AI images as a data-URL
   `image_url` part, and the answer is **streamed** (`stream: true` +
@@ -317,9 +338,14 @@ Single sheets:
 
 Batch:
 
-* **Scan:** root handle → `readDirTree` (ignore list) → `walkTree` →
-  `collectAiImages` → `linkReferences` → `syncAndCollect` rewrites every
-  `<base>.json` → rows render with statuses.
+* **Scan:** root handle → `readDirTree` (ignore list) → `walkTree` (canonical
+  order) → `collectAiImages` → `linkReferences` → `syncAndCollect` rewrites
+  every `<base>.json` → rows render with statuses.
+* **Review/SVG scan (one path, two tabs):** ticket → `readDirTree` → `walkTree`
+  → `pairEntries` → decisions → complete snapshot → `scanKey` compare → one
+  commit (rows, discovery, root token, checked ids) → best-effort index +
+  report. Nothing is written to the root, nothing is committed by a superseded
+  scan, and an unchanged snapshot commits nothing.
 * **Process:** selection → rescan-derived items → `planBatch` (collision-safe
   folders) → per item: load → `splitSheet` → write `split_NN/<stem>_NN.png`
   via no-overwrite writes → copy reference per split dir → `applyOutcomes`
@@ -373,6 +399,12 @@ Batch:
   the confirmation and the runner compute it the same way; the confirmation
   lists every request (and its exact images) before anything is sent, and an
   unmappable plan is refused rather than partially sent.
+* **I-21 (scan, RULE 3/4/24):** a scan is a pure function of the file set and
+  commits once: enumeration order can never change a pair, its id, its AI side
+  or the list order; an unreadable file is a status (never a fabricated size,
+  never "changed"/"gone"); an approved pair is never hidden while its files are
+  only missing; a scan writes nothing into the scanned root; a superseded scan
+  and an unchanged snapshot both commit nothing.
 * **I-20 (SVG runs, RULE 4/23):** one request's outcome — status, tokens, cost,
   error — is recorded and shown for that request only; a failed request never
   alters another request's files, usage or cost, and a request whose outcome
@@ -423,12 +455,13 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
-| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing, filters, sorts, status/hotkey semantics, decision records |
+| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
+| Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
-| SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
+| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved pair listed, with per-file problems), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
@@ -460,6 +493,12 @@ and `data-testid` handles):
 * `reviewfile.test.ts` — corrupt/valid parse, orphans, rename carry, diff
 * `reviewstore.test.ts` — missing/corrupt load, atomic write + failure path
 * `selection_state.test.ts` — applyScan/withDecision/nextPending/counters
+* `scanseq` + `scankey` (in `svg_scan.test.ts`) — the ticket order and the
+  snapshot key: a superseded scan commits nothing, an identical one commits
+  nothing, a changed one commits exactly once
+* `selection_scan.test.ts` — the Selection `rescan` end to end: identical
+  rescan keeps `pairs`/`records` by reference, a rename carries the decision
+  once, and an overlapping older rescan commits nothing
 * `handles.test.ts`, `fmt.test.ts` — path resolution, formatters
 * `selection_ui.test.tsx` — DOM smoke: pick → list → A/D hotkeys → text chips
 * `reviewselect.test.ts`, `reviewbulk.test.ts`, `reviewprefs.test.ts`,
@@ -521,8 +560,13 @@ and `data-testid` handles):
   used only when nothing was reported, a charged-but-invalid result keeping its
   usage, the sidecar read back after a "restart", and a legacy record without
   cost reading as unknown instead of crashing a row
-* `svg_io.test.ts` — the SVG IO layer: approved-only discovery + corrupt /
-  missing / unreadable reporting, scan + remembered root, row model, the
+* `svg_scan.test.ts` — the scan orchestrator (RULE 8): one complete snapshot
+  per commit, a boot/rescan of an unchanged folder rebuilding identical rows,
+  the overlap gate, and the key that decides "nothing changed"
+* `svg_io.test.ts` — the SVG IO layer: approved-only discovery + every approved
+  pair kept with its per-file reasons (missing AI image, unreadable file,
+  record-only pair), byte-identical discovery whatever the enumeration order,
+  a scan that writes nothing, scan + remembered root, row model, the
   write order (validate first, never overwrite, failure records), runner
   events, the review decision + its undo patch, the state reducer, preview
 * `svg_preview.test.ts` — the preview pipeline end to end: a document without
@@ -637,7 +681,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   (`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy` and the
   shared `sel-footer` / `sel-diff` / `sel-retry-count`). Full table:
   `UI_SELECTORS.md` §N.
-* Generate SVG mode: source bar (`svg-root`, `svg-choose-root`, `svg-rescan`,
+* Generate SVG mode: the row's scan status (`svg-problem-{id}` — "AI image
+  missing" / "Reference missing" / "Unreadable file" / "Files missing", with
+  the full reason in the `title`), source bar (`svg-root`, `svg-choose-root`, `svg-rescan`,
   `svg-count-*`), prompt + provider card (`svg-prompt`, `svg-reset-prompt`,
   `svg-provider`, `svg-limits`, `svg-per-request`, `svg-timeout`,
   `svg-retries`, `svg-model`, `svg-key-state`

@@ -46,7 +46,7 @@ function rows(n: number): SvgRow[] {
     const name = `icon-${i + 1}_AI.png`;
     const source: SvgSource = {
       id, name, stem: `icon-${i + 1}_AI`, relPath: `architecture/${name}`,
-      dirPath: "architecture", fingerprint: `${i + 1}:100`,
+      dirPath: "architecture", fingerprint: `${i + 1}:100`, problems: [],
     };
     return toRow(source, null, false);
   });

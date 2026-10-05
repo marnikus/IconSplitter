@@ -12,7 +12,7 @@ import type { SvgSource } from "../src/svg/sources";
 function source(id: string): SvgSource {
   return {
     id, name: `${id}.png`, stem: `${id}_AI`, relPath: `architecture/${id}_AI.png`,
-    dirPath: "architecture", fingerprint: "20:3100",
+    dirPath: "architecture", fingerprint: "20:3100", problems: [],
   };
 }
 

@@ -30,7 +30,7 @@ vi.mock("../src/lib/dom", async (importOriginal) => {
 
 const source: SvgSource = {
   id: "pair_fog", name: "fog_AI.png", stem: "fog_AI",
-  relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100",
+  relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100", problems: [],
 };
 
 const SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";

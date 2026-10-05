@@ -9,6 +9,7 @@ import { newSidecar, newestValid, parseSidecar, serializeSidecar, withVersion } 
 import { saveSvgVersion, recordFailure } from "../src/svg/saveversion";
 import { loadSidecar, readSvgText, listSvgFiles, saveSidecar } from "../src/svg/sidecar";
 import { discoverApprovedSources, toBatchSource } from "../src/svg/sources";
+import { SCAN_IDLE } from "../src/lib/scanseq";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
 import { headerState, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
@@ -18,7 +19,7 @@ import { DEFAULT_SVG_PREFS, SVG_PREFS_KEY, loadSvgPrefs, parseSvgPrefs, saveSvgP
 import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
-import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot/remember real.
@@ -46,6 +47,15 @@ function makeRoot(): FakeDir {
   root.children.set("architecture", arch);
   root.children.set("coastal", coast);
   return root;
+}
+
+/** The same logical root, with every directory enumerated in the opposite order. */
+function mirrored(root: FakeDir): FakeDir {
+  const out = new FakeDir(root.name);
+  for (const [name, child] of [...root.children.entries()].reverse()) {
+    out.children.set(name, child instanceof FakeDir ? mirrored(child) : child);
+  }
+  return out;
 }
 
 const FOG = pairId("architecture", "fog", "");
@@ -76,7 +86,10 @@ function setters() {
 }
 
 function refs(root: FakeDir | null = null) {
-  return { root: { current: root }, sidecars: new Map(), abort: { current: null }, key: { current: null } };
+  return {
+    root: { current: root }, sidecars: new Map(), abort: { current: null }, key: { current: null },
+    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+  };
 }
 
 beforeEach(async () => {
@@ -85,7 +98,7 @@ beforeEach(async () => {
 });
 
 describe("approved-source discovery", () => {
-  it("keeps only approved pairs and reports the ones it skipped", async () => {
+  it("lists every approved pair, in path order, with no problems when healthy", async () => {
     const root = makeRoot();
     root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
     const found = await discoverApprovedSources(root);
@@ -93,7 +106,9 @@ describe("approved-source discovery", () => {
     expect(found.sources[0].name).toBe("court_AI.png");
     expect(found.sources[0].stem).toBe("court_AI");
     expect(found.sources[0].dirPath).toBe("architecture");
-    expect(found.approvedTotal).toBe(2);
+    expect(found.sources.every((s) => s.problems.length === 0)).toBe(true);
+    expect(found.problems).toEqual([]);
+    expect(found.unreadable).toEqual([]);
     expect(found.corruptDecisions).toBe(false);
   });
 
@@ -105,18 +120,87 @@ describe("approved-source discovery", () => {
     expect(found.sources).toEqual([]);
   });
 
-  it("reports an approved pair whose AI image disappeared", async () => {
+  it("keeps an approved pair whose AI image disappeared, with the reason on it", async () => {
     const root = makeRoot();
     const arch = await root.getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png");
     root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
     const found = await discoverApprovedSources(root);
-    expect(found.sources.map((s) => s.id)).toEqual([FOG]);
-    expect(found.missing).toEqual(["court"]);
+    expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
+    const court = found.sources[0];
+    expect(court.relPath).toBe("architecture/court_AI.png");
+    expect(court.stem).toBe("court_AI");
+    expect(court.problems).toEqual([
+      { kind: "ai-missing", relPath: null, reason: "no AI result (court_AI.png) beside architecture/court.png" },
+    ]);
+    expect(found.problems).toEqual([{ id: COURT, ...court.problems[0] }]);
+    expect(found.unreadable).toEqual([]);
+  });
+
+  it("answers byte-identically whatever order the filesystem enumerated", async () => {
+    const root = makeRoot();
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+    const first = await discoverApprovedSources(root);
+    const again = await discoverApprovedSources(root);
+    const flipped = await discoverApprovedSources(mirrored(root));
+    expect(JSON.stringify(again)).toBe(JSON.stringify(first));
+    expect(JSON.stringify(flipped)).toBe(JSON.stringify(first));
+  });
+
+  it("writes nothing into the scanned root", async () => {
+    const root = makeRoot();
+    const before = [...root.children.keys()];
+    const arch = await root.getDirectoryHandle("architecture");
+    await discoverApprovedSources(root);
+    expect([...root.children.keys()]).toEqual(before);
+    expect([...arch.children.keys()]).toEqual(["fog.png", "fog_AI.png", "court.png", "court_AI.png"]);
+  });
+
+  it("reports an unreadable file with its path and never as a vanished pair", async () => {
+    const root = makeRoot();
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+    const arch = await root.getDirectoryHandle("architecture");
+    arch.children.set("court_AI.png", new LockedFile("court_AI.png"));
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
+    expect(found.sources[0].problems).toEqual([
+      { kind: "unreadable", relPath: "architecture/court_AI.png", reason: "architecture/court_AI.png could not be read (locked or still being written)" },
+    ]);
+    expect(found.unreadable).toEqual([
+      { relPath: "architecture/court_AI.png", reason: "architecture/court_AI.png could not be read (locked or still being written)" },
+    ]);
+  });
+
+  it("keeps an approved pair whose every file is gone, as a status row", async () => {
+    const root = makeRoot();
+    const arch = await root.getDirectoryHandle("architecture");
+    await arch.removeEntry("court_AI.png");
+    await arch.removeEntry("court.png");
+    const rec = {
+      pair_id: COURT, source: "architecture/court.png", ai_result: "architecture/court_AI.png",
+      decision: "approved", reviewed_at: "2026-10-01T09:00:00.000Z",
+    };
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({ records: [rec] })));
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([COURT]);
+    expect(found.sources[0].relPath).toBe("architecture/court_AI.png");
+    expect(found.sources[0].problems).toEqual([
+      { kind: "files-missing", relPath: null, reason: "only the decision record remains for architecture/court_AI.png" },
+    ]);
+  });
+
+  it("ignores this app's own version artifacts instead of inventing a row", async () => {
+    const root = makeRoot();
+    const arch = await root.getDirectoryHandle("architecture");
+    arch.children.set("fog_AI_v2.svg", new FakeFile("fog_AI_v2.svg", 30, 3200, "<svg/>"));
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
+    expect(found.problems).toEqual([]);
   });
 
   it("maps a source onto its batch identity without touching the file id", () => {
-    const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" };
+    const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" , problems: []};
     expect(toBatchSource(source)).toEqual({ sourceId: FOG, name: "fog_AI", relPath: "architecture/fog_AI.png", fingerprint: "20:3100" });
   });
 });
@@ -162,7 +246,7 @@ describe("scanSources", () => {
 });
 
 describe("row model", () => {
-  const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" };
+  const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" , problems: []};
   const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
 
   it("marks a source with no sidecar as not generated", () => {
@@ -239,7 +323,7 @@ describe("row model", () => {
 
   it("filters, sorts and reports the header checkbox state", () => {
     const mk = (id: string, name: string, status: "generated" | "failed") => ({
-      ...toRow({ id, name, stem: name.replace(".png", ""), relPath: `d/${name}`, dirPath: "d", fingerprint: "1:1" }, null, false),
+      ...toRow({ id, name, stem: name.replace(".png", ""), relPath: `d/${name}`, dirPath: "d", fingerprint: "1:1" , problems: []}, null, false),
       status,
     });
     const list = [mk(FOG, "fog_AI.png", "generated"), mk(COURT, "court_AI.png", "failed")];
@@ -253,7 +337,7 @@ describe("row model", () => {
 
   it("drops a checked id the rescan removed", () => {
     patchSvg({ checked: [FOG, COURT] });
-    const rows = [toRow({ id: FOG, name: "a", stem: "a", relPath: "a", dirPath: "", fingerprint: "1:1" }, null, false)];
+    const rows = [toRow({ id: FOG, name: "a", stem: "a", relPath: "a", dirPath: "", fingerprint: "1:1" , problems: []}, null, false)];
     pruneChecked(rows);
     expect(getAppState().svg.checked).toEqual([FOG]);
     patchSvg({ checked: [] });
@@ -261,7 +345,7 @@ describe("row model", () => {
 });
 
 describe("runner events and the review decision", () => {
-  const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" };
+  const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" , problems: []};
 
   it("maps a saved item onto its row and reloads the sidecars after the run", async () => {
     const root = makeRoot();

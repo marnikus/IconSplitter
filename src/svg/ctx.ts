@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
 import { providerLabel } from "../lib/svgconfig";
+import { SCAN_IDLE } from "../lib/scanseq";
 import { requestCount } from "../lib/svgbatch";
 import { clampImagesPerRequest } from "../lib/svgconfig";
 import { usageTotals } from "../lib/svglist";
@@ -169,7 +170,10 @@ function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" 
 }
 
 function newRefs(): SvgRefs {
-  return { root: { current: null }, sidecars: new Map(), abort: { current: null }, key: { current: null } };
+  return {
+    root: { current: null }, sidecars: new Map(), abort: { current: null }, key: { current: null },
+    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+  };
 }
 
 /** Re-exported so the panel can name the row type without a second import. */

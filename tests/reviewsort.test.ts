@@ -7,9 +7,9 @@ import type { ViewPair } from "../src/lib/reviewfilter";
 
 function pair(id: string, dir: string, created: number, decision: ViewPair["decision"]): ViewPair {
   return {
-    pairId: `pair_${id}`, base: id, relDir: dir,
-    source: { relPath: `${dir}/${id}.png`, size: 1, mtime: created },
-    ai: { relPath: `${dir}/${id}_AI.png`, size: 2, mtime: created + 1 },
+    pairId: `pair_${id}`, base: id, suffix: "", relDir: dir,
+    source: { relPath: `${dir}/${id}.png`, size: 1, mtime: created, error: null },
+    ai: { relPath: `${dir}/${id}_AI.png`, size: 2, mtime: created + 1, error: null },
     created, generated: created + 1, decision, reviewedAt: null,
   };
 }

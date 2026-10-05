@@ -28,6 +28,12 @@ export function isImageExt(ext: string): boolean {
   return IMAGE_EXTS.includes(ext.toLowerCase());
 }
 
+/** This app's own versioned output (`X_AI_v2.svg`) — an artifact, not a source. */
+export function isVersionArtifact(fileName: string): boolean {
+  const m = /^(.*)_v\d+\.svg$/i.exec(fileName);
+  return m !== null && parseAiName(`${m[1]}.svg`) !== null;
+}
+
 /** Reference image file name for a parsed AI name (spec §4). */
 export function referenceName(n: AiName): string {
   return `${n.base}${n.ext}`;

@@ -12,6 +12,7 @@ const img = (relPath: string, size = 10, mtime = 1, ref: string | null = "ref.pn
   dirPath: relPath.includes("/") ? relPath.split("/")[0] : "",
   size,
   mtime,
+  error: null,
   ai: { base: "ref", suffix: "", ext: ".png" },
   refRelPath: ref,
 });

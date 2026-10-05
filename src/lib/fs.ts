@@ -2,6 +2,9 @@
 // Owns: reading a directory tree into scan.TreeNode, probing names, creating
 // nested dirs, non-overwriting file writes, and file copy. Structural
 // interfaces let tests run this logic against in-memory fakes (RULE 8).
+// A read that fails is reported as an error state — never as a zero size
+// (design D3): a File object also becomes unreadable the moment the file on
+// disk changes, which is exactly what a concurrent write looks like.
 
 import type { TreeNode } from "./scan";
 
@@ -48,13 +51,24 @@ async function toNode(handle: DirHandleLike | FileHandleLike, ignore: string[]):
   return fileNode(handle);
 }
 
+/** Two attempts: one immediate retry covers a temp-file swap mid-write. */
+const READ_ATTEMPTS = 2;
+
 async function fileNode(handle: FileHandleLike): Promise<TreeNode> {
-  try {
-    const f = await handle.getFile();
-    return { name: handle.name, dir: false, size: f.size, mtime: f.lastModified };
-  } catch {
-    return { name: handle.name, dir: false, size: 0, mtime: 0 }; // unreadable, still listed
+  const f = await readFile(handle);
+  if (f === null) return { name: handle.name, dir: false, size: 0, mtime: 0, error: "unreadable" };
+  return { name: handle.name, dir: false, size: f.size, mtime: f.lastModified, error: null };
+}
+
+async function readFile(handle: FileHandleLike): Promise<File | null> {
+  for (let attempt = 0; attempt < READ_ATTEMPTS; attempt++) {
+    try {
+      return await handle.getFile();
+    } catch {
+      // the file is locked or being replaced; the next attempt decides
+    }
   }
+  return null;
 }
 
 function isIgnored(name: string, ignore: string[]): boolean {

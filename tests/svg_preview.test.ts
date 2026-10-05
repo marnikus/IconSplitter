@@ -280,7 +280,7 @@ describe("buildSvgPreview — empty is not broken (RULE 4)", () => {
 });
 
 describe("previewTargetOf — one version for the preview and for Copy", () => {
-  const source = { id: "fog", name: "fog_AI.png", stem: "fog_AI", relPath: "a/fog_AI.png", dirPath: "a", fingerprint: "20:3100" };
+  const source = { id: "fog", name: "fog_AI.png", stem: "fog_AI", relPath: "a/fog_AI.png", dirPath: "a", fingerprint: "20:3100", problems: [] };
 
   function version(v: number, svgPath: string, ok = true): SvgVersion {
     return {
