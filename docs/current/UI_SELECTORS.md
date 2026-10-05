@@ -241,6 +241,17 @@ handles in both tabs: `sel-footer`, `sel-diff`, `sel-rescan-age`,
 `v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy`, and the
 empty-root states `v2-root-empty` / `v2-unsupported`.
 
+## Q. App shell and the global activity log (verified 2026-10-05)
+
+| Test id | Element | Notes |
+|---|---|---|
+| `app-shell` | the app's one viewport column | nav → `app-main` → `log-dock`; `height: 100dvh`, `overflow: hidden` |
+| `app-main` | the scrolling region | holds the active tab's panel; the window itself never scrolls |
+| `log-dock` | the docked log, the shell's last row | a layout row, never `fixed`/`sticky` — that overlay is what used to eat row-checkbox clicks (I-27) |
+| `log-head` | the dock's header | `log-count` ("120 of 200"), `log-autoscroll` ("following" / "paused"), `log-max` (select: 50/100/200/500/1000), `log-copy`, `log-clear`, `log-minimize` ("Minimize" / "Restore"), `log-note` (Copy/Clear feedback) |
+| `log-body` / `log-list` / `log-entry` / `log-empty` | the scrolling entries | one `log-entry` per line: level, `feature.action`, ids, detail; `role="log"` |
+| `--app-dock-h` | CSS custom property on `:root` | the dock's height (236 px open, 36 px minimized), published by `src/log/dockheight.ts`; the fixed floats (`svg-toast`, `svg-busy`, `.toast-above-dock`) read it |
+
 ## J. Handles still needed (to be added on demand)
 
 | Handle | Where | Needed when |

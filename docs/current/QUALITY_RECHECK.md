@@ -1070,3 +1070,64 @@ Regression tests (RULE 8 — each fails if its fix is deleted):
   into the root.
 * `tests/svg_ui.test.tsx` (29) — a pair whose AI image is gone is still a row,
   with its status and the full reason in the banner.
+
+---
+
+# Quality re-check — 2026-10-05 (global activity log ported; the dock no longer covers the rows)
+
+Change: the activity log from `arena/01a10c14-iconsplitter@aaedf2e` ported onto
+this branch, and the layout bug that branch carried fixed (the fixed dock
+intercepted clicks on the row checkboxes painted under it — see
+`archive/2026-10-05-global-log/design.md`). Scope: the log only; the prompt
+preview and the tier caps of that commit are not ported.
+
+## Lanes run (`npm run verify`, committed-tree equivalent)
+
+| Lane | Result |
+|---|---|
+| 1/6 `tsc --noEmit` | clean |
+| 2/6 ESLint (src, tests, tools) | 0 errors, 8 warnings (all pre-existing: `any` in test helpers, `detect.ts` complexity) |
+| 3/6 RULE 16 gate — changed files (legacy allowed, ratchet) | **GATE PASSED** |
+| 4/6 `vitest run` | 75 files / 704 tests passed |
+| 5/6 coverage (`src/lib`, RULE 16.3) | 97.14 stmts / 92.21 branch / 97.16 funcs / 98.27 lines |
+| 6/6 production build | `dist/index.html` 636.84 kB, gzip 188.08 kB |
+
+## RULE 18 / RULE 16 numbers for the touched files
+
+| File | Lines | Note |
+|---|---|---|
+| `src/lib/log.ts` | 212 | new; pure core (1 file, 21 functions, all ≤ 30) |
+| `src/log/logstore.ts` | 120 | new |
+| `src/log/{LogDock,LogHead,LogList,LogRow}.tsx` | 49 / 75 / 30 / 23 | new |
+| `src/log/{dockheight,scroll,useAutoScroll,useLog}.ts` | 26 / 17 / 44 / 11 | new |
+| `src/svg/runlog.ts` | 126 | new |
+| `src/svg/runplan.ts` | 33 | new — the three pure plan helpers moved out of `actions.ts` |
+| `src/svg/actions.ts` | 282 | changed: emitters + the `refreshModelsNow` extraction keep every function ≤ 30 |
+| `src/svg/runbatch.ts` | 298 | changed: the retry event is a helper, not four lines inside `sendBatch` |
+| `src/svg/scan.ts` | 155 | changed: `logScan` + one `scanWarnings` used by both the user message and the log |
+| `src/{ui/Workbench,state/HistoryProvider,svg/keystore,index.css,...}` | +≈90 | changed |
+
+Baseline: **untouched** (no recorded offender grew; the two new over-100 files
+are new code, not legacy).
+
+## Browser verification of the fix (the bug the port had to resolve)
+
+Headless Chromium (`@sparticuz/chromium`) + Playwright, 1440×900, the app served
+by Vite, a fake File System Access root with 14 approved pairs (the probe lives
+outside the repo — it needs a headless Chromium the project does not ship):
+
+| Probe result | `aaedf2e` | this branch |
+|---|---|---|
+| Selection V2 — checkboxes inside the visible region whose own coordinates hit the dock | 2 (`time`, `log-body`) | **0** |
+| Selection V2 — human click at the list's end | `false → true` only after a full *window* scroll | `false → true` |
+| Generate SVG — checkboxes inside the visible region whose own coordinates hit the dock | 2 (`li[log-entry]`, `log-body`) | **0** |
+| Generate SVG — human click at the list's end | `false → true` only after a full *window* scroll | `false → true` |
+| Dock geometry | `y 663…900`, `position: fixed`, covering both lists | `y 663…900` as the shell's last row; the lists end at `y 663` |
+
+New debt accepted: none. The full (non-changed) gate still reports the same
+three baseline hotspots as before this change — `src/App.tsx` (70 fns, 581
+lines), `src/lib/detect.ts` (15 fns, 307 lines, 5 over-line functions) and
+`src/lib/render.ts` (8 fns, 106 lines, 1 over-line function) — byte-identical to
+the gate output on the parent commit, and the changed-file lane with the ratchet
+passes. The 8 ESLint warnings are the same pre-existing ones.
+

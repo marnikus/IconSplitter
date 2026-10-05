@@ -5,6 +5,8 @@
 // error/export goes through redact(). When IndexedDB is unavailable the key
 // lives in memory for the session only and the UI says so honestly.
 
+import { log } from "../log/logstore";
+import { maskKey } from "../lib/svgsecret";
 import { idbDelete, idbGet, idbPut } from "../batch/store";
 
 const STORE = "secrets";
@@ -22,11 +24,31 @@ let memory: string | null = null;
  */
 export async function saveApiKey(key: string): Promise<boolean> {
   memory = key.trim() === "" ? null : key.trim();
+  const persisted = await putKey(memory);
+  logKeyChange(memory, persisted);
+  return persisted;
+}
+
+/** A refused IndexedDB write is not a lost key: the session copy still works. */
+async function putKey(key: string | null): Promise<boolean> {
   try {
-    return await idbPut(STORE, KEY, { key: memory });
+    return await idbPut(STORE, KEY, { key });
   } catch {
     return false;
   }
+}
+
+/** The log only ever sees the mask and whether the write persisted (RULE 20). */
+function logKeyChange(key: string | null, persisted: boolean): void {
+  if (key === null) {
+    log({ feature: "svg", action: "key-cleared", detail: "the API key was cleared from this device" });
+    return;
+  }
+  const mask = maskKey(key);
+  log({
+    feature: "svg", action: "key-saved", detail: `stored ${mask}`,
+    data: { keyMask: mask, persisted },
+  });
 }
 
 export async function loadApiKey(): Promise<string | null> {
@@ -41,12 +63,14 @@ export async function loadApiKey(): Promise<string | null> {
 }
 
 export async function clearApiKey(): Promise<void> {
+  const hadKey = memory !== null;
   memory = null;
   try {
     await idbDelete(STORE, KEY);
   } catch {
     // Nothing to do: the key is already out of memory.
   }
+  if (hadKey) log({ feature: "svg", action: "key-cleared", detail: "the API key was cleared from this device" });
 }
 
 /** True when a key is available for a request right now. */

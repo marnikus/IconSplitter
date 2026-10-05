@@ -141,6 +141,8 @@ export interface BatchOutcome {
   cost: CostInfo;
   /** Redacted reason when the request failed; null after an answer. */
   error: string | null;
+  /** Provider request id (header or stream); null when the provider sent none. */
+  requestId: string | null;
   /** Wall-clock time the request was in flight, for the run's own record. */
   elapsedMs: number;
 }
@@ -154,6 +156,8 @@ export interface OutcomeInput {
   missing: number;
   usage: Usage;
   error: string | null;
+  /** Provider id, so a finished request can be named in the log and the strip. */
+  requestId?: string | null;
   /** true when the error means "no confirmed outcome" rather than a failure. */
   unknown?: boolean;
   elapsedMs?: number;
@@ -173,6 +177,7 @@ export function batchOutcome(input: OutcomeInput): BatchOutcome {
     usage,
     cost: costInfoFor(input.model, usage),
     error: input.error,
+    requestId: input.requestId ?? null,
     elapsedMs: Math.max(0, Math.round(input.elapsedMs ?? 0)),
   };
 }

@@ -52,8 +52,39 @@
   --v2-thumb: 84px;
 }
 
+/* ── the app shell: nav / scrolling tab area / log dock ────────────────────
+   One viewport column. The dock is the last ROW, so it can only take space:
+   a fixed dock painted over the rows it covered and swallowed their clicks —
+   row checkboxes included (2026-10-05-global-log §1/§2, invariant I-27). The
+   floating toasts read `--app-dock-h`, published by src/log/dockheight.ts. */
+
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-dock {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--v2-line);
+  background: rgb(3 6 13 / 96%);
+}
+
+/* The Tailwind toasts sit at 24 px; this lifts them above the dock's band. */
+.toast-above-dock {
+  bottom: calc(var(--app-dock-h, 0px) + 24px);
+}
+
 .v2-shell {
-  min-height: 100vh;
+  height: 100%; /* the band: the panel may floor itself at it (min-height) */
   background: var(--v2-bg);
   color: var(--v2-text);
 }
@@ -65,7 +96,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: calc(100vh - 3rem);
+  /* At least the visible band; taller when the content is: `.app-main` scrolls
+     (the dock is a separate row, so nothing is ever painted under it). */
+  min-height: 100%;
 }
 
 .v2 :where(button, input, select):focus-visible {
@@ -502,7 +535,7 @@
 }
 
 .svg-shell {
-  min-height: 100vh;
+  height: 100%; /* the band: the panel may floor itself at it (min-height) */
   background: var(--v2-bg);
   color: var(--v2-text);
 }
@@ -511,7 +544,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: calc(100vh - 3rem);
+  min-height: 100%;
 }
 
 .svg :where(button, input, select, textarea):focus-visible {
@@ -1215,7 +1248,9 @@
 .svg-toast {
   position: fixed;
   right: 18px;
-  bottom: 54px;
+  /* Above the dock: it publishes its height, so a message can never be hidden
+     behind the log's band (design D-log-2). */
+  bottom: calc(var(--app-dock-h, 0px) + 54px);
   max-width: 380px;
   padding: 11px 13px;
   border: 1px solid var(--v2-line-strong);
@@ -1232,7 +1267,7 @@
 .svg-busy {
   position: fixed;
   left: 18px;
-  bottom: 54px;
+  bottom: calc(var(--app-dock-h, 0px) + 54px);
   padding: 8px 12px;
   border: 1px solid var(--v2-line);
   border-radius: 999px;

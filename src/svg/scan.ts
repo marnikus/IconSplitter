@@ -5,6 +5,7 @@
 // snapshot commits nothing, only the newest scan may commit, and the cache
 // write can no longer half-commit a scan (design D6/D7).
 
+import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
 import { loadHandles, saveHandles } from "../batch/store";
@@ -49,9 +50,13 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
     const key = scanKey(root.name, found, loaded.rows);
     if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
     commit({ refs, setters: s, discovery: found, loaded, key });
+    logScan(found);
     reportScan(found, s.say);
   } catch {
-    if (isCurrent(refs.seq.current, ticket.id)) s.say("Rescan failed — the folder may be unreadable", true);
+    if (isCurrent(refs.seq.current, ticket.id)) {
+      log({ level: "error", feature: "svg", action: "scan-failed", detail: "the scan failed — the folder may be unreadable" });
+      s.say("Rescan failed — the folder may be unreadable", true);
+    }
   } finally {
     if (isCurrent(refs.seq.current, ticket.id)) s.setBusy(null);
   }
@@ -102,10 +107,31 @@ function saveIndex(sources: SvgSource[]): void {
   }
 }
 
+/** What a scan found, so an empty or partial list is never a mystery (§3). */
+function logScan(found: Discovery): void {
+  log({
+    feature: "svg", action: "scan", detail: `found ${found.sources.length} approved source(s)`,
+    data: {
+      eligible: found.sources.length, problems: found.problems.length,
+      unreadable: found.unreadable.length, corruptDecisions: found.corruptDecisions,
+    },
+  });
+}
+
+/** The user message and the log entry share one wording (RULE 10). */
 function reportScan(found: Discovery, say: (m: string, e?: boolean) => void): void {
-  if (found.corruptDecisions) say("review-decisions.json is corrupt — kept the previous decisions in memory", true);
-  if (found.problems.length > 0) say(`${found.problems.length} approved pair(s) need attention — the reason is on the row`, true);
-  if (found.unreadable.length > 0) say(`${found.unreadable.length} file(s) could not be read and are marked unreadable`, true);
+  for (const warning of scanWarnings(found)) {
+    say(warning, true);
+    log({ level: "warn", feature: "svg", action: "scan-warning", detail: warning });
+  }
+}
+
+function scanWarnings(found: Discovery): string[] {
+  return [
+    ...(found.corruptDecisions ? ["review-decisions.json is corrupt — kept the previous decisions in memory"] : []),
+    ...(found.problems.length > 0 ? [`${found.problems.length} approved pair(s) need attention — the reason is on the row`] : []),
+    ...(found.unreadable.length > 0 ? [`${found.unreadable.length} file(s) could not be read and are marked unreadable`] : []),
+  ];
 }
 
 /** Restores the remembered root: this tab's handle, else the Selection tab's. */

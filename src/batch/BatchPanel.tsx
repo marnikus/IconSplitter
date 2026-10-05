@@ -49,7 +49,7 @@ function Overlays({ b }: { b: Batch }) {
     <>
       {b.s.busy && <BusyOverlay msg={b.s.busy} cancel={b.cancel} />}
       {b.s.toast && (
-        <div data-testid="batch-toast" className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${b.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>
+        <div data-testid="batch-toast" className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${b.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>
           {b.s.toast.msg}
         </div>
       )}

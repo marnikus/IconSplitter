@@ -416,6 +416,29 @@ Batch:
   never "changed"/"gone"); an approved pair is never hidden while its files are
   only missing; a scan writes nothing into the scanned root; a superseded scan
   and an unchanged snapshot both commit nothing.
+* **I-23 (the log, RULE 10/12):** one log instance for the whole app, docked by
+  `Workbench` on every tab. Features write through `log()` only — no feature
+  touches `iconSplitter.log.v1` — and one entry is one `LogSpec` through one
+  sanitiser, so the store, the rows and the copied text can never disagree.
+* **I-24 (the log, RULE 20):** an entry never carries a key, an Authorization
+  header, image bytes, a composite data URL or a full payload — only a mask, a
+  hash and counts. Sanitising happens on write **and** on read, so a tampered
+  stored payload cannot smuggle one either.
+* **I-25 (the log, RULE 13):** the stored log is validated and clamped on read
+  (foreign version or corrupt JSON → the default state, never a guess), keeps at
+  most the configured cap (50/100/200/500/1000, default 200) in display **and**
+  storage, is debounced 150 ms and flushed on pagehide, and `clearLog()` leaves
+  exactly one honest `log.cleared` entry.
+* **I-26 (the log, RULE 11/24):** the dock follows new entries only while it is
+  at the bottom (24 px slack), stops the moment the reader scrolls up, resumes
+  when they come back, and always says which of the two states it is in.
+* **I-27 (the shell, RULE 3/24 — the port's fix):** the dock occupies a **layout
+  row** of one viewport column (`.app-shell` → nav, `.app-main`, `.app-dock`);
+  the panels are floored at the band that is left (`.v2`, `.svg`: `min-height:
+  100%`) and grow with their content, so `.app-main` — never the window — is
+  what scrolls. No interactive element is ever painted under the dock, at any
+  scroll position, and the app's floating toasts are lifted above the dock's
+  published height (`--app-dock-h`).
 
 ## 6. Storage map
 
@@ -435,6 +458,7 @@ Batch:
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, stall window, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.svg.inflight.v1` | the in-flight journal: run/batch id, source ids + names, model, start time, provider request id — no key, no prompt, no answer | validated on read; corrupt = empty; cleared when a request gets a confirmed outcome |
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
+| localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
 | `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
 
@@ -468,7 +492,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 61 files / 574 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 75 files / 704 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -593,6 +617,38 @@ and `data-testid` handles):
   every preview background applied to the frame while the document stays
   byte-identical, and the model card + request estimate following all four
   tiers
+* `log_lib.test.ts` — the log's pure core: the entry shape, key/data-URL
+  redaction on write, the cap clamp (0/12→50, 250→200, 600→500, 99999→1000),
+  the ring buffer, `formatEntry`/`formatLogText` and a damaged or foreign stored
+  payload (valid entries kept, re-sanitised on read)
+* `log_scroll.test.ts` — the follow rule: at the bottom, inside the 24 px slack,
+  and short content is "at the bottom" too
+* `log_store.test.ts` — subscribe/notify, the 150 ms debounce, the cap trimming
+  display **and** storage, a restart restoring the log, `clearLog()` leaving one
+  `log.cleared` entry, the remembered minimize state, corrupt → defaults
+* `log_layout.test.tsx` — **the port's bug gate**: the dock is the shell's last
+  row and a sibling *after* `app-main`, never `fixed`/`sticky`/`absolute`; the
+  shell is a viewport column; `.v2`/`.svg` are floored at the band they are
+  given (never `100vh`, never a fixed height that could collapse the list); the
+  fixed toasts read `--app-dock-h`, which the dock publishes and moves with
+  minimize/restore
+* `log_ui.test.tsx` — DOM: one dock on every tab with its head/body/empty state,
+  the tab switches recorded once each, level + feature + action on a row, a key
+  written into an entry never shown, follow/pause/resume on the real scroll
+  events, Copy all == `formatLogText(entries)`, Clear, the cap (120 → 50 keeps
+  `step-71 … log.max-entries`), and minimize surviving a restart
+* `log_wiring.test.tsx` — the real emitters: a pushed edit (`{feature:"history",
+  action:"push"}` with its label and count), undo + the failed apply, a scan's
+  summary and its `review-decisions.json` warning, `key-saved` with the mask and
+  never the key, and `withRunLog` handing the event to the live UI before it
+  writes the entry
+* `svg_runlog.test.ts` — every `RunEvent` kind maps to one `svg.*` entry with
+  its stable ids (run, request, item, retry, cancel), a finished request reports
+  tokens/cost/outcome/elapsed **and** the provider request id, a stalled outcome
+  is a warning that says "never retried" (never an error), and the composite's
+  data URL travelling on the same event never reaches the entry
+* `secret_hygiene.test.ts` (extended) — a key written through the real log store
+  appears neither in the entry, the stored payload, nor the copied text
 
 Must exist before the matching change ships:
 
@@ -653,6 +709,12 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
 ## 11. Current UI — control inventory
 
 Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
+
+* App shell: `app-shell` (one viewport column: nav → `app-main` → `log-dock`),
+  `app-main` (the region that scrolls — the window never does). The global
+  activity log dock is the last row of that column on **every** tab: `log-dock`,
+  `log-head`, `log-count`, `log-autoscroll`, `log-max`, `log-copy`, `log-clear`,
+  `log-minimize`, `log-note`, `log-body`, `log-list`, `log-entry`, `log-empty`.
 
 * Workbench: `tab-sheets`, `tab-batch`, `tab-selection`, `tab-selection-v2`,
   `tab-generate-svg`.
@@ -847,3 +909,60 @@ datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` o
 `checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
 the zoom slider or clicking a row checkbox — the previous "any input is a text
 field" test killed undo for the two controls the review tab uses most.
+
+## 13. The global activity log, and the shell that stopped the dock blocking rows (2026-10-05)
+
+Ported from `arena/01a10c14-iconsplitter@aaedf2e` ("verbatim prompt preview +
+global activity log"); the prompt preview and the reasoning-tier caps that
+commit also carried stay out — the first is a different feature, the second a
+reversal this branch documented on 2026-10-05. Full record:
+`archive/2026-10-05-global-log/design.md`.
+
+### 13.1 What the log is
+
+One docked panel, mounted once by `Workbench` as the last row of the app shell.
+`src/lib/log.ts` owns the pure rules (schema, sanitising/redaction, the cap, the
+ring buffer, formatting, validate-on-read); `src/log/logstore.ts` owns the live
+state + the debounced persistence to `iconSplitter.log.v1`; `useLog` binds it to
+React (`useSyncExternalStore`); `useAutoScroll` + `scroll.ts` own the follow
+rule (24 px slack, pause on scroll-up, resume at the bottom); `LogHead`,
+`LogList` and `LogRow` draw it. Entries are `{ id, at, level, feature, action,
+ids, detail, data, v }` — `debug/info/warn/error`, one line, values trimmed
+(`DETAIL_MAX_CHARS` 400, `VALUE_MAX_CHARS` 200, `DATA_MAX_KEYS` 12).
+
+### 13.2 Who writes, and what may never be written
+
+| Emitter | Entries |
+|---|---|
+| `ui/Workbench` | `app.open-tab` (the id of the tab, e.g. `tab=selectionV2`) |
+| `state/HistoryProvider` | `history.push` / `history.push-gesture` (debug, the label + type + id count), `history.undo` / `history.redo`, `history.apply-failed` (error) |
+| `svg/scan` | `svg.scan` (eligible/problems/unreadable/corrupt counts), `svg.scan-warning` (the same wording the user is told), `svg.scan-failed` (error) |
+| `svg/actions` | `svg.root-picked`, `svg.prompt-reset`, `svg.config-changed`, `svg.sampling-changed`, `svg.review-decided`, `svg.confirm-opened`, `svg.generate-confirmed`, `svg.cancel-requested` (warn) |
+| `svg/keystore` | `svg.key-saved` (the mask + whether it persisted), `svg.key-cleared` — never the key |
+| `svg/runbatch` → `RunEvent` → `svg/runlog` | `svg.run-start`, `svg.request-start`, `svg.request-retry` (warn), `svg.item-start` (debug), `svg.item-saved`, `svg.item-failed` (error), `svg.request-failed` (error), `svg.request-done` (info, or warn for an unconfirmed outcome), `svg.cancelled` |
+| `log/logstore`, `log/LogHead` | `log.cleared`, `log.max-entries`, `log.minimized`/`log.restored`, `log.copied` |
+
+`withRunLog(sink)` wraps the runner's one event sink: the live UI gets the event
+first, then the log records it, so the batch strip and the log can never
+disagree. Two additions to this branch's own vocabulary made that honest rather
+than approximate: `RunEvent.request-retry` (a retryable failure is now visible
+while its wait runs instead of appearing only as the final report) and
+`BatchOutcome.requestId` (a finished request's entry can name the provider id
+that its sidecar and the in-flight journal already keep).
+
+### 13.3 The shell, and the bug this port had to fix
+
+The source branch docked the log with `position: fixed; bottom: 0` plus a spacer,
+while every panel derived its height from the viewport (`.v2 { min-height:
+calc(100vh - 3rem) }`). The dock therefore owned the bottom 236 px of the
+viewport at every scroll position and received the clicks meant for the rows
+painted there: at 1440×900 a hit test found two checkboxes per tab whose own
+coordinates hit `log-body`/`log-entry`, and a real click on one left it
+unselected (probe recorded in the archive doc). The fix is structural — the dock
+is a row of `.app-shell`, `.app-main` is what scrolls, the panels are floored at
+the band that is left and grow when their chrome needs more (a fixed-height
+attempt collapsed the Generate SVG list to zero rows, which the same probe
+caught), and the fixed toasts are lifted by `--app-dock-h`, the one value the
+dock publishes. Invariants I-23…I-27; the layout gate is
+`tests/log_layout.test.tsx`.
+

@@ -105,7 +105,7 @@ function finishBatch(ctx: BatchCtx): void {
     plan, index, model: state.args.config.model,
     saved: tally.saved, failed: tally.failed, missing: tally.missing,
     usage: ctx.usage ?? zeroUsage(), error: ctx.error,
-    unknown: ctx.unsettled, elapsedMs: Date.now() - ctx.startedAt,
+    unknown: ctx.unsettled, elapsedMs: Date.now() - ctx.startedAt, requestId: ctx.requestId,
   });
   // Saved, failed or cancelled: this request has a confirmed outcome, so its
   // journal note is done with. A STALL keeps its note on purpose — nobody has
@@ -141,7 +141,9 @@ async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<Send
     if (!out.failure.retryable || attempt === state.args.config.retries) {
       return { ok: false, error: failureText(state, out.failure, ctx), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
     }
-    await delay(out.failure.retryAfterMs ?? backoff(attempt), state.args.signal);
+    const waitMs = out.failure.retryAfterMs ?? backoff(attempt);
+    noteRetry(ctx, attempt + 1, out.failure, waitMs);
+    await delay(waitMs, state.args.signal);
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
 }
@@ -245,6 +247,15 @@ async function persist(state: RunState, item: SvgSource, sidecar: SvgSidecar | n
     state.problems.push(`${item.name}: sidecar could not be written — the SVG is saved, retry the save`);
   }
   return sidecar;
+}
+
+/** A retry is visible in the log while its wait runs, not only in the report. */
+function noteRetry(ctx: BatchCtx, attempt: number, failure: Failure, delayMs: number): void {
+  ctx.state.args.onEvent({
+    kind: "request-retry", batchId: ctx.plan.id, attempt,
+    retries: ctx.state.args.config.retries, failure: failure.kind,
+    status: failure.status, delayMs,
+  });
 }
 
 function failBatch(ctx: BatchCtx, error: string, kind: Failure["kind"], retryAfterMs: number | null): void {

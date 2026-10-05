@@ -1,8 +1,16 @@
-// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar and
-// the session autosave. The providers sit ABOVE the panels, which is what makes
-// an undo pressed on one tab able to reverse an action made on another (RULE 12).
+// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar,
+// the session autosave and the global activity log. The providers sit ABOVE the
+// panels, which is what makes an undo pressed on one tab able to reverse an
+// action made on another (RULE 12).
+//
+// The shell is ONE viewport column: the nav, the scrolling tab area (`app-main`)
+// and the log dock last. The dock is a layout row, never an overlay — a fixed
+// dock painted over the rows it covered and swallowed their clicks, checkboxes
+// included (design 2026-10-05-global-log §1/§2, invariant I-27).
 
 import App from "../App";
+import LogDock from "../log/LogDock";
+import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
 import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
@@ -35,7 +43,7 @@ function Shell() {
   useSessionAutosave();
   usePrefsAutosave();
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell">
       <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
           <div className="flex gap-2" data-testid="tabbar">
@@ -48,17 +56,21 @@ function Shell() {
           </div>
         </div>
       </nav>
-      {tab === "sheets" && <App />}
-      {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
-      {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
-      {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
-      {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
+      <main className="app-main" data-testid="app-main">
+        {tab === "sheets" && <App />}
+        {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
+        {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
+        {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
+        {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
+      </main>
+      <LogDock />
     </div>
   );
 }
 
 /** Switching tabs is navigation, not an edit — it is restored, but not undoable. */
 function openTab(tab: AppState["tab"]): void {
+  log({ feature: "app", action: "open-tab", detail: `tab=${tab}`, data: { tab } });
   setAppState({ tab });
 }
 
