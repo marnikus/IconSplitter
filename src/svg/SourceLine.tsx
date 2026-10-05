@@ -4,6 +4,7 @@
 // for copies, and the honest counts of what the scan found. Extracted from
 // SvgControls so both stay inside the RULE 18 size budget.
 
+import { auditText } from "./sourcelist";
 import RootPathField from "../ui/RootPathField";
 import type { Discovery } from "./sources";
 
@@ -38,6 +39,8 @@ export default function SourceLine({ rootName, discovery, busy, counts, onChoose
         <span className="svg-recursive" data-testid="svg-scope-copy">
           Approved Selection images only · recursive · {discovery?.sources.length ?? 0} sources
         </span>
+        {/* The whole picture, so a short list is never a mystery (invariant I-33). */}
+        {discovery !== null && <span className="svg-audit" data-testid="svg-audit">{auditText(discovery.audit)}</span>}
       </div>
       <div className="svg-summary">
         <Chip value={counts.eligible} label="eligible" testid="svg-count-eligible" />

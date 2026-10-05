@@ -8,12 +8,12 @@
 import type { BatchSource } from "../lib/svgbatch";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
-import {
-  pairEntries, pairId, problemsOf, unreadableReason,
-  type PairProblem, type ProblemKind, type ReviewPair,
-} from "../lib/pairing";
-import { mergeDecisions, type ReviewRecord } from "../lib/reviewfile";
+import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem, type ProblemKind } from "../lib/pairing";
 import { loadDecisions } from "../selection/reviewstore";
+import {
+  auditText, fileTally, selectRows,
+  type RowPair, type ScanAudit, type SourceExclusion,
+} from "./sourcelist";
 
 /** One approved AI image the SVG tab may generate from. */
 export interface SvgSource {
@@ -43,10 +43,17 @@ export interface FileProblem {
 }
 
 export interface Discovery {
-  /** Every approved pair — a problem is a status on the row, never a removal. */
+  /** Every approved AI OUTPUT that exists on disk, one row per path (I-31/32). */
   sources: SvgSource[];
-  /** Every approved pair that needs attention, in source order. */
+  /** Every listed source that needs attention, in source order. */
   problems: SourceProblem[];
+  /**
+   * Approved sources that are NOT listed, each with its reason: no AI image,
+   * no files left, no AI result, or a duplicate path. Reported, never rows.
+   */
+  excluded: SourceExclusion[];
+  /** The whole picture the list was checked against (I-33). */
+  audit: ScanAudit;
   /** Files that could not be read (locked or being written) — not "changed". */
   unreadable: FileProblem[];
   /** review-decisions.json could not be parsed — decisions kept in memory. */
@@ -61,69 +68,35 @@ export const PROBLEM_LABEL: Record<ProblemKind, string> = {
   "files-missing": "Files missing",
 };
 
-/** Scans the root and lists every approved pair, in a deterministic order. */
+/** Scans the root and lists every approved AI output, in a deterministic order. */
 export async function discoverApprovedSources(root: DirHandleLike): Promise<Discovery> {
   const entries = walkTree(await readDirTree(root, []), []);
-  const pairs = pairEntries(entries);
   const load = await loadDecisions(root);
-  const { byId, orphans } = mergeDecisions(pairs, load.records);
-  const approved = pairs.filter((p) => byId.get(p.pairId)?.decision === "approved");
-  const sources = sortSources([...approved.map(toSource), ...recordSources(orphans)]);
+  const picked = selectRows(pairEntries(entries), load.records);
+  const sources = sortSources(picked.rows.map(toSource));
   return {
     sources,
     problems: flattenProblems(sources),
+    excluded: picked.excluded,
+    audit: { ...fileTally(entries), missing: picked.missing, duplicates: picked.duplicates, rows: sources.length },
     unreadable: unreadableFiles(entries),
     corruptDecisions: load.corrupt,
   };
 }
 
-/**
- * The AI side when it is there; when it is gone, the AI name the naming rule
- * expects beside the reference — the row keeps its identity and its artifact
- * path, and the status says what is missing (design D4). A pair is never dropped.
- */
-function toSource(pair: ReviewPair): SvgSource {
-  const ai = pair.ai;
-  const relPath = ai ? ai.relPath : expectedAiPath(pair);
-  const name = baseName(relPath);
+/** The audit line the source bar shows and the scan logs (one wording, I-33). */
+export { auditText };
+
+/** A listed row: its real AI file, never an invented name (I-31). */
+function toSource(pair: RowPair): SvgSource {
   return {
     id: pair.pairId,
-    name,
-    stem: stemOf(name),
-    relPath,
+    name: baseName(pair.ai.relPath),
+    stem: stemOf(baseName(pair.ai.relPath)),
+    relPath: pair.ai.relPath,
     dirPath: pair.relDir,
-    fingerprint: ai ? `${ai.size}:${ai.mtime}` : "missing",
+    fingerprint: `${pair.ai.size}:${pair.ai.mtime}`,
     problems: problemsOf(pair),
-  };
-}
-
-/** `architecture/court.png` -> `architecture/court_AI.png` (single-piece rule). */
-function expectedAiPath(pair: ReviewPair): string {
-  const name = baseName(pair.source?.relPath ?? pair.base);
-  const stem = stemOf(name);
-  const ai = `${stem}_AI${name.slice(stem.length)}`;
-  return pair.relDir === "" ? ai : `${pair.relDir}/${ai}`;
-}
-
-/** Approved pairs the disk no longer holds: the record is their only trace. */
-function recordSources(orphans: ReviewRecord[]): SvgSource[] {
-  return orphans.flatMap((r) => (r.decision === "approved" ? [recordSource(r)] : []));
-}
-
-function recordSource(r: ReviewRecord): SvgSource {
-  const relPath = r.ai_result ?? r.source ?? r.pair_id;
-  const name = baseName(relPath);
-  return {
-    id: r.pair_id,
-    name,
-    stem: stemOf(name),
-    relPath,
-    dirPath: relPath.includes("/") ? relPath.slice(0, relPath.lastIndexOf("/")) : "",
-    fingerprint: "missing",
-    problems: [{
-      kind: "files-missing", relPath: null,
-      reason: `only the decision record remains for ${relPath}`,
-    }],
   };
 }
 

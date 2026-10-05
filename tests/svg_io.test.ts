@@ -108,8 +108,10 @@ describe("approved-source discovery", () => {
     expect(found.sources[0].dirPath).toBe("architecture");
     expect(found.sources.every((s) => s.problems.length === 0)).toBe(true);
     expect(found.problems).toEqual([]);
+    expect(found.excluded).toEqual([]);
     expect(found.unreadable).toEqual([]);
     expect(found.corruptDecisions).toBe(false);
+    expect(found.audit).toEqual({ files: 7, aiSources: 3, references: 3, missing: 0, duplicates: 0, rows: 2 });
   });
 
   it("says the decision file is corrupt instead of dropping every source", async () => {
@@ -120,20 +122,20 @@ describe("approved-source discovery", () => {
     expect(found.sources).toEqual([]);
   });
 
-  it("keeps an approved pair whose AI image disappeared, with the reason on it", async () => {
+  it("drops an approved pair whose AI image disappeared, with the reason reported", async () => {
     const root = makeRoot();
     const arch = await root.getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png");
     root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
     const found = await discoverApprovedSources(root);
-    expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
-    const court = found.sources[0];
-    expect(court.relPath).toBe("architecture/court_AI.png");
-    expect(court.stem).toBe("court_AI");
-    expect(court.problems).toEqual([
-      { kind: "ai-missing", relPath: null, reason: "no AI result (court_AI.png) beside architecture/court.png" },
-    ]);
-    expect(found.problems).toEqual([{ id: COURT, ...court.problems[0] }]);
+    // only the real AI output is a row; the surviving reference is explained
+    expect(found.sources.map((s) => s.id)).toEqual([FOG]);
+    expect(found.problems).toEqual([]);
+    expect(found.excluded).toEqual([{
+      id: COURT, relPath: "architecture/court.png", kind: "ai-missing",
+      reason: "no AI result (court_AI.png) beside architecture/court.png",
+    }]);
+    expect(found.audit).toMatchObject({ files: 6, aiSources: 2, references: 3, missing: 1, duplicates: 0, rows: 1 });
     expect(found.unreadable).toEqual([]);
   });
 
@@ -169,9 +171,10 @@ describe("approved-source discovery", () => {
     expect(found.unreadable).toEqual([
       { relPath: "architecture/court_AI.png", reason: "architecture/court_AI.png could not be read (locked or still being written)" },
     ]);
+    expect(found.audit.rows).toBe(2); // a file that cannot be read still exists
   });
 
-  it("keeps an approved pair whose every file is gone, as a status row", async () => {
+  it("reports an approved record whose every file is gone, and lists nothing for it", async () => {
     const root = makeRoot();
     const arch = await root.getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png");
@@ -182,11 +185,12 @@ describe("approved-source discovery", () => {
     };
     root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({ records: [rec] })));
     const found = await discoverApprovedSources(root);
-    expect(found.sources.map((s) => s.id)).toEqual([COURT]);
-    expect(found.sources[0].relPath).toBe("architecture/court_AI.png");
-    expect(found.sources[0].problems).toEqual([
-      { kind: "files-missing", relPath: null, reason: "only the decision record remains for architecture/court_AI.png" },
-    ]);
+    expect(found.sources).toEqual([]);
+    expect(found.excluded).toEqual([{
+      id: COURT, relPath: "architecture/court_AI.png", kind: "no-files",
+      reason: "only the decision record remains for architecture/court_AI.png",
+    }]);
+    expect(found.audit).toMatchObject({ files: 5, aiSources: 2, references: 2, missing: 1, rows: 0 });
   });
 
   it("ignores this app's own version artifacts instead of inventing a row", async () => {

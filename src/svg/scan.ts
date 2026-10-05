@@ -10,6 +10,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
 import { loadHandles, saveHandles } from "../batch/store";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
+import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { loadSidecar } from "./sidecar";
 import { saveSourceIndex, type IndexEntry } from "./sourceindex";
@@ -110,10 +111,11 @@ function saveIndex(sources: SvgSource[]): void {
 /** What a scan found, so an empty or partial list is never a mystery (§3). */
 function logScan(found: Discovery): void {
   log({
-    feature: "svg", action: "scan", detail: `found ${found.sources.length} approved source(s)`,
+    feature: "svg", action: "scan", detail: auditText(found.audit),
     data: {
       eligible: found.sources.length, problems: found.problems.length,
-      unreadable: found.unreadable.length, corruptDecisions: found.corruptDecisions,
+      excluded: found.excluded.length, unreadable: found.unreadable.length,
+      corruptDecisions: found.corruptDecisions, ...found.audit,
     },
   });
 }
@@ -129,7 +131,8 @@ function reportScan(found: Discovery, say: (m: string, e?: boolean) => void): vo
 function scanWarnings(found: Discovery): string[] {
   return [
     ...(found.corruptDecisions ? ["review-decisions.json is corrupt — kept the previous decisions in memory"] : []),
-    ...(found.problems.length > 0 ? [`${found.problems.length} approved pair(s) need attention — the reason is on the row`] : []),
+    ...(found.excluded.length > 0 ? [`${found.excluded.length} approved source(s) are not listed — ${exclusionSummary(found.excluded)}; the audit names every count`] : []),
+    ...(found.problems.length > 0 ? [`${found.problems.length} listed source(s) need attention — the reason is on the row`] : []),
     ...(found.unreadable.length > 0 ? [`${found.unreadable.length} file(s) could not be read and are marked unreadable`] : []),
   ];
 }

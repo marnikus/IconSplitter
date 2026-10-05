@@ -588,6 +588,7 @@
 }
 
 .svg-recursive { color: var(--v2-muted); font-size: 11px; }
+.svg-audit { color: var(--v2-muted); font-size: 10px; }
 
 /* The root's real full path, pasted once (the browser only knows its name). */
 .pathfield { display: flex; align-items: center; gap: 7px; min-width: 0; }

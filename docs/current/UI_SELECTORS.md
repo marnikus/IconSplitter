@@ -329,6 +329,7 @@ Source bar (only after a root is remembered; `svg-root-empty` /
 | `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so the user pastes it once (Explorer's address bar or "Copy as path"); normalised and remembered per folder name (I-29). `svg-root-path-label` is the label, `svg-root-path-note` says when nothing is set |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
+| `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |
 | `svg-count-{eligible,generated,approved,failed}` | counter chips | live counts |
 
 Prompt + provider card:
@@ -399,7 +400,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the sidecar name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
 | `svg-persist-{sourceId}` | text | "Per-file sidecar saved" / "Not generated yet" / "Sidecar unreadable — SVGs on disk are kept"; the `title` names the sidecar itself ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it); `error` class on failure |
-| `svg-problem-{sourceId}` | text | the row's scan status when a file needs attention: "AI image missing" / "Reference missing" / "Unreadable file" / "Files missing" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). Present means the row is still listed — absence is a status, never a removal |
+| `svg-problem-{sourceId}` | text | the row's scan status when a file of a **listed** source needs attention: "Reference missing" / "Unreadable file" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). An unreadable file or a missing reference is a status on the row, never a removal — but a missing **AI image** means there is no row at all (I-31): that source appears in `svg-warn-excluded` instead |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved
@@ -441,8 +442,12 @@ those sources — the only way to resend, always a deliberate user action) and
 `svg-inflight-dismiss` (acknowledges the note and clears the journal).
 
 Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / `problems` — the
-approved pairs that need attention, with the first reasons spelled out /
-`unreadable` — the files that could not be read this scan / save failure),
+listed sources that need attention, with the first reasons spelled out /
+`excluded` — the approved sources **not** listed, grouped by kind with the first
+reasons spelled out ("4 approved source(s) are not listed — 2 with no AI image
+on disk, 2 duplicate records."), so a reference image is never mistaken for a
+missing row (I-31) / `unreadable` — the files that could not be read this scan /
+save failure),
 `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes

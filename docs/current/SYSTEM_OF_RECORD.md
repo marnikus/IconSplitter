@@ -138,16 +138,26 @@ Everything above runs client-side; nothing is uploaded anywhere.
 Generate SVG (adds to, never replaces, the rules above — and is the one mode
 that makes a network call, only when the user asks it to):
 
-* Discovery reuses the Selection scan and pairing: only pairs whose stored
-  decision is **approved** become sources, keyed by the same stable
-  `pair_<hash>` id (never a row index), in deterministic path order. **Every
-  approved pair stays in the list** — a pair is never removed because a file
-  needs attention (2026-10-05): a missing AI image, a missing reference, an
-  unreadable file and a pair only its decision record still remembers are all
-  listed with a status on the row (`svg-problem-*`, one reason per file) and
-  counted in `Discovery.problems`; `Discovery.unreadable` names the files that
-  could not be read this scan. A corrupt decision file warns and keeps the
-  in-memory decisions.
+* Discovery reuses the Selection scan and pairing, but a row is now
+  **an approved AI OUTPUT that exists on disk** (2026-10-05, I-31): a file whose
+  own name carries the canonical `_AI` form (`…_AI.png`, `…_AI_7.png`,
+  `…_AI_9_01.png` — a raster image, never this app's `_AI.svg` output), named by
+  an approved decision — by the pair's own `pair_<hash>` id, or by an approved
+  record whose `ai_result` is exactly that path (ids drift when a file moves
+  between `split_NN` folders; the recorded approval does not). **One normalized
+  AI path is one row** (I-32), whatever the row index, the split folder or how
+  many decision records name it, in deterministic path order. Everything else is
+  reported instead of listed (`Discovery.excluded` + the `svg-warn-excluded`
+  banner + the log): an approved pair whose AI image is gone (`ai-missing`), a
+  record with nothing left on disk (`no-files`), a record naming a reference
+  image (`not-ai-output`), an approved pair of only this app's own SVG
+  (`artifact`), and a second record for a path already claimed (`duplicate`) —
+  the first record naming a path is that row's approval, so N records for one
+  path yield one row and N−1 duplicates. A listed row that needs attention keeps
+  its per-file status (`svg-problem-*` — a missing reference or an unreadable
+  file never removes a row, I-22); `Discovery.unreadable` names the files that
+  could not be read this scan; `Discovery.problems` counts the listed ones.
+  A corrupt decision file warns and keeps the in-memory decisions.
 * Generation: the editable prompt (stored locally, resettable to the
   documented default) is sent with the approved AI images as a data-URL
   `image_url` part, and the answer is **streamed** (`stream: true` +
@@ -413,9 +423,10 @@ Batch:
 * **I-22 (scan, RULE 3/4/24):** a scan is a pure function of the file set and
   commits once: enumeration order can never change a pair, its id, its AI side
   or the list order; an unreadable file is a status (never a fabricated size,
-  never "changed"/"gone"); an approved pair is never hidden while its files are
-  only missing; a scan writes nothing into the scanned root; a superseded scan
-  and an unchanged snapshot both commit nothing.
+  never "changed"/"gone"); an approved **listed** source is never hidden while a
+  file of its own is only missing (a source with no AI image is not a row at all
+  — see I-31 — and is reported with its reason); a scan writes nothing into the
+  scanned root; a superseded scan and an unchanged snapshot both commit nothing.
 * **I-23 (the log, RULE 10/12):** one log instance for the whole app, docked by
   `Workbench` on every tab. Features write through `log()` only — no feature
   touches `iconSplitter.log.v1` — and one entry is one `LogSpec` through one
@@ -454,6 +465,28 @@ Batch:
   itself at a folder — the picker is offered whether or not a root is loaded,
   because the Selection tab's handle is a fallback for the first run, not a
   lock — and each tab has exactly one picker control.
+* **I-31 (SVG list, RULE 3/4):** a Generate SVG row is an **existing canonical
+  AI output** whose path an approved decision names — never an invented `_AI`
+  name, never a reference image, never a path that is not on disk. A source that
+  fails this is excluded **with its reason** and reported (banner + audit + log);
+  it is never silently dropped and never offered for generation. The judgement
+  lives in one pure module (`svg/sourcelist.ts`), not inside the scan.
+* **I-32 (identity, RULE 6/24):** one normalized AI path is one row, whatever
+  the row index, the split folder or how many decision records name it; rows are
+  ordered by normalized path, so a reload or a repeated rescan yields
+  byte-identical rows, order and audit. N records naming one path are one row
+  plus N−1 `duplicate` reports — the same file two split folders apart is two
+  rows, because it is two files.
+* **I-33 (audit, RULE 4):** every scan states the whole picture — files walked,
+  AI sources on disk, references excluded, missing sources, duplicates removed
+  and final unique rows — as one line in the source bar (`svg-audit`) and in the
+  scan log (`svg.scan`, with the numbers as fields), so a list different from
+  what the user expects can always be traced to a named reason. The exclusions
+  and the audit are part of the snapshot key: a changed count is a changed scan.
+* **I-34 (naming, RULE 3):** a source must be a **raster** image. This app's own
+  output (`…_AI.svg`) and its versioned artifacts (`…_v1.svg`) are never sources
+  and are never counted as AI sources in the audit — otherwise a second run
+  would feed an artifact back into generation, and the counts would not add up.
 
 ## 6. Storage map
 
@@ -501,7 +534,8 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
-| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved pair listed, with per-file problems), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
+| SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
+| SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).

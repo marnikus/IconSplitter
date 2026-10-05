@@ -224,22 +224,43 @@ describe("Generate SVG panel", () => {
     expect(q(`[data-testid=svg-persist-${FOG}]`)?.textContent).toBe("Per-file sidecar saved");
   });
 
-  it("keeps a pair whose AI image is gone, as a row that says what is missing", async () => {
+  it("does not list a pair whose AI image is gone — a reference is not a source", async () => {
     const root = await makeRoot();
     const arch = await root.getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png");
     await mount(root);
-    // both rows are listed: absence is a status, never a silent removal
-    expect(host.querySelectorAll(".svg-row")).toHaveLength(2);
-    expect(q(`[data-testid=svg-row-${COURT}]`)).not.toBeNull();
-    expect(q(`[data-testid=svg-problem-${COURT}]`)?.textContent).toBe("AI image missing");
-    expect(q(`[data-testid=svg-problem-${FOG}]`)).toBeNull();
-    // the row still names the SVG generation would write for it
-    expect(q(`[data-testid=svg-target-${COURT}]`)?.textContent).toBe("architecture/court_AI.svg");
-    // and the banner names the file and the reason, not just a count
-    expect(q("[data-testid=svg-warn-problems]")?.textContent).toContain("1 approved pair(s) need attention");
-    expect(q("[data-testid=svg-warn-problems]")?.textContent)
-      .toContain("no AI result (court_AI.png) beside architecture/court.png");
+    // the surviving reference is NOT a generation source (the reported bug)
+    expect(host.querySelectorAll(".svg-row")).toHaveLength(1);
+    expect(q(`[data-testid=svg-row-${COURT}]`)).toBeNull();
+    expect(q(`[data-testid=svg-row-${FOG}]`)).not.toBeNull();
+    expect(q(`[data-testid=svg-row-count]`)?.textContent).toBe("1");
+    // reported instead, with the file and the reason — never silently dropped
+    const note = q("[data-testid=svg-warn-excluded]");
+    expect(note?.textContent).toContain("1 approved source(s) are not listed");
+    expect(note?.textContent).toContain("no AI result (court_AI.png) beside architecture/court.png");
+    // and the audit line states the whole picture
+    expect(q("[data-testid=svg-audit]")?.textContent)
+      .toBe("Audit — 6 files · 1 AI source · 2 references excluded · 1 missing file · 0 duplicates removed → 1 row");
+    expect(q(`[data-testid=svg-generate-${COURT}]`)).toBeNull();
+  });
+
+  it("shows one row for an AI image three records name, with the extra reported", async () => {
+    const root = await makeRoot();
+    const file = await root.getFileHandle("review-decisions.json");
+    const parsed = JSON.parse(await (await file.getFile()).text()) as {
+      records: { pair_id: string; source: string | null; ai_result: string | null }[];
+    };
+    // the fog record as a real path, then the SAME path twice more under ids
+    // from before the file moved — the shape that listed one image three times
+    const fog = parsed.records.find((r) => r.pair_id === FOG)!;
+    fog.source = "architecture/fog.png";
+    fog.ai_result = "architecture/fog_AI.png";
+    parsed.records.push({ ...fog, pair_id: "pair_deadbeef" }, { ...fog, pair_id: "pair_cafebabe" });
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify(parsed)));
+    await mount(root);
+    expect(host.querySelectorAll(".svg-row")).toHaveLength(2); // fog + court, each once
+    expect(q("[data-testid=svg-audit]")?.textContent).toContain("1 duplicate removed");
+    expect(q("[data-testid=svg-warn-excluded]")?.textContent).toContain("already reported");
   });
 
   it("bulk selection: header checkbox, select-visible, deselect-all, disabled bulk actions", async () => {

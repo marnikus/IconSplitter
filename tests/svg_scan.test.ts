@@ -145,17 +145,22 @@ describe("scanSources — one complete snapshot per commit", () => {
     expect(r.scanKey.current).toBe(key);
   });
 
-  it("commits the changed snapshot once, with the reason on the row", async () => {
+  it("commits the changed snapshot once, dropping the row whose AI image went away", async () => {
     const r = refs(makeRoot());
     const s = setters();
     await scanSources(r, s.api);
+    expect(s.out.rows).toHaveLength(2);
     const arch = await (r.root.current as FakeDir).getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png");
     await scanSources(r, s.api);
     expect(s.out.rowCalls).toBe(2);
     expect(s.out.tokens).toBe(2);
-    expect(s.out.rows[0].source.problems.map((p) => p.kind)).toEqual(["ai-missing"]);
-    expect(s.out.rows[0].sidecar).toBeNull();
+    // the reference must never be listed as something to generate from …
+    expect(s.out.rows.map((row) => row.source.name)).toEqual(["fog_AI.png"]);
+    // … and the scan says why it is gone, instead of hiding the fact
+    const discovery = s.out.discovery as { excluded: { kind: string; reason: string }[] };
+    expect(discovery.excluded.map((e) => e.kind)).toEqual(["ai-missing"]);
+    expect(discovery.excluded[0].reason).toContain("no AI result (court_AI.png) beside architecture/court.png");
   });
 
   it("lets only the newest scan commit when two overlap", async () => {
@@ -175,7 +180,7 @@ describe("scanSources — one complete snapshot per commit", () => {
     await slow; // ticket 1 resolves; it is no longer the newest
     expect(s.out.rowCalls).toBe(1);
     expect(s.out.tokens).toBe(1);
-    expect(s.out.rows[0].source.problems.map((p) => p.kind)).toEqual(["ai-missing"]);
+    expect(s.out.rows.map((row) => row.source.name)).toEqual(["fog_AI.png"]);
   });
 });
 

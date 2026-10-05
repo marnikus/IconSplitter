@@ -18,6 +18,7 @@ import { useSvgHotkeys } from "./SvgHotkeys";
 import SvgList from "./SvgList";
 import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
+import { exclusionSummary } from "./sourcelist";
 
 export default function SvgPanel() {
   const g = useSvgGen();
@@ -125,6 +126,7 @@ function Banners({ g }: { g: SvgGenApi }) {
       "review-decisions.json could not be read.",
       " The decisions held in memory are used for this session; no file was changed."),
     problemNote(d),
+    excludedNote(d),
     unreadableNote(d),
     banner("sidecar", corrupt > 0,
       `${corrupt} sidecar(s) could not be parsed.`,
@@ -144,8 +146,25 @@ function problemNote(d: Discovery | null): Note | null {
   if (problems.length === 0) return null;
   return {
     id: "problems",
-    strong: `${problems.length} approved pair(s) need attention`,
+    strong: `${problems.length} listed source(s) need attention`,
     rest: ` — ${problemSummary(problems)}. They stay listed with their status.`,
+  };
+}
+
+/**
+ * Approved sources the list does NOT show, with why: a reference with no AI
+ * image, a record with nothing on disk, a record that names no AI result, or a
+ * duplicate path. Reported here, never dressed up as a generation row (I-31).
+ */
+function excludedNote(d: Discovery | null): Note | null {
+  const excluded = d?.excluded ?? [];
+  if (excluded.length === 0) return null;
+  const shown = excluded.slice(0, 2).map((e) => e.reason);
+  const more = excluded.length > shown.length ? ` (+${excluded.length - shown.length} more)` : "";
+  return {
+    id: "excluded",
+    strong: `${excluded.length} approved source(s) are not listed`,
+    rest: ` — ${exclusionSummary(excluded)}. ${shown.join("; ")}${more}. Nothing on disk was changed.`,
   };
 }
 

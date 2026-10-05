@@ -1213,3 +1213,83 @@ same 14 eligible sources.
 
 New debt accepted: none.
 
+## 2026-10-05 — the Generate SVG list: approved AI outputs only (Task D)
+
+Reported (with screenshots) after the earlier fixes: the Generate SVG list still
+showed **the same AI source twice** (`icon-bunny-face_AI_5_01.png`) and listed a
+**reference image** (`icon-airplane-landing.png` — a name with no `_AI`) as
+something to generate from, and the user asked for the whole-dataset audit
+("total files, eligible AI sources, references excluded, duplicates removed,
+missing files, final unique rows") to be the app's own output.
+
+Root cause: the list was built from **decisions**, not from files. `sources.ts`
+concatenated `approved.map(toSource)` with `recordSources(orphans)` — `toSource`
+invented a `<stem>_AI<ext>` name for a pair whose AI side was gone (a reference
+wearing an implied `_AI` name, still offering Generate), and every approved
+decision record whose `pair_id` did not match this scan became a row using
+`r.ai_result ?? r.source ?? r.pair_id`, so a reference path was listed and two
+records naming one `ai_result` each produced a row for the same file. Nothing
+deduplicated the two halves or checked the name and the file. The version half
+was already correct (`toRow` → `newestValid`), so it was left alone. Full record:
+`archive/2026-10-05-svg-source-list-audit/design.md`.
+
+The rules now live in one pure module, `src/svg/sourcelist.ts` (no IO, no React):
+a row exists iff a **raster** file on disk carries the canonical `_AI` name
+**and** an approved decision names exactly that path — by the pair's own id, or
+by an approved record whose `ai_result` is that path (ids drift when a file
+moves between `split_NN` folders; the recorded approval does not) — and nothing
+else claimed the same normalized path. The first record naming a claimed path is
+that path's approval; only a second one is a duplicate (probed: reporting every
+record would have turned a reorganised folder's 12 healthy approvals into 14
+"duplicates" and buried the user's own). Everything else is **reported, never
+listed**: `ai-missing`, `no-files`, `not-ai-output`, `artifact` (the app's own
+`…_AI.svg`) and `duplicate`, each with its reason, in the banner, the audit line
+and the log. Invariants I-31…I-34.
+
+### Lanes run (`npm run verify`, `/tmp/verify14.log`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing baseline) — GATE PASSED |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED (`--changed --allow-legacy`, 15 files) |
+| 4/6 Tests | **77 files / 737 tests, all green** (was 76 / 736) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 97.21 statements · 92.3 branches · 97.39 functions · 98.44 lines |
+| 6/6 Build | `dist/index.html` 642.94 kB / 189.93 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the touched files
+
+| File | fns / lines | What changed |
+|---|---|---|
+| `src/svg/sourcelist.ts` | 25 / 256 | **new**: the selection rules (canonical `_AI` + raster), approval by id or path, the attribution + dedupe, the exclusions, the audit counts + their one-line text |
+| `src/svg/sources.ts` | 15 / 138 | `discoverApprovedSources` calls it; `toSource`/`expectedAiPath`/`recordSources` deleted; `Discovery` gains `excluded` + `audit` |
+| `src/svg/SvgPanel.tsx` | 34 / 260 | the exclusion banner (`svg-warn-excluded`); the row-problem banner reworded to "listed source(s)" |
+| `src/svg/SourceLine.tsx` | 4 / 72 | the audit line (`svg-audit`) under the scope copy |
+| `src/svg/scan.ts` | 10 / 158 | the scan log carries the audit as its detail + fields, and warns for the exclusions |
+| `src/svg/scankey.ts` | 8 / 41 | the exclusions and the audit join the snapshot key (`auditKey`) |
+| `src/index.css` | +1 | `.svg-audit` (muted, 10 px) |
+
+Baseline: **untouched**. Tests: `tests/svg_sources.test.ts` (**new**, 11 tests
+built on a root reproducing the report — two stale records for the bunny path,
+two approved references with no AI image, a stale plane record, a declined pair),
+plus the suites that had encoded the old contract updated (`svg_io` 2, `svg_scan`
+2, `svg_ui` 1 rewritten + 1 new) — 80 tests across the four files, with the audit
+numbers asserted as literals so a future change cannot quietly re-list a
+reference or a duplicate.
+
+### Browser verification (headless Chromium, 1440×900, dev server)
+
+Fake root: 12 healthy approved pairs **plus** the reported tree (one AI image
+named by three records with ids from other folders, two approved references with
+no AI image). Before the fix the same root listed a reference and the same image
+more than once; now:
+
+| Check | Result |
+|---|---|
+| rows | 13 = 12 healthy + the bunny **once**; every name carries `_AI`; no `icon-airplane-landing.png` |
+| `svg-audit` | `Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows` |
+| `svg-warn-excluded` | "4 approved source(s) are not listed — 2 with no AI image on disk, 2 duplicate records", first reasons spelled out |
+| scan log | `svg.scan · Audit — 30 files · … → 13 rows · aiSources=13 · duplicates=2 · files=30 · missing=2 · references=14 · rows=13 · unreadable=0` |
+| layout, both tabs | 3 scroll positions each: the dock covered **0 of 11** (SVG) and **0 of 15** (V2) visible row controls, **0** blocked hit-tests, the window itself never scrolls, and a real mouse click on the last row's control toggles it (`false → true`) |
+
+New debt accepted: none.
