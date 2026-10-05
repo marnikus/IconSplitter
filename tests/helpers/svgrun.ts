@@ -72,6 +72,11 @@ export function failReply(status: number, message = "boom", headers: Record<stri
   });
 }
 
+/** No network at all: every request fails the way an offline browser's does. */
+export function stubOffline(): void {
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
+}
+
 export type Reply = Response | "hang";
 
 export interface PostedCall { url: string; init: RequestInit; body: string }

@@ -1296,3 +1296,25 @@
 .svg-provider-foot { flex-wrap: wrap; }
 .svg-provider-foot .svg-key-state { flex: 1 1 180px; min-width: 0; }
 .svg-provider-foot .svg-link { white-space: nowrap; }
+
+/* Confirmation: the request exactly as it will be sent (svg/confirm/). */
+.svg-prompt-preview { margin: 12px 0; }
+.svg-pager-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 8px; }
+.svg-pager { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: var(--v2-muted); }
+.svg-block { margin-bottom: 8px; }
+.svg-prompt-block {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--v2-line);
+  border-radius: 6px;
+  background: var(--v2-surface);
+  color: #cbd4e9;
+  font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.svg-confirm-rules { min-height: 110px; max-height: 40vh; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.svg-json { margin: 8px 0; }
+.svg-json summary, .svg-manifest summary { cursor: pointer; }

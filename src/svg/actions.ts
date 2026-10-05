@@ -21,13 +21,13 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
-import { prepareRun } from "../lib/svgpayload";
-import { runGeneration } from "./runner";
+import type { PreparedRun } from "../lib/svgpayload";
+import { runGeneration, type RunSummary } from "./runner";
 import { message } from "./send";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
-import { toBatchSource, type Discovery } from "./sources";
+import type { Discovery, SvgSource } from "./sources";
 
 /** Everything an action may touch. One object, passed everywhere. */
 export interface SvgCtx {
@@ -85,7 +85,7 @@ export interface SvgActions {
   decide: (ids: string[], decision: ReviewStatus) => void;
   requestGenerate: (ids: string[]) => void;
   cancelRun: () => void;
-  confirmGenerate: () => void;
+  confirmGenerate: (prepared: PreparedRun) => void;
   dismissDialog: () => void;
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
@@ -211,8 +211,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     const c = latest.current;
     const why = guard(c, ids);
     if (why !== null) return c.say(why, true);
-    const perRequest = c.m.config.imagesPerRequest;
-    const dialog: Dialog = { kind: "confirm", ids, batches: Math.ceil(ids.length / perRequest), perRequest };
+    const dialog: Dialog = { kind: "confirm", ids };
     c.dispatch({ type: "dialog", dialog });
   }, []);
   const cancelRun = useCallback(() => {
@@ -220,8 +219,8 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     c.refs.abort.current?.abort();
     c.say("Cancelling — finished results are kept");
   }, []);
-  const confirmGenerate = useCallback(() => {
-    void confirmRun(latest.current);
+  const confirmGenerate = useCallback((prepared: PreparedRun) => {
+    void confirmRun(latest.current, prepared);
   }, []);
   const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
   return { requestGenerate, cancelRun, confirmGenerate, dismissDialog };
@@ -235,25 +234,33 @@ function guard(c: SvgCtx, ids: string[]): string | null {
   return null;
 }
 
-/** One confirmation = one run: a second click while running is ignored. */
-async function confirmRun(ctx: SvgCtx): Promise<void> {
+/**
+ * One confirmation = one run: a second click while running is ignored. The run
+ * posts `prepared` — the object the dialog rendered — and re-reads nothing.
+ */
+async function confirmRun(ctx: SvgCtx, prepared: PreparedRun): Promise<void> {
   const dialog = ctx.m.dialog;
   if (dialog === null || dialog.kind !== "confirm" || ctx.m.running) return;
-  const ids = dialog.ids;
+  const { controller, sources } = beginRun(ctx, dialog.ids);
+  const summary = await runGeneration({
+    root: ctx.refs.root.current as DirHandleLike, apiKey: ctx.refs.key.current ?? "",
+    config: ctx.m.config, prepared, sources, sidecars: ctx.refs.sidecars,
+    signal: controller.signal, onEvent: (event) => onRunEvent(event, ctx),
+  });
+  await finishRun(ctx, sources, summary);
+}
+
+/** Closes the dialog, marks the rows busy and hands back what the run needs. */
+function beginRun(ctx: SvgCtx, ids: string[]): { controller: AbortController; sources: SvgSource[] } {
   ctx.dispatch({ type: "dialog", dialog: null });
   const controller = new AbortController();
   ctx.refs.abort.current = controller;
   ctx.dispatch({ type: "running", running: true });
   ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
-  const sources = ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source);
-  const summary = await runGeneration({
-    root: ctx.refs.root.current as DirHandleLike,
-    apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, sources,
-    prepared: prepareRun({ sources: sources.map(toBatchSource), config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, rules: ctx.m.prompt }),
-    sidecars: ctx.refs.sidecars, signal: controller.signal,
-    onEvent: (event) => onRunEvent(event, ctx),
-  });
+  return { controller, sources: ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source) };
+}
+
+async function finishRun(ctx: SvgCtx, sources: SvgSource[], summary: RunSummary): Promise<void> {
   ctx.dispatch({ type: "running", running: false });
   ctx.dispatch({ type: "progress", progress: null });
   ctx.refs.abort.current = null;

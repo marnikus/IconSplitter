@@ -38,7 +38,7 @@ export interface RunProgress {
 }
 
 export type Dialog =
-  | { kind: "confirm"; ids: string[]; batches: number; perRequest: number }
+  | { kind: "confirm"; ids: string[] }
   | { kind: "code"; id: string; version: number }
   | { kind: "history"; id: string };
 

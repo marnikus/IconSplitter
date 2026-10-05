@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
+import type { PreparedRun } from "../lib/svgpayload";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import SvgPreviewBox from "./SvgPreview";
@@ -20,9 +21,12 @@ export interface SvgDialogsProps {
   config: SvgConfig;
   caps: ModelCaps;
   params: SamplingParams;
+  /** The stored generation rules — the confirmation edits the same value as the tab. */
+  prompt: string;
+  onPrompt: (text: string) => void;
   rootRef: { current: DirHandleLike | null };
   readCode: (id: string, version: number) => Promise<string | null>;
-  onConfirm: () => void;
+  onConfirm: (prepared: PreparedRun) => void;
   onDismiss: () => void;
   onShowCode: (id: string, version: number) => void;
 }
@@ -32,8 +36,8 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   if (dialog === null) return null;
   if (dialog.kind === "confirm") {
     return (
-      <SvgConfirm ids={dialog.ids} batches={dialog.batches} perRequest={dialog.perRequest} rows={p.rows}
-        config={p.config} caps={p.caps} params={p.params} rootRef={p.rootRef}
+      <SvgConfirm ids={dialog.ids} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
+        prompt={p.prompt} onPrompt={p.onPrompt} rootRef={p.rootRef}
         onConfirm={p.onConfirm} onDismiss={p.onDismiss} />
     );
   }

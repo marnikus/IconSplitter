@@ -33,7 +33,7 @@ export default function SvgPanel() {
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
       <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
-        rootRef={rootRef} readCode={g.readCode}
+        prompt={g.prompt} onPrompt={g.setPrompt} rootRef={rootRef} readCode={g.readCode}
         onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode} />
       <Overlay g={g} />
     </div>
