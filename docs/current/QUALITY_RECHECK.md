@@ -975,3 +975,26 @@ design detail lives in `docs/archive/`.
 * `tests/svg_strip.test.tsx` (4) — the ticking elapsed time (shared with the
   bulk bar), Cancel only while running, and a stalled request named "outcome
   unknown" with its own elapsed time in the report line.
+
+## Follow-up 2026-10-05 (same day, small): the row's path line named the sidecar
+
+Reported from a real screenshot: a row that is NOT generated yet showed
+`…/split_01/icon-airplane-landing_AI_8_01.svg.json`, which reads like a double
+file extension. Cause: `SvgRow.FileCell` fell back to the sidecar's name
+(`<stem>.svg.json`) whenever no version existed, and prefixed `dirPath` even
+though a version's `svgPath` is already root-relative (so a generated row
+doubled its folder: `architecture/architecture/fog_AI.svg`).
+
+* `src/svg/SvgRow.tsx` — the row now names the SVG artifact: the newest
+  version's real path, or the path generation will write (`<dirPath>/<stem>.svg`).
+  The sidecar stays discoverable on the persist line's `title`
+  (`architecture/fog_AI.svg.json`), where "Per-file sidecar saved" / "Not
+  generated yet" already lives. New handle `svg-target-{sourceId}`.
+* `tests/svg_ui.test.tsx` — new case: the generated row shows its path exactly
+  once (no doubled folder, no `.json`), the not-generated row shows the SVG it
+  will produce, and the sidecar path is on the persist title.
+
+Lanes: `tsc` clean, eslint 0 errors (8 pre-existing warnings), quality gate
+PASSED, **66 files / 615 tests**, coverage unchanged at 97.14/92.30/96.95/98.09,
+build 617.75 kB / gzip 182.06 kB. Baseline untouched; `UI_SELECTORS.md` §P and
+`SYSTEM_OF_RECORD.md` §11 updated with the handle.

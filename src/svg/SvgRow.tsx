@@ -6,12 +6,13 @@
 // exists, and the active row is visually distinct from a merely checked one.
 
 import { useEffect, useRef } from "react";
-import type { ReviewStatus } from "../lib/svgfile";
+import { SVG_EXT, sidecarName, type ReviewStatus } from "../lib/svgfile";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { previewTargetOf } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
+import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 
 export interface SvgRowActions {
@@ -104,16 +105,38 @@ function useActiveScroll(active: boolean) {
 }
 
 function FileCell({ row }: { row: SvgRow }) {
-  const target = row.newest?.svgPath || `${row.source.stem}.svg.json`;
+  const target = targetPath(row);
   return (
     <div className="svg-file-main">
       <div className="svg-file-name" title={row.source.name}>{row.source.name}</div>
-      <div className="svg-file-sub" title={target}>{row.source.dirPath === "" ? "./" : `${row.source.dirPath}/`}{target}</div>
-      <div className={`svg-persist${row.corrupt ? " error" : ""}`} data-testid={`svg-persist-${row.source.id}`}>
+      <div className="svg-file-sub" data-testid={`svg-target-${row.source.id}`} title={target}>{target}</div>
+      <div className={`svg-persist${row.corrupt ? " error" : ""}`} data-testid={`svg-persist-${row.source.id}`}
+        title={sidecarPathOf(row.source)}>
         {row.corrupt ? "Sidecar unreadable — SVGs on disk are kept" : row.sidecar ? "Per-file sidecar saved" : "Not generated yet"}
       </div>
     </div>
   );
+}
+
+/**
+ * The SVG this row owns: the newest version's real path (already root-relative),
+ * or — while nothing exists yet — the path generation will write. Never the
+ * sidecar name: `<stem>.svg.json` is metadata BESIDE the SVG, and showing it as
+ * the artifact made a not-yet-generated row look like a double extension.
+ */
+function targetPath(row: SvgRow): string {
+  const path = row.newest?.svgPath;
+  return path ? path : joinPath(row.source.dirPath, `${row.source.stem}${SVG_EXT}`);
+}
+
+/** The sidecar beside that SVG — the file the persist line reports. */
+function sidecarPathOf(source: SvgSource): string {
+  return joinPath(source.dirPath, sidecarName(source.stem));
+}
+
+/** "." for the root, so a row never shows a stray leading slash. */
+function joinPath(dir: string, name: string): string {
+  return dir === "" ? name : `${dir}/${name}`;
 }
 
 function StatusCell({ row }: { row: SvgRow }) {

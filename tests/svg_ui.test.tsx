@@ -179,6 +179,20 @@ describe("Generate SVG panel", () => {
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("Pending");
   });
 
+  it("names the SVG artifact on each row — never the sidecar as if it were the SVG", async () => {
+    await mount(await makeRoot());
+    // fog HAS a version: the row shows its real path, exactly once (svgPath is
+    // already root-relative, so the folder must not be prefixed twice).
+    expect(q(`[data-testid=svg-target-${FOG}]`)?.textContent).toBe("architecture/fog_AI.svg");
+    // court has none: the row names the SVG generation WILL write — it must not
+    // look like a double extension (".svg.json") for a file that does not exist.
+    expect(q(`[data-testid=svg-target-${COURT}]`)?.textContent).toBe("architecture/court_AI.svg");
+    expect(q(`[data-testid=svg-target-${COURT}]`)?.textContent).not.toContain(".json");
+    // ...and the sidecar itself stays discoverable on the line that reports it.
+    expect(q(`[data-testid=svg-persist-${FOG}]`)?.getAttribute("title")).toBe("architecture/fog_AI.svg.json");
+    expect(q(`[data-testid=svg-persist-${FOG}]`)?.textContent).toBe("Per-file sidecar saved");
+  });
+
   it("bulk selection: header checkbox, select-visible, deselect-all, disabled bulk actions", async () => {
     await mount(await makeRoot());
     expect(q("[data-testid=svg-selected-count]")?.textContent).toBe("0 selected");

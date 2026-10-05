@@ -383,7 +383,8 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
-| `svg-persist-{sourceId}` | text | "Not saved" until the sidecar is written; `error` class on failure |
+| `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the sidecar name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
+| `svg-persist-{sourceId}` | text | "Per-file sidecar saved" / "Not generated yet" / "Sidecar unreadable — SVGs on disk are kept"; the `title` names the sidecar itself ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it); `error` class on failure |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved

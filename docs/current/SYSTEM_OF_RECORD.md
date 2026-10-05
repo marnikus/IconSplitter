@@ -650,7 +650,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-generate-selected`, `svg-approve-selected`,
   `svg-decline-selected`, `svg-cancel-run`), list (`svg-list`, `svg-rows`,
   `svg-row-*`, `svg-check-*`, `svg-ai-*` / `svg-prev-*`,
-  `svg-prev-frame-*` (the coloured frame), `svg-status-*`,
+  `svg-prev-frame-*` (the coloured frame), `svg-target-*` (the SVG the row
+  owns, or the path generation will write) `svg-status-*`,
   `svg-review-*`, `svg-usage-*`, `svg-persist-*`, `svg-generate-*`,
   `svg-approve-*`, `svg-decline-*`, `svg-location-*`, `svg-copy-*`,
   `svg-code-*`, `svg-history-*` + `svg-history-cost-{n}`, `svg-empty`),
