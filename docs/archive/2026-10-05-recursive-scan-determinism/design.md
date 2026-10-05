@@ -186,7 +186,7 @@ still a row: checkbox, identity, status, disabled generation actions.
    times; `tests/svg_scan.test.ts` — a fresh boot rebuilds identical rows;
    `tests/selection_scan.test.ts` — a folder rename carries the decision once
    and the new snapshot is stable.
-10. Docs: `SYSTEM_OF_RECORD` (scan contract + `I-21`), `UI_SELECTORS`
+10. Docs: `SYSTEM_OF_RECORD` (scan contract + invariant `I-22`), `UI_SELECTORS`
     (`svg-problem-{id}`, the new banner ids), `QUALITY_RECHECK` (dated entry),
     `docs/README.md` archive row.
 

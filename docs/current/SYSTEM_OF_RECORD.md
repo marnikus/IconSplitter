@@ -399,12 +399,6 @@ Batch:
   the confirmation and the runner compute it the same way; the confirmation
   lists every request (and its exact images) before anything is sent, and an
   unmappable plan is refused rather than partially sent.
-* **I-21 (scan, RULE 3/4/24):** a scan is a pure function of the file set and
-  commits once: enumeration order can never change a pair, its id, its AI side
-  or the list order; an unreadable file is a status (never a fabricated size,
-  never "changed"/"gone"); an approved pair is never hidden while its files are
-  only missing; a scan writes nothing into the scanned root; a superseded scan
-  and an unchanged snapshot both commit nothing.
 * **I-20 (SVG runs, RULE 4/23):** one request's outcome — status, tokens, cost,
   error — is recorded and shown for that request only; a failed request never
   alters another request's files, usage or cost, and a request whose outcome
@@ -416,6 +410,12 @@ Batch:
   the inline stylesheet is layout only, the root colour is the document's own
   (or the UA default), and the frame's background and contrast outline stay
   outside the document.
+* **I-22 (scan, RULE 3/4/24):** a scan is a pure function of the file set and
+  commits once: enumeration order can never change a pair, its id, its AI side
+  or the list order; an unreadable file is a status (never a fabricated size,
+  never "changed"/"gone"); an approved pair is never hidden while its files are
+  only missing; a scan writes nothing into the scanned root; a superseded scan
+  and an unchanged snapshot both commit nothing.
 
 ## 6. Storage map
 
