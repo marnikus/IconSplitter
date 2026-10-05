@@ -1414,3 +1414,62 @@ the refusal the existing warn tone.
 | pick with SVG markup on the clipboard | nothing stored (`{}`); field empty; pill still `test_processing`; status "not set — …" |
 | typing the same markup into the field | note *"That is not a folder path — paste the folder's path, e.g. F:\work\icons"*; nothing stored |
 | a row's copy action on a split tree | clipboard `F:\Stocks 2026\icons testing\single\test_processing\_split_output\2026-10\2026-10-01_10-24-31` — the batch folder, never a file |
+
+## 2026-10-05 — one JSON per pair: the approval and the SVG history live beside the images
+
+The reported gap — *"i don't see json in local folder contain information about SVG
+aproval. only AI image aproval"* — had two halves in two places: the pair's
+approval sat in `<root>/review-decisions.json` (one file per picked tree) while
+the SVG's own review sat in `<stem>.svg.json` beside the images. Per I-41…I-43
+(design: `docs/archive/2026-10-05-per-pair-metadata/design.md`) both now live in
+**one `v: 2` file per pair**, in the folder that holds the pair; the Selection
+tabs, Generate SVG and every writer read/write it through
+`selection/pairstore` + `lib/pairmeta`, a scan writes nothing, the legacy global
+file is a read-only fallback (a local file wins, including `pending`), an
+unreadable pair file is named while its decision is kept, and Retry rewrites
+exactly the pairs whose write failed. `selection/reviewstore.ts` is deleted;
+`svg/sidecar.ts` → `svg/svgfiles.ts`; `svg/sourceindex.ts` → `state/sourceindex.ts`
+(shared by both tabs' undo paths). Wording: the UI now says "pair file", never
+"sidecar".
+
+### Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing baseline; the two new complexity-11 functions found on the first pass — `pairMetaFromLegacy`, `metaFromRecord` — were split into named helpers, `nameParts` / `identityFromRecord`) |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED |
+| 4/6 Tests | **82 files / 827 tests, all green** (was 80 / 786) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 96.59 statements · 90.84 branches · 96.34 functions · 98.06 lines |
+| 6/6 Build | `dist/index.html` 655.73 kB / 194.09 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/lib/pairmeta.ts` | 24 / 276 | **new, pure**: the v2 model (identity + both faces + decision + versions), parse (v2 + legacy v1), serialize, `toRecord`, `withDecision`, `withVersion`, the file-name/locator rules |
+| `src/lib/svgmodel.ts` | 14 / 155 | **new**: the version record (status, review, usage, cost + basis, validation, batch ref) with per-field tolerant parsing |
+| `src/selection/pairstore.ts` | 22 / 304 | **new** (replaces `reviewstore.ts`): reads every pair file of a walk + the legacy fallback, writes ONE pair's file atomically, locates a file from a record |
+| `src/selection/offline.ts` | 8 / 86 | the cross-tab undo writes per-pair files; a pair back to `pending` is located through `state/sourceindex` |
+| `src/selection/useSelection.ts` | 28 / 262 | per-pair writes + failed-id retry (`retryIds`), reworded warning |
+| `src/selection/rootsource.ts` | 17 / 152 | `walkAndLoad` → one `commit`; records the id → AI path index for the undo paths |
+| `src/selection/Surfaces.tsx` | 6 / 62 | `PairFilesNote` (`sel-pairfiles` / `v2-pairfiles`), pair-file wording |
+| `src/svg/saveversion.ts` | 9 / 146 | validate → name → write; returns the pair's updated record (the caller persists it); `metaAfterFailure` records a failed attempt with no SVG |
+| `src/svg/reviewact.ts` / `reviewundo.ts` | 23 / 119 · 9 / 88 | the SVG review writes the pair's own file; one history entry per operation; the applier patch both tabs share |
+
+Baseline: **untouched**. New debt accepted: none. `src/index.css` needed no
+change (the notes reuse the existing warn tone).
+
+### Browser verification (headless Chromium 153, 1440×900, real OPFS folder, 13/13 green)
+
+| Scenario | Result |
+|---|---|
+| V2 on a root holding both the unsplit sheet and `_split_output/…` | 2 rows — the split pieces only; the scope line names the sheet left out |
+| **Approve visible** (arm → confirm) on both pieces | both pair files appear beside their images (`…/split_01/icon-sheet_AI_01.svg.json`, `…/split_02/…`) with `decision: "approved"`; the file carries `v: 2`, `pair.{id,base,suffix,dir}` and both faces; **no `review-decisions.json` exists anywhere** |
+| Generate SVG on the same root | exactly the two approved rows |
+| the row's ✓ on a pair whose file has `versions[0].review: "pending"` | the SAME file now reads `versions[0].review: "approved"`, `decision` untouched |
+| one pair file replaced with `{not json`, re-scan | banner names `icon-sheet_AI_02.svg.json`; both pairs still listed; the neighbour's decision still shown |
+
+Probe script: `/tmp/probe_pair.mjs` (sandbox-local; the recipe — OPFS
+subdirectory as the picked root, `showDirectoryPicker` overridden in the page —
+is the one from the earlier probes).
