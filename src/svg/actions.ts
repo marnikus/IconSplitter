@@ -10,7 +10,6 @@ import { parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
-import type { DirHandleLike } from "../lib/fs";
 import { pickDirectory } from "../batch/picker";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
@@ -20,14 +19,14 @@ import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
-import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
 import type { PreparedRun } from "../lib/svgpayload";
-import { runGeneration, type RunSummary } from "./runner";
+import { confirmRun, runIdOf } from "./runflow";
+import { logConfirmCancel, logConfirmOpen, logRulesEdit, logRunCancel } from "./runlog";
 import { message } from "./send";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
-import type { Discovery, SvgSource } from "./sources";
+import type { Discovery } from "./sources";
 
 /** Everything an action may touch. One object, passed everywhere. */
 export interface SvgCtx {
@@ -140,7 +139,10 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPr
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
-  const setPrompt = useCallback((text: string) => latest.current.dispatch({ type: "prompt", prompt: text }), []);
+  const setPrompt = useCallback((text: string) => {
+    latest.current.dispatch({ type: "prompt", prompt: text });
+    logRulesEdit(text);
+  }, []);
   const resetPrompt = useCallback(() => {
     const c = latest.current;
     c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
@@ -213,17 +215,25 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     if (why !== null) return c.say(why, true);
     const dialog: Dialog = { kind: "confirm", ids };
     c.dispatch({ type: "dialog", dialog });
+    logConfirmOpen(ids.length, Math.ceil(ids.length / c.m.config.imagesPerRequest));
   }, []);
   const cancelRun = useCallback(() => {
     const c = latest.current;
     c.refs.abort.current?.abort();
+    logRunCancel(runIdOf(c.refs.abort.current));
     c.say("Cancelling — finished results are kept");
   }, []);
   const confirmGenerate = useCallback((prepared: PreparedRun) => {
     void confirmRun(latest.current, prepared);
   }, []);
-  const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
+  const dismissDialog = useCallback(() => closeDialog(latest.current), []);
   return { requestGenerate, cancelRun, confirmGenerate, dismissDialog };
+}
+
+/** Closing a confirmation without sending is itself worth a line in the log. */
+function closeDialog(c: SvgCtx): void {
+  if (c.m.dialog?.kind === "confirm") logConfirmCancel(c.m.dialog.ids.length);
+  c.dispatch({ type: "dialog", dialog: null });
 }
 
 /** Why a run cannot start, or null when it can. Never a partial reason. */
@@ -232,40 +242,6 @@ function guard(c: SvgCtx, ids: string[]): string | null {
   if (c.refs.root.current === null) return "Pick the source folder first";
   if (c.refs.key.current === null) return "Add your Requesty API key first — it stays on this device";
   return null;
-}
-
-/**
- * One confirmation = one run: a second click while running is ignored. The run
- * posts `prepared` — the object the dialog rendered — and re-reads nothing.
- */
-async function confirmRun(ctx: SvgCtx, prepared: PreparedRun): Promise<void> {
-  const dialog = ctx.m.dialog;
-  if (dialog === null || dialog.kind !== "confirm" || ctx.m.running) return;
-  const { controller, sources } = beginRun(ctx, dialog.ids);
-  const summary = await runGeneration({
-    root: ctx.refs.root.current as DirHandleLike, apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, prepared, sources, sidecars: ctx.refs.sidecars,
-    signal: controller.signal, onEvent: (event) => onRunEvent(event, ctx),
-  });
-  await finishRun(ctx, sources, summary);
-}
-
-/** Closes the dialog, marks the rows busy and hands back what the run needs. */
-function beginRun(ctx: SvgCtx, ids: string[]): { controller: AbortController; sources: SvgSource[] } {
-  ctx.dispatch({ type: "dialog", dialog: null });
-  const controller = new AbortController();
-  ctx.refs.abort.current = controller;
-  ctx.dispatch({ type: "running", running: true });
-  ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
-  return { controller, sources: ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source) };
-}
-
-async function finishRun(ctx: SvgCtx, sources: SvgSource[], summary: RunSummary): Promise<void> {
-  ctx.dispatch({ type: "running", running: false });
-  ctx.dispatch({ type: "progress", progress: null });
-  ctx.refs.abort.current = null;
-  await reloadSidecars(ctx.refs, sources, ctx);
-  ctx.say(summaryLine(summary), summary.saved === 0 && summary.problems.length > 0);
 }
 
 /** One selection gesture = one entry holding the whole selection (RULE 12). */

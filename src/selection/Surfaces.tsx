@@ -52,7 +52,7 @@ export function Overlays(p: OverlayProps) {
         <div
           data-testid={p.toastTestid ?? "sel-toast"}
           className={p.toastClass
-            ?? `fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${p.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}
+            ?? `fixed bottom-[calc(var(--log-dock-h,0px)_+_1.5rem)] left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${p.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}
         >
           {p.s.toast.msg}
         </div>

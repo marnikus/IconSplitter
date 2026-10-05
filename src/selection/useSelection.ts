@@ -5,6 +5,7 @@
 // it; decisions stay here and on disk, which is their own source of truth.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { logStatus } from "../log/logger";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { walkTree } from "../lib/scan";
 import { pairEntries } from "../lib/pairing";
@@ -54,7 +55,7 @@ export function useSelection() {
   useDecisionApplier(ctx, setCore);
   const s = ctx.state.current;
   const visible = useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort), [s.pairs, s.filter, s.sort]);
-  const say = useCallback((msg: string, err = false) => setCore((p) => ({ ...p, toast: { msg, err } })), []);
+  const say = useCallback((msg: string, err = false) => toast(setCore, msg, err), []);
   return {
     s, visible, say, supported: fsSupported(), rootRef: ctx.root,
     chooseRoot: useCallback(() => chooseRoot(ctx, setCore, say), [ctx, say]),
@@ -224,15 +225,21 @@ function toggleLabel(view: Partial<SelState>): string {
     .join(", ");
 }
 
+/** The one way this panel shows a status: the toast the user sees and its mirror in the global log (L-4). */
+function toast(setS: Setter, msg: string, err: boolean): void {
+  logStatus("selection", msg, err);
+  setS((p) => ({ ...p, toast: { msg, err } }));
+}
+
 function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
   const msg = bulkMessage({ decision: d, applied: 0, skipped: out.skipped.length, saved: true });
-  setS((p) => ({ ...p, toast: { msg, err: true } })); // honest no-op, never a fake success
+  toast(setS, msg, true); // honest no-op, never a fake success
 }
 
 async function reportBulk(ctx: Ctx, setS: Setter, out: BulkOut, d: Decision): Promise<void> {
   const saved = await persist(ctx, setS, out.state);
   const msg = bulkMessage({ decision: d, applied: out.applied.length, skipped: out.skipped.length, saved });
-  setS((p) => ({ ...p, toast: { msg, err: !saved } }));
+  toast(setS, msg, !saved);
 }
 
 /**

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, type SvgConfig } from "../src/lib/svgconfig";
 import { DEFAULT_PARAMS, capsFor, type SamplingParams } from "../src/lib/modelcaps";
 import type { BatchSource, ManifestItem } from "../src/lib/svgbatch";
-import { batchPrompt, composePrompt, joinBlocks, singlePrompt } from "../src/lib/svgprompt";
+import { composePrompt, joinBlocks } from "../src/lib/svgprompt";
 import {
   IMAGE_SLOT, assertSendable, describeRequest, elideImage, fingerprintOf, prepareRun, withImage,
   type PrepareArgs,
@@ -49,12 +49,10 @@ function prep(over: Partial<PrepareArgs> = {}) {
 describe("composePrompt — what the provider is told (C-0)", () => {
   it("builds the batch text byte for byte as today's batch template", () => {
     expect(composePrompt(RULES, ITEMS).text).toBe(GOLDEN_BATCH);
-    expect(batchPrompt(RULES, ITEMS)).toBe(GOLDEN_BATCH);
   });
 
   it("builds the single text byte for byte as today's single template", () => {
     expect(composePrompt(RULES, ITEMS.slice(0, 1)).text).toBe(GOLDEN_SINGLE);
-    expect(singlePrompt(RULES, "fog_AI")).toBe(GOLDEN_SINGLE);
   });
 
   it("flips from the batch to the single template at exactly one item", () => {
@@ -240,6 +238,19 @@ describe("describeRequest — read from the object, not from the settings", () =
     const cfg = config({ model: "openai/gpt-4o" });
     const request = prep({ config: cfg }).batches[0].request;
     expect(describeRequest(request, capsFor(cfg.model))).toBe("temperature 0.7 · 32 000 max tokens");
+  });
+
+  it("names a chosen temperature of a classic model, and an unchosen effort of a reasoning one", () => {
+    const classic = config({ model: "openai/gpt-4o" });
+    const withTemperature = prep({ config: classic, params: { temperature: 0.4, maxTokens: 32_000, effort: null } }).batches[0].request;
+    expect(describeRequest(withTemperature, capsFor(classic.model))).toBe("temperature 0.4 · 32 000 max tokens");
+    const unchosen = prep({ params: { temperature: null, maxTokens: 32_000, effort: null } }).batches[0].request;
+    expect(describeRequest(unchosen, caps)).toBe("no temperature · 32 000 max tokens · effort default");
+  });
+
+  it("says so when no output ceiling was asked for, instead of printing a zero", () => {
+    const open = prep({ params: { temperature: null, maxTokens: 0, effort: null } }).batches[0].request;
+    expect(describeRequest(open, caps)).toBe("no temperature · provider-default max tokens · effort default");
   });
 
   it("follows the object: change the request and the line changes", () => {

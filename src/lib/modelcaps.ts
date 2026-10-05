@@ -208,16 +208,6 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** "temperature 0.4 · 32 000 max tokens · effort high" — for the confirm dialog. */
-export function paramsLabel(caps: ModelCaps, params: SamplingParams): string {
-  const temp = caps.temperature === null || params.temperature === null
-    ? "no temperature"
-    : `temperature ${params.temperature}`;
-  const tokens = `${groupDigits(params.maxTokens)} max tokens`;
-  const effort = `effort ${params.effort === null ? "default" : params.effort}`;
-  return caps.efforts.length === 0 ? `${temp} · ${tokens}` : `${temp} · ${tokens} · ${effort}`;
-}
-
 /** 32000 -> "32 000" (thin grouping, same wording everywhere a limit is shown). */
 export function groupDigits(value: number): string {
   return value.toLocaleString("en-US").replace(/,/g, " ");

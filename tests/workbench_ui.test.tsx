@@ -46,6 +46,14 @@ describe("the shell", () => {
     expect(q("[data-testid='tabbar']")).not.toBeNull();
   });
 
+  it("shows the global log dock beside the tabs, outside any panel", () => {
+    mountWorkbench();
+    const dock = q("[data-testid='log-dock']");
+    expect(dock).not.toBeNull();
+    expect(q("[data-testid='tabbar']")?.contains(dock)).toBe(false);
+    expect(dock?.getAttribute("aria-label")).toBe("Application log");
+  });
+
   it("switches tabs through the store, so the choice is the one restored next time", async () => {
     mountWorkbench();
     await click("[data-testid='tab-batch']");

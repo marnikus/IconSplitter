@@ -10,8 +10,7 @@ import {
 } from "../src/lib/svgconfig";
 import { authHeader, containsSecret, findSecrets, maskKey, redact } from "../src/lib/svgsecret";
 import {
-  batchPrompt, DEFAULT_SVG_PROMPT, isDefaultPrompt, manifestLines, parsePrompt, serializePrompt,
-  singlePrompt,
+  DEFAULT_SVG_PROMPT, composePrompt, isDefaultPrompt, manifestLines, parsePrompt, serializePrompt,
 } from "../src/lib/svgprompt";
 import { cellOf, emptyPositions, gridSize, planBatches } from "../src/lib/svgbatch";
 import { compositeLayout, fitRect } from "../src/lib/svgcomposite";
@@ -89,14 +88,14 @@ describe("svgprompt", () => {
   });
 
   it("builds the ordered manifest prompt with the numeric contract", () => {
-    const text = batchPrompt("Snap every join.", items);
+    const text = composePrompt("Snap every join.", items).text;
     expect(manifestLines(items)).toEqual(["1 — icon-one_AI", "2 — icon-two_AI"]);
     expect(text).toContain("Here is a batch of icons arranged in numbered grid order:");
     expect(text).toContain("1 — icon-one_AI\n2 — icon-two_AI");
     expect(text).toContain("same numeric order, starting from 1");
     expect(text).toContain("exact same name in the SVG <title>");
     expect(text.trimEnd().endsWith("Snap every join.")).toBe(true);
-    expect(singlePrompt("Snap every join.", "icon-one_AI")).toContain("Icon name (use it as the SVG <title>): icon-one_AI");
+    expect(composePrompt("Snap every join.", items.slice(0, 1)).text).toContain("Icon name (use it as the SVG <title>): icon-one_AI");
   });
 });
 

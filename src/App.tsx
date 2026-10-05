@@ -32,7 +32,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
-  const { toast, say } = useToast();
+  const { toast, say } = useToast("sheets");
   // in the store above the tabs: restored on restart, undoable like any change
   const sheetsEdit = useSheetsEdit();
   const { padding, size, transparent } = sheetsEdit.opts;
@@ -562,7 +562,7 @@ export default function App() {
       {toast && (
         <div
           data-testid="toast"
-          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
+          className={`fixed bottom-[calc(var(--log-dock-h,0px)_+_1.5rem)] left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
             toast.err ? "bg-rose-600" : "bg-emerald-600"
           }`}
         >

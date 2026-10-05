@@ -9,7 +9,9 @@ import { usageTotals } from "../lib/svglist";
 import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
 import { loadApiKey } from "./keystore";
+import { logStatus } from "../log/logger";
 import { isStale, loadCatalog, refreshCatalog } from "./catalog";
+import { logModelChange } from "./runlog";
 import { loadParamMap, paramsFor, saveParamMap, withParams } from "./paramstore";
 import { resetNote, resolveModelParams } from "./modelparams";
 import { saveConfig, savePrompt } from "./promptstore";
@@ -48,6 +50,7 @@ export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCt
 /** A toast lives for a few seconds and then clears itself (RULE 9). */
 function useSay(dispatch: Dispatch<SvgAction>): (msg: string, err?: boolean) => void {
   return useCallback((msg: string, err = false) => {
+    logStatus("svg", msg, err); // the toast's mirror in the global log (L-4)
     dispatch({ type: "toast", toast: { msg, err } });
     window.setTimeout(() => dispatch({ type: "toast", toast: null }), 4200);
   }, [dispatch]);
@@ -126,6 +129,7 @@ function useModelSync(model: SvgModel, dispatch: Dispatch<SvgAction>, say: SvgCt
   useEffect(() => {
     const now = latest.current;
     if (applied.current === now.key) return;
+    const before = applied.current.split("#")[0]; // "" on the first resolution at mount
     applied.current = now.key;
     const target = now.model;
     const model_ = target.config.model;
@@ -138,6 +142,7 @@ function useModelSync(model: SvgModel, dispatch: Dispatch<SvgAction>, say: SvgCt
       now.dispatch({ type: "param-note", note });
       now.say(note, true);
     }
+    if (before !== "" && (before !== model_ || reset.length > 0)) logModelChange(model_, caps.reasoning, reset.length);
   }, [key]);
 }
 

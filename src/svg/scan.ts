@@ -9,6 +9,7 @@ import { discoverApprovedSources, type Discovery, type SvgSource } from "./sourc
 import { loadSidecar } from "./sidecar";
 import { saveSourceIndex, type IndexEntry } from "./sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
+import { logScan } from "./runlog";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -57,6 +58,7 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
 }
 
 function reportScan(found: Discovery, say: (m: string, e?: boolean) => void): void {
+  logScan(found);
   if (found.corruptDecisions) say("review-decisions.json is corrupt — kept the previous decisions in memory", true);
   if (found.missing.length > 0) say(`${found.missing.length} approved pair(s) lost their AI image since the last scan`, true);
   if (found.unreadable.length > 0) say(`${found.unreadable.length} file(s) could not be read and were skipped`, true);

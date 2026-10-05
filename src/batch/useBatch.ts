@@ -14,6 +14,7 @@ import { processItems, type BatchItem, type ItemResult } from "./process";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import { loadPresets, loadLastName, loadHandles } from "./store";
+import { logStatus, logger } from "../log/logger";
 import { usePresetActions } from "./usePresetActions";
 import type { SourceStatus } from "../lib/statefile";
 
@@ -55,7 +56,10 @@ export function useBatch() {
   const ctx = useCtx(s);
   useEffect(() => { void boot(ctx, setS); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useToastClear(s.toast, setS);
-  const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
+  const say = useCallback((msg: string, err = false) => {
+    logStatus("batch", msg, err); // the toast and its mirror in the global log — outside any updater, which StrictMode runs twice
+    setS((p) => ({ ...p, toast: { msg, err } }));
+  }, []);
   return {
     s, say,
     ...useCoreActions(ctx, setS, say),
@@ -87,9 +91,15 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   }, [ctx, setS, say]);
 
   const refresh = useCallback(() => { void scan(ctx, setS, say); }, [ctx, setS, say]);
-  const run = useCallback(() => { void process(ctx, setS); }, [ctx, setS]);
-  const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
+  const run = useCallback(() => { void process(ctx, setS, say); }, [ctx, setS, say]);
+  const cancel = useCallback(() => stopRun(ctx), [ctx]);
   return { chooseRoot, chooseDest, refresh, run, cancel };
+}
+
+/** Stop: the run notices at its next item; what is finished is kept, and the log hears it. */
+function stopRun(ctx: Ctx): void {
+  ctx.stop.current = true;
+  logger("batch").warn("process.stop", "Stop requested — finished items are kept");
 }
 
 function useViewActions(ctx: Ctx, setS: Setter) {
@@ -180,15 +190,19 @@ function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>): Row {
   return { ...img, status, selected: status !== "missing" && status !== "deleted" };
 }
 
-async function process(ctx: Ctx, setS: Setter): Promise<void> {
+async function process(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
   ctx.stop.current = false;
   const selected = ctx.state.current.rows.filter((r) => r.selected);
-  if (!selected.length) return setS((p) => ({ ...p, toast: { msg: "Nothing selected", err: true } }));
+  if (!selected.length) return say("Nothing selected", true);
+  logger("batch").info("process.start", `Splitting ${selected.length} image(s)`, { data: { selected: selected.length } });
   setS((p) => ({ ...p, busy: "Preparing…" }));
   const report = await runBatch(ctx, root, selected, setS);
-  await finalize(root, report.results, selected, setS);
+  const c = await finalize(root, report.results, selected, setS);
+  const result = { data: { saved: c.done, skipped: c.skipped, failed: c.failed } };
+  logger("batch")[c.failed > 0 || ctx.stop.current ? "warn" : "info"]("process.done", `Split run finished: ${c.done} saved, ${c.skipped} skipped, ${c.failed} failed`, result);
+  say(`Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, c.failed > 0);
 }
 
 async function runBatch(ctx: Ctx, root: DirHandleLike, selected: Row[], setS: Setter) {
@@ -233,17 +247,16 @@ async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHan
   }
 }
 
-/** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24). */
-async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter): Promise<void> {
+/** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24); the caller says the result. */
+async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter) {
   const outcomes = toOutcomes(results, selected);
   await applyOutcomes(root, outcomes, new Date().toISOString());
   const byPath = new Map(outcomes.map((o) => [o.relPath.toLowerCase(), o.status]));
-  const c = tally(results);
   setS((p) => ({
     ...p, busy: null,
     rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, selected: false })),
-    toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
+  return tally(results);
 }
 
 function toOutcomes(results: ItemResult[], selected: Row[]): Outcome[] {

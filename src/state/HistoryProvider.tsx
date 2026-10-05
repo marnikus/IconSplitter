@@ -17,6 +17,7 @@ import {
 } from "../lib/history";
 import { isTextField } from "../selection/hotkeys";
 import { applyEntry } from "./apply";
+import { logApply, logPush } from "./statelog";
 import { loadHistory, saveHistory } from "./historystore";
 
 /** An action as the caller knows it; id/timestamp/version are added here. */
@@ -82,7 +83,9 @@ function useTimeline(): TimelineStore {
   }, []);
   const record = useCallback((entry: NewEntry, gesture: boolean) => {
     setError(null);
-    commit(gesture ? coalesce(ref.current, stamp(entry), Date.now(), COALESCE_MS) : pushEntry(ref.current, stamp(entry)));
+    const stamped = stamp(entry);
+    commit(gesture ? coalesce(ref.current, stamped, Date.now(), COALESCE_MS) : pushEntry(ref.current, stamped));
+    logPush(stamped, gesture);
   }, [commit]);
   return {
     timeline, error, ref, commit, setError,
@@ -101,6 +104,7 @@ function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, 
     busy.current = true;
     const ok = await applyEntry(step.entry, dir === "undo" ? step.entry.before : step.entry.after);
     busy.current = false;
+    logApply(dir, step.entry, ok);
     if (!ok) return setError(APPLY_FAILED); // cursor untouched: the timeline stays consistent
     setError(null);
     commit(step.timeline);

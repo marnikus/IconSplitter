@@ -56,20 +56,33 @@ function Body({ p, run }: { p: ConfirmProps; run: ConfirmRun }) {
         saved as the next version. A rate limit reports its retry-after delay, and nothing is resent while a
         request&apos;s outcome is unknown.
       </p>
-      {shown !== null && (
-        <ConfirmPrompt batch={shown} endpoint={prepared.endpoint} index={run.index} total={prepared.batches.length}
-          onIndex={run.setIndex} rules={p.prompt} onRules={p.onPrompt} />
-      )}
-      {empty && <p className="svg-note error" data-testid="svg-confirm-empty-rules">The generation rules are empty — a request would carry no instructions. Add rules above to send.</p>}
+      <Preview p={p} run={run} empty={empty} />
       <Manifest plans={prepared.batches.map((b) => b.plan)} />
-      {shown !== null && (
-        <CompositePreview key={`${shown.plan.id}|${shown.plan.items.map((i) => i.fingerprint).join()}`}
-          rootRef={p.rootRef} items={shown.plan.items} index={run.index} total={prepared.batches.length} />
-      )}
+      <Sheet p={p} run={run} />
       <Actions onDismiss={p.onDismiss} onConfirm={() => p.onConfirm(prepared)}
         disabled={empty || shown === null} requests={prepared.batches.length} />
     </>
   );
+}
+
+/** The request on screen, and the reason a send is disabled when there is one. */
+function Preview({ p, run, empty }: { p: ConfirmProps; run: ConfirmRun; empty: boolean }) {
+  if (run.shown === null) return null;
+  return (
+    <>
+      <ConfirmPrompt batch={run.shown} endpoint={run.prepared.endpoint} index={run.index} total={run.prepared.batches.length}
+        onIndex={run.setIndex} rules={p.prompt} onRules={p.onPrompt} />
+      {empty && <p className="svg-note error" data-testid="svg-confirm-empty-rules">The generation rules are empty — a request would carry no instructions. Add rules above to send.</p>}
+    </>
+  );
+}
+
+/** The contact sheet of the request on screen; remounted when another request comes on screen. */
+function Sheet({ p, run }: { p: ConfirmProps; run: ConfirmRun }) {
+  const shown = run.shown;
+  if (shown === null) return null;
+  const key = `${shown.plan.id}|${shown.plan.items.map((i) => i.fingerprint).join()}`;
+  return <CompositePreview key={key} rootRef={p.rootRef} items={shown.plan.items} index={run.index} total={run.prepared.batches.length} />;
 }
 
 function Actions({ onDismiss, onConfirm, disabled, requests }: {

@@ -6,6 +6,7 @@
 // lives in memory for the session only and the UI says so honestly.
 
 import { idbDelete, idbGet, idbPut } from "../batch/store";
+import { forgetSecret, watchSecret } from "../log/secrets";
 
 const STORE = "secrets";
 const KEY = "requesty-api-key";
@@ -21,6 +22,9 @@ let memory: string | null = null;
  * guards against presented.
  */
 export async function saveApiKey(key: string): Promise<boolean> {
+  // Registered so the global log masks it even when it has no recognisable shape. A key that is
+  // REPLACED stays registered for the session: it may still be a live secret somewhere.
+  if (key.trim() === "") forgetKey(); else watchSecret(key);
   memory = key.trim() === "" ? null : key.trim();
   try {
     return await idbPut(STORE, KEY, { key: memory });
@@ -33,14 +37,26 @@ export async function loadApiKey(): Promise<string | null> {
   try {
     const stored = await idbGet<{ key?: unknown }>(STORE, KEY);
     const key = stored?.key;
-    if (typeof key === "string" && key.trim() !== "") return key;
+    if (typeof key === "string" && key.trim() !== "") return watched(key);
   } catch {
     // Unreadable storage is not a lost key: fall through to the memory copy.
   }
-  return memory;
+  return memory === null ? null : watched(memory);
+}
+
+/** Registers a key the store just handed out, so the log can never print it. */
+function watched(key: string): string {
+  watchSecret(key);
+  return key;
+}
+
+/** The key leaves this device: the log may stop masking it. */
+function forgetKey(): void {
+  if (memory !== null) forgetSecret(memory);
 }
 
 export async function clearApiKey(): Promise<void> {
+  forgetKey();
   memory = null;
   try {
     await idbDelete(STORE, KEY);

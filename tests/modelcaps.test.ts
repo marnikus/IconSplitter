@@ -14,7 +14,6 @@ import {
   clampMaxTokens,
   clampTemperature,
   effortOf,
-  paramsLabel,
   sanitizeParams,
   type CatalogModel,
   type SamplingParams,
@@ -143,16 +142,7 @@ describe("clamp helpers", () => {
   });
 });
 
-describe("paramsLabel", () => {
-  it("names what will be sent, and what will not", () => {
-    expect(paramsLabel(capsFor(GPT4), { temperature: 0.4, maxTokens: 32_000, effort: null }))
-      .toBe("temperature 0.4 · 32 000 max tokens");
-    expect(paramsLabel(capsFor(GPT6), { temperature: null, maxTokens: 32_000, effort: "high" }))
-      .toBe("no temperature · 32 000 max tokens · effort high");
-    expect(paramsLabel(capsFor(GPT6), { temperature: null, maxTokens: 32_000, effort: null }))
-      .toBe("no temperature · 32 000 max tokens · effort default");
-  });
-
+describe("effort labels", () => {
   it("labels every effort the picker offers", () => {
     expect(EFFORT_ORDER).toEqual(["low", "medium", "high", "xhigh"]);
     expect(EFFORT_LABELS.xhigh).toBe("Extra high");

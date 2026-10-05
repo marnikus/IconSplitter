@@ -11,10 +11,11 @@ export default defineConfig({
     include: ["tests/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**"],
+      include: ["src/lib/**", "src/log/**"],
       reporter: ["text", "json-summary"],
       thresholds: {
-        // RULE 16.3 — line coverage of src/lib never decreases vs baseline.
+        // RULE 16.3 — line coverage of src/lib (and of the log, whose wiring is not
+        // otherwise in the lane) never decreases vs baseline.
         lines: 80,
       },
     },

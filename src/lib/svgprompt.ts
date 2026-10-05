@@ -80,13 +80,3 @@ export function composePrompt(rules: string, items: readonly ManifestItem[]): Pr
   const blocks = single ? singleBlocks(rules, items[0].name) : batchBlocks(rules, items);
   return { kind: single ? "single" : "batch", blocks, text: joinBlocks(blocks) };
 }
-
-/** The batch template, whatever the item count — kept for callers that name it. */
-export function batchPrompt(userPrompt: string, items: readonly ManifestItem[]): string {
-  return joinBlocks(batchBlocks(userPrompt, items));
-}
-
-/** The single template: no manifest, just the quality prompt and the icon name. */
-export function singlePrompt(userPrompt: string, name: string): string {
-  return joinBlocks(singleBlocks(userPrompt, name));
-}

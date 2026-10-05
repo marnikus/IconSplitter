@@ -1,5 +1,5 @@
-// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar and
-// the session autosave. The providers sit ABOVE the panels, which is what makes
+// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar, the
+// global log dock and the session autosave. The providers sit ABOVE the panels, which is what makes
 // an undo pressed on one tab able to reverse an action made on another (RULE 12).
 
 import App from "../App";
@@ -8,6 +8,7 @@ import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
 import { setAppState, type AppState } from "../state/appstore";
+import LogDock from "../log/LogDock";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppState } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
@@ -26,6 +27,7 @@ export default function Workbench() {
   return (
     <HistoryProvider>
       <Shell />
+      <LogDock />
     </HistoryProvider>
   );
 }
@@ -35,7 +37,7 @@ function Shell() {
   useSessionAutosave();
   usePrefsAutosave();
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-slate-950 pb-[var(--log-dock-h,0px)] text-slate-100">
       <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
           <div className="flex gap-2" data-testid="tabbar">
