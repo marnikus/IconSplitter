@@ -1293,3 +1293,74 @@ more than once; now:
 | layout, both tabs | 3 scroll positions each: the dock covered **0 of 11** (SVG) and **0 of 15** (V2) visible row controls, **0** blocked hit-tests, the window itself never scrolls, and a real mouse click on the last row's control toggles it (`false → true`) |
 
 New debt accepted: none.
+
+## 2026-10-05 — the approval is of the reference, not of the derived pair id (Task E)
+
+Reported straight after Task D: the Generate SVG tab answered
+
+> **9 approved source(s) are not listed** — 9 with no AI result (reference
+> images). `…/icon-airplane-landing_AI_8/split_01/icon-airplane-landing.png` is
+> a reference image, not an AI output (+8 more)
+
+for folders that, in the user's words, hold "both file are: ref and AI icon".
+Reproduced before the fix on a fake root built like the reported one
+(`split_01/icon-airplane-landing.png` + `split_01/icon-airplane-landing_AI_8_01.png`,
+one reference-only approval each): audit `5 files · 2 AI sources · 2 references
+excluded · 0 missing · 0 duplicates → 0 rows` with two `not-ai-output`
+exclusions — the two AI icons counted as sources, listed nowhere.
+
+Root cause: `decide()` accepted only two proofs of approval — a record with the
+pair's own `pair_<hash>` id, or an approved record whose `ai_result` is the AI
+path. A record written while the AI image was absent (`ai_result: null`,
+`selection/state.recordsFromViews`) names the **reference**, and the pair id of
+the image that later arrives is `pairId(dir, base, "<variation suffix>")` — a
+different id. So a healthy, on-disk pair counted as *not approved*, and
+`addRecord` reported the record itself as "a reference image, not an AI output"
+because it checked `ai_result === null` before asking whether an image now sits
+beside that reference. Full record:
+`archive/2026-10-05-svg-approval-by-reference/design.md`.
+
+The fix adds the third proof (I-35) in the same pure module and splits the audit
+out of it: an approved record with no `ai_result` approves the pair that **owns**
+its reference path (first in canonical order, so the canonical `…_AI.ext` result
+wins over a later variation), never when a record already names that pair's own
+AI path (a decline stays authoritative). `not-ai-output` now means what it says:
+a reference with **no** AI image beside it. `src/svg/audit.ts` (new) owns the
+five-bucket tally, the `ScanAudit` shape and both wordings, so `sourcelist.ts`
+stayed under the RULE 16 file line.
+
+### Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing baseline) — GATE PASSED |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED (`--changed --allow-legacy`, 7 files) |
+| 4/6 Tests | **77 files / 746 tests, all green** (was 77 / 737) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | unchanged (the change is in `src/svg`, outside the coverage include) |
+| 6/6 Build | single-file `dist/index.html` |
+
+### RULE 16 / RULE 18 numbers for the touched files
+
+| File | fns / lines | What changed |
+|---|---|---|
+| `src/svg/sourcelist.ts` | 26 / 262 | `referenceOwners`, `approvedPairs`, `isApproved`, `approvedAiPath`, `coversReference`, `newSink(owner)`; `Sink.owner`; the `not-ai-output` branch asks the owner map first; the audit (counts + wording) moved out |
+| `src/svg/audit.ts` | 6 / 70 | **new**: `ScanAudit`, `fileTally`, `auditText`, `exclusionSummary`, `KINDS`, `plural` — the numbers a scan reports and their one wording |
+| `src/svg/sources.ts` | 15 / 133 | imports the tally from `./audit`; the dead `export { auditText }` re-export removed |
+| `src/svg/scan.ts`, `SourceLine.tsx`, `SvgPanel.tsx`, `scankey.ts` | unchanged size | import the audit wording/type from `./audit` |
+
+Baseline: **untouched**. Tests: `tests/svg_sources.test.ts` — 9 new cases: the
+reported tree with its AI icons (rows + audit as literals), the owner bound (a
+second variation is not dragged in), the pair's own decline and a stale decline
+both beating the older reference approval, a reference with no image beside it
+still `not-ai-output`, the extra records for one owned reference counted as
+duplicates, repeat-scan identity, and the reported icon end-to-end through
+`loadSidecar` → `toRow` (newest version v2, status `generated`, the app's own
+`.svg` / `_v2.svg` artifacts counted as neither sources nor rows).
+
+Browser verification: **not re-run** — this change moves no markup, selector or
+layout (the `svg-warn-excluded` banner, the `svg-audit` line and the `svg.scan`
+log entry keep their handles; only the numbers behind them change), so the
+1440×900 result recorded for Task D still holds.
+
+New debt accepted: none.

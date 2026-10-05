@@ -11,8 +11,9 @@ import { describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { scanKey } from "../src/svg/scankey";
 import { discoverApprovedSources, type Discovery } from "../src/svg/sources";
-import { auditText } from "../src/svg/sourcelist";
+import { auditText } from "../src/svg/audit";
 import { toRow } from "../src/svg/rowmodel";
+import { loadSidecar } from "../src/svg/sidecar";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 const OUT = "_split_output/2026-10/2026-10-01_10-24-31";
@@ -21,6 +22,8 @@ const BUNNY = "icon-bunny-face_AI_5_01.png";
 const BUNNY_STALE = pairId("somewhere/else", "icon-bunny-face", "_5_01");
 const BUNNY_REAL = pairId(BUNNY_DIR, "icon-bunny-face", "_5_01");
 const PLANE = "icon-airplane-landing.png";
+const PLANE_DIR = (split: string) => `${OUT}/icon-airplane-landing_AI_8/split_${split}`;
+const PLANE_AI = (split: string) => `icon-airplane-landing_AI_8_${split}.png`;
 
 const SIDECAR = JSON.stringify({
   v: 1,
@@ -76,19 +79,18 @@ function reportedRoot(): FakeDir {
   bunny.children.set("icon-bunny-face_AI_5_01_v5.svg", new FakeFile("icon-bunny-face_AI_5_01_v5.svg", 40, 3300, "<svg/>"));
   bunny.children.set(`${BUNNY}.svg.json`, new FakeFile(`${BUNNY}.svg.json`, 10, 3300, SIDECAR));
   for (const split of ["01", "02"]) {
-    const plane = dir(root, `${OUT}/icon-airplane-landing_AI_8/split_${split}`);
+    const plane = dir(root, PLANE_DIR(split));
     plane.children.set(PLANE, new FakeFile(PLANE, 12, 2000, "ref"));
   }
-  const planeDir = (split: string) => `${OUT}/icon-airplane-landing_AI_8/split_${split}`;
   return withDecisions(root, [
     // The bunny: two records, the same AI path, neither id matches this scan.
     record(BUNNY_STALE, `${BUNNY_DIR}/${BUNNY}`, `${BUNNY_DIR}/${BUNNY}`),
     record(pairId("moved/away", "icon-bunny-face", "_5_01"), null, `${BUNNY_DIR}/${BUNNY}`),
     // References approved in Selection while their AI image was already gone.
-    record(pairId(planeDir("01"), "icon-airplane-landing", ""), `${planeDir("01")}/${PLANE}`, null),
-    record(pairId(planeDir("02"), "icon-airplane-landing", ""), `${planeDir("02")}/${PLANE}`, null),
+    record(pairId(PLANE_DIR("01"), "icon-airplane-landing", ""), `${PLANE_DIR("01")}/${PLANE}`, null),
+    record(pairId(PLANE_DIR("02"), "icon-airplane-landing", ""), `${PLANE_DIR("02")}/${PLANE}`, null),
     // …plus a stale id for the same reference path (the older duplicate shape).
-    record(pairId("elsewhere", "icon-airplane-landing", ""), `${planeDir("01")}/${PLANE}`, null),
+    record(pairId("elsewhere", "icon-airplane-landing", ""), `${PLANE_DIR("01")}/${PLANE}`, null),
   ]);
 }
 
@@ -243,5 +245,167 @@ describe("the Generate SVG source list", () => {
       .not.toBe(scanKey("test_processing", first, [row]));
     expect(scanKey("test_processing", { ...first, excluded: [] }, [row]))
       .not.toBe(scanKey("test_processing", first, [row]));
+  });
+});
+
+/**
+ * The reported tree as it really is on disk: every split folder holds the
+ * reference the batch copied AND the AI icon it split out, and the decision
+ * file approved the references while their AI images were not there yet
+ * (`ai_result: null`, a pair id derived from the reference alone).
+ */
+function iconsPresentRoot(): FakeDir {
+  const root = new FakeDir("test_processing");
+  for (const split of ["01", "02"]) {
+    const plane = dir(root, PLANE_DIR(split));
+    plane.children.set(PLANE, new FakeFile(PLANE, 12, 2000, "ref"));
+    plane.children.set(PLANE_AI(split), new FakeFile(PLANE_AI(split), 20, 2100, "ai"));
+  }
+  return withDecisions(root, [
+    record(pairId(PLANE_DIR("01"), "icon-airplane-landing", ""), `${PLANE_DIR("01")}/${PLANE}`, null),
+    record(pairId(PLANE_DIR("02"), "icon-airplane-landing", ""), `${PLANE_DIR("02")}/${PLANE}`, null),
+  ]);
+}
+
+const PLANE_SC = "icon-airplane-landing_AI_8_01.svg.json";
+
+/** The sidecar a generated row leaves beside its AI image. */
+function planeSidecar(): string {
+  const at = PLANE_DIR("01");
+  return JSON.stringify({
+    v: 1,
+    source: { relPath: `${at}/${PLANE_AI("01")}`, name: PLANE_AI("01"), fingerprint: "20:2100" },
+    versions: [1, 2].map((v) => ({
+      version: v, svgPath: `${at}/icon-airplane-landing_AI_8_01_v${v}.svg`, status: "generated",
+      review: "pending", prompt: "p", provider: "Requesty", model: "m",
+      requestedAt: "2026-10-01T10:00:00.000Z", completedAt: "2026-10-01T10:00:05.000Z",
+      usage: { input: 1, output: 2, total: 3 },
+      cost: { actual: null, estimated: null, currency: "USD", pricing: "p", basis: "provider" },
+      validation: { ok: true, errors: [], warnings: [], icons: 1 },
+      batch: null, error: null, requestId: null,
+    })),
+  });
+}
+
+describe("an approval recorded before the AI image existed (I-35)", () => {
+  it("lists the AI icon that now sits beside its approved reference", async () => {
+    const found = await discoverApprovedSources(iconsPresentRoot());
+    expect(found.sources.map((s) => s.relPath)).toEqual([
+      `${PLANE_DIR("01")}/${PLANE_AI("01")}`,
+      `${PLANE_DIR("02")}/${PLANE_AI("02")}`,
+    ]);
+    // the row keeps the pair's own stable id, not the record's
+    expect(found.sources[0].id).toBe(pairId(PLANE_DIR("01"), "icon-airplane-landing", "_8_01"));
+    expect(found.excluded).toEqual([]);
+  });
+
+  it("audits the tree the icons live in", async () => {
+    const found = await discoverApprovedSources(iconsPresentRoot());
+    expect(found.audit).toEqual({
+      files: 5,        // two references, two AI icons, review-decisions.json
+      aiSources: 2,    // both AI icons are on disk
+      references: 2,
+      missing: 0,
+      duplicates: 0,
+      rows: 2,
+    });
+    expect(auditText(found.audit))
+      .toBe("Audit — 5 files · 2 AI sources · 2 references excluded · 0 missing files · 0 duplicates removed → 2 rows");
+  });
+
+  it("approves only the pair that owns the reference — never a second variation", async () => {
+    const root = new FakeDir("root");
+    const arch = dir(root, "architecture");
+    arch.children.set("icon.png", new FakeFile("icon.png", 12, 2000, "ref"));
+    arch.children.set("icon_AI.png", new FakeFile("icon_AI.png", 20, 2100, "ai"));
+    arch.children.set("icon_AI_7.png", new FakeFile("icon_AI_7.png", 21, 2200, "ai"));
+    withDecisions(root, [record(pairId("elsewhere", "icon", ""), "architecture/icon.png", null)]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.relPath)).toEqual(["architecture/icon_AI.png"]);
+    expect(found.excluded).toEqual([]); // the other variation is simply not approved
+  });
+
+  it("lets the AI image's own decline win over the older reference approval", async () => {
+    const root = new FakeDir("root");
+    const arch = dir(root, "architecture");
+    arch.children.set("icon.png", new FakeFile("icon.png", 12, 2000, "ref"));
+    arch.children.set("icon_AI.png", new FakeFile("icon_AI.png", 20, 2100, "ai"));
+    withDecisions(root, [
+      record(pairId("moved/away", "icon", ""), "architecture/icon.png", null),
+      record(pairId("architecture", "icon", ""), "architecture/icon.png", "architecture/icon_AI.png", "declined"),
+    ]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources).toEqual([]);
+    expect(found.excluded).toEqual([]); // an existing, declined image is not an anomaly
+  });
+
+  it("keeps a stale decline of the AI image authoritative", async () => {
+    const root = new FakeDir("root");
+    const arch = dir(root, "architecture");
+    arch.children.set("icon.png", new FakeFile("icon.png", 12, 2000, "ref"));
+    arch.children.set("icon_AI.png", new FakeFile("icon_AI.png", 20, 2100, "ai"));
+    withDecisions(root, [
+      record(pairId("older", "icon", ""), "architecture/icon.png", null),
+      record(pairId("moved/away", "icon", ""), "architecture/icon.png", "architecture/icon_AI.png", "declined"),
+    ]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources).toEqual([]);
+  });
+
+  it("still reports a reference-only record when no AI image sits beside it", async () => {
+    const root = new FakeDir("root");
+    const arch = dir(root, "architecture");
+    arch.children.set("icon.png", new FakeFile("icon.png", 12, 2000, "ref"));
+    withDecisions(root, [record(pairId("elsewhere", "icon", ""), "architecture/icon.png", null)]);
+    const found = await discoverApprovedSources(root);
+    expect(found.excluded).toEqual([{
+      id: pairId("elsewhere", "icon", ""),
+      relPath: "architecture/icon.png",
+      kind: "not-ai-output",
+      reason: "architecture/icon.png is a reference image, not an AI output",
+    }]);
+    expect(found.audit).toMatchObject({ rows: 0, references: 1, missing: 0 });
+  });
+
+  it("counts the extra records for one owned reference as duplicates", async () => {
+    const root = new FakeDir("root");
+    const arch = dir(root, "architecture");
+    arch.children.set("icon.png", new FakeFile("icon.png", 12, 2000, "ref"));
+    arch.children.set("icon_AI.png", new FakeFile("icon_AI.png", 20, 2100, "ai"));
+    withDecisions(root, [
+      record(pairId("a", "icon", ""), "architecture/icon.png", null),
+      record(pairId("b", "icon", ""), "architecture/icon.png", null),
+      record(pairId("c", "icon", ""), "architecture/icon.png", null),
+    ]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.relPath)).toEqual(["architecture/icon_AI.png"]);
+    expect(found.excluded.map((e) => e.kind)).toEqual(["duplicate"]);
+    expect(found.audit).toMatchObject({ rows: 1, duplicates: 1 });
+  });
+
+  it("is byte-identical on a repeat scan", async () => {
+    const first = await discoverApprovedSources(iconsPresentRoot());
+    const again = await discoverApprovedSources(iconsPresentRoot());
+    expect(JSON.stringify(again)).toBe(JSON.stringify(first));
+  });
+
+  it("lists the reported icon with its newest version, artifacts and all", async () => {
+    const root = new FakeDir("test_processing");
+    const d = dir(root, PLANE_DIR("01"));
+    d.children.set(PLANE, new FakeFile(PLANE, 12, 2000, "ref"));
+    d.children.set(PLANE_AI("01"), new FakeFile(PLANE_AI("01"), 20, 2100, "ai"));
+    d.children.set("icon-airplane-landing_AI_8_01.svg", new FakeFile("icon-airplane-landing_AI_8_01.svg", 40, 2200, "<svg/>"));
+    d.children.set("icon-airplane-landing_AI_8_01_v2.svg", new FakeFile("icon-airplane-landing_AI_8_01_v2.svg", 41, 2200, "<svg/>"));
+    d.children.set(PLANE_SC, new FakeFile(PLANE_SC, 10, 2200, planeSidecar()));
+    withDecisions(root, [record(pairId(PLANE_DIR("01"), "icon-airplane-landing", ""), `${PLANE_DIR("01")}/${PLANE}`, null)]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.relPath)).toEqual([`${PLANE_DIR("01")}/${PLANE_AI("01")}`]);
+    expect(found.excluded).toEqual([]);
+    // the app's own outputs are artifacts: never sources, never rows (I-34)
+    expect(found.audit).toMatchObject({ files: 6, aiSources: 1, references: 1, rows: 1 });
+    const load = await loadSidecar(root, found.sources[0]);
+    const row = toRow(found.sources[0], load.sidecar, load.corrupt);
+    expect(row.newest?.svgPath).toBe(`${PLANE_DIR("01")}/icon-airplane-landing_AI_8_01_v2.svg`);
+    expect(row.status).toBe("generated");
   });
 });

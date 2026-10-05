@@ -5,7 +5,7 @@
 // two scans of the same unchanged folder cannot produce two different keys.
 
 import type { Discovery } from "./sources";
-import type { ScanAudit } from "./sourcelist";
+import type { ScanAudit } from "./audit";
 import type { SvgRow } from "./types";
 
 /** One row: which file, which problems, which sidecar versions, which status. */

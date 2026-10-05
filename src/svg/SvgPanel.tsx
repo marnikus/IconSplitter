@@ -18,7 +18,7 @@ import { useSvgHotkeys } from "./SvgHotkeys";
 import SvgList from "./SvgList";
 import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
-import { exclusionSummary } from "./sourcelist";
+import { exclusionSummary } from "./audit";
 
 export default function SvgPanel() {
   const g = useSvgGen();

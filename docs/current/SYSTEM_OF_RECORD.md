@@ -142,15 +142,18 @@ that makes a network call, only when the user asks it to):
   **an approved AI OUTPUT that exists on disk** (2026-10-05, I-31): a file whose
   own name carries the canonical `_AI` form (`…_AI.png`, `…_AI_7.png`,
   `…_AI_9_01.png` — a raster image, never this app's `_AI.svg` output), named by
-  an approved decision — by the pair's own `pair_<hash>` id, or by an approved
-  record whose `ai_result` is exactly that path (ids drift when a file moves
-  between `split_NN` folders; the recorded approval does not). **One normalized
+  an approved decision — by the pair's own `pair_<hash>` id, by an approved
+  record whose `ai_result` is exactly that path, or by an approved record that
+  named only the reference the image sits beside (I-35: ids drift when a file
+  moves between `split_NN` folders, and an AI image that arrives after the
+  decision carries a variation suffix the record never saw; the paths do not
+  drift). **One normalized
   AI path is one row** (I-32), whatever the row index, the split folder or how
   many decision records name it, in deterministic path order. Everything else is
   reported instead of listed (`Discovery.excluded` + the `svg-warn-excluded`
   banner + the log): an approved pair whose AI image is gone (`ai-missing`), a
   record with nothing left on disk (`no-files`), a record naming a reference
-  image (`not-ai-output`), an approved pair of only this app's own SVG
+  that has no AI image beside it (`not-ai-output`), an approved pair of only this app's own SVG
   (`artifact`), and a second record for a path already claimed (`duplicate`) —
   the first record naming a path is that row's approval, so N records for one
   path yield one row and N−1 duplicates. A listed row that needs attention keeps
@@ -487,6 +490,15 @@ Batch:
   output (`…_AI.svg`) and its versioned artifacts (`…_v1.svg`) are never sources
   and are never counted as AI sources in the audit — otherwise a second run
   would feed an artifact back into generation, and the counts would not add up.
+* **I-35 (approval, RULE 3/6/24):** an approval is of the **files**, not of the
+  derived pair id. A pair on disk is approved by a record that names its own id,
+  its AI path, or — when the record was written before the AI image existed
+  (`ai_result: null`) — its reference path; the reference path approves exactly
+  the pair that owns it (the first in canonical order), and a record naming the
+  pair's own AI path is that pair's authority, so an explicit decline is never
+  overridden. So an AI image that appears beside an approved reference is
+  **listed**, and a reference with no AI image beside it is still **reported**
+  (`not-ai-output`) rather than listed.
 
 ## 6. Storage map
 
@@ -534,7 +546,8 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
-| SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
+| SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-35): canonical `_AI` + raster, approval by pair id / AI path / reference path (I-35), one row per normalized AI path, the exclusions with their reasons. Pure — no IO, no React |
+| SVG scan audit | `src/svg/audit.ts` | the numbers a scan reports and their wording (I-33): the five-bucket tally over the walked files, the `ScanAudit` shape the source bar / log / snapshot key share, the one-line audit text, the exclusion summary. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 
@@ -542,7 +555,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 75 files / 704 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 77 files / 746 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):

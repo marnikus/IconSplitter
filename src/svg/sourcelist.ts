@@ -1,24 +1,22 @@
 // sourcelist.ts — which approved sources the Generate SVG tab may list
-// (invariants I-31…I-33). A row exists iff a file on disk carries the canonical
-// `_AI` name AND an approved decision names that file — by the pair's own id, or
-// by an approved record whose `ai_result` is exactly that path (ids drift when a
-// file moves between split folders; the recorded approval does not).
+// (invariants I-31…I-35). A row exists iff a file on disk carries the canonical
+// `_AI` name AND an approved decision covers that file — by the pair's own id,
+// by an approved record whose `ai_result` is exactly that path, or by an
+// approved record that named only the reference the AI image sits beside (ids
+// drift when a file moves between split folders, and an AI image that arrives
+// after the decision has a suffix the record never saw; the paths do not drift).
 //
 // Everything else is REPORTED, never listed: an approved pair whose AI image is
-// gone, a record with no files left, a record that names a reference image, and
-// a record for a path another row already has. This is the fix for the two
-// reported symptoms — the same AI source listed twice, and a reference image
-// offered as something to generate from — so the rules live here, pure and
-// testable, instead of inside the scan.
-//
-// The audit is the whole picture the list was checked against: files walked,
-// canonical AI sources on disk, references excluded, missing sources, duplicates
-// removed, final rows.
+// gone, a record with no files left, a record that names a reference with no AI
+// image beside it, and a record for a path another row already has. This is the
+// fix for the reported symptoms — the same AI source listed twice, a reference
+// image offered as something to generate from, and an existing AI icon reported
+// as "a reference image" — so the rules live here, pure and testable, instead of
+// inside the scan. `audit.ts` owns the counts of all of it and their wording.
 
-import { isEligibleImage, isImageExt, isVersionArtifact } from "../lib/naming";
+import { isEligibleImage, isVersionArtifact } from "../lib/naming";
 import { problemsOf, type ReviewPair, type SideRef } from "../lib/pairing";
 import type { ReviewRecord } from "../lib/reviewfile";
-import type { FileEntry } from "../lib/scan";
 
 /** A pair the list may show: its AI image really exists on disk. */
 export type RowPair = ReviewPair & { ai: SideRef };
@@ -33,22 +31,15 @@ export interface SourceExclusion {
   reason: string;
 }
 
-/** What the scan found, in the numbers the audit line reports. */
-export interface ScanAudit {
-  files: number; // every file the walk saw
-  aiSources: number; // canonical AI images on disk (eligible naming)
-  references: number; // image files that are not AI outputs — never rows
-  missing: number; // approved sources whose AI image is not on disk
-  duplicates: number; // rows dropped because the same path was already taken
-  rows: number; // the final unique list
-}
-
 export interface ListSelection {
   rows: RowPair[];
   excluded: SourceExclusion[];
   missing: number;
   duplicates: number;
 }
+
+/** normalized reference path -> the pair id whose AI image sits beside it. */
+type ReferenceOwners = Map<string, string>;
 
 /**
  * Canonical AI naming, one place: `_AI`, `_AI_7`, `_AI_9_01`, a raster image
@@ -61,7 +52,7 @@ export function isCanonicalAi(name: string): boolean {
 }
 
 /** True for an AI-named SVG: this app's output, not a source. */
-function isAiArtifact(name: string): boolean {
+export function isAiArtifact(name: string): boolean {
   return isEligibleImage(name) && !isRaster(ext(name));
 }
 
@@ -69,27 +60,12 @@ function isRaster(ext: string): boolean {
   return ext.toLowerCase() !== ".svg";
 }
 
-/**
- * Counts the whole tree the list was built from. Five buckets, so no file is
- * counted twice: this app's versioned outputs and its `_AI.svg` files are
- * ignored, canonical raster AI images are sources, and every other image is a
- * reference (never a source, whatever its name).
- */
-export function fileTally(entries: readonly FileEntry[]): Pick<ScanAudit, "files" | "aiSources" | "references"> {
-  let aiSources = 0;
-  let references = 0;
-  for (const e of entries) {
-    if (isVersionArtifact(e.name) || isAiArtifact(e.name)) continue;
-    if (isCanonicalAi(e.name)) aiSources += 1;
-    else if (isImageExt(ext(e.name))) references += 1;
-  }
-  return { files: entries.length, aiSources, references };
-}
-
 /** The rows, the exclusions and the dedupe counts for one scan. */
 export function selectRows(pairs: readonly ReviewPair[], records: readonly ReviewRecord[]): ListSelection {
-  const sink: Sink = { rows: [], excluded: [], claimed: new Map(), approver: new Map(), represented: new Set(), existing: new Set() };
-  for (const pair of pairs) addPair(pair, decide(pair, records), sink);
+  const owner = referenceOwners(pairs);
+  const approved = approvedPairs(pairs, records, owner);
+  const sink = newSink(owner);
+  for (const pair of pairs) addPair(pair, approved.has(pair.pairId), sink);
   for (const r of records) addRecord(r, sink);
   const sorted = [...sink.excluded].sort(byPlace);
   return {
@@ -100,13 +76,66 @@ export function selectRows(pairs: readonly ReviewPair[], records: readonly Revie
   };
 }
 
-/** The exact pair id wins; otherwise any approved record naming the AI path. */
-function decide(pair: ReviewPair, records: readonly ReviewRecord[]): boolean {
+/** One scan's accumulator: the rows, the reports, and what has spoken already. */
+function newSink(owner: ReferenceOwners): Sink {
+  return {
+    rows: [], excluded: [], claimed: new Map(), approver: new Map(),
+    represented: new Set(), existing: new Set(), owner,
+  };
+}
+
+/**
+ * Which pairs on disk an approved decision covers (I-35): the pair's own id,
+ * the AI path a record names, or the reference a record named before the AI
+ * image existed. One pass, so every pair is judged against the same records.
+ */
+function approvedPairs(pairs: readonly ReviewPair[], records: readonly ReviewRecord[], owner: ReferenceOwners): Set<string> {
+  const out = new Set<string>();
+  for (const p of pairs) if (isApproved(p, records, owner)) out.add(p.pairId);
+  return out;
+}
+
+function isApproved(pair: ReviewPair, records: readonly ReviewRecord[], owner: ReferenceOwners): boolean {
   const own = records.find((r) => r.pair_id === pair.pairId);
-  if (own) return own.decision === "approved";
+  if (own) return own.decision === "approved"; // the pair's own record decides
   if (pair.ai === null) return false;
-  const path = key(pair.ai.relPath);
-  return records.some((r) => r.decision === "approved" && r.ai_result !== null && key(r.ai_result) === path);
+  const ai = key(pair.ai.relPath);
+  if (approvedAiPath(records, ai)) return true;
+  return coversReference(pair, records, owner, ai);
+}
+
+/** True when an approved record names this exact AI path. */
+function approvedAiPath(records: readonly ReviewRecord[], aiPath: string): boolean {
+  return records.some((r) => r.decision === "approved" && r.ai_result !== null && key(r.ai_result) === aiPath);
+}
+
+/**
+ * True when an approved record named ONLY the reference — the AI image arrived
+ * after the decision — and this pair is the one that owns that reference. A
+ * record naming the pair's own AI path (approved or declined) outranks it.
+ */
+function coversReference(pair: ReviewPair, records: readonly ReviewRecord[], owner: ReferenceOwners, aiPath: string): boolean {
+  if (pair.source === null) return false;
+  const ref = key(pair.source.relPath);
+  if (owner.get(ref) !== pair.pairId) return false; // another AI image owns that reference
+  if (records.some((r) => r.ai_result !== null && key(r.ai_result) === aiPath)) return false;
+  return records.some((r) => r.decision === "approved" && r.ai_result === null
+    && r.source !== null && key(r.source) === ref);
+}
+
+/**
+ * The pair that owns a reference path: the first in canonical order, so the
+ * canonical `…_AI.ext` result wins over a later variation and the answer never
+ * depends on how many AI images happen to share one reference.
+ */
+function referenceOwners(pairs: readonly ReviewPair[]): ReferenceOwners {
+  const out: ReferenceOwners = new Map();
+  for (const p of pairs) {
+    if (p.source === null || p.ai === null) continue;
+    const ref = key(p.source.relPath);
+    if (!out.has(ref)) out.set(ref, p.pairId);
+  }
+  return out;
 }
 
 interface Sink {
@@ -120,6 +149,8 @@ interface Sink {
   represented: Set<string>;
   /** Normalized AI paths that really exist on disk, approved or not. */
   existing: Set<string>;
+  /** Which pair owns each reference an AI image sits beside (I-35). */
+  owner: ReferenceOwners;
 }
 
 /**
@@ -183,7 +214,11 @@ function addRecord(r: ReviewRecord, sink: Sink): void {
   sink.represented.add(r.pair_id);
   if (r.ai_result === null) {
     sink.claimed.set(place, r.pair_id);
-    sink.excluded.push(exclusion(r, path, "not-ai-output", `${path} is a reference image, not an AI output`));
+    // An AI image sits beside that reference now: this record is its approval,
+    // not an anomaly. Only a reference with no AI image beside it is reported.
+    if (!sink.owner.has(place)) {
+      sink.excluded.push(exclusion(r, path, "not-ai-output", `${path} is a reference image, not an AI output`));
+    }
     return;
   }
   if (sink.existing.has(key(r.ai_result))) return;
@@ -212,7 +247,8 @@ function baseName(relPath: string): string {
   return relPath.split("/").pop() ?? relPath;
 }
 
-function ext(name: string): string {
+/** The extension of a file name, dot included; "" when there is none. */
+export function ext(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot) : "";
 }
@@ -223,33 +259,3 @@ function byPlace(a: SourceExclusion, b: SourceExclusion): number {
   return path !== 0 ? path : a.id.localeCompare(b.id);
 }
 
-/** The audit line: the whole picture, one line, so a count is never a mystery. */
-export function auditText(a: ScanAudit): string {
-  const parts = [
-    plural(a.files, "file"), plural(a.aiSources, "AI source"),
-    `${plural(a.references, "reference")} excluded`, plural(a.missing, "missing file"),
-    `${plural(a.duplicates, "duplicate")} removed`,
-  ];
-  return `Audit — ${parts.join(" · ")} → ${plural(a.rows, "row")}`;
-}
-
-/** Why sources are missing from the list, grouped by kind (banner summary). */
-export function exclusionSummary(excluded: readonly SourceExclusion[]): string {
-  const parts = KINDS.flatMap(([kind, label]) => {
-    const n = excluded.filter((e) => e.kind === kind).length;
-    return n === 0 ? [] : [`${n} ${label}`];
-  });
-  return parts.join(", ");
-}
-
-const KINDS: [ExclusionKind, string][] = [
-  ["ai-missing", "with no AI image on disk"],
-  ["no-files", "with no files left"],
-  ["not-ai-output", "with no AI result (reference images)"],
-  ["artifact", "with only this app's own SVG output"],
-  ["duplicate", "duplicate records"],
-];
-
-function plural(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
-}

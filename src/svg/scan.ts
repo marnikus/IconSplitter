@@ -10,7 +10,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
 import { loadHandles, saveHandles } from "../batch/store";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
-import { auditText, exclusionSummary } from "./sourcelist";
+import { auditText, exclusionSummary } from "./audit";
 import { scanKey } from "./scankey";
 import { loadSidecar } from "./sidecar";
 import { saveSourceIndex, type IndexEntry } from "./sourceindex";

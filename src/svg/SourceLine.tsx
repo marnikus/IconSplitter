@@ -4,7 +4,7 @@
 // for copies, and the honest counts of what the scan found. Extracted from
 // SvgControls so both stay inside the RULE 18 size budget.
 
-import { auditText } from "./sourcelist";
+import { auditText } from "./audit";
 import RootPathField from "../ui/RootPathField";
 import type { Discovery } from "./sources";
 

@@ -10,10 +10,8 @@ import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem, type ProblemKind } from "../lib/pairing";
 import { loadDecisions } from "../selection/reviewstore";
-import {
-  auditText, fileTally, selectRows,
-  type RowPair, type ScanAudit, type SourceExclusion,
-} from "./sourcelist";
+import { fileTally, type ScanAudit } from "./audit";
+import { selectRows, type RowPair, type SourceExclusion } from "./sourcelist";
 
 /** One approved AI image the SVG tab may generate from. */
 export interface SvgSource {
@@ -83,9 +81,6 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
     corruptDecisions: load.corrupt,
   };
 }
-
-/** The audit line the source bar shows and the scan logs (one wording, I-33). */
-export { auditText };
 
 /** A listed row: its real AI file, never an invented name (I-31). */
 function toSource(pair: RowPair): SvgSource {
