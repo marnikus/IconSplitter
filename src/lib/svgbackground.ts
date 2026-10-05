@@ -3,7 +3,7 @@
 // goes through, the stored payload shape the panel restores, and the contrast
 // rule that keeps black artwork visible. The colour is applied to the app's
 // preview FRAME — the frame carries a colour and an outline flag, nothing else,
-// so it can never modify an SVG document, a sidecar or an export.
+// so it can never modify an SVG document, a pair file or an export.
 
 export type BgPreset = "white" | "black" | "gray" | "green" | "red" | "custom";
 

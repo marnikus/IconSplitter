@@ -7,14 +7,7 @@ import { markUnknown, unknownNote } from "../src/svg/recovery";
 import type { InflightRequest } from "../src/svg/journal";
 import { toRow } from "../src/svg/rowmodel";
 import type { SvgRow } from "../src/svg/types";
-import type { SvgSource } from "../src/svg/sources";
-
-function source(id: string): SvgSource {
-  return {
-    id, name: `${id}.png`, stem: `${id}_AI`, relPath: `architecture/${id}_AI.png`,
-    dirPath: "architecture", fingerprint: "20:3100", problems: [],
-  };
-}
+import { svgSource } from "./helpers/svgpair";
 
 const ENTRY: InflightRequest = {
   runId: "run_past_1", batchId: "batch_1_2", index: 1,
@@ -23,7 +16,7 @@ const ENTRY: InflightRequest = {
   requestId: "req_stalled_9",
 };
 
-const rows = (): SvgRow[] => [toRow(source("a"), null, false), toRow(source("z"), null, false)];
+const rows = (): SvgRow[] => [toRow(svgSource("a"), null, false), toRow(svgSource("z"), null, false)];
 
 describe("markUnknown — a restart never turns an unanswered request into a failure", () => {
   it("marks exactly the journal'd sources as unknown, with the id in the reason", () => {

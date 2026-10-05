@@ -50,7 +50,7 @@ function dataUrlToBlob(url: string): Blob {
   return new Blob([out], { type: "image/png" });
 }
 
-/** Stable short hash of the composite bytes — stored in the sidecar batch ref. */
+/** Stable short hash of the composite bytes — stored in the pair file’s batch ref. */
 export function hashBytes(text: string): string {
   return fnv1a32(text).toString(16).padStart(8, "0");
 }

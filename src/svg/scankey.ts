@@ -8,14 +8,14 @@ import type { Discovery } from "./sources";
 import type { ScanAudit } from "./sourcelist";
 import type { SvgRow } from "./types";
 
-/** One row: which file, which problems, which sidecar versions, which status. */
+/** One row: which file, which problems, which pair-file versions, which status. */
 function rowKey(row: SvgRow): string {
   const v = row.newest;
   return [
     row.source.id, row.source.relPath, row.source.fingerprint,
     row.source.problems.map((p) => p.kind).join("+"),
     row.corrupt ? "corrupt" : "ok", row.status,
-    row.sidecar ? `n${row.sidecar.versions.length}` : "n0",
+    row.meta ? `n${row.meta.versions.length}` : "n0",
     v ? `v${v.version}:${v.svgPath}:${v.status}:${v.review}` : "v0",
     row.approved ? `a${row.approved.version}` : "a0",
   ].join("~");

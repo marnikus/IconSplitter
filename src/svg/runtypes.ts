@@ -8,14 +8,14 @@ import type { Failure, Usage } from "../lib/svgrequest";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { DirHandleLike } from "../lib/fs";
-import type { SvgSidecar } from "../lib/svgfile";
+import type { PairMeta } from "../lib/pairmeta";
 import type { SvgSource } from "./sources";
 
 export type RunEvent =
   | { kind: "run-start"; batches: number; perRequest: number }
   | { kind: "batch-start"; batchId: string; index: number; count: number; batches: number; perRequest: number; cols: number; rows: number; composite: string; hash: string; startedAt: number }
   | { kind: "item-start"; batchId: string; position: number; sourceId: string }
-  | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; sidecar: SvgSidecar | null }
+  | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; meta: PairMeta | null }
   | { kind: "item-failed"; batchId: string; position: number; sourceId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
   /** A retryable failure is about to be retried; the wait happens after this. */
   | { kind: "request-retry"; batchId: string; attempt: number; retries: number; failure: Failure["kind"]; status: number | null; delayMs: number }
@@ -35,7 +35,7 @@ export interface RunArgs {
   prompt: string;
   sources: readonly SvgSource[];
   /** Sidecars loaded before the run; refreshed in place as results are saved. */
-  sidecars: Map<string, SvgSidecar | null>;
+  metas: Map<string, PairMeta | null>;
   onEvent: (event: RunEvent) => void;
   signal: AbortSignal;
 }

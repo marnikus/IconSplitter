@@ -1,14 +1,15 @@
 // history_integration.test.tsx — the acceptance path end to end, on the real
 // panel: bulk reset is ONE history entry, undo restores every affected pair,
-// undo from another tab (panel unmounted) still reaches the decision file, and
-// a restart brings the session back. Nothing here re-implements a rule.
+// undo from another tab (panel unmounted) still reaches each pair's OWN file
+// beside its images (I-41), no global file is ever created, and a restart
+// brings the session back. Nothing here re-implements a rule.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { DEFAULT_SESSION } from "../src/lib/session";
-import { parseDecisions } from "../src/lib/reviewfile";
-import { DECISIONS_FILE } from "../src/selection/reviewstore";
+import { parsePairMeta, type PairMeta } from "../src/lib/pairmeta";
+import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { getAppState, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
@@ -66,11 +67,22 @@ const q = (sel: string) => host.querySelector(sel);
 const text = (sel: string) => q(sel)?.textContent ?? "";
 const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 
+/** Every pair file in the fake folder, as a read of the tree really sees it. */
+function pairFiles(dir: FakeDir, prefix = ""): { path: string; meta: PairMeta }[] {
+  const out: { path: string; meta: PairMeta }[] = [];
+  for (const [name, child] of dir.children.entries()) {
+    if (child instanceof FakeDir) out.push(...pairFiles(child, `${prefix}${name}/`));
+    else if (name.endsWith(".svg.json")) {
+      const parsed = parsePairMeta((child as FakeFile).text);
+      if (parsed.ok) out.push({ path: `${prefix}${name}`, meta: parsed.meta });
+    }
+  }
+  return out;
+}
+
 /** The stored decisions, read back from the fake folder — the cross-tab truth. */
 function storedDecisions(root: FakeDir): string[] {
-  const file = root.children.get(DECISIONS_FILE) as FakeFile;
-  const parsed = parseDecisions(file.text);
-  return parsed.ok ? parsed.records.map((r) => `${r.pair_id}:${r.decision}`).sort() : [];
+  return pairFiles(root).map(({ meta }) => `${meta.id}:${meta.decision}`).sort();
 }
 
 async function mountPanel(root: FakeDir): Promise<void> {
@@ -112,12 +124,14 @@ describe("reset to pending", () => {
     await click(q("[data-testid='v2-approve-selected']")); // arm, then confirm
     await settle();
     expect(storedDecisions(root)).toHaveLength(3);
+    expect(root.children.has(LEGACY_FILE)).toBe(false); // never the global file (I-42)
     expect(api.entries.at(-1)?.label).toBe("Approve 3 pairs");
 
     await click(q("[data-testid='v2-reset-selected']"));
     await click(q("[data-testid='v2-reset-selected']"));
     await settle();
-    expect(storedDecisions(root)).toEqual([]); // pending owns no record (I-13)
+    // a reset is written, not deleted: every pair's own file says pending (I-41)
+    expect(storedDecisions(root).map((r) => r.split(":")[1])).toEqual(["pending", "pending", "pending"]);
     expect(text("[data-testid='v2-toast']")).toContain("3 pairs reset to pending");
     expect(api.entries.at(-1)?.label).toBe("Reset 3 pairs"); // ONE entry, not three
     expect(api.entries.at(-1)?.ids).toHaveLength(3);
@@ -125,6 +139,7 @@ describe("reset to pending", () => {
     await click(q("[data-testid='hist-undo']")); // undo the reset
     await settle();
     expect(storedDecisions(root).map((r) => r.split(":")[1])).toEqual(["approved", "approved", "approved"]);
+    expect(root.children.has(LEGACY_FILE)).toBe(false);
     expect(text(`[data-testid='v2-status-${FOG}']`)).toContain("Approved");
   });
 
@@ -139,7 +154,7 @@ describe("reset to pending", () => {
     await settle();
     await click(q("[data-testid='sel-reset']"));
     await settle();
-    expect(storedDecisions(root)).toEqual([]);
+    expect(storedDecisions(root)).toEqual([`${FOG}:pending`]);
     expect(api.entries.at(-1)?.label).toBe("Reset 1 pair");
   });
 });
@@ -166,14 +181,16 @@ describe("cross-tab undo", () => {
 
     await click(q("[data-testid='hist-undo']"));
     await settle();
-    expect(storedDecisions(root)).toEqual([]); // written without any panel mounted
+    // written without any panel mounted — into the pair files, never a global one
+    expect(storedDecisions(root).map((r) => r.split(":")[1])).toEqual(["pending", "pending", "pending"]);
+    expect(root.children.has(LEGACY_FILE)).toBe(false);
     const back = loadHistory();
     expect(back.index).toBe(back.entries.length - 2); // one step back from the tip
     expect(back.entries[back.index].type).toBe("checked"); // the selection is what an undo would take next
 
     await click(q("[data-testid='hist-redo']"));
     await settle();
-    expect(storedDecisions(root)).toHaveLength(3); // redo re-applies it just as truly
+    expect(storedDecisions(root).map((r) => r.split(":")[1])).toEqual(["approved", "approved", "approved"]); // redo re-applies it just as truly
     unmountPanel();
   });
 });

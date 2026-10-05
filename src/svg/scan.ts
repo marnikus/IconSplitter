@@ -1,6 +1,6 @@
 // scan.ts — scanning the picked root for the Generate SVG tab (prompt §1).
 // Owns: restoring the remembered root handle, recursive approved-source
-// discovery, loading every sidecar, and committing ONE complete snapshot.
+// discovery, loading every pair file, and committing ONE complete snapshot.
 // The whole snapshot is built before any state is touched, an unchanged
 // snapshot commits nothing, only the newest scan may commit, and the cache
 // write can no longer half-commit a scan (design D6/D7).
@@ -12,10 +12,11 @@ import { loadHandles, saveHandles } from "../batch/store";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
-import { loadSidecar } from "./sidecar";
-import { saveSourceIndex, type IndexEntry } from "./sourceindex";
+import { metaPathFor } from "../lib/pairmeta";
+
+import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
-import type { SvgSidecar } from "../lib/svgfile";
+import type { PairMeta } from "../lib/pairmeta";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -37,7 +38,7 @@ export interface BootArgs {
   refreshKey: () => void;
 }
 
-/** Scans the root, loads every sidecar and commits one complete snapshot. */
+/** Scans the root, loads every pair file and commits one complete snapshot. */
 export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> {
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
@@ -46,7 +47,7 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
   s.setBusy("Scanning approved sources…");
   try {
     const found = await discoverApprovedSources(root);
-    const loaded = await loadRows(root, found.sources);
+    const loaded = loadRows(found);
     if (!isCurrent(refs.seq.current, ticket.id)) return; // a newer scan took over
     const key = scanKey(root.name, found, loaded.rows);
     if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
@@ -65,19 +66,22 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
 
 interface LoadedRows {
   rows: SvgRow[];
-  sidecars: [string, SvgSidecar | null][];
+  metas: [string, PairMeta | null][];
 }
 
-/** Reads every sidecar into memory first — no state is touched while reading. */
-async function loadRows(root: DirHandleLike, sources: SvgSource[]): Promise<LoadedRows> {
-  const rows: SvgRow[] = [];
-  const sidecars: [string, SvgSidecar | null][] = [];
-  for (const source of sources) {
-    const load = await loadSidecar(root, source);
-    sidecars.push([source.id, load.sidecar]);
-    rows.push(toRow(source, load.sidecar, load.corrupt));
-  }
-  return { rows, sidecars };
+/**
+ * Rows from the records discovery ALREADY read: one pass over the pair files
+ * serves both, so a scan reads each file once and can never show a row whose
+ * record it did not see (I-41).
+ */
+function loadRows(found: Discovery): LoadedRows {
+  const metas: [string, PairMeta | null][] = [];
+  const rows = found.sources.map((source) => {
+    const meta = found.metas.get(source.id) ?? null;
+    metas.push([source.id, meta]);
+    return toRow(source, meta, found.corruptFiles.includes(metaPathOf(source)));
+  });
+  return { rows, metas };
 }
 
 /** Everything one commit needs, so the commit stays one parameter (RULE 16). */
@@ -91,7 +95,7 @@ interface Commit {
 
 /** The single commit: state first, then the cache that must never fail a scan. */
 function commit(c: Commit): void {
-  for (const [id, sidecar] of c.loaded.sidecars) c.refs.sidecars.set(id, sidecar);
+  for (const [id, meta] of c.loaded.metas) c.refs.metas.set(id, meta);
   c.setters.setRows(c.loaded.rows);
   c.setters.setDiscovery(c.discovery);
   c.setters.setRootToken();
@@ -154,4 +158,12 @@ export async function rememberRoot(handle: DirHandleLike): Promise<void> {
 
 function toIndexEntry(source: SvgSource): IndexEntry {
   return { id: source.id, relPath: source.relPath, name: source.name, fingerprint: source.fingerprint };
+}
+
+/** The pair file a listed source owns — what a corrupt file is reported against. */
+function metaPathOf(source: SvgSource): string {
+  return metaPathFor({
+    pairId: source.id, base: source.base, suffix: source.suffix, relDir: source.dirPath,
+    source: null, ai: { relPath: source.relPath, size: 0, mtime: 0, error: null }, created: 0, generated: null,
+  });
 }

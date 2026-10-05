@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { ALL_FILTER } from "../lib/reviewfilter";
 import CompareView from "./CompareView";
-import { CorruptNote, Overlays, WriteBanner } from "./Surfaces";
+import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "./Surfaces";
 import FilterBar from "./FilterBar";
 import HeaderRow from "./HeaderRow";
 import PairList from "./PairList";
@@ -48,6 +48,7 @@ function Banners({ api }: { api: SelectionApi }) {
     <>
       {api.s.writeWarn && <WriteBanner warn={api.s.writeWarn} retry={api.retryWrite} />}
       {api.s.corrupt && <CorruptNote />}
+      <PairFilesNote files={api.s.corruptFiles} />
     </>
   );
 }

@@ -109,7 +109,7 @@ function CodeActions({ code, ref, copy, onDone }: {
 }
 
 function HistoryDialog({ row, p }: { row: SvgRow; p: SvgDialogsProps }) {
-  const versions = row.sidecar?.versions ?? [];
+  const versions = row.meta?.versions ?? [];
   return (
     <div className="svg-backdrop" data-testid="svg-history-dialog">
       <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="svg-history-title">
@@ -119,7 +119,7 @@ function HistoryDialog({ row, p }: { row: SvgRow; p: SvgDialogsProps }) {
         </header>
         <div className="svg-modal-body">
           {versions.length === 0
-            ? <p className="svg-note">No versions recorded yet — the sidecar is missing, so this source is pending.</p>
+            ? <p className="svg-note">No versions recorded yet — the pair’s file has no history, so this source is pending.</p>
             : <VersionTable row={row} versions={versions} onShowCode={p.onShowCode} />}
           <div className="svg-modal-actions">
             <button type="button" className="svg-btn" data-testid="svg-history-done" onClick={p.onDismiss}>Done</button>

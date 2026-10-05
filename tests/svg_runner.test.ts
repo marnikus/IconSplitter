@@ -16,6 +16,7 @@ import { compositeLayout } from "../src/lib/svgcomposite";
 import { runGeneration, type RunEvent, type RunSummary } from "../src/svg/runner";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { svgSource } from "./helpers/svgpair";
 
 // The contact sheet is the only browser-canvas step; its own pixel test lives
 // in tests/svg_canvas.test.ts. Here it is replaced by a deterministic marker so
@@ -49,9 +50,8 @@ function fixture(n: number): { root: FakeDir; sources: SvgSource[] } {
   const sources: SvgSource[] = [];
   for (let i = 1; i <= n; i += 1) {
     const name = `icon-${i}_AI.png`;
-    const relPath = `architecture/${name}`;
     arch.children.set(name, new FakeFile(name, 20, 3000 + i, "png"));
-    sources.push({ id: `pair_${i}`, name, stem: `icon-${i}_AI`, relPath, dirPath: "architecture", fingerprint: `20:${3000 + i}`, problems: [] });
+    sources.push(svgSource(`pair_${i}`, { name, fingerprint: `20:${3000 + i}` }));
   }
   root.children.set("architecture", arch);
   return { root, sources };
@@ -181,7 +181,7 @@ function runArgs(root: FakeDir, sources: SvgSource[], config: Partial<SvgConfig>
       params,
       prompt: "p",
       sources,
-      sidecars: new Map(),
+      metas: new Map(),
       onEvent: (e: RunEvent) => events.push(e),
       signal,
     },
@@ -268,7 +268,7 @@ describe("runGeneration — one request per batch", () => {
 
     expect(summary.saved).toBe(1);
     const saved = events.find((e) => e.kind === "item-saved");
-    expect(saved?.kind === "item-saved" && saved.sidecar?.versions.at(-1)?.requestId).toBe("req_1");
+    expect(saved?.kind === "item-saved" && saved.meta?.versions.at(-1)?.requestId).toBe("req_1");
   });
 
   it("keeps the last partial batch a square grid with its empty cell (3 images at 4)", async () => {
@@ -446,7 +446,7 @@ describe("runGeneration — one request per batch", () => {
     expect(summary.saved).toBe(2);
     expect(loadInflight()).toEqual([]);
     const saved = events.find((e) => e.kind === "item-saved");
-    expect(saved?.kind === "item-saved" && saved.sidecar?.versions.at(-1)?.requestId).toBe("req_1");
+    expect(saved?.kind === "item-saved" && saved.meta?.versions.at(-1)?.requestId).toBe("req_1");
   });
 
   it("cancelling mid-stream keeps the finished request and records the cut one", async () => {

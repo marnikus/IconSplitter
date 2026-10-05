@@ -22,10 +22,10 @@ import { sendChatStreaming } from "../lib/svgstreamread";
 import { attachRequestId, beginRequest, endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
-import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
+import { type PairMeta } from "../lib/pairmeta";
+import { saveMetaAt } from "../selection/pairstore";
 import { buildComposite, type BuiltComposite } from "./composite";
-import { recordFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
-import { saveSidecar } from "./sidecar";
+import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";
 import type { RunState } from "./runtypes";
 
@@ -68,7 +68,7 @@ interface BatchCtx {
   hash: string;
   /** The request's own usage, exactly as the provider reported it. */
   usage: Usage | null;
-  /** The same usage split across the request's images, for each sidecar. */
+  /** The same usage split across the request's images, for each pair file. */
   share: Usage | null;
   /** Redacted reason the request failed; null after an answer. */
   error: string | null;
@@ -196,19 +196,19 @@ async function missOne(ctx: BatchCtx, item: SvgSource, position: number): Promis
 async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: string): Promise<void> {
   const { state, plan } = ctx;
   state.args.onEvent({ kind: "item-start", batchId: plan.id, position, sourceId: item.id });
-  const sidecar = state.args.sidecars.get(item.id) ?? null;
+  const meta = state.args.metas.get(item.id) ?? null;
   const usage = ctx.share ?? zeroUsage();
   const args: SaveArgs = {
     root: state.args.root, source: item, code, prompt: state.args.prompt,
     provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
-    usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, sidecar,
+    usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
   };
   const out = await saveSvgVersion(args);
   if (!out.ok) return rejectOne(ctx, item, position, out.error);
   ctx.tally.saved++;
   state.saved++;
-  const stored = await persist(state, item, out.sidecar);
-  state.args.onEvent({ kind: "item-saved", batchId: plan.id, position, sourceId: item.id, version: out.version, icons: out.icons, warnings: out.warnings, usage, sidecar: stored });
+  const stored = await persist(state, item, out.meta);
+  state.args.onEvent({ kind: "item-saved", batchId: plan.id, position, sourceId: item.id, version: out.version, icons: out.icons, warnings: out.warnings, usage, meta: stored });
 }
 
 function toBatchRef(plan: BatchPlan, position: number, hash: string, manifest: { position: number; name: string }[]): SaveArgs["batch"] {
@@ -221,32 +221,31 @@ function zeroUsage(): Usage {
 
 /** An invalid result is recorded, never written as a successful version. */
 async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error: string): Promise<void> {
-  const sidecar = ctx.state.args.sidecars.get(item.id) ?? null;
+  const meta = ctx.state.args.metas.get(item.id) ?? null;
   const { state, plan } = ctx;
   ctx.tally.failed++;
   state.invalid++;
   state.problems.push(`${item.name}: ${error}`);
-  // A charged attempt keeps its share of the usage, and a source without a
-  // sidecar gets one so no task can vanish without its cost.
-  const rec = recordFailure({
+  // A charged attempt keeps its share of the usage, and a pair without a file
+  // gets one so no task can vanish without its cost (I-41).
+  const next = metaAfterFailure({
     source: item, prompt: state.args.prompt, provider: "Requesty", model: state.args.config.model,
-    requestedAt: new Date().toISOString(), error, sidecar, usage: ctx.share ?? zeroUsage(),
+    requestedAt: new Date().toISOString(), error, meta, usage: ctx.share ?? zeroUsage(),
   });
-  const next = withVersion(sidecar ?? newSidecar({ relPath: item.relPath, name: item.name, fingerprint: item.fingerprint }), rec);
   await persist(state, item, next);
   state.args.onEvent({ kind: "item-failed", batchId: plan.id, position, sourceId: item.id, error, failure: "malformed", retryAfterMs: null });
 }
 
-/** Writes the sidecar and keeps the in-memory copy in step (RULE 24). */
-async function persist(state: RunState, item: SvgSource, sidecar: SvgSidecar | null): Promise<SvgSidecar | null> {
-  if (!sidecar) return null;
-  state.args.sidecars.set(item.id, sidecar);
+/** Writes the pair's own file and keeps the in-memory copy in step (RULE 24). */
+async function persist(state: RunState, item: SvgSource, meta: PairMeta | null): Promise<PairMeta | null> {
+  if (!meta) return null;
+  state.args.metas.set(item.id, meta);
   try {
-    await saveSidecar(state.args.root, item, sidecar);
+    await saveMetaAt(state.args.root, item.metaPath, meta);
   } catch {
-    state.problems.push(`${item.name}: sidecar could not be written — the SVG is saved, retry the save`);
+    state.problems.push(`${item.name}: its pair file could not be written — the SVG is saved, retry the save`);
   }
-  return sidecar;
+  return meta;
 }
 
 /** A retry is visible in the log while its wait runs, not only in the report. */

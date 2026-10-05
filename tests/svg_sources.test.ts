@@ -14,6 +14,9 @@ import { discoverApprovedSources, type Discovery } from "../src/svg/sources";
 import { auditText } from "../src/svg/sourcelist";
 import { toRow } from "../src/svg/rowmodel";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { pairFile } from "./helpers/pairfile";
+import { svgVersion } from "./helpers/svgpair";
+import { saveMetaAt } from "../src/selection/pairstore";
 
 const OUT = "_split_output/2026-10/2026-10-01_10-24-31";
 const BUNNY_DIR = `${OUT}/icon-bunny-face_AI_5/split_01`;
@@ -65,7 +68,7 @@ function withDecisions(root: FakeDir, records: Rec[]): FakeDir {
 }
 
 /**
- * The reported tree: one AI output with a sidecar and old versions, two
+ * The reported tree: one AI output with a pair file and old versions, two
  * reference images whose records never had an AI result, and a second record
  * for the same bunny path (an id from before the file moved).
  */
@@ -133,7 +136,7 @@ describe("the Generate SVG source list", () => {
   it("audits the whole tree: files, AI sources, references, missing, duplicates, rows", async () => {
     const found = await discoverApprovedSources(reportedRoot());
     expect(found.audit).toEqual({
-      files: 6,        // bunny.png, _v5.svg, sidecar, two references, review-decisions.json
+      files: 6,        // bunny.png, _v5.svg, pair file, two references, review-decisions.json
       aiSources: 1,    // the bunny AI image (the _v5.svg is this app's artifact)
       references: 2,   // the two reference images
       missing: 2,      // the two approved references with no AI image
@@ -268,5 +271,51 @@ describe("the Generate SVG source list", () => {
       .not.toBe(scanKey("test_processing", first, [row]));
     expect(scanKey("test_processing", { ...first, excluded: [] }, [row]))
       .not.toBe(scanKey("test_processing", first, [row]));
+  });
+});
+
+describe("the pair file is the list's source of truth (I-41)", () => {
+  /** One AI output + its own file, written exactly as a decision write would. */
+  async function withPairFile(decision: "approved" | "declined" | "pending", versions: number[] = []) {
+    const root = new FakeDir("test_processing");
+    const bunny = dir(root, BUNNY_DIR);
+    bunny.children.set(BUNNY, new FakeFile(BUNNY, 20, 3100, "ai"));
+    const id = pairId(BUNNY_DIR, "icon-bunny-face", "_5_01");
+    const meta = pairFile(BUNNY_DIR, BUNNY, {
+      id, decision,
+      versions: versions.map((v) => svgVersion(`${BUNNY_DIR}/icon-bunny-face_AI_5_01${v === 1 ? "" : `_v${v}`}.svg`, { version: v })),
+    });
+    await saveMetaAt(root, `${BUNNY_DIR}/icon-bunny-face_AI_5_01.svg.json`, meta);
+    return { root, id };
+  }
+
+  it("lists an approved pair and hands the row its versions from the same read", async () => {
+    const { root, id } = await withPairFile("approved", [1, 2]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([id]);
+    expect(found.sources[0].relPath).toBe(`${BUNNY_DIR}/${BUNNY}`);
+    expect(found.metas.get(id)?.versions.map((v) => v.version)).toEqual([1, 2]);
+    expect(found.corruptFiles).toEqual([]);
+    expect(found.excluded).toEqual([]);
+  });
+
+  it("lists nothing for a declined pair, and nothing for a pending one", async () => {
+    const declined = await withPairFile("declined");
+    expect((await discoverApprovedSources(declined.root)).sources).toEqual([]);
+    const pending = await withPairFile("pending");
+    expect((await discoverApprovedSources(pending.root)).sources).toEqual([]);
+  });
+
+  it("upgrades a legacy v1 file in place and keeps its versions", async () => {
+    const root = new FakeDir("test_processing");
+    const bunny = dir(root, BUNNY_DIR);
+    bunny.children.set(BUNNY, new FakeFile(BUNNY, 20, 3100, "ai"));
+    bunny.children.set(`${BUNNY}.svg.json`, new FakeFile(`${BUNNY}.svg.json`, 10, 3300, SIDECAR));
+    const id = pairId(BUNNY_DIR, "icon-bunny-face", "_5_01");
+    withDecisions(root, [record(id, `${BUNNY_DIR}/icon-bunny-face.png`, `${BUNNY_DIR}/${BUNNY}`)]);
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([id]); // the legacy record approves it
+    expect(found.metas.get(id)?.versions.map((v) => v.version)).toEqual([1, 2, 5]); // history survived
+    expect(found.corruptFiles).toEqual([]);
   });
 });

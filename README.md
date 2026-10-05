@@ -12,9 +12,10 @@ It has five modes (tabs across the top):
   it scan, review, split and write everything in one pass, preserving your
   folder hierarchy (see below). Batch mode requires **Chrome or Edge**.
 * **Selection** — review every original next to its `_AI` result, approve or
-  decline each pair, and keep the decisions in `review-decisions.json`
-  (filters by month/date range, sorting, search, hotkeys A/D). Also
-  Chrome/Edge only.
+  decline each pair, and keep every decision in the pair's **own** JSON file,
+  beside its images (`<name>.svg.json` — the file also records the SVGs
+  generated from that pair; filters by month/date range, sorting, search,
+  hotkeys A/D). Also Chrome/Edge only.
 * **Selection V2** — the same review data in a denser, table-like layout:
   a full-width list where every row shows the original and the AI result side
   by side, a thumbnail zoom slider (48–240 px, remembered between sessions),
@@ -24,10 +25,12 @@ It has five modes (tabs across the top):
 * **Generate SVG** — for the pairs Selection approved, sends the AI image
   (alone, or as one square contact sheet of up to 9) to Requesty's
   OpenAI-compatible chat endpoint with your own API key, and writes one
-  validated, versioned `<name>.svg` beside each AI image plus a
-  `<name>.svg.json` sidecar recording the prompt, model, token usage, cost,
-  validation and review state. Nothing is uploaded anywhere else and the key
-  never leaves the browser. Also Chrome/Edge only.
+  validated, versioned `<name>.svg` beside each AI image and records each
+  version — prompt, model, token usage, cost, validation and review state — in
+  that pair's own `<name>.svg.json` next to it (the same file that holds the
+  pair's approval: no separate global metadata file exists). Nothing is
+  uploaded anywhere else and the key never leaves the browser. Also Chrome/Edge
+  only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
@@ -169,8 +172,11 @@ start. A folder or file that has since disappeared is reported, never hidden.
 ## Selection V2 (Chrome / Edge only)
 
 The **Selection V2** tab reviews the same pairs as **Selection**, but as a
-fast bulk-review table. Both tabs share one root folder, one set of decisions
-and one `review-decisions.json`.
+fast bulk-review table. Both tabs share one root folder and the same decisions:
+each approval is written to the pair's own `<name>.svg.json` beside its images,
+so a folder keeps its approvals when it is renamed, moved or opened on its own.
+An older `review-decisions.json` at the root is still **read** as a fallback for
+pairs that have no file of their own, and is never written again.
 
 1. **Choose source folder** (or **↻ Rescan**) — the folder is walked
    recursively; every `name.ext` is paired with its `name_AI.ext`. Files
@@ -199,9 +205,10 @@ and one `review-decisions.json`.
 7. **Comparison layout** — switch to *Comparison* for a large side-by-side
    view of the active pair with dimensions, format, size and path per side.
 
-Decisions are written to `review-decisions.json` in the source folder. If the
-file cannot be written, the decisions stay in memory, a warning explains what
-happened, and **↻ Retry write** saves them once the folder is writable again.
+Decisions are written to the pair's own `<name>.svg.json` beside its images. If
+a file cannot be written, that decision stays in memory, a warning names the
+pairs involved, and **↻ Retry write** saves exactly those pairs once the folder
+is writable again — no other file is touched.
 
 ---
 

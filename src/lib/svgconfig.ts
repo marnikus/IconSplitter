@@ -43,7 +43,7 @@ export const IMAGES_PER_REQUEST_MIN = 1;
 export const IMAGES_PER_REQUEST_MAX = 9;
 export const DEFAULT_IMAGES_PER_REQUEST = 4;
 
-/** Longest prompt kept per version in a sidecar (keeps the JSON readable). */
+/** Longest prompt kept per version in the pair file (keeps the JSON readable). */
 export const PROMPT_KEEP = 20_000;
 
 export interface SvgConfig {

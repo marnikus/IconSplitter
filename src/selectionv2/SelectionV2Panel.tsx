@@ -12,7 +12,7 @@ import CompareView from "../selection/CompareView";
 import { copyFolderText } from "../lib/copypath";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
-import { CorruptNote, Overlays, WriteBanner } from "../selection/Surfaces";
+import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "../selection/Surfaces";
 import { useSideThumbs, type SideThumbFor } from "../selection/thumbs";
 import BulkBar from "./BulkBar";
 import FilterGrid from "./FilterGrid";
@@ -52,6 +52,7 @@ function Banners({ v }: { v: SelectionV2Api }) {
           warn={v.core.s.writeWarn} retry={v.core.retryWrite} />
       )}
       {v.core.s.corrupt && <CorruptNote className="v2-warning" testid="v2-corrupt" />}
+      <PairFilesNote files={v.core.s.corruptFiles} className="v2-warning" testid="v2-pairfiles" />
     </>
   );
 }

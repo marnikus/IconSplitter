@@ -1,7 +1,7 @@
 // SvgPanel.tsx — the Generate SVG tab (prompt §1/§2/§17): controls, the honest
 // discovery banners, the live batch strip, the bulk bar, the source list, the
 // status footer, the three dialogs and the toast. The panel owns no rule of
-// its own — discovery, sidecars, validation, versioning, the run, the lists
+// its own — discovery, pair files, validation, versioning, the run, the lists
 // and the review decision all live in tested modules; this file is the wiring
 // that makes them one screen.
 
@@ -128,8 +128,8 @@ function Banners({ g }: { g: SvgGenApi }) {
     problemNote(d),
     excludedNote(d),
     unreadableNote(d),
-    banner("sidecar", corrupt > 0,
-      `${corrupt} sidecar(s) could not be parsed.`,
+    banner("pairfile", corrupt > 0,
+      `${corrupt} pair file(s) could not be parsed.`,
       " The SVG files on disk are untouched — regenerate to record a new version."),
   ].filter((n): n is Note => n !== null);
   return (

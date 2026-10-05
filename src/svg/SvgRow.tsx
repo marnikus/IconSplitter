@@ -6,7 +6,7 @@
 // exists, and the active row is visually distinct from a merely checked one.
 
 import { useEffect, useRef } from "react";
-import { SVG_EXT, sidecarName, type ReviewStatus } from "../lib/svgfile";
+import { SVG_EXT, type ReviewStatus } from "../lib/svgfile";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -73,7 +73,7 @@ function FileActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
         onClick={click(() => a.copyCode(id, version))}>Copy</button>
       <button type="button" className="svg-btn tiny" data-testid={`svg-code-${id}`} disabled={!hasSvg}
         onClick={click(() => a.showCode(id, version))}>Code</button>
-      <button type="button" className="svg-btn tiny" data-testid={`svg-history-${id}`} disabled={(row.sidecar?.versions.length ?? 0) === 0}
+      <button type="button" className="svg-btn tiny" data-testid={`svg-history-${id}`} disabled={(row.meta?.versions.length ?? 0) === 0}
         onClick={click(() => a.showHistory(id))}>History</button>
     </div>
   );
@@ -112,8 +112,8 @@ function FileCell({ row }: { row: SvgRow }) {
       <div className="svg-file-sub" data-testid={`svg-target-${row.source.id}`} title={target}>{target}</div>
       <ProblemLine row={row} />
       <div className={`svg-persist${row.corrupt ? " error" : ""}`} data-testid={`svg-persist-${row.source.id}`}
-        title={sidecarPathOf(row.source)}>
-        {row.corrupt ? "Sidecar unreadable — SVGs on disk are kept" : row.sidecar ? "Per-file sidecar saved" : "Not generated yet"}
+        title={pairFilePathOf(row.source)}>
+        {row.corrupt ? "Pair file unreadable — SVGs on disk are kept" : row.meta ? "Pair file saved" : "Not generated yet"}
       </div>
     </div>
   );
@@ -137,7 +137,7 @@ function ProblemLine({ row }: { row: SvgRow }) {
 /**
  * The SVG this row owns: the newest version's real path (already root-relative),
  * or — while nothing exists yet — the path generation will write. Never the
- * sidecar name: `<stem>.svg.json` is metadata BESIDE the SVG, and showing it as
+ * pair-file name: `<stem>.svg.json` is metadata BESIDE the SVG, and showing it
  * the artifact made a not-yet-generated row look like a double extension.
  */
 function targetPath(row: SvgRow): string {
@@ -145,9 +145,9 @@ function targetPath(row: SvgRow): string {
   return path ? path : joinPath(row.source.dirPath, `${row.source.stem}${SVG_EXT}`);
 }
 
-/** The sidecar beside that SVG — the file the persist line reports. */
-function sidecarPathOf(source: SvgSource): string {
-  return joinPath(source.dirPath, sidecarName(source.stem));
+/** The pair file beside that SVG — the file the persist line reports. */
+function pairFilePathOf(source: SvgSource): string {
+  return source.metaPath;
 }
 
 /** "." for the root, so a row never shows a stray leading slash. */

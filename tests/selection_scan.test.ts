@@ -1,7 +1,9 @@
 // selection_scan.test.ts — a rescan of the review tab obeys the same rules as
 // the SVG tab's: build the whole snapshot, compare it, commit once, and let only
-// the newest scan commit (design: recursive-scan-determinism D6/D7). RULE 8:
-// the exported rescan() runs for real against the in-memory fakes.
+// the newest scan commit (design: recursive-scan-determinism D6/D7). A decision
+// is read from the pair's OWN file beside its images (I-41) and a file that
+// cannot be read is named while its decision survives (I-43). RULE 8: the
+// exported rescan() runs for real against the in-memory fakes.
 import { beforeEach, describe, expect, it } from "vitest";
 import { SCAN_IDLE } from "../src/lib/scanseq";
 import { pairId } from "../src/lib/pairing";
@@ -9,9 +11,12 @@ import { initialSelState, type SelState } from "../src/selection/state";
 import { rescan } from "../src/selection/rootsource";
 import { setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { serializePairMeta } from "../src/lib/pairmeta";
+import { pairFile } from "./helpers/pairfile";
 import { dropDb } from "./helpers/idb";
 
 const COURT = pairId("architecture", "court", "");
+const COURT_FILE = "architecture/court_AI.svg.json";
 
 function decisionsJson(): string {
   return JSON.stringify({
@@ -22,14 +27,32 @@ function decisionsJson(): string {
   });
 }
 
-/** architecture/court.png + a readable AI result, plus an unreadable sibling. */
+/** architecture/court.png + its AI result + the pair's OWN approved file. */
 function makeRoot(): FakeDir {
+  return withCourtFile(pairFileText("approved"));
+}
+
+/** The same root decided the old way: a legacy global file, no pair file. */
+function makeLegacyRoot(): FakeDir {
+  const root = makeRoot();
+  const arch = root.children.get("architecture") as FakeDir;
+  arch.children.delete("court_AI.svg.json");
+  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson()));
+  return root;
+}
+
+/** The pair file text for one decision, exactly as a write would store it. */
+function pairFileText(decision: "approved" | "declined" | "pending"): string {
+  return serializePairMeta(pairFile("architecture", "court_AI.png", { id: COURT, decision }));
+}
+
+function withCourtFile(text: string): FakeDir {
   const root = new FakeDir("split_root");
   const arch = new FakeDir("architecture");
   arch.children.set("court.png", new FakeFile("court.png", 12, 2000, "c"));
   arch.children.set("court_AI.png", new FakeFile("court_AI.png", 20, 2100, "d"));
+  arch.children.set("court_AI.svg.json", new FakeFile("court_AI.svg.json", text.length, 10, text));
   root.children.set("architecture", arch);
-  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson()));
   return root;
 }
 
@@ -56,7 +79,6 @@ function makeBatchRoot(): FakeDir {
   const out = new FakeDir("_split_output");
   out.children.set("2026-10", month);
   root.children.set("_split_output", out);
-  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson()));
   return root;
 }
 
@@ -106,6 +128,52 @@ describe("the reviewable set is the split output (I-38)", () => {
     await rescan(b.ctx, b.set, b.say);
     expect(a.ctx.state.current.pairs.map((p) => p.pairId)).toEqual(b.ctx.state.current.pairs.map((p) => p.pairId));
     expect(a.ctx.state.current.scope).toEqual(b.ctx.state.current.scope);
+  });
+});
+
+describe("the decision's source of truth is the pair's own file (I-41/I-42)", () => {
+  it("an approved pair file makes the pair approved, with no legacy file present", async () => {
+    const h = harness(makeRoot());
+    await rescan(h.ctx, h.set, h.say);
+    const s = h.ctx.state.current;
+    expect(s.pairs[0].decision).toBe("approved");
+    expect(s.records.map((r) => [r.pair_id, r.decision])).toEqual([[COURT, "approved"]]);
+    expect((h.ctx.root.current as FakeDir).children.has("review-decisions.json")).toBe(false);
+  });
+
+  it("honours declined and pending exactly as the file says", async () => {
+    const declined = harness(withCourtFile(pairFileText("declined")));
+    await rescan(declined.ctx, declined.set, declined.say);
+    expect(declined.ctx.state.current.pairs[0].decision).toBe("declined");
+    const reset = harness(withCourtFile(pairFileText("pending")));
+    await rescan(reset.ctx, reset.set, reset.say);
+    expect(reset.ctx.state.current.pairs[0].decision).toBe("pending");
+    expect(reset.ctx.state.current.records).toEqual([]); // pending owns no record (I-13)
+  });
+
+  it("still reads the legacy file for a pair that has none of its own", async () => {
+    const h = harness(makeLegacyRoot());
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.ctx.state.current.pairs[0].decision).toBe("approved");
+    expect(h.ctx.state.current.records).toHaveLength(1);
+  });
+
+  it("names an unreadable pair file and keeps the decision it already had", async () => {
+    const root = makeRoot();
+    const h = harness(root);
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.ctx.state.current.pairs[0].decision).toBe("approved");
+    const arch = (root.children.get("architecture") as FakeDir);
+    arch.children.set("court_AI.svg.json", new FakeFile("court_AI.svg.json", 5, 20, "{oops"));
+    await rescan(h.ctx, h.set, h.say);
+    const s = h.ctx.state.current;
+    expect(s.pairs[0].decision).toBe("approved"); // never silently turned pending
+    expect(s.corruptFiles).toEqual([COURT_FILE]);
+    expect(h.sayings.join(" | ")).toContain("court_AI.svg.json");
+    arch.children.delete("court_AI.svg.json"); // and the next scan is clean again
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.ctx.state.current.corruptFiles).toEqual([]);
+    expect(h.ctx.state.current.pairs[0].decision).toBe("approved");
   });
 });
 
@@ -218,10 +286,10 @@ describe("rescan — one snapshot, one commit", () => {
 
   it("lets only the newest rescan commit when two overlap", async () => {
     const root = makeRoot();
-    const gate = new OneShotGate("review-decisions.json", decisionsJson());
-    root.children.set("review-decisions.json", gate);
+    const gate = new OneShotGate("court_AI.svg.json", pairFileText("approved"));
+    (root.children.get("architecture") as FakeDir).children.set("court_AI.svg.json", gate);
     const h = harness(root);
-    const slow = rescan(h.ctx, h.set, h.say); // ticket 1 — blocked on the decision file
+    const slow = rescan(h.ctx, h.set, h.say); // ticket 1 — blocked on the pair file
     await gate.held();
     const arch = await root.getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png"); // the newer snapshot differs

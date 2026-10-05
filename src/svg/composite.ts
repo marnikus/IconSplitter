@@ -1,7 +1,7 @@
 // composite.ts — builds the square contact sheet sent with a batch request
 // (prompt §3/§12). Owns: reading the batch's AI images, drawing them through
 // lib/svgcanvas (RULE 1), and producing the data URL + hash the provider and
-// the sidecar both need. The composite lives in memory only: it is never
+// the pair file both need. The composite lives in memory only: it is never
 // written into the user's SVG output folder.
 
 import { blobToDataUrl, loadImageFile } from "../lib/dom";
@@ -13,7 +13,7 @@ import type { SvgSource } from "./sources";
 
 export interface BuiltComposite {
   dataUrl: string;
-  /** Stable hash of the PNG bytes — stored in every sidecar batch reference. */
+  /** Stable hash of the PNG bytes — stored in every pair file’s batch reference. */
   hash: string;
   layout: CompositeLayout;
   bytes: number;

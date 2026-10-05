@@ -1,28 +1,29 @@
 // useSelection.ts — UI orchestration for Selection review (RULE 2/4/5/24).
-// Thin: every rule lives in tested pure modules (state.ts, reviewstore.ts,
+// Thin: every rule lives in tested pure modules (state.ts, pairstore.ts,
 // pairing/scan/fs). View state (filter, sort, selected row, zoom…) lives in the
 // store above the tabs, so a restart and an undo pressed on another tab can see
-// it; decisions stay here and on disk, which is their own source of truth.
+// it; each decision stays in the pair's OWN file, which is its source of truth.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyFilters, filterLabel, type Decision, type ListFilter } from "../lib/reviewfilter";
 import { sortLabel, sortPairs, type SortState } from "../lib/reviewsort";
 import { bulkMessage } from "../lib/reviewbulk";
 import type { ReviewRecord } from "../lib/reviewfile";
+import type { DirHandleLike } from "../lib/fs";
 import { fsSupported } from "../batch/picker";
 import { useAppView } from "../state/useAppState";
 import { useHistory, type HistoryApi } from "../state/HistoryProvider";
 import { getAppState, patchView } from "../state/appstore";
 import { SCAN_IDLE } from "../lib/scanseq";
 import { bindDecisionApplier, type DecisionPatch } from "./offline";
-import { saveDecisions } from "./reviewstore";
+import { metaFor, metaForRecord, savePairDecision } from "./pairstore";
 import {
   initialSelState, nextPendingId, withBulkDecision, withDecision, withRecords,
   withReset, type BulkOut, type SelState,
 } from "./state";
 
 const WATCH_MS = 30_000;
-const WRITE_WARN = "Decision file could not be written. Your pending change is retained in memory.";
+const WRITE_WARN = "A pair file could not be written. Your pending change is retained in memory — Retry writes exactly those pairs.";
 
 const ACTION_WORD: Record<Decision, string> = { pending: "Reset", approved: "Approve", declined: "Decline" };
 
@@ -78,7 +79,7 @@ function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   setS(next);
   if (rolled) patchView({ selectedId: rolled });
   pushDecisions(ctx, { ids: [id], before, after: next, label: `${ACTION_WORD[d]} 1 pair` });
-  void persist(ctx, setS, next);
+  void persist(ctx, setS, next, [id]);
 }
 
 /** One bulk operation: one transition, one write, ONE toast, ONE history entry. */
@@ -173,7 +174,7 @@ function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
 }
 
 async function reportBulk(ctx: Ctx, setS: Setter, out: BulkOut, d: Decision): Promise<void> {
-  const saved = await persist(ctx, setS, out.state);
+  const saved = await persist(ctx, setS, out.state, out.applied);
   const msg = bulkMessage({ decision: d, applied: out.applied.length, skipped: out.skipped.length, saved });
   setS((p) => ({ ...p, toast: { msg, err: !saved } }));
 }
@@ -191,25 +192,50 @@ async function applyRecords(ctx: Ctx, setS: Setter, touched: readonly string[], 
   const out = withRecords(ctx.state.current, touched, patch.recs);
   if (out.applied.length === 0) return false; // every target is gone: report it, do not fake it
   setS(out.state);
-  return persist(ctx, setS, out.state);
+  return persist(ctx, setS, out.state, out.applied);
 }
 
-/** Writes the decision file; resolves false when memory and disk disagree. */
-async function persist(ctx: Ctx, setS: Setter, s: SelState): Promise<boolean> {
+/**
+ * Writes ONE file per changed pair, beside that pair's images (I-41). A pair
+ * whose file could not be written is remembered by id, so Retry rewrites exactly
+ * the pairs that failed instead of every pair (I-43). Resolves false when memory
+ * and disk disagree.
+ */
+async function persist(ctx: Ctx, setS: Setter, s: SelState, changed: readonly string[]): Promise<boolean> {
   const root = ctx.root.current;
   if (!root) return true; // no root yet: in-memory review only
-  try {
-    await saveDecisions(root, s.records);
-    setS((p) => ({ ...p, writeWarn: null, awaitingRetry: 0 }));
+  const failed = await writeChanged(root, s, changed);
+  if (failed.length === 0) {
+    setS((p) => ({ ...p, writeWarn: null, awaitingRetry: 0, retryIds: p.retryIds.filter((id) => !changed.includes(id)) }));
     return true;
-  } catch {
-    setS((p) => ({ ...p, writeWarn: WRITE_WARN, awaitingRetry: p.awaitingRetry + 1 }));
-    return false;
   }
+  setS((p) => ({ ...p, writeWarn: WRITE_WARN, awaitingRetry: p.awaitingRetry + 1, retryIds: mergeIds(p.retryIds, failed) }));
+  return false;
 }
 
+function mergeIds(prev: readonly string[], next: readonly string[]): string[] {
+  return [...new Set([...prev, ...next])];
+}
+
+/** Writes each changed pair's file; returns the ids that could not be written. */
+async function writeChanged(root: DirHandleLike, s: SelState, changed: readonly string[]): Promise<string[]> {
+  const failed: string[] = [];
+  for (const id of changed) {
+    const view = s.pairs.find((p) => p.pairId === id);
+    if (!view) continue;
+    try {
+      await savePairDecision(root, view, metaForRecord(s.records, view, metaFor(view)));
+    } catch {
+      failed.push(id);
+    }
+  }
+  return failed;
+}
+
+/** Retry rewrites exactly the pairs whose file failed, never the whole tree. */
 async function retryWrite(ctx: Ctx, setS: Setter): Promise<void> {
-  await persist(ctx, setS, ctx.state.current);
+  const ids = ctx.state.current.retryIds;
+  await persist(ctx, setS, ctx.state.current, ids.length > 0 ? ids : ctx.state.current.pairs.map((p) => p.pairId));
 }
 
 function useWatcher(ctx: Ctx, on: boolean, rootName: string, setS: Setter): void {

@@ -22,7 +22,7 @@ export default function SvgList({ g, actions }: SvgListProps) {
         <div className="svg-title">
           <h1>APPROVED SOURCES / SVG OUTPUT</h1>
           <span data-testid="svg-row-count">{g.visible.length}</span>
-          <span>per-file sidecars</span>
+          <span>one file per pair</span>
         </div>
         <div className="svg-attention">
           <span className="running" data-testid="svg-running-count">{running} generating</span>

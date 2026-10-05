@@ -46,7 +46,7 @@ const COURT = pairId("architecture", "court", "");
 /** The one saved document the fixture holds — the preview must never alter it. */
 const SAVED_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
 
-/** The sidecar as it was written last time — the preview must never touch it. */
+/** The pair file as it was written last time — the preview must never touch it. */
 const SIDECAR = JSON.stringify({
   v: 1,
   source: { relPath: "architecture/fog_AI.png", name: "fog_AI.png", fingerprint: "20:3100" },
@@ -296,7 +296,7 @@ describe("Generate SVG panel", () => {
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("Pending");
   });
 
-  it("names the SVG artifact on each row — never the sidecar as if it were the SVG", async () => {
+  it("names the SVG artifact on each row — never the pair file as if it were the SVG", async () => {
     await mount(await makeRoot());
     // fog HAS a version: the row shows its real path, exactly once (svgPath is
     // already root-relative, so the folder must not be prefixed twice).
@@ -305,9 +305,9 @@ describe("Generate SVG panel", () => {
     // look like a double extension (".svg.json") for a file that does not exist.
     expect(q(`[data-testid=svg-target-${COURT}]`)?.textContent).toBe("architecture/court_AI.svg");
     expect(q(`[data-testid=svg-target-${COURT}]`)?.textContent).not.toContain(".json");
-    // ...and the sidecar itself stays discoverable on the line that reports it.
+    // ...and the pair file itself stays discoverable on the line that reports it.
     expect(q(`[data-testid=svg-persist-${FOG}]`)?.getAttribute("title")).toBe("architecture/fog_AI.svg.json");
-    expect(q(`[data-testid=svg-persist-${FOG}]`)?.textContent).toBe("Per-file sidecar saved");
+    expect(q(`[data-testid=svg-persist-${FOG}]`)?.textContent).toBe("Pair file saved");
   });
 
   it("does not list a pair whose AI image is gone — a reference is not a source", async () => {

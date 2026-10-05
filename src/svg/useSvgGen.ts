@@ -1,6 +1,6 @@
 // useSvgGen.ts — Generate SVG orchestration (RULE 2/4/5/24).
 // Thin on purpose: the rules live in tested modules — discovery in svg/sources,
-// sidecar IO in svg/sidecar, validation in lib/svgvalidate, versioning in
+// pair-file IO in svg/svgfiles + selection/pairstore, validation in lib/svgvalidate, versioning in
 // lib/svgfile, the run in svg/runner, lists in lib/svglist, the review decision
 // in svg/reviewact and the row model in svg/rowmodel. This file owns only the
 // wiring: one reducer for the model (svg/statemodel), one context object for

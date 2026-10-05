@@ -1,21 +1,21 @@
 // saveversion.ts — validating, naming and storing ONE generated SVG version
-// (prompt §10/§12/§13). Owns the write order that makes a bad result harmless:
+// (prompt §10/§12/§13). Owns the order that makes a bad result harmless:
 // validate first (nothing invalid is ever written), then pick the next version
-// from disk + sidecar, then write the new SVG file (never an overwrite), then
-// update the sidecar. A validation failure or a write failure leaves the
-// previous version and the previous sidecar exactly as they were.
+// from disk + the pair file's history, then write the new SVG file (never an
+// overwrite) and hand back the pair's updated record — which keeps its identity,
+// both faces and its own decision (I-41). Persisting that record is the caller's
+// step, so a metadata write failure is reported without hiding the saved SVG.
 
 import { probePath, writeFileNew, type DirHandleLike } from "../lib/fs";
 import { countIcons } from "../lib/svgicons";
 import { parseSvg, validateSvg } from "../lib/svgvalidate";
-import {
-  newSidecar, nextVersion, sidecarName, svgFileName, svgStem, withVersion,
-  type BatchRef, type SvgSidecar, type SvgVersion,
-} from "../lib/svgfile";
+import { nextVersion, svgFileName } from "../lib/svgfile";
+import type { BatchRef, SvgVersion } from "../lib/svgmodel";
+import { withVersion, type PairMeta } from "../lib/pairmeta";
 import { NO_USAGE, type Usage } from "../lib/svgrequest";
 import { costInfoFor } from "../lib/svgpricing";
-import { listSvgFiles } from "./sidecar";
-import type { SvgSource } from "./sources";
+import { listSvgFiles } from "./svgfiles";
+import { metaForSource, type SvgSource } from "./sources";
 
 export interface SaveArgs {
   root: DirHandleLike;
@@ -28,28 +28,30 @@ export interface SaveArgs {
   usage: Usage;
   batch: BatchRef | null;
   requestId: string | null;
-  sidecar: SvgSidecar | null;
+  /** The pair's own file content as read on this scan; null when there is none. */
+  meta: PairMeta | null;
 }
 
 export type SaveOut =
-  | { ok: true; version: number; svgPath: string; icons: number; warnings: string[]; sidecar: SvgSidecar }
+  | { ok: true; version: number; svgPath: string; icons: number; warnings: string[]; meta: PairMeta }
   | { ok: false; error: string };
 
-/** Validates, then writes the SVG and its sidecar record. Never overwrites. */
+/** Validates, writes the SVG file, and returns the pair's record with it added. */
 export async function saveSvgVersion(args: SaveArgs): Promise<SaveOut> {
   const check = validateSvg(args.code);
   if (!check.ok) return { ok: false, error: `invalid SVG: ${check.errors.join("; ")}` };
   const icons = iconCount(args.code);
   const existing = await listSvgFiles(args.root, args.source);
-  const sidecar = args.sidecar ?? newSidecar({ relPath: args.source.relPath, name: args.source.name, fingerprint: args.source.fingerprint });
-  const version = nextVersion(args.source.stem, existing, sidecar);
+  const meta = args.meta ?? metaForSource(args.source, null);
+  const version = nextVersion(args.source.stem, existing, meta.versions);
   const fileName = svgFileName(args.source.stem, version);
   const dir = await writeSvg(args, fileName);
   if (!dir.ok) return { ok: false, error: dir.error };
   const saved = { version, svgPath: joinPath(args.source.dirPath, fileName), icons, warnings: check.warnings };
-  const record = toRecord(args, saved);
-  const next = withVersion(sidecar, record);
-  return { ok: true, version, svgPath: joinPath(args.source.dirPath, fileName), icons, warnings: check.warnings, sidecar: next };
+  return {
+    ok: true, ...saved,
+    meta: withVersion(meta, toRecord(args, saved)),
+  };
 }
 
 async function writeSvg(args: SaveArgs, fileName: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -68,7 +70,7 @@ function iconCount(code: string): number {
   return doc ? countIcons(doc).icons : 0;
 }
 
-/** The version record stored in the sidecar; `args` carries the request facts. */
+/** The version record stored in the pair file; `args` carries the request facts. */
 function toRecord(args: SaveArgs, saved: { version: number; svgPath: string; icons: number; warnings: string[] }): SvgVersion {
   return {
     version: saved.version,
@@ -97,20 +99,26 @@ export interface FailArgs {
   requestedAt: string;
   /** Redacted, human-safe reason — never a key, never a raw provider dump. */
   error: string;
-  sidecar: SvgSidecar | null;
+  /** The pair's record, so the failure does not overwrite its decision or cost. */
+  meta: PairMeta | null;
   status?: "failed" | "interrupted";
   usage?: Usage;
   batch?: BatchRef | null;
 }
 
 /**
- * Records a failed attempt in the sidecar WITHOUT writing an SVG file, so the
- * failure is visible after a restart while every previous version survives.
+ * The pair's record with a failed attempt added — WITHOUT writing an SVG file,
+ * so the failure is visible after a restart while every previous version and the
+ * pair's own decision survive.
  */
-export function recordFailure(args: FailArgs): SvgVersion {
-  const version = Math.max(0, ...(args.sidecar?.versions ?? []).map((v) => v.version)) + 1;
+export function metaAfterFailure(args: FailArgs): PairMeta {
+  return withVersion(args.meta ?? metaForSource(args.source, null), failureRecord(args));
+}
+
+function failureRecord(args: FailArgs): SvgVersion {
+  const versions = args.meta?.versions ?? [];
   return {
-    version,
+    version: Math.max(0, ...versions.map((v) => v.version)) + 1,
     svgPath: "",
     status: args.status ?? "failed",
     review: "pending",
@@ -126,11 +134,6 @@ export function recordFailure(args: FailArgs): SvgVersion {
     error: args.error,
     requestId: null,
   };
-}
-
-/** Sidecar name helper re-exported for the UI's "open file location" action. */
-export function sidecarFileName(source: SvgSource): string {
-  return sidecarName(svgStem(source.name));
 }
 
 function joinPath(dir: string, name: string): string {

@@ -33,7 +33,7 @@ const STAGES: RunEvent[] = [
   { kind: "run-start", batches: 2, perRequest: 4 },
   START,
   { kind: "item-start", batchId: "batch_1_1", position: 1, sourceId: "pair_1" },
-  { kind: "item-saved", batchId: "batch_1_1", position: 1, sourceId: "pair_1", version: 2, icons: 3, warnings: [], usage: USAGE, sidecar: null },
+  { kind: "item-saved", batchId: "batch_1_1", position: 1, sourceId: "pair_1", version: 2, icons: 3, warnings: [], usage: USAGE, meta: null },
   { kind: "item-failed", batchId: "batch_1_1", position: 1, sourceId: "pair_1", error: `401 with ${KEY}`, failure: "auth", retryAfterMs: null },
   { kind: "request-retry", batchId: "batch_1_1", attempt: 1, retries: 2, failure: "rate_limit", status: 429, delayMs: 2_000 },
   { kind: "request-failed", batchId: "batch_1_1", error: "500 boom", failure: "provider", retryAfterMs: null, count: 4, requestId: null },

@@ -8,7 +8,7 @@ import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { copyFolderText } from "../lib/copypath";
 import { previewTargetOf } from "./rowmodel";
-import { readSvgText } from "./sidecar";
+import { readSvgText } from "./svgfiles";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dispatch } from "react";
 import type { SvgActions } from "./actions";
@@ -52,7 +52,7 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
 async function readCodeOf(ctx: CodeCtx, id: string, version: number): Promise<string | null> {
   const root = ctx.refs.root.current as DirHandleLike | null;
   const row = ctx.rows.find((r) => r.source.id === id);
-  const found = (row?.sidecar?.versions ?? []).find((v) => v.version === version && v.status === "generated");
+  const found = (row?.meta?.versions ?? []).find((v) => v.version === version && v.status === "generated");
   if (!root || !found || found.svgPath === "") return null;
   return readSvgText(root, found.svgPath);
 }

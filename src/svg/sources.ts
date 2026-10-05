@@ -7,10 +7,11 @@
 
 import type { BatchSource } from "../lib/svgbatch";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
+import { metaPathFor, newPairMeta, withDecision, type PairMeta } from "../lib/pairmeta";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { directoryNames, scopeOf } from "../lib/splitscope";
 import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem, type ProblemKind } from "../lib/pairing";
-import { loadDecisions } from "../selection/reviewstore";
+import { loadPairDecisions } from "../selection/pairstore";
 import {
   auditText, fileTally, selectRows,
   type RowPair, type ScanAudit, type SourceExclusion,
@@ -30,6 +31,13 @@ export interface SvgSource {
   fingerprint: string;
   /** Per-file reasons this pair is not fully usable; empty when healthy. */
   problems: PairProblem[];
+  /** The pair's own file, relative to the root (I-41): decision + SVG history. */
+  metaPath: string;
+  /** The pair's identity, so a record can be rebuilt without a second walk. */
+  base: string;
+  suffix: string;
+  sourcePath: string | null;
+  sourceFingerprint: string | null;
 }
 
 /** One reason, tied to the pair it belongs to. */
@@ -57,7 +65,11 @@ export interface Discovery {
   audit: ScanAudit;
   /** Files that could not be read (locked or being written) — not "changed". */
   unreadable: FileProblem[];
-  /** review-decisions.json could not be parsed — decisions kept in memory. */
+  /** Every pair file the walk found, by pair id — the versions rows show (I-41). */
+  metas: Map<string, PairMeta>;
+  /** Pair files that exist but could not be parsed, by path. */
+  corruptFiles: string[];
+  /** The legacy global file could not be parsed — decisions kept in memory. */
   corruptDecisions: boolean;
 }
 
@@ -76,7 +88,7 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
   // folder keeps the unsplit sheets, which are the batch's input (I-38).
   const scoped = scopeOf(directoryNames(tree), root.name);
   const entries = walkTree(tree, []);
-  const load = await loadDecisions(root);
+  const load = await loadPairDecisions(root, entries);
   const picked = selectRows(pairEntries(entries), load.records, scoped);
   const sources = sortSources(picked.rows.map(toSource));
   return {
@@ -85,7 +97,9 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
     excluded: picked.excluded,
     audit: { ...fileTally(entries), missing: picked.missing, duplicates: picked.duplicates, rows: sources.length },
     unreadable: unreadableFiles(entries),
-    corruptDecisions: load.corrupt,
+    metas: load.metas,
+    corruptFiles: load.corruptFiles,
+    corruptDecisions: load.legacyCorrupt,
   };
 }
 
@@ -102,6 +116,11 @@ function toSource(pair: RowPair): SvgSource {
     dirPath: pair.relDir,
     fingerprint: `${pair.ai.size}:${pair.ai.mtime}`,
     problems: problemsOf(pair),
+    metaPath: metaPathFor(pair),
+    base: pair.base,
+    suffix: pair.suffix,
+    sourcePath: pair.source?.relPath ?? null,
+    sourceFingerprint: pair.source === null ? null : `${pair.source.size}:${pair.source.mtime}`,
   };
 }
 
@@ -134,6 +153,23 @@ function stemOf(name: string): string {
 /** The batch view of a source: stable identity beside the manifest name. */
 export function toBatchSource(s: SvgSource): BatchSource {
   return { sourceId: s.id, name: s.stem, relPath: s.relPath, fingerprint: s.fingerprint };
+}
+
+/** The pair's file content for a source the list just discovered (I-41). */
+export function metaForSource(source: SvgSource, existing: PairMeta | null): PairMeta {
+  if (existing !== null) return existing;
+  return newPairMeta({
+    id: source.id, base: source.base, suffix: source.suffix, dirPath: source.dirPath,
+    ai: { relPath: source.relPath, name: source.name, fingerprint: source.fingerprint },
+    source: source.sourcePath === null
+      ? null
+      : { relPath: source.sourcePath, name: source.sourcePath.split("/").pop() ?? source.sourcePath, fingerprint: source.sourceFingerprint ?? "" },
+  });
+}
+
+/** The pair decision recorded for a source (used by the panel's banners). */
+export function decisionFor(meta: PairMeta | null, fallback: PairMeta): PairMeta {
+  return withDecision(fallback, meta?.decision ?? "pending", meta?.reviewedAt ?? "");
 }
 
 /** The stable id a source keeps even if its folder is renamed away. */

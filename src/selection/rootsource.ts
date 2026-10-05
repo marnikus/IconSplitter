@@ -7,7 +7,9 @@
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
+import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
+import { pairIdOfMetaPath } from "../lib/pairmeta";
 import { directoryNames, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
 import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
@@ -17,9 +19,10 @@ import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchV2, patchView } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pruneIds } from "../lib/session";
-import { loadDecisions } from "./reviewstore";
+import { loadPairDecisions, type PairLoad } from "./pairstore";
 import { SELECTION_HANDLE_KEY } from "./offline";
 import { applyScan, type SelState } from "./state";
+import { saveSourceIndex } from "../state/sourceindex";
 
 export type Setter = React.Dispatch<React.SetStateAction<SelState>>;
 
@@ -67,25 +70,50 @@ export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   ctx.seq.current = ticket.seq;
   setS((p) => ({ ...p, busy: "Scanning folders…" }));
   try {
-    const { pairs, scope } = await scopedPairs(root);
-    const load = await loadDecisions(root);
+    const walked = await walkAndLoad(root);
     if (!isCurrent(ctx.seq.current, ticket.id)) return; // a newer scan took over
     // The root's name comes from the handle that was just walked, never from a
     // state snapshot taken before the pick: React may batch a scan commit with
     // the pick's own update, and the snapshot would then carry the OLD name and
     // win (the pill would fall back to "Choose source folder…" — observed).
-    const prevScope = ctx.state.current.scope; // read before the commit, to compare
-    const next = { ...applyScan(ctx.state.current, pairs, load, Date.now()), rootName: root.name, scope };
-    setS(next);
-    patchView({ selectedId: next.selectedId });
-    pruneChecked(next.pairs); // a restored check must not point at a removed pair
-    announce(prevScope, scope, say);
-    if (load.corrupt) say("review-decisions.json is corrupt — kept previous decisions in memory", true);
+    commit(ctx, setS, say, { ...walked, rootName: root.name });
   } catch {
     if (isCurrent(ctx.seq.current, ticket.id)) say("Rescan failed — the folder may be unreadable", true);
   } finally {
     if (isCurrent(ctx.seq.current, ticket.id)) setS((p) => ({ ...p, busy: null }));
   }
+}
+
+/** What one walk produced: the reviewable pairs, the scope and the records. */
+interface Walked {
+  pairs: ReviewPair[];
+  scope: ScanScope;
+  load: PairLoad;
+}
+
+async function walkAndLoad(root: DirHandleLike): Promise<Walked> {
+  const { pairs, scope, entries } = await scanRoot(root);
+  return { pairs, scope, load: await loadPairDecisions(root, entries) };
+}
+
+/** The single commit: state, then the cache the undo paths read, then the report. */
+function commit(
+  ctx: Ctx, setS: Setter, say: Say,
+  w: Walked & { rootName: string },
+): void {
+  const scanLoad = {
+    records: w.load.records, corrupt: w.load.legacyCorrupt,
+    corruptIds: w.load.corruptFiles.map(pairIdOfMetaPath).filter((id) => id !== ""),
+    corruptFiles: w.load.corruptFiles,
+  };
+  const prevScope = ctx.state.current.scope; // read before the commit, to compare
+  const next = { ...applyScan(ctx.state.current, w.pairs, scanLoad, Date.now()), rootName: w.rootName, scope: w.scope };
+  setS(next);
+  patchView({ selectedId: next.selectedId });
+  savePairIndex(next.pairs); // the undo paths find each pair's own file by id
+  pruneChecked(next.pairs); // a restored check must not point at a removed pair
+  announce(prevScope, w.scope, say);
+  reportReads(w.load, say);
 }
 
 /**
@@ -94,11 +122,34 @@ export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
  * unsplit sheets are counted as outside; otherwise every pair is reviewable, so a
  * folder that never saw a batch behaves exactly as before.
  */
-async function scopedPairs(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope }> {
+async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope; entries: FileEntry[] }> {
   const tree = await readDirTree(root, []);
   const scoped = scopeOf(directoryNames(tree), root.name);
-  const { pairs, outside } = splitPairs(pairEntries(walkTree(tree, [])), scoped);
-  return { pairs, scope: { split: scoped, outside: outside.length } };
+  const entries = walkTree(tree, []);
+  const { pairs, outside } = splitPairs(pairEntries(entries), scoped);
+  return { pairs, scope: { split: scoped, outside: outside.length }, entries };
+}
+
+/** The id -> AI path cache every cross-tab undo reads (state/sourceindex). */
+function savePairIndex(pairs: readonly ViewPair[]): void {
+  try {
+    saveSourceIndex(pairs.flatMap((p) => (p.ai === null ? [] : [{
+      id: p.pairId, relPath: p.ai.relPath, name: p.ai.relPath.split("/").pop() ?? p.ai.relPath,
+      fingerprint: `${p.ai.size}:${p.ai.mtime}`,
+    }])));
+  } catch {
+    // the index is a cache: its failure must never fail a scan
+  }
+}
+
+/** An unreadable pair file is named, never silently turned into "pending" (I-43). */
+function reportReads(load: PairLoad, say: Say): void {
+  if (load.corruptFiles.length > 0) {
+    const files = load.corruptFiles.slice(0, 3).join(", ");
+    say(`${load.corruptFiles.length} pair file(s) could not be read: ${files} — their decisions kept in memory`, true);
+    log({ level: "warn", feature: "selection", action: "pair-file-unreadable", detail: load.corruptFiles.join(", ") });
+  }
+  if (load.legacyCorrupt) say("review-decisions.json is corrupt — kept previous decisions in memory", true);
 }
 
 /**

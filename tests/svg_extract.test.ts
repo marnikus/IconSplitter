@@ -1,4 +1,4 @@
-// RULE 8 — extraction, validation/security, icon counting, versioning + sidecar
+// RULE 8 — extraction, validation/security, icon counting, versioning + pair-file
 // parsing, the exact request payload and every provider failure mode execute
 // for real. happy-dom supplies the real DOMParser, so the security gate is
 // tested against real XML, not a regex stand-in.
@@ -7,9 +7,14 @@ import { extractSvgBlocks, matchBlocks, readHeadPosition, readTitle, sameName, t
 import { parseSvg, svgDataUrl, validateSvg } from "../src/lib/svgvalidate";
 import { countIcons } from "../src/lib/svgicons";
 import {
-  approvedVersion, newSidecar, newestValid, nextVersion, parseSidecar, serializeSidecar, sidecarName,
-  svgFileName, svgStem, tallyReviews, versionOfFileName, withVersion, type SvgVersion,
+  approvedVersion, newestValid, nextVersion,
+  svgFileName, svgStem, tallyReviews, versionOfFileName,
 } from "../src/lib/svgfile";
+import { metaFileName } from "../src/lib/pairmeta";
+import type { SvgVersion } from "../src/lib/svgmodel";
+import {
+  newPairMeta, parsePairMeta, serializePairMeta, withVersion, type PairMeta,
+} from "../src/lib/pairmeta";
 import { classifyHttp, classifyTransport, readContent, readRetryAfterMs, readUsage } from "../src/lib/svgrequest";
 import { allocateUsage, fmtCost, fmtTokens, sumUsage, usageLine } from "../src/lib/svgusage";
 import { batchManifest } from "../src/lib/svgbatch";
@@ -146,6 +151,14 @@ describe("svgicons", () => {
   });
 });
 
+/** The pair file these naming tests write beside `a/x_AI.png`. */
+function file(): PairMeta {
+  return newPairMeta({
+    id: "pair_x", base: "x", suffix: "", dirPath: "a",
+    ai: { relPath: "a/x_AI.png", name: "x_AI.png", fingerprint: "1:1" }, source: null,
+  });
+}
+
 function rec(version: number, over: Partial<SvgVersion> = {}): SvgVersion {
   return {
     version, svgPath: `a/icon_AI_v${version}.svg`, status: "generated", review: "pending",
@@ -161,7 +174,7 @@ function rec(version: number, over: Partial<SvgVersion> = {}): SvgVersion {
 describe("svgfile", () => {
   it("names the base, v2 and v3 files beside the AI image", () => {
     expect(svgStem("fog_architecture_041_AI.png")).toBe("fog_architecture_041_AI");
-    expect(sidecarName("fog_architecture_041_AI")).toBe("fog_architecture_041_AI.svg.json");
+    expect(metaFileName("fog_architecture_041_AI.png")).toBe("fog_architecture_041_AI.svg.json");
     expect(svgFileName("icon_AI", 1)).toBe("icon_AI.svg");
     expect(svgFileName("icon_AI", 2)).toBe("icon_AI_v2.svg");
     expect(svgFileName("icon_AI", 3)).toBe("icon_AI_v3.svg");
@@ -170,39 +183,37 @@ describe("svgfile", () => {
     expect(versionOfFileName("other_AI_v2.svg", "icon_AI")).toBeNull();
   });
 
-  it("picks the next version from disk AND sidecar history", () => {
-    const sidecar = withVersion(newSidecar({ relPath: "a/x_AI.png", name: "x_AI.png", fingerprint: "1:1" }), rec(1));
-    expect(nextVersion("x_AI", [], sidecar)).toBe(2);
-    expect(nextVersion("x_AI", ["x_AI.svg", "x_AI_v2.svg"], sidecar)).toBe(3);
-    expect(nextVersion("x_AI", ["x_AI.svg", "x_AI_v7.svg"], null)).toBe(8);
-    expect(nextVersion("x_AI", [], null)).toBe(1);
-    const grown = withVersion(sidecar, rec(2));
+  it("picks the next version from disk AND the pair file's history", () => {
+    const meta = withVersion(file(), rec(1));
+    expect(nextVersion("x_AI", [], meta.versions)).toBe(2);
+    expect(nextVersion("x_AI", ["x_AI.svg", "x_AI_v2.svg"], meta.versions)).toBe(3);
+    expect(nextVersion("x_AI", ["x_AI.svg", "x_AI_v7.svg"], [])).toBe(8);
+    expect(nextVersion("x_AI", [], [])).toBe(1);
+    const grown = withVersion(meta, rec(2));
     expect(grown.versions.map((v) => v.version)).toEqual([1, 2]);
     expect(withVersion(grown, rec(1)).versions.map((v) => v.version)).toEqual([1, 2]);
   });
 
   it("finds the newest valid and the approved version, and tallies reviews", () => {
-    const s = withVersion(
-      withVersion(newSidecar({ relPath: "a", name: "x_AI.png", fingerprint: "1:1" }), rec(1, { review: "approved" })),
-      rec(2),
-    );
-    expect(newestValid(s)?.version).toBe(2);
-    expect(approvedVersion(s)?.version).toBe(1);
-    expect(tallyReviews(s)).toEqual({ pending: 1, approved: 1, declined: 0 });
+    const s = withVersion(withVersion(file(), rec(1, { review: "approved" })), rec(2));
+    expect(newestValid(s.versions)?.version).toBe(2);
+    expect(approvedVersion(s.versions)?.version).toBe(1);
+    expect(tallyReviews(s.versions)).toEqual({ pending: 1, approved: 1, declined: 0 });
     const failed = withVersion(s, rec(3, { status: "failed", validation: { ok: false, errors: ["x"], warnings: [], icons: 0 } }));
-    expect(newestValid(failed)?.version).toBe(2);
-    expect(newestValid(null)).toBeNull();
+    expect(newestValid(failed.versions)?.version).toBe(2);
+    expect(newestValid([])).toBeNull();
   });
 
-  it("round-trips a sidecar and drops corrupt records without touching files", () => {
-    const s = withVersion(newSidecar({ relPath: "a/x_AI.png", name: "x_AI.png", fingerprint: "1:1" }), rec(1));
-    const parsed = parseSidecar(serializeSidecar(s));
-    expect(parsed.ok && parsed.sidecar.versions).toHaveLength(1);
-    expect(parseSidecar("{ not json").ok).toBe(false);
-    expect(parseSidecar(JSON.stringify({ v: 99, source: {}, versions: [] })).ok).toBe(false);
-    expect(parseSidecar(JSON.stringify({ v: 1, source: {}, versions: "no" })).ok).toBe(false);
-    const halfBad = parseSidecar(JSON.stringify({ v: 1, source: {}, versions: [rec(1), { version: "x" }] }));
-    expect(halfBad.ok && halfBad.sidecar.versions).toHaveLength(1);
+  it("round-trips a pair file and drops corrupt version records without touching files", () => {
+    const s = withVersion(file(), rec(1));
+    const parsed = parsePairMeta(serializePairMeta(s));
+    expect(parsed.ok && parsed.meta.versions).toHaveLength(1);
+    expect(parsePairMeta("{ not json").ok).toBe(false);
+    expect(parsePairMeta(JSON.stringify({ v: 99, pair: {}, ai: {}, versions: [] })).ok).toBe(false);
+    const base = JSON.parse(serializePairMeta(s)) as Record<string, unknown>;
+    expect(parsePairMeta(JSON.stringify({ ...base, versions: "no" })).ok).toBe(false);
+    const halfBad = parsePairMeta(JSON.stringify({ ...base, versions: [rec(1), { version: "x" }] }));
+    expect(halfBad.ok && halfBad.meta.versions).toHaveLength(1);
   });
 });
 

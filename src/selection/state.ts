@@ -31,6 +31,10 @@ export interface SelState {
   sort: SortState;
   selectedId: string | null;
   corrupt: boolean;
+  /** Pair files that could not be read on the last scan, by path (I-43). */
+  corruptFiles: string[];
+  /** Pair ids whose decision could not be WRITTEN; Retry rewrites exactly these. */
+  retryIds: string[];
   writeWarn: string | null;
   awaitingRetry: number;
   watcher: boolean;
@@ -47,14 +51,19 @@ export function initialSelState(): SelState {
     rootName: "", scope: { split: false, outside: 0 }, pairs: [], records: [],
     lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
-    corrupt: false, writeWarn: null, awaitingRetry: 0, watcher: true,
+    corrupt: false, corruptFiles: [], retryIds: [], writeWarn: null, awaitingRetry: 0, watcher: true,
     collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
   };
 }
 
 export interface ScanLoad {
   records: ReviewRecord[];
+  /** The legacy global file is unreadable (kept for the migration's report). */
   corrupt: boolean;
+  /** Pair ids whose OWN file could not be read — their decision is kept. */
+  corruptIds?: readonly string[];
+  /** Those files' paths, for the message (never silently swallowed). */
+  corruptFiles?: readonly string[];
 }
 
 /**
@@ -63,10 +72,11 @@ export interface ScanLoad {
  * rebuilt (design D7 — no churn, no lost row state, nothing to re-render).
  */
 export function applyScan(s: SelState, scanned: ReviewPair[], load: ScanLoad, now: number): SelState {
+  const corruptFiles = [...(load.corruptFiles ?? [])];
   if (samePairs(s.pairs, scanned)) {
-    return { ...s, lastDiff: diffPairs(s.pairs, scanned), lastRescanAt: now, corrupt: load.corrupt };
+    return { ...s, lastDiff: diffPairs(s.pairs, scanned), lastRescanAt: now, corrupt: load.corrupt, corruptFiles };
   }
-  const records = load.corrupt ? s.records : load.records;
+  const records = mergeKept(s.records, load);
   const recMap = new Map(records.map((r) => [r.pair_id, r]));
   const carry = carryRenamed(s.pairs, scanned, recMap);
   const pairs = scanned.map((p) => carry.byId.get(p.pairId)!);
@@ -77,8 +87,21 @@ export function applyScan(s: SelState, scanned: ReviewPair[], load: ScanLoad, no
   const selectedId = s.selectedId && viewIds.has(s.selectedId) ? s.selectedId : (pairs[0]?.pairId ?? null);
   return {
     ...s, pairs, records: recordsFromViews(pairs, orphans),
-    lastDiff: diff, lastRescanAt: now, selectedId, corrupt: load.corrupt,
+    lastDiff: diff, lastRescanAt: now, selectedId, corrupt: load.corrupt, corruptFiles,
   };
+}
+
+/**
+ * The records to apply. A pair whose own file could not be read keeps the
+ * decision already in memory — an unreadable file is never evidence that a pair
+ * is pending (I-43); the legacy file's own corruption keeps everything.
+ */
+function mergeKept(prev: ReviewRecord[], load: ScanLoad): ReviewRecord[] {
+  if (load.corrupt) return prev;
+  const kept = new Set(load.corruptIds ?? []);
+  if (kept.size === 0) return load.records;
+  const ids = new Set(load.records.map((r) => r.pair_id));
+  return [...load.records, ...prev.filter((r) => kept.has(r.pair_id) && !ids.has(r.pair_id))];
 }
 
 /** True when a rescan found exactly the sides the state already shows. */

@@ -19,7 +19,7 @@ export function WriteBanner(p: BannerProps) {
       data-testid={p.testid ?? "sel-writewarn"}
       className={p.className ?? "flex items-center gap-3 rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200"}
     >
-      ⚠ {p.warn} <code className="text-xs">review-decisions.json</code>
+      ⚠ {p.warn} <code className="text-xs">&lt;name&gt;.svg.json</code>
       <button className="btn-mini ml-auto sel-focus" data-testid={p.retryTestid ?? "sel-retry"} onClick={p.retry}>
         ↻ Retry write
       </button>
@@ -33,7 +33,21 @@ export function CorruptNote({ className, testid }: { className?: string; testid?
       data-testid={testid ?? "sel-corrupt"}
       className={className ?? "rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200"}
     >
-      ⚠ review-decisions.json was corrupt — previous decisions were kept in memory.
+      ⚠ the old review-decisions.json is unreadable — previous decisions were kept in memory.
+    </p>
+  );
+}
+
+/** The pair files that could not be read this scan, by name (never silent). */
+export function PairFilesNote({ files, className, testid }: { files: readonly string[]; className?: string; testid?: string }) {
+  if (files.length === 0) return null;
+  return (
+    <p
+      data-testid={testid ?? "sel-pairfiles"}
+      className={className ?? "rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200"}
+    >
+      ⚠ {files.length} pair file{files.length === 1 ? "" : "s"} could not be read — their decisions were kept in memory:{" "}
+      <code className="text-xs">{files.slice(0, 3).join(", ")}{files.length > 3 ? " …" : ""}</code>
     </p>
   );
 }

@@ -10,8 +10,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildSvgPreview, PREVIEW_CSS, STANDALONE_INK } from "../src/lib/svgpreview";
 import { previewTargetOf } from "../src/svg/rowmodel";
-import { newSidecar, withVersion, type SvgSidecar, type SvgVersion } from "../src/lib/svgfile";
+import { withVersion, type PairMeta } from "../src/lib/pairmeta";
+import type { SvgVersion } from "../src/lib/svgmodel";
 import type { SvgRow } from "../src/svg/types";
+import { pairMetaFor, svgSource } from "./helpers/svgpair";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -280,7 +282,7 @@ describe("buildSvgPreview — empty is not broken (RULE 4)", () => {
 });
 
 describe("previewTargetOf — one version for the preview and for Copy", () => {
-  const source = { id: "fog", name: "fog_AI.png", stem: "fog_AI", relPath: "a/fog_AI.png", dirPath: "a", fingerprint: "20:3100", problems: [] };
+  const source = svgSource("fog", { dir: "a", name: "fog_AI.png" });
 
   function version(v: number, svgPath: string, ok = true): SvgVersion {
     return {
@@ -294,11 +296,8 @@ describe("previewTargetOf — one version for the preview and for Copy", () => {
   }
 
   function rowWith(versions: SvgVersion[]): SvgRow {
-    const sidecar: SvgSidecar = versions.reduce(
-      (acc, v) => withVersion(acc, v),
-      newSidecar({ relPath: source.relPath, name: source.name, fingerprint: source.fingerprint }),
-    );
-    return { source, sidecar, corrupt: false, newest: versions.at(-1) ?? null, approved: null, status: "generated", error: null, running: false };
+    const meta: PairMeta = versions.reduce((acc, v) => withVersion(acc, v), pairMetaFor(source, []));
+    return { source, meta, corrupt: false, newest: versions.at(-1) ?? null, approved: null, status: "generated", error: null, running: false };
   }
 
   it("points at the newest valid version's file and number", () => {

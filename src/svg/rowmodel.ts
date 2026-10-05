@@ -1,9 +1,11 @@
 // rowmodel.ts — the Generate SVG list model (prompt §2).
-// Owns: turning a source + its sidecar into one row, the newest-valid and
+// Owns: turning a source + its pair file into one row, the newest-valid and
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, newestValid, type SvgSidecar, type SvgVersion } from "../lib/svgfile";
+import { approvedVersion, newestValid } from "../lib/svgfile";
+import type { SvgVersion } from "../lib/svgmodel";
+import type { PairMeta } from "../lib/pairmeta";
 import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { SvgSource } from "./sources";
@@ -15,13 +17,14 @@ export interface SvgTarget {
   svgPath: string;
 }
 
-export function toRow(source: SvgSource, sidecar: SvgSidecar | null, corrupt: boolean): SvgRow {
-  const newest = newestValid(sidecar);
-  const failed = (sidecar?.versions ?? []).some((v) => v.status !== "generated");
+export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean): SvgRow {
+  const versions = meta?.versions ?? [];
+  const newest = newestValid(versions);
+  const failed = versions.some((v) => v.status !== "generated");
   return {
-    source, sidecar, corrupt, newest, approved: approvedVersion(sidecar), running: false,
+    source, meta, corrupt, newest, approved: approvedVersion(versions), running: false,
     status: newest ? "generated" : failed ? "failed" : "not-generated",
-    error: (sidecar?.versions ?? []).filter((v) => v.error).at(-1)?.error ?? null,
+    error: versions.filter((v) => v.error).at(-1)?.error ?? null,
   };
 }
 

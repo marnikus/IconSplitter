@@ -1,6 +1,6 @@
 // RULE 8 — the SVG lib modules execute for real: config defaults/validation,
 // secret masking and redaction, prompt + manifest text, response extraction and
-// matching, validation/security, icon counting, versioning + sidecar parsing,
+// matching, validation/security, icon counting, versioning + pair-file parsing,
 // batch planning, composite layout, request payload/usage/error classification
 // and usage formatting. Each test fails if the module it covers is deleted.
 import { describe, expect, it } from "vitest";

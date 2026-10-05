@@ -7,7 +7,7 @@
 // the same (possibly billable) request again. It stores nothing else: the key,
 // the prompt and the answer never touch it.
 //
-// Competing with the sidecar is deliberate: the sidecar is the durable record
+// Competing with the pair file is deliberate: the pair file is the durable record
 // of COMPLETED work, this is a small, self-clearing note about work that is
 // still open. A corrupt payload reads as empty (RULE 13) — losing the note can
 // never break the tab.

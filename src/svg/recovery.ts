@@ -57,7 +57,7 @@ export function useInflightRecovery(
 /**
  * Marks every row the journal names as unknown. It repaints only while a named
  * row does NOT already say so — which also heals a rescan that rebuilt the row
- * from its sidecar — and then stops, so it can never loop.
+ * from its pair file — and then stops, so it can never loop.
  */
 function usePaintUnknown(rows: SvgRow[], requests: readonly InflightRequest[], setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void): void {
   useEffect(() => {

@@ -184,8 +184,12 @@ Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,
 `sel-missing` (absent side / decode failure), `sel-discovery`
 (created/generated line).
 
-Surfaces: `sel-writewarn` + `sel-retry` (atomic-write failure banner),
-`sel-corrupt`, `sel-toast`, `sel-busy`, `sel-footer` with `sel-rescan-age`,
+Surfaces: `sel-writewarn` + `sel-retry` (write-failure banner: it names the
+pair files — `<name>.svg.json` — and Retry rewrites exactly the pairs whose write
+failed, I-43), `sel-pairfiles` (the pair files this scan could not read, by
+name — their decisions are kept, I-43), `sel-corrupt` (the **legacy**
+`review-decisions.json` is unreadable; it is never written, I-42), `sel-toast`,
+`sel-busy`, `sel-footer` with `sel-rescan-age`,
 `sel-diff` (+new/renamed/removed/unchanged), `sel-retry-count`,
 `sel-progress`; empty-root states `sel-root-empty`, `sel-unsupported`.
 
@@ -241,8 +245,10 @@ Comparison layout: `v2-pair-picker` (labelled `<select>` of the visible pairs)
 plus the V1 `sel-compare` handles (§M). Shared surfaces keep their `sel-*`
 handles in both tabs: `sel-footer`, `sel-diff`, `sel-rescan-age`,
 `sel-retry-count`, `sel-progress`; V2 skins its own banners and overlays with
-`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy`, and the
-empty-root states `v2-root-empty` / `v2-unsupported`.
+`v2-writewarn` / `v2-retry`, `v2-pairfiles`, `v2-corrupt`, `v2-toast`, `v2-busy`,
+and the empty-root states `v2-root-empty` / `v2-unsupported`.
+Approving a pair writes `<dir>/<stem>.svg.json` beside its images and never a
+`review-decisions.json` (I-41/I-42; `tests/selectionv2_ui.test.tsx` asserts both).
 
 ## Q. App shell and the global activity log (verified 2026-10-05)
 
@@ -400,8 +406,8 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
-| `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the sidecar name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
-| `svg-persist-{sourceId}` | text | "Per-file sidecar saved" / "Not generated yet" / "Sidecar unreadable — SVGs on disk are kept"; the `title` names the sidecar itself ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it); `error` class on failure |
+| `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the pair file's name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
+| `svg-persist-{sourceId}` | text | "Pair file saved" / "Not generated yet" / "Pair file unreadable — SVGs on disk are kept"; the `title` names the pair's own file ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it, I-41); `error` class on failure |
 | `svg-problem-{sourceId}` | text | the row's scan status when a file of a **listed** source needs attention: "Reference missing" / "Unreadable file" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). An unreadable file or a missing reference is a status on the row, never a removal — but a missing **AI image** means there is no row at all (I-31): that source appears in `svg-warn-excluded` instead |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
@@ -443,7 +449,8 @@ been resent"), `svg-inflight-retry` (opens the normal confirmation for exactly
 those sources — the only way to resend, always a deliberate user action) and
 `svg-inflight-dismiss` (acknowledges the note and clears the journal).
 
-Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / `problems` — the
+Shared surfaces: `svg-warn-{noteId}` (`pairfile` — the pair files that could not
+be parsed, I-43 / `problems` — the
 listed sources that need attention, with the first reasons spelled out /
 `excluded` — the approved sources **not** listed, grouped by kind with the first
 reasons spelled out ("4 approved source(s) are not listed — 2 with no AI image

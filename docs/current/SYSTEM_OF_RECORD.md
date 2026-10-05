@@ -501,6 +501,25 @@ Batch:
   file names can never be stored, replayed, shown as the root's path or prefixed
   to a copy — and the field states the refusal ("That is not a folder path — …")
   instead of failing silently.
+* **I-41 (one file per pair, RULE 3/13):** a pair's metadata is a single JSON in
+  the folder that holds the pair, named after the AI image's stem
+  (`<stem>.svg.json`). It stores the pair's identity, both image faces, the
+  pair's `decision` (may this AI image be generated from?), and one record per
+  SVG version with `status`, `review` (is this SVG approved?), prompt,
+  provider/model, timestamps, tokens, cost + basis + pricing version, validation
+  and the redacted error. No global file holds any of it.
+* **I-42 (the migration is read-only, RULE 13):** `<root>/review-decisions.json`
+  is read as a fallback for pairs that have no local file and is never written or
+  deleted by this build. A scan writes nothing. A legacy `<stem>.svg.json`
+  (`v: 1`) keeps its versions, gets the pair identity derived from its stored AI
+  face, and is upgraded on its next write. A local file always wins over the
+  legacy record — including an explicit `pending`.
+* **I-43 (a decision survives the tree, RULE 12/24):** because the record lives
+  with the images, an approval travels with a renamed or moved folder; when the
+  images are gone the file still reports the pair (`files-missing`); an
+  unreadable pair file is named (banner + log + row status) and the in-memory
+  decision is kept, never silently turned into `pending`; a failed write keeps
+  the decision in memory and `Retry` rewrites exactly the pairs that failed.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -539,7 +558,7 @@ Batch:
 | IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
 | `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
-| `<root>/review-decisions.json` | selection approve/decline records | atomic write; corrupt → warn + keep memory (I-12) |
+| `<root>/review-decisions.json` | **legacy** approve/decline records — read as a fallback only | never written or deleted by this build (I-42); a local pair file wins; corrupt → warn + keep memory (I-12) |
 | IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle (shared by both Selection tabs) | permission re-requested on restore |
 | localStorage `iconSplitter.selectionV2.prefs.v1` | V2 view prefs `{ mode, thumbHeight }` | validated + clamped on read (RULE 13) |
 | IndexedDB `iconSplitter/handles["__svg__"]` | Generate SVG root handle | falls back to the Selection handle |
@@ -550,8 +569,8 @@ Batch:
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
 | localStorage `iconSplitter.rootpaths.v1` | the picked roots' real full paths, `{ [folderName]: path }` | normalised + validated on read (I-29); used only to build copy text; never leaves the browser |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
-| `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
-| `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
+| `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
+| `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -792,6 +811,10 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   validator, the paginated confirmation, per-request outcomes, one zoom value,
   the preview's layout-only stylesheet). Its effort **icon caps and total
   timeout were reversed on 2026-10-05** — see the entry below.
+* 2026-10-05 — one JSON per image pair (the pair's approval **and** its SVG
+  history, no global metadata): `docs/archive/2026-10-05-per-pair-metadata/design.md`
+  (contract, naming, the read-only legacy fallback, module plan, TDD order,
+  verification, rejected alternatives, I-41…I-43).
 * 2026-10-05 — long SVG generations must survive, not be truncated:
   `docs/archive/2026-10-05-svg-long-requests/design.md` (the user's batch size
   at every tier, SSE streaming + `stream_options.include_usage`, the stall
@@ -1174,3 +1197,40 @@ clipboard, the button, the field and on read — a junk value written by an olde
 build counts as no memory — and the field says *"That is not a folder path —
 paste the folder's path, e.g. F:\work\icons"*. The folder name still shows on
 the pill, so the app never lies about what a copy will hand over.
+
+## 15. One JSON per pair — the fix for "the folder shows only the AI approval" (2026-10-05)
+
+The report: *"i don't see json in local folder contain information about SVG
+aproval. only AI image aproval"*. Both halves existed, in different places: the
+AI-image approval lived in `<root>/review-decisions.json` (ONE file for the whole
+picked tree, far from the images) while the SVG's own review lived in the
+`<stem>.svg.json` beside the pair. A folder that was copied, moved or opened on
+its own lost the approval; the file the user was looking at never said anything
+about the pair.
+
+Per I-41 both halves are now **one file per pair, in the pair's own folder**:
+`<AI stem>.svg.json`, `v: 2`, carrying the pair identity + both image faces +
+`decision`/`reviewedAt` + `versions[]` (status, review, prompt, provider/model,
+timestamps, tokens, cost `{actual, estimated, currency, pricing, basis}`,
+validation, batch ref, error, requestId). The Selection tabs read their
+decisions from those files (`selection/pairstore.loadPairDecisions`), Generate
+SVG discovers approved pairs from them (`svg/sources.discoverApprovedSources`),
+and every writer — approve/decline/bulk/reset, generation, SVG review and both
+undo paths — writes through `savePairDecision`/`saveMetaAt`, so no code path
+touches a global decision file any more.
+
+The migration is read-only (I-42): `review-decisions.json` still supplies
+decisions for pairs that have no local file and is never written or deleted; a
+local file always wins, including an explicit `pending` (a reset must outlive
+the fallback). A legacy `v: 1` file keeps its versions and is upgraded on its
+next write. `selection/reviewstore.ts` is deleted; `LEGACY_FILE` and the
+fallback merge live in `selection/pairstore.ts`.
+
+Honesty under failure (I-43): an unreadable pair file is named — the banners
+(`sel-pairfiles` / `v2-pairfiles`), the log and the row's own status — while the
+in-memory decision for that pair is kept; the Retry button rewrites exactly the
+pairs whose write failed (`SelState.retryIds`), never the whole tree. The SVG
+tab's `svg/svgfiles.ts` keeps the file-level reads (version listing, SVG text);
+the pair-file read/write lives in `selection/pairstore` + `lib/pairmeta`, and
+`svg/sourceindex.ts` moved to `state/sourceindex.ts` because both tabs' undo
+paths share that id → path cache.

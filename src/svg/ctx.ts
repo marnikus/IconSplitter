@@ -1,5 +1,5 @@
 // ctx.ts — the one context object the Generate SVG tab's actions consume
-// (RULE 24). Owns the mutable refs (root handle, sidecars, abort, API key), the
+// (RULE 24). Owns the mutable refs (root handle, pair files, abort, API key), the
 // toasts, the scan bridge, the boot/autosave effects and the derived lists.
 // Building it here keeps useSvgGen itself a five-line composition.
 
@@ -171,7 +171,7 @@ function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" 
 
 function newRefs(): SvgRefs {
   return {
-    root: { current: null }, sidecars: new Map(), abort: { current: null }, key: { current: null },
+    root: { current: null }, metas: new Map(), abort: { current: null }, key: { current: null },
     scanKey: { current: null }, seq: { current: SCAN_IDLE },
   };
 }

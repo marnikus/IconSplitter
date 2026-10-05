@@ -14,6 +14,7 @@ import SvgConfirm from "../src/svg/SvgConfirm";
 import type { SvgRow } from "../src/svg/types";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir } from "./helpers/fakefs";
+import { svgSource } from "./helpers/svgpair";
 
 vi.mock("../src/svg/composite", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/svg/composite")>();
@@ -44,10 +45,7 @@ function rows(n: number): SvgRow[] {
   return Array.from({ length: n }, (_, i) => {
     const id = `pair_${i + 1}`;
     const name = `icon-${i + 1}_AI.png`;
-    const source: SvgSource = {
-      id, name, stem: `icon-${i + 1}_AI`, relPath: `architecture/${name}`,
-      dirPath: "architecture", fingerprint: `${i + 1}:100`, problems: [],
-    };
+    const source = svgSource(id, { name, fingerprint: `${i + 1}:100` });
     return toRow(source, null, false);
   });
 }

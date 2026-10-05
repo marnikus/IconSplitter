@@ -2,11 +2,14 @@
 // surface (spec V2 §16). Everything here drives the real panel: folder pick →
 // recursive scan → list review rows → zoom → selection → bulk approve →
 // persistence, against in-memory FS fakes. No component logic is re-implemented.
+// An approval writes ONE file beside the pair's images (I-41); the root never
+// gains a review-decisions.json (I-42).
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { DECISIONS_FILE, TMP_FILE } from "../src/selection/reviewstore";
+import { parsePairMeta } from "../src/lib/pairmeta";
+import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
@@ -294,9 +297,10 @@ describe("Selection V2 panel", () => {
     expect(btn.textContent).toBe("✓ Approve selected (1)");
   });
 
-  it("keeps decisions in memory and reports a failed save honestly", async () => {
+  it("keeps a decision in memory when its OWN file cannot be written, and Retry writes exactly that pair", async () => {
     const root = makeRoot();
-    root.children.set(TMP_FILE, new BrokenFile(TMP_FILE)); // decision file cannot be written
+    const arch = root.children.get("architecture") as FakeDir;
+    arch.children.set("fog_AI.svg.tmp.json", new BrokenFile("fog_AI.svg.tmp.json")); // this pair's write fails
     const { el } = await mount(root);
     await check(q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement, true);
     await click(q(el, "[data-testid='v2-approve-selected']")!);
@@ -305,9 +309,11 @@ describe("Selection V2 panel", () => {
     expect(text(el, "[data-testid='v2-toast']")).toBe("1 pair approved · save failed — retry");
     expect(q(el, "[data-testid='v2-writewarn']")).toBeTruthy();
     expect(text(el, "[data-testid='sel-retry-count']")).toContain("awaiting retry");
-    root.children.delete(TMP_FILE); // the folder becomes writable again
+    expect(arch.children.has("fog_AI.svg.json")).toBe(false); // nothing half-written
+    arch.children.delete("fog_AI.svg.tmp.json"); // the folder becomes writable again
     await click(q(el, "[data-testid='v2-retry']")!);
     expect(q(el, "[data-testid='v2-writewarn']")).toBeNull();
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
   });
 
   it("reports an empty folder and a filter with no matches distinctly", async () => {
@@ -322,12 +328,34 @@ describe("Selection V2 panel", () => {
     await act(async () => { full.ui.unmount(); });
   });
 
-  it("warns about a corrupt decision file without losing the review", async () => {
+  it("warns about a corrupt legacy file without losing the review", async () => {
     const root = makeRoot();
-    root.children.set(DECISIONS_FILE, new FakeFile(DECISIONS_FILE, 5, 1, "{oops"));
+    root.children.set(LEGACY_FILE, new FakeFile(LEGACY_FILE, 5, 1, "{oops"));
     const { el } = await mount(root);
     expect(q(el, "[data-testid='v2-corrupt']")).toBeTruthy();
     expect(rows(el).length).toBe(4);
+  });
+
+  it("names a pair file it could not read and keeps that pair's decision", async () => {
+    const root = makeRoot();
+    const arch = root.children.get("architecture") as FakeDir;
+    arch.children.set("fog_AI.svg.json", new FakeFile("fog_AI.svg.json", 5, 1, "{oops"));
+    const { el } = await mount(root);
+    expect(text(el, "[data-testid='v2-pairfiles']")).toContain("fog_AI.svg.json");
+    expect(rows(el).length).toBe(4); // the pair is still listed, with its reason
+  });
+
+  it("approve → ONE file per pair, no review-decisions.json anywhere", async () => {
+    const root = makeRoot();
+    const { el } = await mount(root);
+    await check(q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement, true);
+    await click(q(el, "[data-testid='v2-approve-selected']")!);
+    await click(q(el, "[data-testid='v2-approve-selected']")!);
+    const arch = root.children.get("architecture") as FakeDir;
+    const written = parsePairMeta((arch.children.get("fog_AI.svg.json") as FakeFile).text);
+    expect(written.ok && written.meta).toMatchObject({ decision: "approved", base: "fog", suffix: "", dirPath: "architecture" });
+    expect(root.children.has(LEGACY_FILE)).toBe(false);
+    expect(arch.children.has("fog.svg.json")).toBe(false);
   });
 
   it("rescan keeps decisions, adds new pairs pending and preserves the zoom", async () => {

@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { useSideThumbs } from "../selection/thumbs";
-import { readSvgText } from "./sidecar";
+import { readSvgText } from "./svgfiles";
 import { previewTargetOf } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
 import type { SvgRow } from "./types";

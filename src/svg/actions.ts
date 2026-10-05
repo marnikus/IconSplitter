@@ -1,7 +1,7 @@
 // actions.ts — what the user can do on the Generate SVG tab (RULE 2/4/24).
 // Every action is a small hook over one context object: the current model
 // snapshot, the dispatch that changes it, the mutable refs (root handle,
-// sidecars, abort, key) and the shared history. Grouped by concern so no hook
+// pair files, abort, key) and the shared history. Grouped by concern so no hook
 // grows past RULE 18 and the panel never holds state of its own.
 
 import { useCallback, useRef, type Dispatch } from "react";
@@ -261,7 +261,7 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
     config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
-    sidecars: ctx.refs.sidecars, signal: controller.signal,
+    metas: ctx.refs.metas, signal: controller.signal,
     onEvent: withRunLog((event) => onRunEvent(event, ctx)),
   });
   ctx.dispatch({ type: "running", running: false });

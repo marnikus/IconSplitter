@@ -2,13 +2,16 @@
 // the picked root for approved pairs, the row model, the runner-event mapping,
 // the review decision + its undo path, the state reducer, the root token and
 // the write order that makes a bad result harmless. Each test fails if the
-// module it covers is deleted.
+// module it covers is deleted. Decisions AND the SVG history live in ONE file
+// beside the images (I-41) — the legacy global file is only ever read (I-42).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { newSidecar, newestValid, parseSidecar, serializeSidecar, withVersion } from "../src/lib/svgfile";
-import { saveSvgVersion, recordFailure } from "../src/svg/saveversion";
-import { loadSidecar, readSvgText, listSvgFiles, saveSidecar } from "../src/svg/sidecar";
-import { discoverApprovedSources, toBatchSource } from "../src/svg/sources";
+import { newestValid } from "../src/lib/svgfile";
+import { metaFileName, parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
+import { saveSvgVersion, metaAfterFailure } from "../src/svg/saveversion";
+import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
+import { loadMetaAt, saveMetaAt, LEGACY_FILE } from "../src/selection/pairstore";
+import { discoverApprovedSources, toBatchSource, type SvgSource } from "../src/svg/sources";
 import { SCAN_IDLE } from "../src/lib/scanseq";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
 import { headerState, pruneChecked, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
@@ -20,6 +23,7 @@ import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
+import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot/remember real.
@@ -60,9 +64,27 @@ function mirrored(root: FakeDir): FakeDir {
 
 const FOG = pairId("architecture", "fog", "");
 const COURT = pairId("architecture", "court", "");
+const HARBOR = pairId("coastal", "harbor", "");
 
+const FOG_SRC = svgSource(FOG, { name: "fog_AI.png" });
+const COURT_SRC = svgSource(COURT, { name: "court_AI.png", sourceName: "court.png" });
+
+
+/** An approval click, as the Selection tab writes it: one file, beside the pair. */
+async function approve(root: FakeDir, source: SvgSource): Promise<void> {
+  await saveMetaAt(root, source.metaPath, pairMetaFor(source, [], "approved"));
+}
+
+/** makeRoot + the pair-file approvals a Selection run would have left behind. */
+async function approvedRoot(...sources: SvgSource[]): Promise<FakeDir> {
+  const root = makeRoot();
+  for (const source of sources) await approve(root, source);
+  return root;
+}
+
+/** The legacy global file, for the tests that pin the read-only fallback. */
 function decisionsJson(...approved: string[]): string {
-  const recs = [FOG, COURT, pairId("coastal", "harbor", "")].map((id) => ({
+  const recs = [FOG, COURT, HARBOR].map((id) => ({
     pair_id: id, source: `${id}.png`, ai_result: `${id}_AI.png`,
     decision: approved.includes(id) ? "approved" : "pending", reviewed_at: "2026-10-01T09:00:00.000Z",
   }));
@@ -87,7 +109,7 @@ function setters() {
 
 function refs(root: FakeDir | null = null) {
   return {
-    root: { current: root }, sidecars: new Map(), abort: { current: null }, key: { current: null },
+    root: { current: root }, metas: new Map(), abort: { current: null }, key: { current: null },
     scanKey: { current: null }, seq: { current: SCAN_IDLE },
   };
 }
@@ -99,34 +121,60 @@ beforeEach(async () => {
 
 describe("approved-source discovery", () => {
   it("lists every approved pair, in path order, with no problems when healthy", async () => {
-    const root = makeRoot();
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const found = await discoverApprovedSources(root);
     expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
     expect(found.sources[0].name).toBe("court_AI.png");
     expect(found.sources[0].stem).toBe("court_AI");
     expect(found.sources[0].dirPath).toBe("architecture");
+    expect(found.sources[0].metaPath).toBe("architecture/court_AI.svg.json");
     expect(found.sources.every((s) => s.problems.length === 0)).toBe(true);
     expect(found.problems).toEqual([]);
     expect(found.excluded).toEqual([]);
     expect(found.unreadable).toEqual([]);
     expect(found.corruptDecisions).toBe(false);
-    expect(found.audit).toEqual({ files: 7, aiSources: 3, references: 3, missing: 0, duplicates: 0, rows: 2 });
+    expect(found.audit).toEqual({ files: 8, aiSources: 3, references: 3, missing: 0, duplicates: 0, rows: 2 });
   });
 
-  it("says the decision file is corrupt instead of dropping every source", async () => {
+  it("reads the decision AND the versions from the same pair file", async () => {
     const root = makeRoot();
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, "{not json"));
+    await saveMetaAt(root, FOG_SRC.metaPath, pairMetaFor(FOG_SRC, [svgVersionRecord(FOG_SRC, 1)], "approved"));
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([FOG]);
+    expect(found.metas.get(FOG)?.versions.map((v) => v.version)).toEqual([1]);
+    expect(found.corruptFiles).toEqual([]);
+  });
+
+  it("still reads the legacy global file for a pair that has no file of its own", async () => {
+    const root = makeRoot();
+    root.children.set(LEGACY_FILE, new FakeFile(LEGACY_FILE, 10, 10, decisionsJson(FOG, COURT)));
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
+    expect(found.corruptDecisions).toBe(false);
+  });
+
+  it("names a corrupt pair file and keeps every other decision", async () => {
+    const root = await approvedRoot(FOG_SRC);
+    const arch = await root.getDirectoryHandle("architecture");
+    arch.children.set(metaFileName("court_AI.png"), new FakeFile(metaFileName("court_AI.png"), 9, 9, "{nope"));
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([FOG]);
+    expect(found.corruptFiles).toEqual(["architecture/court_AI.svg.json"]);
+    expect(found.corruptDecisions).toBe(false);
+  });
+
+  it("says the legacy decision file is corrupt instead of dropping every source", async () => {
+    const root = makeRoot();
+    root.children.set(LEGACY_FILE, new FakeFile(LEGACY_FILE, 10, 10, "{not json"));
     const found = await discoverApprovedSources(root);
     expect(found.corruptDecisions).toBe(true);
     expect(found.sources).toEqual([]);
   });
 
   it("drops an approved pair whose AI image disappeared, with the reason reported", async () => {
-    const root = makeRoot();
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const arch = await root.getDirectoryHandle("architecture");
     await arch.removeEntry("court_AI.png");
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
     const found = await discoverApprovedSources(root);
     // only the real AI output is a row; the surviving reference is explained
     expect(found.sources.map((s) => s.id)).toEqual([FOG]);
@@ -135,13 +183,12 @@ describe("approved-source discovery", () => {
       id: COURT, relPath: "architecture/court.png", kind: "ai-missing",
       reason: "no AI result (court_AI.png) beside architecture/court.png",
     }]);
-    expect(found.audit).toMatchObject({ files: 6, aiSources: 2, references: 3, missing: 1, duplicates: 0, rows: 1 });
+    expect(found.audit).toMatchObject({ files: 7, aiSources: 2, references: 3, missing: 1, duplicates: 0, rows: 1 });
     expect(found.unreadable).toEqual([]);
   });
 
   it("answers byte-identically whatever order the filesystem enumerated", async () => {
-    const root = makeRoot();
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const first = await discoverApprovedSources(root);
     const again = await discoverApprovedSources(root);
     const flipped = await discoverApprovedSources(mirrored(root));
@@ -150,17 +197,17 @@ describe("approved-source discovery", () => {
   });
 
   it("writes nothing into the scanned root", async () => {
-    const root = makeRoot();
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const before = [...root.children.keys()];
     const arch = await root.getDirectoryHandle("architecture");
+    const beforeArch = [...arch.children.keys()];
     await discoverApprovedSources(root);
     expect([...root.children.keys()]).toEqual(before);
-    expect([...arch.children.keys()]).toEqual(["fog.png", "fog_AI.png", "court.png", "court_AI.png"]);
+    expect([...arch.children.keys()]).toEqual(beforeArch);
   });
 
   it("reports an unreadable file with its path and never as a vanished pair", async () => {
-    const root = makeRoot();
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const arch = await root.getDirectoryHandle("architecture");
     arch.children.set("court_AI.png", new LockedFile("court_AI.png"));
     const found = await discoverApprovedSources(root);
@@ -183,7 +230,7 @@ describe("approved-source discovery", () => {
       pair_id: COURT, source: "architecture/court.png", ai_result: "architecture/court_AI.png",
       decision: "approved", reviewed_at: "2026-10-01T09:00:00.000Z",
     };
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({ records: [rec] })));
+    root.children.set(LEGACY_FILE, new FakeFile(LEGACY_FILE, 10, 10, JSON.stringify({ records: [rec] })));
     const found = await discoverApprovedSources(root);
     expect(found.sources).toEqual([]);
     expect(found.excluded).toEqual([{
@@ -194,25 +241,22 @@ describe("approved-source discovery", () => {
   });
 
   it("ignores this app's own version artifacts instead of inventing a row", async () => {
-    const root = makeRoot();
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const arch = await root.getDirectoryHandle("architecture");
     arch.children.set("fog_AI_v2.svg", new FakeFile("fog_AI_v2.svg", 30, 3200, "<svg/>"));
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
     const found = await discoverApprovedSources(root);
     expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
     expect(found.problems).toEqual([]);
   });
 
   it("maps a source onto its batch identity without touching the file id", () => {
-    const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" , problems: []};
-    expect(toBatchSource(source)).toEqual({ sourceId: FOG, name: "fog_AI", relPath: "architecture/fog_AI.png", fingerprint: "20:3100" });
+    expect(toBatchSource(FOG_SRC)).toEqual({ sourceId: FOG, name: "fog_AI", relPath: "architecture/fog_AI.png", fingerprint: "20:3100" });
   });
 });
 
 describe("scanSources", () => {
-  it("loads every sidecar and reports what could not be used", async () => {
-    const root = makeRoot();
-    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson(FOG, COURT)));
+  it("loads every pair file and reports what could not be used", async () => {
+    const root = await approvedRoot(FOG_SRC, COURT_SRC);
     const r = refs(root);
     const s = setters();
     await scanSources(r, s.api);
@@ -220,9 +264,9 @@ describe("scanSources", () => {
     expect(s.out.busy).toBeNull();
     // one bumped token per scan: a row's preview re-reads the file it shows
     expect(s.out.tokens).toBe(1);
-    const rows = s.out.rows as { source: { id: string }; sidecar: unknown }[];
-    expect(rows.every((row) => row.sidecar === null)).toBe(true);
-    expect(r.sidecars.size).toBe(2);
+    const rows = s.out.rows as { source: { id: string }; meta: PairMeta | null }[];
+    expect(rows.every((row) => row.meta?.decision === "approved")).toBe(true);
+    expect(r.metas.size).toBe(2);
   });
 
   it("keeps the previous rows and says so when the scan throws", async () => {
@@ -250,10 +294,10 @@ describe("scanSources", () => {
 });
 
 describe("row model", () => {
-  const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" , problems: []};
+  const source = FOG_SRC;
   const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
 
-  it("marks a source with no sidecar as not generated", () => {
+  it("marks a source with no pair file as not generated", () => {
     const row = toRow(source, null, false);
     expect(row.status).toBe("not-generated");
     expect(row.newest).toBeNull();
@@ -261,7 +305,7 @@ describe("row model", () => {
     expect(toListRow(row)).toMatchObject({ generation: "not-generated", review: "pending", version: 0, tokens: null, cost: null });
   });
 
-  it("previews the newest VALID version and flags a corrupt sidecar", async () => {
+  it("previews the newest VALID version and flags a corrupt pair file", async () => {
     const root = makeRoot();
     const arch = await root.getDirectoryHandle("architecture");
     const dir = arch as unknown as FakeDir;
@@ -269,20 +313,21 @@ describe("row model", () => {
       root, source, code: svg, prompt: "p", provider: "Requesty", model: "openai/gpt-6.1-sol",
       requestedAt: "2026-10-01T10:00:00.000Z",
       usage: { input: 100, output: 200, total: 300, cost: 0.01, currency: "USD" },
-      batch: null, requestId: null, sidecar: null,
+      batch: null, requestId: null, meta: null,
     });
     expect(first.ok).toBe(true);
-    if (first.ok) await saveSidecar(root, source, first.sidecar);
-    const loaded = await loadSidecar(root, source);
-    const row = toRow(source, loaded.sidecar, loaded.corrupt);
+    if (first.ok) await saveMetaAt(root, source.metaPath, first.meta);
+    const loaded = await loadMetaAt(root, source.metaPath);
+    const row = toRow(source, loaded.meta, loaded.corrupt);
     expect(row.status).toBe("generated");
     expect(row.newest?.version).toBe(1);
-    expect(newestValid(loaded.sidecar)?.version).toBe(1);
+    expect(newestValid(loaded.meta?.versions ?? [])?.version).toBe(1);
     expect(toListRow(row).tokens).toBe(300);
     expect(toListRow(row).cost).toBe(0.01);
     expect(await readSvgText(root, first.ok ? first.svgPath : "")).toBe(svg);
     expect(await listSvgFiles(root, source)).toEqual(["fog_AI.svg"]);
     expect(dir.children.has("fog_AI.svg")).toBe(true);
+    expect(dir.children.has(metaFileName("fog_AI.png"))).toBe(true);
   });
 
   it("never overwrites: the next save is version 2", async () => {
@@ -290,13 +335,24 @@ describe("row model", () => {
     const args = {
       root, source, code: svg, prompt: "p", provider: "Requesty", model: "m",
       requestedAt: "2026-10-01T10:00:00.000Z", usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
-      batch: null, requestId: null, sidecar: null,
+      batch: null, requestId: null, meta: null as PairMeta | null,
     };
     const a = await saveSvgVersion(args);
-    const b = await saveSvgVersion(args);
-    expect(a.ok && b.ok && a.version).toBe(1);
+    const b = await saveSvgVersion({ ...args, meta: a.ok ? a.meta : null });
+    expect(a.ok && a.version).toBe(1);
     expect(b.ok && b.version).toBe(2);
     expect(await listSvgFiles(root, source)).toEqual(["fog_AI.svg", "fog_AI_v2.svg"]);
+  });
+
+  it("keeps the pair's decision when a version is saved", async () => {
+    const root = await approvedRoot(FOG_SRC);
+    const out = await saveSvgVersion({
+      root, source, code: svg, prompt: "p", provider: "R", model: "m",
+      requestedAt: "2026-10-01T10:00:00.000Z", usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
+      batch: null, requestId: null, meta: pairMetaFor(FOG_SRC, [], "approved"),
+    });
+    expect(out.ok && out.meta.decision).toBe("approved");
+    expect(out.ok && out.meta.versions).toHaveLength(1);
   });
 
   it("writes nothing when the document is not a valid single-root SVG", async () => {
@@ -304,33 +360,30 @@ describe("row model", () => {
     const out = await saveSvgVersion({
       root, source, code: "<svg><script>alert(1)</script></svg>", prompt: "p", provider: "R", model: "m",
       requestedAt: "2026-10-01T10:00:00.000Z", usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
-      batch: null, requestId: null, sidecar: null,
+      batch: null, requestId: null, meta: null,
     });
     expect(out.ok).toBe(false);
     expect(await listSvgFiles(root, source)).toEqual([]);
-    expect((await loadSidecar(root, source)).sidecar).toBeNull();
+    expect((await loadMetaAt(root, source.metaPath)).meta).toBeNull();
   });
 
-  it("records a failure in the sidecar without writing an SVG file", async () => {
-    const rec = recordFailure({
+  it("records a failure in the pair file without writing an SVG file", async () => {
+    const rec = metaAfterFailure({
       source, prompt: "p", provider: "Requesty", model: "m", requestedAt: "2026-10-01T10:00:00.000Z",
-      error: "rate limited", sidecar: null, status: "failed",
+      error: "rate limited", meta: null, status: "failed",
+      usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
     });
-    const sidecar = withVersion(newSidecar({ relPath: source.relPath, name: source.name, fingerprint: source.fingerprint }), rec);
-    expect(sidecar.versions).toHaveLength(1);
-    expect(sidecar.versions[0].status).toBe("failed");
-    expect(sidecar.versions[0].svgPath).toBe("");
-    expect(sidecar.versions[0].error).toBe("rate limited");
-    expect(toRow(source, sidecar, false).status).toBe("failed");
-    expect(parseSidecar(serializeSidecar(sidecar)).ok).toBe(true);
+    expect(rec.versions).toHaveLength(1);
+    expect(rec.versions[0].status).toBe("failed");
+    expect(rec.versions[0].svgPath).toBe("");
+    expect(rec.versions[0].error).toBe("rate limited");
+    expect(toRow(source, rec, false).status).toBe("failed");
+    expect(parsePairMeta(serializePairMeta(rec)).ok).toBe(true);
   });
 
   it("filters, sorts and reports the header checkbox state", () => {
-    const mk = (id: string, name: string, status: "generated" | "failed") => ({
-      ...toRow({ id, name, stem: name.replace(".png", ""), relPath: `d/${name}`, dirPath: "d", fingerprint: "1:1" , problems: []}, null, false),
-      status,
-    });
-    const list = [mk(FOG, "fog_AI.png", "generated"), mk(COURT, "court_AI.png", "failed")];
+    const mk = (source: SvgSource, status: "generated" | "failed") => ({ ...toRow(source, null, false), status });
+    const list = [mk(FOG_SRC, "generated"), mk(COURT_SRC, "failed")];
     expect(headerState(list, [])).toBe("none");
     expect(headerState(list, [FOG])).toBe("some");
     expect(headerState(list, [FOG, COURT])).toBe("all");
@@ -341,7 +394,7 @@ describe("row model", () => {
 
   it("drops a checked id the rescan removed", () => {
     patchSvg({ checked: [FOG, COURT] });
-    const rows = [toRow({ id: FOG, name: "a", stem: "a", relPath: "a", dirPath: "", fingerprint: "1:1" , problems: []}, null, false)];
+    const rows = [toRow(svgSource(FOG), null, false)];
     pruneChecked(rows);
     expect(getAppState().svg.checked).toEqual([FOG]);
     patchSvg({ checked: [] });
@@ -349,15 +402,15 @@ describe("row model", () => {
 });
 
 describe("runner events and the review decision", () => {
-  const source = { id: FOG, name: "fog_AI.png", stem: "fog_AI", relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100" , problems: []};
+  const source = FOG_SRC;
 
-  it("maps a saved item onto its row and reloads the sidecars after the run", async () => {
+  it("maps a saved item onto its row and reloads the pair files after the run", async () => {
     const root = makeRoot();
-    const sidecar = newSidecar({ relPath: source.relPath, name: source.name, fingerprint: source.fingerprint });
-    await saveSidecar(root, source, sidecar);
+    const meta = pairMetaFor(source, [svgVersionRecord(source, 1)], "approved");
+    await saveMetaAt(root, source.metaPath, meta);
     const r = refs(root);
-    r.sidecars.set(FOG, sidecar);
-    const rows = [toRow(source, sidecar, false)];
+    r.metas.set(FOG, meta);
+    const rows = [toRow(source, meta, false)];
     const written: string[] = [];
     const api: RunSetters = {
       setProgress: (p) => { written.push(`progress:${p === null ? "null" : "set"}`); },
@@ -378,7 +431,7 @@ describe("runner events and the review decision", () => {
     expect(rows[0].status).toBe("unknown");
     expect(rows[0].error).toContain("no data for 600s");
     await reloadSidecars(r, [source], api);
-    expect(rows[0].sidecar?.source.relPath).toBe(source.relPath);
+    expect(rows[0].meta?.ai.relPath).toBe(source.relPath);
   });
 
   it("names a request that failed instead of hiding it in the totals", () => {
@@ -430,21 +483,20 @@ describe("runner events and the review decision", () => {
     })).toContain("$0.0200 Estimated");
   });
 
-  it("approves the newest version of every named source and pushes ONE entry", async () => {
+  it("approves the newest version of every named source, in its OWN file, and pushes ONE entry", async () => {
     const root = makeRoot();
     const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
     const saved = await saveSvgVersion({
       root, source, code: svg, prompt: "p", provider: "Requesty", model: "m",
       requestedAt: "2026-10-01T10:00:00.000Z", usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
-      batch: null, requestId: null, sidecar: null,
+      batch: null, requestId: null, meta: pairMetaFor(source, [], "approved"),
     });
     expect(saved.ok).toBe(true);
-    if (saved.ok) await saveSidecar(root, source, saved.sidecar);
-    const sidecar = (await loadSidecar(root, source)).sidecar;
-    const rows = [toRow(source, sidecar, false)];
+    if (saved.ok) await saveMetaAt(root, source.metaPath, saved.meta);
+    const meta = (await loadMetaAt(root, source.metaPath)).meta;
+    const rows = [toRow(source, meta, false)];
     const r = refs(root);
-    r.sidecars.set(FOG, sidecar);
-    if (sidecar !== null) await saveSidecar(root, source, sidecar);
+    if (meta !== null) r.metas.set(FOG, meta);
     const pushed: { label: string; ids: string[] }[] = [];
     const ctx = {
       rows, refs: r, setRowsFn: (fn: (all: SvgRow[]) => SvgRow[]) => { rows.splice(0, rows.length, ...fn(rows)); },
@@ -454,8 +506,9 @@ describe("runner events and the review decision", () => {
     expect(rows[0].newest?.review).toBe("approved");
     expect(pushed).toHaveLength(1);
     expect(pushed[0].label).toBe("Approve 1 SVG");
-    const onDisk = parseSidecar(await (await (await root.getDirectoryHandle("architecture")).getFileHandle("fog_AI.svg.json")).getFile().then((f) => f.text()));
-    expect(onDisk.ok && onDisk.sidecar.versions[0].review).toBe("approved");
+    const onDisk = parsePairMeta(await (await (await root.getDirectoryHandle("architecture")).getFileHandle("fog_AI.svg.json")).getFile().then((f) => f.text()));
+    expect(onDisk.ok && onDisk.meta.versions[0].review).toBe("approved");
+    expect(onDisk.ok && onDisk.meta.decision).toBe("approved"); // the pair decision is untouched
 
     const back = await applyReviewPatch(ctx, { recs: [{ id: FOG, version: 1, review: "declined" }] });
     expect(back).toBe(true);
@@ -526,3 +579,8 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "root", name: "split_root" }).rootToken).toBe(1);
   });
 });
+
+/** The version record a save would have written for this source. */
+function svgVersionRecord(source: SvgSource, version: number) {
+  return svgVersion(`${source.dirPath}/${source.stem}${version === 1 ? "" : `_v${version}`}.svg`, { version });
+}
