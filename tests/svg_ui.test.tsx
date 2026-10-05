@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
+import { loadRootPath } from "../src/lib/rootpath";
 import { saveCatalog } from "../src/svg/catalog";
 import { clearApiKey } from "../src/svg/keystore";
 import SvgPanel from "../src/svg/SvgPanel";
@@ -156,6 +157,36 @@ beforeEach(async () => {
   resetAppStore();
   host = document.createElement("div");
   document.body.appendChild(host);
+});
+
+describe("the root's full path (folder copies)", () => {
+  it("keeps a folder picker available while a root is loaded, so the tab can be pointed by hand", async () => {
+    await mount(await makeRoot());
+    const btn = q("[data-testid=svg-choose-root]") as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.disabled).toBe(false);
+    // the root came from the remembered handle, not from this tab's picker:
+    // the button must offer to change it instead of hiding (the old bug).
+    expect(btn.textContent).toContain("Change folder");
+    expect(q("[data-testid=svg-root]")?.textContent).toContain("split_root");
+  });
+
+  it("remembers a pasted full path, normalises it, and shows it after a restart", async () => {
+    await mount(await makeRoot());
+    await type("[data-testid=svg-root-path]", `"F:\\Stocks 2026\\icons\\split_root\\"`);
+    await settle();
+    expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons\\split_root");
+    await act(async () => { ui.unmount(); }); // a restart: the field is filled from the memory
+    await mount(await makeRoot());
+    expect(input("[data-testid=svg-root-path]").value).toBe("F:\\Stocks 2026\\icons\\split_root");
+  });
+
+  it("says what the field is for and what the browser cannot see", async () => {
+    await mount(await makeRoot());
+    const field = input("[data-testid=svg-root-path]");
+    expect(field.getAttribute("placeholder")).toContain("full path");
+    expect(field.getAttribute("title")).toContain("cannot see the drive");
+  });
 });
 
 describe("Generate SVG panel", () => {

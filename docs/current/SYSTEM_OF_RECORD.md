@@ -439,6 +439,21 @@ Batch:
   what scrolls. No interactive element is ever painted under the dock, at any
   scroll position, and the app's floating toasts are lifted above the dock's
   published height (`--app-dock-h`).
+* **I-28 (copies, RULE 2/9):** a "copy path" action yields a **folder** path,
+  never a file name: the batch folder for anything inside
+  `_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>`, the item's own folder
+  anywhere else. The text uses backslashes throughout, and a blocked clipboard
+  is reported as an error instead of being swallowed.
+* **I-29 (full path, RULE 13/20):** the full path of a picked root is
+  remembered per **folder name** in `iconSplitter.rootpaths.v1`, normalised on
+  write (Explorer's surrounding quotes, forward slashes, trailing and doubled
+  separators, UNC pairs kept) and validated on read — corrupt or hand-edited
+  payload means no memory, never a guess, and the app never invents a drive.
+  With no memory the copy falls back to the folder's own name.
+* **I-30 (root picking, RULE 4/10):** the Generate SVG tab can always point
+  itself at a folder — the picker is offered whether or not a root is loaded,
+  because the Selection tab's handle is a fallback for the first run, not a
+  lock — and each tab has exactly one picker control.
 
 ## 6. Storage map
 
@@ -458,6 +473,7 @@ Batch:
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, stall window, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.svg.inflight.v1` | the in-flight journal: run/batch id, source ids + names, model, start time, provider request id — no key, no prompt, no answer | validated on read; corrupt = empty; cleared when a request gets a confirmed outcome |
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
+| localStorage `iconSplitter.rootpaths.v1` | the picked roots' real full paths, `{ [folderName]: path }` | normalised + validated on read (I-29); used only to build copy text; never leaves the browser |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
 | `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
@@ -741,7 +757,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `v2-approve-row-*`, `v2-autonext`, `v2-empty`, `v2-nomatch`), comparison
   (`v2-pair-picker` + the V1 `sel-compare` handles), shared surfaces
   (`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy` and the
-  shared `sel-footer` / `sel-diff` / `sel-retry-count`). Full table:
+  shared `sel-footer` / `sel-diff` / `sel-retry-count`), and the copy prefix
+  (`v2-root-path` — the pasted full path of the picked folder). Full table:
   `UI_SELECTORS.md` §N.
 * Generate SVG mode: the row's scan status (`svg-problem-{id}` — "AI image
   missing" / "Reference missing" / "Unreadable file" / "Files missing", with
@@ -749,7 +766,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-count-*`), prompt + provider card (`svg-prompt`, `svg-reset-prompt`,
   `svg-provider`, `svg-limits`, `svg-per-request`, `svg-timeout`,
   `svg-retries`, `svg-model`, `svg-key-state`
-  / `svg-key-input` / `svg-key-save`), filters (`svg-filter-generation`,
+  / `svg-key-input` / `svg-key-save`), the copy prefix (`svg-root-path`;
+  `svg-choose-root` is offered while a root is loaded too, so this tab can be
+  pointed by hand), filters (`svg-filter-generation`,
   `svg-filter-review`, `svg-sort`, `svg-search`, `svg-shown`,
   `svg-clear-filters`), bulk bar (`svg-check-all`, `svg-selected-count`,
   `svg-select-visible`, `svg-deselect`, `svg-thumb` + `svg-thumb-value`,
@@ -940,6 +959,7 @@ ids, detail, data, v }` — `debug/info/warn/error`, one line, values trimmed
 | `svg/actions` | `svg.root-picked`, `svg.prompt-reset`, `svg.config-changed`, `svg.sampling-changed`, `svg.review-decided`, `svg.confirm-opened`, `svg.generate-confirmed`, `svg.cancel-requested` (warn) |
 | `svg/keystore` | `svg.key-saved` (the mask + whether it persisted), `svg.key-cleared` — never the key |
 | `svg/runbatch` → `RunEvent` → `svg/runlog` | `svg.run-start`, `svg.request-start`, `svg.request-retry` (warn), `svg.item-start` (debug), `svg.item-saved`, `svg.item-failed` (error), `svg.request-failed` (error), `svg.request-done` (info, or warn for an unconfirmed outcome), `svg.cancelled` |
+| `ui/RootPathField` | `svg.root-path` (the pasted full path of the picked folder, or that it was forgotten) |
 | `log/logstore`, `log/LogHead` | `log.cleared`, `log.max-entries`, `log.minimized`/`log.restored`, `log.copied` |
 
 `withRunLog(sink)` wraps the runner's one event sink: the live UI gets the event
@@ -965,4 +985,49 @@ attempt collapsed the Generate SVG list to zero rows, which the same probe
 caught), and the fixed toasts are lifted by `--app-dock-h`, the one value the
 dock publishes. Invariants I-23…I-27; the layout gate is
 `tests/log_layout.test.tsx`.
+
+## 14. Folder copies and the remembered full path (2026-10-05)
+
+A copy action used to hand over a **file**: `rootName\relPath` in Selection and
+Generate SVG, and `rootName/relPath` — forward slashes, exactly the format
+Explorer refuses — in the Batch tab. The user asked for the folder instead, as a
+full Windows path that pastes straight into Explorer, and gave the target string
+(`…\_split_output\2026-10\2026-10-01_10-24-31`). Full record:
+`archive/2026-10-05-folder-path-copy/design.md`.
+
+### 14.1 What the browser can and cannot know
+
+The File System Access API tells the page the picked folder's **name** only
+(`test_processing`); the drive and every folder above it are invisible for
+privacy. So a pasteable path cannot be read — it has to be **told** to the app
+once. That is what the toolbar field is for (`ui/RootPathField`, testids
+`svg-root-path` / `v2-root-path`): paste the folder's path from Explorer's
+address bar or its "Copy as path", it is normalised (quotes, forward slashes,
+doubled and trailing separators, UNC pairs — I-29) and remembered per folder
+name in `iconSplitter.rootpaths.v1`, so the same folder picked in another tab
+gives the same text for free. Until something is pasted the copies still work
+and say so (`not set — copies name the folder only`).
+
+### 14.2 One function decides every copy
+
+`lib/rootpath.folderCopyText(rootName, relPath)` and its one caller
+`lib/copypath.copyFolderText` replace the three hand-written copies (the Batch
+one had its own, with forward slashes). The rule (I-28): inside a run's output
+tree (`_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>/…`) the copy stops at the
+**batch folder** — the folder a human browses — and anywhere else it keeps the
+item's own folder; the file name is dropped in both cases. Four surfaces use it:
+the Batch scan table's row action, Selection V1's and V2's "original / AI
+result" buttons and Generate SVG's "open location".
+
+### 14.3 The Generate SVG tab can be pointed by hand
+
+The picker used to render only while no root existed, so a tab that had
+inherited the Selection tab's remembered handle had no way to choose a folder of
+its own — reported as "now it takes the path already saved in selection tab …
+fix the btn so I can select the folder here manually too". The source bar
+(`svg/SourceLine`, extracted from `SvgControls` for the RULE 18 budget) now
+always offers the picker: "Choose source folder…" with no root, "Change folder…"
+with one, next to the root pill, the rescan and the full-path field. Picking
+there remembers the handle under this tab's own key, so the fallback is only the
+first run.
 

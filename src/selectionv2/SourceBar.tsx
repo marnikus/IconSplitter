@@ -4,6 +4,7 @@
 import type { ViewMode } from "../lib/reviewprefs";
 import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
+import RootPathField from "../ui/RootPathField";
 import SegButton from "./SegButton";
 
 export interface SourceBarProps {
@@ -28,6 +29,7 @@ export default function SourceBar(p: SourceBarProps) {
         <button className="v2-btn ghost" data-testid="v2-watcher" onClick={p.toggleWatcher} title="Auto-rescan every 30 s">
           {p.watcher ? "● Watcher active" : "○ Watcher paused"}
         </button>
+        {p.rootName !== "" && <RootPathField key={p.rootName} rootName={p.rootName} testid="v2-root-path" />}
         <span className="v2-recursive">Recursive · subfolders included</span>
       </div>
       <div className="v2-toolbar-right">

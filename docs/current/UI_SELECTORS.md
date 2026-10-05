@@ -229,7 +229,8 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 | `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers | each carries an `Original` / `AI result` tag; missing side or decode failure → `role="img"` placeholder with an aria-label |
 | `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
 | `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
-| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copy-path fallback |
+| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
+| `v2-root-path` | `Full path for copies` field | the shared `ui/RootPathField`, same memory as the Generate SVG tab's field (§Q); `v2-root-path-note` marks it unset |
 | `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
 | `v2-autonext` | checkbox | advance to the next pending after a decision |
 | `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
@@ -323,7 +324,9 @@ Source bar (only after a root is remembered; `svg-root-empty` /
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-root` | path pill | the root name; `svg-choose-root` opens the picker |
+| `svg-root` | path pill | the root name |
+| `svg-choose-root` | `Choose source folder…` / `Change folder…` | the picker, offered whether or not a root is loaded (I-30) |
+| `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so the user pastes it once (Explorer's address bar or "Copy as path"); normalised and remembered per folder name (I-29). `svg-root-path-label` is the label, `svg-root-path-note` says when nothing is set |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-count-{eligible,generated,approved,failed}` | counter chips | live counts |

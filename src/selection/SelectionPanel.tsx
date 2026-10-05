@@ -12,7 +12,7 @@ import HeaderRow from "./HeaderRow";
 import PairList from "./PairList";
 import StatusFooter from "./StatusFooter";
 import { counters } from "./state";
-import { copyPathText } from "./copypath";
+import { copyFolderText } from "../lib/copypath";
 import { hotTarget, isTextField, runHotAction } from "./hotkeys";
 import { useThumbFor } from "./thumbs";
 import { useSelection, type SelectionApi } from "./useSelection";
@@ -58,7 +58,7 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
 }) {
   const selected = api.visible.find((v) => v.pairId === api.s.selectedId)
     ?? api.s.pairs.find((v) => v.pairId === api.s.selectedId) ?? null;
-  const copyPath = (relPath: string) => { void copyPathText(api.s.rootName, relPath, api.say); };
+  const copyPath = (relPath: string) => { void copyFolderText(api.s.rootName, relPath, api.say); };
   return (
     <div className="grid items-start gap-3 lg:grid-cols-[22rem_1fr]">
       <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}

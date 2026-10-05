@@ -15,7 +15,10 @@ import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import SvgSampling from "./SvgSampling";
+import SourceLine, { type SvgCounts } from "./SourceLine";
 import type { Discovery } from "./sources";
+
+export type { SvgCounts } from "./SourceLine";
 
 export interface SvgControlsProps {
   rootName: string;
@@ -51,13 +54,6 @@ export interface SvgControlsProps {
   onClearFilters: () => void;
 }
 
-export interface SvgCounts {
-  eligible: number;
-  generated: number;
-  approved: number;
-  failed: number;
-}
-
 export default function SvgControls(p: SvgControlsProps) {
   return (
     <section className="svg-controls" aria-label="SVG generation controls">
@@ -74,39 +70,6 @@ export default function SvgControls(p: SvgControlsProps) {
         onFilter={p.onFilter} onSort={p.onSort} onClear={p.onClearFilters} />
     </section>
   );
-}
-
-function SourceLine({ rootName, discovery, busy, counts, onChooseRoot, onRescan }: {
-  rootName: string; discovery: Discovery | null; busy: string | null; counts: SvgCounts;
-  onChooseRoot: () => void; onRescan: () => void;
-}) {
-  return (
-    <div className="svg-toolbar">
-      <div className="svg-source">
-        {rootName === ""
-          ? <button type="button" className="svg-btn primary" data-testid="svg-choose-root" onClick={onChooseRoot}>Choose source folder…</button>
-          : <>
-            <span className="svg-path-pill" data-testid="svg-root" title={rootName}>📂 Root: {rootName}</span>
-            <button type="button" className="svg-btn primary" data-testid="svg-rescan" disabled={busy !== null} onClick={onRescan}>
-              {busy === null ? "↻ Rescan approved" : busy}
-            </button>
-          </>}
-        <span className="svg-recursive" data-testid="svg-scope-copy">
-          Approved Selection images only · recursive · {discovery?.sources.length ?? 0} sources
-        </span>
-      </div>
-      <div className="svg-summary">
-        <Chip value={counts.eligible} label="eligible" testid="svg-count-eligible" />
-        <Chip value={counts.generated} label="generated" testid="svg-count-generated" />
-        <Chip value={counts.approved} label="approved" cls="approved" testid="svg-count-approved" />
-        <Chip value={counts.failed} label="failed" cls="failed" testid="svg-count-failed" />
-      </div>
-    </div>
-  );
-}
-
-function Chip({ value, label, cls, testid }: { value: number; label: string; cls?: string; testid: string }) {
-  return <span className={`svg-chip${cls ? ` ${cls}` : ""}`} data-testid={testid}><strong>{value}</strong>{label}</span>;
 }
 
 function PromptZone({ prompt, onPrompt, onReset }: { prompt: string; onPrompt: (t: string) => void; onReset: () => void }) {

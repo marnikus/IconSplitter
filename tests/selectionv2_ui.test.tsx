@@ -71,6 +71,22 @@ describe("Selection V2 panel", () => {
     expect((q(el, `[data-testid='v2-open-ai-${DUNES}']`) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("copies the FOLDER of the pasted full path from a row's open button", async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (t: string) => { written.push(t); } }, configurable: true,
+    });
+    const { el } = await mount(makeRoot());
+    // The browser cannot read the drive, so the user pastes the path once here.
+    await type(el, "[data-testid='v2-root-path']", `"F:\\Stocks 2026\\icons\\split_root\\`);
+    const row = rows(el)[0];
+    const pair = row.getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
+    await click(q(el, `[data-testid='v2-open-ai-${pair}']`) as HTMLElement);
+    // the folder, as a full Windows path — never the file, never forward slashes
+    expect(written).toEqual(["F:\\Stocks 2026\\icons\\split_root\\architecture"]);
+    expect(text(el, "[data-testid='v2-toast']")).toContain("Folder path copied");
+  });
+
   it("loads both sides of a pair as real object-URL thumbnails", async () => {
     const { el } = await mount(makeRoot());
     const row = q(el, `[data-testid='v2-row-${FOG}']`)!;
@@ -333,6 +349,16 @@ function rows(el: HTMLElement): Element[] {
 
 function text(el: HTMLElement, sel: string): string {
   return q(el, sel)?.textContent ?? "";
+}
+
+/** React tracks input values, so the native setter must be used to change one. */
+async function type(el: HTMLElement, sel: string, value: string): Promise<void> {
+  await act(async () => {
+    const node = q(el, sel) as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(node, value);
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
 }
 
 async function click(node: HTMLElement): Promise<void> {

@@ -1158,3 +1158,58 @@ lines), `src/lib/detect.ts` (15 fns, 307 lines, 5 over-line functions) and
 the gate output on the parent commit, and the changed-file lane with the ratchet
 passes. The 8 ESLint warnings are the same pre-existing ones.
 
+---
+
+# Quality re-check — 2026-10-05 (copy a folder, with the picked folder's real full path)
+
+Change: every "copy path" action copies a **folder** instead of a file, as a
+Windows full path with backslashes; the picked root's real full path is a value
+the user pastes once and the app remembers (`iconSplitter.rootpaths.v1`); and
+the Generate SVG tab always offers the folder picker, so its root can be chosen
+there rather than only inherited from the Selection tab. Record:
+`archive/2026-10-05-folder-path-copy/design.md`.
+
+## Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 `tsc --noEmit` | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing) |
+| 3/6 RULE 16 gate — changed files (legacy allowed, ratchet) | **GATE PASSED** |
+| 4/6 `vitest run` | **76 files / 725 tests passed** (21 new) |
+| 5/6 coverage (`src/lib`) | 97.12 stmts / 92.16 branch / 97.21 funcs / 98.32 lines |
+| 6/6 production build | `dist/index.html` 639.24 kB, gzip 188.79 kB |
+
+## RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | Fns / lines | Note |
+|---|---|---|
+| `src/lib/rootpath.ts` | 8 / 100 | new: the path memory + the pure copy-text rules |
+| `src/lib/copypath.ts` | 1 / 19 | new: the one clipboard writer (replaces `src/selection/copypath.ts`, deleted) |
+| `src/ui/RootPathField.tsx` | 2 / 35 | new: the shared toolbar field |
+| `src/svg/SourceLine.tsx` | 5 / 68 | new: extracted from `SvgControls` so both stay under the 300-line ceiling |
+| `src/svg/SvgControls.tsx` | 27 / 256 | changed: `SourceLine` moved out (was 300 → would have failed) |
+| `src/selectionv2/SourceBar.tsx` | 7 / 70 | changed: the shared field joins the source bar |
+| `src/batch/BatchPanel.tsx` | 15 / 124 | changed: its private forward-slash copy is replaced by the shared function |
+| `src/selection/{SelectionPanel,handles}.tsx` + `src/svg/codeactions.ts` | ±2 | changed: import the shared function |
+| `src/index.css` | +16 | changed: `.pathfield` (the toolbar field's box) |
+
+Baseline: **untouched**. Function-level: the new exports are covered by
+`tests/rootpath.test.ts` (15) and `tests/copypath.test.ts` (3), and the DOM
+behaviour by `tests/svg_ui.test.tsx` (3 new) and `tests/selectionv2_ui.test.tsx`
+(1 new — the real clipboard stub receives `…\F:\\…\architecture` for a row
+button, never a file name). The layout change was re-checked with the same
+headless-Chromium probe as the log port (1440×900, fake root with 14 approved
+pairs): both tabs report `covered=0`, the window still does not scroll
+(`max 0` — `.app-main` does, `57…663`, with the dock at `663…900`), a human
+click on the last row's checkbox still selects (`false → true`), and the new
+controls hit-test clear (`svg-choose-root` `82…115`, `svg-root-path` `84…113`,
+`v2-root-path` `84…113`). The Generate SVG probe also drove the copy end to end
+in the real browser: after pasting `"F:\Stocks 2026\icons testing\single\test_processing\"`
+the row's `Location` action handed the clipboard
+`F:\Stocks 2026\icons testing\single\test_processing\set_A` — full path,
+backslashes, folder only — and `Change folder…` re-picked from that tab with the
+same 14 eligible sources.
+
+New debt accepted: none.
+

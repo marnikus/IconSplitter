@@ -1,6 +1,7 @@
 // BatchPanel.tsx — batch feature layout (spec §1–§6): folder pickers, preset
 // bar, review window, process controls, honest status surfaces (RULE 2/4).
 
+import { copyFolderText } from "../lib/copypath";
 import { useBatch } from "./useBatch";
 import PresetBar from "./PresetBar";
 import ScanTable, { useThumbCache } from "./ScanTable";
@@ -117,9 +118,7 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
   );
 }
 
-/** Honest substitute for "Open in File Explorer" (browsers cannot open the OS file manager). */
+/** Honest substitute for "Open in File Explorer": the folder, never the file. */
 function copyPath(b: Batch, relPath: string): void {
-  const full = `${b.s.rootName}/${relPath}`;
-  void navigator.clipboard?.writeText(full);
-  b.say(`Path copied: ${full} — browsers cannot open File Explorer, paste it there`);
+  void copyFolderText(b.s.rootName, relPath, b.say);
 }

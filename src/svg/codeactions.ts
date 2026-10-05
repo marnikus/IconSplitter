@@ -6,7 +6,7 @@
 
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import { copyPathText } from "../selection/copypath";
+import { copyFolderText } from "../lib/copypath";
 import { previewTargetOf } from "./rowmodel";
 import { readSvgText } from "./sidecar";
 import type { SvgAction, SvgModel } from "./statemodel";
@@ -42,7 +42,7 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
     const row = c.rows.find((r) => r.source.id === id);
     if (!row) return;
     const target = previewTargetOf(row)?.svgPath ?? `${row.source.stem}.svg.json`;
-    void copyPathText(c.m.rootName, joinPath(row.source.dirPath, target), c.say);
+    void copyFolderText(c.m.rootName, joinPath(row.source.dirPath, target), c.say);
   }, []);
   const readCode = useCallback((id: string, version: number) => readCodeOf(latest.current, id, version), []);
   return { showCode, showHistory, copyCode, openLocation, readCode };

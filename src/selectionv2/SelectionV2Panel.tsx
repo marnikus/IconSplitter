@@ -9,7 +9,7 @@ import { attentionInfo } from "../lib/pairing";
 import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
 import { selectIntent } from "../lib/reviewselect";
 import CompareView from "../selection/CompareView";
-import { copyPathText } from "../selection/copypath";
+import { copyFolderText } from "../lib/copypath";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
 import { CorruptNote, Overlays, WriteBanner } from "../selection/Surfaces";
@@ -77,7 +77,7 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
 }
 
 function openSide(v: SelectionV2Api, relPath: string): void {
-  void copyPathText(v.core.s.rootName, relPath, v.core.say);
+  void copyFolderText(v.core.s.rootName, relPath, v.core.say);
 }
 
 function CompareBody({ v }: { v: SelectionV2Api }) {

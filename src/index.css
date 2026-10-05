@@ -589,6 +589,21 @@
 
 .svg-recursive { color: var(--v2-muted); font-size: 11px; }
 
+/* The root's real full path, pasted once (the browser only knows its name). */
+.pathfield { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.pathfield > span { color: var(--v2-muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
+.pathfield > input {
+  min-width: 260px;
+  max-width: 460px;
+  padding: 7px 9px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: #090f1d;
+  color: #c6cee2;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.pathfield > em { color: var(--v2-muted); font-size: 10px; font-style: normal; }
+
 .svg-chip {
   display: inline-flex;
   align-items: center;
