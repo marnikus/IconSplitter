@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NO_COST } from "../src/lib/svgmodel";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
-import { loadMetaAt, saveMetaAt } from "../src/selection/pairstore";
+import { loadMetaAt, saveMetaAt } from "../src/selection/pairfile";
 import { PRICING_VERSION } from "../src/lib/svgpricing";
 import { NO_USAGE } from "../src/lib/svgrequest";
 import { allocateUsage, costLabel } from "../src/lib/svgusage";

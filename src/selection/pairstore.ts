@@ -1,27 +1,24 @@
-// pairstore.ts — reading and writing the pair files of a walk (I-41/I-42/I-43).
-// The only module that touches disk for a decision. It reads every `<stem>.svg.json`
-// the walk found (each one is a pair's own record: decision + SVG history),
-// still reads the legacy global `review-decisions.json` as a fallback for pairs
-// that have no local record, and writes ONE pair's file through the
-// tmp → verify → overwrite → cleanup protocol. A file that cannot be read is
-// named, never guessed; a file that cannot be written throws, so the caller
-// keeps the decision in memory and can retry exactly that pair.
+// pairstore.ts — the decisions of ONE WALK (I-41/I-42/I-43): every
+// `<stem>.svg.json` the walk found (a pair's own record: decision + SVG history)
+// and the legacy global `review-decisions.json` as the fallback for pairs that
+// have no local file of their own. pairfile.ts owns the file itself (read one,
+// write one, rebuild one); this module owns WHICH files the walk means and what
+// the list applies, including the identity rule that makes a decision mean the
+// same thing at every level of the tree (I-44). A file that cannot be read is
+// named, never guessed.
 
-import { probePath, tryGetFile, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
-import { parseAiName } from "../lib/naming";
-import { pairId, type ReviewPair, type SideRef } from "../lib/pairing";
-import {
-  metaPathFor, metaPathForAi, newPairMeta, parsePairMeta, serializePairMeta, toRecord, withDecision,
-  type PairIdentity, type PairMeta, type PairSide,
-} from "../lib/pairmeta";
+import { tryGetFile, type DirHandleLike } from "../lib/fs";
+import { pairEntries, type ReviewPair, type SideRef } from "../lib/pairing";
+import { forPair, metaPathFor, toRecord, type PairMeta, type PairSide } from "../lib/pairmeta";
 import { parseDecisions, type ReviewRecord } from "../lib/reviewfile";
 import type { FileEntry } from "../lib/scan";
+import { loadMetaAt } from "./pairfile";
 
 /** The one global file older builds wrote; read-only from here on. */
 export const LEGACY_FILE = "review-decisions.json";
 
 export interface PairLoad {
-  /** pair id -> the record its own file holds (first file wins, in path order). */
+  /** pair id (of THIS walk, I-44) -> the record its own file holds (first file wins). */
   metas: Map<string, PairMeta>;
   /** The decisions the list applies: local files first, legacy as the fallback. */
   records: ReviewRecord[];
@@ -33,19 +30,36 @@ export interface PairLoad {
   legacyCorrupt: boolean;
 }
 
-/** Reads every pair file of a walk, then the legacy file for what is missing. */
+/**
+ * Reads every pair file of a walk, then the legacy file for what is missing.
+ * A pair file answers for the pair it SITS BESIDE (I-44): its path is resolved
+ * against this walk's pairs, so the file keeps working after the same tree is
+ * opened at another level, and a file whose pair is not on disk falls back to
+ * the identity it stores.
+ */
 export async function loadPairDecisions(root: DirHandleLike, entries: readonly FileEntry[]): Promise<PairLoad> {
-  const metas = new Map<string, PairMeta>();
-  const corruptFiles: string[] = [];
-  for (const relPath of pairFilePaths(entries)) await readInto(root, relPath, metas, corruptFiles);
+  const pairs = pairEntries(entries);
+  const byFile = pairFileIndex(pairs);
+  const sink: LoadSink = { metas: new Map(), corrupt: [] };
+  for (const relPath of pairFilePaths(entries)) await readInto(root, relPath, byFile.get(relPath) ?? null, sink);
   const legacy = await readLegacy(root);
   return {
-    metas,
-    records: mergeRecords(metas, legacy.records),
-    corruptFiles,
+    metas: sink.metas,
+    records: mergeRecords(sink.metas, legacy.records),
+    corruptFiles: sink.corrupt,
     legacy: legacy.found && !legacy.corrupt,
     legacyCorrupt: legacy.corrupt,
   };
+}
+
+/** pair file path (this walk's) -> the pair that owns it (I-44). */
+function pairFileIndex(pairs: readonly ReviewPair[]): Map<string, ReviewPair> {
+  const byFile = new Map<string, ReviewPair>();
+  for (const pair of pairs) {
+    const at = metaPathFor(pair);
+    if (at !== "") byFile.set(at, pair);
+  }
+  return byFile;
 }
 
 /** The pair files in a walk, in path order so a rescan is identical every time. */
@@ -56,36 +70,22 @@ function pairFilePaths(entries: readonly FileEntry[]): string[] {
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
-async function readInto(root: DirHandleLike, relPath: string, metas: Map<string, PairMeta>, corrupt: string[]): Promise<void> {
+interface LoadSink {
+  /** pair id (of this walk) -> the record its own file holds (first file wins). */
+  metas: Map<string, PairMeta>;
+  /** Pair files that exist but could not be parsed, by relative path. */
+  corrupt: string[];
+}
+
+async function readInto(root: DirHandleLike, relPath: string, owner: ReviewPair | null, sink: LoadSink): Promise<void> {
   const read = await loadMetaAt(root, relPath);
   if (read.missing) return;
   if (read.corrupt || read.meta === null) {
-    corrupt.push(relPath);
+    sink.corrupt.push(relPath);
     return;
   }
-  if (!metas.has(read.meta.id)) metas.set(read.meta.id, read.meta); // first in path order wins
-}
-
-export interface MetaRead {
-  meta: PairMeta | null;
-  corrupt: boolean;
-  missing: boolean;
-}
-
-/** Reads one pair file by its path relative to the root. */
-export async function loadMetaAt(root: DirHandleLike, relPath: string): Promise<MetaRead> {
-  const dir = await dirAt(root, relPath);
-  if (dir === null) return { meta: null, corrupt: false, missing: true };
-  const fh = await tryGetFile(dir.dir, dir.name);
-  if (!fh) return { meta: null, corrupt: false, missing: true };
-  let text: string;
-  try {
-    text = await (await fh.getFile()).text();
-  } catch {
-    return { meta: null, corrupt: true, missing: false }; // exists but unreadable
-  }
-  const parsed = parsePairMeta(text);
-  return parsed.ok ? { meta: parsed.meta, corrupt: false, missing: false } : { meta: null, corrupt: true, missing: false };
+  const meta = owner === null ? read.meta : forPair(read.meta, owner); // the walk's paths win
+  if (!sink.metas.has(meta.id)) sink.metas.set(meta.id, meta); // first in path order wins
 }
 
 interface LegacyLoad {
@@ -120,9 +120,36 @@ function mergeRecords(metas: Map<string, PairMeta>, legacy: readonly ReviewRecor
       if (fallback) out.push(fallback);
     }
   }
+  // A pair file owns its pair's id (of THIS walk): the legacy file is only the
+  // fallback for pairs nothing local answered for. A legacy record whose id no
+  // longer matches a moved pair is NOT swallowed here — the list reports it as
+  // the duplicate it is, which is exactly what the audit exists for (I-32/I-33).
+  //
+  // One exception, and it is a rule, not a courtesy: a pair file that says
+  // `pending` is a decision (I-13/I-42), so no legacy record may speak for the
+  // files it names — not even one carrying an older id (reported 2026-10-05:
+  // the reset vanished when the record's id stopped matching the walk's).
   const covered = new Set([...metas.keys()]);
-  for (const r of legacy) if (!covered.has(r.pair_id)) out.push(r);
+  const reset = resetFiles(metas);
+  for (const r of legacy) if (!covered.has(r.pair_id) && !reset.has(pathOf(r))) out.push(r);
   return out.sort((a, b) => (a.pair_id < b.pair_id ? -1 : 1));
+}
+
+/** The file paths a pair file with an explicit `pending` decision speaks for. */
+function resetFiles(metas: Map<string, PairMeta>): Set<string> {
+  const out = new Set<string>();
+  for (const meta of metas.values()) {
+    if (meta.decision !== "pending") continue;
+    if (meta.ai.relPath !== "") out.add(meta.ai.relPath);
+    if (meta.source !== null && meta.source.relPath !== "") out.add(meta.source.relPath);
+  }
+  return out;
+}
+
+/** The file a legacy record names (the AI result, else the reference). */
+function pathOf(r: ReviewRecord): string {
+  if (r.ai_result !== null && r.ai_result !== "") return r.ai_result;
+  return r.source ?? "";
 }
 
 function sortedMetas(metas: Map<string, PairMeta>): PairMeta[] {
@@ -149,158 +176,3 @@ function sideRef(side: PairSide | null): SideRef | null {
   return { relPath: side.relPath, size: Number(size) || 0, mtime: Number(mtime) || 0, error: null };
 }
 
-/**
- * Writes ONE pair's file beside its images. Throws when the pair cannot own a
- * file (no name to give it) or the write fails, so the caller keeps the decision
- * in memory and retries exactly this pair.
- */
-export async function savePairDecision(root: DirHandleLike, pair: ReviewPair, meta: PairMeta): Promise<void> {
-  const relPath = metaPathFor(pair);
-  if (relPath === "") throw new Error("the pair has no file name");
-  await saveMetaAt(root, relPath, meta);
-}
-
-/** Writes a pair file at an explicit path (generation, review, undo). */
-export async function saveMetaAt(root: DirHandleLike, relPath: string, meta: PairMeta): Promise<void> {
-  const dir = await dirAt(root, relPath);
-  if (dir === null) throw new Error("the pair's folder is gone");
-  const text = serializePairMeta(meta);
-  const tmp = tmpName(dir.name);
-  await writeAndVerify(dir.dir, tmp, text);
-  await writeFileOverwrite(dir.dir, dir.name, new Blob([text]));
-  await removeTmp(dir.dir, tmp);
-}
-
-/**
- * The pair file to write for a scanned pair: the decision the state holds (a
- * pending pair owns no record, I-13) added to the record already on disk, so
- * neither half can overwrite the other (I-41).
- */
-export function metaForRecord(records: readonly ReviewRecord[], pair: ReviewPair, base: PairMeta): PairMeta {
-  const rec = records.find((r) => r.pair_id === pair.pairId);
-  return withDecision(base, rec?.decision ?? "pending", rec?.reviewed_at ?? "");
-}
-
-/** A fresh pair file for a scanned pair that has none yet. */
-export function metaFor(pair: ReviewPair): PairMeta {
-  return newPairMeta({
-    id: pair.pairId, base: pair.base, suffix: pair.suffix, dirPath: pair.relDir,
-    ai: pair.ai === null ? sideNameOf(pair) : { relPath: pair.ai.relPath, name: baseName(pair.ai.relPath), fingerprint: fp(pair.ai) },
-    source: pair.source === null ? null : { relPath: pair.source.relPath, name: baseName(pair.source.relPath), fingerprint: fp(pair.source) },
-  });
-}
-
-function sideNameOf(pair: ReviewPair): PairSide {
-  const from = pair.source?.relPath ?? "";
-  const ext = from.includes(".") ? from.slice(from.lastIndexOf(".")) : ".png";
-  return { relPath: "", name: `${pair.base}_AI${pair.suffix}${ext}`, fingerprint: "" };
-}
-
-function fp(side: SideRef): string {
-  return `${side.size}:${side.mtime}`;
-}
-
-function baseName(relPath: string): string {
-  return relPath.split("/").pop() ?? relPath;
-}
-
-/**
- * Where a decision record's pair file lives. Derived from the record's own paths
- * (the AI image when it has one, else the reference's AI name), so an undo from
- * another tab finds the file without a scan. A reference-only pair that carried
- * a batch suffix cannot be located from the record alone — the caller that saw
- * the pair uses `savePairDecision` instead.
- */
-export function metaPathOf(rec: ReviewRecord): string {
-  if (rec.ai_result !== null && rec.ai_result !== "") return metaPathForAi(rec.ai_result);
-  if (rec.source !== null && rec.source !== "") return metaPathForAi(aiNameOf(rec.source));
-  return "";
-}
-
-/** "split_01/icon.png" -> "split_01/icon_AI.png" (the name a healthy AI side has). */
-function aiNameOf(sourceRelPath: string): string {
-  const name = baseName(sourceRelPath);
-  const dot = name.lastIndexOf(".");
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot) : ".png";
-  const base = parseAiName(name) ? stem.slice(0, -3) : stem;
-  return `${base}_AI${ext}`;
-}
-
-interface AtDir {
-  dir: DirHandleLike;
-  name: string;
-}
-
-async function dirAt(root: DirHandleLike, relPath: string): Promise<AtDir | null> {
-  const at = relPath.lastIndexOf("/");
-  if (at < 0) return { dir: root, name: relPath };
-  const dir = await probePath(root, relPath.slice(0, at));
-  return dir === null ? null : { dir, name: relPath.slice(at + 1) };
-}
-
-function tmpName(fileName: string): string {
-  return fileName.replace(/\.svg\.json$/i, ".svg.tmp.json");
-}
-
-async function writeAndVerify(dir: DirHandleLike, name: string, text: string): Promise<void> {
-  const tmp = await dir.getFileHandle(name, { create: true });
-  const w = await tmp.createWritable();
-  await w.write(new Blob([text]));
-  await w.close();
-  const back = await (await tmp.getFile()).text();
-  if (!parsePairMeta(back).ok) throw new Error("pair file tmp verify failed");
-}
-
-async function removeTmp(dir: DirHandleLike, name: string): Promise<void> {
-  try {
-    await dir.removeEntry?.(name);
-  } catch {
-    // a leftover tmp is harmless — the next save overwrites it
-  }
-}
-
-/**
- * A pair file rebuilt from a record alone — the legacy/undo path, when the file
- * is missing or unreadable. The AI path names the identity (a record always
- * carries the AI path for a pair that has one); a reference-only record falls
- * back to its own pair id.
- */
-export function metaFromRecord(rec: ReviewRecord): PairMeta {
-  const identity = identityFromRecord(rec);
-  return withDecision(newPairMeta({
-    ...identity,
-    source: rec.source === null ? null : { relPath: rec.source, name: baseName(rec.source), fingerprint: "" },
-  }), rec.decision, rec.reviewed_at);
-}
-
-/** The half a record can always name: the identity and the AI face. */
-function identityFromRecord(rec: ReviewRecord): PairIdentity & { ai: PairSide } {
-  const aiRel = rec.ai_result ?? "";
-  const name = aiRel === "" ? "" : baseName(aiRel);
-  const parsed = name === "" ? null : parseAiName(name);
-  const dirPath = aiRel === "" ? dirOf(rec.source ?? "") : dirOf(aiRel);
-  return {
-    id: rec.pair_id,
-    base: parsed?.base ?? rec.pair_id,
-    suffix: parsed?.suffix ?? "",
-    dirPath,
-    ai: { relPath: aiRel, name, fingerprint: "" },
-  };
-}
-
-function dirOf(relPath: string): string {
-  const at = relPath.lastIndexOf("/");
-  return at < 0 ? "" : relPath.slice(0, at);
-}
-
-/** True when the record can be turned into a pair file (used by the writers). */
-export function locatable(rec: ReviewRecord): boolean {
-  return metaPathOf(rec) !== "";
-}
-
-/** Side identity a writer can rebuild from a path alone (pairing helper). */
-export function identityOfPaths(dirPath: string, aiName: string): string {
-  const parsed = parseAiName(aiName);
-  return pairId(dirPath, parsed?.base ?? aiName, parsed?.suffix ?? "");
-}

@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 import { withVersion, type PairMeta } from "../lib/pairmeta";
 import type { ReviewStatus } from "../lib/svgmodel";
 import { getAppState } from "../state/appstore";
-import { saveMetaAt } from "../selection/pairstore";
+import { saveMetaAt } from "../selection/pairfile";
 import { bindSvgReviewApplier, type SvgReviewPatch, type SvgReviewRec } from "./reviewundo";
 import { metaForSource } from "./sources";
 import type { DirHandleLike } from "../lib/fs";

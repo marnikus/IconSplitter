@@ -176,6 +176,7 @@
   overflow-wrap: anywhere;
 }
 .v2-toolbar + .folder-path { margin-top: 10px; }
+.folder-path.unknown { color: var(--v2-muted); font-family: inherit; }
 
 .v2-recursive { color: var(--v2-muted); font-size: 11px; }
 

@@ -116,7 +116,7 @@ export function identityOf(pair: ReviewPair): PairIdentity {
 
 /** Fresh side data from a scanned pair: paths plus a size:mtime fingerprint. */
 export function aiSideOf(pair: ReviewPair): PairSide {
-  return sideFromPath(pair.ai?.relPath ?? aiSideNameAt(pair), pair.ai);
+  return sideFromPath(pair.ai?.relPath ?? aiSideName(pair), pair.ai);
 }
 
 export function sourceSideOf(pair: ReviewPair): PairSide | null {
@@ -127,10 +127,6 @@ export function sourceSideOf(pair: ReviewPair): PairSide | null {
 
 function sideFromPath(relPath: string, side: SideRef | null): PairSide {
   return { relPath, name: baseName(relPath), fingerprint: side === null ? "" : fingerprintOf(side) };
-}
-
-function aiSideNameAt(pair: ReviewPair): string {
-  return aiSideName(pair);
 }
 
 function fingerprintOf(side: SideRef): string {
@@ -163,6 +159,23 @@ export function toRecord(meta: PairMeta, pair: ReviewPair): ReviewRecord | null 
     decision: meta.decision,
     reviewed_at: meta.reviewedAt ?? new Date(0).toISOString(),
   };
+}
+
+/** One pair file as the root that READ it sees it (I-44): the walk's identity
+ * and face paths win over the stored ones, so a decision, a reset and the SVG
+ * history mean the same thing at any level; a face the walk cannot see keeps
+ * its stored path, and everything the pair owns is carried over untouched. */
+export function forPair(meta: PairMeta, pair: ReviewPair): PairMeta {
+  return {
+    ...meta,
+    id: pair.pairId, base: pair.base, suffix: pair.suffix, dirPath: pair.relDir,
+    ai: faceOf(pair.ai) ?? meta.ai, source: faceOf(pair.source) ?? meta.source,
+  };
+}
+
+/** A scanned side in the stored shape; null when the side is not on disk. */
+function faceOf(side: SideRef | null): PairSide | null {
+  return side === null ? null : sideOf(side.relPath, `${side.size}:${side.mtime}`);
 }
 
 /** The pair decision, leaving the SVG history exactly as it was. */

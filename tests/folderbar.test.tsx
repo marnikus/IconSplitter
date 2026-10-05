@@ -66,9 +66,9 @@ describe("OpenFolderButton — the one way to open a folder", () => {
   });
 });
 
-describe("RootPathRow — the picked full path, read-only", () => {
+describe("RootPathRow — the picked full path, read-only (I-36)", () => {
   it("shows the complete path as text, with nothing to type or press", () => {
-    render(<RootPathRow testid="svg-root-path" path={FULL} />);
+    render(<RootPathRow testid="svg-root-path" rootName="split_root" path={FULL} />);
     const row = q("[data-testid='svg-root-path']")!;
     expect(row.textContent).toBe(FULL);
     expect(row.getAttribute("title")).toBe(FULL); // the whole path on hover
@@ -78,20 +78,35 @@ describe("RootPathRow — the picked full path, read-only", () => {
     expect(row.querySelector("button")).toBeNull();
   });
 
-  it("renders nothing while the full path is unknown", () => {
-    render(<RootPathRow testid="v2-root-path" path="" />);
+  it("renders nothing before a folder is chosen — there is no path to report", () => {
+    render(<RootPathRow testid="v2-root-path" rootName="" path="" />);
     expect(q("[data-testid='v2-root-path']")).toBeNull();
   });
 
-  it("shows a newly captured path at once, without a reload (RULE 24)", () => {
-    render(<RootPathRow testid="v2-root-path" path="" />);
-    expect(q("[data-testid='v2-root-path']")).toBeNull();
-    render(<RootPathRow testid="v2-root-path" path={FULL} />);
-    expect(q("[data-testid='v2-root-path']")?.textContent).toBe(FULL);
+  it("explains WHY the path is missing once a folder is open, still with nothing to press", () => {
+    // the reported bug: the folder was chosen and the row said nothing at all
+    render(<RootPathRow testid="v2-root-path" rootName="split_root" path="" />);
+    const row = q("[data-testid='v2-root-path']")!;
+    expect(row.tagName).toBe("P");
+    expect(row.textContent).toContain("Full path unknown");
+    expect(row.textContent).toContain("copy the folder in Explorer");
+    expect(row.textContent).toContain("Open folder");
+    expect(row.querySelector("input, textarea, button, a")).toBeNull();
+    expect(row.className).toContain("unknown");
+  });
+
+  it("replaces the hint with the path the moment a pick captures one (RULE 24)", () => {
+    render(<RootPathRow testid="v2-root-path" rootName="split_root" path="" />);
+    expect(q("[data-testid='v2-root-path']")?.textContent).toContain("Full path unknown");
+    render(<RootPathRow testid="v2-root-path" rootName="split_root" path={FULL} />);
+    const row = q("[data-testid='v2-root-path']")!;
+    expect(row.textContent).toBe(FULL);
+    expect(row.className).not.toContain("unknown");
   });
 
   it("wraps a long path instead of hiding it behind an ellipsis", () => {
     expect(rule(".folder-path")).toMatch(/overflow-wrap:\s*anywhere/);
     expect(rule(".folder-path")).toMatch(/width:\s*100%/);
+    expect(rule(".folder-path.unknown")).toMatch(/color:/); // quiet, but readable
   });
 });

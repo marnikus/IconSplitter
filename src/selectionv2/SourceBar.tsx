@@ -40,7 +40,7 @@ export default function SourceBar(p: SourceBarProps) {
           <Summary c={counters(p.pairs)} />
         </div>
       </div>
-      <RootPathRow testid="v2-root-path" path={path} />
+      <RootPathRow testid="v2-root-path" rootName={p.rootName} path={path} />
     </>
   );
 }

@@ -48,7 +48,7 @@ export default function SourceLine({ rootName, discovery, busy, counts, onChoose
           <Chip value={counts.failed} label="failed" cls="failed" testid="svg-count-failed" />
         </div>
       </div>
-      <RootPathRow testid="svg-root-path" path={path} />
+      <RootPathRow testid="svg-root-path" rootName={rootName} path={path} />
     </>
   );
 }

@@ -8,7 +8,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { parsePairMeta } from "../src/lib/pairmeta";
+import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -17,6 +17,7 @@ import { resetAppStore } from "../src/state/appstore";
 import { PREFS_KEY } from "../src/selectionv2/prefsstore";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+import { pairFile } from "./helpers/pairfile";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -67,6 +68,18 @@ function makeBatchRoot(): FakeDir {
   return root;
 }
 
+/** The folder the user opened, at the reported levels of the same tree. */
+function branch(root: FakeDir, rel: string): FakeDir {
+  let dir = root;
+  for (const seg of rel.split("/").filter(Boolean)) dir = dir.children.get(seg) as FakeDir;
+  return dir;
+}
+
+/** The pair file a decision taken at `dir` writes, exactly as the app stores it. */
+function metaOf(dir: string): string {
+  return serializePairMeta(pairFile(dir, "icon-sheet_AI_01.png", { decision: "approved" }));
+}
+
 describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
@@ -86,6 +99,33 @@ describe("Selection V2 panel", () => {
     expect(rows(el).length).toBe(1);
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("Scope: split output only");
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("not listed");
+  });
+
+  it("lists the pieces at the output, the month and the run — not zero (the reported bug)", async () => {
+    for (const rel of ["_split_output", "_split_output/2026-10", "_split_output/2026-10/2026-10-01_10-24-31"]) {
+      const { el, ui } = await mount(branch(makeBatchRoot(), rel));
+      // the reported picks returned an EMPTY list here
+      expect(rows(el).length).toBe(1);
+      // the pick IS the output -> `output`; a pick inside it reviews all of it
+      const scope = rel === "_split_output" ? "Scope: split output — everything under it is listed"
+        : "Scope: whole folder — no split output found";
+      expect(text(el, "[data-testid='v2-scan-scope']")).toContain(scope);
+      await act(async () => { ui.unmount(); });
+    }
+  });
+
+  it("keeps a piece's decision when the same tree is opened one level deeper", async () => {
+    const root = makeBatchRoot();
+    const piece = ((root.children.get("_split_output") as FakeDir).children.get("2026-10") as FakeDir)
+      .children.get("2026-10-01_10-24-31") as FakeDir;
+    const sheet = piece.children.get("icon-sheet_AI") as FakeDir;
+    const split = sheet.children.get("split_01") as FakeDir;
+    const text0 = metaOf("_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01");
+    split.children.set("icon-sheet_AI_01.svg.json", new FakeFile("icon-sheet_AI_01.svg.json", text0.length, 10, text0));
+    const { el } = await mount(branch(root, "_split_output"));
+    expect(rows(el).length).toBe(1);
+    // the file was written with the batch root's paths — the row still says approved (I-44)
+    expect(text(el, "[data-testid^='v2-status-']")).toContain("Approved");
   });
 
   it("keeps the whole folder when no split output exists", async () => {
@@ -154,9 +194,10 @@ describe("Selection V2 panel", () => {
     expect(q(el, "[data-testid='v2-open-folder']")?.parentElement?.parentElement?.nextElementSibling).toBe(row);
   });
 
-  it("hides the row while the full path is unknown, and carries no copied-path or watcher controls", async () => {
+  it("explains the missing full path once a folder is open, and carries no copied-path or watcher controls", async () => {
     const { el } = await mount(makeRoot()); // nothing on the clipboard this time
-    expect(q(el, "[data-testid='v2-root-path']")).toBeNull();
+    // the reported bug: the row was blank although the folder HAD been chosen
+    expect(text(el, "[data-testid='v2-root-path']")).toContain("Full path unknown");
     for (const gone of ["v2-root-path-use", "v2-root-path-note", "v2-watcher", "v2-root"]) {
       expect(q(el, `[data-testid='${gone}']`)).toBeNull();
     }

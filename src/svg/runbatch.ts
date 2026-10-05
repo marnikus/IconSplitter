@@ -23,7 +23,7 @@ import { attachRequestId, beginRequest, endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import { type PairMeta } from "../lib/pairmeta";
-import { saveMetaAt } from "../selection/pairstore";
+import { saveMetaAt } from "../selection/pairfile";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";

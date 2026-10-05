@@ -478,26 +478,34 @@ Batch:
   is shown in one read-only, full-width row directly below the controls of
   Selection V2 and Generate SVG (`v2-root-path` / `svg-root-path`, shared
   `ui/FolderBar.RootPathRow`): plain text, no field, no button, no status
-  sentence. The row is rendered only while a path is known (a pick that captured
-  nothing shows no row — `design 2026-10-05-folder-ui` D3), it follows the
-  storage live (`ui/userootpath`), so a capture in one tab is visible in the
-  other without a reload, and a user never has to open a dialog to find out what
-  a copy will hand over.
+  sentence. A pick that captured a path shows the path; **a pick that captured
+  nothing still shows a row that says so** and names the one action that fixes
+  it ("Full path unknown — copy the folder in Explorer (Ctrl+Shift+C) before
+  pressing Open folder") — the row must never be blank while a folder is open
+  (reported 2026-10-05; design `archive/2026-10-05-pick-level-scope`, D14) and
+  no path is ever invented (I-35). Before a pick there is nothing to report, so
+  no row exists at all. The row follows the storage live (`ui/userootpath`), so
+  a capture in one tab is visible in the other without a reload, and a user
+  never has to open a dialog to find out what a copy will hand over.
 * **I-37 (the boundary is stated, RULE 9) — RETIRED 2026-10-05:** there is no
   paste field and no `Use copied path` any more, so the explanation of why a page
   cannot read the drive has no control left to sit beside; the path row states
-  what is known and stays hidden while nothing is (`design
-  2026-10-05-folder-ui`, D2/D4). The number is kept, never renumbered (RULE 17).
-* **I-38 (the scope is the batch's output, RULE 3/24):** when the picked tree
-  contains a folder whose name matches `/^_.*split.+output/i` (or the picked
-  folder is one), Selection V1/V2 and Generate SVG list **only** pairs with a
-  side inside such a folder — the main folder keeps the unsplit sheets, which are
-  the batch's input, and they are not reviewable and not generatable. The scope
-  is a function of the tree's directories, so a repeated scan decides the same
-  way; every out-of-scope item is counted and reported (both toolbars, the log,
-  `outside-split` exclusions), never silently dropped, and the records of
-  out-of-scope pairs stay as orphans. A tree without such a folder behaves
-  exactly as before.
+  what is known — and says so plainly when nothing is (I-36, revised
+  2026-10-05). The number is kept, never renumbered (RULE 17).
+* **I-38 (the scope is relative to the PICK, RULE 3/24) — rewritten 2026-10-05:**
+  the reviewable set is decided from the **picked folder** and never from how
+  deep it happens to sit. A folder whose name matches `/^_.*split.+output/i`
+  **directly inside** the pick is the batch's output: its pairs are listed and
+  the main folder's unsplit sheets — the batch's input — are counted and
+  reported as outside. A pick that **is** such a folder reviews everything
+  under it, and a pick inside one reviews everything below it, so opening the
+  batch root, `_split_output`, a month or a run gives the **same pieces** (the
+  reported 2026-10-05 bug: the deeper levels listed nothing). Only a DIRECT
+  child can scope, so a piece folder that merely carries the words
+  (`…_split_01`) never hides anything; a tree without such a folder reviews
+  fully as before. Every out-of-scope item is counted and reported (both
+  toolbars, the log, `outside-split` exclusions), never silently dropped, and
+  the records of out-of-scope pairs stay as orphans.
 * **I-39 (a "full path" is only a folder path, RULE 13):** the value remembered
   for a root (`iconSplitter.rootpaths.v1`) is either an Explorer-usable **folder**
   path — a drive path (`F:`, `F:\`, `F:\a\b`; forward slashes and surrounding
@@ -527,12 +535,27 @@ Batch:
   unreadable pair file is named (banner + log + row status) and the in-memory
   decision is kept, never silently turned into `pending`; a failed write keeps
   the decision in memory and `Retry` rewrites exactly the pairs that failed.
+* **I-44 (a pair file answers for the pair it sits beside, RULE 3/24) — new
+  2026-10-05:** a `<stem>.svg.json` stores the identity and the face paths of
+  the root that WROTE it, but it is read as the pair it lies beside: the walk's
+  pair id and paths win over the stored ones
+  (`lib/pairmeta.forPair`, `selection/pairstore.pairFileIndex`), so a decision,
+  a reset and the SVG history mean the same thing however deep the tree was
+  opened — opening `_split_output` again cannot turn an approved piece into
+  `pending` or empty the Generate SVG list (the second half of the reported
+  bug). Everything the pair owns (decision, versions) is carried over
+  untouched; a pair file whose pair is not on disk at all still answers by its
+  stored identity (the `files-missing` report, I-42/I-43), and a local file
+  still wins over the legacy `review-decisions.json` (I-41).
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
-  ("Scope: split output only · N pair(s) in the main folder not listed" /
-  "Scope: whole folder — no split output found"), and the Generate SVG list
-  reports the same items as `outside-split` exclusions in its banner, audit and
-  log. A user never has to guess why the list is shorter than the folder.
+  ("Scope: split output only · N pair(s) in the main folder not listed"); a
+  pick that IS a split output states that everything under it is listed
+  ("Scope: split output — everything under it is listed"), and a pick with no
+  split output inside it states "Scope: whole folder — no split output found".
+  The Generate SVG list reports the same items as `outside-split` exclusions in
+  its banner, audit and log. A user never has to guess why the list is shorter
+  than the folder.
 * **I-31 (SVG list, RULE 3/4):** a Generate SVG row is an **existing canonical
   AI output** whose path an approved decision names — never an invented `_AI`
   name, never a reference image, never a path that is not on disk. A source that
@@ -602,7 +625,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
-| The picked root's path | `src/ui/pickroot.ts`, `src/ui/userootpath.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/RootPathField.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the live React view of it, and the control (field + status + `Use copied path`) |
+| The picked root's path | `src/ui/pickroot.ts`, `src/ui/userootpath.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`), the live React view of it, and the shared read-only row (path, or the reason it is unknown — I-36) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
@@ -855,8 +878,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   (`sel-footer`), write/corrupt banners, busy + toast.
 * Selection V2 mode: source bar (`v2-open-folder` — the green button,
   `v2-rescan`, `v2-mode-list` / `v2-mode-compare`, `v2-count-*`), the
-  read-only full-path row (`v2-root-path`, hidden while unknown; shared
-  `ui/FolderBar`), filter grid (`v2-date-*`,
+  read-only full-path row (`v2-root-path`, the path or the reason it is unknown;
+  shared `ui/FolderBar`), filter grid (`v2-date-*`,
   `v2-from` / `v2-to`, `v2-status`, `v2-pairing`, `v2-sort`, `v2-dir`,
   `v2-shown`, `v2-clear`), bulk bar (`v2-check-all`, `v2-selected-count`,
   `v2-scope`, `v2-blocked`, `v2-hidden`, `v2-select-visible`, `v2-deselect`,
@@ -871,7 +894,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
 * Generate SVG mode: the row's scan status (`svg-problem-{id}` — "AI image
   missing" / "Reference missing" / "Unreadable file" / "Files missing", with
   the full reason in the `title`), source bar (`svg-open-folder`, `svg-rescan`,
-  `svg-count-*`), the read-only full-path row (`svg-root-path`, hidden while
+  `svg-count-*`), the read-only full-path row (`svg-root-path`, the path or the reason it is
   unknown), prompt + provider card (`svg-prompt`, `svg-reset-prompt`,
   `svg-provider`, `svg-limits`, `svg-per-request`, `svg-timeout`,
   `svg-retries`, `svg-model`, `svg-key-state`
@@ -1121,7 +1144,8 @@ exact leaf match only). It is normalised (quotes, forward slashes, doubled and
 trailing separators, UNC pairs — I-29) and remembered per folder name in
 `iconSplitter.rootpaths.v1`, so the same folder opened in another tab gives the
 same text for free. Until a path is captured the copies still work and name the
-folder only, and the tab's path row stays hidden (I-36).
+folder only, and the tab's path row says the full path is unknown and how to
+capture it (I-36, revised 2026-10-05).
 
 ### 14.2 One function decides every copy
 
@@ -1219,7 +1243,8 @@ clipboard, the button, the field and on read — a junk value written by an olde
 build counts as no memory. (The field itself and its refusal message were
 removed on 2026-10-05 — see the note at the top of §14.) The app still never
 lies about what a copy will hand over: with nothing captured the copy names the
-folder only, and the path row that would show a path stays hidden (I-36).
+folder only, and the path row states that the full path is unknown and how to
+capture it (I-36, revised 2026-10-05).
 
 ## 15. One JSON per pair — the fix for "the folder shows only the AI approval" (2026-10-05)
 

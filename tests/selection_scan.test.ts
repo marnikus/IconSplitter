@@ -60,8 +60,10 @@ function withCourtFile(text: string): FakeDir {
  * The reported tree: an unsplit sheet pair at the root (the batch's input) and
  * the batch's own pieces inside `_split_output`, each beside the reference copy
  * the batch writes. Only the pieces are reviewable (I-38).
+ * With `appr`, each piece also gets its OWN pair file — written with the paths
+ * the batch root sees, exactly as a decision taken there would store them.
  */
-function makeBatchRoot(): FakeDir {
+function makeBatchRoot(appr = false): FakeDir {
   const root = new FakeDir("test_processing");
   root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
   root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
@@ -71,6 +73,10 @@ function makeBatchRoot(): FakeDir {
     const split = new FakeDir(`split_${piece}`);
     split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
     split.children.set(`icon-sheet_AI_${piece}.png`, new FakeFile(`icon-sheet_AI_${piece}.png`, 20, 1200, "e"));
+    if (appr) {
+      const text = serializePairMeta(pairFile(batchDir(piece), `icon-sheet_AI_${piece}.png`, { decision: "approved" }));
+      split.children.set(`icon-sheet_AI_${piece}.svg.json`, new FakeFile(`icon-sheet_AI_${piece}.svg.json`, text.length, 10, text));
+    }
     sheet.children.set(`split_${piece}`, split);
   }
   run.children.set("icon-sheet_AI", sheet);
@@ -80,6 +86,18 @@ function makeBatchRoot(): FakeDir {
   out.children.set("2026-10", month);
   root.children.set("_split_output", out);
   return root;
+}
+
+/** The piece folder as the batch root sees it (the path a decision writes). */
+function batchDir(piece: string): string {
+  return `_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_${piece}`;
+}
+
+/** The folder the user opened, at the reported levels of the same tree. */
+function branch(root: FakeDir, rel: string): FakeDir {
+  let dir = root;
+  for (const seg of rel.split("/").filter(Boolean)) dir = dir.children.get(seg) as FakeDir;
+  return dir;
 }
 
 describe("the reviewable set is the split output (I-38)", () => {
@@ -93,7 +111,7 @@ describe("the reviewable set is the split output (I-38)", () => {
     ]);
     expect(s.pairs[0].ai?.relPath).toContain("icon-sheet_AI_01.png");
     expect(s.pairs[0].source?.relPath).toContain("split_01/icon-sheet.png");
-    expect(s.scope).toEqual({ split: true, outside: 1 });
+    expect(s.scope).toEqual({ level: "output-child", outside: 1 });
     expect(h.sayings.join(" | ")).toContain("Scope: split output only");
   });
 
@@ -117,7 +135,7 @@ describe("the reviewable set is the split output (I-38)", () => {
   it("reviews a plain folder as before when no split output exists", async () => {
     const h = harness(makeRoot());
     await rescan(h.ctx, h.set, h.say);
-    expect(h.ctx.state.current.scope).toEqual({ split: false, outside: 0 });
+    expect(h.ctx.state.current.scope).toEqual({ level: "whole", outside: 0 });
     expect(h.ctx.state.current.pairs.map((p) => p.relDir)).toEqual(["architecture"]);
   });
 
@@ -128,6 +146,76 @@ describe("the reviewable set is the split output (I-38)", () => {
     await rescan(b.ctx, b.set, b.say);
     expect(a.ctx.state.current.pairs.map((p) => p.pairId)).toEqual(b.ctx.state.current.pairs.map((p) => p.pairId));
     expect(a.ctx.state.current.scope).toEqual(b.ctx.state.current.scope);
+  });
+});
+
+describe("the same tree reviews the same pieces however deep it is opened (the reported 0-item bug)", () => {
+  const PICKS = [
+    "_split_output",
+    "_split_output/2026-10",
+    "_split_output/2026-10/2026-10-01_10-24-31",
+  ];
+  const PIECES = [
+    "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01",
+    "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02",
+  ];
+  const DEEP = ["2026-10-01_10-24-31/icon-sheet_AI/split_01", "2026-10-01_10-24-31/icon-sheet_AI/split_02"];
+
+  it("lists the pieces — not nothing — at the output, the month and the run", async () => {
+    const expected: Record<string, string[]> = {
+      [PICKS[0]]: PIECES,
+      [PICKS[1]]: DEEP,
+      [PICKS[2]]: DEEP.map((d) => d.replace("2026-10-01_10-24-31/", "")),
+    };
+    for (const rel of PICKS) {
+      const h = harness(branch(makeBatchRoot(), rel));
+      await rescan(h.ctx, h.set, h.say);
+      const s = h.ctx.state.current;
+      expect(s.scope.outside).toBe(0); // opening inside the output hides nothing
+      expect(s.pairs.map((p) => p.relDir)).toEqual(expected[rel]);
+      expect(s.pairs.map((p) => p.ai?.relPath.split("/").pop())).toEqual(["icon-sheet_AI_01.png", "icon-sheet_AI_02.png"]);
+      // the pick IS the output -> the scan explains that everything under it is
+      // listed; a pick inside the output reviews all of it and explains nothing
+      // (there is nothing to explain — the whole pick is reviewable).
+      if (rel === "_split_output") {
+        expect(h.sayings.join(" | ")).toContain("Scope: split output — everything under it is listed");
+      } else {
+        expect(h.sayings.join(" | ")).not.toContain("Scope:");
+      }
+    }
+  });
+
+  it("still has each piece's decision when the tree is opened at a deeper level", async () => {
+    // the pair files were written at the batch root, naming `_split_output/…` paths
+    for (const rel of PICKS) {
+      const h = harness(branch(makeBatchRoot(true), rel));
+      await rescan(h.ctx, h.set, h.say);
+      const s = h.ctx.state.current;
+      expect(s.pairs.map((p) => p.decision)).toEqual(["approved", "approved"]);
+      expect(s.records.map((r) => r.decision)).toEqual(["approved", "approved"]);
+      // the record names the file as THIS pick sees it (I-44) — that is how a row matches
+      expect(s.records.map((r) => r.ai_result)).toEqual(s.pairs.map((p) => p.ai?.relPath));
+    }
+  });
+
+  it("names the same two pieces at every level — only the paths are relative to the pick", async () => {
+    const seen: string[][] = [];
+    for (const rel of PICKS) {
+      const h = harness(branch(makeBatchRoot(true), rel));
+      await rescan(h.ctx, h.set, h.say);
+      const s = h.ctx.state.current;
+      expect(s.pairs).toHaveLength(2); // the reported bug listed ZERO here
+      seen.push(s.pairs.map((p) => p.ai?.relPath.split("/").pop() ?? "").sort());
+    }
+    expect(seen[0]).toEqual(seen[1]);
+    expect(seen[2]).toEqual(seen[1]);
+  });
+
+  it("reports the unsplit sheet only where it is really mixed in — the batch root", async () => {
+    const h = harness(makeBatchRoot(true));
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.ctx.state.current.scope).toEqual({ level: "output-child", outside: 1 });
+    expect(h.sayings.join(" | ")).toContain("1 pair(s) in the main folder not listed");
   });
 });
 

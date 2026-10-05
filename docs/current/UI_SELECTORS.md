@@ -163,7 +163,7 @@ Header + status:
 |---|---|---|
 | `sel-root` | root picker button | label mirrors state (`Root: {name}`), RULE 24 |
 | `sel-rescan` | `↺ Rescan` | re-walks the root; the ONE scan control (the watcher pill is gone — no auto-rescan anywhere) |
-| `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
+| `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: split output — everything under it is listed" (the pick IS the output) / "Scope: whole folder — no split output found" |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
 | `sel-help` | `?` popover | keyboard reference |
 
@@ -199,7 +199,7 @@ Source bar + layout switch:
 | Test id | Element | Notes |
 |---|---|---|
 | `v2-open-folder` | **green `Open folder` button** | the ONE picker control of this tab (I-30); label is never the folder's name (shared `ui/FolderBar`, design 2026-10-05-folder-ui) |
-| `v2-root-path` | read-only `<p>` row below the toolbar | the picked folder's **complete path**, captured from the clipboard when the folder is opened (I-35) and remembered per folder name (I-29); rendered only while a path is known — no field, no button, nothing to copy or press |
+| `v2-root-path` | read-only `<p>` row below the toolbar | the picked folder's **complete path**, captured from the clipboard when the folder is opened (I-35) and remembered per folder name (I-29); with no path captured it instead states "Full path unknown — copy the folder in Explorer (Ctrl+Shift+C) before pressing Open folder" (I-36, revised 2026-10-05) — no field, no button, nothing to copy or press; no row at all before a folder is open |
 | `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom; unchanged by the folder-UI change |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
@@ -216,7 +216,7 @@ Bulk bar (`v2-bulk`):
 | `v2-check-all` | header checkbox | checked / unchecked / **indeterminate** |
 | `v2-selected-count` | `N selected` | checked rows, independent of the filters |
 | `v2-scope` | `across N visible pairs` | the scope "Select visible" and bulk act on |
-| `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — the same two states as `sel-scope`; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
+| `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — the same states as `sel-scope`, including "…everything under it is listed" when the picked folder IS the split output; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
 | `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
 | `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
 | `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
@@ -331,7 +331,7 @@ Source bar (only after a root is remembered; `svg-root-empty` /
 | Test id | Element | Notes |
 |---|---|---|
 | `svg-open-folder` | **green `Open folder` button** | the ONE picker control of this tab (I-30), offered whether or not a root is loaded; label is never the folder's name (shared `ui/FolderBar`) |
-| `svg-root-path` | read-only `<p>` row below the toolbar | the picked folder's **complete path** — a browser cannot read the drive, so it is captured from the clipboard when the folder is opened (I-35) and remembered per folder name (I-29); rendered only while a path is known, as plain text (no field, no `Use copied path`, no status sentence) |
+| `svg-root-path` | read-only `<p>` row below the toolbar | the picked folder's **complete path** — a browser cannot read the drive, so it is captured from the clipboard when the folder is opened (I-35) and remembered per folder name (I-29); the same row states "Full path unknown — copy the folder in Explorer (Ctrl+Shift+C) before pressing Open folder" while nothing was captured (I-36, revised 2026-10-05), as plain text (no field, no `Use copied path`, no status sentence); no row before a folder is open |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt; unchanged by the folder-UI change |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |

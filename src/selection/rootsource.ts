@@ -10,7 +10,7 @@ import { pairEntries, type ReviewPair } from "../lib/pairing";
 import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
 import { pairIdOfMetaPath } from "../lib/pairmeta";
-import { directoryNames, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
+import { scopeLevelOf, scopeText, splitPairs, treeDirs, type ScanScope } from "../lib/splitscope";
 import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
@@ -116,17 +116,18 @@ function commit(
 }
 
 /**
- * Walks the root once and decides the reviewable set (I-38): when the tree holds
- * a split-output folder, that folder's pairs are the set and the main folder's
- * unsplit sheets are counted as outside; otherwise every pair is reviewable, so a
- * folder that never saw a batch behaves exactly as before.
+ * Walks the root once and decides the reviewable set (I-38), relative to the
+ * PICKED folder: a direct split-output child is the set (its pairs are listed,
+ * the main folder's unsplit sheets are counted as outside); a picked split
+ * output, or a folder inside one, reviews everything below it. So the same tree
+ * lists the same pieces however deep the user opened it.
  */
 async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope; entries: FileEntry[] }> {
   const tree = await readDirTree(root, []);
-  const scoped = scopeOf(directoryNames(tree), root.name);
+  const level = scopeLevelOf(treeDirs(tree), root.name);
   const entries = walkTree(tree, []);
-  const { pairs, outside } = splitPairs(pairEntries(entries), scoped);
-  return { pairs, scope: { split: scoped, outside: outside.length }, entries };
+  const { pairs, outside } = splitPairs(pairEntries(entries), level);
+  return { pairs, scope: { level, outside: outside.length }, entries };
 }
 
 /** The id -> AI path cache every cross-tab undo reads (state/sourceindex). */
@@ -156,8 +157,8 @@ function reportReads(load: PairLoad, say: Say): void {
  * while a fresh pick explains why the list is short (I-40).
  */
 function announce(before: ScanScope, scope: ScanScope, say: Say): void {
-  if (before.split === scope.split && before.outside === scope.outside) return;
-  if (!scope.split) return;
+  if (before.level === scope.level && before.outside === scope.outside) return;
+  if (scope.level === "whole") return;
   say(scopeText(scope));
   log({ feature: "selection", action: "scan-scope", detail: scopeText(scope) });
 }

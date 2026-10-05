@@ -9,7 +9,7 @@ import type { BatchSource } from "../lib/svgbatch";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { metaPathFor, newPairMeta, withDecision, type PairMeta } from "../lib/pairmeta";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
-import { directoryNames, scopeOf } from "../lib/splitscope";
+import { scopeLevelOf, treeDirs } from "../lib/splitscope";
 import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem, type ProblemKind } from "../lib/pairing";
 import { loadPairDecisions } from "../selection/pairstore";
 import {
@@ -84,12 +84,12 @@ export const PROBLEM_LABEL: Record<ProblemKind, string> = {
 /** Scans the root and lists every approved AI output, in a deterministic order. */
 export async function discoverApprovedSources(root: DirHandleLike): Promise<Discovery> {
   const tree = await readDirTree(root, []);
-  // When the tree holds the batch's output, that is the reviewable set: the main
-  // folder keeps the unsplit sheets, which are the batch's input (I-38).
-  const scoped = scopeOf(directoryNames(tree), root.name);
+  // A direct split-output child is the reviewable set; a pick that IS one (or
+  // sits inside one) reviews everything below it (I-38, level-relative).
+  const level = scopeLevelOf(treeDirs(tree), root.name);
   const entries = walkTree(tree, []);
   const load = await loadPairDecisions(root, entries);
-  const picked = selectRows(pairEntries(entries), load.records, scoped);
+  const picked = selectRows(pairEntries(entries), load.records, level);
   const sources = sortSources(picked.rows.map(toSource));
   return {
     sources,

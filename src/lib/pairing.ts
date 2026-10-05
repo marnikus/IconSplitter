@@ -40,7 +40,7 @@ export interface PairProblem {
 }
 
 /** Builds the pair list from a recursive scan (walkTree output), in place order. */
-export function pairEntries(entries: FileEntry[]): ReviewPair[] {
+export function pairEntries(entries: readonly FileEntry[]): ReviewPair[] {
   const sources = indexSources(entries);
   const byId = new Map<string, ReviewPair>();
   for (const e of entries) addAiPair(e, sources, byId);
@@ -55,7 +55,7 @@ function byPlace(a: ReviewPair, b: ReviewPair): number {
 
 type SourceMap = Map<string, FileEntry>; // lower relPath -> entry
 
-function indexSources(entries: FileEntry[]): SourceMap {
+function indexSources(entries: readonly FileEntry[]): SourceMap {
   const map: SourceMap = new Map();
   for (const e of entries) {
     if (!isImageFile(e.name) || isVersionArtifact(e.name)) continue;
@@ -109,7 +109,7 @@ function resultRank(p: ReviewPair): number {
   return p.ai.relPath.toLowerCase().endsWith(".svg") ? 1 : 0;
 }
 
-function addOrphanSources(entries: FileEntry[], sources: SourceMap, out: Map<string, ReviewPair>): void {
+function addOrphanSources(entries: readonly FileEntry[], sources: SourceMap, out: Map<string, ReviewPair>): void {
   const pairedSrc = new Set([...out.values()].map((p) => p.source?.relPath.toLowerCase()));
   for (const e of entries) {
     if (!sources.has(e.relPath.toLowerCase()) || pairedSrc.has(e.relPath.toLowerCase())) continue;

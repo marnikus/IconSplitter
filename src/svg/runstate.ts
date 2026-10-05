@@ -9,7 +9,7 @@ import { costText, fmtTokens } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import type { DirHandleLike } from "../lib/fs";
 import type { RunEvent, RunSummary } from "./runner";
-import { loadMetaAt } from "../selection/pairstore";
+import { loadMetaAt } from "../selection/pairfile";
 import { loadSourceIndex, metaPathOfEntry } from "../state/sourceindex";
 import { toRow } from "./rowmodel";
 import { newestValid } from "../lib/svgfile";

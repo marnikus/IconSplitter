@@ -202,7 +202,8 @@ describe("the root's full path (folder copies)", () => {
     expect(btn.textContent).toBe("Open folder"); // one action, never the folder's name
     // the root came from the remembered handle, not from this tab's picker:
     // the button must still offer to change it instead of hiding (the old bug).
-    expect(q("[data-testid=svg-root-path]")).toBeNull(); // nothing captured yet
+    // the path was never captured in this session, so the row says why (I-36)
+    expect(text("[data-testid=svg-root-path]")).toContain("Full path unknown");
   });
 
   it("shows the path captured at pick time in a read-only row, and keeps it after a restart", async () => {
@@ -225,12 +226,14 @@ describe("the root's full path (folder copies)", () => {
     expect(text("[data-testid=svg-root-path]")).toBe("F:\\Stocks 2026\\icons\\split_root");
   });
 
-  it("refuses the copied PARENT folder — the row stays hidden and nothing is stored", async () => {
+  it("refuses the copied PARENT folder — nothing is stored, and the row says why", async () => {
     stubClipboard("F:\\Stocks 2026\\icons testing\\single"); // the parent, not the folder
     try {
       await mountPick(await makeRoot());
       expect(loadRootPath("split_root")).toBe(""); // never completed into a guess
-      expect(q("[data-testid=svg-root-path]")).toBeNull();
+      // no invented path — the row reports the miss instead of a wrong path
+      expect(text("[data-testid=svg-root-path]")).toContain("Full path unknown");
+      expect(text("[data-testid=svg-root-path]")).not.toContain("icons testing");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }

@@ -47,7 +47,7 @@ export interface SelState {
 
 export function initialSelState(): SelState {
   return {
-    rootName: "", scope: { split: false, outside: 0 }, pairs: [], records: [],
+    rootName: "", scope: { level: "whole", outside: 0 }, pairs: [], records: [],
     lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
     corrupt: false, corruptFiles: [], retryIds: [], writeWarn: null, awaitingRetry: 0,

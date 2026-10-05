@@ -16,7 +16,7 @@ import { toRow } from "../src/svg/rowmodel";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
-import { saveMetaAt } from "../src/selection/pairstore";
+import { saveMetaAt } from "../src/selection/pairfile";
 
 const OUT = "_split_output/2026-10/2026-10-01_10-24-31";
 const BUNNY_DIR = `${OUT}/icon-bunny-face_AI_5/split_01`;

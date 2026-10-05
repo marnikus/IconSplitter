@@ -8,7 +8,8 @@ import {
   applyDecisionPatch, bindDecisionApplier, hasLiveApplier, SELECTION_HANDLE_KEY,
   type DecisionPatch,
 } from "../src/selection/offline";
-import { LEGACY_FILE, loadMetaAt, saveMetaAt } from "../src/selection/pairstore";
+import { LEGACY_FILE } from "../src/selection/pairstore";
+import { loadMetaAt, saveMetaAt } from "../src/selection/pairfile";
 import { pairFile } from "./helpers/pairfile";
 import { loadHandles } from "../src/batch/store";
 import { saveSourceIndex } from "../src/state/sourceindex";

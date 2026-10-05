@@ -1449,7 +1449,7 @@ exactly the pairs whose write failed. `selection/reviewstore.ts` is deleted;
 |---|---|---|
 | `src/lib/pairmeta.ts` | 24 / 276 | **new, pure**: the v2 model (identity + both faces + decision + versions), parse (v2 + legacy v1), serialize, `toRecord`, `withDecision`, `withVersion`, the file-name/locator rules |
 | `src/lib/svgmodel.ts` | 14 / 155 | **new**: the version record (status, review, usage, cost + basis, validation, batch ref) with per-field tolerant parsing |
-| `src/selection/pairstore.ts` | 22 / 304 | **new** (replaces `reviewstore.ts`): reads every pair file of a walk + the legacy fallback, writes ONE pair's file atomically, locates a file from a record |
+| `src/selection/pairstore.ts` | 22 / 304 | **new** (replaces `reviewstore.ts`): reads every pair file of a walk + the legacy fallback, writes ONE pair's file atomically, locates a file from a record (later split by concept — see the pick-level entry below: `pairfile.ts` 18 / 184 + `pairstore.ts` 18 / 179) |
 | `src/selection/offline.ts` | 8 / 86 | the cross-tab undo writes per-pair files; a pair back to `pending` is located through `state/sourceindex` |
 | `src/selection/useSelection.ts` | 28 / 262 | per-pair writes + failed-id retry (`retryIds`), reworded warning |
 | `src/selection/rootsource.ts` | 17 / 152 | `walkAndLoad` → one `commit`; records the id → AI path index for the undo paths |
@@ -1550,3 +1550,93 @@ returning a real folder and the clipboard read succeeding during that click's
 user activation — is exactly what the user's own browser confirms on the first
 pick; the unit tests pin the capture protocol around it (pre-read → pick →
 conditional re-read, nothing stored on cancel).
+
+## 2026-10-05 — the same tree at three pick levels, and the pick's own identity
+
+Reported (two bugs): picking `…\test_processing_2\_split_output\2026-10\2026-10-05_18-45-20`,
+`…\_split_output\` and `…\_split_output\2026-10\` did **not** give the same list — the first
+two showed **0 items** in Selection and in Generate SVG, only `2026-10` listed the pieces —
+although the scan is recursive over the picked folder; and the full folder path was not
+displayed after the folder was chosen. Design of record:
+`docs/archive/2026-10-05-pick-level-scope/design.md` (D10–D15). Two root causes:
+
+* **Scope was a property of the tree, not of the pick** (bug 1a, I-38). `splitscope` looked
+  for a `_*split*output` directory anywhere in the walk and, when the pick itself *was* that
+  directory or below it, the "outside the split output" count made the rule reject every
+  pair — the list emptied. Scope is now **level-relative** (D10–D12): the pick is the
+  reference; a split-output directory **directly inside** the pick scopes the review; a pick
+  inside one reviews everything; only a direct child can ever scope; `…/split_01` never
+  hides anything. Three states, one per pick (below).
+* **A pair file answered with the identity of the file that wrote it** (bug 1b, I-44, D13).
+  A `split_01` piece is indexed by the walk under `<batchDir>/split_01/…`, while its pair
+  file stores the identity it was written with (`meta.id` hashed over the writing root's
+  path, `ai_result` relative to that root). `mergeRecords` rebuilt the record with the
+  **stored** identity (`toRecord(meta, pairRefOf(meta))`), so at a deeper pick the list's
+  `decide()` could not match the approval, and the consumers (`svg/runstate.ts`,
+  `svg/scan.ts`) read `metas.get(walkPairId)` — the approval, the reset and the SVG history
+  all vanished (Generate SVG lists approved only, so it showed 0 rows). Now
+  `pairmeta.forPair(meta, pair)` rebuilds every field from the walk's own pair: the walk
+  identity wins, everything the pair owns is carried over, the stored face is kept only
+  where the walk has none; a pair file that matches **no** pair on disk falls back to its
+  stored identity, and a local pair file beats the legacy global file by id **or** by the
+  paths it names when it says `pending`.
+* **The path row was hidden while the path was unknown** (bug 2). After the pick the row
+  stayed blank when the clipboard capture missed, which read as "the path is not shown".
+  The row now never goes blank while a folder is open (I-36 revised, D14): it shows the
+  full path when known, otherwise the reason and the fix
+  (`Full path unknown — copy the folder in Explorer (Ctrl+Shift+C) before pressing Open folder`);
+  no row before a pick. Still read-only text, still an exact-leaf clipboard match only,
+  never an invented path.
+
+`src/selection/pairstore.ts` had grown to 22 fns / 304 lines, so the pair-file half was
+**split by concept** (RULE 19 step 4): `src/selection/pairfile.ts` (one file on disk —
+read, rebuild, atomic write) and `src/selection/pairstore.ts` (the walk — which files,
+what the list applies to). `src/lib/pairmeta.ts` was compacted back to exactly 300 lines
+after gaining `forPair`.
+
+### Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing: `App.tsx`, `lib/detect.ts`) |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED (`--changed --allow-legacy`) |
+| 4/6 Tests | **83 files / 849 tests, all green** (was 83 / 831) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 96.74 statements · 91.23 branches · 96.49 functions · 98.09 lines |
+| 6/6 Build | `dist/index.html` 652.34 kB / 193.13 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/selection/pairfile.ts` | 18 / 184 | **new** (split out of `pairstore`): one pair file on disk — `loadMetaAt`/`saveMetaAt`/`savePairDecision`, `metaFor`/`metaForRecord`, `metaPathOf`, the atomic `writeAndVerify` |
+| `src/selection/pairstore.ts` | 18 / 179 (was 22 / 304) | the walk level only: `loadPairDecisions`, `pairFileIndex`/`pairFilePaths`, `readInto(root, relPath, owner, sink)`, `readLegacy`, `mergeRecords`, `resetFiles`, `pathOf` |
+| `src/lib/pairmeta.ts` | 35 / 300 (was 24 / 276) | **compacted to the limit**: `forPair` + private `faceOf` rebuild a record from the walk's pair; `aiSideNameAt` folded into `aiSideName` |
+| `src/lib/splitscope.ts` | 11 / 102 (was 9 / 77) | level-relative scope: `treeDirs`, `scopeLevelOf`, `inScope`/`pairInScope`, `ScanScope{level,outside}`, `splitPairs`, `scopeText` |
+| `src/ui/FolderBar.tsx` | 2 / 46 (was 2 / 30) | `RootPathRow({ testid, rootName, path })` states the unknown-path reason instead of returning `null` |
+| `src/index.css` | 1371 (was 1370) | `.folder-path.unknown` |
+| `src/svg/sourcelist.ts` | 26 / 269 | `selectRows(pairs, records, level)` — one level rule for Selection and Generate SVG; `svg/sources.ts`, `selection/rootsource.ts`, `selection/state.ts` carry the level |
+
+Scope per pick, pinned by `tests/selection_scan.test.ts` (16): batch root →
+`Scope: split output only · N pair(s) in the main folder not listed`; `_split_output` →
+`Scope: split output — everything under it is listed`; `2026-10` and
+`2026-10-05_18-45-20` → `Scope: whole folder — no split output found` (nothing hidden —
+the reported zero-item list). All three picks list the same pieces. At the rescan level
+(outside the React tree, sandbox-local scratch): the `_split_output` pick scans to
+`{ level: "output", outside: 0 }` and returns the piece **approved** — `pair_4c4c2a84`,
+read from `…/split_01/icon-sheet_AI_01.svg.json` — while `tests/pairstore.test.ts` (15)
+covers the same identity rule in both directions.
+
+### Verification (no browser probe this time — stated, not skipped silently)
+
+The sandbox has **no Chromium, Puppeteer or Playwright**, so the pick/clipboard flow could
+not be probed headlessly. What was verified instead: the level matrix incl. `…_split_01`
+and a nested `_split_output` (`tests/splitscope.test.ts` 15), the walk/pair-file identity in
+both directions plus the pending-reset rule (`tests/pairstore.test.ts` 15,
+`tests/legacyfile.test.ts` 5), the per-pick scope wording and the non-UI rescan result
+(`tests/selection_scan.test.ts` 16), the scope chip and the path row in the real panels
+(`tests/selectionv2_ui.test.tsx` 29), the path row's three states
+(`tests/folderbar.test.tsx` 7), and the Generate SVG list incl. the three-records duplicate
+audit and the `svg-root-path` hint (`tests/svg_ui.test.tsx` 34, `tests/svg_sources.test.ts` 15)
+— 136 tests across the eight suites most tied to this change. The picking itself is
+confirmed in the user's top-level Chrome/Edge, as before.

@@ -17,7 +17,7 @@
 
 import { isEligibleImage, isImageExt, isVersionArtifact } from "../lib/naming";
 import { problemsOf, type ReviewPair, type SideRef } from "../lib/pairing";
-import { pairInSplitScope } from "../lib/splitscope";
+import { pairInScope, type ScopeLevel } from "../lib/splitscope";
 import type { ReviewRecord } from "../lib/reviewfile";
 import type { FileEntry } from "../lib/scan";
 
@@ -88,9 +88,9 @@ export function fileTally(entries: readonly FileEntry[]): Pick<ScanAudit, "files
 }
 
 /** The rows, the exclusions and the dedupe counts for one scan. */
-export function selectRows(pairs: readonly ReviewPair[], records: readonly ReviewRecord[], scoped = false): ListSelection {
+export function selectRows(pairs: readonly ReviewPair[], records: readonly ReviewRecord[], level: ScopeLevel = "whole"): ListSelection {
   const sink: Sink = { rows: [], excluded: [], claimed: new Map(), approver: new Map(), represented: new Set(), existing: new Set() };
-  for (const pair of pairs) addPair(pair, decide(pair, records), sink, scoped && !pairInSplitScope(pair));
+  for (const pair of pairs) addPair(pair, decide(pair, records), sink, !pairInScope(pair, level));
   for (const r of records) addRecord(r, sink);
   const sorted = [...sink.excluded].sort(byPlace);
   return {

@@ -9,7 +9,7 @@ import { loadHandles } from "../batch/store";
 import { withVersion, type PairMeta } from "../lib/pairmeta";
 import type { ReviewStatus } from "../lib/svgmodel";
 import type { DirHandleLike } from "../lib/fs";
-import { loadMetaAt, metaFromRecord, saveMetaAt } from "../selection/pairstore";
+import { loadMetaAt, metaFromRecord, saveMetaAt } from "../selection/pairfile";
 import { loadSourceIndex, metaPathOfEntry, type IndexEntry } from "../state/sourceindex";
 
 export const SVG_HANDLE_KEY = "__svg__";

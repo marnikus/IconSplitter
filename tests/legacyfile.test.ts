@@ -5,7 +5,8 @@
 // parsed by lib/reviewfile and merged by selection/pairstore.
 import { describe, expect, it } from "vitest";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import { LEGACY_FILE, loadPairDecisions, loadMetaAt, saveMetaAt } from "../src/selection/pairstore";
+import { LEGACY_FILE, loadPairDecisions } from "../src/selection/pairstore";
+import { loadMetaAt, saveMetaAt } from "../src/selection/pairfile";
 import { pairFile } from "./helpers/pairfile";
 import { serializeDecisions, type ReviewRecord } from "../src/lib/reviewfile";
 import { readDirTree } from "../src/lib/fs";
