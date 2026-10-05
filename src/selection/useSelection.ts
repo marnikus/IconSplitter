@@ -231,11 +231,8 @@ function toggleLabel(view: Partial<SelState>): string {
     .join(", ");
 }
 
-/** The one way this panel shows a status: the toast the user sees and its mirror in the global log (L-4). */
-function toast(setS: Setter, msg: string, err: boolean): void {
-  logStatus("selection", msg, err);
-  setS((p) => ({ ...p, toast: { msg, err } }));
-}
+/** The toast the user sees and its mirror in the global log (L-4). */
+function toast(setS: Setter, msg: string, err: boolean): void { logStatus("selection", msg, err); setS((p) => ({ ...p, toast: { msg, err } })); }
 
 function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
   const msg = bulkMessage({ decision: d, applied: 0, skipped: out.skipped.length, saved: true });

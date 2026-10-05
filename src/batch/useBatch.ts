@@ -1,7 +1,6 @@
-// useBatch.ts — UI orchestration for the batch feature (RULE 2/4/5/7/24).
-// Owns: root/dest picking, scan + selection state, preset application, and the
-// process run that keeps the per-reference JSON in sync. The adapters it calls
-// (fs, picker, process, statewrite, store) are separately tested.
+// useBatch.ts — UI orchestration for the batch feature (RULE 2/4/5/7/24):
+// root/dest picking, scan + selection state, presets, and the process run that
+// keeps the per-reference JSON in sync. Adapters are separately tested.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { linkReferences, collectAiImages, walkTree, type AiImageEntry } from "../lib/scan";
@@ -14,7 +13,8 @@ import { processItems, type BatchItem, type ItemResult } from "./process";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
-import { logStatus, logger } from "../log/logger";
+import { logStatus } from "../log/logger";
+import { logProcessStart, logProcessDone, logProcessStop } from "./batchlog";
 import type { SourceStatus } from "../lib/statefile";
 
 export interface Row extends AiImageEntry {
@@ -55,9 +55,8 @@ export function useBatch() {
   const ctx = useCtx(s);
   useEffect(() => { void boot(ctx, setS); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useToastClear(s.toast, setS);
-  const say = useCallback((msg: string, err = false) => {
-    logStatus("batch", msg, err); // the toast and its mirror in the global log (L-4)
-    setS((p) => ({ ...p, toast: { msg, err } }));
+  const say = useCallback((msg: string, err = false) => { // toast + its mirror in the global log (L-4)
+    logStatus("batch", msg, err); setS((p) => ({ ...p, toast: { msg, err } }));
   }, []);
   return {
     s, say,
@@ -91,10 +90,7 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
 
   const refresh = useCallback(() => { void scan(ctx, setS, say); }, [ctx, setS, say]);
   const run = useCallback(() => { void process(ctx, setS, say); }, [ctx, setS, say]);
-  const cancel = useCallback(() => {
-    ctx.stop.current = true;
-    logger("batch").warn("process.stop", "Stop requested — finished items are kept");
-  }, [ctx]);
+  const cancel = useCallback(() => { ctx.stop.current = true; logProcessStop(); }, [ctx]);
   return { chooseRoot, chooseDest, refresh, run, cancel };
 }
 
@@ -126,8 +122,7 @@ function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) 
     savePresets([...loadPresets().filter((p) => p.name !== name), named]);
     saveLastName(name);
     await saveHandles(name, { source: ctx.root.current ?? undefined, dest: ctx.dest.current ?? undefined });
-    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name) }));
-    say(`Preset “${name}” saved`);
+    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name) })); say(`Preset “${name}” saved`);
   }, [ctx, setS, say]);
 
   const loadPreset = useCallback(async (name: string) => {
@@ -139,8 +134,7 @@ function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) 
 
   const deletePreset = useCallback((name: string) => {
     savePresets(loadPresets().filter((p) => p.name !== name));
-    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name) }));
-    say(`Preset “${name}” deleted`);
+    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name) })); say(`Preset “${name}” deleted`);
   }, [setS, say]);
 
   return { setPreset, savePreset, loadPreset, deletePreset };
@@ -173,9 +167,8 @@ async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<voi
   if (ctx.root.current) await scan(ctx, setS, () => {});
 }
 
-async function grant(h: DirHandleLike | undefined): Promise<DirHandleLike | null> {
-  return h && (await ensurePermission(h)) ? h : null;
-}
+const grant = async (h: DirHandleLike | undefined): Promise<DirHandleLike | null> =>
+  h && (await ensurePermission(h)) ? h : null;
 
 async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const root = ctx.root.current;
@@ -222,14 +215,11 @@ async function process(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => 
   ctx.stop.current = false;
   const selected = ctx.state.current.rows.filter((r) => r.selected);
   if (!selected.length) return say("Nothing selected", true);
-  logger("batch").info("process.start", `Splitting ${selected.length} image(s)`, { data: { selected: selected.length } });
+  logProcessStart(selected.length);
   setS((p) => ({ ...p, busy: "Preparing…" }));
   const report = await runBatch(ctx, root, selected, setS);
   const c = await finalize(root, report.results, selected, setS);
-  const level = c.failed > 0 || ctx.stop.current ? "warn" : "info";
-  logger("batch")[level]("process.done", `Split run finished: ${c.done} saved, ${c.skipped} skipped, ${c.failed} failed`, {
-    data: { saved: c.done, skipped: c.skipped, failed: c.failed },
-  });
+  logProcessDone(c, ctx.stop.current);
   say(`Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, c.failed > 0);
 }
 
@@ -268,11 +258,7 @@ async function resolveFile(root: DirHandleLike, relPath: string): Promise<FileHa
 }
 
 async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHandleLike | null> {
-  try {
-    return await resolveFile(root, relPath);
-  } catch {
-    return null;
-  }
+  try { return await resolveFile(root, relPath); } catch { return null; }
 }
 
 /** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24); the caller says the result. */
@@ -305,9 +291,6 @@ function outcomeStatus(r: ItemResult): SourceStatus {
 }
 
 function tally(results: ItemResult[]) {
-  return {
-    done: results.filter((r) => r.outcome === "processed").length,
-    skipped: results.filter((r) => r.outcome === "skipped").length,
-    failed: results.filter((r) => r.outcome === "failed").length,
-  };
+  const count = (outcome: ItemResult["outcome"]) => results.filter((r) => r.outcome === outcome).length;
+  return { done: count("processed"), skipped: count("skipped"), failed: count("failed") };
 }

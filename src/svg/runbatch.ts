@@ -15,15 +15,15 @@
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
 import { stallHint } from "../lib/effortlimits";
 import { chatUrl } from "../lib/svgconfig";
-import { batchPrompt, singlePrompt } from "../lib/svgprompt";
 import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
-import { buildChatRequest, type Failure, type Usage } from "../lib/svgrequest";
+import { type Failure, type Usage } from "../lib/svgrequest";
 import { sendChatStreaming } from "../lib/svgstreamread";
 import { attachRequestId, beginRequest, endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
 import { buildComposite, type BuiltComposite } from "./composite";
+import { requestFor } from "./batchrequest";
 import { recordFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import { saveSidecar } from "./sidecar";
 import type { SvgSource } from "./sources";
@@ -120,12 +120,7 @@ interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAft
 
 async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<SendOk | SendBad> {
   const { state, plan, items } = ctx;
-  const manifest = batchManifest(plan.items);
-  const prompt = items.length === 1 ? singlePrompt(state.args.prompt, items[0].stem) : batchPrompt(state.args.prompt, manifest);
-  const request = buildChatRequest({
-    model: state.args.config.model, prompt, image: composite.dataUrl,
-    caps: state.args.caps, params: state.args.params,
-  });
+  const request = requestFor({ model: state.args.config.model, prompt: state.args.prompt, caps: state.args.caps, params: state.args.params }, plan, items, composite);
   journalRequest(ctx);
   const of = state.args.config.retries + 1;
   for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
@@ -139,20 +134,16 @@ async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<Send
     if (out.ok) {
       // A non-streamed answer carries no stream `id:`; keep the header id it does have.
       if (out.requestId !== null && ctx.requestId === null) ctx.requestId = out.requestId;
-      state.args.onEvent({
-        kind: "request-ok", batchId: plan.id, attempt: attempt + 1, status: out.status,
-        ms: Date.now() - startedAt, requestId: ctx.requestId, usage: out.usage,
-      });
+      state.args.onEvent({ kind: "request-ok", batchId: plan.id, attempt: attempt + 1, status: out.status,
+        ms: Date.now() - startedAt, requestId: ctx.requestId, usage: out.usage });
       return { ok: true, text: out.text, usage: out.usage, requestId: ctx.requestId };
     }
     if (!out.failure.retryable || attempt === state.args.config.retries) {
       return { ok: false, error: failureText(state, out.failure, ctx), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
     }
     const waitMs = out.failure.retryAfterMs ?? backoff(attempt);
-    state.args.onEvent({
-      kind: "request-retry", batchId: plan.id, attempt: attempt + 1, of, failure: out.failure.kind,
-      status: out.failure.status, waitMs, error: redact(out.failure.message, state.args.apiKey),
-    });
+    state.args.onEvent({ kind: "request-retry", batchId: plan.id, attempt: attempt + 1, of, failure: out.failure.kind,
+      status: out.failure.status, waitMs, error: redact(out.failure.message, state.args.apiKey) });
     await delay(waitMs, state.args.signal);
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
