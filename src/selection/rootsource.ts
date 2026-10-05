@@ -16,6 +16,8 @@ import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
 import { loadHandles, saveHandles } from "../batch/store";
 import { pickFolderFor } from "../ui/pickroot";
+import { rememberKnownRoot } from "../ui/knownroots";
+import { loadRootPath } from "../lib/rootpath";
 import { getAppState, patchV2, patchView } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pruneIds } from "../lib/session";
@@ -43,6 +45,7 @@ export async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   const h = stored?.source ?? null;
   if (!h) return;
   setRoot(ctx, setS, h);
+  rememberRestored(h);
   await rescan(ctx, setS, () => undefined);
 }
 
@@ -55,6 +58,11 @@ export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void
   if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
   await rescan(ctx, setS, say);
   if (picked.message !== null) say(picked.message);
+}
+
+/** A restored handle counts as a known folder: its captured path names its children (I-51). */
+function rememberRestored(h: DirHandleLike): void {
+  rememberKnownRoot(h, loadRootPath(h.name));
 }
 
 export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {

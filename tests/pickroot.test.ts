@@ -4,8 +4,9 @@
 // costs the user the folder they just chose.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adoptCopiedText } from "../src/lib/clipboardpath";
-import { loadRootPath } from "../src/lib/rootpath";
+import { loadRootPath, loadRootPathInfo } from "../src/lib/rootpath";
 import { pickRootWithPath } from "../src/ui/pickroot";
+import { clearKnownRoots, rememberKnownRoot } from "../src/ui/knownroots";
 import type { DirHandleLike } from "../src/lib/fs";
 
 const ROOT = "test_processing";
@@ -23,7 +24,23 @@ function stubClipboard(readText: () => Promise<string>): void {
   Object.defineProperty(navigator, "clipboard", { value: { readText }, configurable: true });
 }
 
+/**
+ * A KNOWN folder: the handle the app already picked, whose `resolve` answers the
+ * segments from itself down to the folder about to be picked (the real API is
+ * `parent.resolve(child)`).
+ */
+function ancestorOf(name: string, segments: string[]): DirHandleLike {
+  return {
+    kind: "directory", name,
+    resolve: async () => segments,
+  } as unknown as DirHandleLike;
+}
+
+/** The folder the app captured earlier in the session. */
+const OUT = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
+
 beforeEach(() => {
+  clearKnownRoots();
   localStorage.clear();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   usePicker(async () => handle(ROOT));
@@ -89,6 +106,50 @@ describe("pickRootWithPath", () => {
     stubClipboard(spy);
     expect(await pickRootWithPath()).toBeNull();
     expect(spy).toHaveBeenCalledTimes(1); // pre-read only
+  });
+});
+
+describe("the full path of a pick whose clipboard says nothing (I-51)", () => {
+  it("derives the exact path from the folder the app already picked", async () => {
+    rememberKnownRoot(ancestorOf("_split_output", ["2026-10", "2026-10-05_18-45-20"]), OUT);
+    usePicker(async () => handle("2026-10-05_18-45-20"));
+    // nothing path-like on the clipboard at all
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe(`${OUT}\\2026-10\\2026-10-05_18-45-20`);
+    expect(picked?.how).toBe("copied"); // derived from real handles, not typed text
+    expect(loadRootPathInfo("2026-10-05_18-45-20")).toEqual({ path: `${OUT}\\2026-10\\2026-10-05_18-45-20`, how: "copied" });
+  });
+
+  it("overrules a completed guess whose parent is NOT the picked folder's parent", async () => {
+    // the reported mistake: the batch folder on the clipboard while the RUN is
+    // picked — the old guess dropped the month segment
+    stubClipboard(async () => OUT);
+    rememberKnownRoot(ancestorOf("_split_output", ["2026-10", "2026-10-05_18-45-20"]), OUT);
+    usePicker(async () => handle("2026-10-05_18-45-20"));
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe(`${OUT}\\2026-10\\2026-10-05_18-45-20`);
+    expect(picked?.how).toBe("copied");
+  });
+
+  it("keeps the clipboard guess when no known folder can place the pick", async () => {
+    stubClipboard(async () => OUT);
+    usePicker(async () => handle("2026-10-05_18-45-20"));
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe(`${OUT}\\2026-10-05_18-45-20`); // the old, flagged guess
+    expect(picked?.how).toBe("completed");
+  });
+
+  it("remembers the pick it just captured, so the NEXT pick inside it is exact", async () => {
+    stubClipboard(async () => OUT);
+    // the first pick IS the output folder, and its handle can answer `resolve`
+    // for the folder picked next — exactly what the platform gives the app
+    usePicker(async () => ancestorOf("_split_output", ["2026-10"]));
+    const first = await pickRootWithPath();
+    expect(first?.path).toBe(OUT);
+    expect(first?.how).toBe("copied");
+    stubClipboard(async () => ""); // the clipboard says nothing this time
+    usePicker(async () => handle("2026-10"));
+    expect((await pickRootWithPath())?.path).toBe(`${OUT}\\2026-10`);
   });
 });
 

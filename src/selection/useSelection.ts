@@ -16,7 +16,8 @@ import { useHistory, type HistoryApi } from "../state/HistoryProvider";
 import { getAppState, patchView } from "../state/appstore";
 import { SCAN_IDLE } from "../lib/scanseq";
 import { bindDecisionApplier, type DecisionPatch } from "./offline";
-import { metaFor, metaForRecord, savePairDecision } from "./pairstore";
+import { savePairDecision } from "./pairstore";
+import { metaFor, metaForRecord } from "./pairrecord";
 import {
   initialSelState, nextPendingId, withBulkDecision, withDecision, withRecords,
   withReset, type BulkOut, type SelState,

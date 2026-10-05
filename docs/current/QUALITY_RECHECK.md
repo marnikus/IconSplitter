@@ -1601,3 +1601,69 @@ folders, with the real path on the clipboard:
 Probe script: `/tmp/probeenv/probe_outputroot.mjs` (sandbox-local; the probe
 approves through the real arm → confirm bulk action, then reads the SVG tab).
 
+## 2026-10-05 — root-independent pairs: the same folders under any root (Task I, part 2)
+
+The report: the run folder, `_split_output` and the month folder must list the
+same pairs — the month was the only accepted pick — and the path row must show
+the picked folder **exactly** ("unable to disply full folder path as folder was
+chosen"). Red-before tests first (TDD), then I-49/I-50/I-51 (SYSTEM_OF_RECORD
+§18). Design: `archive/2026-10-05-root-independent-pairs/design.md`.
+
+### The red tests, and what each one pinned
+
+| Test | Red before | Green after |
+|---|---|---|
+| `tests/pairstore.test.ts` — "a pair file read from a DIFFERENT root (I-49)" (3) | the meta kept the other root's `dirPath`, faces and id | the file's own directory, the stored file names, the id a scan of this root computes |
+| `tests/svg_scan.test.ts` (2) | `[]` sources · `missing` 2 | 2 sources · `missing` 0 |
+| `tests/selection_scan.test.ts` (1) | the pair the file names was not listed | listed, decision intact |
+| `tests/splitscope.test.ts` (1) | the month root → `whole folder — no split output found` | `{ split: true, hideOutside: false }` |
+| `tests/knownroots.test.ts` (new, 8) · `tests/pickroot.test.ts` (+4) | `deriveRootPath` → `null` (the module did not exist) | derivation, overrule, fallbacks |
+| `tests/selectionv2_ui.test.tsx` (1) | the row showed the folder name | the captured path, exactly |
+
+One fixture lesson (kept in `tests/helpers/fakefs`): the real API is
+`parent.resolve(child)`. A test that puts `resolve` on the *picked* folder
+instead of on the folder the app already knows gets `null` from every
+derivation — the algorithm was right, the fixture was not.
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/lib/pairrebase.ts` | 3 / 33 | **new, pure**: `rebaseMeta(meta, dirPath)` — identity + both faces re-pointed at the file's own directory (I-49) |
+| `src/selection/pairrecord.ts` | 13 / 114 | the record ⇄ pair-file mapping (`metaForRecord`, `metaFor`, `metaPathOf`, `metaFromRecord`, `locatable`, `identityOfPaths`) extracted **by concept** out of `pairstore` (RULE 19 step 4) |
+| `src/selection/pairstore.ts` | 23 / 232 | reads rebase onto this root (I-49); the id each file carried still answers the legacy record |
+| `src/lib/pairmeta.ts` | 36 / 286 | `rebaseMeta` moved out; parsing/serializing/transitions unchanged |
+| `src/lib/splitscope.ts` | 8 / 88 | `split` = an output folder **or** a run stamp in the set (I-50) |
+| `src/ui/knownroots.ts` | 10 / 71 | the folders the app has named + `deriveRootPath` (I-51) |
+| `src/ui/pickroot.ts` | 5 / 86 | prefers an exact clipboard match, else the derivation, else the flagged completion |
+| `src/selection/rootsource.ts`, `src/svg/scan.ts` | 20 / 179 · 12 / 173 | boot remembers the restored handle with its captured path |
+
+The first gate run failed on `pairmeta` (309) and `pairstore` (334) — both over
+RULE 18's 300-line ideal, and neither is in `tools/quality_baseline.json`, so the
+ratchet could not hold them. Fixed in RULE 19 order (nothing to flatten or
+simplify: the files had two responsibilities each), by extracting the rebase and
+the record mapping. No over-ideal file, no new lint warning (8 pre-existing
+warnings), no `ideal-size:` deviation needed.
+
+### Gates (full run)
+
+`npm run verify`: types ✅ · lint 0 errors / 8 warnings · quality gate PASSED ·
+**84 files / 872 tests** ✅ · coverage ✅ (96.6 st / 90.87 br / 96.2 fn /
+98.01 ln) · build 654.64 kB (193.93 kB gzip). `npm run quality:changed` PASSED.
+
+### Browser verification (headless Chromium 153, real OPFS, both tabs)
+
+`probe_three_roots.mjs`, the two-run tree (`…\_split_output\2026-10\` holding
+`2026-10-05_18-45-20` with 2 pieces and `2026-10-05_19-02-11` with 1):
+
+| Check | Before | After |
+|---|---|---|
+| Selection V2 rows (run / out / month / main) | 2 / 3 / 3 / 3 | 2 / 3 / 3 / 3 (unchanged — the rows were already right) |
+| Scope line (run / out / month) | `split output only` / `split output only` / **`whole folder — no split output found`** | `Scope: split output only` in all three |
+| Generate SVG rows (run / out / month), after approving on the main pick | **0 / 0 / 0**, every audit `3 missing files` | **2 / 3 / 3**, audits `0 missing files`, no `outside-split` |
+| One-run tree, the three roots, **empty clipboard** (the literal report: "all 3 dir should gave same result and same list of items") | *not measured — this is the acceptance itself* | the same 2 pairs (`icon-sheet_AI_01.png`, `icon-sheet_AI_02.png`) in all three, each with its own exact path |
+| Path row under four clipboard states (exact / nothing / parent / a stale folder of the same name) | exact / *not captured* / **`…\_split_output\2026-10-05_18-45-20` (month lost, `completed`)** / `D:\other\2026-10\2026-10-05_18-45-20` | **the exact run path in all four** |
+
+Screenshots: `/home/user/run-folder-derived-path-v2.png`,
+`/home/user/single-run-three-roots.png` (sandbox-local evidence, like the probe).
+

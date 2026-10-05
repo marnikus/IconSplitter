@@ -23,6 +23,8 @@ import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
+import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
+import { saveRootPathInfo } from "../src/lib/rootpath";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 
@@ -280,6 +282,20 @@ describe("scanSources", () => {
     await scanSources(refs(broken), s.api);
     expect(s.out.said.join(" ")).toContain("Rescan failed");
     expect(s.out.rows).toEqual([]);
+  });
+
+  it("remembers the restored folder at boot, so a pick inside it is named exactly (I-51)", async () => {
+    const root = makeRoot();
+    root.children.set("2026-10", new FakeDir("2026-10")); // a folder inside it, not yet picked
+    saveRootPathInfo(root.name, "F:\\work\\split_root", "copied");
+    await rememberRoot(root);
+    const r = refs();
+    await bootSources(r, { setRootName: () => {}, loadAll: () => {}, refreshKey: () => {} });
+    // the folder that was just restored reports where a pick inside it lives —
+    // no clipboard involved
+    const child = root.children.get("2026-10") as FakeDir;
+    expect(await deriveRootPath(child)).toBe("F:\\work\\split_root\\2026-10");
+    clearKnownRoots();
   });
 
   it("remembers and restores the picked folder", async () => {

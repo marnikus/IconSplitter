@@ -458,6 +458,24 @@ describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
     expect(written[0]).toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31");
   });
 
+  it("shows the exact full path of a pick inside a folder picked before (I-51)", async () => {
+    // first pick: the batch's output folder, its real path on the clipboard
+    stubClipboard("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output");
+    const root = makeBatchRoot();
+    const out = root.children.get("_split_output") as FakeDir;
+    const { el } = await mount(out);
+    expect(text(el, "[data-testid='v2-folder-path']")).toContain("test_processing_2\\_split_output");
+    // second pick: the run folder INSIDE it, with the clipboard saying nothing
+    stubClipboard("");
+    const run = (out.children.get("2026-10") as FakeDir).children.get("2026-10-01_10-24-31") as FakeDir;
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(run);
+    await click(q(el, "[data-testid='v2-open-folder']")!);
+    const row = text(el, "[data-testid='v2-folder-path']");
+    expect(row).toContain("test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31");
+    expect(row).not.toContain("not captured");
+    expect(rows(el).length).toBe(1); // and the run's own pair is listed
+  });
+
   it("shows the same green Open folder button in the empty state", async () => {
     (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(makeRoot());
     const el = document.createElement("div");

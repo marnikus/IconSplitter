@@ -10,7 +10,8 @@ import { readDirTree } from "../src/lib/fs";
 import {
   metaPathFor, newPairMeta, serializePairMeta, withDecision, type PairMeta,
 } from "../src/lib/pairmeta";
-import { loadPairDecisions, metaPathOf, savePairDecision } from "../src/selection/pairstore";
+import { loadPairDecisions, savePairDecision } from "../src/selection/pairstore";
+import { metaPathOf } from "../src/selection/pairrecord";
 import { FakeDir, FakeFile, BrokenFile } from "./helpers/fakefs";
 
 const PIECE = pairId("split_01", "icon", "_01");
@@ -44,6 +45,75 @@ function writeMeta(dir: FakeDir, name: string, meta: PairMeta): void {
 async function walk(root: FakeDir) {
   return walkTree(await readDirTree(root, []), []);
 }
+
+describe("a pair file read from a DIFFERENT root (I-49)", () => {
+  /** The piece's file written while the root was the main folder. */
+  function mainRoot(): FakeDir {
+    const root = new FakeDir("test_processing");
+    const out = new FakeDir("_split_output");
+    const month = new FakeDir("2026-10");
+    const run = new FakeDir("2026-10-05_18-45-20");
+    const ai = new FakeDir("icon-sheet_AI");
+    const split = new FakeDir("split_01");
+    split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 900, "c"));
+    split.children.set("icon-sheet_AI_01.png", new FakeFile("icon-sheet_AI_01.png", 20, 960, "d"));
+    const dirPath = "_split_output/2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01";
+    const meta = withDecision(newPairMeta({
+      id: pairId(dirPath, "icon-sheet", "_01"), base: "icon-sheet", suffix: "_01", dirPath,
+      ai: { relPath: `${dirPath}/icon-sheet_AI_01.png`, name: "icon-sheet_AI_01.png", fingerprint: "20:960" },
+      source: { relPath: `${dirPath}/icon-sheet.png`, name: "icon-sheet.png", fingerprint: "12:900" },
+    }), "approved", "2026-10-05T17:02:11.000Z");
+    const text = serializePairMeta(meta);
+    split.children.set("icon-sheet_AI_01.svg.json", new FakeFile("icon-sheet_AI_01.svg.json", text.length, 500, text));
+    ai.children.set("split_01", split);
+    run.children.set("icon-sheet_AI", ai);
+    month.children.set("2026-10-05_18-45-20", run);
+    out.children.set("2026-10", month);
+    root.children.set("_split_output", out);
+    return root;
+  }
+
+  it("reads the decision under the output root that holds the same folder", async () => {
+    const main = mainRoot();
+    const out = main.children.get("_split_output") as FakeDir;
+    const load = await loadPairDecisions(out, await walk(out));
+    // the id the scan of THIS root computes for that folder
+    const here = pairId("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01", "icon-sheet", "_01");
+    expect(load.metas.get(here)?.decision).toBe("approved");
+    expect(load.metas.get(here)?.dirPath).toBe("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01");
+    // both faces are named the way this root sees them
+    const rec = load.records.find((r) => r.pair_id === here);
+    expect(rec?.ai_result).toBe("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01/icon-sheet_AI_01.png");
+    expect(rec?.source).toBe("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01/icon-sheet.png");
+    // …and the scanned pair of that root matches the record by id
+    const pairs = pairEntries(await walk(out));
+    expect(pairs.map((x) => x.pairId)).toEqual([here]);
+  });
+
+  it("reads the same decision from the month root and from the run root too", async () => {
+    const main = mainRoot();
+    const out = main.children.get("_split_output") as FakeDir;
+    for (const [dirName, relDir] of [
+      ["2026-10", "2026-10-05_18-45-20/icon-sheet_AI/split_01"],
+      ["2026-10-05_18-45-20", "icon-sheet_AI/split_01"],
+    ] as const) {
+      const month = (dirName === "2026-10" ? out.children.get("2026-10") : (out.children.get("2026-10") as FakeDir).children.get("2026-10-05_18-45-20")) as FakeDir;
+      const load = await loadPairDecisions(month, await walk(month));
+      const here = pairId(relDir, "icon-sheet", "_01");
+      expect(load.metas.get(here)?.decision).toBe("approved");
+      expect(pairEntries(await walk(month)).map((x) => x.pairId)).toEqual([here]);
+    }
+  });
+
+  it("keeps a face with no file name described by the file's own folder", async () => {
+    // a legacy v1 file records one side only; it must still rebase cleanly
+    const main = mainRoot();
+    const out = main.children.get("_split_output") as FakeDir;
+    const load = await loadPairDecisions(out, await walk(out));
+    const here = pairId("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01", "icon-sheet", "_01");
+    expect(load.metas.get(here)?.ai.name).toBe("icon-sheet_AI_01.png");
+  });
+});
 
 describe("reading the pair files of a walk", () => {
   it("finds the approved pair and leaves the undecided one pending", async () => {

@@ -89,6 +89,12 @@ describe("scopeOf — what the picked folder makes reviewable", () => {
     expect(scopeOf(directoryNames(plain), "icons")).toEqual({ split: false, hideOutside: false });
   });
 
+  it("names the set when the picked folder is the MONTH of the output (I-50)", () => {
+    const month = ((reportedTree().children?.[3] as TreeNode).children?.[0]) as TreeNode;
+    // the one pick the report called "accepted" — it IS the batch's output month
+    expect(scopeOf(directoryNames(month), "2026-10")).toEqual({ split: true, hideOutside: false });
+  });
+
   it("does not treat a folder that merely looks dated as the output", () => {
     const dated: TreeNode = {
       name: "2026-10", dir: true, children: [
@@ -97,6 +103,8 @@ describe("scopeOf — what the picked folder makes reviewable", () => {
     };
     // a month folder is not evidence of the app's output; a run STAMP is
     expect(scopeOf(directoryNames(dated), "2026-10")).toEqual({ split: false, hideOutside: false });
+    // …and the same for a month holding no run stamp anywhere below it
+    expect(scopeOf(directoryNames(dated), "2026-11")).toEqual({ split: false, hideOutside: false });
   });
 });
 

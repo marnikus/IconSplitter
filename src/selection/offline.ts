@@ -17,7 +17,8 @@ import { withDecision } from "../lib/pairmeta";
 import type { ReviewRecord } from "../lib/reviewfile";
 import { loadSourceIndex } from "../state/sourceindex";
 import type { DirHandleLike } from "../lib/fs";
-import { loadMetaAt, metaFromRecord, metaPathOf, saveMetaAt } from "./pairstore";
+import { loadMetaAt, saveMetaAt } from "./pairstore";
+import { metaFromRecord, metaPathOf } from "./pairrecord";
 
 export const SELECTION_HANDLE_KEY = "__selection__";
 

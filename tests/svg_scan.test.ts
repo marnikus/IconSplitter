@@ -126,6 +126,44 @@ function makeOutputRoot(prefix = ""): FakeDir {
   return out;
 }
 
+describe("an approval outlives the root it was made under (I-49)", () => {
+  /** The main folder: the unsplit sheet pair + the batch's output below it. */
+  function mainTree(): FakeDir {
+    const root = new FakeDir("test_processing_2");
+    root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+    root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
+    const sheet = serializePairMeta(pairFile("", "icon-sheet_AI.png", { decision: "approved" }));
+    root.children.set("icon-sheet_AI.svg.json", new FakeFile("icon-sheet_AI.svg.json", sheet.length, 10, sheet));
+    root.children.set("_split_output", makeOutputRoot("_split_output/"));
+    return root;
+  }
+
+  it("lists the pieces from the output root when the approval was made from the main root", async () => {
+    const main = mainTree();
+    const out = main.children.get("_split_output") as FakeDir;
+    const s = setters();
+    await scanSources(refs(out), s.api);
+    const discovery = s.out.discovery as Discovery;
+    expect(discovery.sources.map((x) => x.relPath)).toEqual([
+      "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01/icon-sheet_AI_01.png",
+      "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png",
+    ]);
+    // no "missing files" and no ai-missing exclusions for pairs whose images are there
+    expect(discovery.excluded).toEqual([]);
+    expect(discovery.audit.missing).toBe(0);
+  });
+
+  it("lists the same pairs from the month root and from the run root", async () => {
+    const main = mainTree();
+    const out = main.children.get("_split_output") as FakeDir;
+    const month = out.children.get("2026-10") as FakeDir;
+    const monthScan = setters();
+    await scanSources(refs(month), monthScan.api);
+    expect((monthScan.out.discovery as Discovery).audit.missing).toBe(0);
+    expect((monthScan.out.discovery as Discovery).sources).toHaveLength(2);
+  });
+});
+
 describe("the picked output folder is the approved set (I-47)", () => {
   it("lists the approved pieces instead of excluding them as outside-split", async () => {
     const s = setters();

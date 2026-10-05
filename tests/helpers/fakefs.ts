@@ -49,6 +49,29 @@ export class FakeDir implements DirHandleLike {
   async removeEntry(n: string): Promise<void> {
     if (!this.children.delete(n)) throw new DOMException("Not found", "NotFoundError");
   }
+  /**
+   * The real `FileSystemDirectoryHandle.resolve`: the segments from HERE to the
+   * given descendant, `[]` for this folder itself, `null` when it is not below
+   * (I-51 — the app's second source for a picked folder's full path).
+   */
+  async resolve(possible: DirHandleLike): Promise<string[] | null> {
+    const hit = walkTo(this, possible as unknown as FakeDir | FakeFile, []);
+    return hit;
+  }
+}
+
+/** The segment list from `from` down to `target`, or null when not below it. */
+function walkTo(from: FakeDir, target: FakeDir | FakeFile, trail: string[]): string[] | null {
+  if ((from as unknown) === (target as unknown)) return trail;
+  for (const [name, child] of from.children) {
+    if (!(child instanceof FakeDir)) {
+      if ((child as unknown) === (target as unknown)) return [...trail, name];
+      continue;
+    }
+    const hit = walkTo(child, target, [...trail, name]);
+    if (hit !== null) return hit;
+  }
+  return null;
 }
 
 /** FakeFile whose read fails the first n times — a file being replaced mid-scan. */

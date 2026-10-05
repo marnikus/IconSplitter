@@ -5,12 +5,16 @@
 // first read was empty — the other natural order (copy after picking) still
 // works. The captured text is matched against the folder that was really picked
 // and never invented; when the clipboard is unreadable the folder is still
-// returned, because the scan is what the user asked for.
+// returned, because the scan is what the user asked for. When the clipboard
+// cannot name the folder exactly (nothing, or only a guess), the path is derived
+// from a folder this app already picked (I-51) — a real handle relationship,
+// never text.
 
 import { pickDirectory } from "../batch/picker";
 import { adoptCopiedText, readCopiedText } from "../lib/clipboardpath";
 import type { DirHandleLike } from "../lib/fs";
-import { loadRootPathInfo, type PathHow } from "../lib/rootpath";
+import { loadRootPathInfo, saveRootPathInfo, type PathHow, type RootPathInfo } from "../lib/rootpath";
+import { deriveRootPath, rememberKnownRoot } from "./knownroots";
 
 /** The picked folder, plus the full path captured for it ("" when none). */
 export interface PickedRoot {
@@ -33,9 +37,25 @@ export async function pickRootWithPath(): Promise<PickedRoot | null> {
   const handle = await pickDirectory();
   if (!handle) return null;
   const copied = before === "" ? await readCopiedText() : before;
-  const info = copied === "" || copied === "none" ? { path: "", how: null } : adoptCopiedText(handle.name, copied);
+  const info = await pathForPick(handle, copied);
+  rememberKnownRoot(handle, info.path);
   return { handle, path: info.path, how: info.how };
 }
+
+/**
+ * The path of the picked folder: the clipboard when it names it exactly, else
+ * the derivation from a known ancestor (which is exact), else the clipboard's
+ * flagged completion, else nothing at all (I-51).
+ */
+async function pathForPick(handle: DirHandleLike, copied: string): Promise<RootPathInfo> {
+  const info = copied === "" || copied === "none" ? UNKNOWN : adoptCopiedText(handle.name, copied);
+  if (info.path !== "" && info.how !== "completed") return info;
+  const derived = await deriveRootPath(handle);
+  if (derived === null) return info;
+  return saveRootPathInfo(handle.name, derived, "copied");
+}
+
+const UNKNOWN: RootPathInfo = { path: "", how: null };
 
 /**
  * The whole pick step every caller needs: pick, adopt the copied path, hand the

@@ -40,8 +40,11 @@ export interface ScopeRule {
 
 export function scopeOf(names: readonly string[], rootName: string): ScopeRule {
   const outputBelow = names.some(isSplitDirName);
-  const rootIsOutput = isSplitDirName(rootName) || isRunStamp(rootName);
-  return { split: outputBelow || rootIsOutput, hideOutside: outputBelow };
+  // A run stamp anywhere — the root's own name or a directory below it — is the
+  // evidence that this picked set IS a batch output (I-50), so the run folder,
+  // the output folder and its month all name their set the same way.
+  const runInside = [rootName, ...names].some(isRunStamp);
+  return { split: outputBelow || runInside, hideOutside: outputBelow };
 }
 
 /** True when a relative path has a split-output folder as one of its segments. */

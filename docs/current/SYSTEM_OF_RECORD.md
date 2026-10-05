@@ -557,6 +557,32 @@ Batch:
   (`<stamp>` as the picked folder, where the copy hands over the root itself).
   A folder that merely resembles the layout keeps the item's own folder, as
   before; `lib/batchlayout` owns the names both rules read.
+* **I-49 (a pair file is read from where it sits, RULE 3/13):** every read of a
+  pair file rebases it onto the root doing the reading — `dirPath` is the file's
+  own directory, each face's `relPath` is that directory plus the name the file
+  stored, and the id is recomputed exactly as a scan of this root computes it
+  (`lib/pairrebase.rebaseMeta`, applied by `selection/pairstore.loadMetaAt`). A
+  decision therefore follows the folder between roots; a pair file that names an
+  id no scan of this root would produce (a legacy record) still answers for that
+  id when the legacy file is merged (`pairstore.loadPairDecisions` keeps the id
+  each file carried).
+* **I-50 (a run stamp anywhere in the set is evidence, RULE 3/12):** `scopeOf`
+  reports `split: true` when the picked folder **is** an output folder *or* any
+  name in the set (the root's own name, or any directory below it) is a run stamp
+  — so `_split_output`, a month folder and one run folder all review the pieces
+  they contain. `hideOutside` still applies only while `_split_output` lies
+  strictly below the root (the `test_processing_2` case, I-38/I-40).
+* **I-51 (the app names a folder only from a folder it already named, RULE 4/13):**
+  the full path of a pick comes from the clipboard **only** when it matches the
+  picked folder's name exactly; otherwise `ui/knownroots.deriveRootPath` answers
+  it: the deepest folder this app already has a captured path for, plus the
+  segments that folder's own `resolve(picked)` reports (`[]` when it is the same
+  folder, `null` when it is not below). Every capture is remembered
+  (`pickroot.pathForPick`), and each tab remembers the root it restores at boot
+  (`selection/rootsource.boot`, `svg/scan.bootSources`) — so a pick inside a
+  folder the app already knows is exact with an empty clipboard, while a
+  clipboard guess that only *looks* right is overruled or left flagged
+  `completed — check it`.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -626,14 +652,15 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
-| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
+| Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
+| Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
 | The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) and `lib/rootpath` (where a copy stops, I-28/I-48) |
-| The picked root's path | `src/ui/pickroot.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
+| The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named and the derivation from one of them (`resolve()` segments, I-51), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
@@ -1367,3 +1394,53 @@ the item's own folder, exactly as before.
 (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — imported by
 `lib/rootpath` and `lib/splitscope` instead of each repeating the patterns;
 `svg/sourcelist.selectRows` takes `hideOutside` under its real name.
+
+## 18. The same folders under any root (2026-10-05, I-49…I-51)
+
+The report compares three picks of one batch:
+
+```
+…\test_processing_2                                   (the main folder — today's behaviour)
+…\test_processing_2\_split_output                     (the batch root)
+…\test_processing_2\_split_output\2026-10\<stamp>     (one run)
+```
+
+"all 3 dir should gave same result and same list of items" and "also unable to
+display full folder path as folder was chosen". Measured on the two-run tree of
+the probe (`probe_three_roots.mjs`, real OPFS, both tabs):
+
+| Picked | Rows before | Scope before | Generate SVG before | Path row before |
+|---|---:|---|---:|---|
+| one run | 2 | `split output only` | **0 rows** (`2 missing files`) | exact |
+| `_split_output` | 3 | `split output only` | **0 rows** (`3 missing files`) | exact |
+| the month `2026-10` | 3 | `whole folder — no split output found` | **0 rows** (`3 missing files`) | exact |
+| `test_processing_2` | 3 | `split output only · 1 pair(s) not listed` | *not measured (the baseline)* | exact |
+
+After the fix, on the same tree: the run lists **2** pairs, `_split_output` and
+the month list **3** (the same items — every pair below the pick), every scope
+line reads `Scope: split output only` without "not listed", and Generate SVG
+lists 2 / 3 / 3 rows with `Audit — 9 files · 3 AI sources · 3 references excluded
+· 0 missing files · 0 duplicates removed → 3 rows` — no `outside-split`, no
+`missing files`. The main folder is unchanged by design (I-38/I-40): the unsplit
+sheet stays hidden **and counted** ("1 pair(s) in the main folder not listed").
+
+Three causes, one per invariant. **A pair file written under another root** was
+read with the paths and the id it was written with, so the pairs a scan of this
+root found never matched those decisions and every approved source looked
+missing (I-49 — I-49's rebase makes the file speak for the pair it sits beside).
+**The scope filter recognised only `_split_output` as evidence**, so a month
+folder — which is not an output dir but holds run stamps — fell back to "whole
+folder", which then hid the pieces as if they were the main folder's sheets
+(I-50). **The path row** completed a partial clipboard path by appending the
+picked folder's name, which *dropped* every segment between the copied folder and
+the pick (the month, in the report) and could just as well append the name to a
+stale path of the same name elsewhere (I-51 — the app derives a path only from a
+folder it already named, via `resolve()`, and never from a guess).
+
+Scope of the change: `lib/pairrebase.ts` (new), `selection/pairrecord.ts` (new —
+the record ⇄ pair-file mapping moved out of `pairstore`), `lib/pairmeta.ts`
+(`rebaseMeta` moved out), `selection/pairstore.ts` (the read rebases; the id each
+file carried still answers the legacy file), `lib/splitscope.ts` (run-stamp
+evidence), `ui/knownroots.ts` (new), `ui/pickroot.ts`, `selection/rootsource.ts`
+and `svg/scan.ts` (boot remembers the restored root). Design:
+`archive/2026-10-05-root-independent-pairs/design.md`.

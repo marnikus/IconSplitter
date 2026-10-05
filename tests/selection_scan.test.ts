@@ -4,16 +4,32 @@
 // is read from the pair's OWN file beside its images (I-41) and a file that
 // cannot be read is named while its decision survives (I-43). RULE 8: the
 // exported rescan() runs for real against the in-memory fakes.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SCAN_IDLE } from "../src/lib/scanseq";
 import { pairId } from "../src/lib/pairing";
 import { initialSelState, type SelState } from "../src/selection/state";
-import { rescan } from "../src/selection/rootsource";
+import { boot, rescan } from "../src/selection/rootsource";
 import { setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairFile } from "./helpers/pairfile";
 import { dropDb } from "./helpers/idb";
+import { SELECTION_HANDLE_KEY } from "../src/selection/offline";
+import { saveHandles } from "../src/batch/store";
+import { saveRootPathInfo } from "../src/lib/rootpath";
+import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
+
+// No IndexedDB in this DOM: an in-memory handle store keeps boot real (and the
+// handle it restores is the very object the test picked, as in the browser).
+const stored = new Map<string, unknown>();
+vi.mock("../src/batch/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/batch/store")>();
+  return {
+    ...actual,
+    saveHandles: vi.fn(async (name: string, handles: unknown) => { stored.set(name, handles); }),
+    loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
+  };
+});
 
 const COURT = pairId("architecture", "court", "");
 const COURT_FILE = "architecture/court_AI.svg.json";
@@ -148,6 +164,25 @@ describe("the reviewable set is the split output (I-38/I-47)", () => {
     expect(s.scope).toEqual({ split: true, outside: 0 });
   });
 
+  it("shows the approval made under the main root when scanned from the output root (I-49)", async () => {
+    const main = makeBatchRoot();
+    // the piece was approved while `test_processing` was the root (its own file)
+    const dirPath = "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01";
+    const text = serializePairMeta(pairFile(dirPath, "icon-sheet_AI_01.png", { decision: "approved" }));
+    const split = ((main.children.get("_split_output") as FakeDir).children.get("2026-10") as FakeDir)
+      .children.get("2026-10-01_10-24-31") as FakeDir;
+    const sheet = (split.children.get("icon-sheet_AI") as FakeDir).children.get("split_01") as FakeDir;
+    sheet.children.set("icon-sheet_AI_01.svg.json", new FakeFile("icon-sheet_AI_01.svg.json", text.length, 10, text));
+    const out = main.children.get("_split_output") as FakeDir;
+    const h = harness(out);
+    await rescan(h.ctx, h.set, h.say);
+    const s = h.ctx.state.current;
+    expect(s.pairs).toHaveLength(2);
+    const piece = s.pairs.find((p) => p.relDir.endsWith("split_01"));
+    expect(piece?.pairId).toBe(pairId("2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01", "icon-sheet", "_01"));
+    expect(s.records.find((r) => r.pair_id === piece?.pairId)?.decision).toBe("approved");
+  });
+
   it("reviews a plain folder as before when no split output exists", async () => {
     const h = harness(makeRoot());
     await rescan(h.ctx, h.set, h.say);
@@ -270,6 +305,20 @@ class OneShotGate extends FakeFile {
 beforeEach(async () => {
   await dropDb();
   setAppState({});
+});
+
+describe("the restored folder is remembered at boot (I-51)", () => {
+  it("names a pick inside it exactly, with no clipboard involved", async () => {
+    const root = makeBatchRoot();
+    saveRootPathInfo(root.name, "F:\\work\\test_processing", "copied");
+    await saveHandles(SELECTION_HANDLE_KEY, { source: root });
+    const h = harness(root);
+    await boot(h.ctx, h.set);
+    const out = root.children.get("_split_output") as FakeDir;
+    // the folder the app already has a path for answers where the next pick lives
+    expect(await deriveRootPath(out)).toBe("F:\\work\\test_processing\\_split_output");
+    clearKnownRoots();
+  });
 });
 
 describe("rescan — one snapshot, one commit", () => {

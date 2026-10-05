@@ -5,6 +5,8 @@
 // snapshot commits nothing, only the newest scan may commit, and the cache
 // write can no longer half-commit a scan (design D6/D7).
 
+import { rememberKnownRoot } from "../ui/knownroots";
+import { loadRootPath } from "../lib/rootpath";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
@@ -146,6 +148,7 @@ export async function bootSources(refs: SvgRefs, s: BootArgs): Promise<void> {
   const stored = (await loadHandles(SVG_HANDLE_KEY))?.source ?? (await loadHandles("__selection__"))?.source ?? null;
   if (!stored) return;
   refs.root.current = stored;
+  rememberKnownRoot(stored, loadRootPath(stored.name)); // a restored folder names its children (I-51)
   s.setRootName(stored.name);
   s.loadAll();
   s.refreshKey();
