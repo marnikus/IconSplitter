@@ -5,17 +5,11 @@
 // input. When the picked tree holds such a folder, that folder is the reviewable
 // set — the main folder's unsplit files are not. Pure: names and paths only.
 
+import { isRunStamp, isSplitDirName } from "./batchlayout";
 import type { ReviewPair } from "./pairing";
 import type { TreeNode } from "./scan";
 
-/**
- * The app's output folder: `_split_output`, and tolerant variants a user may
- * have (`_split_output_v2`, `_my_split_output`). A near-miss without the
- * separator (`_splitoutput`) or in the wrong order (`_output_split`) is not it.
- */
-export function isSplitDirName(name: string): boolean {
-  return /^_.*split.+output/i.test(name);
-}
+export { isSplitDirName }; // the layout's names live in lib/batchlayout
 
 /** Every directory name in the tree, at any depth (the root itself excluded). */
 export function directoryNames(tree: TreeNode): string[] {
@@ -28,12 +22,26 @@ export function directoryNames(tree: TreeNode): string[] {
 }
 
 /**
- * True when the reviewable set is a split output: the tree holds such a folder,
- * or the picked folder itself is one. Decided from the directories, so a
- * repeated scan of the same tree always decides the same way.
+ * What the picked folder makes reviewable (I-38/I-47). Decided from the names —
+ * the tree's directories and the root's own name — so a repeated scan of the
+ * same folder always decides the same way.
  */
-export function scopeOf(names: readonly string[], rootName: string): boolean {
-  return isSplitDirName(rootName) || names.some(isSplitDirName);
+export interface ScopeRule {
+  /** The reviewable set is a split output: the folder is one, or holds one. */
+  split: boolean;
+  /**
+   * The output folder lies strictly BELOW the picked root, so the root has a
+   * main folder whose pairs are out of scope. False when the picked folder is
+   * the output folder itself (or one run inside it): then everything found is
+   * the set, and nothing is "in the main folder".
+   */
+  hideOutside: boolean;
+}
+
+export function scopeOf(names: readonly string[], rootName: string): ScopeRule {
+  const outputBelow = names.some(isSplitDirName);
+  const rootIsOutput = isSplitDirName(rootName) || isRunStamp(rootName);
+  return { split: outputBelow || rootIsOutput, hideOutside: outputBelow };
 }
 
 /** True when a relative path has a split-output folder as one of its segments. */
@@ -60,8 +68,8 @@ export interface ScopedPairs {
 }
 
 /** Splits a scan into the reviewable pairs and the ones the scope hides. */
-export function splitPairs(pairs: readonly ReviewPair[], scoped: boolean): ScopedPairs {
-  if (!scoped) return { pairs: [...pairs], outside: [] };
+export function splitPairs(pairs: readonly ReviewPair[], rule: ScopeRule): ScopedPairs {
+  if (!rule.hideOutside) return { pairs: [...pairs], outside: [] };
   return {
     pairs: pairs.filter(pairInSplitScope),
     outside: pairs.filter((p) => !pairInSplitScope(p)),

@@ -12,6 +12,8 @@ import type { Discovery } from "../src/svg/sources";
 import type { SvgRefs, SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+import { serializePairMeta } from "../src/lib/pairmeta";
+import { pairFile } from "./helpers/pairfile";
 
 const FOG = pairId("architecture", "fog", "");
 const COURT = pairId("architecture", "court", "");
@@ -96,6 +98,65 @@ function setters() {
 beforeEach(async () => {
   await dropDb();
   setAppState({});
+});
+
+/**
+ * `2026-10/<run>/icon-sheet_AI/split_0N/` with both pieces approved. `prefix` is
+ * the folder's own path from the root that will be picked, so the same tree can
+ * be used as the root itself ("" ) or below it (`"_split_output/"`).
+ */
+function makeOutputRoot(prefix = ""): FakeDir {
+  const out = new FakeDir("_split_output");
+  const month = new FakeDir("2026-10");
+  const run = new FakeDir("2026-10-05_18-45-20");
+  const ai = new FakeDir("icon-sheet_AI");
+  for (const piece of ["01", "02"]) {
+    const split = new FakeDir(`split_${piece}`);
+    const aiName = `icon-sheet_AI_${piece}.png`;
+    split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+    split.children.set(aiName, new FakeFile(aiName, 20, 1200, "e"));
+    const dirPath = `${prefix}2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_${piece}`;
+    const text = serializePairMeta(pairFile(dirPath, aiName, { decision: "approved" }));
+    split.children.set("icon-sheet_AI_" + piece + ".svg.json", new FakeFile(`icon-sheet_AI_${piece}.svg.json`, text.length, 10, text));
+    ai.children.set(`split_${piece}`, split);
+  }
+  run.children.set("icon-sheet_AI", ai);
+  month.children.set("2026-10-05_18-45-20", run);
+  out.children.set("2026-10", month);
+  return out;
+}
+
+describe("the picked output folder is the approved set (I-47)", () => {
+  it("lists the approved pieces instead of excluding them as outside-split", async () => {
+    const s = setters();
+    await scanSources(refs(makeOutputRoot()), s.api);
+    const discovery = s.out.discovery as Discovery;
+    // the reported pick: the app's own `_split_output` folder as the root
+    expect(discovery.sources.map((x) => x.relPath)).toEqual([
+      "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01/icon-sheet_AI_01.png",
+      "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png",
+    ]);
+    expect(discovery.excluded).toEqual([]); // no "outside the split output" rows
+    expect(s.out.rows).toHaveLength(2);
+  });
+
+  it("still excludes the unsplit sheets when the output folder is BELOW the root", async () => {
+    const root = new FakeDir("test_processing_2");
+    root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+    root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
+    // the sheet is approved too — so hiding it must be REPORTED, never silent
+    const sheet = serializePairMeta(pairFile("", "icon-sheet_AI.png", { decision: "approved" }));
+    root.children.set("icon-sheet_AI.svg.json", new FakeFile("icon-sheet_AI.svg.json", sheet.length, 10, sheet));
+    root.children.set("_split_output", makeOutputRoot("_split_output/"));
+    const s = setters();
+    await scanSources(refs(root), s.api);
+    const discovery = s.out.discovery as Discovery;
+    expect(discovery.sources.map((x) => x.relPath)).toEqual([
+      "_split_output/2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01/icon-sheet_AI_01.png",
+      "_split_output/2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png",
+    ]);
+    expect(discovery.excluded.map((e) => e.kind)).toEqual(["outside-split"]); // the sheet, named
+  });
 });
 
 describe("scan sequencing (D6)", () => {

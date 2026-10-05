@@ -82,7 +82,18 @@ function makeBatchRoot(): FakeDir {
   return root;
 }
 
-describe("the reviewable set is the split output (I-38)", () => {
+/** The batch's output folder itself — what a human browses and picks. */
+function batchOut(): FakeDir {
+  return makeBatchRoot().children.get("_split_output") as FakeDir;
+}
+
+/** One run folder inside it: `…/_split_output/2026-10/2026-10-01_10-24-31`. */
+function batchRun(): FakeDir {
+  const month = batchOut().children.get("2026-10") as FakeDir;
+  return month.children.get("2026-10-01_10-24-31") as FakeDir;
+}
+
+describe("the reviewable set is the split output (I-38/I-47)", () => {
   it("lists the batch's pieces and reports the unsplit sheet it left out", async () => {
     const h = harness(makeBatchRoot());
     await rescan(h.ctx, h.set, h.say);
@@ -112,6 +123,29 @@ describe("the reviewable set is the split output (I-38)", () => {
     // the sheet is not reviewable in this tree, but its decision is never lost
     expect(h.ctx.state.current.pairs.some((p) => p.pairId === sheetId)).toBe(false);
     expect(h.ctx.state.current.records.some((r) => r.pair_id === sheetId)).toBe(true);
+  });
+
+  it("reviews the pieces when the picked folder IS the output folder (I-47)", async () => {
+    const h = harness(batchOut());
+    await rescan(h.ctx, h.set, h.say);
+    const s = h.ctx.state.current;
+    // the reported pick: F:\\…\\test_processing_2\\_split_output — everything
+    // below it is the batch's output, so every piece is reviewable
+    expect(s.pairs.map((p) => p.relDir)).toEqual([
+      "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01",
+      "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02",
+    ]);
+    expect(s.scope).toEqual({ split: true, outside: 0 }); // nothing is "in the main folder"
+    expect(h.sayings.join(" | ")).toContain("Scope: split output only");
+    expect(h.sayings.join(" | ")).not.toContain("not listed");
+  });
+
+  it("reviews the pieces when the picked folder is one run folder (I-47)", async () => {
+    const h = harness(batchRun());
+    await rescan(h.ctx, h.set, h.say);
+    const s = h.ctx.state.current;
+    expect(s.pairs).toHaveLength(2);
+    expect(s.scope).toEqual({ split: true, outside: 0 });
   });
 
   it("reviews a plain folder as before when no split output exists", async () => {

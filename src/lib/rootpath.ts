@@ -14,16 +14,12 @@
 // run's output tree it stops at the batch folder — the one a human opens in
 // Explorer — and anywhere else it keeps the item's own folder.
 
+import { isMonthName, isRunStamp, isSplitDirName } from "./batchlayout";
 import { readKey, writeKey } from "../state/safestorage";
 import { isRecord } from "./isrecord";
 
 /** `{ [folderName]: { path, how } }`; one key so a root has one path everywhere. */
 export const ROOT_PATH_KEY = "iconSplitter.rootpaths.v1";
-
-/** The app's own output tree: `_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>`. */
-const MONTH = /^\d{4}-\d{2}$/;
-const STAMP = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
-const OUTPUT_DIR = "_split_output";
 
 /**
  * How a remembered path was obtained (I-46 — the row says which one it is):
@@ -203,16 +199,26 @@ function notify(): void {
  */
 export function folderCopyText(rootName: string, relPath: string): string {
   const base = normalizeRootPath(rememberedRootPath(rootName));
-  const rel = folderOf(relPath);
+  const rel = folderOf(relPath, rootName);
   if (base === "") return rel;
   return rel === "" ? base : `${base}\\${rel}`;
 }
 
-/** The folder a copy should name: the batch folder, else the item's own. */
-function folderOf(relPath: string): string {
+/**
+ * The folder a copy should name: the batch folder when the item belongs to a
+ * run, else the item's own folder. The batch chain may sit anywhere relative to
+ * the picked root (I-48): below it (`_split_output/<month>/<stamp>/…`), at its
+ * head (`<month>/<stamp>/…` when the output folder or a month folder is the
+ * root), or the root itself may be one run folder (`<stamp>`).
+ */
+function folderOf(relPath: string, rootName: string): string {
   const segs = relPath.split("/").filter((s) => s !== "");
-  const end = batchEnd(segs);
-  return segs.slice(0, end > 0 ? end : segs.length - 1).join("\\");
+  const batch = batchEnd(segs);
+  if (batch > 0) return segs.slice(0, batch).join("\\");
+  const run = runEnd(segs);
+  if (run > 0) return segs.slice(0, run).join("\\");
+  if (isRunStamp(normalizeRootPath(rootName))) return ""; // the root IS the batch folder
+  return segs.slice(0, segs.length - 1).join("\\");
 }
 
 /**
@@ -221,11 +227,21 @@ function folderOf(relPath: string): string {
  * folder chain.
  */
 function batchEnd(segs: string[]): number {
-  const at = segs.findIndex((s) => s.toLowerCase() === OUTPUT_DIR);
+  const at = segs.findIndex(isSplitDirName);
   const month = segs[at + 1];
   const stamp = segs[at + 2];
   if (at < 0 || month === undefined || stamp === undefined) return -1;
-  return MONTH.test(month) && STAMP.test(stamp) ? at + 3 : -1;
+  return isMonthName(month) && isRunStamp(stamp) ? at + 3 : -1;
+}
+
+/**
+ * Index just past a run folder at the HEAD of the relative path — `<month>/
+ * <stamp>` or `<stamp>` — or -1. This is the same batch base seen from inside
+ * the output tree, where the chain is no longer part of the relative path.
+ */
+function runEnd(segs: string[]): number {
+  const at = isMonthName(segs[0] ?? "") ? 1 : 0;
+  return isRunStamp(segs[at] ?? "") ? at + 1 : -1;
 }
 
 /** The stored map, validated on read: anything unexpected is no memory. */

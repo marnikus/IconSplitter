@@ -86,10 +86,10 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
   const tree = await readDirTree(root, []);
   // When the tree holds the batch's output, that is the reviewable set: the main
   // folder keeps the unsplit sheets, which are the batch's input (I-38).
-  const scoped = scopeOf(directoryNames(tree), root.name);
+  const rule = scopeOf(directoryNames(tree), root.name);
   const entries = walkTree(tree, []);
   const load = await loadPairDecisions(root, entries);
-  const picked = selectRows(pairEntries(entries), load.records, scoped);
+  const picked = selectRows(pairEntries(entries), load.records, rule.hideOutside);
   const sources = sortSources(picked.rows.map(toSource));
   return {
     sources,

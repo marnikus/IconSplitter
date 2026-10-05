@@ -119,6 +119,29 @@ describe("folderCopyText", () => {
       .toBe(`${ROOT}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
   });
 
+  it("stops at the batch folder when the picked ROOT is the output folder (I-48)", () => {
+    // the reported pick: F:\\…\\test_processing_2\\_split_output — the run chain is
+    // at the head of the relative path, not inside it
+    const out = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
+    saveRootPathInfo("_split_output", out, "copied");
+    expect(folderCopyText("_split_output", "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png"))
+      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20`);
+    // a month folder picked instead: the run stamp is the first segment
+    saveRootPathInfo("2026-10", `${out}\\2026-10`, "copied");
+    expect(folderCopyText("2026-10", "2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png"))
+      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20`);
+    // an item directly in the output folder keeps its own folder
+    expect(folderCopyText("_split_output", "notes/a_AI.png")).toBe(`${out}\\notes`);
+  });
+
+  it("stops at the picked ROOT when the root itself is one run folder (I-48)", () => {
+    // the reported pick: …\\_split_output\\2026-10\\2026-10-05_18-45-20
+    const run = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-05_18-45-20";
+    saveRootPathInfo("2026-10-05_18-45-20", run, "copied");
+    expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI/split_02/icon-sheet_AI_02.png")).toBe(run);
+    expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI_02.png")).toBe(run);
+  });
+
   it("keeps a batch base that is nested under a subfolder of the root", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
     expect(folderCopyText(ROOT, "sub/_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))

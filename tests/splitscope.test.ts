@@ -61,14 +61,23 @@ describe("isSplitDirName — the folder the batch created", () => {
   });
 });
 
-describe("scopeOf — is this tree's reviewable set a split output?", () => {
-  it("scopes to the split output when the tree holds one", () => {
+describe("scopeOf — what the picked folder makes reviewable", () => {
+  it("names the set and hides the main folder when the tree HOLDS the output folder", () => {
     const tree = reportedTree();
-    expect(scopeOf(directoryNames(tree), "test_processing")).toBe(true);
+    expect(scopeOf(directoryNames(tree), "test_processing")).toEqual({ split: true, hideOutside: true });
   });
 
-  it("scopes the whole tree when the picked folder IS a split output", () => {
-    expect(scopeOf(directoryNames(reportedTree()), "_split_output")).toBe(true);
+  it("names the set and hides nothing when the picked folder IS the output folder (I-47)", () => {
+    // the reported pick: F:\…\test_processing_2\_split_output — the directories
+    // BELOW it are month/run/split folders, and the main folder is above the
+    // root, so nothing found is "outside the split output"
+    const out = reportedTree().children?.[3] as TreeNode;
+    expect(scopeOf(directoryNames(out), "_split_output")).toEqual({ split: true, hideOutside: false });
+  });
+
+  it("names the set when the picked folder is one run folder inside the output", () => {
+    const run = reportedTree().children?.[3];
+    expect(scopeOf(directoryNames(run as TreeNode), "2026-10-01_10-24-31")).toEqual({ split: true, hideOutside: false });
   });
 
   it("does not scope a tree without one, so a plain folder reviews as before", () => {
@@ -77,7 +86,17 @@ describe("scopeOf — is this tree's reviewable set a split output?", () => {
         { name: "architecture", dir: true, children: [file("court.png"), file("court_AI.png")] },
       ],
     };
-    expect(scopeOf(directoryNames(plain), "icons")).toBe(false);
+    expect(scopeOf(directoryNames(plain), "icons")).toEqual({ split: false, hideOutside: false });
+  });
+
+  it("does not treat a folder that merely looks dated as the output", () => {
+    const dated: TreeNode = {
+      name: "2026-10", dir: true, children: [
+        { name: "architecture", dir: true, children: [file("court.png"), file("court_AI.png")] },
+      ],
+    };
+    // a month folder is not evidence of the app's output; a run STAMP is
+    expect(scopeOf(directoryNames(dated), "2026-10")).toEqual({ split: false, hideOutside: false });
   });
 });
 
@@ -89,7 +108,7 @@ describe("splitPairs — the pieces in, the unsplit sheets reported", () => {
       "", "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01",
       "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02",
     ]);
-    const scoped = splitPairs(all, true);
+    const scoped = splitPairs(all, { split: true, hideOutside: true });
     expect(scoped.pairs.map((p) => p.relDir)).toEqual([
       "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01",
       "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02",
@@ -101,9 +120,21 @@ describe("splitPairs — the pieces in, the unsplit sheets reported", () => {
 
   it("keeps every pair when the tree is not scoped", () => {
     const all = pairEntries(walkTree(reportedTree(), []));
-    const scoped = splitPairs(all, false);
+    const scoped = splitPairs(all, { split: false, hideOutside: false });
     expect(scoped.pairs).toEqual(all);
     expect(scoped.outside).toEqual([]);
+  });
+
+  it("keeps every pair when the picked folder IS the output folder (I-47)", () => {
+    // the pieces walk relative to `_split_output`, so no relative segment names
+    // it — the root itself is the evidence, and it hides nothing
+    const out = (reportedTree().children?.[3] ?? null) as TreeNode;
+    const pieces = walkTree(out, []).map((e) => ({ ...e, relPath: e.relPath.replace("_split_output/", "") }));
+    const all = pairEntries(pieces);
+    expect(all.length).toBe(2);
+    const scoped = splitPairs(all, { split: true, hideOutside: false });
+    expect(scoped.pairs.map((p) => p.relDir)).toEqual(["2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01", "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02"]);
+    expect(scoped.outside).toEqual([]); // the reported "2 pair(s) in the main folder" bug
   });
 
   it("scopes by DIRECTORY name only — a file merely named like one changes nothing", () => {
@@ -112,8 +143,8 @@ describe("splitPairs — the pieces in, the unsplit sheets reported", () => {
       file("notes_split_output_ideas.png"),
       file("notes_split_output_ideas_AI.png"),
     ]);
-    expect(scopeOf(directoryNames(tree), "root")).toBe(true);
-    const scoped = splitPairs(pairEntries(walkTree(tree, [])), true);
+    expect(scopeOf(directoryNames(tree), "root")).toEqual({ split: true, hideOutside: true });
+    const scoped = splitPairs(pairEntries(walkTree(tree, [])), { split: true, hideOutside: true });
     // the folder is the split output; the root pair whose FILE name mentions it is not
     expect(scoped.pairs.map((p) => p.relDir)).toEqual(["_split_output"]);
     expect(scoped.outside.map((p) => p.relDir)).toEqual([""]);

@@ -1547,3 +1547,57 @@ extracted `al2023` libs **without** `FONTCONFIG_PATH` (Skia aborts with
 `SkFontMgr_FontConfigInterface … Not implemented` when that is set), Vite dev
 server on `:5199`, OPFS `probe_root` as the picked handle.
 
+## 2026-10-05 — picking the batch's own output folder (`…\_split_output\`)
+
+The report names two folders:
+`…\test_processing_2\_split_output\2026-10\2026-10-05_18-45-20` and
+`…\test_processing_2\_split_output\`. Both are folders the app created, and the
+scope filter read only **relative** path segments — so the folder that *is* the
+split output filtered itself out. Per I-47/I-48 (design:
+`docs/archive/2026-10-05-picked-output-root/design.md`) `lib/splitscope.scopeOf`
+now returns `ScopeRule { split, hideOutside }` (hide only while the output folder
+is strictly *below* the root), `lib/batchlayout.ts` owns the layout's names
+(`_split_output` / `<YYYY-MM>` / `<YYYY-MM-DD_HH-mm-ss>`), and
+`lib/rootpath.folderCopyText` finds the batch folder from either side of the
+root — inside the relative path, at its head, or the root itself.
+
+### Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (untouched baseline) |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED (17 files checked, every one OK) |
+| 4/6 Tests | **83 files / 850 tests, all green** (was 83 / 840) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 96.68 statements · 91.06 branches · 96.34 functions · 98.06 lines |
+| 6/6 Build | `dist/index.html` 653.13 kB / 193.45 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/lib/batchlayout.ts` | 3 / 29 | **new, pure**: `OUTPUT_DIR`, `isSplitDirName`, `isMonthName`, `isRunStamp` — the one owner of the app's output layout |
+| `src/lib/splitscope.ts` | 8 / 85 | `ScopeRule { split, hideOutside }`; `scopeOf` reads the tree **and** the root's own name; `splitPairs` takes the rule |
+| `src/lib/rootpath.ts` | 27 / 258 | `folderOf(relPath, rootName)`: `batchEnd` (chain inside the relPath) → `runEnd` (chain at its head) → the root being one run folder; the old `MONTH`/`STAMP`/`OUTPUT_DIR` literals moved to `batchlayout` |
+| `src/svg/sourcelist.ts` | 26 / 269 | `selectRows(..., hideOutside)` — the flag under its real name |
+| `src/svg/sources.ts`, `src/selection/rootsource.ts` | 17 / 179 · 19 / 171 | pass `rule.hideOutside` / `rule.split` instead of the old boolean |
+
+No over-ideal file, no new lint warning, no `ideal-size:` deviation needed.
+
+### Browser verification (headless Chromium 153, 1440×900, real OPFS folder)
+
+The exact tree from the report — `probe_root/test_processing_2/_split_output/
+2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_0N/` — picked as each of the two
+folders, with the real path on the clipboard:
+
+| Check (both picks) | Before | After |
+|---|---|---|
+| Selection V2 rows | run folder 2 · `_split_output` **0** | **2 / 2** |
+| Scope line | run folder `whole folder — no split output found` · `_split_output` `split output only · 2 pair(s) in the main folder not listed` | `Scope: split output only` (no "not listed") |
+| The copy a row's button hands over | `…\icon-sheet_AI\split_02` · *(nothing — no row)* | `…\_split_output\2026-10\2026-10-05_18-45-20` in both |
+| Generate SVG rows after approving both | — | **2 / 2**, audit `6 files · 2 AI sources · 2 references excluded · 0 missing · 0 duplicates → 2 rows`, no `outside-split` |
+| The path row | already correct (Task H) | unchanged: the picked folder's full path in both cases |
+
+Probe script: `/tmp/probeenv/probe_outputroot.mjs` (sandbox-local; the probe
+approves through the real arm → confirm bulk action, then reads the SVG tab).
+

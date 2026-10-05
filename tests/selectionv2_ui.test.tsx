@@ -436,6 +436,28 @@ describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
     expect(el.textContent).not.toContain("Full path for copies");
   });
 
+  it("reviews the batch's output folder when that folder IS the picked root (I-47)", async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        readText: async () => "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output",
+        writeText: async (t: string) => { written.push(t); },
+      }, configurable: true,
+    });
+    const out = makeBatchRoot().children.get("_split_output") as FakeDir;
+    const { el } = await mount(out);
+    // the reported pick: the piece below the output folder is reviewable…
+    expect(rows(el).length).toBe(1);
+    // …and nothing is claimed to be sitting "in the main folder" (RULE 4)
+    expect(text(el, "[data-testid='v2-scan-scope']")).toContain("Scope: split output only");
+    expect(text(el, "[data-testid='v2-scan-scope']")).not.toContain("not listed");
+    expect(text(el, "[data-testid='v2-folder-path']")).toContain("_split_output");
+    // a copy hands over the RUN folder — the one a human opens in Explorer
+    const id = rows(el)[0].getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
+    await click(q(el, `[data-testid='v2-open-src-${id}']`)!);
+    expect(written[0]).toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31");
+  });
+
   it("shows the same green Open folder button in the empty state", async () => {
     (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(makeRoot());
     const el = document.createElement("div");

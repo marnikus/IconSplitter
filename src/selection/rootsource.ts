@@ -124,10 +124,10 @@ function commit(
  */
 async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope; entries: FileEntry[] }> {
   const tree = await readDirTree(root, []);
-  const scoped = scopeOf(directoryNames(tree), root.name);
+  const rule = scopeOf(directoryNames(tree), root.name);
   const entries = walkTree(tree, []);
-  const { pairs, outside } = splitPairs(pairEntries(entries), scoped);
-  return { pairs, scope: { split: scoped, outside: outside.length }, entries };
+  const { pairs, outside } = splitPairs(pairEntries(entries), rule);
+  return { pairs, scope: { split: rule.split, outside: outside.length }, entries };
 }
 
 /** The id -> AI path cache every cross-tab undo reads (state/sourceindex). */
