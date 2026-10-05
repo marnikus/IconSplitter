@@ -67,4 +67,6 @@ export interface SvgRefs {
   scanKey: { current: string | null };
   /** Which scan may commit (see lib/scanseq). */
   seq: { current: ScanSeq };
+  /** The id of the run in flight, so Cancel and the log can name it. */
+  run: { current: string | null };
 }

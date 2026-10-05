@@ -6,7 +6,7 @@
 
 import { useCallback, useRef, type Dispatch } from "react";
 import type { ReviewStatus } from "../lib/svgfile";
-import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
+import { planBatches, requestCount, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
 import { clampImagesPerRequest, parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
@@ -21,7 +21,9 @@ import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
+import { newRunId } from "./journal";
 import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
+import { logConfirmAccept, logConfirmCancel, logConfirmOpen, logRunCancel, logRunDone, logRunStart, logRulesEdit, tapRun } from "./runlog";
 import { message, runGeneration } from "./runner";
 import { toBatchSource } from "./sources";
 import { useCodeActions } from "./codeactions";
@@ -142,7 +144,10 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPr
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
-  const setPrompt = useCallback((text: string) => latest.current.dispatch({ type: "prompt", prompt: text }), []);
+  const setPrompt = useCallback((text: string) => {
+    latest.current.dispatch({ type: "prompt", prompt: text });
+    logRulesEdit(text);
+  }, []);
   const resetPrompt = useCallback(() => {
     const c = latest.current;
     c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
@@ -219,17 +224,25 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     if (problems.length > 0) return c.say(problems[0], true);
     const dialog: Dialog = { kind: "confirm", ids };
     c.dispatch({ type: "dialog", dialog });
+    logConfirmOpen(ids.length, requestCount(ids.length, perRequestOf(c)));
   }, []);
   const cancelRun = useCallback(() => {
     const c = latest.current;
     c.refs.abort.current?.abort();
+    logRunCancel(c.refs.run.current);
     c.say("Cancelling — finished results are kept");
   }, []);
   const confirmGenerate = useCallback(() => {
     void confirmRun(latest.current);
   }, []);
-  const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
+  const dismissDialog = useCallback(() => closeDialog(latest.current), []);
   return { requestGenerate, cancelRun, confirmGenerate, dismissDialog };
+}
+
+/** Closing a confirmation without sending is itself worth a line in the log. */
+function closeDialog(c: SvgCtx): void {
+  if (c.m.dialog?.kind === "confirm") logConfirmCancel(c.m.dialog.ids.length);
+  c.dispatch({ type: "dialog", dialog: null });
 }
 
 /** The one split the confirmation and the run both see (RUN-1). */
@@ -259,24 +272,37 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
   const dialog = ctx.m.dialog;
   if (dialog === null || dialog.kind !== "confirm" || ctx.m.running) return;
   const ids = dialog.ids;
+  const runId = newRunId();
+  const plans = planOf(ctx, ids);
   ctx.dispatch({ type: "dialog", dialog: null });
   const controller = new AbortController();
   ctx.refs.abort.current = controller;
+  ctx.refs.run.current = runId;
   ctx.dispatch({ type: "running", running: true });
   ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
   const sources = ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source);
+  logConfirmAccept(runId, ids.length, plans.length);
+  logRunStart(runId, {
+    sources: sources.length, requests: plans.length, model: ctx.m.config.model,
+    retries: ctx.m.config.retries, timeoutMs: ctx.m.config.timeoutMs,
+  });
+  // The runner emits facts; the tap mirrors them into the log beside the UI (D8).
+  const mirror = tapRun({ run: runId, model: ctx.m.config.model });
   const summary = await runGeneration({
+    runId,
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
     config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
     sidecars: ctx.refs.sidecars, signal: controller.signal,
-    onEvent: (event) => onRunEvent(event, ctx),
+    onEvent: (event) => { onRunEvent(event, ctx); mirror(event); },
   });
   ctx.dispatch({ type: "running", running: false });
   // The finished run stays visible: its per-request outcomes are the record of
   // what was sent, what it cost and what failed (the batch strip shows it).
   ctx.refs.abort.current = null;
+  ctx.refs.run.current = null;
   await reloadSidecars(ctx.refs, sources, ctx);
+  logRunDone(runId, summary);
   ctx.say(summaryLine(summary), summary.saved === 0 && summary.problems.length > 0);
 }
 

@@ -14,6 +14,12 @@ import type { SvgSource } from "./sources";
 export type RunEvent =
   | { kind: "run-start"; batches: number; perRequest: number }
   | { kind: "batch-start"; batchId: string; index: number; count: number; batches: number; perRequest: number; cols: number; rows: number; composite: string; hash: string; startedAt: number }
+  // Facts about the wire, emitted beside the retry loop (runbatch.ts). The UI
+  // ignores kinds it does not know; the log's adapter (runlog.ts) mirrors them.
+  // The runner itself never imports the log (observer, not instrumentation).
+  | { kind: "request-sent"; batchId: string; attempt: number; of: number; hash: string }
+  | { kind: "request-ok"; batchId: string; attempt: number; status: number; ms: number; requestId: string | null; usage: Usage }
+  | { kind: "request-retry"; batchId: string; attempt: number; of: number; failure: Failure["kind"]; status: number | null; waitMs: number; error: string }
   | { kind: "item-start"; batchId: string; position: number; sourceId: string }
   | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; sidecar: SvgSidecar | null }
   | { kind: "item-failed"; batchId: string; position: number; sourceId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null }

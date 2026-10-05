@@ -14,6 +14,7 @@ import { processItems, type BatchItem, type ItemResult } from "./process";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
+import { logStatus, logger } from "../log/logger";
 import type { SourceStatus } from "../lib/statefile";
 
 export interface Row extends AiImageEntry {
@@ -54,7 +55,10 @@ export function useBatch() {
   const ctx = useCtx(s);
   useEffect(() => { void boot(ctx, setS); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useToastClear(s.toast, setS);
-  const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
+  const say = useCallback((msg: string, err = false) => {
+    logStatus("batch", msg, err); // the toast and its mirror in the global log (L-4)
+    setS((p) => ({ ...p, toast: { msg, err } }));
+  }, []);
   return {
     s, say,
     ...useCoreActions(ctx, setS, say),
@@ -86,8 +90,11 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   }, [ctx, setS, say]);
 
   const refresh = useCallback(() => { void scan(ctx, setS, say); }, [ctx, setS, say]);
-  const run = useCallback(() => { void process(ctx, setS); }, [ctx, setS]);
-  const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
+  const run = useCallback(() => { void process(ctx, setS, say); }, [ctx, setS, say]);
+  const cancel = useCallback(() => {
+    ctx.stop.current = true;
+    logger("batch").warn("process.stop", "Stop requested — finished items are kept");
+  }, [ctx]);
   return { chooseRoot, chooseDest, refresh, run, cancel };
 }
 
@@ -119,8 +126,9 @@ function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) 
     savePresets([...loadPresets().filter((p) => p.name !== name), named]);
     saveLastName(name);
     await saveHandles(name, { source: ctx.root.current ?? undefined, dest: ctx.dest.current ?? undefined });
-    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset “${name}” saved` } }));
-  }, [ctx, setS]);
+    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name) }));
+    say(`Preset “${name}” saved`);
+  }, [ctx, setS, say]);
 
   const loadPreset = useCallback(async (name: string) => {
     const found = loadPresets().find((p) => p.name === name);
@@ -131,8 +139,9 @@ function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) 
 
   const deletePreset = useCallback((name: string) => {
     savePresets(loadPresets().filter((p) => p.name !== name));
-    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset “${name}” deleted` } }));
-  }, [setS]);
+    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name) }));
+    say(`Preset “${name}” deleted`);
+  }, [setS, say]);
 
   return { setPreset, savePreset, loadPreset, deletePreset };
 }
@@ -207,15 +216,21 @@ function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>): Row {
   return { ...img, status, selected: status !== "missing" && status !== "deleted" };
 }
 
-async function process(ctx: Ctx, setS: Setter): Promise<void> {
+async function process(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
   ctx.stop.current = false;
   const selected = ctx.state.current.rows.filter((r) => r.selected);
-  if (!selected.length) return setS((p) => ({ ...p, toast: { msg: "Nothing selected", err: true } }));
+  if (!selected.length) return say("Nothing selected", true);
+  logger("batch").info("process.start", `Splitting ${selected.length} image(s)`, { data: { selected: selected.length } });
   setS((p) => ({ ...p, busy: "Preparing…" }));
   const report = await runBatch(ctx, root, selected, setS);
-  await finalize(root, report.results, selected, setS);
+  const c = await finalize(root, report.results, selected, setS);
+  const level = c.failed > 0 || ctx.stop.current ? "warn" : "info";
+  logger("batch")[level]("process.done", `Split run finished: ${c.done} saved, ${c.skipped} skipped, ${c.failed} failed`, {
+    data: { saved: c.done, skipped: c.skipped, failed: c.failed },
+  });
+  say(`Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, c.failed > 0);
 }
 
 async function runBatch(ctx: Ctx, root: DirHandleLike, selected: Row[], setS: Setter) {
@@ -260,17 +275,16 @@ async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHan
   }
 }
 
-/** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24). */
-async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter): Promise<void> {
+/** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24); the caller says the result. */
+async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter) {
   const outcomes = toOutcomes(results, selected);
   await applyOutcomes(root, outcomes, new Date().toISOString());
   const byPath = new Map(outcomes.map((o) => [o.relPath.toLowerCase(), o.status]));
-  const c = tally(results);
   setS((p) => ({
     ...p, busy: null,
     rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, selected: false })),
-    toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
+  return tally(results);
 }
 
 function toOutcomes(results: ItemResult[], selected: Row[]): Outcome[] {

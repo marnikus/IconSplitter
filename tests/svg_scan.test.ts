@@ -76,7 +76,7 @@ class OneShotGate extends FakeFile {
 function refs(root: FakeDir): SvgRefs {
   return {
     root: { current: root }, sidecars: new Map(), abort: { current: null }, key: { current: null },
-    scanKey: { current: null }, seq: { current: SCAN_IDLE },
+    scanKey: { current: null }, seq: { current: SCAN_IDLE }, run: { current: null },
   };
 }
 

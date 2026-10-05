@@ -127,8 +127,11 @@ async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<Send
     caps: state.args.caps, params: state.args.params,
   });
   journalRequest(ctx);
+  const of = state.args.config.retries + 1;
   for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
     if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
+    state.args.onEvent({ kind: "request-sent", batchId: plan.id, attempt: attempt + 1, of, hash: ctx.hash });
+    const startedAt = Date.now();
     const out = await sendChatStreaming({
       url: chatUrl(state.args.config.baseUrl), body: request, apiKey: state.args.apiKey,
       signal: state.args.signal, stallMs: state.stallMs, onId: (id) => rememberId(ctx, id),
@@ -136,12 +139,21 @@ async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<Send
     if (out.ok) {
       // A non-streamed answer carries no stream `id:`; keep the header id it does have.
       if (out.requestId !== null && ctx.requestId === null) ctx.requestId = out.requestId;
+      state.args.onEvent({
+        kind: "request-ok", batchId: plan.id, attempt: attempt + 1, status: out.status,
+        ms: Date.now() - startedAt, requestId: ctx.requestId, usage: out.usage,
+      });
       return { ok: true, text: out.text, usage: out.usage, requestId: ctx.requestId };
     }
     if (!out.failure.retryable || attempt === state.args.config.retries) {
       return { ok: false, error: failureText(state, out.failure, ctx), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
     }
-    await delay(out.failure.retryAfterMs ?? backoff(attempt), state.args.signal);
+    const waitMs = out.failure.retryAfterMs ?? backoff(attempt);
+    state.args.onEvent({
+      kind: "request-retry", batchId: plan.id, attempt: attempt + 1, of, failure: out.failure.kind,
+      status: out.failure.status, waitMs, error: redact(out.failure.message, state.args.apiKey),
+    });
+    await delay(waitMs, state.args.signal);
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
 }

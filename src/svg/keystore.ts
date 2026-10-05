@@ -6,6 +6,7 @@
 // lives in memory for the session only and the UI says so honestly.
 
 import { idbDelete, idbGet, idbPut } from "../batch/store";
+import { forgetSecret, watchSecret } from "../log/secrets";
 
 const STORE = "secrets";
 const KEY = "requesty-api-key";
@@ -21,6 +22,14 @@ let memory: string | null = null;
  * guards against presented.
  */
 export async function saveApiKey(key: string): Promise<boolean> {
+  // Registered so the log masks it even with no recognisable shape. A key that
+  // is REPLACED stays registered for the session — it may still be live
+  // elsewhere; saving an empty string or clearing forgets the current one.
+  if (key.trim() === "") {
+    if (memory !== null) forgetSecret(memory);
+  } else {
+    watchSecret(key.trim());
+  }
   memory = key.trim() === "" ? null : key.trim();
   try {
     return await idbPut(STORE, KEY, { key: memory });
@@ -33,14 +42,19 @@ export async function loadApiKey(): Promise<string | null> {
   try {
     const stored = await idbGet<{ key?: unknown }>(STORE, KEY);
     const key = stored?.key;
-    if (typeof key === "string" && key.trim() !== "") return key;
+    if (typeof key === "string" && key.trim() !== "") {
+      watchSecret(key); // a new session starts with an empty registry
+      return key;
+    }
   } catch {
     // Unreadable storage is not a lost key: fall through to the memory copy.
   }
+  if (memory !== null) watchSecret(memory);
   return memory;
 }
 
 export async function clearApiKey(): Promise<void> {
+  if (memory !== null) forgetSecret(memory);
   memory = null;
   try {
     await idbDelete(STORE, KEY);

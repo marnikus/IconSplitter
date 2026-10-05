@@ -5,6 +5,7 @@
 
 import { useCallback, useRef } from "react";
 import { clearApiKey, saveApiKey } from "./keystore";
+import { logKey } from "./runlog";
 import type { SvgCtx, Slice } from "./actions";
 
 export function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
@@ -19,9 +20,7 @@ export function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
       const stored = await saveApiKey(trimmed);
       c.refs.key.current = trimmed === "" ? null : trimmed;
       c.dispatch({ type: "key", key: c.refs.key.current });
-      if (trimmed === "") c.say("API key cleared from this device");
-      else if (stored) c.say("API key stored on this device only");
-      else c.say("API key kept for this session only — browser storage refused it", true);
+      reportSave(c, trimmed === "", stored);
     })();
   }, []);
   const forgetKey = useCallback(() => {
@@ -30,8 +29,17 @@ export function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
       await clearApiKey();
       c.refs.key.current = null;
       c.dispatch({ type: "key", key: null });
+      logKey("clear");
       c.say("API key cleared from this device");
     })();
   }, []);
   return { saveKey, forgetKey };
+}
+
+/** Says — in the toast and in the log — where the key went, never the key. */
+function reportSave(c: SvgCtx, cleared: boolean, stored: boolean): void {
+  logKey(cleared ? "clear" : "save", stored ? "device" : "session");
+  if (cleared) c.say("API key cleared from this device");
+  else if (stored) c.say("API key stored on this device only");
+  else c.say("API key kept for this session only — browser storage refused it", true);
 }

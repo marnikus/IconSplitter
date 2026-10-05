@@ -13,6 +13,7 @@ import { scanKey } from "./scankey";
 import { loadSidecar } from "./sidecar";
 import { saveSourceIndex, type IndexEntry } from "./sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
+import { logScan } from "./runlog";
 import type { SvgSidecar } from "../lib/svgfile";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
@@ -103,6 +104,7 @@ function saveIndex(sources: SvgSource[]): void {
 }
 
 function reportScan(found: Discovery, say: (m: string, e?: boolean) => void): void {
+  logScan(found);
   if (found.corruptDecisions) say("review-decisions.json is corrupt — kept the previous decisions in memory", true);
   if (found.problems.length > 0) say(`${found.problems.length} approved pair(s) need attention — the reason is on the row`, true);
   if (found.unreadable.length > 0) say(`${found.unreadable.length} file(s) could not be read and are marked unreadable`, true);
