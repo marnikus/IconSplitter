@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG, type SvgConfig } from "../src/lib/svgconfig";
 import { capsFor, type SamplingParams } from "../src/lib/modelcaps";
-import { buildChatRequest, sendChatRequest, type FetchLike } from "../src/lib/svgrequest";
+import { buildChatRequest, sendChatRequest, wireHeaders, type FetchLike } from "../src/lib/svgrequest";
 import { redact } from "../src/lib/svgsecret";
 
 // Assembled from parts so no key-shaped literal is committed (hygiene test).
@@ -68,6 +68,14 @@ describe("buildChatRequest", () => {
 });
 
 describe("sendChatRequest", () => {
+  it("posts exactly the headers wireHeaders names, and the body is JSON.stringify of the request", async () => {
+    const { calls, fetch } = capture();
+    const request = buildChatRequest({ model: config.model, prompt: "p", image: "data:image/png;base64,AA", caps: capsFor(config.model), params: { temperature: null, maxTokens: 1_000, effort: null } });
+    await sendChatRequest({ config, apiKey: KEY, request, fetch });
+    expect(calls[0].init.headers).toEqual(wireHeaders(KEY));
+    expect(calls[0].init.body).toBe(JSON.stringify(request));
+  });
+
   it("posts the documented payload to the router with the key in the header", async () => {
     const { calls, fetch } = capture();
     const caps = capsFor(config.model);

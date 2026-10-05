@@ -21,11 +21,13 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { onRunEvent, reloadSidecars, summaryLine } from "./runstate";
-import { message, runGeneration } from "./runner";
+import { prepareRun } from "../lib/svgpayload";
+import { runGeneration } from "./runner";
+import { message } from "./send";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
-import type { Discovery } from "./sources";
+import { toBatchSource, type Discovery } from "./sources";
 
 /** Everything an action may touch. One object, passed everywhere. */
 export interface SvgCtx {
@@ -247,7 +249,8 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
   const summary = await runGeneration({
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
+    config: ctx.m.config, sources,
+    prepared: prepareRun({ sources: sources.map(toBatchSource), config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, rules: ctx.m.prompt }),
     sidecars: ctx.refs.sidecars, signal: controller.signal,
     onEvent: (event) => onRunEvent(event, ctx),
   });

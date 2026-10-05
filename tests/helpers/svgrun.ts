@@ -5,8 +5,9 @@
 import { vi } from "vitest";
 import { DEFAULT_CONFIG, type SvgConfig } from "../../src/lib/svgconfig";
 import { DEFAULT_PARAMS, capsFor, type ModelCaps, type SamplingParams } from "../../src/lib/modelcaps";
+import { prepareRun } from "../../src/lib/svgpayload";
 import type { RunArgs } from "../../src/svg/runner";
-import type { SvgSource } from "../../src/svg/sources";
+import { toBatchSource, type SvgSource } from "../../src/svg/sources";
 import { FakeDir, FakeFile } from "./fakefs";
 
 /** Assembled from parts so no key-shaped literal is committed (hygiene test). */
@@ -103,16 +104,23 @@ export interface RunOver extends Partial<Omit<RunArgs, "config">> {
   params?: SamplingParams;
 }
 
-/** RunArgs for the given names, one image per request and no retries unless overridden. */
+/**
+ * RunArgs for the given names: one image per request and no retries unless
+ * overridden. `prepared` is built from the same sources, config and rules the
+ * run uses, exactly as the confirmation dialog would have built it.
+ */
 export function runArgs(over: RunOver = {}): RunArgs {
   const names = over.names ?? ["fog"];
-  const { config, names: _n, rules, caps, params, ...rest } = over;
-  void _n;
+  const { config, names: _names, rules, caps, params, ...rest } = over;
+  void _names;
   const merged: SvgConfig = { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0, ...config };
+  const sources = rest.sources ?? sourcesOf(names);
+  const prepared = rest.prepared ?? prepareRun({
+    sources: sources.map(toBatchSource), config: merged, caps: caps ?? capsFor(merged.model),
+    params: params ?? DEFAULT_PARAMS, rules: rules ?? "p",
+  });
   return {
-    root: rootWith(names), apiKey: KEY, config: merged,
-    caps: caps ?? capsFor(merged.model), params: params ?? DEFAULT_PARAMS, prompt: rules ?? "p",
-    sources: sourcesOf(names), sidecars: new Map(),
+    root: rootWith(names), apiKey: KEY, config: merged, prepared, sources, sidecars: new Map(),
     signal: new AbortController().signal, onEvent: () => undefined, ...rest,
   };
 }

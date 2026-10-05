@@ -19,8 +19,14 @@ export interface BuiltComposite {
   bytes: number;
 }
 
-/** Reads, decodes and draws the batch; throws when any image is unreadable. */
-export async function buildComposite(root: DirHandleLike, sources: readonly SvgSource[]): Promise<BuiltComposite> {
+/** What a contact sheet needs of an image: where it is and how it looked when scanned. */
+export type CompositeSource = Pick<SvgSource, "relPath" | "fingerprint">;
+
+/**
+ * Reads, decodes and draws the batch; throws when any image is unreadable or is
+ * no longer the file the user reviewed (its size:mtime is not the scan's).
+ */
+export async function buildComposite(root: DirHandleLike, sources: readonly CompositeSource[]): Promise<BuiltComposite> {
   const layout = compositeLayout(sources.length);
   const images = await loadImages(root, sources);
   const canvas = renderComposite(layout, images);
@@ -29,12 +35,16 @@ export async function buildComposite(root: DirHandleLike, sources: readonly SvgS
   return { dataUrl, hash: hashBytes(dataUrl), layout, bytes: blob.size };
 }
 
-async function loadImages(root: DirHandleLike, sources: readonly SvgSource[]): Promise<CompositeImage[]> {
+async function loadImages(root: DirHandleLike, sources: readonly CompositeSource[]): Promise<CompositeImage[]> {
   const out: CompositeImage[] = [];
   for (const source of sources) {
     const fh = await resolveFile(root, source.relPath);
     if (!fh) throw new Error(`source image gone: ${source.relPath}`);
-    const img = await loadImageFile(await fh.getFile());
+    const file = await fh.getFile();
+    if (`${file.size}:${file.lastModified}` !== source.fingerprint) {
+      throw new Error(`${source.relPath} changed since it was scanned — rescan, then review again`);
+    }
+    const img = await loadImageFile(file);
     out.push({ src: img, w: img.naturalWidth, h: img.naturalHeight });
   }
   return out;

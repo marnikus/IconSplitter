@@ -8,13 +8,14 @@ import { NO_COST, newSidecar, parseSidecar, serializeSidecar } from "../src/lib/
 import { PRICING_VERSION } from "../src/lib/svgpricing";
 import { NO_USAGE } from "../src/lib/svgrequest";
 import { allocateUsage, costLabel } from "../src/lib/svgusage";
-import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
+import { DEFAULT_CONFIG, type SvgConfig } from "../src/lib/svgconfig";
 import { DEFAULT_PARAMS, capsFor } from "../src/lib/modelcaps";
+import { prepareRun } from "../src/lib/svgpayload";
 import { recordFailure, saveSvgVersion } from "../src/svg/saveversion";
 import { loadSidecar, saveSidecar } from "../src/svg/sidecar";
 import { toListRow, toRow } from "../src/svg/rowmodel";
 import { runGeneration } from "../src/svg/runner";
-import type { SvgSource } from "../src/svg/sources";
+import { toBatchSource, type SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 // Deterministic pixels: the composite path is exercised for real (canvas shims)
@@ -30,10 +31,18 @@ vi.mock("../src/lib/dom", async (importOriginal) => {
 
 const source: SvgSource = {
   id: "pair_fog", name: "fog_AI.png", stem: "fog_AI",
-  relPath: "architecture/fog_AI.png", dirPath: "architecture", fingerprint: "20:3100",
+  relPath: "architecture/fog_AI.png", dirPath: "architecture",
+  // what a scan derives from getFile(): the text's length ("b") and the mtime — the
+  // runner refuses an image whose size:mtime is not the one it was planned with
+  fingerprint: "1:3100",
 };
 
 const SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
+
+/** The requests the confirmation would have shown, built the way it builds them. */
+function prepared(sources: SvgSource[], config: SvgConfig) {
+  return prepareRun({ sources: sources.map(toBatchSource), config, caps: capsFor(config.model), params: DEFAULT_PARAMS, rules: "p" });
+}
 
 function root(): FakeDir {
   const dir = new FakeDir("split_root");
@@ -164,10 +173,10 @@ describe("runGeneration cost plumbing", () => {
     stubFetch(block("fog_AI", "<path d=\"M2 2h20v20H2z\"/>"), { prompt_tokens: 1000, completion_tokens: 2000, total_tokens: 3000, cost: 0.06, currency: "USD" });
     const dir = root();
     const sidecars = new Map();
+    const config = { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0 };
     const summary = await runGeneration({
-      root: dir, apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0 },
-      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS,
-      prompt: "p", sources: [source], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
+      root: dir, apiKey: "key", config, prepared: prepared([source], config),
+      sources: [source], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
     });
     expect(summary.saved).toBe(1);
     const stored = sidecars.get(source.id);
@@ -188,12 +197,12 @@ describe("runGeneration cost plumbing", () => {
       { prompt_tokens: 40, completion_tokens: 80, total_tokens: 120, cost: 0.04, currency: "USD" },
     );
     const dir = root();
-    const court: SvgSource = { ...source, id: "pair_court", name: "court_AI.png", stem: "court_AI", relPath: "architecture/court_AI.png" };
+    const court: SvgSource = { ...source, id: "pair_court", name: "court_AI.png", stem: "court_AI", relPath: "architecture/court_AI.png", fingerprint: "1:2100" };
     const sidecars = new Map();
+    const config = { ...DEFAULT_CONFIG, imagesPerRequest: 2, retries: 0 };
     const summary = await runGeneration({
-      root: dir, apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 2, retries: 0 },
-      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS,
-      prompt: "p", sources: [source, court], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
+      root: dir, apiKey: "key", config, prepared: prepared([source, court], config),
+      sources: [source, court], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
     });
     expect(summary.saved).toBe(1);
     expect(summary.invalid).toBe(1);

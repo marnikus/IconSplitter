@@ -118,3 +118,45 @@ describe("the retry loop", () => {
     expect(summary).toMatchObject({ saved: 0, failed: 1 });
   });
 });
+
+describe("the events of a request", () => {
+  const kinds = (events: RunEvent[]) =>
+    events.map((e) => e.kind).filter((k) => k === "request-sent" || k === "request-retry" || k === "request-ok");
+
+  it("tells sent → retry → sent → ok with attempt numbers and the wait, in that order", async () => {
+    stubFetchSeq([failReply(503), okReply(ANSWER, { "x-request-id": "req_77" })]);
+    const { events, pending } = await start({ config: { retries: 2 } });
+    await tick(500);
+    await pending;
+    expect(kinds(events)).toEqual(["request-sent", "request-retry", "request-sent", "request-ok"]);
+    expect(events.find((e) => e.kind === "request-retry")).toMatchObject({
+      attempt: 1, of: 3, failure: "provider", status: 503, waitMs: 500,
+    });
+    expect(events.filter((e) => e.kind === "request-sent").map((e) => (e as { attempt: number }).attempt)).toEqual([1, 2]);
+    expect(events.find((e) => e.kind === "request-ok")).toMatchObject({ attempt: 2, status: 200, requestId: "req_77" });
+  });
+
+  it("measures one fingerprint and one size for every attempt, equal to what was posted", async () => {
+    const calls = stubFetchSeq([failReply(503), okReply(ANSWER)]);
+    const args = runArgs({ config: { retries: 2 } });
+    const events: RunEvent[] = [];
+    const pending = runGeneration({ ...args, onEvent: (e) => events.push(e) });
+    await tick(500);
+    await pending;
+    const sent = events.filter((e) => e.kind === "request-sent") as Array<Extract<RunEvent, { kind: "request-sent" }>>;
+    expect(sent).toHaveLength(2);
+    expect(sent[0].fp).toBe(sent[1].fp);
+    expect(sent[0].fp).toBe(args.prepared.batches[0].fingerprint);
+    expect(sent[0].chars).toBe(calls[0].body.length);
+  });
+
+  it("carries the retry-after of a 429 as the wait and never an echoed key", async () => {
+    stubFetchSeq([failReply(429, `slow down ${KEY}`, { "retry-after": "3" }), okReply(ANSWER)]);
+    const { events, pending } = await start({ config: { retries: 2 } });
+    await tick(3000);
+    await pending;
+    const retry = events.find((e) => e.kind === "request-retry") as Extract<RunEvent, { kind: "request-retry" }>;
+    expect(retry).toMatchObject({ failure: "rate_limit", status: 429, waitMs: 3000 });
+    expect(JSON.stringify(events)).not.toContain(KEY);
+  });
+});
