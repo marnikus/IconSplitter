@@ -174,6 +174,11 @@ export function classifyTransport(error: unknown, timedOut: boolean, aborted: bo
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
+/** The only headers a request carries — one list for the sender and the confirmation. */
+export function wireHeaders(apiKey: string): Record<string, string> {
+  return { "Content-Type": "application/json", Authorization: authHeader(apiKey) };
+}
+
 export interface SendArgs {
   config: SvgConfig;
   apiKey: string;
@@ -200,7 +205,7 @@ export async function sendChatRequest(args: SendArgs): Promise<SendOut> {
   try {
     const response = await doFetch(chatUrl(args.config.baseUrl), {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: authHeader(args.apiKey) },
+      headers: wireHeaders(args.apiKey),
       body: JSON.stringify(args.request),
       signal: controller.signal,
     });
