@@ -1,11 +1,12 @@
-// SourceBar.tsx — V2 control row one: root path pill, rescan, watcher, the
-// layout switch (list review / comparison) and the live counters.
+// SourceBar.tsx — V2 control row one: the green Open folder button, rescan,
+// the layout switch (list review / comparison) and the live counters, plus the
+// full-width read-only path row below (the remembered full path once captured,
+// else the folder name — never an input, I-44).
 
 import type { ViewMode } from "../lib/reviewprefs";
 import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
 import { scopeText, type ScanScope } from "../lib/splitscope";
-import RootPathField from "../ui/RootPathField";
 import { useRootLabel } from "../ui/userootpath";
 import SegButton from "./SegButton";
 
@@ -14,36 +15,41 @@ export interface SourceBarProps {
   scope: ScanScope;
   pairs: ViewPair[];
   mode: ViewMode;
-  watcher: boolean;
   chooseRoot: () => void;
   rescan: () => void;
   setMode: (mode: ViewMode) => void;
-  toggleWatcher: () => void;
 }
 
 export default function SourceBar(p: SourceBarProps) {
-  const label = useRootLabel(p.rootName); // the full path once it is known (I-36)
   return (
-    <div className="v2-toolbar">
-      <div className="v2-source">
-        <button className="v2-path-pill" data-testid="v2-root" onClick={p.chooseRoot} title={label || undefined}>
-          {label || "Choose source folder…"}
-        </button>
-        <button className="v2-btn primary" data-testid="v2-rescan" onClick={p.rescan}>↻ Rescan</button>
-        <button className="v2-btn ghost" data-testid="v2-watcher" onClick={p.toggleWatcher} title="Auto-rescan every 30 s">
-          {p.watcher ? "● Watcher active" : "○ Watcher paused"}
-        </button>
-        {p.rootName !== "" && <RootPathField key={p.rootName} rootName={p.rootName} testid="v2-root-path" />}
-        {p.rootName !== "" && (
-          <span className="v2-recursive" data-testid="v2-scan-scope">{scopeText(p.scope)}</span>
-        )}
+    <>
+      <div className="v2-toolbar">
+        <div className="v2-source">
+          <button type="button" className="v2-btn open" data-testid="v2-root" onClick={p.chooseRoot}>
+            📂 Open folder
+          </button>
+          <button type="button" className="v2-btn primary" data-testid="v2-rescan" onClick={p.rescan}>↻ Rescan</button>
+          {p.rootName !== "" && (
+            <span className="v2-recursive" data-testid="v2-scan-scope">{scopeText(p.scope)}</span>
+          )}
+        </div>
+        <div className="v2-toolbar-right">
+          <ModeSwitch mode={p.mode} setMode={p.setMode} />
+          <Summary c={counters(p.pairs)} />
+        </div>
       </div>
-      <div className="v2-toolbar-right">
-        <ModeSwitch mode={p.mode} setMode={p.setMode} />
-        <Summary c={counters(p.pairs)} />
-      </div>
-    </div>
+      <PathRow rootName={p.rootName} />
+    </>
   );
+}
+
+/** The picked folder, as read-only text: full path once known, else its name. */
+function PathRow({ rootName }: { rootName: string }) {
+  const label = useRootLabel(rootName);
+  if (rootName === "") {
+    return <p className="v2-pathrow empty" data-testid="v2-path">No folder selected — open a folder to start</p>;
+  }
+  return <p className="v2-pathrow" data-testid="v2-path" title={label}>📁 {label}</p>;
 }
 
 function ModeSwitch({ mode, setMode }: { mode: ViewMode; setMode: (m: ViewMode) => void }) {

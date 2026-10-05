@@ -199,9 +199,9 @@ Source bar + layout switch:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `v2-root` | path pill button | shows the root name, opens the picker; label mirrors state (RULE 24) |
+| `v2-root` | green `Open folder` button | opens the picker; the picked folder is shown in `v2-path`, never as the button (I-44) |
 | `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
-| `v2-watcher` | watcher pill | toggles the 30 s auto-rescan |
+| `v2-path` | full-width read-only path row | the **full path** once one was captured (I-36), else the folder name; `No folder selected` with no root (I-44). No watcher exists in V2 (V1-only) |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
 
@@ -235,8 +235,7 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 | `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers | each carries an `Original` / `AI result` tag; missing side or decode failure → `role="img"` placeholder with an aria-label |
 | `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
 | `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
-| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
-| `v2-root-path` | `Full path for copies` field | the shared `ui/RootPathField`, same memory as the Generate SVG tab's field (§Q); `v2-root-path-note` marks it unset |
+| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the captured full path when one is remembered (I-28) |
 | `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
 | `v2-autonext` | checkbox | advance to the next pending after a decision |
 | `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
@@ -327,14 +326,13 @@ contenteditable — so undo still works after using the zoom slider or a checkbo
 Source: `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`,
 `SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgPanel.tsx`.
 
-Source bar (only after a root is remembered; `svg-root-empty` /
+Source bar (always rendered, with a placeholder row while no root is picked; `svg-root-empty` /
 `svg-unsupported` are the two empty states and stay distinct):
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-root` | path pill | the root's label: its **full path** once one was captured (I-36), else the folder name |
-| `svg-choose-root` | `Choose source folder…` / `Change folder…` | the picker, offered whether or not a root is loaded (I-30) |
-| `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so it is captured from the clipboard when the folder is picked (I-35) or pasted here; normalised and remembered per folder name (I-29). `svg-root-path-label` is the label; `svg-root-path-use` is `Use copied path` (adopt what Explorer copied, no typing); `svg-root-path-note` names the state: "✓ every copy uses this path" / "completed from the copied folder — check it" / "not set — Chrome can't read the drive path; copy the folder in Explorer, then press “Use copied path”", or the button's own feedback ("Nothing path-like on the clipboard…") |
+| `svg-choose-root` | green `Open folder` button | the picker, offered whether or not a root is loaded (I-30); the picked folder is shown in `svg-path`, never as the button (I-44) |
+| `svg-path` | full-width read-only path row | the **full path** once one was captured (I-36), else the folder name; `No folder selected` with no root (I-44) |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |

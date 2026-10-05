@@ -244,7 +244,7 @@ function PickRoot({ onPick }: { onPick: () => void }) {
   return (
     <section className="svg-panel svg-center" data-testid="svg-root-empty">
       <p>Pick the folder that holds your originals, <code>_AI</code> results and <code>review-decisions.json</code>.</p>
-      <button type="button" className="svg-btn primary" onClick={onPick}>Choose source folder…</button>
+      <button type="button" className="svg-btn open" onClick={onPick}>📂 Open folder</button>
     </section>
   );
 }

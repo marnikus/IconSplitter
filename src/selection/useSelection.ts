@@ -34,13 +34,19 @@ const VIEW_TOGGLES: Record<string, string> = {
 
 import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";
 
-export function useSelection() {
+/** Selection V2 passes `{ watcher: false }` — it has no watcher UI (I-44). */
+export interface UseSelectionOptions {
+  watcher?: boolean;
+}
+
+export function useSelection(options?: UseSelectionOptions) {
   const view = useAppView();
   const [core, setCore] = useState(initialSelState);
   const hist = useHistory();
   const ctx = useCtx(useMerged(core, view), hist);
+  const watcherOn = (options?.watcher ?? true) && ctx.state.current.watcher;
   useEffect(() => { void boot(ctx, setCore); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useWatcher(ctx, ctx.state.current.watcher, ctx.state.current.rootName, setCore);
+  useWatcher(ctx, watcherOn, ctx.state.current.rootName, setCore);
   useToastClear(ctx.state.current.toast, setCore);
   useDecisionApplier(ctx, setCore);
   const s = ctx.state.current;

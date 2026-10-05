@@ -144,9 +144,11 @@
 .v2-toolbar-right { gap: 14px; flex-wrap: wrap; }
 .v2-summary { gap: 8px; flex-wrap: wrap; }
 
-.v2-path-pill {
-  min-width: 220px;
-  max-width: 380px;
+/* The picked folder as read-only text: full width, below the toolbar (I-44). */
+.v2-pathrow {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
   padding: 8px 11px;
   border: 1px solid var(--v2-line);
   border-radius: var(--v2-radius);
@@ -157,6 +159,8 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.v2-pathrow.empty { color: var(--v2-muted); }
 
 .v2-recursive { color: var(--v2-muted); font-size: 11px; }
 
@@ -573,9 +577,11 @@
 .svg-source { display: flex; align-items: center; gap: 9px; min-width: 0; flex-wrap: wrap; }
 .svg-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.svg-path-pill {
-  min-width: 220px;
-  max-width: 380px;
+/* The picked folder as read-only text: full width, below the toolbar (I-44). */
+.svg-pathrow {
+  display: block;
+  width: 100%;
+  margin: 0;
   padding: 8px 11px;
   border: 1px solid var(--v2-line);
   border-radius: var(--v2-radius);
@@ -587,36 +593,10 @@
   text-overflow: ellipsis;
 }
 
+.svg-pathrow.empty { color: var(--v2-muted); }
+
 .svg-recursive { color: var(--v2-muted); font-size: 11px; }
 .svg-audit { color: var(--v2-muted); font-size: 10px; }
-
-/* The root's real full path, pasted once (the browser only knows its name). */
-.pathfield { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.pathfield > span { color: var(--v2-muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
-.pathfield > input {
-  min-width: 260px;
-  max-width: 460px;
-  padding: 7px 9px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: #090f1d;
-  color: #c6cee2;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.pathfield > em { color: var(--v2-muted); font-size: 10px; font-style: normal; }
-.pathfield > em.ok { color: #7fbf9a; }
-.pathfield > em.warn { color: #d8b26a; }
-.pathfield-use {
-  padding: 7px 9px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #c6cee2;
-  font-size: 10px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.pathfield-use:hover { background: #16203a; }
 
 .svg-chip {
   display: inline-flex;
@@ -792,6 +772,22 @@
 .svg-btn.primary { background: var(--v2-purple); border-color: var(--v2-purple); color: #fff; }
 .svg-btn.ghost { background: transparent; }
 .svg-btn.success { background: #143a31; border-color: #245e4c; color: var(--v2-green); }
+
+/* The folder action: solid green, unmistakably clickable (I-44). */
+.svg-btn.open {
+  background: #159361;
+  border-color: #1ab274;
+  color: #fff;
+  cursor: pointer;
+}
+
+.svg-btn.open:hover:not(:disabled) {
+  background: #1ab274;
+  border-color: #22c55e;
+  filter: brightness(1.08);
+}
+
+.svg-btn.open:active:not(:disabled) { transform: translateY(1px); filter: none; }
 .svg-btn.danger { background: var(--v2-red-bg); border-color: #713249; color: var(--v2-red); }
 .svg-btn.tiny { min-height: 26px; padding: 5px 7px; font-size: 8px; }
 

@@ -28,9 +28,8 @@ export default function SelectionV2Panel() {
   return (
     <div className="v2" data-testid="v2-panel">
       <section className="v2-controls" aria-label="Review controls">
-        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode} watcher={v.core.s.watcher}
-          chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode}
-          toggleWatcher={() => v.core.patch({ watcher: !v.core.s.watcher })} />
+        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode}
+          chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode} />
         {v.core.s.rootName !== "" && (
           <FilterGrid filter={v.core.s.filter} sort={v.core.s.sort} shown={v.core.visible.length}
             setFilter={v.core.setFilter} setSort={v.core.setSort} />

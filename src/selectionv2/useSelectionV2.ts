@@ -37,7 +37,7 @@ export interface SelectionV2Api {
 }
 
 export function useSelectionV2(): SelectionV2Api {
-  const core = useSelection();
+  const core = useSelection({ watcher: false }); // V2 has no watcher (I-44)
   const hist = useHistory();
   const app = useAppState();
   const { checked, scrollY, anchorId } = app.v2;

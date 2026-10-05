@@ -9,6 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { parsePairMeta } from "../src/lib/pairmeta";
+import { saveRootPathInfo } from "../src/lib/rootpath";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -110,14 +111,15 @@ describe("Selection V2 panel", () => {
     expect((q(el, `[data-testid='v2-open-ai-${DUNES}']`) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("copies the FOLDER of the pasted full path from a row's open button", async () => {
+  it("copies the FOLDER of the remembered full path from a row's open button", async () => {
     const written: string[] = [];
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: async (t: string) => { written.push(t); } }, configurable: true,
     });
+    // The browser cannot read the drive, so the path comes from the memory the
+    // pick-time capture writes — this seeds that same memory directly.
+    saveRootPathInfo("split_root", `"F:\\Stocks 2026\\icons\\split_root\\`, "copied");
     const { el } = await mount(makeRoot());
-    // The browser cannot read the drive, so the user pastes the path once here.
-    await type(el, "[data-testid='v2-root-path']", `"F:\\Stocks 2026\\icons\\split_root\\`);
     const row = rows(el)[0];
     const pair = row.getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
     await click(q(el, `[data-testid='v2-open-ai-${pair}']`) as HTMLElement);
@@ -129,19 +131,22 @@ describe("Selection V2 panel", () => {
   it("keeps the picked root name when the scan commits in the same batch", async () => {
     const { el } = await mount(makeRoot());
     // The scan commit is built from a state snapshot; a snapshot taken before
-    // the pick used to win and the pill fell back to "Choose source folder…".
-    expect(text(el, "[data-testid='v2-root']")).toBe("split_root");
+    // the pick used to win and the path row fell back to "No folder selected".
+    expect(text(el, "[data-testid='v2-root']")).toContain("Open folder");
+    expect(text(el, "[data-testid='v2-path']")).toContain("split_root");
     expect(rows(el).length).toBeGreaterThan(0);
   });
 
-  it("shows the full path in the pill once it is captured, without a reload", async () => {
-    const { el } = await mount(makeRoot());
-    const before = rows(el).length;
+  it("shows the full path in the row once it is captured at pick time", async () => {
     stubClipboard("F:\\Stocks 2026\\icons\\split_root\\");
-    await click(q(el, "[data-testid='v2-root-path-use']")!);
-    expect(text(el, "[data-testid='v2-root']")).toBe("F:\\Stocks 2026\\icons\\split_root");
-    expect(input(el, "[data-testid='v2-root-path']").value).toBe("F:\\Stocks 2026\\icons\\split_root");
-    expect(rows(el).length).toBe(before); // the list is untouched by a path capture
+    try {
+      const { el } = await mount(makeRoot());
+      expect(text(el, "[data-testid='v2-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
+      expect(rows(el).length).toBe(4); // the list is untouched by a path capture
+      expect(text(el, "[data-testid='v2-toast']")).toContain("Full path taken from your clipboard");
+    } finally {
+      Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    }
   });
 
   it("loads both sides of a pair as real object-URL thumbnails", async () => {
@@ -425,10 +430,6 @@ function q(el: HTMLElement, sel: string): HTMLElement | null {
   return el.querySelector(sel);
 }
 
-function input(el: HTMLElement, sel: string): HTMLInputElement {
-  return q(el, sel) as HTMLInputElement;
-}
-
 function stubClipboard(value: string): void {
   Object.defineProperty(navigator, "clipboard", {
     value: { readText: async () => value, writeText: async () => undefined }, configurable: true,
@@ -441,16 +442,6 @@ function rows(el: HTMLElement): Element[] {
 
 function text(el: HTMLElement, sel: string): string {
   return q(el, sel)?.textContent ?? "";
-}
-
-/** React tracks input values, so the native setter must be used to change one. */
-async function type(el: HTMLElement, sel: string, value: string): Promise<void> {
-  await act(async () => {
-    const node = q(el, sel) as HTMLInputElement;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(node, value);
-    node.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await settle();
 }
 
 async function click(node: HTMLElement): Promise<void> {
