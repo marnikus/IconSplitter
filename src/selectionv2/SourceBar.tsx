@@ -7,7 +7,8 @@ import type { ViewMode } from "../lib/reviewprefs";
 import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
 import { scopeText, type ScanScope } from "../lib/splitscope";
-import { useRootLabel } from "../ui/userootpath";
+import { useRootPath } from "../ui/userootpath";
+import PathHint from "../ui/PathHint";
 import SegButton from "./SegButton";
 
 export interface SourceBarProps {
@@ -30,7 +31,7 @@ export default function SourceBar(p: SourceBarProps) {
           </button>
           <button type="button" className="v2-btn primary" data-testid="v2-rescan" onClick={p.rescan}>↻ Rescan</button>
           {p.rootName !== "" && (
-            <span className="v2-recursive" data-testid="v2-scan-scope">{scopeText(p.scope)}</span>
+            <span className="v2-recursive" data-testid="v2-scan-scope">{scopeText(p.scope, p.rootName)}</span>
           )}
         </div>
         <div className="v2-toolbar-right">
@@ -45,11 +46,17 @@ export default function SourceBar(p: SourceBarProps) {
 
 /** The picked folder, as read-only text: full path once known, else its name. */
 function PathRow({ rootName }: { rootName: string }) {
-  const label = useRootLabel(rootName);
+  const stored = useRootPath(rootName);
   if (rootName === "") {
     return <p className="v2-pathrow empty" data-testid="v2-path">No folder selected — open a folder to start</p>;
   }
-  return <p className="v2-pathrow" data-testid="v2-path" title={label}>📁 {label}</p>;
+  const label = stored.path === "" ? rootName : stored.path;
+  return (
+    <>
+      <p className="v2-pathrow" data-testid="v2-path" title={label}>📁 {label}</p>
+      {stored.path === "" && <PathHint testid="v2-path-hint" />}
+    </>
+  );
 }
 
 function ModeSwitch({ mode, setMode }: { mode: ViewMode; setMode: (m: ViewMode) => void }) {

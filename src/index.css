@@ -155,9 +155,7 @@
   background: var(--v2-surface);
   color: #b7c1d9;
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .v2-pathrow.empty { color: var(--v2-muted); }
@@ -588,12 +586,12 @@
   background: var(--v2-surface);
   color: #b7c1d9;
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .svg-pathrow.empty { color: var(--v2-muted); }
+
+.pathhint { color: var(--v2-muted); font-size: 10px; margin: 4px 2px 0; }
 
 .svg-recursive { color: var(--v2-muted); font-size: 11px; }
 .svg-audit { color: var(--v2-muted); font-size: 10px; }

@@ -33,6 +33,34 @@ moves down or sideways, never up to hide growth — CODE_VERIFICATION.md).
 
 ---
 
+# Quality re-check — 2026-10-05 (pick-level equivalence + responsibility split)
+
+Change: `docs/archive/2026-10-05-pick-level-fix/design.md` (I-45…I-47) —
+split-output picks review the whole tree, pair files re-seat onto the picked
+root, a paste captures the un-capturable path. The gate counts a touched file
+over 300 lines as a failure, so the pair-file reader and the merge moved to
+`lib/pairfile.ts` / `lib/pairmerge.ts` instead of squeezing into the oversize
+owners.
+
+1. Lanes (`npm run verify`, 6/6 passed — "ALL LANES PASSED — safe to push"):
+   types clean, lint clean, quality gate on ALL files PASSED, tests
+   **85 files / 863 tests green**, coverage lane passed, vite build passed
+   (dist/index.html 654.38 kB, gzip 193.75 kB). Review lanes: jscpd 13 clones
+   = HEAD full-tree 13 (**0 new**); knip CLI still exits without output
+   (pre-existing tooling issue) — manual export-consumer check instead: every
+   new export is consumed (`rebasePairMeta`, `usePastePathCapture`, `PathHint`,
+   `mergeRecords`, dir/base/join helpers); `pairRefOf` stays export-shaped as
+   before (no external consumer — pre-existing, unchanged).
+2. Numbers: pairmeta 225, pairstore 257, pairfile 97, pairmerge 70,
+   saveversion 142 — all ≤ 299, no new file over the ideals. Coverage (all
+   files): 96.73 stmts / 91.21 branch / 96.56 funcs / 98.19 lines.
+3. Baseline: untouched. No legacy hotspot touched (`App.tsx`, `detect.ts`
+   not in the diff); the gate passes without re-recording, so the ratchet
+   does not move.
+4. New debt: none. The two oversize files were split by responsibility
+   (model/read/merge/disk) rather than grown; the duplicated-tail corruption
+   at the end of §15 (pre-existing) was repaired in passing.
+
 # Quality re-check — 2026-09-30 (rules adopted from sister project)
 
 First re-check: adoption of the RULE 16 gate, test lane and baseline from

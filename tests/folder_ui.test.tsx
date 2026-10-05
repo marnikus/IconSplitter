@@ -3,10 +3,15 @@
 // tabs drive their REAL panels against in-memory FS fakes: one green Open folder
 // button, one full-width read-only path row below, no watcher / copied-path UI
 // in V2 or SVG, and an unchanged Rescan. Selection V1 keeps its watcher.
+// The pick-level contract (bug-1): the split output, its month folder and its
+// stamp folder all list the same run. The path contract (bug-2): the full path
+// shows after a pick — captured from a paste when the clipboard read gave
+// nothing — and a re-pick updates the row.
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
+import { newPairMeta, serializePairMeta, withDecision } from "../src/lib/pairmeta";
 import { saveRootPathInfo } from "../src/lib/rootpath";
 import SelectionPanel from "../src/selection/SelectionPanel";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
@@ -68,6 +73,55 @@ function v1Root(): FakeDir {
   camp.children.set("a_AI.png", new FakeFile("a_AI.png", 9, 222, "y"));
   root.children.set("camp", camp);
   return root;
+}
+
+function otherRoot(): FakeDir {
+  const root = new FakeDir("other");
+  const arch = new FakeDir("architecture");
+  arch.children.set("fog.png", new FakeFile("fog.png", 12, 3000, "a"));
+  arch.children.set("fog_AI.png", new FakeFile("fog_AI.png", 20, 3100, "b"));
+  root.children.set("architecture", arch);
+  return root;
+}
+
+const STAMP_NAME = "2026-10-05_18-45-20";
+
+/**
+ * test_processing_2: one unsplit input pair plus a two-piece run, the pair
+ * files' approvals framed for the `_split_output` pick (as a real run writes).
+ */
+function batchRoot(): FakeDir {
+  const root = new FakeDir("test_processing_2");
+  root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 100, "e"));
+  root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 110, "f"));
+  const hier = new FakeDir("icon-sheet_AI");
+  for (const n of ["01", "02"]) {
+    const split = new FakeDir(`split_${n}`);
+    const frame = `2026-10/${STAMP_NAME}/icon-sheet_AI/split_${n}`;
+    split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 900, "c"));
+    split.children.set(`icon-sheet_AI_${n}.png`, new FakeFile(`icon-sheet_AI_${n}.png`, 20, 960, "d"));
+    const text = serializePairMeta(withDecision(newPairMeta({
+      id: pairId(frame, "icon-sheet", `_${n}`), base: "icon-sheet", suffix: `_${n}`, dirPath: frame,
+      ai: { relPath: `${frame}/icon-sheet_AI_${n}.png`, name: `icon-sheet_AI_${n}.png`, fingerprint: "20:960" },
+      source: { relPath: `${frame}/icon-sheet.png`, name: "icon-sheet.png", fingerprint: "12:900" },
+    }), "approved", "2026-10-05T17:02:11.000Z"));
+    split.children.set(`icon-sheet_AI_${n}.svg.json`, new FakeFile(`icon-sheet_AI_${n}.svg.json`, text.length, 500, text));
+    hier.children.set(`split_${n}`, split);
+  }
+  const stamp = new FakeDir(STAMP_NAME);
+  stamp.children.set("icon-sheet_AI", hier);
+  const month = new FakeDir("2026-10");
+  month.children.set(STAMP_NAME, stamp);
+  const output = new FakeDir("_split_output");
+  output.children.set("2026-10", month);
+  root.children.set("_split_output", output);
+  return root;
+}
+
+function subdir(root: FakeDir, ...names: string[]): FakeDir {
+  let dir = root;
+  for (const name of names) dir = dir.children.get(name) as FakeDir;
+  return dir;
 }
 
 let mounted: { el: HTMLElement; ui: Root }[] = [];
@@ -229,6 +283,118 @@ describe("Selection V1 keeps its watcher", () => {
     expect(el.querySelector("[data-testid='sel-watcher']")?.textContent).toContain("Watcher");
   });
 });
+
+describe("Selection V2 lists the same run at every pick level (bug-1)", () => {
+  it("lists the run's pieces when the picked folder IS the split output", async () => {
+    const { el } = await mountV2(subdir(batchRoot(), "_split_output"));
+    expect(el.querySelectorAll("[data-testid^='v2-row-']").length).toBe(2);
+    expect(el.querySelector("[data-testid='v2-scan-scope']")?.textContent).toBe("Scope: this split output");
+  });
+
+  it("lists the same pieces from the stamp folder", async () => {
+    const { el } = await mountV2(subdir(batchRoot(), "_split_output", "2026-10", STAMP_NAME));
+    expect(el.querySelectorAll("[data-testid^='v2-row-']").length).toBe(2);
+  });
+
+  it("lists the same pieces from the month folder", async () => {
+    const { el } = await mountV2(subdir(batchRoot(), "_split_output", "2026-10"));
+    expect(el.querySelectorAll("[data-testid^='v2-row-']").length).toBe(2);
+  });
+
+  it("keeps the approvals when moving between pick levels", async () => {
+    const root = batchRoot();
+    const { el } = await mountV2(subdir(root, "_split_output"));
+    expect(badges(el)).toEqual(["✓ Approved", "✓ Approved"]);
+    (window as unknown as PickerWindow).showDirectoryPicker = () =>
+      Promise.resolve(subdir(root, "_split_output", "2026-10", STAMP_NAME));
+    await click(el.querySelector("[data-testid='v2-root']") as HTMLElement);
+    expect(el.querySelectorAll("[data-testid^='v2-row-']").length).toBe(2);
+    expect(badges(el)).toEqual(["✓ Approved", "✓ Approved"]);
+  });
+});
+
+describe("Generate SVG lists the same run at every pick level (bug-1)", () => {
+  it("lists the approved pieces when the picked folder IS the split output", async () => {
+    const { el } = await mountSvg(subdir(batchRoot(), "_split_output"));
+    expect(el.querySelectorAll(".svg-row").length).toBe(2);
+  });
+
+  it("lists the same pieces from the stamp folder", async () => {
+    const { el } = await mountSvg(subdir(batchRoot(), "_split_output", "2026-10", STAMP_NAME));
+    expect(el.querySelectorAll(".svg-row").length).toBe(2);
+  });
+
+  it("lists the same pieces from the month folder", async () => {
+    const { el } = await mountSvg(subdir(batchRoot(), "_split_output", "2026-10"));
+    expect(el.querySelectorAll(".svg-row").length).toBe(2);
+  });
+});
+
+describe("the full path after a folder is chosen (bug-2)", () => {
+  it("V2 captures a pasted full path when the clipboard read gave nothing", async () => {
+    const { el } = await mountV2(v2Root());
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).toContain("split_root");
+    expect(el.querySelector("[data-testid='v2-path-hint']")?.textContent).toContain("then paste (Ctrl+V)");
+    await firePaste(FULL);
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).toContain(FULL);
+    expect(el.querySelector("[data-testid='v2-toast']")?.textContent).toContain(`Full path taken from your paste: ${FULL}`);
+    expect(el.querySelector("[data-testid='v2-path-hint']")).toBeNull();
+  });
+
+  it("SVG captures a pasted full path when the clipboard read gave nothing", async () => {
+    const { el } = await mountSvg(svgRoot());
+    expect(el.querySelector("[data-testid=svg-path]")?.textContent).toContain("split_root");
+    expect(el.querySelector("[data-testid=svg-path-hint]")?.textContent).toContain("then paste (Ctrl+V)");
+    await firePaste(FULL);
+    expect(el.querySelector("[data-testid=svg-path]")?.textContent).toContain(FULL);
+    expect(el.querySelector("[data-testid=svg-toast]")?.textContent).toContain(`Full path taken from your paste: ${FULL}`);
+    expect(el.querySelector("[data-testid=svg-path-hint]")).toBeNull();
+  });
+
+  it("ignores a paste aimed at a field", async () => {
+    const { el } = await mountV2(v2Root());
+    await firePaste(FULL, el.querySelector("[data-testid='v2-from']") as HTMLElement);
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).toContain("split_root");
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).not.toContain(FULL);
+    expect(el.querySelector("[data-testid='v2-toast']")?.textContent ?? "").not.toContain("taken from your paste");
+  });
+
+  it("ignores pasted text that is not a folder path", async () => {
+    const { el } = await mountV2(v2Root());
+    await firePaste("hello world");
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).toContain("split_root");
+    expect(el.querySelector("[data-testid='v2-toast']")?.textContent ?? "").not.toContain("taken from your paste");
+  });
+
+  it("V2 shows the newly picked folder after a re-pick", async () => {
+    const { el } = await mountV2(v2Root());
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).toContain("split_root");
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(otherRoot());
+    await click(el.querySelector("[data-testid='v2-root']") as HTMLElement);
+    expect(el.querySelector("[data-testid='v2-path']")?.textContent).toContain("other");
+  });
+
+  it("SVG shows the newly picked folder after a re-pick", async () => {
+    const { el } = await mountSvg(svgRoot());
+    expect(el.querySelector("[data-testid=svg-path]")?.textContent).toContain("split_root");
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(otherRoot());
+    await click(el.querySelector("[data-testid=svg-choose-root]") as HTMLElement);
+    expect(el.querySelector("[data-testid=svg-path]")?.textContent).toContain("other");
+  });
+});
+
+function badges(el: HTMLElement): string[] {
+  return [...el.querySelectorAll("[data-testid^='v2-status-']")]
+    .map((b) => b.textContent ?? "").sort();
+}
+
+async function firePaste(text: string, target?: HTMLElement): Promise<void> {
+  const event = new Event("paste", { bubbles: true, cancelable: true }) as
+    Event & { clipboardData?: { getData: (type: string) => string } };
+  event.clipboardData = { getData: () => text };
+  await act(async () => { (target ?? window).dispatchEvent(event); });
+  await settle();
+}
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 

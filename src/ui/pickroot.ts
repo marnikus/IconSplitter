@@ -52,11 +52,17 @@ export async function pickFolderFor(
   return { handle: picked.handle, message: pickMessage(picked) };
 }
 
-/** The one line every caller says about a capture — or null to stay quiet. */
-export function pickMessage(picked: PickedRoot): string | null {
-  if (picked.path === "") return null;
-  const where = picked.path;
-  return picked.how === "completed"
-    ? `Full path completed from the copied folder: ${where} — check it`
-    : `Full path taken from your clipboard: ${where}`;
+/**
+ * The one line said about a capture — or null to stay quiet. Voiced for the
+ * gesture that captured it: the pick reads the clipboard, while a later paste
+ * stands in for that read when the browser refused it (I-47).
+ */
+export function pickMessage(info: { path: string; how: PathHow | null }, via: "clipboard" | "paste" = "clipboard"): string | null {
+  if (info.path === "") return null;
+  const where = info.path;
+  if (info.how === "completed") {
+    const folder = via === "paste" ? "pasted" : "copied";
+    return `Full path completed from the ${folder} folder: ${where} — check it`;
+  }
+  return `Full path taken from your ${via}: ${where}`;
 }

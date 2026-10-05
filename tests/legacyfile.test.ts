@@ -6,13 +6,16 @@
 import { describe, expect, it } from "vitest";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { LEGACY_FILE, loadPairDecisions, loadMetaAt, saveMetaAt } from "../src/selection/pairstore";
+import { pairId } from "../src/lib/pairing";
 import { pairFile } from "./helpers/pairfile";
 import { serializeDecisions, type ReviewRecord } from "../src/lib/reviewfile";
 import { readDirTree } from "../src/lib/fs";
 import { walkTree } from "../src/lib/scan";
 
 const REC: ReviewRecord = {
-  pair_id: "pair_1", source: "a/o.png", ai_result: "a/a_AI.png",
+  // the pair's real id: coverage follows the file's seat now (I-46), so a
+  // stored id that names no pair no longer covers the legacy record either
+  pair_id: pairId("a", "a", ""), source: "a/o.png", ai_result: "a/a_AI.png",
   decision: "approved", reviewed_at: "2026-10-01T10:00:00.000Z",
 };
 

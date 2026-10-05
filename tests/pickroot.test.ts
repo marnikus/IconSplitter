@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adoptCopiedPath } from "../src/lib/clipboardpath";
 import { loadRootPath } from "../src/lib/rootpath";
-import { pickRootWithPath } from "../src/ui/pickroot";
+import { pickMessage, pickRootWithPath } from "../src/ui/pickroot";
 import type { DirHandleLike } from "../src/lib/fs";
 
 const ROOT = "test_processing";
@@ -100,5 +100,18 @@ describe("pickroot and clipboardpath agree", () => {
     await adoptCopiedPath(ROOT);
     await adoptCopiedPath(ROOT);
     expect(loadRootPath(ROOT)).toBe(FULL);
+  });
+});
+
+describe("pickMessage — the one line said about a capture", () => {
+  it("voices a paste like the pick it stands in for (bug-2)", () => {
+    expect(pickMessage({ path: FULL, how: "copied" }, "paste")).toBe(`Full path taken from your paste: ${FULL}`);
+    expect(pickMessage({ path: FULL, how: "completed" }, "paste")).toBe(
+      `Full path completed from the pasted folder: ${FULL} — check it`);
+  });
+
+  it("keeps the clipboard voice by default", () => {
+    expect(pickMessage({ path: FULL, how: "copied" })).toBe(`Full path taken from your clipboard: ${FULL}`);
+    expect(pickMessage({ path: "", how: null })).toBeNull();
   });
 });

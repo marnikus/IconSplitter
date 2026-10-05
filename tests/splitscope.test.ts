@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { pairEntries } from "../src/lib/pairing";
 import { walkTree } from "../src/lib/scan";
-import { directoryNames, isSplitDirName, scopeOf, splitPairs } from "../src/lib/splitscope";
+import { directoryNames, isSplitDirName, scopeOf, scopeText, splitPairs } from "../src/lib/splitscope";
 import type { TreeNode } from "../src/lib/scan";
 
 function file(name: string): TreeNode {
@@ -67,8 +67,10 @@ describe("scopeOf — is this tree's reviewable set a split output?", () => {
     expect(scopeOf(directoryNames(tree), "test_processing")).toBe(true);
   });
 
-  it("scopes the whole tree when the picked folder IS a split output", () => {
-    expect(scopeOf(directoryNames(reportedTree()), "_split_output")).toBe(true);
+  it("reviews the whole picked output when the picked folder IS a split output", () => {
+    // bug-1: picking `_split_output` itself listed 0 — every pair is root-relative
+    // then, so none carries the split segment the narrowed set looks for.
+    expect(scopeOf(directoryNames(reportedTree()), "_split_output")).toBe(false);
   });
 
   it("does not scope a tree without one, so a plain folder reviews as before", () => {
@@ -106,6 +108,29 @@ describe("splitPairs — the pieces in, the unsplit sheets reported", () => {
     expect(scoped.outside).toEqual([]);
   });
 
+  it("lists the run's pieces when the picked folder IS the split output (bug-1)", () => {
+    const output = reportedTree().children!.find((c) => c.name === "_split_output")!;
+    const all = pairEntries(walkTree(output, []));
+    expect(all).toHaveLength(2);
+    const scoped = splitPairs(all, scopeOf(directoryNames(output), output.name));
+    expect(scoped.pairs.map((p) => p.relDir).sort()).toEqual([
+      "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01",
+      "2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02",
+    ]);
+    expect(scoped.outside).toEqual([]);
+  });
+
+  it("still narrows a batch root whose split output holds no pairs (I-38)", () => {
+    const tree = dir("test_processing", [
+      file("icon-sheet.png"), file("icon-sheet_AI.png"), dir("_split_output", []),
+    ]);
+    const all = pairEntries(walkTree(tree, []));
+    expect(all.map((p) => p.relDir)).toEqual([""]);
+    const scoped = splitPairs(all, scopeOf(directoryNames(tree), tree.name));
+    expect(scoped.pairs).toEqual([]);
+    expect(scoped.outside.map((p) => p.relDir)).toEqual([""]);
+  });
+
   it("scopes by DIRECTORY name only — a file merely named like one changes nothing", () => {
     const tree = dir("root", [
       dir("_split_output", [file("a.png"), file("a_AI.png")]),
@@ -117,5 +142,16 @@ describe("splitPairs — the pieces in, the unsplit sheets reported", () => {
     // the folder is the split output; the root pair whose FILE name mentions it is not
     expect(scoped.pairs.map((p) => p.relDir)).toEqual(["_split_output"]);
     expect(scoped.outside.map((p) => p.relDir)).toEqual([""]);
+  });
+});
+
+describe("scopeText — the scope as the toolbars state it", () => {
+  it("names the picked output instead of claiming none was found (bug-1)", () => {
+    expect(scopeText({ split: false, outside: 0 }, "_split_output")).toBe("Scope: this split output");
+  });
+
+  it("states the whole folder as before for any other unscoped pick", () => {
+    expect(scopeText({ split: false, outside: 0 }, "2026-10")).toBe("Scope: whole folder — no split output found");
+    expect(scopeText({ split: false, outside: 0 })).toBe("Scope: whole folder — no split output found");
   });
 });

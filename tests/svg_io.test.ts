@@ -7,7 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { newestValid } from "../src/lib/svgfile";
-import { metaFileName, parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
+import { metaFileName, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
+import { parsePairMeta } from "../src/lib/pairfile";
 import { saveSvgVersion, metaAfterFailure } from "../src/svg/saveversion";
 import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
 import { loadMetaAt, saveMetaAt, LEGACY_FILE } from "../src/selection/pairstore";

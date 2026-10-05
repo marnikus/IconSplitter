@@ -162,3 +162,37 @@ describe("writing one pair's file", () => {
     }
   });
 });
+
+describe("a pair file written at another pick level (bug-1)", () => {
+  const OUTPUT = "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01";
+  const STAMP = "icon-sheet_AI/split_01";
+
+  /** The stamp picked as root, holding a file framed for the `_split_output` pick. */
+  function stampRoot(): FakeDir {
+    const stamp = new FakeDir("2026-10-05_18-45-20");
+    const hier = new FakeDir("icon-sheet_AI");
+    const split = new FakeDir("split_01");
+    split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 900, "c"));
+    split.children.set("icon-sheet_AI_01.png", new FakeFile("icon-sheet_AI_01.png", 20, 960, "d"));
+    writeMeta(split, "icon-sheet_AI_01.svg.json", withDecision(newPairMeta({
+      id: pairId(OUTPUT, "icon-sheet", "_01"), base: "icon-sheet", suffix: "_01", dirPath: OUTPUT,
+      ai: { relPath: `${OUTPUT}/icon-sheet_AI_01.png`, name: "icon-sheet_AI_01.png", fingerprint: "20:960" },
+      source: { relPath: `${OUTPUT}/icon-sheet.png`, name: "icon-sheet.png", fingerprint: "12:900" },
+    }), "approved", "2026-10-05T17:02:11.000Z"));
+    hier.children.set("split_01", split);
+    stamp.children.set("icon-sheet_AI", hier);
+    return stamp;
+  }
+
+  it("re-seats the loaded meta and its record onto the picked root", async () => {
+    const root = stampRoot();
+    const load = await loadPairDecisions(root, await walk(root));
+    expect(load.corruptFiles).toEqual([]);
+    const id = pairId(STAMP, "icon-sheet", "_01");
+    expect(load.metas.get(id)?.decision).toBe("approved");
+    expect(load.metas.get(id)?.dirPath).toBe(STAMP);
+    expect(load.records.map((r) => [r.pair_id, r.ai_result, r.decision])).toEqual([
+      [id, `${STAMP}/icon-sheet_AI_01.png`, "approved"],
+    ]);
+  });
+});

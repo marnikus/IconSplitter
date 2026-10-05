@@ -29,6 +29,7 @@ export type SvgGenApi = SvgModel & SvgActions & {
   requests: number;
   refs: SvgCtx["refs"];
   dispatch: SvgCtx["dispatch"];
+  say: SvgCtx["say"];
   /** What the last session left in flight; nothing is ever resent on its own. */
   recovery: Recovery;
 };
@@ -43,6 +44,7 @@ export function useSvgGen(): SvgGenApi {
   return {
     ...model, ...actions, supported: fsSupported(), provider, visible,
     checked, activeId, header, affected, totals, requests, refs, dispatch, recovery,
+    say: ctx.say,
   };
 }
 

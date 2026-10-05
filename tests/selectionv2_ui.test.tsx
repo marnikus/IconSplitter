@@ -8,7 +8,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { parsePairMeta } from "../src/lib/pairmeta";
+import { parsePairMeta } from "../src/lib/pairfile";
 import { saveRootPathInfo } from "../src/lib/rootpath";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";

@@ -5,7 +5,8 @@
 // result still records what it cost — all in the pair's OWN file (I-41).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NO_COST } from "../src/lib/svgmodel";
-import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
+import { parsePairMeta } from "../src/lib/pairfile";
+import { serializePairMeta } from "../src/lib/pairmeta";
 import { loadMetaAt, saveMetaAt } from "../src/selection/pairstore";
 import { PRICING_VERSION } from "../src/lib/svgpricing";
 import { NO_USAGE } from "../src/lib/svgrequest";

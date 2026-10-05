@@ -13,8 +13,9 @@ import {
 import { metaFileName } from "../src/lib/pairmeta";
 import type { SvgVersion } from "../src/lib/svgmodel";
 import {
-  newPairMeta, parsePairMeta, serializePairMeta, withVersion, type PairMeta,
+  newPairMeta, serializePairMeta, withVersion, type PairMeta,
 } from "../src/lib/pairmeta";
+import { parsePairMeta } from "../src/lib/pairfile";
 import { classifyHttp, classifyTransport, readContent, readRetryAfterMs, readUsage } from "../src/lib/svgrequest";
 import { allocateUsage, fmtCost, fmtTokens, sumUsage, usageLine } from "../src/lib/svgusage";
 import { batchManifest } from "../src/lib/svgbatch";

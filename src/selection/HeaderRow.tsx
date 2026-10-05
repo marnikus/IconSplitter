@@ -31,7 +31,7 @@ export default function HeaderRow(p: HeaderProps) {
         {p.watcher ? "● Watcher active" : "○ Watcher paused"}
       </button>
       {p.rootName !== "" && (
-        <span className="text-xs text-slate-400" data-testid="sel-scope">{scopeText(p.scope)}</span>
+        <span className="text-xs text-slate-400" data-testid="sel-scope">{scopeText(p.scope, p.rootName)}</span>
       )}
       <div className="ml-auto flex items-center gap-2">
         <Count n={c.total} label="total" cls="text-slate-200" />

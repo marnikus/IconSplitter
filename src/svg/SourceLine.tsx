@@ -6,7 +6,8 @@
 // from SvgControls so both stay inside the RULE 18 size budget.
 
 import { auditText } from "./sourcelist";
-import { useRootLabel } from "../ui/userootpath";
+import { useRootPath } from "../ui/userootpath";
+import PathHint from "../ui/PathHint";
 import type { Discovery } from "./sources";
 
 export interface SvgCounts {
@@ -54,11 +55,17 @@ export default function SourceLine({ rootName, discovery, busy, counts, onChoose
 
 /** The picked folder, as read-only text: full path once known, else its name. */
 function PathRow({ rootName }: { rootName: string }) {
-  const label = useRootLabel(rootName);
+  const stored = useRootPath(rootName);
   if (rootName === "") {
     return <p className="svg-pathrow empty" data-testid="svg-path">No folder selected — open a folder to start</p>;
   }
-  return <p className="svg-pathrow" data-testid="svg-path" title={label}>📁 {label}</p>;
+  const label = stored.path === "" ? rootName : stored.path;
+  return (
+    <>
+      <p className="svg-pathrow" data-testid="svg-path" title={label}>📁 {label}</p>
+      {stored.path === "" && <PathHint testid="svg-path-hint" />}
+    </>
+  );
 }
 
 function RescanButton({ busy, onClick }: { busy: string | null; onClick: () => void }) {

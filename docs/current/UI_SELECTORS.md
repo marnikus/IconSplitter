@@ -202,6 +202,7 @@ Source bar + layout switch:
 | `v2-root` | green `Open folder` button | opens the picker; the picked folder is shown in `v2-path`, never as the button (I-44) |
 | `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
 | `v2-path` | full-width read-only path row | the **full path** once one was captured (I-36), else the folder name; `No folder selected` with no root (I-44). No watcher exists in V2 (V1-only) |
+| `v2-path-hint` | the paste hint under a leaf-only row | shown while only the folder name is known (I-47); a paste adopts the path |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
 
@@ -333,6 +334,7 @@ Source bar (always rendered, with a placeholder row while no root is picked; `sv
 |---|---|---|
 | `svg-choose-root` | green `Open folder` button | the picker, offered whether or not a root is loaded (I-30); the picked folder is shown in `svg-path`, never as the button (I-44) |
 | `svg-path` | full-width read-only path row | the **full path** once one was captured (I-36), else the folder name; `No folder selected` with no root (I-44) |
+| `svg-path-hint` | the paste hint under a leaf-only row | shown while only the folder name is known (I-47); a paste adopts the path |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |

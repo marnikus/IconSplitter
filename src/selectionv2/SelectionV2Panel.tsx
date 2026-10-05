@@ -14,6 +14,7 @@ import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
 import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "../selection/Surfaces";
 import { useSideThumbs, type SideThumbFor } from "../selection/thumbs";
+import { usePastePathCapture } from "../ui/usepathpaste";
 import BulkBar from "./BulkBar";
 import FilterGrid from "./FilterGrid";
 import ReviewList from "./ReviewList";
@@ -24,6 +25,7 @@ export default function SelectionV2Panel() {
   const v = useSelectionV2();
   const thumbFor = useSideThumbs(v.core.rootRef);
   useHotkeys(v);
+  usePastePathCapture(v.core.s.rootName, v.core.say);
   if (!v.core.supported) return <UnsupportedNote onPick={v.core.chooseRoot} />;
   return (
     <div className="v2" data-testid="v2-panel">

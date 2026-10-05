@@ -6,6 +6,7 @@
 // that makes them one screen.
 
 import type { CSSProperties } from "react";
+import { usePastePathCapture } from "../ui/usepathpaste";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -28,6 +29,7 @@ export default function SvgPanel() {
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,
     decide: g.decide, showCode: g.showCode, dismissDialog: g.dismissDialog,
   });
+  usePastePathCapture(g.rootName, g.say);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>

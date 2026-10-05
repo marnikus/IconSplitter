@@ -11,7 +11,7 @@ import { countIcons } from "../lib/svgicons";
 import { parseSvg, validateSvg } from "../lib/svgvalidate";
 import { nextVersion, svgFileName } from "../lib/svgfile";
 import type { BatchRef, SvgVersion } from "../lib/svgmodel";
-import { withVersion, type PairMeta } from "../lib/pairmeta";
+import { joinDir, withVersion, type PairMeta } from "../lib/pairmeta";
 import { NO_USAGE, type Usage } from "../lib/svgrequest";
 import { costInfoFor } from "../lib/svgpricing";
 import { listSvgFiles } from "./svgfiles";
@@ -47,7 +47,7 @@ export async function saveSvgVersion(args: SaveArgs): Promise<SaveOut> {
   const fileName = svgFileName(args.source.stem, version);
   const dir = await writeSvg(args, fileName);
   if (!dir.ok) return { ok: false, error: dir.error };
-  const saved = { version, svgPath: joinPath(args.source.dirPath, fileName), icons, warnings: check.warnings };
+  const saved = { version, svgPath: joinDir(args.source.dirPath, fileName), icons, warnings: check.warnings };
   return {
     ok: true, ...saved,
     meta: withVersion(meta, toRecord(args, saved)),
@@ -134,10 +134,6 @@ function failureRecord(args: FailArgs): SvgVersion {
     error: args.error,
     requestId: null,
   };
-}
-
-function joinPath(dir: string, name: string): string {
-  return dir === "" ? name : `${dir}/${name}`;
 }
 
 async function dirOf(root: DirHandleLike, dirPath: string): Promise<DirHandleLike | null> {

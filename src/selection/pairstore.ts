@@ -11,9 +11,11 @@ import { probePath, tryGetFile, writeFileOverwrite, type DirHandleLike } from ".
 import { parseAiName } from "../lib/naming";
 import { pairId, type ReviewPair, type SideRef } from "../lib/pairing";
 import {
-  metaPathFor, metaPathForAi, newPairMeta, parsePairMeta, serializePairMeta, toRecord, withDecision,
+  baseName, dirOf, metaPathFor, metaPathForAi, newPairMeta, rebasePairMeta, serializePairMeta, withDecision,
   type PairIdentity, type PairMeta, type PairSide,
 } from "../lib/pairmeta";
+import { parsePairMeta } from "../lib/pairfile";
+import { mergeRecords } from "../lib/pairmerge";
 import { parseDecisions, type ReviewRecord } from "../lib/reviewfile";
 import type { FileEntry } from "../lib/scan";
 
@@ -85,7 +87,10 @@ export async function loadMetaAt(root: DirHandleLike, relPath: string): Promise<
     return { meta: null, corrupt: true, missing: false }; // exists but unreadable
   }
   const parsed = parsePairMeta(text);
-  return parsed.ok ? { meta: parsed.meta, corrupt: false, missing: false } : { meta: null, corrupt: true, missing: false };
+  if (!parsed.ok) return { meta: null, corrupt: true, missing: false };
+  // Re-seated onto this root, so the scan, the undo paths and the version
+  // reload all see the file where it sits now, not where it was written (I-46).
+  return { meta: rebasePairMeta(parsed.meta, relPath), corrupt: false, missing: false };
 }
 
 interface LegacyLoad {
@@ -101,52 +106,6 @@ async function readLegacy(root: DirHandleLike): Promise<LegacyLoad> {
   return parsed.ok
     ? { found: true, corrupt: false, records: parsed.records }
     : { found: true, corrupt: true, records: [] };
-}
-
-/**
- * The records to apply. A pair's own file speaks for it whenever it carries a
- * decision (an explicit `pending` is a decision: a reset must outlive the legacy
- * record); a file with no decision yet — a freshly generated pair — lets the
- * legacy record through, so an approval is never lost to the migration.
- */
-function mergeRecords(metas: Map<string, PairMeta>, legacy: readonly ReviewRecord[]): ReviewRecord[] {
-  const byLegacy = new Map(legacy.map((r) => [r.pair_id, r]));
-  const out: ReviewRecord[] = [];
-  for (const meta of sortedMetas(metas)) {
-    const own = toRecord(meta, pairRefOf(meta));
-    if (own !== null) out.push(own);
-    else if (meta.decision === null) {
-      const fallback = byLegacy.get(meta.id);
-      if (fallback) out.push(fallback);
-    }
-  }
-  const covered = new Set([...metas.keys()]);
-  for (const r of legacy) if (!covered.has(r.pair_id)) out.push(r);
-  return out.sort((a, b) => (a.pair_id < b.pair_id ? -1 : 1));
-}
-
-function sortedMetas(metas: Map<string, PairMeta>): PairMeta[] {
-  return [...metas.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
-}
-
-/** The pair a pair file describes, for building its record (paths only). */
-export function pairRefOf(meta: PairMeta): ReviewPair {
-  return {
-    pairId: meta.id, base: meta.base, suffix: meta.suffix, relDir: meta.dirPath,
-    source: sideRef(meta.source), ai: sideRef(realFace(meta.ai)),
-    created: 0, generated: null,
-  };
-}
-
-/** A face with no fingerprint was never seen on disk — it is a name, not a file. */
-function realFace(side: PairSide): PairSide | null {
-  return side.relPath === "" || side.fingerprint === "" ? null : side;
-}
-
-function sideRef(side: PairSide | null): SideRef | null {
-  if (side === null) return null;
-  const [size, mtime] = side.fingerprint.split(":");
-  return { relPath: side.relPath, size: Number(size) || 0, mtime: Number(mtime) || 0, error: null };
 }
 
 /**
@@ -198,10 +157,6 @@ function sideNameOf(pair: ReviewPair): PairSide {
 
 function fp(side: SideRef): string {
   return `${side.size}:${side.mtime}`;
-}
-
-function baseName(relPath: string): string {
-  return relPath.split("/").pop() ?? relPath;
 }
 
 /**
@@ -287,11 +242,6 @@ function identityFromRecord(rec: ReviewRecord): PairIdentity & { ai: PairSide } 
     dirPath,
     ai: { relPath: aiRel, name, fingerprint: "" },
   };
-}
-
-function dirOf(relPath: string): string {
-  const at = relPath.lastIndexOf("/");
-  return at < 0 ? "" : relPath.slice(0, at);
 }
 
 /** True when the record can be turned into a pair file (used by the writers). */
