@@ -16,6 +16,7 @@ import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
 import { loadHandles, saveHandles } from "../batch/store";
 import { pickFolderFor } from "../ui/pickroot";
+import { retryCapture } from "../ui/rootcapture";
 import { rememberKnownRoot } from "../ui/knownroots";
 import { loadRootPath } from "../lib/rootpath";
 import { getAppState, patchV2, patchView } from "../state/appstore";
@@ -74,6 +75,8 @@ export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
 export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
+  const captured = await retryCapture(root.name); // before any await: the click's own gesture (I-52)
+  if (captured !== null) say(captured);
   const ticket = beginScan(ctx.seq.current);
   ctx.seq.current = ticket.seq;
   setS((p) => ({ ...p, busy: "Scanning folders…" }));

@@ -119,3 +119,41 @@ describe("the removed folder chrome stays removed", () => {
     }
   });
 });
+
+describe("FolderPathRow — the note says what to do (I-52)", () => {
+  it("names the Explorer copy and the Rescan that captures it when there is no path", async () => {
+    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    const note = q("[data-testid=x-folder-path] em") as HTMLElement;
+    expect(note.textContent).toContain("Ctrl+Shift+C");
+    expect(note.textContent).toContain("Rescan");
+    expect((q("[data-testid=x-folder-path]") as HTMLElement).title).toContain("Ctrl+Shift+C");
+  });
+
+  it("keeps the plain note when a path IS known", async () => {
+    saveRootPathInfo(ROOT, FULL, "copied");
+    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    expect(text("[data-testid=x-folder-path]")).toContain(FULL);
+    expect(q("[data-testid=x-folder-path] em")?.textContent).toBe("");
+    expect((q("[data-testid=x-folder-path]") as HTMLElement).title).toBe(FULL);
+  });
+
+  it("fills in from the user's own Ctrl+V, with no picker and no reload", async () => {
+    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await act(async () => { pasteInto(document.body, `"${FULL}"`); });
+    expect(text("[data-testid=x-folder-path]")).toContain(FULL);
+    expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
+  });
+
+  it("adds no control — the bar is still one button and one line of text", async () => {
+    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    expect(host.querySelectorAll("button, input, textarea")).toHaveLength(0);
+  });
+});
+
+/** One paste event, as the browser delivers it when the user presses Ctrl+V. */
+function pasteInto(target: Element, text: string): void {
+  const event = new Event("paste", { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown };
+  event.clipboardData = { getData: (type: string) => (type === "text/plain" ? text : "") };
+  target.dispatchEvent(event);
+}
+

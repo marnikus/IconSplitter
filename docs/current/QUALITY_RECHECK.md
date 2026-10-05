@@ -1667,3 +1667,63 @@ warnings), no `ideal-size:` deviation needed.
 Screenshots: `/home/user/run-folder-derived-path-v2.png`,
 `/home/user/single-run-three-roots.png` (sandbox-local evidence, like the probe).
 
+## 2026-10-05 — capturing the picked folder's path when the first try fails (I-52)
+
+Report (screenshot of the folder bar): *"work, but stil unable to capture full
+path of folder user choose. fix"* — the row read `FULL PATH _split_output · full
+path not captured`. Design: `archive/2026-10-05-path-capture-recovery/design.md`.
+
+The pick's capture reads the clipboard, and that read has four failure modes the
+app could not tell apart (a Ctrl+C'd folder item, a blocked read, a copy made
+after the pick, nothing copied) — all of them ended at "not captured" with
+nothing to do. I-52 makes the capture recoverable and self-explaining:
+`Rescan` retries one exact-match read, `Ctrl+V` anywhere outside a text field
+adopts the path for the root on screen, the read reports `text`/`empty`/
+`blocked`/`unsupported`, and the row + toast name the action and the reason.
+
+### Red tests first (TDD)
+
+| Test file | Red before | Green after |
+|---|---|---|
+| `tests/clipboardpath.test.ts` (3) | `readClipboardText is not a function` | the read distinguishes text / empty / blocked / no-API |
+| `tests/rootcapture.test.ts` (new, 13) | module missing | paste adoption (exact only), `Rescan`'s retry, the paste listener (bubbles, ignores fields, unsubscribes), and the gesture guard |
+| `tests/pickroot.test.ts` (3) | the failure was silent | the toast names `Ctrl+Shift+C` + `Rescan`, or `blocked` + `Ctrl+V` |
+| `tests/folderbar.test.tsx` (4) | the note stopped at `full path not captured` | the note names both ways out, is in the `title`, and `Ctrl+V` fills the row in live — still no control added |
+| `tests/selection_scan.test.ts` (2) · `tests/svg_io.test.ts` (1) | a rescan never re-read the clipboard | a rescan captures an unknown root's exact path once and says so; a second rescan stays quiet; an unrelated clipboard writes nothing |
+
+One test-only lesson: the path memory is a single `localStorage` key, so the two
+scan suites now clear `localStorage` in `beforeEach` — a test must not inherit
+the previous test's captured path.
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/ui/rootcapture.ts` | 8 / 81 | **new**: `captureFromPaste`, `retryCapture`, `bindPasteCapture`, the gesture guard, and the field-target check |
+| `src/lib/clipboardpath.ts` | 2 / 48 | `readClipboardText(): { text, state }` replaces the `""`/`"none"` sentinel pair; `adoptCopiedText` unchanged |
+| `src/ui/pickroot.ts` | 6 / 103 | carries the clip state into `pickMessage`, which now also speaks when the capture failed |
+| `src/ui/FolderBar.tsx` | 5 / 72 | the actionable note (in the `title` too) and the paste listener mounted with the row |
+| `src/selection/rootsource.ts`, `src/svg/scan.ts` | 20 / 182 · 12 / 176 | one `retryCapture` before any `await`, so the click's gesture is still active |
+
+No over-ideal file, no new lint warning, no `ideal-size:` deviation needed.
+
+### Gates (full run)
+
+`npm run verify`: types ✅ · lint 0 errors · quality gate PASSED · **85 files /
+896 tests** ✅ · coverage ✅ · build ✅. `npm run quality:changed` PASSED.
+
+### Browser verification (headless Chromium 153, real OPFS tree, six states)
+
+| Clipboard at pick time | Result |
+|---|---|
+| the exact path (Ctrl+Shift+C) | row + toast: `Folder path captured: …\_split_output` |
+| a copied folder **item** (read gives the bare name) | row names both ways out; toast: `in Explorer press Ctrl+Shift+C on the folder, then Rescan`; **Rescan → the exact path** |
+| the read **blocked** (throws) | toast: `the browser blocked the clipboard: … press Ctrl+V here`; **Ctrl+V → the exact path** |
+| the parent folder copied | `completed — check it` (unchanged) |
+| nothing copied | actionable note, nothing invented |
+| the **real** Clipboard API (no stub, permission granted) | the exact path — the shipped code, unstubbed |
+
+Probe: `/tmp/probeenv/probe_path_capture.mjs`; screenshots
+`/home/user/path-capture-not-captured.png`,
+`/home/user/path-capture-real-clipboard.png` (sandbox-local).
+

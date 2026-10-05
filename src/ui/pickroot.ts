@@ -11,7 +11,7 @@
 // never text.
 
 import { pickDirectory } from "../batch/picker";
-import { adoptCopiedText, readCopiedText } from "../lib/clipboardpath";
+import { adoptCopiedText, readClipboardText, type ClipState } from "../lib/clipboardpath";
 import type { DirHandleLike } from "../lib/fs";
 import { loadRootPathInfo, saveRootPathInfo, type PathHow, type RootPathInfo } from "../lib/rootpath";
 import { deriveRootPath, rememberKnownRoot } from "./knownroots";
@@ -21,6 +21,8 @@ export interface PickedRoot {
   handle: DirHandleLike;
   path: string;
   how: PathHow | null;
+  /** What the clipboard did at pick time — it decides the line when nothing landed. */
+  clip: ClipState;
 }
 
 /** The path captured at pick time for a handle, or the remembered one. */
@@ -33,13 +35,13 @@ export function capturedPath(handle: DirHandleLike): PickedRoot["path"] {
  * when the user cancels (or the API is missing) — and stores nothing then.
  */
 export async function pickRootWithPath(): Promise<PickedRoot | null> {
-  const before = await readCopiedText();
+  const before = await readClipboardText();
   const handle = await pickDirectory();
   if (!handle) return null;
-  const copied = before === "" ? await readCopiedText() : before;
-  const info = await pathForPick(handle, copied);
+  const read = before.text === "" ? await readClipboardText() : before;
+  const info = await pathForPick(handle, read.text);
   rememberKnownRoot(handle, info.path);
-  return { handle, path: info.path, how: info.how };
+  return { handle, path: info.path, how: info.how, clip: read.state };
 }
 
 /**
@@ -48,7 +50,7 @@ export async function pickRootWithPath(): Promise<PickedRoot | null> {
  * flagged completion, else nothing at all (I-51).
  */
 async function pathForPick(handle: DirHandleLike, copied: string): Promise<RootPathInfo> {
-  const info = copied === "" || copied === "none" ? UNKNOWN : adoptCopiedText(handle.name, copied);
+  const info = copied === "" ? UNKNOWN : adoptCopiedText(handle.name, copied);
   if (info.path !== "" && info.how !== "completed") return info;
   const derived = await deriveRootPath(handle);
   if (derived === null) return info;
@@ -78,8 +80,23 @@ export async function pickFolderFor(
  * say that the capture happened, and flag a completed one.
  */
 export function pickMessage(picked: PickedRoot): string | null {
-  if (picked.path === "") return null;
-  return picked.how === "completed"
-    ? `Folder path completed from the copied folder: ${picked.path} — check it`
-    : `Folder path captured: ${picked.path}`;
+  if (picked.path !== "") {
+    return picked.how === "completed"
+      ? `Folder path completed from the copied folder: ${picked.path} — check it`
+      : `Folder path captured: ${picked.path}`;
+  }
+  return captureHelp(picked.clip);
+}
+
+/**
+ * What to say when the path could not be captured — the row names the folder,
+ * and this tells the user the one action that still fills it in (I-52/RULE 12).
+ * A blocked read needs the paste (no permission needed); anything else is the
+ * normal Explorer copy plus the Rescan that re-reads it.
+ */
+function captureHelp(clip: ClipState): string {
+  if (clip === "blocked" || clip === "unsupported") {
+    return "Folder path not captured — the browser blocked the clipboard: copy it in Explorer, then press Ctrl+V here";
+  }
+  return "Folder path not captured — in Explorer press Ctrl+Shift+C on the folder, then Rescan";
 }

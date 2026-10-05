@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adoptCopiedText } from "../src/lib/clipboardpath";
 import { loadRootPath, loadRootPathInfo } from "../src/lib/rootpath";
-import { pickRootWithPath } from "../src/ui/pickroot";
+import { pickMessage, pickRootWithPath } from "../src/ui/pickroot";
 import { clearKnownRoots, rememberKnownRoot } from "../src/ui/knownroots";
 import type { DirHandleLike } from "../src/lib/fs";
 
@@ -106,6 +106,33 @@ describe("pickRootWithPath", () => {
     stubClipboard(spy);
     expect(await pickRootWithPath()).toBeNull();
     expect(spy).toHaveBeenCalledTimes(1); // pre-read only
+  });
+});
+
+describe("a pick whose path could not be captured says what to do (I-52)", () => {
+  it("names the Explorer copy and the Rescan that captures it", async () => {
+    stubClipboard(async () => ""); // nothing was copied
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe("");
+    const message = pickMessage(picked!);
+    expect(message).toContain("Ctrl+Shift+C");
+    expect(message).toContain("Rescan");
+  });
+
+  it("names the reason — a blocked clipboard — and the paste that still works", async () => {
+    stubClipboard(async () => { throw new Error("denied"); });
+    const picked = await pickRootWithPath();
+    const message = pickMessage(picked!);
+    expect(message).toContain("blocked");
+    expect(message).toContain("Ctrl+V");
+  });
+
+  it("stays quiet when the clipboard was simply empty AND the path is known", async () => {
+    stubClipboard(async () => "");
+    rememberKnownRoot(ancestorOf("test_processing", [ROOT]), "F:\\parent");
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe("F:\\parent\\test_processing");
+    expect(pickMessage(picked!)).toContain("captured");
   });
 });
 

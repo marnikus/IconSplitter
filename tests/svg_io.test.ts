@@ -24,7 +24,7 @@ import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
 import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 
@@ -38,6 +38,11 @@ vi.mock("../src/batch/store", async (importOriginal) => {
     loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
   };
 });
+
+/** The clipboard as the app sees it at pick/rescan time. */
+function stubClipboardRead(readText: () => Promise<string>): void {
+  Object.defineProperty(navigator, "clipboard", { value: { readText }, configurable: true });
+}
 
 /** architecture/{fog,court} + coastal/harbor with approved decisions. */
 function makeRoot(): FakeDir {
@@ -119,6 +124,8 @@ function refs(root: FakeDir | null = null) {
 beforeEach(async () => {
   await dropDb();
   setAppState({});
+  localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
 describe("approved-source discovery", () => {
@@ -282,6 +289,15 @@ describe("scanSources", () => {
     await scanSources(refs(broken), s.api);
     expect(s.out.said.join(" ")).toContain("Rescan failed");
     expect(s.out.rows).toEqual([]);
+  });
+
+  it("captures the path on a rescan when the pick missed it (I-52)", async () => {
+    const root = makeRoot();
+    const s = setters();
+    stubClipboardRead(async () => "F:\\work\\split_root");
+    await scanSources(refs(root), s.api);
+    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect(s.out.said.join(" ")).toContain("Folder path captured");
   });
 
   it("remembers the restored folder at boot, so a pick inside it is named exactly (I-51)", async () => {

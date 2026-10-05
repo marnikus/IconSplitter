@@ -7,8 +7,9 @@
 // Storage (lib/rootpath) is the single source of truth: a capture made by any
 // picker appears in every row at once, with no reload (I-36/RULE 24).
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { loadRootPathInfo, rootPathRevision, subscribeRootPaths, type PathHow } from "../lib/rootpath";
+import { bindPasteCapture } from "./rootcapture";
 
 export interface RootPath {
   path: string;
@@ -40,19 +41,31 @@ export function OpenFolderButton({ onClick, testid }: { onClick: () => void; tes
  */
 export function FolderPathRow({ rootName, testid }: { rootName: string; testid: string }) {
   const info = useRootPath(rootName);
+  useEffect(() => bindPasteCapture(rootName), [rootName]); // the user's own Ctrl+V still captures (I-52)
   if (rootName === "") return null;
   const path = info.path === "" ? rootName : info.path;
+  const warning = note(info);
   return (
-    <div className={`folder-path${info.how === "completed" ? " warn" : ""}`} data-testid={testid} title={path}>
+    <div
+      className={`folder-path${warning === "" ? "" : " warn"}`} data-testid={testid}
+      title={warning === "" ? path : `${path} — ${warning}`}
+    >
       <span className="folder-path-label">Full path</span>
       <code>{path}</code>
-      <em>{note(info)}</em>
+      <em>{warning}</em>
     </div>
   );
 }
 
-/** The row's one warning state: a path the app completed from a copied parent. */
+/**
+ * The row's note: which state this path is in, and — when there is none — the
+ * one action that still fills it in (I-46/I-52). The whole sentence is in the
+ * row's `title`, so a long path never hides the way out.
+ */
 function note(info: RootPath): string {
   if (info.how === "completed") return "completed — check it";
-  return info.path === "" ? "full path not captured" : "";
+  if (info.path !== "") return "";
+  // both ways out are named, because the row cannot know which one the browser
+  // will allow: Rescan re-reads the clipboard, Ctrl+V needs no permission (I-52)
+  return "full path not captured — press Ctrl+Shift+C in Explorer, then Rescan (or Ctrl+V here)";
 }

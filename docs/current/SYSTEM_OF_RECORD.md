@@ -557,6 +557,18 @@ Batch:
   (`<stamp>` as the picked folder, where the copy hands over the root itself).
   A folder that merely resembles the layout keeps the item's own folder, as
   before; `lib/batchlayout` owns the names both rules read.
+* **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
+  capture; when it finds nothing the path is still recoverable without another
+  dialog, and the UI says how. `Rescan` (and the Generate SVG rescan) makes one
+  more attempt for a root whose path is unknown, and a `paste` anywhere outside
+  a text field adopts the text for the root on screen
+  (`ui/rootcapture.retryCapture` / `bindPasteCapture`, mounted by
+  `ui/FolderBar.FolderPathRow`). Both take an **exact leaf match only** — a
+  pasted parent, a word, a URL or markup writes nothing — and no read happens
+  without the user's own gesture (`navigator.userActivation`), so a boot-time
+  scan never touches the clipboard. The read reports a state, not just text
+  (`lib/clipboardpath.ClipRead`: `text` / `empty` / `blocked` / `unsupported`),
+  which is what lets the toast name the reason and the row name both ways out.
 * **I-49 (a pair file is read from where it sits, RULE 3/13):** every read of a
   pair file rebases it onto the root doing the reading — `dirPath` is the file's
   own directory, each face's `relPath` is that directory plus the name the file
@@ -653,6 +665,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
+| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52): `Rescan`'s one exact-match retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
@@ -1444,3 +1457,43 @@ file carried still answers the legacy file), `lib/splitscope.ts` (run-stamp
 evidence), `ui/knownroots.ts` (new), `ui/pickroot.ts`, `selection/rootsource.ts`
 and `svg/scan.ts` (boot remembers the restored root). Design:
 `archive/2026-10-05-root-independent-pairs/design.md`.
+
+## 19. When the browser will not hand over the folder's path (2026-10-05, I-52)
+
+Report, with the row on screen:
+
+```
+Open folder   Rescan   Scope: split output only
+FULL PATH  _split_output   full path not captured
+```
+
+The list was right; the path never arrived and the row offered nothing to do
+about it. Measured cause (headless Chromium, `probe_path_capture.mjs`, the
+browser's clipboard stubbed per state): a pick captures the path from the
+clipboard, and that read can fail in four ways the app could not tell apart —
+the clipboard held a **copied folder item** (plain Ctrl+C puts a shell object
+there, not text), the read was **blocked** (permission, focus, or an iframe
+whose `allow` list omits `clipboard-read`), the user copied the path **after**
+picking, or nothing was copied at all. In every one of them the row read
+`full path not captured` and stopped.
+
+I-52 turns the single attempt into a conversation:
+
+* the pick is unchanged (read before the dialog, once after it if the first read
+  was empty);
+* **`Rescan`** — the existing button — makes one more exact-match attempt when
+  the root's path is unknown, so a copy made after the pick lands with one
+  click instead of another trip through the dialog;
+* **`Ctrl+V`** anywhere outside a text field adopts the text for the root on
+  screen: a paste event needs no permission and works inside iframes, so this is
+  the way out when the Clipboard API itself is blocked;
+* the read now reports `text` / `empty` / `blocked` / `unsupported`, and the UI
+  says which: the toast names the reason, the row (`title` included) names both
+  ways out.
+
+What never changes: nothing is invented (outside the picker only an exact leaf
+match is adopted — a pasted parent folder is not completed into a guess), no
+read happens without the user's own gesture (a boot-time scan is silently
+refused), and no new control appears — the bar is still one green button, one
+`Rescan` and one read-only row. Design:
+`archive/2026-10-05-path-capture-recovery/design.md`.

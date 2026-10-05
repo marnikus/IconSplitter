@@ -16,7 +16,7 @@ import { pairFile } from "./helpers/pairfile";
 import { dropDb } from "./helpers/idb";
 import { SELECTION_HANDLE_KEY } from "../src/selection/offline";
 import { saveHandles } from "../src/batch/store";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
 import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot real (and the
@@ -305,6 +305,35 @@ class OneShotGate extends FakeFile {
 beforeEach(async () => {
   await dropDb();
   setAppState({});
+  localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+});
+
+function stubClipboard(readText: () => Promise<string>): void {
+  Object.defineProperty(navigator, "clipboard", { value: { readText }, configurable: true });
+}
+
+describe("Rescan captures a path the pick missed (I-52)", () => {
+  it("saves the exact path from the clipboard and says the one line", async () => {
+    const root = makeRoot(); // named split_root, no path captured yet
+    const h = harness(root);
+    stubClipboard(async () => "F:\\work\\split_root");
+    await rescan(h.ctx, h.set, h.say);
+    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect(h.sayings.join(" | ")).toContain("Folder path captured: F:\\work\\split_root");
+    // a second rescan has nothing to capture and stays quiet about it
+    h.sayings.length = 0;
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.sayings.join(" | ")).not.toContain("Folder path captured");
+  });
+
+  it("never invents a path from a clipboard that does not name this folder", async () => {
+    const root = makeRoot();
+    const h = harness(root);
+    stubClipboard(async () => "F:\\work\\icons testing");
+    await rescan(h.ctx, h.set, h.say);
+    expect(loadRootPath(root.name)).toBe("");
+  });
 });
 
 describe("the restored folder is remembered at boot (I-51)", () => {

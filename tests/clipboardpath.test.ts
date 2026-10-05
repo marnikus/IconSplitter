@@ -3,7 +3,7 @@
 // drive), so reading the clipboard is a normal, guarded action and the text is
 // adopted only when it really names the picked folder.
 import { beforeEach, describe, expect, it } from "vitest";
-import { adoptCopiedText, readCopiedText } from "../src/lib/clipboardpath";
+import { adoptCopiedText, readClipboardText } from "../src/lib/clipboardpath";
 import { loadRootPath, ROOT_PATH_KEY } from "../src/lib/rootpath";
 
 const ROOT = "test_processing";
@@ -19,18 +19,22 @@ function stubClipboard(readText: () => Promise<string>): void {
   Object.defineProperty(navigator, "clipboard", { value: { readText }, configurable: true });
 }
 
-describe("readCopiedText", () => {
-  it("reads the clipboard, and reports an empty one as nothing", async () => {
+describe("readClipboardText — the read says why it failed (I-52)", () => {
+  it("hands over the text, or reports an empty clipboard as empty", async () => {
     stubClipboard(async () => `"${FULL}\\" `);
-    expect(await readCopiedText()).toBe(`"${FULL}\\" `);
+    expect(await readClipboardText()).toEqual({ text: `"${FULL}\\" `, state: "text" });
     stubClipboard(async () => "");
-    expect(await readCopiedText()).toBe("");
+    expect(await readClipboardText()).toEqual({ text: "", state: "empty" });
   });
 
-  it("reports \"none\" when there is no clipboard API or the read is refused", async () => {
-    expect(await readCopiedText()).toBe("none"); // navigator.clipboard is undefined here
+  it("tells a BLOCKED read apart from an empty clipboard", async () => {
     refuseClipboard();
-    expect(await readCopiedText()).toBe("none");
+    // the row must be able to say "the browser blocked it" — not "nothing copied"
+    expect(await readClipboardText()).toEqual({ text: "", state: "blocked" });
+  });
+
+  it("reports a browser without the clipboard API", async () => {
+    expect(await readClipboardText()).toEqual({ text: "", state: "unsupported" });
   });
 });
 
