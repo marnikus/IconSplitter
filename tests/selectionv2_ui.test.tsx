@@ -4,10 +4,13 @@
 // persistence, against in-memory FS fakes. No component logic is re-implemented.
 // An approval writes ONE file beside the pair's images (I-41); the root never
 // gains a review-decisions.json (I-42).
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
+import { saveRootPathInfo } from "../src/lib/rootpath";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
@@ -110,14 +113,18 @@ describe("Selection V2 panel", () => {
     expect((q(el, `[data-testid='v2-open-ai-${DUNES}']`) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("copies the FOLDER of the pasted full path from a row's open button", async () => {
+  it("copies the FOLDER of the captured full path from a row's open button", async () => {
     const written: string[] = [];
     Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: async (t: string) => { written.push(t); } }, configurable: true,
+      value: {
+        readText: async () => "F:\\Stocks 2026\\icons\\split_root",
+        writeText: async (t: string) => { written.push(t); },
+      }, configurable: true,
     });
+    // The browser cannot read the drive, so the full path comes from Explorer's
+    // copy, captured at pick time — the row then shows it (I-35/I-46).
     const { el } = await mount(makeRoot());
-    // The browser cannot read the drive, so the user pastes the path once here.
-    await type(el, "[data-testid='v2-root-path']", `"F:\\Stocks 2026\\icons\\split_root\\`);
+    expect(text(el, "[data-testid='v2-folder-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
     const row = rows(el)[0];
     const pair = row.getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
     await click(q(el, `[data-testid='v2-open-ai-${pair}']`) as HTMLElement);
@@ -130,17 +137,17 @@ describe("Selection V2 panel", () => {
     const { el } = await mount(makeRoot());
     // The scan commit is built from a state snapshot; a snapshot taken before
     // the pick used to win and the pill fell back to "Choose source folder…".
-    expect(text(el, "[data-testid='v2-root']")).toBe("split_root");
+    expect(text(el, "[data-testid='v2-folder-path']")).toContain("split_root");
     expect(rows(el).length).toBeGreaterThan(0);
   });
 
-  it("shows the full path in the pill once it is captured, without a reload", async () => {
-    const { el } = await mount(makeRoot());
+  it("shows the full path in its own row as soon as a pick captures it, without a reload", async () => {
+    const { el } = await mount(makeRoot(), "F:\\Stocks 2026\\icons\\split_root\\");
     const before = rows(el).length;
-    stubClipboard("F:\\Stocks 2026\\icons\\split_root\\");
-    await click(q(el, "[data-testid='v2-root-path-use']")!);
-    expect(text(el, "[data-testid='v2-root']")).toBe("F:\\Stocks 2026\\icons\\split_root");
-    expect(input(el, "[data-testid='v2-root-path']").value).toBe("F:\\Stocks 2026\\icons\\split_root");
+    expect(text(el, "[data-testid='v2-folder-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
+    // a capture in another tab reaches this row live (I-36/RULE 24)
+    await act(async () => { saveRootPathInfo("split_root", "D:\\backup\\split_root", "copied"); });
+    expect(text(el, "[data-testid='v2-folder-path']")).toContain("D:\\backup\\split_root");
     expect(rows(el).length).toBe(before); // the list is untouched by a path capture
   });
 
@@ -403,6 +410,92 @@ describe("Selection V2 panel", () => {
   });
 });
 
+describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    resetAppStore();
+    await dropDb();
+  });
+
+  it("is one green \"Open folder\" button — no name pill, no path field, no copied-path button", async () => {
+    const { el } = await mount(makeRoot());
+    const btn = q(el, "[data-testid='v2-open-folder']") as HTMLButtonElement;
+    expect(btn.tagName).toBe("BUTTON");
+    expect(btn.textContent).toBe("Open folder");
+    expect(btn.className).toContain("folder-open");
+    expect(btn.disabled).toBe(false);
+    // the folder's NAME is never the button any more, and nothing else offers
+    // to write the remembered path: that memory is only ever captured at pick
+    // time (I-45).
+    expect(q(el, "[data-testid='v2-root']")).toBeNull();
+    expect(q(el, "[data-testid='v2-root-path']")).toBeNull();
+    expect(q(el, "[data-testid='v2-root-path-use']")).toBeNull();
+    expect(q(el, "[data-testid='v2-root-path-note']")).toBeNull();
+    expect(el.textContent).not.toContain("Use copied path");
+    expect(el.textContent).not.toContain("FULL PATH FOR COPIES");
+    expect(el.textContent).not.toContain("Full path for copies");
+  });
+
+  it("shows the same green Open folder button in the empty state", async () => {
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(makeRoot());
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const ui = createRoot(el);
+    await act(async () => { ui.render(<HistoryProvider><PrefsHost><SelectionV2Panel /></PrefsHost></HistoryProvider>); });
+    const empty = q(el, "[data-testid='v2-open-folder-empty']") as HTMLButtonElement;
+    expect(empty).not.toBeNull();
+    expect(empty.textContent).toBe("Open folder");
+    expect(empty.className).toContain("folder-open");
+    expect(empty.closest("[data-testid='v2-root-empty']")).not.toBeNull();
+    // and no path row while there is no folder to name (RULE 4)
+    expect(q(el, "[data-testid='v2-folder-path']")).toBeNull();
+    await act(async () => { ui.unmount(); });
+  });
+
+  it("keeps the complete path visible in a full-width read-only row below the controls", async () => {
+    const { el } = await mount(makeRoot(), "F:\\Stocks 2026\\icons\\split_root");
+    const row = q(el, "[data-testid='v2-folder-path']")!;
+    expect(row.parentElement?.className).toContain("v2-controls"); // below the toolbar
+    expect(nearestToolbar(row)).toBe(true);
+    expect(row.textContent).toContain("F:\\Stocks 2026\\icons\\split_root");
+    expect(row.querySelector("input, textarea, button")).toBeNull();
+  });
+
+  it("has no Watcher left: nothing ticks a rescan by itself", async () => {
+    const { el } = await mount(makeRoot());
+    expect(q(el, "[data-testid='v2-watcher']")).toBeNull();
+    expect(el.textContent).not.toContain("Watcher");
+    expect(selectionSources()).not.toMatch(/watcher/i);
+    // the hook that owned the scan timer ticks nothing any more; the only
+    // interval left in the selection modules is the footer's "N seconds ago"
+    // display clock (StatusFooter), which never scans (RULE 13)
+    expect(readFileSync(join(process.cwd(), "src/selection/useSelection.ts"), "utf8"))
+      .not.toContain("setInterval");
+  });
+
+  it("re-opens the picker from the same button with a root already loaded", async () => {
+    const { el, pick } = await mount(makeRoot());
+    expect(pick).toHaveBeenCalledTimes(1);
+    await click(q(el, "[data-testid='v2-open-folder']")!); // the same button, again
+    expect(pick).toHaveBeenCalledTimes(2); // the tab can be pointed again by hand
+    expect(rows(el).length).toBeGreaterThan(0);
+  });
+});
+
+/** The row must sit directly under the toolbar: nothing but the toolbar above it. */
+function nearestToolbar(row: HTMLElement): boolean {
+  const parent = row.parentElement;
+  return parent?.firstElementChild?.className.includes("v2-toolbar") ?? false;
+}
+
+/** Every Selection module's source, so a removed timer cannot come back unseen. */
+function selectionSources(): string {
+  const dirs = ["src/selection", "src/selectionv2"];
+  return dirs.flatMap((dir) => readdirSync(join(process.cwd(), dir))
+    .filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"))
+    .map((f) => readFileSync(join(process.cwd(), dir, f), "utf8"))).join("\n");
+}
+
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
 /** Prefs persistence lives above the tabs (Workbench mounts it); mirror that here. */
@@ -411,22 +504,21 @@ function PrefsHost({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-async function mount(root: FakeDir): Promise<{ el: HTMLElement; ui: Root }> {
-  (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(root);
+/** `copied` is what Explorer left on the clipboard for the pick-time capture. */
+async function mount(root: FakeDir, copied = ""): Promise<{ el: HTMLElement; ui: Root; pick: ReturnType<typeof vi.fn> }> {
+  if (copied !== "") stubClipboard(copied);
+  const pick = vi.fn(async () => root);
+  (window as unknown as PickerWindow).showDirectoryPicker = pick;
   const el = document.createElement("div");
   document.body.appendChild(el);
   const ui = createRoot(el);
   await act(async () => { ui.render(<HistoryProvider><PrefsHost><SelectionV2Panel /></PrefsHost></HistoryProvider>); });
-  await click(q(el, "[data-testid='v2-root']")!);
-  return { el, ui };
+  await click(q(el, "[data-testid='v2-open-folder']")!);
+  return { el, ui, pick };
 }
 
 function q(el: HTMLElement, sel: string): HTMLElement | null {
   return el.querySelector(sel);
-}
-
-function input(el: HTMLElement, sel: string): HTMLInputElement {
-  return q(el, sel) as HTMLInputElement;
 }
 
 function stubClipboard(value: string): void {
@@ -441,16 +533,6 @@ function rows(el: HTMLElement): Element[] {
 
 function text(el: HTMLElement, sel: string): string {
   return q(el, sel)?.textContent ?? "";
-}
-
-/** React tracks input values, so the native setter must be used to change one. */
-async function type(el: HTMLElement, sel: string, value: string): Promise<void> {
-  await act(async () => {
-    const node = q(el, sel) as HTMLInputElement;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(node, value);
-    node.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await settle();
 }
 
 async function click(node: HTMLElement): Promise<void> {

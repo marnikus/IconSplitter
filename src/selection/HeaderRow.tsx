@@ -1,17 +1,17 @@
-// HeaderRow.tsx — root picker, rescan, watcher pill, live counters, help.
+// HeaderRow.tsx — the folder button, rescan, live counters, help — and the
+// picked folder's full path in its own read-only row below (I-44/I-46).
 import { useState } from "react";
 import { counters } from "./state";
 import type { ViewPair } from "../lib/reviewfilter";
 import { scopeText, type ScanScope } from "../lib/splitscope";
+import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 
 export interface HeaderProps {
   rootName: string;
   scope: ScanScope;
-  watcher: boolean;
   pairs: ViewPair[];
   chooseRoot: () => void;
   rescan: () => void;
-  patch: (p: { watcher?: boolean }) => void;
 }
 
 export default function HeaderRow(p: HeaderProps) {
@@ -19,17 +19,8 @@ export default function HeaderRow(p: HeaderProps) {
   const c = counters(p.pairs);
   return (
     <section className="panel flex flex-wrap items-center gap-2">
-      <button data-testid="sel-root" className="btn-primary" onClick={p.chooseRoot}>
-        {p.rootName ? `Root: ${p.rootName}` : "Choose source folder…"}
-      </button>
+      <OpenFolderButton testid="sel-open-folder" onClick={p.chooseRoot} />
       <button data-testid="sel-rescan" className="btn-ghost" onClick={p.rescan}>↺ Rescan</button>
-      <button
-        data-testid="sel-watcher" onClick={() => p.patch({ watcher: !p.watcher })}
-        className={`rounded-full px-3 py-1 text-xs font-medium ${p.watcher ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-slate-400"}`}
-        title="Auto-rescan every 30 s"
-      >
-        {p.watcher ? "● Watcher active" : "○ Watcher paused"}
-      </button>
       {p.rootName !== "" && (
         <span className="text-xs text-slate-400" data-testid="sel-scope">{scopeText(p.scope)}</span>
       )}
@@ -40,6 +31,7 @@ export default function HeaderRow(p: HeaderProps) {
         <Count n={c.declined} label="declined" cls="text-rose-300" />
         <HelpBtn help={help} setHelp={setHelp} />
       </div>
+      <FolderPathRow rootName={p.rootName} testid="sel-folder-path" />
     </section>
   );
 }

@@ -1,10 +1,10 @@
 // copypath.test.ts — RULE 4/9: "Open in File Explorer" is impossible from a
-// browser, so the fallback copies the FOLDER (full path when the user pasted
+// browser, so the fallback copies the FOLDER (full path when the pick captured
 // one) and says so; a blocked clipboard is reported as an error, never
 // swallowed.
 import { beforeEach, describe, expect, it } from "vitest";
 import { copyFolderText } from "../src/lib/copypath";
-import { saveRootPath } from "../src/lib/rootpath";
+import { saveRootPathInfo } from "../src/lib/rootpath";
 
 type Said = { msg: string; err?: boolean };
 
@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe("copyFolderText", () => {
   it("copies the full folder path and explains the limitation", async () => {
-    saveRootPath(ROOT, FULL);
+    saveRootPathInfo(ROOT, FULL, "copied"); // the pick-time capture
     const written: string[] = [];
     useClipboard(async (t) => { written.push(t); });
     const said: Said[] = [];

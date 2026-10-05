@@ -9,6 +9,7 @@ import CompareView from "./CompareView";
 import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "./Surfaces";
 import FilterBar from "./FilterBar";
 import HeaderRow from "./HeaderRow";
+import { OpenFolderButton } from "../ui/FolderBar";
 import PairList from "./PairList";
 import StatusFooter from "./StatusFooter";
 import { counters } from "./state";
@@ -27,8 +28,8 @@ export default function SelectionPanel() {
   if (!api.supported) return <UnsupportedNote onPick={api.chooseRoot} />;
   return (
     <div className="space-y-3">
-      <HeaderRow rootName={api.s.rootName} scope={api.s.scope} watcher={api.s.watcher} pairs={api.s.pairs}
-        chooseRoot={api.chooseRoot} rescan={api.rescan} patch={api.patch} />
+      <HeaderRow rootName={api.s.rootName} scope={api.s.scope} pairs={api.s.pairs}
+        chooseRoot={api.chooseRoot} rescan={api.rescan} />
       <Banners api={api} />
       {api.s.rootName !== "" && (
         <FilterBar filter={api.s.filter} sort={api.s.sort} shown={api.visible.length}
@@ -78,7 +79,7 @@ function PickRootNote({ onPick }: { onPick: () => void }) {
   return (
     <section className="panel p-10 text-center">
       <p className="mb-3 text-sm text-slate-300">Pick the folder that holds your originals and <code>_AI</code> results.</p>
-      <button className="btn-primary sel-focus" data-testid="sel-root-empty" onClick={onPick}>Choose source folder…</button>
+      <OpenFolderButton testid="sel-open-folder-empty" onClick={onPick} />
     </section>
   );
 }

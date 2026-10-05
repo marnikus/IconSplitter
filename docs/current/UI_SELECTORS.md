@@ -161,9 +161,9 @@ Header + status:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `sel-root` | root picker button | label mirrors state (`Root: {name}`), RULE 24 |
+| `sel-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root |
+| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* / *completed — check it* (I-46) |
 | `sel-rescan` | `↺ Rescan` | re-walks the root |
-| `sel-watcher` | watcher pill | toggles the 30 s auto-rescan |
 | `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
 | `sel-help` | `?` popover | keyboard reference |
@@ -191,7 +191,8 @@ name — their decisions are kept, I-43), `sel-corrupt` (the **legacy**
 `review-decisions.json` is unreadable; it is never written, I-42), `sel-toast`,
 `sel-busy`, `sel-footer` with `sel-rescan-age`,
 `sel-diff` (+new/renamed/removed/unchanged), `sel-retry-count`,
-`sel-progress`; empty-root states `sel-root-empty`, `sel-unsupported`.
+`sel-progress`; the empty-root state's button is `sel-open-folder-empty` (the
+old `sel-root-empty` handle was that button and is gone), and `sel-unsupported`.
 
 ## N. Selection review V2 — `src/selectionv2/*` (verified 2026-10-01)
 
@@ -199,9 +200,9 @@ Source bar + layout switch:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `v2-root` | path pill button | shows the root name, opens the picker; label mirrors state (RULE 24) |
+| `v2-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root (I-30) |
+| `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* / *completed — check it* name the states |
 | `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
-| `v2-watcher` | watcher pill | toggles the 30 s auto-rescan |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
 
@@ -236,7 +237,6 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 | `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
 | `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
 | `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
-| `v2-root-path` | `Full path for copies` field | the shared `ui/RootPathField`, same memory as the Generate SVG tab's field (§Q); `v2-root-path-note` marks it unset |
 | `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
 | `v2-autonext` | checkbox | advance to the next pending after a decision |
 | `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
@@ -246,7 +246,8 @@ plus the V1 `sel-compare` handles (§M). Shared surfaces keep their `sel-*`
 handles in both tabs: `sel-footer`, `sel-diff`, `sel-rescan-age`,
 `sel-retry-count`, `sel-progress`; V2 skins its own banners and overlays with
 `v2-writewarn` / `v2-retry`, `v2-pairfiles`, `v2-corrupt`, `v2-toast`, `v2-busy`,
-and the empty-root states `v2-root-empty` / `v2-unsupported`.
+and the empty-root states `v2-root-empty` (its button is
+`v2-open-folder-empty`) / `v2-unsupported`.
 Approving a pair writes `<dir>/<stem>.svg.json` beside its images and never a
 `review-decisions.json` (I-41/I-42; `tests/selectionv2_ui.test.tsx` asserts both).
 
@@ -327,14 +328,14 @@ contenteditable — so undo still works after using the zoom slider or a checkbo
 Source: `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`,
 `SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgPanel.tsx`.
 
-Source bar (only after a root is remembered; `svg-root-empty` /
-`svg-unsupported` are the two empty states and stay distinct):
+Source bar (always rendered — `svg-open-folder` is the one way in whether or not
+a root is loaded; `svg-root-empty` / `svg-unsupported` are the two empty states
+and stay distinct):
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-root` | path pill | the root's label: its **full path** once one was captured (I-36), else the folder name |
-| `svg-choose-root` | `Choose source folder…` / `Change folder…` | the picker, offered whether or not a root is loaded (I-30) |
-| `svg-root-path` | `Full path for copies` field | the picked folder's real path — a browser cannot read the drive, so it is captured from the clipboard when the folder is picked (I-35) or pasted here; normalised and remembered per folder name (I-29). `svg-root-path-label` is the label; `svg-root-path-use` is `Use copied path` (adopt what Explorer copied, no typing); `svg-root-path-note` names the state: "✓ every copy uses this path" / "completed from the copied folder — check it" / "not set — Chrome can't read the drive path; copy the folder in Explorer, then press “Use copied path”", or the button's own feedback ("Nothing path-like on the clipboard…") |
+| `svg-open-folder` | green `Open folder` button | the same shared control as the Selection tabs (I-44), offered whether or not a root is loaded (I-30); `svg-root-empty`'s button is `svg-open-folder-empty` |
+| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* / *completed — check it* name the states (I-46) |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |

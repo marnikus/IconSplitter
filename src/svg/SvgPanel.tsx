@@ -9,6 +9,7 @@ import type { CSSProperties } from "react";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
+import { OpenFolderButton } from "../ui/FolderBar";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
 import SvgBatchStrip from "./SvgBatchStrip";
@@ -244,7 +245,7 @@ function PickRoot({ onPick }: { onPick: () => void }) {
   return (
     <section className="svg-panel svg-center" data-testid="svg-root-empty">
       <p>Pick the folder that holds your originals, <code>_AI</code> results and <code>review-decisions.json</code>.</p>
-      <button type="button" className="svg-btn primary" onClick={onPick}>Choose source folder…</button>
+      <OpenFolderButton testid="svg-open-folder-empty" onClick={onPick} />
     </section>
   );
 }

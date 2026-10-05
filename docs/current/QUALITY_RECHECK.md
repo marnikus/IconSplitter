@@ -1473,3 +1473,77 @@ change (the notes reuse the existing warn tone).
 Probe script: `/tmp/probe_pair.mjs` (sandbox-local; the recipe — OPFS
 subdirectory as the picked root, `showDirectoryPicker` overridden in the page —
 is the one from the earlier probes).
+
+## 2026-10-05 — one folder control, one path row (Selection V1/V2 + Generate SVG)
+
+The report — *"Folder control is unclear and displays the folder name as the
+button. Obsolete Watcher and copied-path controls add noise. Full selected path
+is not presented clearly."* — was three variants of one control in three
+toolbars, each labelled with **state** (the folder's name) instead of the action,
+each followed by a `Full path for copies` field with a `Use copied path` button
+and a status sentence, and V2 additionally carried a 30 s `Watcher` pill. Per
+I-44…I-46 (design: `docs/archive/2026-10-05-folder-bar/design.md`) all three now
+mount one shared `ui/FolderBar`: a green `Open folder` button with real
+hover/active/focus states, always labelled with the action, plus a full-width
+read-only path row below the controls (`sel-folder-path` / `v2-folder-path` /
+`svg-folder-path`) in three honest states — the captured path, the same path with
+`completed — check it`, or the folder's name with `full path not captured`.
+Removed: `ui/RootPathField`, `ui/userootpath` (the live read moved into
+`ui/FolderBar`), `lib/rootpath.saveRootPath` + the `pasted` variant of `PathHow`,
+`lib/clipboardpath.adoptCopiedPath`, and the Watcher with everything it owned
+(`SelState.watcher`, `useSelection.useWatcher`, `WATCH_MS`). The pick-time
+capture (I-35) is untouched and is now the memory's only writer; its toast says
+`Folder path captured: …` because the path itself is on screen. Rescan is
+unchanged in all three tabs (same handlers, labels, testids).
+
+### Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (untouched baseline: `App`, `detect` — no new warning, and one `setInterval` (the footer's "N seconds ago" display clock) is deliberately kept) |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED (`quality:changed`: 13 files checked, every one OK) |
+| 4/6 Tests | **83 files / 840 tests, all green** (was 82 / 827) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 96.66 statements · 91.04 branches · 96.33 functions · 98.05 lines (branch +0.20; lines −0.01, 18 points above the enforced 80 % floor) |
+| 6/6 Build | `dist/index.html` 652.89 kB / 193.35 kB gzip (was 655.73 / 194.09 — the removed field/pill CSS) |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/ui/FolderBar.tsx` | 4 / 59 | **new, shared**: the live path read (`useRootPath`), `OpenFolderButton` (one label, one green class) and `FolderPathRow` (read-only text + the one warning state) |
+| `src/selectionv2/SourceBar.tsx` | 6 / 71 | the V2 toolbar + the row below it; `watcher`/`toggleWatcher` props gone |
+| `src/svg/SourceLine.tsx` | 3 / 63 | the SVG bar + the row below it; the name pill, the second picker button and the field gone |
+| `src/selection/HeaderRow.tsx` | 4 / 63 | V1: `sel-open-folder` + `sel-folder-path`; the watcher pill and the `patch` prop gone |
+| `src/selection/useSelection.ts` | 53 / 248 | `useWatcher` + `WATCH_MS` + the `watcher` dependency of the boot effect gone |
+| `src/selection/state.ts` | 36 / 240 | `SelState.watcher` (and its default) gone |
+| `src/lib/rootpath.ts` | 27 / 242 | `saveRootPath` gone; `PathHow` = `copied \| completed` (a legacy `pasted`/bare-string record reads as `copied`) |
+| `src/lib/clipboardpath.ts` | 2 / 34 | `adoptCopiedPath` gone; `readCopiedText` + `adoptCopiedText` (the pick-time capture) stay |
+| `src/ui/pickroot.ts` | 4 / 66 | the capture is untouched; `pickMessage` no longer names the clipboard |
+| `src/index.css` | — | `.folder-open` (+ `:hover` / `:active` / `:focus-visible` / `:disabled`) and `.folder-path`; `.v2-path-pill`, `.svg-path-pill`, `.pathfield*` deleted |
+
+Under ideal, not over: `FolderBar.tsx` (59 lines) is small because it owns one
+control; the state that grew (`SelState`) only shrank. No `ideal-size:` deviation
+was needed.
+
+### Browser verification (headless Chromium 153, 1440×900, real OPFS folder, 27/27 green)
+
+| Check | Result |
+|---|---|
+| V2, empty state | the toolbar shows the green `Open folder` button, label exactly `Open folder`, class `folder-open`, painted `rgb(23, 113, 76)` |
+| hover / cursor | background changes on hover `rgb(23, 113, 76) → rgb(29, 139, 94)`; `cursor: pointer` |
+| the pick | clicking it walks the picked OPFS folder and lists the pair (1 row) |
+| the path row | below the toolbar, 1378 px wide = the toolbar's own width, `DIV`, 0 inputs/buttons/links inside, text `Full pathF:\Stocks 2026\icons\probe_root` |
+| removals | no `v2-watcher`, no `v2-root`, no `v2-root-path*`, no "Watcher", no "Use copied path", no "Full path for copies" anywhere in the DOM |
+| Rescan | `v2-rescan` re-walks the root and keeps the row (unchanged) |
+| the pair file (Task G intact) | approving wrote `architecture/fog_AI.svg.json` beside the images and **no** `review-decisions.json`; Generate SVG then listed exactly that 1 row (`svg-row-count` = 1) |
+| Generate SVG | the same button (`svg-open-folder`, same label) is offered with a root already loaded, the read-only `svg-folder-path` row shows the same captured path, Rescan works, and re-opening the picker keeps the list |
+| narrow window | at 780 px the row stays inside the viewport (`31…749`) |
+
+Probe script: `/tmp/probeenv/probe_folder.mjs` (sandbox-local). Recipe: Chromium
+153 extracted from `@sparticuz/chromium/bin/chromium.br` (the package's own
+`executablePath()` wrote a 0-byte file in this sandbox), `LD_LIBRARY_PATH` to the
+extracted `al2023` libs **without** `FONTCONFIG_PATH` (Skia aborts with
+`SkFontMgr_FontConfigInterface … Not implemented` when that is set), Vite dev
+server on `:5199`, OPFS `probe_root` as the picked handle.
+

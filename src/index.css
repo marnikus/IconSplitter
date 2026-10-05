@@ -144,20 +144,6 @@
 .v2-toolbar-right { gap: 14px; flex-wrap: wrap; }
 .v2-summary { gap: 8px; flex-wrap: wrap; }
 
-.v2-path-pill {
-  min-width: 220px;
-  max-width: 380px;
-  padding: 8px 11px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #b7c1d9;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .v2-recursive { color: var(--v2-muted); font-size: 11px; }
 
 .v2-chip {
@@ -573,50 +559,68 @@
 .svg-source { display: flex; align-items: center; gap: 9px; min-width: 0; flex-wrap: wrap; }
 .svg-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.svg-path-pill {
-  min-width: 220px;
-  max-width: 380px;
-  padding: 8px 11px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #b7c1d9;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .svg-recursive { color: var(--v2-muted); font-size: 11px; }
 .svg-audit { color: var(--v2-muted); font-size: 10px; }
 
-/* The root's real full path, pasted once (the browser only knows its name). */
-.pathfield { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.pathfield > span { color: var(--v2-muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
-.pathfield > input {
-  min-width: 260px;
-  max-width: 460px;
-  padding: 7px 9px;
-  border: 1px solid var(--v2-line);
+/* ── the one folder control, shared by every tab (I-44/I-46) ────────────────
+   A green button that always says what it does, and under it the picked
+   folder's complete path as read-only text. The path is captured from the
+   user's own Explorer copy at pick time (I-35) — there is no field here. */
+
+.folder-open {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border: 1px solid #1f8a5d;
   border-radius: var(--v2-radius);
-  background: #090f1d;
-  color: #c6cee2;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.pathfield > em { color: var(--v2-muted); font-size: 10px; font-style: normal; }
-.pathfield > em.ok { color: #7fbf9a; }
-.pathfield > em.warn { color: #d8b26a; }
-.pathfield-use {
-  padding: 7px 9px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-radius);
-  background: var(--v2-surface);
-  color: #c6cee2;
-  font-size: 10px;
+  background: #17714c;
+  color: #f2fff8;
+  font-size: 12px;
+  font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
-.pathfield-use:hover { background: #16203a; }
+
+.folder-open:hover { background: #1d8b5e; border-color: #2fb37a; box-shadow: 0 0 0 3px #32d68b22; }
+.folder-open:active { background: #12583c; border-color: #17714c; box-shadow: none; transform: translateY(1px); }
+.folder-open:focus-visible { outline: 2px solid #7ef0bb; outline-offset: 2px; }
+.folder-open:disabled { background: #1b2c26; border-color: var(--v2-line); color: var(--v2-muted); cursor: not-allowed; }
+
+.folder-path {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex: 1 0 100%;
+  width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+  padding: 7px 11px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: #0a1120;
+}
+
+.folder-path > .folder-path-label {
+  color: var(--v2-muted);
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.folder-path > code {
+  min-width: 0;
+  color: #c6cee2;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  user-select: text; /* read-only, but copyable like any other text */
+}
+
+.folder-path > em { color: var(--v2-muted); font-size: 10px; font-style: normal; white-space: nowrap; }
+.folder-path.warn { border-color: #4a3d1d; }
+.folder-path.warn > code { color: #d8b26a; }
+.folder-path.warn > em { color: #d8b26a; }
 
 .svg-chip {
   display: inline-flex;

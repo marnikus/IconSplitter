@@ -1,12 +1,11 @@
-// SourceLine.tsx — the Generate SVG tab's source bar: the picked root, the
-// folder picker (always offered, so the tab can be pointed by hand instead of
-// only inheriting the Selection root), the rescan, the root's real full path
-// for copies, and the honest counts of what the scan found. Extracted from
-// SvgControls so both stay inside the RULE 18 size budget.
+// SourceLine.tsx — the Generate SVG tab's source bar: the folder button (always
+// offered, so the tab can be pointed at a folder by hand instead of only
+// inheriting the Selection root), the rescan, the honest counts of what the scan
+// found — and, in its own read-only row below, the picked folder's full path
+// (I-44/I-46). Extracted from SvgControls so both stay inside the RULE 18 budget.
 
 import { auditText } from "./sourcelist";
-import RootPathField from "../ui/RootPathField";
-import { useRootLabel } from "../ui/userootpath";
+import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 import type { Discovery } from "./sources";
 
 export interface SvgCounts {
@@ -26,39 +25,27 @@ export interface SourceLineProps {
 }
 
 export default function SourceLine({ rootName, discovery, busy, counts, onChooseRoot, onRescan }: SourceLineProps) {
-  // The pill names the folder's real path as soon as one is known, so the user
-  // never has to open a dialog to find out what a copy will hand over (I-36).
-  const label = useRootLabel(rootName);
   return (
-    <div className="svg-toolbar">
-      <div className="svg-source">
-        {rootName === "" ? <PickButton label="Choose source folder…" onClick={onChooseRoot} /> : (
-          <>
-            <span className="svg-path-pill" data-testid="svg-root" title={label}>📂 Root: {label}</span>
-            <PickButton label="Change folder…" onClick={onChooseRoot} />
-            <RescanButton busy={busy} onClick={onRescan} />
-            <RootPathField key={rootName} rootName={rootName} testid="svg-root-path" />
-          </>
-        )}
-        <span className="svg-recursive" data-testid="svg-scope-copy">
-          Approved Selection images only · recursive · {discovery?.sources.length ?? 0} sources
-        </span>
-        {/* The whole picture, so a short list is never a mystery (invariant I-33). */}
-        {discovery !== null && <span className="svg-audit" data-testid="svg-audit">{auditText(discovery.audit)}</span>}
+    <>
+      <div className="svg-toolbar">
+        <div className="svg-source">
+          <OpenFolderButton testid="svg-open-folder" onClick={onChooseRoot} />
+          {rootName !== "" && <RescanButton busy={busy} onClick={onRescan} />}
+          <span className="svg-recursive" data-testid="svg-scope-copy">
+            Approved Selection images only · recursive · {discovery?.sources.length ?? 0} sources
+          </span>
+          {/* The whole picture, so a short list is never a mystery (invariant I-33). */}
+          {discovery !== null && <span className="svg-audit" data-testid="svg-audit">{auditText(discovery.audit)}</span>}
+        </div>
+        <div className="svg-summary">
+          <Chip value={counts.eligible} label="eligible" testid="svg-count-eligible" />
+          <Chip value={counts.generated} label="generated" testid="svg-count-generated" />
+          <Chip value={counts.approved} label="approved" cls="approved" testid="svg-count-approved" />
+          <Chip value={counts.failed} label="failed" cls="failed" testid="svg-count-failed" />
+        </div>
       </div>
-      <div className="svg-summary">
-        <Chip value={counts.eligible} label="eligible" testid="svg-count-eligible" />
-        <Chip value={counts.generated} label="generated" testid="svg-count-generated" />
-        <Chip value={counts.approved} label="approved" cls="approved" testid="svg-count-approved" />
-        <Chip value={counts.failed} label="failed" cls="failed" testid="svg-count-failed" />
-      </div>
-    </div>
-  );
-}
-
-function PickButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button type="button" className="svg-btn primary" data-testid="svg-choose-root" onClick={onClick}>{label}</button>
+      <FolderPathRow rootName={rootName} testid="svg-folder-path" />
+    </>
   );
 }
 

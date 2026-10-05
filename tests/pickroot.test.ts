@@ -3,7 +3,7 @@
 // any tab behaves the same: a cancel is a cancel, and a clipboard problem never
 // costs the user the folder they just chose.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { adoptCopiedPath } from "../src/lib/clipboardpath";
+import { adoptCopiedText } from "../src/lib/clipboardpath";
 import { loadRootPath } from "../src/lib/rootpath";
 import { pickRootWithPath } from "../src/ui/pickroot";
 import type { DirHandleLike } from "../src/lib/fs";
@@ -95,10 +95,9 @@ describe("pickRootWithPath", () => {
 // The adopt action itself is covered by clipboardpath.test.ts, but pickroot
 // depends on it — this keeps the two honest about each other.
 describe("pickroot and clipboardpath agree", () => {
-  it("adopting twice is idempotent", async () => {
-    stubClipboard(async () => FULL);
-    await adoptCopiedPath(ROOT);
-    await adoptCopiedPath(ROOT);
+  it("adopting the same copied text twice is idempotent", () => {
+    expect(adoptCopiedText(ROOT, FULL)).toEqual({ path: FULL, how: "copied" });
+    expect(adoptCopiedText(ROOT, FULL)).toEqual({ path: FULL, how: "copied" });
     expect(loadRootPath(ROOT)).toBe(FULL);
   });
 });

@@ -14,6 +14,7 @@ import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
 import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "../selection/Surfaces";
 import { useSideThumbs, type SideThumbFor } from "../selection/thumbs";
+import { OpenFolderButton } from "../ui/FolderBar";
 import BulkBar from "./BulkBar";
 import FilterGrid from "./FilterGrid";
 import ReviewList from "./ReviewList";
@@ -28,9 +29,8 @@ export default function SelectionV2Panel() {
   return (
     <div className="v2" data-testid="v2-panel">
       <section className="v2-controls" aria-label="Review controls">
-        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode} watcher={v.core.s.watcher}
-          chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode}
-          toggleWatcher={() => v.core.patch({ watcher: !v.core.s.watcher })} />
+        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode}
+          chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode} />
         {v.core.s.rootName !== "" && (
           <FilterGrid filter={v.core.s.filter} sort={v.core.s.sort} shown={v.core.visible.length}
             setFilter={v.core.setFilter} setSort={v.core.setSort} />
@@ -121,7 +121,7 @@ function PickRootNote({ onPick }: { onPick: () => void }) {
   return (
     <section className="v2-panel v2-center" data-testid="v2-root-empty">
       <p>Pick the folder that holds your originals and <code>_AI</code> results.</p>
-      <button type="button" className="v2-btn primary" onClick={onPick}>Choose source folder…</button>
+      <OpenFolderButton testid="v2-open-folder-empty" onClick={onPick} />
     </section>
   );
 }

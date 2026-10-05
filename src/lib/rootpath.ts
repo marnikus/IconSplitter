@@ -6,8 +6,9 @@
 // normally still holds Explorer's "Copy as path"), remembered per folder name,
 // reused by every tab, and never invented (I-35): with no memory the copy falls
 // back to the name. Only ever an Explorer FOLDER path — markup, URLs and words
-// are refused at every entry point (I-39). `pickroot`/`clipboardpath` do the capturing; this file owns
-// the string rules and the one storage.
+// are refused by the one writer (I-39). `pickroot`/`clipboardpath` do the
+// capturing; this file owns the string rules and the one storage; the row that
+// shows it is `ui/FolderBar` (I-46).
 //
 // The copy itself names a FOLDER, never a file (the user's request): inside a
 // run's output tree it stops at the batch folder — the one a human opens in
@@ -24,8 +25,12 @@ const MONTH = /^\d{4}-\d{2}$/;
 const STAMP = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
 const OUTPUT_DIR = "_split_output";
 
-/** How a remembered path was obtained (I-36 — the UI says which one it is). */
-export type PathHow = "copied" | "completed" | "pasted";
+/**
+ * How a remembered path was obtained (I-46 — the row says which one it is):
+ * `copied`, the user's own Explorer copy, or `completed`, that copy with the
+ * picked folder's name appended. The path is never typed by hand any more.
+ */
+export type PathHow = "copied" | "completed";
 
 export interface RootPathInfo {
   path: string;
@@ -115,7 +120,7 @@ export function loadRootPathInfo(rootName: string): RootPathInfo {
 
 function fromString(value: string): RootPathInfo {
   const path = normalizeRootPath(value);
-  return valid(path) ? { path, how: "pasted" } : UNKNOWN;
+  return valid(path) ? { path, how: "copied" } : UNKNOWN; // a record predating `how`
 }
 
 /**
@@ -128,7 +133,9 @@ function valid(path: string): boolean {
 }
 
 function readHow(value: unknown): PathHow {
-  return value === "copied" || value === "completed" || value === "pasted" ? value : "pasted";
+  // anything unrecognised is a record from before `how` (or a hand-edited one):
+  // the path still came from the user, so it reads as captured
+  return value === "completed" ? "completed" : "copied";
 }
 
 /**
@@ -136,7 +143,7 @@ function readHow(value: unknown): PathHow {
  * stored info unchanged when nothing moved, so a caller can stay quiet about a
  * repeat.
  */
-export function saveRootPathInfo(rootName: string, text: string, how: PathHow = "pasted"): RootPathInfo {
+export function saveRootPathInfo(rootName: string, text: string, how: PathHow = "copied"): RootPathInfo {
   if (rootName === "") return UNKNOWN;
   const path = normalizeRootPath(text);
   if (path !== "" && !isFolderPathText(path)) return loadRootPathInfo(rootName); // refused
@@ -148,18 +155,6 @@ export function saveRootPathInfo(rootName: string, text: string, how: PathHow = 
   else all[rootName] = { path: info.path, how: info.how };
   writePaths(all);
   return info;
-}
-
-/**
- * Remembers a pasted path (the field's own action). False when the text is not
- * an Explorer folder path — the caller says so and nothing is written (I-39);
- * an empty value is not a refusal, it clears the memory.
- */
-export function saveRootPath(rootName: string, text: string): boolean {
-  if (rootName === "") return false;
-  if (normalizeRootPath(text) !== "" && !isFolderPathText(text)) return false;
-  saveRootPathInfo(rootName, text, "pasted");
-  return true;
 }
 
 /** What every copy starts with: the remembered path, else the folder's name. */

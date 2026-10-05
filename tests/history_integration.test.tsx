@@ -99,7 +99,7 @@ async function mountPanel(root: FakeDir): Promise<void> {
       </HistoryProvider>,
     );
   });
-  await click(q("[data-testid='v2-root']"));
+  await click(q("[data-testid='v2-open-folder']"));
   await settle();
 }
 

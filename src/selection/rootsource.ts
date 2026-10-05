@@ -31,7 +31,7 @@ export interface Ctx {
   root: { current: DirHandleLike | null };
   state: { current: SelState };
   hist: HistoryApi;
-  /** Which rescan may commit (see lib/scanseq) — the watcher can overlap one. */
+  /** Which rescan may commit (see lib/scanseq) — two rescans can overlap one. */
   seq: { current: ScanSeq };
 }
 
@@ -153,8 +153,8 @@ function reportReads(load: PairLoad, say: Say): void {
 }
 
 /**
- * Says the scope once per change — never on every watcher tick, so a 30 s
- * rescan stays quiet while a fresh pick explains why the list is short (I-40).
+ * Says the scope once per change — a quiet re-scan never repeats it, while a
+ * fresh pick explains why the list is short (I-40).
  */
 function announce(before: ScanScope, scope: ScanScope, say: Say): void {
   if (before.split === scope.split && before.outside === scope.outside) return;

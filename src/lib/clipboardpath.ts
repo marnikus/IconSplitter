@@ -3,7 +3,9 @@
 // lives (only its name), so the one place the real path exists is what the user
 // copied in Explorer — "Copy as path" (Ctrl+Shift+C) puts it on the clipboard.
 // This module reads that, matches it against the folder that was really picked
-// (lib/rootpath.pathFromCopied), remembers it, and never invents one (I-35).
+// (lib/rootpath.pathFromCopied), remembers it, and never invents one (I-35). It
+// holds no UI: the picker (ui/pickroot) is the only caller, and ui/FolderBar
+// shows the result (I-45).
 
 import { pathFromCopied, saveRootPathInfo, type RootPathInfo } from "./rootpath";
 
@@ -19,22 +21,13 @@ export async function readCopiedText(): Promise<string> {
 }
 
 /**
- * Reads the clipboard and, if it names `folderName` (exactly, or as the parent
- * it lives in), remembers it as that root's full path. Returns the stored path,
- * or null when the clipboard held nothing usable — a refusal is never an error
- * here, because the user's real goal (scanning the folder) does not depend on it.
+ * Remembers the path of the folder the user picked, from text the caller already
+ * has (the pre-dialog read). Returns what the memory now holds — `{ "", null }`
+ * when the clipboard named nothing usable, which is no error: the user's real
+ * goal (scanning the folder) never depends on the capture.
  */
-export async function adoptCopiedPath(folderName: string): Promise<string | null> {
-  const copied = await readCopiedText();
-  if (copied === "" || copied === "none") return null;
-  const info = pathFromCopied(copied, folderName);
-  if (info.path === "") return null;
-  return saveRootPathInfo(folderName, info.path, info.how ?? "pasted").path || null;
-}
-
-/** The same, starting from text the caller already has (a pre-dialog read). */
 export function adoptCopiedText(folderName: string, copied: string): RootPathInfo {
   const info = pathFromCopied(copied, folderName);
   if (info.path === "") return { path: "", how: null };
-  return saveRootPathInfo(folderName, info.path, info.how ?? "pasted");
+  return saveRootPathInfo(folderName, info.path, info.how ?? "copied");
 }

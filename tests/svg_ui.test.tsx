@@ -163,7 +163,7 @@ async function mountPick(root: FakeDir): Promise<void> {
     ui.render(<HistoryProvider><Host><SvgPanel /><HistoryBar /></Host></HistoryProvider>);
   });
   await settle();
-  await click(q("[data-testid=svg-choose-root]") as HTMLElement);
+  await click(q("[data-testid=svg-open-folder]") as HTMLElement);
   await settle();
 }
 
@@ -193,92 +193,94 @@ beforeEach(async () => {
   document.body.appendChild(host);
 });
 
-describe("the root's full path (folder copies)", () => {
-  it("keeps a folder picker available while a root is loaded, so the tab can be pointed by hand", async () => {
+describe("the folder control and the path row", () => {
+  it("keeps a green Open folder button while a root is loaded, so the tab can be pointed by hand", async () => {
     await mount(await makeRoot());
-    const btn = q("[data-testid=svg-choose-root]") as HTMLButtonElement;
+    const btn = q("[data-testid=svg-open-folder]") as HTMLButtonElement;
     expect(btn).not.toBeNull();
     expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe("Open folder");
+    expect(btn.className).toContain("folder-open");
     // the root came from the remembered handle, not from this tab's picker:
-    // the button must offer to change it instead of hiding (the old bug).
-    expect(btn.textContent).toContain("Change folder");
-    expect(q("[data-testid=svg-root]")?.textContent).toContain("split_root");
+    // the button must offer to pick again instead of hiding (the old bug).
+    expect(text("[data-testid=svg-folder-path]")).toContain("split_root");
   });
 
-  it("remembers a pasted full path, normalises it, and shows it after a restart", async () => {
-    await mount(await makeRoot());
-    await type("[data-testid=svg-root-path]", `"F:\\Stocks 2026\\icons\\split_root\\"`);
+  it("offers the same green Open folder button in the empty state", async () => {
+    await act(async () => {
+      ui = createRoot(host);
+      ui.render(<HistoryProvider><Host><SvgPanel /><HistoryBar /></Host></HistoryProvider>);
+    });
     await settle();
-    expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons\\split_root");
-    await act(async () => { ui.unmount(); }); // a restart: the field is filled from the memory
-    await mount(await makeRoot());
-    expect(input("[data-testid=svg-root-path]").value).toBe("F:\\Stocks 2026\\icons\\split_root");
+    const empty = q("[data-testid=svg-open-folder-empty]") as HTMLButtonElement;
+    expect(empty).not.toBeNull();
+    expect(empty.textContent).toBe("Open folder");
+    expect(empty.className).toContain("folder-open");
+    expect(empty.closest("[data-testid=svg-root-empty]")).not.toBeNull();
+    expect(q("[data-testid=svg-folder-path]")).toBeNull(); // nothing to name yet
   });
 
-  it("says what the field is for and why the app cannot read the drive itself", async () => {
+  it("shows the folder in a full-width read-only row, never in the button and never in a field", async () => {
     await mount(await makeRoot());
-    const field = input("[data-testid=svg-root-path]");
-    expect(field.getAttribute("placeholder")).toContain("full path");
-    expect(field.getAttribute("title")).toContain("never tells a page the drive path");
-    // with nothing recorded the status says why, and offers the one-click fix
-    expect(text("[data-testid=svg-root-path-note]")).toContain("Chrome can't read the drive path");
-    expect(text("[data-testid=svg-root-path-note]")).toContain("Use copied path");
-    expect(q("[data-testid=svg-root-path-use]")).not.toBeNull();
+    const row = q("[data-testid=svg-folder-path]")!;
+    expect(row.textContent).toContain("split_root");
+    expect(row.querySelector("input, textarea, button")).toBeNull();
+    // the pill that carried the folder's name, and the field + button that let
+    // the path be typed or adopted by hand, are gone (I-44/I-45)
+    expect(q("[data-testid=svg-root]")).toBeNull();
+    expect(q("[data-testid=svg-root-path]")).toBeNull();
+    expect(q("[data-testid=svg-root-path-use]")).toBeNull();
+    expect(q("[data-testid=svg-root-path-note]")).toBeNull();
+    expect(host.textContent).not.toContain("Use copied path");
+    expect(host.textContent).not.toContain("Full path for copies");
   });
 
-  it("captures the full path at pick time and shows it in the pill, the field and the status", async () => {
+  it("captures the full path at pick time, says so, and keeps it visible after a restart", async () => {
     const root = await makeRoot();
     stubClipboard(`"F:\\Stocks 2026\\icons\\split_root\\"`);
     try {
       await mountPick(root); // a hand pick, with the path on the clipboard
       expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons\\split_root");
-      expect(q("[data-testid=svg-root]")?.textContent).toContain("F:\\Stocks 2026\\icons\\split_root");
-      expect(input("[data-testid=svg-root-path]").value).toBe("F:\\Stocks 2026\\icons\\split_root");
-      expect(text("[data-testid=svg-root-path-note]")).toContain("every copy uses this path");
-      expect(text("[data-testid=svg-toast]")).toContain("Full path taken from your clipboard");
+      expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons\\split_root");
+      expect(text("[data-testid=svg-toast]")).toContain("Folder path captured: F:\\Stocks 2026\\icons\\split_root");
+      await act(async () => { ui.unmount(); }); // a restart: the row reads the memory
+      await mount(root);
+      expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons\\split_root");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }
   });
 
-  it("refuses markup, a URL and a word in the field — the memory stays empty", async () => {
+  it("names the folder and says when no full path was captured (RULE 4)", async () => {
     await mount(await makeRoot());
-    for (const junk of [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25"/>`,
-      "http://www.w3.org/2000/svg",
-      "hello",
-    ]) {
-      await type("[data-testid=svg-root-path]", junk);
-      await settle();
-      expect(loadRootPath("split_root")).toBe(""); // nothing stored
-      expect(text("[data-testid=svg-root-path-note]")).toContain("That is not a folder path");
-    }
-    // the app never lies about what a copy would hand over
-    expect(text("[data-testid=svg-root]")).toContain("split_root");
-    // and the field can still be cleared by hand
-    await type("[data-testid=svg-root-path]", "");
-    await settle();
-    expect(loadRootPath("split_root")).toBe("");
+    expect(text("[data-testid=svg-folder-path]")).toContain("split_root");
+    expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
   });
 
-  it("adopts the copied path on demand, and refuses junk instead of inventing a path", async () => {
+  it("flags a path completed from the copied parent, so a completed guess is never silent", async () => {
+    const root = await makeRoot();
+    stubClipboard("F:\\Stocks 2026\\icons testing\\single"); // the folder it lives in
+    try {
+      await mountPick(root);
+      expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons testing\\single\\split_root");
+      expect(text("[data-testid=svg-folder-path]")).toContain("completed — check it");
+    } finally {
+      Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    }
+  });
+
+  it("has no Watcher and no copied-path chrome left anywhere in the tab", async () => {
     await mount(await makeRoot());
-    stubClipboard("F:\\Stocks 2026\\icons testing\\single");
-    await click(q("[data-testid=svg-root-path-use]") as HTMLElement);
-    // the copied PARENT is completed with the picked folder's name, and flagged
-    expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons testing\\single\\split_root");
-    expect(text("[data-testid=svg-root-path-note]")).toContain("check it");
-    stubClipboard("totally not a path");
-    await click(q("[data-testid=svg-root-path-use]") as HTMLElement);
-    expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons testing\\single\\split_root");
-    expect(text("[data-testid=svg-root-path-note]")).toContain("Nothing path-like on the clipboard");
+    expect(q("[data-testid=svg-watcher]")).toBeNull();
+    expect(host.textContent).not.toContain("Watcher");
+    expect(host.textContent).not.toContain("auto-rescan");
   });
 });
 
 describe("Generate SVG panel", () => {
   it("lists only the approved pairs, with the newest SVG beside its source", async () => {
     await mount(await makeRoot());
-    expect(q("[data-testid=svg-root]")?.textContent).toContain("split_root");
+    expect(text("[data-testid=svg-folder-path]")).toContain("split_root");
     const rows = host.querySelectorAll(".svg-row");
     expect(rows).toHaveLength(2);
     expect(q("[data-testid=svg-row-count]")?.textContent).toBe("2");

@@ -95,7 +95,7 @@ async function mountPanel(): Promise<void> {
       </HistoryProvider>,
     );
   });
-  await click("[data-testid='v2-root']");
+  await click("[data-testid='v2-open-folder']");
   await settle();
 }
 

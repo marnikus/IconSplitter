@@ -52,11 +52,14 @@ export async function pickFolderFor(
   return { handle: picked.handle, message: pickMessage(picked) };
 }
 
-/** The one line every caller says about a capture — or null to stay quiet. */
+/**
+ * The one line every caller says about a capture — or null to stay quiet. The
+ * path itself is on screen in the folder row (I-46), so the toast only has to
+ * say that the capture happened, and flag a completed one.
+ */
 export function pickMessage(picked: PickedRoot): string | null {
   if (picked.path === "") return null;
-  const where = picked.path;
   return picked.how === "completed"
-    ? `Full path completed from the copied folder: ${where} — check it`
-    : `Full path taken from your clipboard: ${where}`;
+    ? `Folder path completed from the copied folder: ${picked.path} — check it`
+    : `Folder path captured: ${picked.path}`;
 }
