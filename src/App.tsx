@@ -568,7 +568,7 @@ export default function App() {
       {toast && (
         <div
           data-testid="toast"
-          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
+          className={`fixed bottom-[calc(var(--log-dock-h,0px)_+_1.5rem)] left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
             toast.err ? "bg-rose-600" : "bg-emerald-600"
           }`}
         >

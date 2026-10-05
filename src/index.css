@@ -1215,7 +1215,7 @@
 .svg-toast {
   position: fixed;
   right: 18px;
-  bottom: 54px;
+  bottom: calc(var(--log-dock-h, 0px) + 54px);
   max-width: 380px;
   padding: 11px 13px;
   border: 1px solid var(--v2-line-strong);
@@ -1232,7 +1232,7 @@
 .svg-busy {
   position: fixed;
   left: 18px;
-  bottom: 54px;
+  bottom: calc(var(--log-dock-h, 0px) + 54px);
   padding: 8px 12px;
   border: 1px solid var(--v2-line);
   border-radius: 999px;

@@ -1,5 +1,5 @@
-// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar and
-// the session autosave. The providers sit ABOVE the panels, which is what makes
+// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar, the
+// global log dock and the session autosave. The providers sit ABOVE the panels, which is what makes
 // an undo pressed on one tab able to reverse an action made on another (RULE 12).
 
 import App from "../App";
@@ -8,6 +8,7 @@ import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
 import { setAppState, type AppState } from "../state/appstore";
+import LogDock from "../log/LogDock";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppState } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
@@ -53,6 +54,10 @@ function Shell() {
       {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
       {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
       {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
+      {/* LAST child of the flow: its spacer reserves the dock's height so no
+          panel's last row can ever sit underneath the fixed dock (its clicks
+          would be lost). The dock itself is position: fixed. */}
+      <LogDock />
     </div>
   );
 }

@@ -46,6 +46,27 @@ describe("the shell", () => {
     expect(q("[data-testid='tabbar']")).not.toBeNull();
   });
 
+  it("shows the global log dock beside the tabs, outside any panel", () => {
+    mountWorkbench();
+    const dock = q("[data-testid='log-dock']");
+    expect(dock).not.toBeNull();
+    expect(q("[data-testid='tabbar']")?.contains(dock)).toBe(false);
+    expect(dock?.getAttribute("aria-label")).toBe("Application log");
+  });
+
+  it("reserves in-flow space for the dock, so page content can never end underneath it", () => {
+    mountWorkbench();
+    const spacer = q("[data-testid='log-dock-spacer']");
+    const dock = q("[data-testid='log-dock']");
+    expect(spacer).not.toBeNull();
+    expect(spacer?.getAttribute("aria-hidden")).toBe("true");
+    // The spacer is the content's own clearance: a sibling of the dock, never inside it or a panel.
+    expect(dock?.contains(spacer)).toBe(false);
+    expect(spacer?.contains(dock)).toBe(false);
+    // One clearance value for both: the spacer and the dock read the same custom property.
+    expect(spacer?.style.height).toBe("var(--log-dock-h, 0px)");
+  });
+
   it("switches tabs through the store, so the choice is the one restored next time", async () => {
     mountWorkbench();
     await click("[data-testid='tab-batch']");
