@@ -42,7 +42,11 @@ export async function sendChatStreaming(call: StreamCall): Promise<SendOut> {
     // The wait starts before the first byte: a connection that never answers
     // must be caught by the same window as one that goes quiet mid-stream.
     const response = await raceStall(requestStream(call, controller.signal), call.stallMs, controller);
-    if (response === null) return { ok: false, failure: stalledFailure(call.stallMs) };
+    if (response === null) {
+      // A user cancel during the initial wait is still the user's Cancel, not
+      // a dead connection ("never calls a user cancel a stall").
+      return { ok: false, failure: call.signal?.aborted === true ? classifyTransport(new Error("cancelled"), { stalled: false, aborted: true }) : stalledFailure(call.stallMs) };
+    }
     if (!response.ok) return { ok: false, failure: await httpFailure(response) };
     if (!isSse(response)) return await readJsonResponse(response);
     return await pump(response, call, controller);
