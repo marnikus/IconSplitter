@@ -8,11 +8,11 @@
 // image inside a request. Neither copies the composite data URL the events
 // carry for the UI: the log keeps the hash, never the bytes.
 //
-// Differences from the branch this was ported from (2026-10-05-global-log §2):
-// this branch streams, so an outcome may be *unconfirmed* (a stall) — that is a
-// warning with its own wording, never an error, because nobody has confirmed a
-// failure; and a request keeps no provider-side `requestId`, so the entry names
-// the batch instead of inventing one.
+// Differences from the branch this was ported from (2026-10-05-global-log §2 /
+// §3.1): this branch streams, so an outcome may be *unconfirmed* (a stall) —
+// that is a warning with its own wording, never an error, because nobody has
+// confirmed a failure; and the entry names the provider request id only when
+// the outcome really carries one (`BatchOutcome.requestId`), never a guess.
 
 import { fmtTokens, costLabel } from "../lib/svgusage";
 import type { LogSpec } from "../lib/log";

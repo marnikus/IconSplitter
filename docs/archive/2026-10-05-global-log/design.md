@@ -124,15 +124,29 @@ honest rather than approximate:
 * `BatchOutcome` gains `requestId` (provider id, already kept in the sidecar and
   the in-flight journal) so a finished request's log line can name it.
 
+### 3.1 How faithful the port is
+
+Checked against `aaedf2e` file by file (`git show aaedf2e:<path> | diff -`):
+`src/lib/log.ts`, `src/log/logstore.ts`, `src/log/scroll.ts`,
+`src/log/useAutoScroll.ts`, `src/log/useLog.ts`, `src/log/LogList.tsx` and
+`src/log/LogRow.tsx` are **byte-identical** to the source branch. Three files are
+deliberately not:
+
+| File | Why it differs |
+|---|---|
+| `src/log/dockheight.ts` | new — the source declared `LOG_DOCK_HEAD_PX` in `LogHead` and positioned the spacer with it; here one module owns the head height, the body height and the `--app-dock-h` value the fixed toasts read (RULE 10) |
+| `src/log/LogDock.tsx` | the fix: a row of the shell column instead of a `fixed` overlay + spacer |
+| `src/svg/runlog.ts` | hand-adapted: a retry is a `warn` naming the failure kind and the wait, a stalled outcome is a warning that says "never retried" rather than an error (this branch has no confirmed failure to report), and the provider request id reaches the entry through the `requestId` the port added to `BatchOutcome` — absent, never invented, when the outcome has none |
+
 ## 4. Module plan (RULE 18: ideal 150–300 lines, functions ≤ 20)
 
 | File | Change | Size |
 |---|---|---|
 | `src/lib/log.ts` | **new**: schema, sanitising, clamp, ring buffer, format, payload | ~210 |
 | `src/log/logstore.ts` | **new**: the one store + debounced persistence | ~119 |
-| `src/log/scroll.ts` / `useAutoScroll.ts` / `useLog.ts` | **new**: follow rule, React binding | 16 / 43 / 10 |
-| `src/log/LogDock.tsx` / `LogHead.tsx` / `LogList.tsx` / `LogRow.tsx` | **new**: the docked panel and its controls | 44 / 76 / 29 / 22 |
-| `src/log/dockheight.ts` | **new**: the `--app-dock-h` contract (the fix) | ~20 |
+| `src/log/scroll.ts` / `useAutoScroll.ts` / `useLog.ts` | **new**: follow rule, React binding | 17 / 44 / 11 |
+| `src/log/LogDock.tsx` / `LogHead.tsx` / `LogList.tsx` / `LogRow.tsx` | **new**: the docked panel and its controls | 49 / 75 / 30 / 23 |
+| `src/log/dockheight.ts` | **new**: the `--app-dock-h` contract **and** the one head/body height (factored out of `LogHead`, RULE 10) | 26 |
 | `src/svg/runlog.ts` | **new**: `RunEvent` → `LogSpec`, `withRunLog` | ~130 |
 | `src/svg/runplan.ts` | **new**: `planOf` / `perRequestOf` / `guard` moved out of `actions.ts`, so the emitters fit that file's RULE 18 budget | ~32 |
 | `src/ui/Workbench.tsx` | shell column: nav → `main` → dock; tab-switch log | +8 |

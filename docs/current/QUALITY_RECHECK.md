@@ -1094,18 +1094,45 @@ preview and the tier caps of that commit are not ported.
 
 ## RULE 18 / RULE 16 numbers for the touched files
 
-| File | Lines | Note |
+`node tools/quality.mjs --changed --allow-legacy` output (the gate's own
+counting) for every touched `src/` file, all `[OK]`:
+
+| File | Fns / lines | Note |
 |---|---|---|
-| `src/lib/log.ts` | 212 | new; pure core (1 file, 21 functions, all ≤ 30) |
-| `src/log/logstore.ts` | 120 | new |
-| `src/log/{LogDock,LogHead,LogList,LogRow}.tsx` | 49 / 75 / 30 / 23 | new |
-| `src/log/{dockheight,scroll,useAutoScroll,useLog}.ts` | 26 / 17 / 44 / 11 | new |
-| `src/svg/runlog.ts` | 126 | new |
-| `src/svg/runplan.ts` | 33 | new — the three pure plan helpers moved out of `actions.ts` |
-| `src/svg/actions.ts` | 282 | changed: emitters + the `refreshModelsNow` extraction keep every function ≤ 30 |
-| `src/svg/runbatch.ts` | 298 | changed: the retry event is a helper, not four lines inside `sendBatch` |
-| `src/svg/scan.ts` | 155 | changed: `logScan` + one `scanWarnings` used by both the user message and the log |
-| `src/{ui/Workbench,state/HistoryProvider,svg/keystore,index.css,...}` | +≈90 | changed |
+| `src/lib/log.ts` | 21 / 212 | new; the pure core |
+| `src/log/logstore.ts` | 15 / 120 | new |
+| `src/log/LogDock.tsx` | 8 / 49 | new |
+| `src/log/LogHead.tsx` | 11 / 75 | new |
+| `src/log/LogList.tsx` | 2 / 30 | new |
+| `src/log/LogRow.tsx` | 1 / 23 | new |
+| `src/log/dockheight.ts` | 2 / 26 | new (the `--app-dock-h` contract + the one head/body height) |
+| `src/log/scroll.ts` | 1 / 17 | new |
+| `src/log/useAutoScroll.ts` | 7 / 44 | new |
+| `src/log/useLog.ts` | 1 / 11 | new |
+| `src/svg/runlog.ts` | 9 / 127 | new |
+| `src/svg/runplan.ts` | 5 / 33 | new — the three pure plan helpers moved out of `actions.ts` |
+| `src/svg/actions.ts` | 38 / 283 | changed: emitters + the `refreshModelsNow` extraction keep every function ≤ 30 |
+| `src/svg/runbatch.ts` | 31 / 299 | changed: the retry event is a helper, not four lines inside `sendBatch` |
+| `src/svg/scan.ts` | 10 / 155 | changed: `logScan` + one `scanWarnings` used by both the user message and the log |
+| `src/batch/BatchPanel.tsx` | 16 / 126 | changed (the toast lift) |
+| `src/selection/Surfaces.tsx` | 3 / 68 | changed (the toast lift) |
+| `src/state/HistoryProvider.tsx` | 18 / 155 | changed (the timeline emitters) |
+| `src/svg/keystore.ts` | 6 / 80 | changed (mask-only entries) |
+| `src/lib/svgbatch.ts` | 15 / 184 | changed (`BatchOutcome.requestId`) |
+| `src/svg/runtypes.ts` | 0 / 83 | changed (the retry event) |
+| `src/ui/Workbench.tsx` | 6 / 89 | changed (the shell + the tab emitter) |
+| `src/App.tsx` | 70 / 581 | changed (2 class names); still a recorded legacy offender, and *smaller* than its baseline record (76 fns / 607 lines) |
+
+Fidelity of the port, checked file by file against `aaedf2e`:
+`lib/log.ts`, `log/{logstore,scroll,useAutoScroll,useLog,LogList,LogRow}` are
+**byte-identical**; `log/dockheight.ts` is new (it factors `LOG_DOCK_HEAD_PX` out
+of `LogHead`, so head, body and the published CSS value share one writer);
+`LogDock.tsx` and `LogHead.tsx` carry the layout fix; `svg/runlog.ts` is
+hand-adapted to this branch's events: a retry is a warn line naming the failure
+kind and the wait, a stalled outcome is a warning that says "never retried"
+(never an error — no failure was confirmed), and the provider request id
+travels to the entry through the `requestId` this port added to `BatchOutcome`
+(absent, never invented, when the outcome has none).
 
 Baseline: **untouched** (no recorded offender grew; the two new over-100 files
 are new code, not legacy).
