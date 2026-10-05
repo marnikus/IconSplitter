@@ -11,6 +11,7 @@
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import { clampThumb, THUMB_MAX, THUMB_MIN, THUMB_STEP, thumbLabel } from "../lib/reviewprefs";
 import { costText, fmtTokens } from "../lib/svgusage";
+import Elapsed from "./Elapsed";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -97,7 +98,7 @@ function Estimate({ p }: { p: SvgBulkBarProps }) {
       <strong>{p.checkedCount} images · {p.requestCount} request(s) · {p.model}</strong>
       {p.progress === null
         ? <span>visible usage {fmtTokens(p.totals.tokens)} tokens · {cost}</span>
-        : <span data-testid="svg-batch-progress">request {p.progress.index}/{p.progress.batches} · {p.progress.saved} saved · {p.progress.failed} failed · {p.progress.missing} missing</span>}
+        : <span data-testid="svg-batch-progress">request {p.progress.index}/{p.progress.batches} · {p.progress.saved} saved · {p.progress.failed} failed · {p.progress.missing} missing · <Elapsed startedAt={p.progress.startedAt} running={p.running} testid="svg-bulk-elapsed" /></span>}
     </div>
   );
 }

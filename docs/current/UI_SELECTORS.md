@@ -323,10 +323,10 @@ Prompt + provider card:
 |---|---|---|
 | `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-reset-prompt` restores the documented default |
 | `svg-provider` | text | provider name + "OpenAI-compatible" |
-| `svg-limits` | text | the values that will really be used: "timeout \{label} · N retries · N per request" — the timeout names its tier floor ("600s (high floor)") and the per-request size is the configured one capped by the tier; the `title` carries the tier note |
-| `svg-per-request` | `input[type=number]` | images per request, 1–9 (a ceiling: the reasoning tier may allow fewer) |
-| `svg-timeout` | `input[type=number]` | the wait per request in **seconds**, 5–900, default 90; clamped at the moment of change; the tier floor can raise the effective value, which `svg-limits` and `svg-confirm-timeout` then show |
-| `svg-retries` | `input[type=number]` | retries per request, 0–5, default 2 (a timeout is never retried — its outcome is unknown) |
+| `svg-limits` | text | the values that will really be used: "\{stall label} · N retries · N per request" — the label names its tier floor ("600s stall (high floor)") and the per-request size is **exactly what the user configured** (no tier ever shrinks it); the `title` carries the tier note |
+| `svg-per-request` | `input[type=number]` | images per request, 1–9 — the size that is really sent, at every reasoning tier |
+| `svg-timeout` | `input[type=number]` | the **stall window** in **seconds**, 5–900, default 120: the longest silence between bytes; there is no total-duration limit. Clamped at the moment of change; the tier floor can raise the effective window, which `svg-limits` and `svg-confirm-timeout` then show |
+| `svg-retries` | `input[type=number]` | retries per request, 0–5, default 2, for failures the provider **confirmed**; a stall is never retried — its outcome is unknown |
 | `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
 | `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
 | `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap |
@@ -366,7 +366,7 @@ Bulk bar (`svg-bulk`):
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | arms first (`Confirm generate`), then sends; disabled at 0 |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
-| `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress |
+| `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
 Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 
@@ -380,7 +380,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the version history; disabled with no SVG / no versions |
 | `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
-| `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" |
+| `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-persist-{sourceId}` | text | "Not saved" until the sidecar is written; `error` class on failure |
@@ -393,24 +393,36 @@ Batch strip (`svg-batch`, the request in flight and every finished request;
 it stays after the run ends so the record is readable): `svg-batch-composite`
 (the contact sheet actually sent), `svg-batch-id`, `svg-batch-grid`
 ("request 2 of 3 · 2×2 grid · 4 image(s)"), `svg-batch-counts` ("N saved · N
-failed · N missing"), `svg-batch-reports` with one `svg-batch-report-{index}`
-per finished request (its own counts, tokens and cost; class `failed` when
-that request failed), `svg-batch-cancel` (only while something is in flight).
+failed · N missing"), `svg-batch-elapsed` (the ticking "elapsed m:ss" of the
+request in flight, next to Cancel — the visual proof that a long generation is
+alive; "(ended)" once the run stops), `svg-batch-reports` with one
+`svg-batch-report-{index}` per finished request (its own counts, elapsed,
+tokens and cost; class `failed` when that request failed and `unknown` when its
+outcome was never confirmed), `svg-batch-cancel` (only while something is in
+flight).
 
 Dialogs:
 
 | Test id | Notes |
 |---|---|
 | `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
-| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 2 max") |
-| `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the wait that will really be used |
-| `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("reasoning tier medium · max 2 icons per request"); the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
+| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier) |
+| `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
+| `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
+| `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
 | `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
 | `svg-composite-building` / `svg-composite-error` | the honest in-progress and could-not-build states |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
+
+Restart recovery: `svg-inflight` (the note about requests with no confirmed
+outcome, shown while `iconSplitter.svg.inflight.v1` has entries) with
+`svg-inflight-note` (how many, their request ids and files, and "Nothing has
+been resent"), `svg-inflight-retry` (opens the normal confirmation for exactly
+those sources — the only way to resend, always a deliberate user action) and
+`svg-inflight-dismiss` (acknowledges the note and clears the journal).
 
 Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / lost AI image / save
 failure), `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with

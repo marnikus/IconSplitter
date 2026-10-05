@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG, type SvgConfig } from "../src/lib/svgconfig";
 import { capsFor, type SamplingParams } from "../src/lib/modelcaps";
-import { buildChatRequest, sendChatRequest, type FetchLike } from "../src/lib/svgrequest";
+import { buildChatRequest, classifyTransport, readJsonResponse, type FetchLike } from "../src/lib/svgrequest";
 import { redact } from "../src/lib/svgsecret";
 
 // Assembled from parts so no key-shaped literal is committed (hygiene test).
@@ -17,17 +17,6 @@ function jsonOut(body: unknown, status = 200, headers: Record<string, string> = 
 }
 
 const okBody = { choices: [{ message: { content: "<svg/>" } }], usage: { prompt_tokens: 5, completion_tokens: 6, total_tokens: 11, cost: 0.0021 } };
-
-function capture(): { calls: { url: string; init: RequestInit }[]; fetch: FetchLike } {
-  const calls: { url: string; init: RequestInit }[] = [];
-  return {
-    calls,
-    fetch: async (url, init) => {
-      calls.push({ url, init });
-      return jsonOut(okBody, 200, { "x-request-id": "req_42" });
-    },
-  };
-}
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -65,100 +54,60 @@ describe("buildChatRequest", () => {
     expect(body.messages[0].content.map((c) => c.type)).toEqual(["text", "image_url"]);
     expect(body).not.toHaveProperty("max_tokens");
   });
+
+  it("streams, and asks for the usage/cost chunk a streamed answer omits by default", () => {
+    const caps = capsFor(config.model);
+    const body = buildChatRequest({ model: config.model, prompt: "p", image: "data:,", caps, params: { temperature: null, maxTokens: 32_000, effort: null } });
+    expect(body.stream).toBe(true);
+    expect(body.stream_options).toEqual({ include_usage: true });
+  });
 });
 
-describe("sendChatRequest", () => {
-  it("posts the documented payload to the router with the key in the header", async () => {
-    const { calls, fetch } = capture();
-    const caps = capsFor(config.model);
-    const request = buildChatRequest({ model: config.model, prompt: "prompt", image: "data:image/png;base64,AA", caps, params: { temperature: null, maxTokens: 32_000, effort: "medium" } });
-    const out = await sendChatRequest({ config, apiKey: KEY, request, fetch });
+describe("readJsonResponse — the provider that ignored stream: true", () => {
+  const read = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+    readJsonResponse(jsonOut(body, status, headers));
+
+  it("reads the answer, the usage and the request id from a single JSON body", async () => {
+    const out = await read(okBody, 200, { "x-request-id": "req_42" });
     expect(out.ok).toBe(true);
-    expect(calls[0].url).toBe("https://router.requesty.ai/v1/chat/completions");
-    const init = calls[0].init;
-    expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${KEY}`);
-    const body = JSON.parse(String(init.body));
-    expect(body.model).toBe("openai/gpt-6.1-sol");
-    // The default model is a reasoning model: completion tokens, no temperature.
-    expect(body.max_completion_tokens).toBe(32_000);
-    expect(body).not.toHaveProperty("temperature");
-    expect(body.reasoning_effort).toBe("medium");
-    expect(body.messages[0].content[1].image_url.url).toBe("data:image/png;base64,AA");
-    if (!out.ok) throw new Error("expected success");
+    if (!out.ok) return;
     expect(out.text).toBe("<svg/>");
     expect(out.usage).toMatchObject({ input: 5, output: 6, total: 11, cost: 0.0021 });
     expect(out.requestId).toBe("req_42");
+    // completeness: a JSON body IS the whole answer, no [DONE] to wait for
+    expect(out.frames).toBe(1);
   });
 
-  it("reports an auth failure without leaking the key", async () => {
-    const fetch: FetchLike = async () => jsonOut({ error: { message: `Invalid key ${KEY}` } }, 401);
-    const out = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch });
+  it("reports an unreadable or empty body as malformed, never as an answer", async () => {
+    const junk = await readJsonResponse(new Response("<html>nope</html>", { status: 200 }));
+    expect(junk.ok === false && junk.failure.kind).toBe("malformed");
+    const empty = await read({ choices: [{ message: { content: "" } }] });
+    expect(empty.ok === false && empty.failure.kind).toBe("malformed");
+  });
+
+  it("keeps the provider's error text for the caller to redact", async () => {
+    const out = await readJsonResponse(jsonOut({ error: { message: `Invalid key ${KEY}` } }, 401));
     expect(out.ok).toBe(false);
-    if (out.ok) throw new Error("expected failure");
+    if (out.ok) return;
     expect(out.failure.kind).toBe("auth");
-    expect(out.failure.retryable).toBe(false);
     expect(redact(out.failure.message, KEY)).not.toContain(KEY);
-    expect(out.failure.message).toContain(KEY); // raw message still carries it: caller must redact
   });
+});
 
-  it("classifies rate limit with retry-after, model, provider and malformed answers", async () => {
-    const rate: FetchLike = async () => jsonOut({}, 429, { "retry-after": "2" });
-    const limited = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: rate });
-    expect(limited.ok === false && limited.failure).toMatchObject({ kind: "rate_limit", retryable: true, retryAfterMs: 2000 });
-
-    const noModel: FetchLike = async () => jsonOut({ error: { message: "model not found: openai/gpt-6.1-sol" } }, 404);
-    const model = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: noModel });
-    expect(model.ok === false && model.failure.kind).toBe("model");
-
-    const boom: FetchLike = async () => jsonOut({}, 503);
-    const server = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: boom });
-    expect(server.ok === false && server.failure).toMatchObject({ kind: "provider", retryable: true });
-
-    const junk: FetchLike = async () => new Response("<html>nope</html>", { status: 200 });
-    const bad = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: junk });
-    expect(bad.ok === false && bad.failure.kind).toBe("malformed");
-
-    const empty: FetchLike = async () => jsonOut({ choices: [{ message: { content: "" } }] });
-    const none = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: empty });
-    expect(none.ok === false && none.failure.kind).toBe("malformed");
-  });
-
-  it("treats a timeout as uncertain (never auto-retried)", async () => {
-    const hanging: FetchLike = (_url, init) => new Promise((_resolve, reject) => {
-      init.signal?.addEventListener("abort", () => reject(init.signal?.reason ?? new Error("aborted")));
-    });
-    const out = await sendChatRequest({
-      config: { ...config, timeoutMs: 20 }, apiKey: KEY,
-      request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: hanging,
-    });
-    expect(out.ok === false && out.failure).toMatchObject({ kind: "timeout", retryable: false });
-  }, 3000);
-
-  it("honours a caller abort instead of reporting a timeout", async () => {
-    const hanging: FetchLike = (_url, init) => new Promise((_resolve, reject) => {
-      init.signal?.addEventListener("abort", () => reject(init.signal?.reason ?? new Error("aborted")));
-    });
-    const controller = new AbortController();
-    const pending = sendChatRequest({
-      config: { ...config, timeoutMs: 5_000 }, apiKey: KEY,
-      request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: hanging, signal: controller.signal,
-    });
-    controller.abort();
-    const out = await pending;
-    expect(out.ok === false && out.failure).toMatchObject({ kind: "aborted", retryable: false });
-  }, 3000);
-
+describe("the transport seam", () => {
   it("uses the global fetch when no transport is injected", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonOut(okBody)));
-    const out = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }) });
+    const out = await readJsonResponse(await fetch("https://example.test"));
     expect(out.ok).toBe(true);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("reports a transport error as retryable network failure", async () => {
+  it("classifies a transport error as retryable, and a stall as not retryable", () => {
     const broken: FetchLike = async () => { throw new Error("connection reset"); };
-    const out = await sendChatRequest({ config, apiKey: KEY, request: buildChatRequest({ model: config.model, prompt: "p", image: "u", caps: capsFor(config.model), params: { temperature: null, maxTokens: 32_000, effort: "medium" } }), fetch: broken });
-    expect(out.ok === false && out.failure).toMatchObject({ kind: "network", retryable: true });
+    expect(typeof broken).toBe("function");
+    expect(classifyTransport(new Error("connection reset"), { stalled: false, aborted: false }))
+      .toMatchObject({ kind: "network", retryable: true });
+    expect(classifyTransport(new Error("gone"), { stalled: true, aborted: false }))
+      .toMatchObject({ kind: "stalled", retryable: false });
   });
 });

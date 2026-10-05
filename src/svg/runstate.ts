@@ -1,7 +1,9 @@
-// runstate.ts — mapping runner events and post-run state (prompt §4/§17).
-// Owns: turning a RunEvent into row/progress state, re-reading the sidecars
-// after a run so versions and decisions are exact, and the ONE summary line a
-// run reports instead of one toast per file (RULE 5).
+// runstate.ts — mapping runner events and post-run state (prompt §4/§17,
+// 2026-10-05). Owns: turning a RunEvent into row/progress state (including the
+// started-at stamp the strip ticks from and the "unknown" status of a request
+// whose outcome nobody confirmed), re-reading the sidecars after a run so
+// versions and decisions are exact, and the ONE summary line a run reports
+// instead of one toast per file (RULE 5).
 
 import { costText, fmtTokens } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
@@ -23,7 +25,7 @@ export function onRunEvent(event: RunEvent, s: RunSetters): void {
     s.setProgressFn((prev) => ({
       batchId: event.batchId, index: event.index, batches: event.batches, count: event.count, cols: event.cols,
       rows: event.rows, composite: event.composite, hash: event.hash, saved: 0, failed: 0, missing: 0,
-      perRequest: event.perRequest, outcomes: prev?.outcomes ?? [],
+      perRequest: event.perRequest, startedAt: event.startedAt, outcomes: prev?.outcomes ?? [],
     }));
   } else if (event.kind === "batch-done") {
     s.setProgressFn((prev) => (prev
@@ -34,8 +36,11 @@ export function onRunEvent(event: RunEvent, s: RunSetters): void {
       ? { ...r, sidecar: event.sidecar, newest: newestValid(event.sidecar), status: "generated", running: false, error: null }
       : r)));
   } else if (event.kind === "item-failed") {
+    // A stalled request is NOT a failure: the provider may still be generating
+    // it, so the row says "unknown" and keeps the reason (with its id).
+    const status = event.failure === "stalled" ? "unknown" : "failed";
     s.setRowsFn((rows) => rows.map((r) => (r.source.id === event.sourceId
-      ? { ...r, status: "failed", running: false, error: redact(event.error) }
+      ? { ...r, status, running: false, error: redact(event.error) }
       : r)));
   }
 }
@@ -65,6 +70,9 @@ export function summaryLine(summary: RunSummary): string {
   // per-image counters (RULE 4: the run says which request failed).
   const failed = summary.outcomes.filter((o) => o.status === "failed").length;
   if (failed > 0) parts.push(`${failed} request${failed === 1 ? "" : "s"} failed`);
+  if (summary.unknown > 0) {
+    parts.push(`${summary.unknown} request${summary.unknown === 1 ? "" : "s"} outcome unknown (not resent)`);
+  }
   if (summary.cancelled) parts.push("cancelled");
   const cost = costText({ reported: summary.usage.cost, estimated: summary.estimated });
   return `SVG generation: ${parts.join(" · ")} · ${fmtTokens(summary.usage.total)} tokens · ${cost}`;

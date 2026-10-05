@@ -10,7 +10,7 @@ import {
   IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, RETRIES_MAX, RETRIES_MIN, TIMEOUT_MAX_MS, TIMEOUT_MIN_MS,
   clampImagesPerRequest, clampRetries, clampTimeoutMs, modelLabel, type SvgConfig,
 } from "../lib/svgconfig";
-import { effectivePerRequest, limitNote, timeoutLabel } from "../lib/effortlimits";
+import { stallLabel, stallNote } from "../lib/effortlimits";
 import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
@@ -167,7 +167,7 @@ function ProviderFields({ config, onConfig }: { config: SvgConfig; onConfig: (pa
 /** The wait in SECONDS — the same unit every label uses, clamped on change. */
 function WaitField({ config, onConfig }: { config: SvgConfig; onConfig: (patch: Partial<SvgConfig>) => void }) {
   return (
-    <NumberField label="Timeout (s)" testid="svg-timeout" value={Math.round(config.timeoutMs / 1000)}
+    <NumberField label="Stall window (s)" testid="svg-timeout" value={Math.round(config.timeoutMs / 1000)}
       min={TIMEOUT_MIN_MS / 1000} max={TIMEOUT_MAX_MS / 1000}
       onChange={(s) => onConfig({ timeoutMs: clampTimeoutMs(s * 1000) })} />
   );
@@ -178,13 +178,14 @@ function ProviderHead({ provider, config, caps, params, open, onToggleOpen }: {
   provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams;
   open: boolean; onToggleOpen: (open: boolean) => void;
 }) {
-  const perRequest = effectivePerRequest(config.imagesPerRequest, caps, params);
-  const note = limitNote(config.imagesPerRequest, caps, params);
+  // The user's size, never a tier cap; the tier only widens the stall window.
+  const perRequest = clampImagesPerRequest(config.imagesPerRequest);
+  const note = stallNote(config.timeoutMs, caps, params);
   return (
     <div className="svg-provider-top">
       <span><strong data-testid="svg-provider">{provider}</strong> · OpenAI-compatible</span>
       <span data-testid="svg-limits" title={note ?? undefined}>
-        timeout {timeoutLabel(config.timeoutMs, caps, params)} · {config.retries} retries · {perRequest} per request
+        {stallLabel(config.timeoutMs, caps, params)} · {config.retries} retries · {perRequest} per request
       </span>
       <button type="button" className="svg-link" data-testid="svg-provider-toggle" aria-expanded={open}
         aria-label={open ? "Minimize model settings" : "Restore model settings"}

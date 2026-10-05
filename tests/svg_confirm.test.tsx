@@ -97,14 +97,17 @@ afterEach(() => {
 });
 
 describe("SvgConfirm — the whole plan before any request", () => {
-  it("shows the total request count and the per-request limit of the tier", async () => {
+  it("shows the request count at the size the user configured — even at medium effort", async () => {
     await mount({ count: 8, perRequest: 4, effort: "medium" });
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("8");
-    // medium caps a request at 2, so 8 images really are 4 requests
-    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("4");
-    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("2");
+    // 8 images at the configured 4 stay TWO requests of 4 at every tier: the
+    // reasoning level widens the stall window, it never shrinks the batch.
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toBe("2 × 4 max");
     expect(q("[data-testid=svg-confirm-limit]")?.textContent).toContain("medium");
-    expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 4");
+    expect(q("[data-testid=svg-confirm-limit]")?.textContent).toContain("stall window");
+    expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 2");
+    // ...and the dialog says the answer is streamed with no total limit
+    expect(q("[data-testid=svg-confirm-streaming]")?.textContent).toContain("never cut");
   });
 
   it("paginates every batch with its own composite and exact ordered filenames", async () => {

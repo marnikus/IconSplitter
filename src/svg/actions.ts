@@ -7,8 +7,7 @@
 import { useCallback, useRef, type Dispatch } from "react";
 import type { ReviewStatus } from "../lib/svgfile";
 import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
-import { effectivePerRequest } from "../lib/effortlimits";
-import { parseConfig, type SvgConfig } from "../lib/svgconfig";
+import { clampImagesPerRequest, parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
@@ -239,9 +238,12 @@ function planOf(c: SvgCtx, ids: string[]): BatchPlan[] {
   return planBatches(sources, perRequestOf(c));
 }
 
-/** Icons one request may carry: the configured size capped by the effort tier. */
+/**
+ * Icons one request carries: the user's configured size, nothing else. The
+ * reasoning tier changes only how long silence is tolerated (2026-10-05 D1).
+ */
 function perRequestOf(c: SvgCtx): number {
-  return effectivePerRequest(c.m.config.imagesPerRequest, c.m.caps, c.m.params);
+  return clampImagesPerRequest(c.m.config.imagesPerRequest);
 }
 
 /** Why a run cannot start, or null when it can. Never a partial reason. */

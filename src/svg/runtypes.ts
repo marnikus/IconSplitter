@@ -13,15 +13,17 @@ import type { SvgSource } from "./sources";
 
 export type RunEvent =
   | { kind: "run-start"; batches: number; perRequest: number }
-  | { kind: "batch-start"; batchId: string; index: number; count: number; batches: number; perRequest: number; cols: number; rows: number; composite: string; hash: string }
+  | { kind: "batch-start"; batchId: string; index: number; count: number; batches: number; perRequest: number; cols: number; rows: number; composite: string; hash: string; startedAt: number }
   | { kind: "item-start"; batchId: string; position: number; sourceId: string }
   | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; sidecar: SvgSidecar | null }
   | { kind: "item-failed"; batchId: string; position: number; sourceId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
-  | { kind: "request-failed"; batchId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null; count: number }
+  | { kind: "request-failed"; batchId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null; count: number; requestId: string | null }
   | { kind: "batch-done"; report: BatchOutcome }
   | { kind: "cancelled" };
 
 export interface RunArgs {
+  /** One confirmation = one run; the journal uses it to name what was in flight. */
+  runId?: string;
   root: DirHandleLike;
   apiKey: string;
   config: SvgConfig;
@@ -45,6 +47,8 @@ export interface RunSummary {
   failed: number;
   missing: number;
   invalid: number;
+  /** Requests whose outcome could not be confirmed (stalled); never retried. */
+  unknown: number;
   cancelled: boolean;
   usage: Usage;
   /** Sum of the calculated (rate-card) parts; reported money is never merged in. */
@@ -61,12 +65,15 @@ export interface RunState {
   /** How many requests this run has, for the progress line. */
   total: number;
   perRequest: number;
-  /** The wait really used: the configured timeout raised to the tier floor. */
-  timeoutMs: number;
+  /** The wait really used: the configured stall window raised to the tier floor. */
+  stallMs: number;
+  /** One confirmation = one run; written into the journal with every request. */
+  runId: string;
   saved: number;
   failed: number;
   missing: number;
   invalid: number;
+  unknown: number;
   usages: Usage[];
   outcomes: BatchOutcome[];
   problems: string[];

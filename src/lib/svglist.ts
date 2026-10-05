@@ -3,7 +3,7 @@
 // orders the template offers. Rows are reduced to the fields the rules need, so
 // the logic stays testable without a DOM (RULE 3/8) and the UI keeps no rule.
 
-export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed";
+export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
 export type ReviewFilter = "all" | "pending" | "approved" | "declined";
 export type SvgSort = "date" | "name" | "generation" | "review" | "cost";
 
@@ -72,7 +72,7 @@ function compare(a: SvgListRow, b: SvgListRow, sort: SvgSort): number {
 }
 
 const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3 };
-const GEN_RANK: Record<GenFilter, number> = { all: 0, "not-generated": 1, generating: 2, generated: 3, failed: 4 };
+const GEN_RANK: Record<GenFilter, number> = { all: 0, "not-generated": 1, generating: 2, generated: 3, failed: 4, unknown: 5 };
 
 function rank(value: string): number {
   return REVIEW_RANK[value as ReviewFilter] ?? GEN_RANK[value as GenFilter] ?? 0;

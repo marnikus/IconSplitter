@@ -128,8 +128,12 @@ export interface BatchOutcome {
   index: number;
   /** Images the request carried. */
   count: number;
-  /** "failed" only when the request itself failed (no answer to map). */
-  status: "done" | "failed";
+  /**
+   * "failed" when the request itself failed with a confirmed reason; "unknown"
+   * when its outcome could not be confirmed at all (a stall — the provider may
+   * still be working), which must never be reported as a plain failure.
+   */
+  status: "done" | "failed" | "unknown";
   saved: number;
   failed: number;
   missing: number;
@@ -137,6 +141,8 @@ export interface BatchOutcome {
   cost: CostInfo;
   /** Redacted reason when the request failed; null after an answer. */
   error: string | null;
+  /** Wall-clock time the request was in flight, for the run's own record. */
+  elapsedMs: number;
 }
 
 export interface OutcomeInput {
@@ -148,6 +154,9 @@ export interface OutcomeInput {
   missing: number;
   usage: Usage;
   error: string | null;
+  /** true when the error means "no confirmed outcome" rather than a failure. */
+  unknown?: boolean;
+  elapsedMs?: number;
 }
 
 /** The outcome of one request: counts, tokens and the one cost decision. */
@@ -157,12 +166,13 @@ export function batchOutcome(input: OutcomeInput): BatchOutcome {
     id: plan.id,
     index: input.index,
     count: plan.items.length,
-    status: input.error === null ? "done" : "failed",
+    status: input.error === null ? "done" : input.unknown === true ? "unknown" : "failed",
     saved: input.saved,
     failed: input.failed,
     missing: input.missing,
     usage,
     cost: costInfoFor(input.model, usage),
     error: input.error,
+    elapsedMs: Math.max(0, Math.round(input.elapsedMs ?? 0)),
   };
 }

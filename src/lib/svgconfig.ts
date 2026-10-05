@@ -16,11 +16,16 @@ export const DEFAULT_BASE_URL = "https://router.requesty.ai/v1";
 export const DEFAULT_MODEL = "openai/gpt-6.1-sol";
 export const DEFAULT_MODEL_LABEL = "GPT 6.1 Sol";
 
-export const DEFAULT_TIMEOUT_MS = 90_000;
 /**
- * The wait may be configured up to 15 minutes: a high-effort reasoning request
- * is documented to take minutes, and the effort floors in lib/effortlimits
- * (low 120 s, medium 300 s, high 600 s) have to fit inside this range.
+ * The STALL window: the longest silence tolerated between bytes of a stream —
+ * NOT a limit on how long a generation may take. Every delta/keepalive resets
+ * it, so a request that keeps talking runs as long as it needs (prompt
+ * 2026-10-05). The tier floors in lib/effortlimits raise this value.
+ */
+export const DEFAULT_TIMEOUT_MS = 120_000;
+/**
+ * The window may be configured up to 15 minutes: the effort floors (low 120 s,
+ * medium 300 s, high 600 s) have to fit inside this range.
  */
 export const TIMEOUT_MIN_MS = 5_000;
 export const TIMEOUT_MAX_MS = 900_000;

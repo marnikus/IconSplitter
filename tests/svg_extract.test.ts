@@ -226,12 +226,12 @@ describe("svgrequest", () => {
     expect(classifyHttp(429, {}, 4000)).toMatchObject({ kind: "rate_limit", retryable: true, retryAfterMs: 4000 });
     expect(classifyHttp(404, { error: { message: "model not found" } }, null)).toMatchObject({ kind: "model", retryable: false });
     expect(classifyHttp(400, { error: { message: "bad payload" } }, null)).toMatchObject({ kind: "payload", retryable: false });
-    expect(classifyHttp(504, {}, null)).toMatchObject({ kind: "timeout", retryable: false });
+    expect(classifyHttp(504, {}, null)).toMatchObject({ kind: "provider_timeout", retryable: false });
     expect(classifyHttp(503, {}, null)).toMatchObject({ kind: "provider", retryable: true });
     expect(classifyHttp(418, {}, null)).toMatchObject({ kind: "malformed", retryable: false });
-    expect(classifyTransport(new Error("offline"), false, false)).toMatchObject({ kind: "network", retryable: true });
-    expect(classifyTransport(new Error("t"), true, false)).toMatchObject({ kind: "timeout", retryable: false });
-    expect(classifyTransport(null, false, true)).toMatchObject({ kind: "aborted", retryable: false });
+    expect(classifyTransport(new Error("offline"), { stalled: false, aborted: false })).toMatchObject({ kind: "network", retryable: true });
+    expect(classifyTransport(new Error("t"), { stalled: true, aborted: false })).toMatchObject({ kind: "stalled", retryable: false });
+    expect(classifyTransport(null, { stalled: false, aborted: true })).toMatchObject({ kind: "aborted", retryable: false });
   });
 
   it("reads Retry-After as seconds or as an HTTP date", () => {

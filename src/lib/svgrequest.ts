@@ -6,9 +6,8 @@
 // runner, because "never retry blindly when the status is uncertain" is policy,
 // not payload.
 
-import { chatUrl, type SvgConfig } from "./svgconfig";
+import type { SvgConfig } from "./svgconfig";
 import { effortOf, type Effort, type ModelCaps, type SamplingParams } from "./modelcaps";
-import { authHeader } from "./svgsecret";
 import { isRecord } from "./isrecord";
 
 export type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
@@ -30,6 +29,10 @@ export interface ChatRequest {
   max_tokens?: number;
   max_completion_tokens?: number;
   reasoning_effort?: Effort;
+  /** SSE streaming — the only way a long answer survives the proxies. */
+  stream?: boolean;
+  /** Required by Requesty (as by OpenAI) to receive the final usage/cost chunk. */
+  stream_options?: { include_usage: boolean };
 }
 
 export interface BuildArgs {
@@ -51,6 +54,10 @@ export function buildChatRequest(args: BuildArgs): ChatRequest {
   const request: ChatRequest = {
     model,
     messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }],
+    // Stream, and ask for the usage chunk: without it a streamed answer reports
+    // no tokens and no cost at all (docs.requesty.ai — Streaming).
+    stream: true,
+    stream_options: { include_usage: true },
   };
   if (caps.temperature !== null && params.temperature !== null) request.temperature = params.temperature;
   if (params.maxTokens > 0) {
@@ -126,7 +133,9 @@ export function readRetryAfterMs(headers: HeadersLike | undefined): number | nul
   return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
 }
 
-export type FailKind = "auth" | "rate_limit" | "model" | "malformed" | "provider" | "network" | "timeout" | "aborted" | "payload";
+export type FailKind =
+  | "auth" | "rate_limit" | "model" | "malformed" | "provider" | "provider_timeout"
+  | "network" | "stalled" | "aborted" | "payload";
 
 export interface Failure {
   kind: FailKind;
@@ -144,7 +153,9 @@ export function classifyHttp(status: number, body: unknown, retryAfterMs: number
   if (status === 401 || status === 403) return { ...base, kind: "auth", retryable: false };
   if (status === 429) return { ...base, kind: "rate_limit", retryable: true };
   if (status === 404 || status === 400) return { ...base, kind: isModelError(body) ? "model" : "payload", retryable: false };
-  if (status === 408 || status === 504) return { ...base, kind: "timeout", retryable: false };
+  // The provider (or its gateway) gave up: a confirmed timeout, and the
+  // upstream may still be working, so it is never repeated automatically.
+  if (status === 408 || status === 504) return { ...base, kind: "provider_timeout", retryable: false };
   if (status >= 500) return { ...base, kind: "provider", retryable: true };
   return { ...base, kind: "malformed", retryable: false };
 }
@@ -162,13 +173,16 @@ function errorDetail(body: unknown): string {
 }
 
 /**
- * Transport failure. A timeout is deliberately NOT retryable: the provider may
- * already be generating, and blind resending would spend twice (prompt §17).
+ * Transport failure. A stall is deliberately NOT retryable: the provider may
+ * still be generating (and charging) the answer, so resending blind would spend
+ * twice and could leave two SVGs for one source (prompt 2026-10-05, RULE 4/23).
  */
-export function classifyTransport(error: unknown, timedOut: boolean, aborted: boolean): Failure {
-  if (aborted) return { kind: "aborted", message: "cancelled", retryAfterMs: null, retryable: false, status: null };
-  if (timedOut) return { kind: "timeout", message: "request timed out", retryAfterMs: null, retryable: false, status: null };
+export function classifyTransport(error: unknown, state: { stalled: boolean; aborted: boolean }): Failure {
+  if (state.aborted) return { kind: "aborted", message: "cancelled", retryAfterMs: null, retryable: false, status: null };
+  if (state.stalled) return { kind: "stalled", message: "no data arrived — the connection looks dead", retryAfterMs: null, retryable: false, status: null };
   const message = error instanceof Error ? error.message : "network error";
+  // A connection that never established (or was reset before any byte) is safe
+  // to repeat: the provider cannot have started generating yet.
   return { kind: "network", message, retryAfterMs: null, retryable: true, status: null };
 }
 
@@ -183,60 +197,26 @@ export interface SendArgs {
 }
 
 export type SendOut =
-  | { ok: true; text: string; usage: Usage; requestId: string | null; status: number }
+  | { ok: true; text: string; usage: Usage; requestId: string | null; status: number; frames?: number }
   | { ok: false; failure: Failure };
 
-/** One attempt: no retry, no guessing. The caller decides what happens next. */
-export async function sendChatRequest(args: SendArgs): Promise<SendOut> {
-  const doFetch = args.fetch ?? defaultFetch;
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort(new Error("timeout"));
-  }, args.config.timeoutMs);
-  const onAbort = () => controller.abort(args.signal?.reason);
-  args.signal?.addEventListener("abort", onAbort);
-  try {
-    const response = await doFetch(chatUrl(args.config.baseUrl), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: authHeader(args.apiKey) },
-      body: JSON.stringify(args.request),
-      signal: controller.signal,
-    });
-    return await toOut(response);
-  } catch (error) {
-    const aborted = args.signal?.aborted === true;
-    return { ok: false, failure: classifyTransport(error, timedOut, aborted) };
-  } finally {
-    clearTimeout(timer);
-    args.signal?.removeEventListener("abort", onAbort);
-  }
-}
-
-function defaultFetch(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init);
-}
-
-async function toOut(response: Response): Promise<SendOut> {
-  const retryAfterMs = readRetryAfterMs(response.headers);
+/**
+ * A non-streamed answer: either a provider that ignored `stream: true`, or the
+ * JSON error body of a failed request. Completeness is the response itself, so
+ * there is no watchdog here.
+ */
+export async function readJsonResponse(response: Response): Promise<SendOut> {
   const text = await response.text();
-  if (!response.ok) return { ok: false, failure: classifyHttp(response.status, parseJson(text), retryAfterMs) };
   const body = parseJson(text);
+  if (!response.ok) return { ok: false, failure: classifyHttp(response.status, body, readRetryAfterMs(response.headers)) };
   const content = readContent(body);
   if (content === null) {
-    return { ok: false, failure: { kind: "malformed", message: "no message content in response", retryAfterMs, retryable: false, status: response.status } };
+    return { ok: false, failure: { kind: "malformed", message: "no message content in response", retryAfterMs: readRetryAfterMs(response.headers), retryable: false, status: response.status } };
   }
-  return {
-    ok: true,
-    text: content,
-    usage: readUsage(body),
-    requestId: readRequestId(response.headers),
-    status: response.status,
-  };
+  return { ok: true, text: content, usage: readUsage(body), requestId: readRequestId(response.headers), status: response.status, frames: 1 };
 }
 
-function parseJson(text: string): unknown {
+export function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {

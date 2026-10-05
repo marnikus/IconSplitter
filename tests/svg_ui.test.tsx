@@ -223,23 +223,23 @@ describe("Generate SVG panel", () => {
     expect(q("[data-testid=svg-code-dialog]")).toBeNull();
   });
 
-  it("lets the user configure the wait and the retries the timeout hint points at", async () => {
+  it("lets the user configure the stall window and the retries the hint points at", async () => {
     await mount(await makeRoot());
     const limits = () => q("[data-testid=svg-limits]")?.textContent ?? "";
     // the controls exist, are clamped to the documented range, and show the
     // configured value (seconds, so it matches the label)
     const timeout = () => input("[data-testid=svg-timeout]");
-    expect(timeout().value).toBe("90");
+    expect(timeout().value).toBe("120");
     expect(timeout().min).toBe("5");
     expect(timeout().max).toBe("900");
     expect(input("[data-testid=svg-retries]").value).toBe("2");
-    expect(limits()).toContain("timeout 90s");
+    expect(limits()).toContain("120s stall");
     expect(limits()).toContain("2 retries");
 
-    // raising the wait is a real config change: the label follows immediately...
+    // raising the window is a real config change: the label follows immediately...
     await type("[data-testid=svg-timeout]", "400");
     expect(timeout().value).toBe("400");
-    expect(limits()).toContain("timeout 400s");
+    expect(limits()).toContain("400s stall");
 
     // ...a value outside the range is clamped at the moment of change...
     await type("[data-testid=svg-timeout]", "9999");
@@ -249,11 +249,11 @@ describe("Generate SVG panel", () => {
     await type("[data-testid=svg-retries]", "-3");
     expect(input("[data-testid=svg-retries]").value).toBe("0");
 
-    // ...and the tier floor still wins over an impatient configured wait, while
+    // ...and the tier floor still wins over an impatient configured window, while
     // the field keeps showing what the user actually configured
     await type("[data-testid=svg-timeout]", "60");
     await selectEffort("high");
-    expect(limits()).toContain("timeout 600s (high floor)");
+    expect(limits()).toContain("600s stall (high floor)");
     expect(timeout().value).toBe("60");
 
     // the confirmation states the same effective wait as the card
@@ -266,10 +266,10 @@ describe("Generate SVG panel", () => {
     await settle();
     await act(async () => { (q("[data-testid=svg-generate-selected]") as HTMLButtonElement).click(); });
     await settle();
-    expect(q("[data-testid=svg-confirm-timeout]")?.textContent).toContain("600s (high floor)");
+    expect(q("[data-testid=svg-confirm-timeout]")?.textContent).toContain("600s stall (high floor)");
   });
 
-  it("caps one request at EVERY reasoning tier and shows how many requests that is", async () => {
+  it("keeps the user's batch size at EVERY reasoning tier — only the wait changes", async () => {
     await mount(await makeRoot());
     await act(async () => { input("[data-testid=svg-check-all]").click(); });
     await settle();
@@ -280,32 +280,86 @@ describe("Generate SVG panel", () => {
     expect(estimate()).toContain("2 images");
     expect(limits()?.textContent).toContain("4 per request");
     expect(estimate()).toContain("1 request(s)");
-    expect(q("[data-testid=svg-confirm-limit]")).toBeNull(); // no note without a dialog
 
-    // low: the configured size is the limit, and the wait gets its floor
+    // low: the configured size is the size, and the window gets its floor
     await selectEffort("low");
     expect(limits()?.textContent).toContain("4 per request");
-    expect(limits()?.textContent).toContain("120s (low floor)");
+    expect(limits()?.textContent).toContain("120s stall");
     expect(estimate()).toContain("1 request(s)");
 
-    // medium caps a request at 2 icons: those two images still fit in one...
+    // medium: the window widens, the batch does NOT shrink
     await selectEffort("medium");
-    expect(limits()?.textContent).toContain("2 per request");
-    expect(limits()?.textContent).toContain("300s (medium floor)");
-    expect(limits()?.getAttribute("title")).toContain("medium");
+    expect(limits()?.textContent).toContain("4 per request");
+    expect(limits()?.textContent).toContain("300s stall (medium floor)");
+    expect(estimate()).toContain("2 images");
     expect(estimate()).toContain("1 request(s)");
 
-    // ...high caps it at 1, so each icon becomes its own request...
+    // high: a big window for a long think, still one request of the user's size
     await selectEffort("high");
-    expect(limits()?.textContent).toContain("1 per request");
-    expect(limits()?.textContent).toContain("600s (high floor)");
-    expect(estimate()).toContain("2 request(s)");
+    expect(limits()?.textContent).toContain("4 per request");
+    expect(limits()?.textContent).toContain("600s stall (high floor)");
+    expect(estimate()).toContain("1 request(s)");
 
-    // ...and extra high splits the same way, with its own floor label
+    // xhigh: same size, its own floor label
     await selectEffort("xhigh");
-    expect(limits()?.textContent).toContain("1 per request");
-    expect(limits()?.textContent).toContain("600s (xhigh floor)");
-    expect(estimate()).toContain("2 request(s)");
+    expect(limits()?.textContent).toContain("4 per request");
+    expect(limits()?.textContent).toContain("600s stall (xhigh floor)");
+    expect(estimate()).toContain("1 request(s)");
+  });
+
+  it("comes back from a restart with the unfinished request named, never auto-resent", async () => {
+    const root = await makeRoot();
+    // The journal the last session left: one request with an UNCONFIRMED outcome.
+    window.localStorage.setItem("iconSplitter.svg.inflight.v1", JSON.stringify({
+      v: 1,
+      requests: [{
+        runId: "run_past_1", batchId: "batch_1_2", index: 1,
+        sourceIds: [FOG, COURT], sourceNames: ["fog_AI.png", "court_AI.png"],
+        model: "openai/gpt-6.1-sol", startedAt: new Date(Date.now() - 600_000).toISOString(),
+        requestId: "req_stalled_9",
+      }],
+    }));
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    // The panel's boot may read the model list; a GENERATION must not happen.
+    const sends = () => fetcher.mock.calls.filter(([url]) => String(url).includes("chat/completions"));
+    await mount(root);
+
+    // The panel says what is unknown, names the request id and stresses that
+    // nothing was resent. The rows show "Unknown" — never "Failed".
+    expect(q("[data-testid=svg-inflight]")).not.toBeNull();
+    const note = q("[data-testid=svg-inflight-note]")?.textContent ?? "";
+    expect(note).toContain("req_stalled_9");
+    expect(note).toContain("Nothing has been resent");
+    expect(q(`[data-testid=svg-status-${FOG}]`)?.textContent).toContain("Unknown");
+    expect(q(`[data-testid=svg-status-${FOG}]`)?.textContent).not.toContain("Failed");
+    expect(sends()).toHaveLength(0);
+
+    // Retrying is the USER's decision and goes through the normal confirmation;
+    // with no key stored it is refused instead of silently doing anything.
+    await act(async () => { (q("[data-testid=svg-inflight-retry]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(q("[data-testid=svg-confirm]")).toBeNull();
+    expect(q("[data-testid=svg-toast]")?.textContent).toContain("API key");
+
+    await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
+    await settle();
+    await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "recovery_key_4321"));
+    await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
+    await settle();
+    await act(async () => { (q("[data-testid=svg-inflight-retry]") as HTMLButtonElement).click(); });
+    await settle();
+    // the confirmation offers exactly those sources, and still sends nothing
+    expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
+    expect(sends()).toHaveLength(0);
+    await act(async () => { (q("[data-testid=svg-confirm-cancel]") as HTMLButtonElement).click(); });
+    await settle();
+
+    // Dismissing acknowledges the note: the banner and the journal entry go.
+    await act(async () => { (q("[data-testid=svg-inflight-dismiss]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(q("[data-testid=svg-inflight]")).toBeNull();
+    expect(window.localStorage.getItem("iconSplitter.svg.inflight.v1")).toBeNull();
   });
 
   it("confirms before sending and never sends twice", async () => {
@@ -388,7 +442,7 @@ describe("Generate SVG panel", () => {
     // Only the header stays: the model, its limits and the toggle itself.
     expect(toggle().getAttribute("aria-expanded")).toBe("false");
     expect(q("[data-testid=svg-provider]")?.textContent).toContain("Requesty");
-    expect(q("[data-testid=svg-limits]")?.textContent).toContain("timeout");
+    expect(q("[data-testid=svg-limits]")?.textContent).toContain("stall");
     expect(q("[data-testid=svg-max-tokens]")).toBeNull();
     expect(q("[data-testid=svg-key-state]")).toBeNull();
 

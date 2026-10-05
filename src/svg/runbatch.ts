@@ -1,17 +1,25 @@
 // runbatch.ts — ONE request of a generation run, start to finish (prompt
-// §3/§4/§17): build the contact sheet, send the composite with the batch
-// manifest, map every returned block back to its source by name (never by
-// guess), save each valid result as the next version, record the request's own
-// status/tokens/cost, and isolate its failure from every other request. A
-// position the provider skipped stays pending; an invalid result is recorded
-// as a failed version. The whole request is retried only when the failure is
-// retryable, and a timeout is never retried because its outcome is unknown.
+// §3/§4/§17; long-generation prompt 2026-10-05): build the contact sheet, send
+// the composite STREAMED with the batch manifest, journal it while it is in
+// flight, keep the provider's request id, map every returned block back to its
+// source by name (never by guess), save each valid result as the next version,
+// record the request's own status/tokens/cost, and isolate its failure from
+// every other request.
+//
+// The wait is a stall window, never a total timeout: as long as bytes arrive
+// the request runs, and a request that goes silent is reported as outcome
+// UNKNOWN (the provider may still be generating and billing it) with its id —
+// it is NEVER resent automatically, because a resend could be a duplicate
+// charge. Only a failure the provider itself confirmed may be retried.
 
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
-import { timeoutHint } from "../lib/effortlimits";
+import { stallHint } from "../lib/effortlimits";
+import { chatUrl } from "../lib/svgconfig";
 import { batchPrompt, singlePrompt } from "../lib/svgprompt";
 import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
-import { buildChatRequest, sendChatRequest, type Failure, type Usage } from "../lib/svgrequest";
+import { buildChatRequest, type Failure, type Usage } from "../lib/svgrequest";
+import { sendChatStreaming } from "../lib/svgstreamread";
+import { attachRequestId, beginRequest, endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
@@ -24,7 +32,10 @@ import type { RunState } from "./runtypes";
 export async function runBatch(state: RunState, plan: BatchPlan, index: number): Promise<void> {
   const items = plan.items.map((i) => state.args.sources.find((s) => s.id === i.sourceId)).filter(isSource);
   if (items.length === 0) return;
-  const ctx = newBatchCtx({ state, plan, index, items, hash: "", usage: null, share: null, error: null });
+  const ctx = newBatchCtx({
+    state, plan, index, items, startedAt: Date.now(),
+    hash: "", usage: null, share: null, error: null, requestId: null, unsettled: false,
+  });
   const composite = await tryComposite(ctx);
   if (composite === null) return finishBatch(ctx); // nothing was sent: every item is already failed
   announceStart(ctx, composite);
@@ -40,6 +51,7 @@ function announceStart(ctx: BatchCtx, built: BuiltComposite): void {
   state.args.onEvent({
     kind: "batch-start", batchId: plan.id, index, count: items.length, batches: state.total,
     perRequest: state.perRequest, cols: plan.cols, rows: plan.rows, composite: built.dataUrl, hash: built.hash,
+    startedAt: ctx.startedAt,
   });
 }
 
@@ -51,6 +63,8 @@ interface BatchCtx {
   index: number;
   items: SvgSource[];
   tally: Tally;
+  /** When this request was announced, for its elapsed time. */
+  startedAt: number;
   hash: string;
   /** The request's own usage, exactly as the provider reported it. */
   usage: Usage | null;
@@ -58,6 +72,10 @@ interface BatchCtx {
   share: Usage | null;
   /** Redacted reason the request failed; null after an answer. */
   error: string | null;
+  /** Provider request id, from the header or the stream; null until known. */
+  requestId: string | null;
+  /** true when there was no confirmed outcome (a stall) — never a plain failure. */
+  unsettled: boolean;
 }
 
 interface Tally {
@@ -87,12 +105,17 @@ function finishBatch(ctx: BatchCtx): void {
     plan, index, model: state.args.config.model,
     saved: tally.saved, failed: tally.failed, missing: tally.missing,
     usage: ctx.usage ?? zeroUsage(), error: ctx.error,
+    unknown: ctx.unsettled, elapsedMs: Date.now() - ctx.startedAt,
   });
+  // Saved, failed or cancelled: this request has a confirmed outcome, so its
+  // journal note is done with. A STALL keeps its note on purpose — nobody has
+  // confirmed anything about it, and the next boot must say so.
+  if (!ctx.unsettled) endRequest(plan.id);
   state.outcomes.push(report);
   state.args.onEvent({ kind: "batch-done", report });
 }
 
-interface SendOk { ok: true; text: string; usage: Usage }
+interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
 
 async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<SendOk | SendBad> {
@@ -103,23 +126,47 @@ async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<Send
     model: state.args.config.model, prompt, image: composite.dataUrl,
     caps: state.args.caps, params: state.args.params,
   });
-  const config = { ...state.args.config, timeoutMs: state.timeoutMs };
-  for (let attempt = 0; attempt <= config.retries; attempt++) {
+  journalRequest(ctx);
+  for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
     if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
-    const out = await sendChatRequest({ config, apiKey: state.args.apiKey, request, signal: state.args.signal });
-    if (out.ok) return { ok: true, text: out.text, usage: out.usage };
-    if (!out.failure.retryable || attempt === config.retries) {
-      return { ok: false, error: failureText(state, out.failure), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
+    const out = await sendChatStreaming({
+      url: chatUrl(state.args.config.baseUrl), body: request, apiKey: state.args.apiKey,
+      signal: state.args.signal, stallMs: state.stallMs, onId: (id) => rememberId(ctx, id),
+    });
+    if (out.ok) {
+      // A non-streamed answer carries no stream `id:`; keep the header id it does have.
+      if (out.requestId !== null && ctx.requestId === null) ctx.requestId = out.requestId;
+      return { ok: true, text: out.text, usage: out.usage, requestId: ctx.requestId };
+    }
+    if (!out.failure.retryable || attempt === state.args.config.retries) {
+      return { ok: false, error: failureText(state, out.failure, ctx), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
     }
     await delay(out.failure.retryAfterMs ?? backoff(attempt), state.args.signal);
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
 }
 
-/** The user-facing reason: redacted, and for a timeout it names the tier and the fix. */
-function failureText(state: RunState, failure: Failure): string {
-  if (failure.kind !== "timeout") return redact(failure.message, state.args.apiKey);
-  return timeoutHint(state.args.caps, state.args.params, state.timeoutMs);
+/** The request is about to be sent: the journal names it until it has an outcome. */
+function journalRequest(ctx: BatchCtx): void {
+  const { state, plan, items } = ctx;
+  beginRequest({
+    runId: state.runId, batchId: plan.id, index: ctx.index,
+    sourceIds: items.map((i) => i.id), sourceNames: items.map((i) => i.name),
+    model: state.args.config.model, startedAt: new Date(ctx.startedAt).toISOString(),
+  });
+}
+
+/** The id is written the moment it arrives — the journal, then the record. */
+function rememberId(ctx: BatchCtx, id: string): void {
+  if (ctx.requestId === null) ctx.requestId = id;
+  attachRequestId(ctx.plan.id, id);
+}
+
+/** The user-facing reason: redacted; a stall names the window and the id. */
+function failureText(state: RunState, failure: Failure, ctx: BatchCtx): string {
+  if (failure.kind !== "stalled") return redact(failure.message, state.args.apiKey);
+  const id = ctx.requestId === null ? "" : ` Provider request id: ${ctx.requestId}.`;
+  return stallHint(state.args.caps, state.args.params, state.stallMs) + id;
 }
 
 async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
@@ -152,7 +199,7 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   const args: SaveArgs = {
     root: state.args.root, source: item, code, prompt: state.args.prompt,
     provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
-    usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: null, sidecar,
+    usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, sidecar,
   };
   const out = await saveSvgVersion(args);
   if (!out.ok) return rejectOne(ctx, item, position, out.error);
@@ -202,13 +249,17 @@ async function persist(state: RunState, item: SvgSource, sidecar: SvgSidecar | n
 
 function failBatch(ctx: BatchCtx, error: string, kind: Failure["kind"], retryAfterMs: number | null): void {
   ctx.error = error;
+  // A stall has no confirmed outcome: the provider may still be working on it,
+  // so it is counted as unknown (and never retried), not as a plain failure.
+  ctx.unsettled = kind === "stalled";
+  if (ctx.unsettled) ctx.state.unknown += 1;
   for (const item of ctx.items) {
     ctx.tally.failed++;
     ctx.state.failed++;
     ctx.state.problems.push(`${item.name}: ${error}`);
     ctx.state.args.onEvent({ kind: "item-failed", batchId: ctx.plan.id, position: 0, sourceId: item.id, error, failure: kind, retryAfterMs });
   }
-  ctx.state.args.onEvent({ kind: "request-failed", batchId: ctx.plan.id, error, failure: kind, retryAfterMs, count: ctx.items.length });
+  ctx.state.args.onEvent({ kind: "request-failed", batchId: ctx.plan.id, error, failure: kind, retryAfterMs, count: ctx.items.length, requestId: ctx.requestId });
 }
 
 function isSource(value: SvgSource | undefined): value is SvgSource {

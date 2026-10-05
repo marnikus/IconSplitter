@@ -13,6 +13,7 @@ import { loadSvgPrefs } from "./prefsstore";
 import { useSvgCtx } from "./ctx";
 import { useSvgModel, type SvgModel, type ViewPrefs } from "./statemodel";
 import { useSvgActions, type SvgActions, type SvgCtx } from "./actions";
+import { useInflightRecovery, type Recovery } from "./recovery";
 
 /** What the panel sees: the model plus every action, flattened (RULE 24). */
 export type SvgGenApi = SvgModel & SvgActions & {
@@ -28,6 +29,8 @@ export type SvgGenApi = SvgModel & SvgActions & {
   requests: number;
   refs: SvgCtx["refs"];
   dispatch: SvgCtx["dispatch"];
+  /** What the last session left in flight; nothing is ever resent on its own. */
+  recovery: Recovery;
 };
 
 export function useSvgGen(): SvgGenApi {
@@ -35,10 +38,11 @@ export function useSvgGen(): SvgGenApi {
   const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs);
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
+  const recovery = useInflightRecovery(model.rows, ctx.setRowsFn, actions.requestGenerate);
   const { visible, checked, activeId, header, affected, totals, provider, requests, refs } = ctx;
   return {
     ...model, ...actions, supported: fsSupported(), provider, visible,
-    checked, activeId, header, affected, totals, requests, refs, dispatch,
+    checked, activeId, header, affected, totals, requests, refs, dispatch, recovery,
   };
 }
 

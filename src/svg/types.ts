@@ -6,7 +6,12 @@ import type { SvgSidecar, SvgVersion } from "../lib/svgfile";
 import type { BatchOutcome } from "../lib/svgbatch";
 import type { SvgSource } from "./sources";
 
-export type RowStatus = "not-generated" | "generating" | "generated" | "failed";
+/**
+ * "unknown" is not a failure: a stalled/interrupted request may still be
+ * generating (and charged) at the provider, so the honest state is "we do not
+ * know" until the user retries it deliberately (prompt 2026-10-05).
+ */
+export type RowStatus = "not-generated" | "generating" | "generated" | "failed" | "unknown";
 
 /** One list row: the approved source plus everything known about its SVGs. */
 export interface SvgRow {
@@ -38,6 +43,8 @@ export interface RunProgress {
   saved: number;
   failed: number;
   missing: number;
+  /** When this request started, so the strip can tick the elapsed time. */
+  startedAt: number;
   /** Icons one request was allowed to carry in this run. */
   perRequest: number;
   /** One outcome per finished request, in request order. */

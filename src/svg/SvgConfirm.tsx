@@ -1,6 +1,7 @@
 // SvgConfirm.tsx — the confirmation that must precede any send (prompt §2/§3/
-// §16): the selected count, the REQUEST count at the size the selected
-// reasoning level allows, the provider and sampling facts, and one page per
+// §16): the selected count, the REQUEST count at the size the USER configured
+// (the reasoning level never shrinks it — 2026-10-05), the provider and
+// sampling facts, and one page per
 // batch with that page's own contact sheet, its ordered `position — name`
 // manifest and its empty cells. Opening it sends nothing; every page's
 // composite is built in memory when the page is first shown and cached for the
@@ -8,7 +9,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
-import { effectivePerRequest, limitNote, timeoutLabel } from "../lib/effortlimits";
+import { stallLabel, stallNote } from "../lib/effortlimits";
+import { clampImagesPerRequest } from "../lib/svgconfig";
 import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
@@ -61,7 +63,7 @@ interface ConfirmPlan {
 /** The whole split, computed once per dialog — the runner uses the same maths. */
 function useConfirmPlan(p: SvgConfirmProps): ConfirmPlan {
   const picked = useMemo(() => p.rows.filter((r) => p.ids.includes(r.source.id)), [p.rows, p.ids]);
-  const perRequest = effectivePerRequest(p.config.imagesPerRequest, p.caps, p.params);
+  const perRequest = clampImagesPerRequest(p.config.imagesPerRequest);
   const plans = useMemo(() => planBatches(picked.map((r) => toBatchSource(r.source)), perRequest), [picked, perRequest]);
   const problems = validateBatchPlan(plans, perRequest);
   const [page, setPage] = useState(0);
@@ -92,14 +94,15 @@ function Actions({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
 
 /** The facts a confirmation must state before anything is sent. */
 function Facts({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
-  const note = limitNote(p.config.imagesPerRequest, p.caps, p.params);
+  const note = stallNote(p.config.timeoutMs, p.caps, p.params);
   return (
     <div className="svg-facts">
       <Fact label="Selected images" value={String(plan.picked.length)} testid="svg-confirm-count" />
       <Fact label="Requests" value={`${plan.plans.length} × ${plan.perRequest} max`} testid="svg-confirm-requests" />
       <Fact label="Provider / model" value={p.config.model} testid="svg-confirm-model" />
       <Fact label="Model settings" value={paramsLabel(p.caps, p.params)} testid="svg-confirm-sampling" />
-      <Fact label="Wait per request" value={timeoutLabel(p.config.timeoutMs, p.caps, p.params)} testid="svg-confirm-timeout" />
+      <Fact label="Stall window" value={stallLabel(p.config.timeoutMs, p.caps, p.params)} testid="svg-confirm-timeout" />
+      <Fact label="Streaming" value="on — a live request is never cut, however long it runs" testid="svg-confirm-streaming" />
       {note !== null && <p className="svg-note warn" data-testid="svg-confirm-limit">{note}</p>}
     </div>
   );
@@ -204,9 +207,11 @@ function Composite({ state }: { state: CompositeState }) {
 function PolicyNote() {
   return (
     <p className="svg-note">
-      The saved local prompt is sent with every request. Existing SVG versions are never overwritten —
-      each result is saved as the next version. A rate limit reports its retry-after delay, and nothing
-      is resent while a request&apos;s outcome is unknown.
+      The saved local prompt is sent with every request, streamed so the connection cannot be cut for
+      being idle. Existing SVG versions are never overwritten — each result is saved as the next
+      version. A rate limit reports its retry-after delay; a request that goes silent for the whole
+      stall window is reported as outcome unknown with its request id and is never resent, because a
+      resend could be a duplicate charge. The batch size above is exactly what you configured.
     </p>
   );
 }

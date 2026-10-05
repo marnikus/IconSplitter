@@ -132,7 +132,33 @@ function Banners({ g }: { g: SvgGenApi }) {
       `${corrupt} sidecar(s) could not be parsed.`,
       " The SVG files on disk are untouched — regenerate to record a new version."),
   ].filter((n): n is Note => n !== null);
-  return <>{notes.map((n) => <Banner key={n.id} note={n} />)}</>;
+  return (
+    <>
+      <Inflight g={g} />
+      {notes.map((n) => <Banner key={n.id} note={n} />)}
+    </>
+  );
+}
+
+/**
+ * What the previous session left without a confirmed outcome. It is a decision
+ * for the user, never an automatic resend: retrying goes through the normal
+ * confirmation, and dismissing only forgets the note.
+ */
+function Inflight({ g }: { g: SvgGenApi }) {
+  const recovery = g.recovery;
+  if (recovery.requests.length === 0) return null;
+  return (
+    <p className="svg-warning" data-testid="svg-inflight">
+      ⚠ <strong data-testid="svg-inflight-note">{recovery.note}</strong>
+      <button type="button" className="svg-btn tiny" data-testid="svg-inflight-retry" onClick={recovery.retry}>
+        Retry these ({recovery.ids.length})
+      </button>
+      <button type="button" className="svg-btn tiny" data-testid="svg-inflight-dismiss" onClick={recovery.dismiss}>
+        Dismiss
+      </button>
+    </p>
+  );
 }
 
 interface Note { id: string; strong: string; rest: string }

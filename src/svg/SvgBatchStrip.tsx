@@ -1,13 +1,17 @@
-// SvgBatchStrip.tsx — the live run strip (prompt §3/§14/§17): the contact sheet
-// the request in flight was built from, the request's place in the run, and one
-// line per finished request with ITS status, tokens and cost — so a partial
-// failure can be traced to a single request. The composites live in memory
-// only and are never written into the SVG output folder. The strip stays after
-// a run ends (that record is the answer to "what did this cost, what failed"),
-// and Cancel only exists while something is actually in flight.
+// SvgBatchStrip.tsx — the live run strip (prompt §3/§14/§17, 2026-10-05): the
+// contact sheet the request in flight was built from, the request's place in
+// the run, a TICKING elapsed time so a long request cannot look frozen, and one
+// line per finished request with ITS status, elapsed, tokens and cost — so a
+// partial failure or an unknown outcome can be traced to a single request. The
+// composites live in memory only and are never written into the SVG output
+// folder. The strip stays after a run ends (that record is the answer to "what
+// did this cost, what failed"), and Cancel only exists while something is in
+// flight — cancelling keeps everything already saved.
 
+import { fmtElapsed } from "../lib/svgclock";
 import { costLabel, fmtTokens } from "../lib/svgusage";
 import type { BatchOutcome } from "../lib/svgbatch";
+import Elapsed from "./Elapsed";
 import type { RunProgress } from "./types";
 
 export interface SvgBatchStripProps {
@@ -27,6 +31,7 @@ export default function SvgBatchStrip({ progress, running, onCancel }: SvgBatchS
           request {progress.index} of {progress.batches} · {progress.cols}×{progress.rows} grid · {progress.count} image(s)
         </span>
         <span data-testid="svg-batch-counts">{progress.saved} saved · {progress.failed} failed · {progress.missing} missing</span>
+        <Elapsed startedAt={progress.startedAt} running={running} testid="svg-batch-elapsed" />
         <span className="svg-masked">hash {progress.hash.slice(0, 12)}</span>
       </div>
       <Outcomes outcomes={progress.outcomes} />
@@ -35,7 +40,7 @@ export default function SvgBatchStrip({ progress, running, onCancel }: SvgBatchS
   );
 }
 
-/** One line per finished request: its own counts, tokens and cost. */
+/** One line per finished request: its own counts, elapsed, tokens and cost. */
 function Outcomes({ outcomes }: { outcomes: BatchOutcome[] }) {
   if (outcomes.length === 0) return null;
   return (
@@ -49,5 +54,7 @@ function line(o: BatchOutcome): string {
   const counts = [`${o.saved} saved`];
   if (o.failed > 0) counts.push(`${o.failed} failed`);
   if (o.missing > 0) counts.push(`${o.missing} missing`);
-  return `#${o.index} ${o.id} · ${counts.join(" · ")} · ${fmtTokens(o.usage.total)} tokens · ${costLabel(o.cost)}`;
+  if (o.status === "unknown") counts.push("outcome unknown");
+  return `#${o.index} ${o.id} · ${counts.join(" · ")} · ${fmtElapsed(o.elapsedMs)} · `
+    + `${fmtTokens(o.usage.total)} tokens · ${costLabel(o.cost)}`;
 }

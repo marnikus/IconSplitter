@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
 import { providerLabel } from "../lib/svgconfig";
 import { requestCount } from "../lib/svgbatch";
-import { effectivePerRequest } from "../lib/effortlimits";
+import { clampImagesPerRequest } from "../lib/svgconfig";
 import { usageTotals } from "../lib/svglist";
 import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
@@ -160,9 +160,10 @@ function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" 
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const affected = useMemo(() => visible.filter((r) => checked.includes(r.source.id)).map((r) => r.source.id), [visible, checked]);
   // The same size the confirmation and the runner use — shown before any send.
+  // The effort tier is deliberately absent: it never shrinks the batch.
   const requests = useMemo(
-    () => requestCount(checked.length, effectivePerRequest(model.config.imagesPerRequest, model.caps, model.params)),
-    [checked.length, model.config.imagesPerRequest, model.caps, model.params],
+    () => requestCount(checked.length, clampImagesPerRequest(model.config.imagesPerRequest)),
+    [checked.length, model.config.imagesPerRequest],
   );
   return { visible, totals, header, affected, requests };
 }
