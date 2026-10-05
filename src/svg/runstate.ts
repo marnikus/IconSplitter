@@ -1,7 +1,5 @@
-// runstate.ts — mapping runner events and post-run state (prompt §4/§17).
-// Owns: turning a RunEvent into row/progress state, re-reading the sidecars
-// after a run so versions and decisions are exact, and the ONE summary line a
-// run reports instead of one toast per file (RULE 5).
+// runstate.ts — map runner events and reload persisted rows after generation.
+// Owns the event-to-UI projection and the single honest completion summary.
 
 import { costText, fmtTokens } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
@@ -51,10 +49,21 @@ export async function reloadSidecars(refs: SvgRefs, sources: SvgSource[], s: Run
   }
 }
 
-/** The single honest line a finished run reports (RULE 2/4). */
+/** One completion line, with failed/uncertain outcomes and a safe detail. */
 export function summaryLine(summary: RunSummary): string {
-  const parts = [`${summary.saved} saved`, `${summary.invalid} invalid`, `${summary.missing} missing`];
+  const parts = [`${summary.saved} saved`, ...failureParts(summary), `${summary.invalid} invalid`, `${summary.missing} missing`];
   if (summary.cancelled) parts.push("cancelled");
+  if (summary.problems[0]) parts.push(`Detail: ${summary.problems[0]}`);
   const cost = costText({ reported: summary.usage.cost, estimated: summary.estimated });
   return `SVG generation: ${parts.join(" · ")} · ${fmtTokens(summary.usage.total)} tokens · ${cost}`;
+}
+
+function failureParts(summary: RunSummary): string[] {
+  const parts: string[] = [];
+  if (summary.failed > 0) parts.push(summary.failed === 1 ? "1 request failed" : `${summary.failed} requests failed`);
+  if (summary.uncertain > 0) {
+    const count = summary.uncertain === 1 ? "1 request outcome" : `${summary.uncertain} request outcomes`;
+    parts.push(`${count} unknown — not retried`);
+  }
+  return parts;
 }

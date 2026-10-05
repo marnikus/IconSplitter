@@ -237,6 +237,8 @@ describe("Generate SVG panel", () => {
     await settle();
     expect(q("[data-testid=svg-confirm]")).not.toBeNull();
     expect(q("[data-testid=svg-confirm]")?.textContent).toContain("batch");
+    expect(q("[data-testid=svg-confirm]")?.textContent).toContain("contact sheets built from these selected images to Requesty");
+    expect(q("[data-testid=svg-confirm]")?.textContent).toContain("check Requesty usage");
     // The confirmation states the sampling values that will be sent.
     expect(q("[data-testid=svg-confirm-sampling]")?.textContent).toContain("no temperature");
     expect(q("[data-testid=svg-confirm-sampling]")?.textContent).toContain("32 000 max tokens");

@@ -99,6 +99,8 @@ export interface FailArgs {
   error: string;
   sidecar: SvgSidecar | null;
   status?: "failed" | "interrupted";
+  completedAt?: string | null;
+  requestId?: string | null;
   usage?: Usage;
   batch?: BatchRef | null;
 }
@@ -118,13 +120,13 @@ export function recordFailure(args: FailArgs): SvgVersion {
     provider: args.provider,
     model: args.model,
     requestedAt: args.requestedAt,
-    completedAt: new Date().toISOString(),
+    completedAt: args.completedAt === undefined ? new Date().toISOString() : args.completedAt,
     usage: args.usage ? { input: args.usage.input, output: args.usage.output, total: args.usage.total } : { input: null, output: null, total: null },
     cost: costInfoFor(args.model, args.usage ?? NO_USAGE),
     validation: { ok: false, errors: [args.error], warnings: [], icons: 0 },
     batch: args.batch ?? null,
     error: args.error,
-    requestId: null,
+    requestId: args.requestId ?? null,
   };
 }
 

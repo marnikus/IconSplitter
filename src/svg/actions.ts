@@ -261,7 +261,8 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
   ctx.dispatch({ type: "progress", progress: null });
   ctx.refs.abort.current = null;
   await reloadSidecars(ctx.refs, sources, ctx);
-  ctx.say(summaryLine(summary), summary.saved === 0 && summary.problems.length > 0);
+  const hasFailure = summary.failed > 0 || summary.invalid > 0 || summary.missing > 0 || summary.problems.length > 0;
+  ctx.say(summaryLine(summary), hasFailure);
 }
 
 /** One selection gesture = one entry holding the whole selection (RULE 12). */

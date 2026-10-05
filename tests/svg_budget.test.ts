@@ -57,7 +57,7 @@ describe("timeoutMsFor — the wall clock a batch is allowed", () => {
     expect(timeoutMsFor("low", 1, 20_000)).toBe(20_000);
   });
 
-  it("never waits past the provider's gateway limit", () => {
+  it("never waits past the app safety ceiling", () => {
     expect(timeoutMsFor("high", 9, 90_000)).toBe(TIMEOUT_CEILING_MS);
     expect(timeoutMsFor("xhigh", 4, 90_000)).toBe(TIMEOUT_CEILING_MS);
   });
@@ -68,34 +68,34 @@ describe("timeoutMsFor — the wall clock a batch is allowed", () => {
 });
 
 describe("imagesPerRequestFor — a batch that can still finish", () => {
-  it("keeps the user's batch at low effort and shrinks it as thinking grows", () => {
+  it("uses the observed safe per-request size at each effort, within the user's setting", () => {
     expect(imagesPerRequestFor("low", 4, 90_000)).toBe(4);
-    expect(imagesPerRequestFor("low", 9, 90_000)).toBe(9);
-    expect(imagesPerRequestFor("medium", 4, 90_000)).toBe(4);
-    expect(imagesPerRequestFor("high", 4, 90_000)).toBe(3);
+    expect(imagesPerRequestFor("low", 9, 90_000)).toBe(4);
+    expect(imagesPerRequestFor("medium", 4, 90_000)).toBe(2);
+    expect(imagesPerRequestFor("high", 4, 90_000)).toBe(1);
     expect(imagesPerRequestFor("xhigh", 4, 90_000)).toBe(1);
     expect(imagesPerRequestFor(null, 4, 90_000)).toBe(4);
   });
 
-  it("never plans an empty or out-of-range batch", () => {
+  it("never plans an empty or above-tier batch", () => {
     expect(imagesPerRequestFor("high", 0, 90_000)).toBe(1);
-    expect(imagesPerRequestFor("low", 99, 90_000)).toBe(9);
+    expect(imagesPerRequestFor("low", 99, 90_000)).toBe(4);
   });
 });
 
 describe("requestBudgetFor — the one budget a run is sent with", () => {
   it("derives all three numbers from the effort and the user's settings", () => {
     expect(requestBudgetFor("medium", BASE)).toEqual({
-      effort: "medium", imagesPerRequest: 4, maxTokens: 64_000, timeoutMs: 90_000,
+      effort: "medium", imagesPerRequest: 2, maxTokens: 64_000, timeoutMs: 90_000,
     });
     expect(requestBudgetFor("high", BASE)).toEqual({
-      effort: "high", imagesPerRequest: 3, maxTokens: 128_000, timeoutMs: 90_000,
+      effort: "high", imagesPerRequest: 1, maxTokens: 128_000, timeoutMs: 90_000,
     });
   });
 
   it("states the timeout a FULL batch is allowed, for the dialog and the limits line", () => {
     expect(budgetFor("medium", BASE)).toEqual({
-      effort: "medium", imagesPerRequest: 4, maxTokens: 64_000, timeoutMs: 360_000,
+      effort: "medium", imagesPerRequest: 2, maxTokens: 64_000, timeoutMs: 180_000,
     });
     expect(budgetFor("low", BASE)).toEqual({
       effort: "low", imagesPerRequest: 4, maxTokens: 32_000, timeoutMs: 180_000,

@@ -287,14 +287,22 @@ describe("runner events and the review decision", () => {
 
   it("summarises a run in one line with the real usage", () => {
     const line = summaryLine({
-      batches: 2, saved: 3, failed: 1, missing: 0, invalid: 1, cancelled: false,
+      batches: 2, saved: 3, failed: 1, uncertain: 0, missing: 0, invalid: 1, cancelled: false,
       usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" }, estimated: null, problems: [],
     });
-    expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500 reported");
+    expect(line).toBe("SVG generation: 3 saved · 1 request failed · 1 invalid · 0 missing · 3,000 tokens · $0.0500 reported");
     expect(summaryLine({
-      batches: 1, saved: 0, failed: 0, missing: 0, invalid: 0, cancelled: true, estimated: 0.02,
+      batches: 1, saved: 0, failed: 0, uncertain: 0, missing: 0, invalid: 0, cancelled: true, estimated: 0.02,
       usage: { input: null, output: null, total: null, cost: null, currency: "USD" }, problems: [],
     })).toContain("$0.0200 Estimated");
+    const uncertain = summaryLine({
+      batches: 1, saved: 0, failed: 1, uncertain: 1, missing: 0, invalid: 0, cancelled: false, estimated: null,
+      usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
+      problems: ["fog_AI.png: request timed out"],
+    });
+    expect(uncertain).toContain("outcome unknown");
+    expect(uncertain).toContain("not retried");
+    expect(uncertain).toContain("request timed out");
   });
 
   it("approves the newest version of every named source and pushes ONE entry", async () => {

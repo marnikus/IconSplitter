@@ -54,11 +54,7 @@ function ConfirmDialog({ ids, batches, perRequest, p }: { ids: string[]; batches
         <div className="svg-modal-body">
           <Facts ids={ids.length} batches={batches} perRequest={perRequest} model={p.config.model}
             sampling={paramsLabel(p.caps, p.params)} />
-          <p className="svg-note">
-            The saved local prompt is sent with every request. Existing SVG versions are never overwritten —
-            each result is saved as the next version. A rate limit reports its retry-after delay, and nothing
-            is resent while a request&apos;s outcome is unknown.
-          </p>
+          <ConfirmNotice />
           <Manifest plans={plans} />
           <CompositePreview p={p} picked={picked} perRequest={perRequest} />
           <div className="svg-modal-actions">
@@ -68,6 +64,19 @@ function ConfirmDialog({ ids, batches, perRequest, p }: { ids: string[]; batches
         </div>
       </section>
     </div>
+  );
+}
+
+/** Honest disclosure of outbound content and safe retry behavior. */
+function ConfirmNotice() {
+  return (
+    <p className="svg-note">
+      Generate now sends the saved prompt and contact sheets built from these selected images to Requesty;
+      no unrelated folder files are sent. Existing SVG versions are never overwritten — each result is
+      saved as the next version. A rate limit reports its retry-after delay. The app never automatically
+      resends an attempt with unknown outcome. If a row says outcome unknown, check Requesty usage (and
+      the request ID if available) before manually trying again.
+    </p>
   );
 }
 

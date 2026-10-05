@@ -33,7 +33,7 @@ React + Vite + TypeScript browser app.
 | 17 | One current doc, dated archive | docs | PIA RULE 17 |
 | 18 | Ideal sizes: write for the reader's context budget | quality | PIA RULE 18 |
 | 19 | Fix complexity before size (nesting → CC → cognitive → size) | quality | PIA RULE 19 |
-| 20 | Privacy & compliance: images never leave the browser | compliance | PIA RULE 20 — ToS adapted |
+| 20 | Privacy & compliance: local processing with explicit provider opt-in | compliance | PIA RULE 20 — ToS adapted |
 | 21 | Selector priority: semantic > structural > class fragment | quality | PIA RULE 21 |
 | 22 | Export output must be traceable to its source | data | PIA RULE 22 — correlation token |
 | 23 | Delivery is atomic; never a partial file | data | PIA RULE 23 — atomic save |
@@ -296,9 +296,10 @@ Baseline at adoption (2026-09-30): `src/App.tsx` = 598 lines, `src/lib/detect.ts
 
 Verify after every step: the existing suite must stay green, because steps 1–3 must be behaviour-preserving.
 
-## RULE 20 — Privacy & compliance: images never leave the browser
+## RULE 20 — Privacy & compliance: local processing with explicit provider opt-in
 
-* The app processes user-provided images **entirely client-side**. Image bytes and exports must never be uploaded anywhere: no network calls with image data, no third-party analytics that see content. The app must remain fully functional offline (the single-file build proves it).
+* Sheets, batch splitting and review process user images entirely client-side; their image bytes and exports are not uploaded. The app has no third-party content analytics and remains usable offline for those local workflows.
+* Generate SVG is the explicit opt-in exception: only after the user confirms, the app sends contact sheets made from the selected approved images and the saved prompt to the configured Requesty endpoint. No unrelated folder files are sent. The confirmation names what is sent; prompts, image data, SVG content, paths and API keys must never appear in logs, reports or exports. The configured Requesty generation call is the user-invoked product feature, not analytics or telemetry.
 * Respect copyright: the user is responsible for owning the sheets they process; the app never fetches images from URLs the user has not provided.
 * Object URLs created from user files are revoked when no longer needed.
 

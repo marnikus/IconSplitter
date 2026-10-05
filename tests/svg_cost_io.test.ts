@@ -13,7 +13,7 @@ import { DEFAULT_PARAMS, capsFor } from "../src/lib/modelcaps";
 import { recordFailure, saveSvgVersion } from "../src/svg/saveversion";
 import { loadSidecar, saveSidecar } from "../src/svg/sidecar";
 import { toListRow, toRow } from "../src/svg/rowmodel";
-import { runGeneration } from "../src/svg/runner";
+import { runGeneration, type RunEvent } from "../src/svg/runner";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
@@ -178,25 +178,25 @@ describe("cost in the sidecar", () => {
 });
 
 describe("runGeneration request budget (reasoning effort)", () => {
-  it("keeps the user's batch at medium effort and sends the room the reasoning is paid out of", async () => {
+  it("splits medium effort into the observed two-image requests", async () => {
     stubCanvas();
-    const answer = [source, courtSource].map((s) => block(s.stem, "<path d=\"M2 2h20v20H2z\"/>")).join("\n");
+    const selected = [source, courtSource, keepSource];
+    const answer = selected.map((s) => block(s.stem, "<path d=\"M2 2h20v20H2z\"/>")).join("\n");
     const { bodies } = stubFetchCapture(answer, { prompt_tokens: 40, completion_tokens: 80, total_tokens: 120, cost: 0.04, currency: "USD" });
     const sidecars = new Map();
     const summary = await runGeneration({
       root: root(), apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 4, retries: 0 },
       caps: capsFor(DEFAULT_CONFIG.model), params: { ...DEFAULT_PARAMS, effort: "medium" },
-      prompt: "p", sources: [source, courtSource], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
+      prompt: "p", sources: selected, sidecars, signal: new AbortController().signal, onEvent: () => undefined,
     });
-    expect(summary.saved).toBe(2);
-    // 4 images per request is still what medium effort may carry...
-    expect(bodies).toHaveLength(1);
-    // ...and the ceiling is the user's 32 000 plus the medium reasoning share.
+    expect(summary.saved).toBe(3);
+    expect(summary.batches).toBe(2);
+    expect(bodies).toHaveLength(2);
     expect(bodies[0].max_completion_tokens).toBe(64_000);
     expect(bodies[0].reasoning_effort).toBe("medium");
   });
 
-  it("shrinks the batch when high effort cannot finish a full one inside the gateway limit", async () => {
+  it("uses one image per high-effort request, matching the observed safe batch size", async () => {
     stubCanvas();
     const all = [source, courtSource, keepSource, laneSource];
     const answer = all.map((s) => block(s.stem, "<path d=\"M2 2h20v20H2z\"/>")).join("\n");
@@ -208,8 +208,9 @@ describe("runGeneration request budget (reasoning effort)", () => {
       prompt: "p", sources: all, sidecars, signal: new AbortController().signal, onEvent: () => undefined,
     });
     expect(summary.saved).toBe(4);
-    // 4 images at high effort would outlive the gateway limit: 3 + 1 instead.
-    expect(bodies).toHaveLength(2);
+    // A high-effort request carries one image; the four-image selection is 1+1+1+1.
+    expect(bodies).toHaveLength(4);
+    expect(summary.batches).toBe(4);
     expect(bodies[0].max_completion_tokens).toBe(128_000);
   });
 
@@ -226,28 +227,156 @@ describe("runGeneration request budget (reasoning effort)", () => {
       onEvent: (e) => { if (e.kind === "item-failed") problems.push(e.error); },
     });
     expect(summary.saved).toBe(0);
+    expect(summary.usage.total).toBe(32_900);
     expect(problems).toEqual([TRUNCATED_MESSAGE]);
+  });
+
+  it("records a lost terminal event as interrupted, preserves the old SVG, and does not resend", async () => {
+    stubCanvas();
+    const dir = root();
+    const previous = await saveSvgVersion({ ...saveArgs(), root: dir });
+    if (!previous.ok) throw new Error("fixture SVG should save");
+    await saveSidecar(dir, source, previous.sidecar);
+    const arch = await dir.getDirectoryHandle("architecture");
+    const svgHandle = await arch.getFileHandle("fog_AI.svg");
+    const before = await (await svgHandle.getFile()).text();
+    const partial = `data: ${JSON.stringify({ choices: [{ delta: { content: "<svg>partial" }, finish_reason: null }] })}\n\n`;
+    const fetch = vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode(partial)); controller.close(); },
+    }), { status: 200, headers: { "content-type": "text/event-stream", "x-request-id": "req_lost_done" } }));
+    vi.stubGlobal("fetch", fetch);
+    const sidecars = new Map([[source.id, previous.sidecar]]);
+    const events: RunEvent[] = [];
+    const summary = await runGeneration({
+      root: dir, apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 4, retries: 2 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: { ...DEFAULT_PARAMS, effort: "high" },
+      prompt: "p", sources: [source], sidecars, signal: new AbortController().signal, onEvent: (event) => events.push(event),
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(summary).toMatchObject({ saved: 0, failed: 1, uncertain: 1, batches: 1 });
+    expect(events.find((event) => event.kind === "request-failed")).toMatchObject({
+      kind: "request-failed", requestId: "req_lost_done", outcome: "unknown", count: 1,
+    });
+    const attempts = sidecars.get(source.id)?.versions ?? [];
+    expect(attempts.map((v) => v.status)).toEqual(["generated", "interrupted"]);
+    expect(attempts[1]).toMatchObject({ requestId: "req_lost_done", completedAt: null });
+    expect(attempts[1].error).toContain("outcome unknown");
+    expect(attempts[1].error).toContain("not retried");
+    expect(summary.problems[0]).toContain("req_lost_done");
+    expect(await (await (await arch.getFileHandle("fog_AI.svg")).getFile()).text()).toBe(before);
+  });
+
+  it("retries a confirmed terminal 429 only after that response, then saves the next attempt", async () => {
+    stubCanvas();
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        status: 429, headers: { "content-type": "application/json", "retry-after": "0" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: block("fog_AI", '<path d="M2 2h20v20H2z"/>') }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 } }), {
+        status: 200, headers: { "content-type": "application/json", "x-request-id": "req_after_limit" },
+      }));
+    vi.stubGlobal("fetch", fetch);
+    const sidecars = new Map();
+    const summary = await runGeneration({
+      root: root(), apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 1 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS, prompt: "p", sources: [source], sidecars,
+      signal: new AbortController().signal, onEvent: () => undefined,
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(summary).toMatchObject({ saved: 1, failed: 0, uncertain: 0 });
+    expect(sidecars.get(source.id)?.versions[0].requestId).toBe("req_after_limit");
+  });
+
+  it("keeps a confirmed 429 as the result when the user aborts during its retry delay", async () => {
+    stubCanvas();
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+      status: 429, headers: { "content-type": "application/json", "retry-after": "0.05", "x-request-id": "req_rate_limited" },
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 5);
+    const sidecars = new Map();
+    const summary = await runGeneration({
+      root: root(), apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 2 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS, prompt: "p", sources: [source], sidecars,
+      signal: controller.signal, onEvent: () => undefined,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(summary).toMatchObject({ saved: 0, failed: 1, uncertain: 0, cancelled: true });
+    expect(sidecars.get(source.id)?.versions[0]).toMatchObject({ status: "failed", requestId: "req_rate_limited" });
+    expect(sidecars.get(source.id)?.versions[0].error).toContain("retry after 1 s");
+    expect(sidecars.get(source.id)?.versions[0].completedAt).not.toBeNull();
+  });
+
+  it("persists one uncertain upstream timeout to every item without retrying", async () => {
+    stubCanvas();
+    const privatePrompt = "A private prompt long enough to redact";
+    const apiKey = "private-secret-value";
+    const diagnostics = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: { message: `upstream timed out for architecture/fog_AI.png: ${privatePrompt}; key ${apiKey}` } }), {
+      status: 503, headers: { "content-type": "application/json", "x-request-id": "req_batch_timeout" },
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const sidecars = new Map();
+    const events: RunEvent[] = [];
+    const summary = await runGeneration({
+      root: root(), apiKey, config: { ...DEFAULT_CONFIG, imagesPerRequest: 2, retries: 2 },
+      caps: capsFor(DEFAULT_CONFIG.model), params: { ...DEFAULT_PARAMS, effort: "medium" },
+      prompt: privatePrompt, sources: [source, courtSource], sidecars,
+      signal: new AbortController().signal, onEvent: (event) => events.push(event),
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(summary).toMatchObject({ saved: 0, failed: 1, uncertain: 1, batches: 1 });
+    expect(events.find((event) => event.kind === "request-failed")).toMatchObject({ kind: "request-failed", failure: "timeout", count: 2, requestId: "req_batch_timeout", outcome: "unknown" });
+    for (const item of [source, courtSource]) {
+      expect(sidecars.get(item.id)?.versions[0]).toMatchObject({ status: "interrupted", requestId: "req_batch_timeout", completedAt: null });
+      expect(sidecars.get(item.id)?.versions[0].error).toContain("not retried");
+    }
+    const safeLog = diagnostics.mock.calls.map(([, record]) => String(record)).join(" ");
+    expect(safeLog).toContain("upstream timed out");
+    expect(safeLog).toContain("[prompt omitted]");
+    expect(safeLog).toContain("[source]");
+    for (const privateValue of [privatePrompt, "architecture/fog_AI.png", apiKey]) {
+      expect(safeLog).not.toContain(privateValue);
+      expect(summary.problems.join(" ")).not.toContain(privateValue);
+    }
   });
 });
 
 describe("runGeneration cost plumbing", () => {
   it("stores exactly the cost the response reported for a single-image request", async () => {
     stubCanvas();
+    const diagnostics = vi.spyOn(console, "info").mockImplementation(() => undefined);
     stubFetch(block("fog_AI", "<path d=\"M2 2h20v20H2z\"/>"), { prompt_tokens: 1000, completion_tokens: 2000, total_tokens: 3000, cost: 0.06, currency: "USD" });
     const dir = root();
     const sidecars = new Map();
     const summary = await runGeneration({
-      root: dir, apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0 },
+      root: dir, apiKey: "private-secret-value", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0 },
       caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS,
-      prompt: "p", sources: [source], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
+      prompt: "PRIVATE_PROMPT_SHOULD_NOT_LOG", sources: [source], sidecars, signal: new AbortController().signal, onEvent: () => undefined,
     });
     expect(summary.saved).toBe(1);
     const stored = sidecars.get(source.id);
     const version = stored?.versions[0];
     expect(version?.usage).toEqual({ input: 1000, output: 2000, total: 3000 });
+    expect(version?.requestId).toBe("req_1");
+    expect(version?.requestedAt).not.toBe("");
+    expect(version?.completedAt).not.toBeNull();
     expect(version?.cost).toEqual({
       actual: 0.06, estimated: null, currency: "USD", pricing: PRICING_VERSION, basis: "provider",
     });
+    const records = diagnostics.mock.calls.map(([, record]) => JSON.parse(String(record)) as Record<string, unknown>);
+    expect(records.map((record) => record.kind)).toEqual(["request", "svg-parse", "save"]);
+    expect(records[0]).toMatchObject({ kind: "request", requestId: "req_1", status: 200, outcome: "complete", inputTokens: 1000, outputTokens: 2000 });
+    expect(records[1]).toMatchObject({ kind: "svg-parse", blocks: 1, matched: 1 });
+    expect(records[1].durationMs).toBeGreaterThanOrEqual(0);
+    expect(records[2]).toMatchObject({ kind: "save", position: 1, outcome: "saved" });
+    expect(records[2].durationMs).toBeGreaterThanOrEqual(0);
+    expect(records[2].sidecarMs).toBeGreaterThanOrEqual(0);
+    const safeLog = JSON.stringify(records);
+    expect(safeLog).not.toContain("PRIVATE_PROMPT_SHOULD_NOT_LOG");
+    expect(safeLog).not.toContain("private-secret-value");
+    expect(safeLog).not.toContain("architecture/fog_AI.png");
     // the number on disk is the number the request reported
     const reloaded = await loadSidecar(dir, source);
     expect(reloaded.sidecar?.versions[0].cost.actual).toBe(0.06);

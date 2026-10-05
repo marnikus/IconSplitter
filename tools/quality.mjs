@@ -33,13 +33,21 @@ function srcFiles() {
   return out.trim().split("\n").filter(Boolean).sort();
 }
 
+// git's empty tree: the honest base when no commit to compare against exists.
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/** Best comparison point: merge-base, then HEAD~1, else the empty tree. */
+function diffBase() {
+  for (const cmd of ["git merge-base origin/main HEAD", "git rev-parse HEAD~1"]) {
+    try {
+      return execSync(cmd, { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch { /* try the next base */ }
+  }
+  return EMPTY_TREE; // single-commit checkout: gate every tracked file
+}
+
 function changedFiles() {
-  let base = "HEAD~1";
-  try {
-    base = execSync("git merge-base origin/main HEAD", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
-      .toString().trim();
-  } catch { /* no origin/main — fall back to HEAD~1 */ }
-  const diff = execSync(`git diff --name-only ${base}`, { cwd: ROOT }).toString().trim();
+  const diff = execSync(`git diff --name-only ${diffBase()}`, { cwd: ROOT }).toString().trim();
   const unstaged = execSync("git diff --name-only HEAD", { cwd: ROOT }).toString().trim();
   // Untracked files never appear in git diff — detect them explicitly,
   // so a brand-new over-line file cannot slip past --changed.

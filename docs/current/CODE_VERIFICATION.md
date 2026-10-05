@@ -48,9 +48,11 @@ lines + ratchet so legacy hotspots stay lintable.
 node tools/quality.mjs --changed --allow-legacy
 ```
 
-- Checks only files changed vs merge-base `origin/main` (fallback `HEAD~1`),
-  including **untracked new files** (`git ls-files --others`) so a brand-new
-  over-line file cannot slip past.
+- Checks only files changed vs merge-base `origin/main` (fallback `HEAD~1`;
+  a checkout with no parent commit compares against git's empty tree, so every
+  tracked file is gated rather than the gate crashing), including **untracked
+  new files** (`git ls-files --others`) so a brand-new over-line file cannot
+  slip past.
 - Hard fail lines (new code): function LOC > 30, params > 4, CC > 10,
   nesting > 4, new file > 300 lines.
 - **Baseline ratchet:** `tools/quality_baseline.json` records per-file line

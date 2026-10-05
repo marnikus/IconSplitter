@@ -1,33 +1,29 @@
-// runner.ts — the batched generation run (prompt §2/§4/§8/§17).
-// Owns: turning the selection into batches, sending one composite request per
-// batch, mapping every returned SVG back to its source, saving valid results,
-// reporting partial failures, and honouring cancellation. It never overwrites
-// an existing version, never retries a request whose outcome is unknown, and
-// never guesses a mapping — an unmatched or duplicate result is reported.
+// runner.ts — the batched SVG-generation policy and request lifecycle.
+// Owns budgets, retries, request diagnostics, cancellation and run summaries;
+// per-source parsing, sidecar writes and save timings live in runitems.ts.
 
-import { batchManifest, batchRefOf, planBatches, type BatchPlan, type BatchSource } from "../lib/svgbatch";
+import { batchManifest, planBatches, type BatchPlan, type BatchSource } from "../lib/svgbatch";
 import { batchPrompt, singlePrompt } from "../lib/svgprompt";
-import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
-import { buildChatRequest, NO_USAGE, sendChatRequest, type Failure, type Usage } from "../lib/svgrequest";
+import { buildChatRequest, sendChatRequest, type Failure, type SendOut, type Usage } from "../lib/svgrequest";
 import { requestBudgetFor, timeoutMsFor, type RequestBudget } from "../lib/svgbudget";
-import { allocateUsage, sumUsage } from "../lib/svgusage";
+import { sumUsage } from "../lib/svgusage";
 import { sumEstimated } from "../lib/svgpricing";
 import { redact } from "../lib/svgsecret";
+import { logSvgDiagnostic, safeSvgErrorText } from "../lib/svgdiagnostics";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { DirHandleLike } from "../lib/fs";
-import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
 import { buildComposite, type BuiltComposite } from "./composite";
-import { recordFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
-import { saveSidecar } from "./sidecar";
 import { toBatchSource, type SvgSource } from "./sources";
+import { failBatch, newBatchCtx, saveMatches, type BatchFailureInfo, type BatchCtx, type CompletedBatchResponse } from "./runitems";
+import type { SvgSidecar } from "../lib/svgfile";
 
 export type RunEvent =
   | { kind: "batch-start"; batchId: string; count: number; batches: number; cols: number; rows: number; composite: string; hash: string }
   | { kind: "item-start"; batchId: string; position: number; sourceId: string }
   | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; sidecar: SvgSidecar | null }
   | { kind: "item-failed"; batchId: string; position: number; sourceId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
-  | { kind: "request-failed"; batchId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null; count: number }
+  | { kind: "request-failed"; batchId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null; count: number; requestId: string | null; outcome: Failure["outcome"] }
   | { kind: "batch-done"; batchId: string; saved: number; failed: number; missing: number }
   | { kind: "cancelled" };
 
@@ -49,21 +45,42 @@ export interface RunArgs {
 export interface RunSummary {
   batches: number;
   saved: number;
+  /** Number of terminal request/batch failures, not affected source rows. */
   failed: number;
+  /** Failed requests whose provider-side completion or charge is uncertain. */
+  uncertain: number;
   missing: number;
   invalid: number;
   cancelled: boolean;
   usage: Usage;
-  /** Sum of the calculated (rate-card) parts; reported money is never merged in. */
   estimated: number | null;
   /** Per-source error lines, already redacted. */
   problems: string[];
 }
 
+export interface RunState {
+  args: RunArgs;
+  total: number;
+  budget: RequestBudget;
+  saved: number;
+  failed: number;
+  uncertain: number;
+  missing: number;
+  invalid: number;
+  usages: Usage[];
+  problems: string[];
+}
+
+interface AttemptLogInput {
+  state: RunState;
+  plan: BatchPlan;
+  request: ReturnType<typeof buildChatRequest>;
+  out: SendOut;
+  attempt: number;
+  images: number;
+}
+
 export async function runGeneration(args: RunArgs): Promise<RunSummary> {
-  // One derived budget per run: the reasoning effort decides how much room the
-  // answer gets, how long it may take, and how many images one request carries
-  // (lib/svgbudget — a flat budget cut 3-4 icons short at medium effort).
   const budget = requestBudgetFor(args.params.effort, {
     images: args.config.imagesPerRequest, maxTokens: args.params.maxTokens,
     timeoutMs: args.config.timeoutMs, tokenCeiling: args.caps.maxTokens.max,
@@ -77,203 +94,152 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
     }
     await runBatch(state, plan);
   }
+  return summarize(state, plans.length);
+}
+
+function newRunState(args: RunArgs, total: number, budget: RequestBudget): RunState {
+  return { args, total, budget, saved: 0, failed: 0, uncertain: 0, missing: 0, invalid: 0, usages: [], problems: [] };
+}
+
+function summarize(state: RunState, batches: number): RunSummary {
   return {
-    batches: plans.length,
-    saved: state.saved,
-    failed: state.failed,
-    missing: state.missing,
-    invalid: state.invalid,
-    cancelled: args.signal.aborted,
-    usage: sumUsage(state.usages),
-    estimated: sumEstimated(args.config.model, state.usages),
+    batches, saved: state.saved, failed: state.failed, uncertain: state.uncertain,
+    missing: state.missing, invalid: state.invalid, cancelled: state.args.signal.aborted,
+    usage: sumUsage(state.usages), estimated: sumEstimated(state.args.config.model, state.usages),
     problems: state.problems,
   };
 }
 
-interface Tally {
-  saved: number;
-  failed: number;
-  missing: number;
-}
-
-interface RunState {
-  args: RunArgs;
-  /** How many batches this run has, for the progress line. */
-  total: number;
-  /** The derived request budget every batch of this run is sent with. */
-  budget: RequestBudget;
-  saved: number;
-  failed: number;
-  missing: number;
-  invalid: number;
-  usages: Usage[];
-  problems: string[];
-}
-
-function newRunState(args: RunArgs, total: number, budget: RequestBudget): RunState {
-  return { args, total, budget, saved: 0, failed: 0, missing: 0, invalid: 0, usages: [], problems: [] };
-}
-
 async function runBatch(state: RunState, plan: BatchPlan): Promise<void> {
-  const items = plan.items.map((i) => state.args.sources.find((s) => s.id === i.sourceId)).filter(isSvgSource);
+  const items = plan.items.map((item) => state.args.sources.find((source) => source.id === item.sourceId)).filter(isSvgSource);
   if (items.length === 0) return;
-  const ctx = newBatchCtx({ state, plan, items, hash: "", usage: null });
+  const ctx = newBatchCtx(state, plan, items);
   const composite = await tryComposite(ctx);
-  if (composite === null) return; // nothing was sent: every item is already failed
+  if (composite === null) return;
   announceStart(ctx, composite);
   ctx.hash = composite.hash;
-  const sent = await sendBatch(state, plan, items, composite);
-  if (!sent.ok) failBatch(ctx, sent.error, sent.failure, sent.retryAfterMs);
-  else await saveMatches(ctx, sent.text, sent.usage);
+  const sent = await sendBatch(ctx, composite);
+  if (sent.ok) await saveMatches(ctx, completedResponse(sent));
+  else await failBatch(ctx, failureInfo(sent));
   state.args.onEvent({ kind: "batch-done", batchId: plan.id, ...ctx.tally });
 }
 
 function announceStart(ctx: BatchCtx, built: BuiltComposite): void {
-  const { state, plan, items } = ctx;
-  state.args.onEvent({
-    kind: "batch-start", batchId: plan.id, count: items.length, batches: ctx.state.total,
-    cols: plan.cols, rows: plan.rows, composite: built.dataUrl, hash: built.hash,
+  ctx.state.args.onEvent({
+    kind: "batch-start", batchId: ctx.plan.id, count: ctx.items.length, batches: ctx.state.total,
+    cols: ctx.plan.cols, rows: ctx.plan.rows, composite: built.dataUrl, hash: built.hash,
   });
-}
-
-/** Everything the per-batch writers need, so no writer takes seven params. */
-interface BatchCtx {
-  state: RunState;
-  plan: BatchPlan;
-  items: SvgSource[];
-  tally: Tally;
-  hash: string;
-  /** This batch's usage split across its images (an estimate by construction). */
-  usage: Usage | null;
-}
-
-function newBatchCtx(ctx: Omit<BatchCtx, "tally">): BatchCtx {
-  return { ...ctx, tally: { saved: 0, failed: 0, missing: 0 } };
 }
 
 /** A composite that cannot be built must produce no request at all. */
 async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
   try {
     return await buildComposite(ctx.state.args.root, ctx.items);
-  } catch (error) {
-    failBatch(ctx, `composite failed: ${message(error)}`, "payload", null);
+  } catch {
+    const failure: Failure = {
+      kind: "payload", message: "contact-sheet construction failed; no request was sent",
+      retryAfterMs: null, retryable: false, outcome: "confirmed", status: null,
+    };
+    await failBatch(ctx, { error: failure.message, failure, requestId: null, usage: null, requestedAt: ctx.requestedAt });
     return null;
   }
 }
 
-interface SendOk { ok: true; text: string; usage: Usage }
-interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
-
-async function sendBatch(state: RunState, plan: BatchPlan, items: SvgSource[], composite: BuiltComposite): Promise<SendOk | SendBad> {
-  const manifest = batchManifest(plan.items);
-  const prompt = items.length === 1 ? singlePrompt(state.args.prompt, items[0].stem) : batchPrompt(state.args.prompt, manifest);
-  const request = buildChatRequest({
-    model: state.args.config.model, prompt, image: composite.dataUrl,
-    caps: state.args.caps,
-    // The ceiling carries back the room the chosen effort spends on reasoning.
-    params: { ...state.args.params, maxTokens: state.budget.maxTokens },
-  });
-  // Wall clock scales with the batch: a 4-image composite is four answers.
+async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<SendOut> {
+  const { state, plan, items } = ctx;
+  const request = batchRequest(ctx, composite);
   const config = {
     ...state.args.config,
     timeoutMs: timeoutMsFor(state.budget.effort, items.length, state.budget.timeoutMs),
   };
-  for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
-    if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
+  let attempt = 0;
+  while (true) {
     const out = await sendChatRequest({ config, apiKey: state.args.apiKey, request, signal: state.args.signal });
-    if (out.ok) return { ok: true, text: out.text, usage: out.usage };
-    if (!out.failure.retryable || attempt === state.args.config.retries) {
-      return { ok: false, error: redact(out.failure.message, state.args.apiKey), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
-    }
+    logAttempt({ state, plan, request, out, attempt: attempt + 1, images: items.length });
+    if (out.ok || !safeToRetry(out.failure) || attempt >= config.retries) return out;
     await delay(out.failure.retryAfterMs ?? backoff(attempt), state.args.signal);
-  }
-  return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
-}
-
-async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
-  const matched = matchBlocks(extractSvgBlocks(text), batchManifest(ctx.plan.items));
-  ctx.state.usages.push(usage);
-  ctx.usage = allocateUsage(usage, ctx.items.length);
-  for (const item of ctx.items) {
-    const position = ctx.plan.items.find((i) => i.sourceId === item.id)?.position ?? 0;
-    const code = matched.byPosition.get(position);
-    if (code === undefined) await missOne(ctx, item, position);
-    else await saveOne(ctx, item, position, code);
+    if (state.args.signal.aborted) return out;
+    attempt++;
   }
 }
 
-
-/** A position the provider did not answer stays pending — never guessed at. */
-async function missOne(ctx: BatchCtx, item: SvgSource, position: number): Promise<void> {
-  const { state, plan, tally } = ctx;
-  tally.missing++;
-  state.missing++;
-  state.problems.push(`${item.name}: no SVG returned for position ${position}`);
-  state.args.onEvent({ kind: "item-failed", batchId: plan.id, position, sourceId: item.id, error: "no SVG returned for this position", failure: "malformed", retryAfterMs: null });
-}
-
-async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: string): Promise<void> {
-  const { state, plan } = ctx;
-  state.args.onEvent({ kind: "item-start", batchId: plan.id, position, sourceId: item.id });
-  const sidecar = state.args.sidecars.get(item.id) ?? null;
-  const usage = ctx.usage ?? NO_USAGE;
-  const args: SaveArgs = {
-    root: state.args.root, source: item, code, prompt: state.args.prompt,
-    provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
-    usage, batch: batchRefOf(plan, position, ctx.hash), requestId: null, sidecar,
-  };
-  const out = await saveSvgVersion(args);
-  if (!out.ok) return rejectOne(ctx, item, position, out.error);
-  ctx.tally.saved++;
-  state.saved++;
-  const stored = await persist(ctx.state, item, out.sidecar);
-  state.args.onEvent({ kind: "item-saved", batchId: plan.id, position, sourceId: item.id, version: out.version, icons: out.icons, warnings: out.warnings, usage, sidecar: stored });
-}
-
-/** An invalid result is recorded, never written as a successful version. */
-async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error: string): Promise<void> {
-  const sidecar = ctx.state.args.sidecars.get(item.id) ?? null;
-  const { state, plan } = ctx;
-  ctx.tally.failed++;
-  state.invalid++;
-  state.problems.push(`${item.name}: ${error}`);
-  // A charged attempt keeps its share of the usage, and a source without a
-  // sidecar gets one so no task can vanish without its cost.
-  const rec = recordFailure({
-    source: item, prompt: state.args.prompt, provider: "Requesty", model: state.args.config.model,
-    requestedAt: new Date().toISOString(), error, sidecar, usage: ctx.usage ?? NO_USAGE,
+function batchRequest(ctx: BatchCtx, composite: BuiltComposite): ReturnType<typeof buildChatRequest> {
+  const manifest = batchManifest(ctx.plan.items);
+  const prompt = ctx.items.length === 1
+    ? singlePrompt(ctx.state.args.prompt, ctx.items[0].stem)
+    : batchPrompt(ctx.state.args.prompt, manifest);
+  return buildChatRequest({
+    model: ctx.state.args.config.model, prompt, image: composite.dataUrl,
+    caps: ctx.state.args.caps,
+    params: { ...ctx.state.args.params, maxTokens: ctx.state.budget.maxTokens },
   });
-  const next = withVersion(sidecar ?? newSidecar({ relPath: item.relPath, name: item.name, fingerprint: item.fingerprint }), rec);
-  await persist(state, item, next);
-  state.args.onEvent({ kind: "item-failed", batchId: plan.id, position, sourceId: item.id, error, failure: "malformed", retryAfterMs: null });
 }
 
-/** Writes the sidecar and keeps the in-memory copy in step (RULE 24). */
-async function persist(state: RunState, item: SvgSource, sidecar: SvgSidecar | null): Promise<SvgSidecar | null> {
-  if (!sidecar) return null;
-  state.args.sidecars.set(item.id, sidecar);
-  try {
-    await saveSidecar(state.args.root, item, sidecar);
-  } catch {
-    state.problems.push(`${item.name}: sidecar could not be written — the SVG is saved, retry the save`);
-  }
-  return sidecar;
+function logAttempt(input: AttemptLogInput): void {
+  const { state, plan, request, out, attempt, images } = input;
+  logSvgDiagnostic({
+    kind: "request", traceId: requestTraceId(), batchId: plan.id, attempt,
+    model: state.args.config.model, effort: request.reasoning_effort ?? null, images,
+    maxTokens: tokenCeiling(request),
+    timeoutMs: timeoutMsFor(state.budget.effort, images, state.budget.timeoutMs),
+    status: out.status, retryAfterMs: out.ok ? null : out.failure.retryAfterMs,
+    requestId: safeRequestId(out.requestId, state.args.apiKey),
+    finishReason: out.finishReason, failure: failureKind(out), error: diagnosticError(out, state, plan), outcome: outcomeOf(out),
+    inputTokens: tokenOf(out, "input"), outputTokens: tokenOf(out, "output"), timing: out.timing,
+  });
 }
 
-function failBatch(ctx: BatchCtx, error: string, kind: Failure["kind"], retryAfterMs: number | null): void {
-  for (const item of ctx.items) {
-    ctx.tally.failed++;
-    ctx.state.failed++;
-    ctx.state.problems.push(`${item.name}: ${error}`);
-    ctx.state.args.onEvent({ kind: "item-failed", batchId: ctx.plan.id, position: 0, sourceId: item.id, error, failure: kind, retryAfterMs });
-  }
-  ctx.state.args.onEvent({ kind: "request-failed", batchId: ctx.plan.id, error, failure: kind, retryAfterMs, count: ctx.items.length });
+function tokenCeiling(request: ReturnType<typeof buildChatRequest>): number {
+  return request.max_tokens ?? request.max_completion_tokens ?? 0;
 }
 
-type IsSource = (value: SvgSource | undefined) => value is SvgSource;
-const isSvgSource: IsSource = (value) => value !== undefined;
+function tokenOf(out: SendOut, kind: "input" | "output"): number | null {
+  return out.usage?.[kind] ?? null;
+}
 
-/** Selection order is the batch order: the scan's deterministic order. */
+function failureKind(out: SendOut): Failure["kind"] | null {
+  return out.ok ? null : out.failure.kind;
+}
+
+function diagnosticError(out: SendOut, state: RunState, plan: BatchPlan): string | null {
+  if (out.ok) return null;
+  const sources = state.args.sources.filter((source) => plan.items.some((item) => item.sourceId === source.id));
+  const privateValues = sources.flatMap((source) => [source.relPath, source.name]);
+  return safeSvgErrorText(out.failure.message, state.args.apiKey, state.args.prompt, privateValues);
+}
+
+function outcomeOf(out: SendOut): "complete" | "failed" | "unknown" {
+  if (out.ok) return "complete";
+  return out.failure.outcome === "unknown" ? "unknown" : "failed";
+}
+
+function safeRequestId(requestId: string | null, apiKey: string): string | null {
+  return requestId === null ? null : redact(requestId, apiKey).slice(0, 200);
+}
+
+function requestTraceId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `svg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function safeToRetry(failure: Failure): boolean {
+  return failure.retryable && failure.outcome === "confirmed";
+}
+
+function failureInfo(out: Extract<SendOut, { ok: false }>): BatchFailureInfo {
+  return {
+    error: out.failure.message, failure: out.failure, requestId: out.requestId,
+    usage: out.usage, requestedAt: out.timing.apiStartedAt,
+  };
+}
+
+function completedResponse(out: Extract<SendOut, { ok: true }>): CompletedBatchResponse {
+  return { text: out.text, usage: out.usage, requestId: out.requestId, requestedAt: out.timing.apiStartedAt };
+}
+
+function isSvgSource(source: SvgSource | undefined): source is SvgSource {
+  return source !== undefined;
+}
+
 function toBatchSources(sources: readonly SvgSource[]): BatchSource[] {
   return sources.map(toBatchSource);
 }
@@ -287,13 +253,15 @@ function backoff(attempt: number): number {
 }
 
 async function delay(ms: number, signal: AbortSignal): Promise<void> {
-  if (ms <= 0) return;
+  if (ms <= 0 || signal.aborted) return;
   await new Promise<void>((resolve) => {
-    const done = () => {
-      window.clearTimeout(timer);
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
       resolve();
     };
-    const timer = window.setTimeout(done, ms);
-    signal.addEventListener("abort", done, { once: true });
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", finish, { once: true });
+    if (signal.aborted) finish();
   });
 }

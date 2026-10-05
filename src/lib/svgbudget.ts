@@ -1,27 +1,13 @@
-// svgbudget.ts — how much to ask for, given how hard the model is asked to
-// think (RULE 3). Owns the effort weights and the three numbers one request
-// needs: the completion ceiling, the timeout, and the images a composite may
-// carry. Pure: no clock, no fetch, no stored config — the caller passes the
-// numbers it already has.
-//
-// Why it exists (docs/archive/2026-10-02-effort-request-budget): a reasoning
-// model spends its completion ceiling on the thinking AND on the answer, and
-// takes longer the harder it thinks. A flat 32 000-token / 90-second budget
-// therefore cut 3–4-icon answers short at medium effort and allowed one icon
-// per run at high. The budget is derived from the effort and shown in the UI,
-// so nothing about it is silent.
+// svgbudget.ts — derive a request budget from explicit effort/settings (RULE 3).
+// Owns the completion ceiling, conservative per-request image cap and app deadline.
+// The caps reflect the reported 4/2/1 safe counts; they are not provider quotas.
 
 import { IMAGES_PER_REQUEST_MAX, TIMEOUT_CEILING_MS } from "./svgconfig";
 import type { Effort } from "./modelcaps";
 
 export { TIMEOUT_CEILING_MS };
 
-/**
- * Hidden reasoning each tier adds, relative to the provider's own default.
- * Calibrated on the reported behaviour (4 icons fit the 90 s budget at `low`,
- * 2 at `medium`, 1 at `high`) and then doubled, so every tier has head-room
- * over the slowest answer a user actually saw.
- */
+/** A provisional multiplier until live per-tier timing/token samples exist. */
 export const REASONING_WEIGHT: Record<Effort, number> = {
   low: 1,
   medium: 2,
@@ -29,7 +15,15 @@ export const REASONING_WEIGHT: Record<Effort, number> = {
   xhigh: 8,
 };
 
-/** An unset effort is the provider's own default — no extra room, no extra time. */
+/** Reported maximum images per request, independent of the provider's quota. */
+export const OBSERVED_IMAGES_PER_REQUEST: Record<Effort, number> = {
+  low: 4,
+  medium: 2,
+  high: 1,
+  xhigh: 1,
+};
+
+/** An unset effort is the provider's own default — no specific tier cap is assumed. */
 export function weightOf(effort: Effort | null): number {
   return effort === null ? 1 : REASONING_WEIGHT[effort];
 }
@@ -39,33 +33,22 @@ function perImageMs(effort: Effort | null, base: number): number {
   return (base * weightOf(effort)) / 2;
 }
 
-/**
- * Completion ceiling to send: the user's own budget plus the room the chosen
- * effort will spend inside the same ceiling. Never above the model's maximum,
- * never below the value the user asked for.
- */
+/** Completion ceiling scales provisionally with effort and is clamped to model caps. */
 export function maxTokensFor(effort: Effort | null, base: number, ceiling: number): number {
   return Math.min(ceiling, Math.max(base, base * weightOf(effort)));
 }
 
-/**
- * How long one composite request may take: the per-image budget times the
- * images in the batch, never shorter than the user's own timeout and never
- * longer than the provider's gateway limit.
- */
+/** Total app deadline: scale by effort and batch size, then respect the safety ceiling. */
 export function timeoutMsFor(effort: Effort | null, images: number, base: number, ceiling: number = TIMEOUT_CEILING_MS): number {
   const batch = perImageMs(effort, base) * Math.max(1, images);
   return Math.min(ceiling, Math.max(base, batch));
 }
 
-/**
- * The largest batch whose derived timeout still fits the gateway limit — a
- * batch that cannot finish is never sent. Then the user's own setting, then the
- * documented 1..9 grid.
- */
+/** The smallest of configured count, observed tier cap, grid maximum and app-deadline fit. */
 export function imagesPerRequestFor(effort: Effort | null, wanted: number, base: number, ceiling: number = TIMEOUT_CEILING_MS): number {
   const fits = Math.floor(ceiling / perImageMs(effort, base));
-  return Math.max(1, Math.min(wanted, fits, IMAGES_PER_REQUEST_MAX));
+  const observed = effort === null ? IMAGES_PER_REQUEST_MAX : OBSERVED_IMAGES_PER_REQUEST[effort];
+  return Math.max(1, Math.min(wanted, fits, IMAGES_PER_REQUEST_MAX, observed));
 }
 
 /** The budget a run plans and sends with — everything the runner needs. */
@@ -90,7 +73,7 @@ export interface BudgetOpts {
   tokenCeiling: number;
 }
 
-/** Planning-time budget: the batch size and the ceiling, straight from settings. */
+/** Planning-time budget: the batch size and token ceiling, straight from settings. */
 export function requestBudgetFor(effort: Effort | null, opts: BudgetOpts): RequestBudget {
   return {
     effort,
