@@ -208,9 +208,9 @@ happened, and **↻ Retry write** saves them once the folder is writable again.
 ## Project rules (code quality)
 
 Every change to this codebase must follow the code-quality rules in
-[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) (24 rules — size,
+[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) (25 rules — size,
 complexity, testing, docs and behaviour gates, adopted from the sister project
-`Process-Images-in-Areana`). Before every push run the verification lanes:
+`Process-Images-in-Areana`, plus one of this project's own). Before every push run the verification lanes:
 
 ```bash
 npm run verify        # types + lint + quality gate + tests + coverage + build

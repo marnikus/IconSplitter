@@ -6,7 +6,7 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 
 | File | What it is |
 |---|---|
-| [`current/AGENT_RULES.md`](current/AGENT_RULES.md) | Code-quality rules every change MUST follow (24 rules, stable numbers) |
+| [`current/AGENT_RULES.md`](current/AGENT_RULES.md) | Code-quality rules every change MUST follow (25 rules, stable numbers) |
 | [`current/SYSTEM_OF_RECORD.md`](current/SYSTEM_OF_RECORD.md) | Current behaviour, state model, invariants, flows, UI inventory |
 | [`current/CODE_VERIFICATION.md`](current/CODE_VERIFICATION.md) | What to run before every push (`npm run verify`), ratchet, overrides |
 | [`current/UI_SELECTORS.md`](current/UI_SELECTORS.md) | Living `data-testid` / semantic handle reference for tests |
@@ -23,7 +23,7 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 | `archive/2026-10-01-svg-preview-cost/design.md` | SVG preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |
 | `archive/2026-10-01-svg-preview-rendering/design.md` | SVG preview: root cause of "copies but paints nothing", the sanitize/fit/inline pipeline, id scoping, rejected alternatives |
 | `archive/2026-10-01-history-session/design.md` | Session restore, reset-to-pending and the one global undo timeline (§12 of the system of record) |
-| `archive/2026-10-01-svg-confirm-global-log/design.md` | **Design only — not implemented.** SVG confirm popup that shows the exact request (one builder, preview = payload) and a global docked log (ownership, schema, redaction, retention, follow-scroll, TDD plan); seven sibling files in the same folder |
+| `archive/2026-10-01-svg-confirm-global-log/design.md` | SVG confirm popup that shows the exact request (one builder, preview = payload) and the global docked log (ownership, schema, redaction, retention, interfaces, phases, test plan). **Implemented 2026-10-05** — the contract as shipped is `current/SYSTEM_OF_RECORD.md` §13 |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

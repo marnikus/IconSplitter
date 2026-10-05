@@ -4,9 +4,9 @@ Current behaviour, invariants and flows. If code and this doc disagree, one of
 them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
 Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.md`.
 
-<!-- ideal-size: 357 lines reason=RULE 17 forbids a second current doc, so all four
-     modes' authoritative behaviour lives in this one file; per-mode design detail
-     stays in docs/archive/ instead of growing here. -->
+<!-- ideal-size: 821 lines reason=RULE 17 forbids a second current doc, so every mode's
+     authoritative behaviour (and, since 2026-10-05, the confirmation/log contract of §13)
+     lives in this one file; design detail stays in docs/archive/ instead of growing here. -->
 
 ## 1. What this is
 
@@ -329,6 +329,8 @@ Batch:
 | localStorage `iconSplitter.svg.prompt.v1` | generation prompt | empty/missing → documented default |
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, timeout, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
+| localStorage `iconSplitter.log.v1` | the global log `{v, savedAt, entries}`: the newest entries that fit 256 KB and the chosen maximum | every entry is shape-checked AND re-sanitised on read (RULE 13/20), so a tampered payload cannot bring a secret back; written 500 ms after the last append (never later than 5 s into a burst), at once for an error, on `pagehide`/`visibilitychange → hidden`; a refused write retries with half the budget |
+| localStorage `iconSplitter.log.prefs.v1` | log dock prefs `{v, max, minimized}` | `max` only from the fixed choices 100/250/500/1 000/2 000/5 000 (default 1 000); the dock opens by default |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
 | `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
 
@@ -356,12 +358,19 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `modelcaps.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request + error classification, token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, per-model capability rules (temperature / token field / effort tiers) + value sanitising |
 | SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery, sidecar IO, key store, the generation run, row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, dialogs, hotkeys, the three sampling controls |
+| SVG request (one builder) | `src/lib/svgpayload.ts`, `svgprompt.ts` (`composePrompt`), `src/svg/send.ts`, `runevent.ts`, `runflow.ts`, `runlog.ts` | `prepareRun` is the ONLY place a request body or prompt is built; `send.ts` re-proves and posts it with retries; `RunEvent`s; the run lifecycle; the event → log table |
+| SVG confirmation UI | `src/svg/confirm/SvgConfirm.tsx`, `ConfirmPrompt.tsx`, `ConfirmFacts.tsx`, `ConfirmComposite.tsx`, `useConfirmRun.ts` | the exact request on screen: blocks, pager, rules editor, JSON, fingerprints, contact sheet |
+| Log pure rules | `src/lib/logentry.ts`, `logredact.ts`, `logbuffer.ts`, `logformat.ts`, `logscroll.ts`, `logprefs.ts` | schema + shape guard + parse/serialise; the three redaction layers; flood → fold → ring; the words of a row and of Copy-all; the follow-scroll machine; prefs |
+| Log state + IO | `src/log/secrets.ts`, `session.ts`, `logstorage.ts`, `logstore.ts`, `logger.ts`, `boot.ts` | secret registry; session id + clock; the two keys + debounced saver; the ONE writer; the facade features import; boot |
+| Log UI | `src/log/LogDock.tsx`, `LogToolbar.tsx`, `LogList.tsx`, `useLog.ts`, `useStickyScroll.ts`, `log.css` | the dock mounted by `ui/Workbench.tsx` beside the shell |
+| Shell taps | `src/state/statelog.ts`, `src/ui/useToast.ts`, `src/batch/usePresetActions.ts` | tab + history entries; the sheets toast with its mirror; the preset actions |
 
-Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
+Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3). The log adds one rule, enforced by
+`tests/log_boundaries.test.ts`: features reach it through `log/logger` and `log/secrets` only; `lib/log*` is pure.
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 52 files / 452 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 76 files / 875 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -433,6 +442,29 @@ and `data-testid` handles):
   frame's `data-version` equal to the version Copy hands over, "Preview
   failed" + reason for a malformed file, "No SVG" for a source with none
 
+* `svg_payload.test.ts` — C-0: golden batch/single text, the named blocks and their separators, 4/4/1 planning,
+  what each model family accepts, the image slot, `withImage`/`elideImage`/`assertSendable`, fingerprints,
+  `describeRequest`, `wireHeaders`
+* `svg_wire.test.ts`, `svg_retry.test.ts` — the real runner against a scripted fetch: the posted body equals the
+  confirmed request, identical on every attempt; retry-after, back-off, never retry a timeout, cancel while
+  waiting; refuse a changed/unfillable/foreign request and still run the next batch; the new events
+* `svg_confirm.test.tsx` — the real panel: the blocks verbatim, joined = the posted text, JSON = the posted
+  body, shown fingerprint = posted, the pager, the rules editor (one stored value), empty rules, a catalog
+  refresh while open, the contact sheet of the request on screen, Copy and a blocked clipboard
+* `svg_boundaries.test.ts`, `log_boundaries.test.ts` — static: one builder; the log's layering and that nothing
+  in it can name the key
+* `log_entry`, `log_redact`, `log_buffer`, `log_format`, `log_scroll` — the pure log: schema/parse/budget/prefs,
+  the three redaction layers (idempotent, never throws, false-positive guard), ring/fold/flood, row = copy
+  words, the follow-scroll table as numbers
+* `log_store.test.ts` — the real store with an in-memory Storage and fake timers: stamping, ring at every
+  choice, debounce/flush rules, quota failure, restore, corrupt, clear, secrets, `log()` never failing
+* `log_ui.test.tsx`, `log_taps.test.tsx`, `svg_runlog.test.ts`, `log_svg_flow.test.tsx`,
+  `log_secret_flow.test.tsx` — the dock on every tab and its follow-scroll; every toast mirrored once (the four
+  `say`s + six direct writes); history/tab; the RunEvent table; a whole run under one id; a provider echoing the
+  key, a header and a data URL leaves nothing in the log, storage or Copy-all
+* `batch_presets.test.tsx`, `sheets_toast.test.tsx` — characterisation of the preset actions and the sheets
+  toast, written before they were extracted
+
 Must exist before the matching change ships:
 
 * any new exported lib/batch function → a test that fails if it is deleted
@@ -476,10 +508,10 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   `docs/archive/2026-10-01-svg-preview-cost/design.md` (preview-only frame and
   the contrast rule, one cost decision with a versioned rate card, cost basis +
   pricing version in the sidecar).
-* 2026-10-01 — SVG confirmation preview + global log **designed, not implemented**
-  (TDD-first): `docs/archive/2026-10-01-svg-confirm-global-log/design.md` (one builder so
-  the popup shows the exact request, a module-scope redacting log with a docked UI,
-  module budgets, test plan). Nothing in this document changes until it ships.
+* 2026-10-01 — SVG confirmation preview + global log designed TDD-first:
+  `docs/archive/2026-10-01-svg-confirm-global-log/design.md` (decisions D1–D15, module budgets,
+  test plan). **Implemented 2026-10-05** — the authoritative contract is §13 below; the deviations
+  from the design are in `QUALITY_RECHECK.md` (2026-10-05).
 
 ## 11. Current UI — control inventory
 
@@ -534,6 +566,11 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-history-dialog`), banners (`svg-warn-*`), status bar
   (`svg-statusbar`), toast + busy (`svg-toast`, `svg-busy`); review undo goes
   through the shared `hist-*` handles. Full table: `UI_SELECTORS.md` §P.
+* Confirm dialog (2026-10-05): `svg-confirm-prompt`, `svg-confirm-pager*`, `svg-prompt-block-*`,
+  `svg-confirm-rules`, `svg-confirm-json*`, `svg-confirm-fingerprint`, `svg-confirm-run-fingerprint`,
+  `svg-confirm-copy*`. Global log dock on every tab: `log-dock`, `log-toggle`, `log-count`, `log-badge`,
+  `log-list`, `log-row`, `log-copy`, `log-clear`, `log-max`, `log-jump`, `log-status`. Full tables:
+  `UI_SELECTORS.md` §P and §Q.
 
 ## 12. Session restore, reset to pending & the global undo timeline (2026-10-01)
 
@@ -662,3 +699,123 @@ datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` o
 `checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
 the zoom slider or clicking a row checkbox — the previous "any input is a text
 field" test killed undo for the two controls the review tab uses most.
+
+## 13. SVG confirmation preview & the global log (2026-10-05)
+
+Design record: `docs/archive/2026-10-01-svg-confirm-global-log/` (decisions D1–D15, test plan). This section is
+the contract **as shipped**; where it differs from the design the deviation is recorded in
+`QUALITY_RECHECK.md` (2026-10-05).
+
+### 13.1 The confirmation shows the request that is sent
+
+**Flow.** *Generate* (`requestGenerate(ids)`, guards unchanged) opens the dialog with state
+`{ kind: "confirm", ids }`. `useConfirmRun` **derives** a `PreparedRun` from live state — the selection, the
+provider settings, the model's capabilities, the stored rules — on every render (RULE 24), so a catalog refresh
+or an edit of the rules while the dialog is open changes what is shown. *Generate now* calls
+`confirmGenerate(prepared)` with **that object**; `runGeneration` posts it and re-reads nothing.
+
+**One builder.** `lib/svgpayload.prepareRun` is the only place a request body or a prompt is created
+(`composePrompt` in `lib/svgprompt` names the blocks and is the only text builder; the former
+`batchPrompt`/`singlePrompt` wrappers and `paramsLabel` were removed with their last caller).
+`tests/svg_boundaries.test.ts` fails if anything else calls `buildChatRequest` or `composePrompt`.
+
+**What the dialog shows.** Facts: count, requests, model, the settings read *from the request on screen*,
+endpoint, attempts and timeout, the run fingerprint. A pager over the requests (a batch of one uses the single
+template). The named blocks in order — batch summary, ordered positions, output order & naming (locked: the
+response parser maps by position and `<title>`), and the **editable rules**; for one image: the rules and the
+icon-name line. *Copy exact prompt*. The request JSON: method, URL, headers (the key shown as `‹hidden›`) and
+the body with the image elided as `image-slot:contact-sheet`. The manifest of all requests, and the contact
+sheet of the request on screen (memory only, never written).
+
+**Rules.** The dialog's textarea and the tab's textarea write the same stored value (`setPrompt`, persisted by
+`savePrompt`). The text sent has the rules `trim()`med; the editor keeps what was typed and says when spaces
+will be dropped. Empty rules disable *Generate now* and say why.
+
+**Posting.** `send.ts` fills the image slot with the contact sheet (`withImage`), refuses anything that is not a
+`data:image/` URL (`assertSendable`), re-measures the fingerprint of the exact object and refuses on a mismatch,
+then posts `JSON.stringify(request)`; every attempt posts the same string. `composite.ts` refuses an image whose
+`size:mtime` is not the one the scan recorded; a plan item whose source left the selection fails its batch.
+Each refusal is `request-failed` of kind `payload`, names why, sends nothing for that batch, and later batches
+still run.
+
+| id | Invariant | Enforced by |
+|---|---|---|
+| C-0 | Byte-compatible: `composePrompt(...).text` equals the wording the app sent before this feature | golden strings in `svg_payload`, pinned from that wording; `svg_lib` asserts its parts |
+| C-1 | One builder | `svg_boundaries` (static) |
+| C-2 | Same object: the rendered `prepared` is what runs; `RunArgs` has no caps/params/prompt | types, `svg_wire`, `svg_confirm` |
+| C-3 | Wire = preview: the posted body is `JSON.stringify(withImage(request, dataUrl))`; the displayed JSON equals it except the image; the fingerprint shown is the fingerprint of the posted body | `svg_wire`, `svg_confirm` |
+| C-4 | Fail closed: an unfilled slot, an unbuildable composite or a changed source sends nothing for that batch | `svg_wire`, `svg_cost_io` |
+| C-5 | Empty rules disable the send | `svg_confirm` |
+| C-6 | One stored value for the rules, mirrored in the same render | `svg_confirm` |
+| C-7 | The run and request fingerprints are shown and logged | `svg_confirm`, `log_svg_flow` |
+
+### 13.2 The global log
+
+**Ownership.** One module-scope store (`log/logstore`) outside React: no tab, panel or unmount can lose it. It
+has ONE writer, `record`, which sanitises before it stores. Features import only `log/logger` (`log`,
+`logger(feature)`, `logStatus`, `newId`) and `log/secrets` (`watchSecret`/`forgetSecret`); the shell calls
+`log/boot` once and mounts `LogDock`; `lib/log*` is pure. `tests/log_boundaries.test.ts` enforces it. The runner
+and the sender emit `RunEvent`s and know nothing of the log; `svg/runlog` is the tap.
+
+**Entry** (`lib/logentry`): `{ v: 1, id: "<sid>-<n>", at (ISO UTC, ms), sid, level: info | warn | error,
+feature: app | history | log | sheets | batch | selection | svg, action (dotted lowercase, ≤ 40), message (one
+line, ≤ 240), ids { run, batch, request, source, hist } (≤ 64 each), data (≤ 24 allow-listed keys, primitives,
+strings ≤ 160), usage? { input, output, total, cost, estimated, currency }, repeat? }`, ≤ 2 KB serialised.
+`cost` is provider-reported and `estimated` is calculated: never merged (I-18), and a row says "reported" or
+"Estimated".
+
+**Vocabulary** (`feature.action`): `app.boot` · `app.tab.open` · `app.storage.failed` · `history.entry.push` /
+`undo` / `redo` / `apply.failed` · `<tab>.status` for sheets, batch, selection and svg (every toast, level from
+`err`) · `batch.process.start` / `done` / `stop` · `svg.scan.done` · `svg.key.save` / `clear` (`where` only) ·
+`svg.model.change` · `svg.rules.edit` (`chars` and `hash` only) · `svg.confirm.open` / `cancel` / `accept` ·
+`svg.run.start` / `done` / `cancel` · `svg.batch.start` / `done` · `svg.request.sent` / `ok` / `retry` /
+`failed` · `svg.item.saved` / `failed` · `log.clear` / `max` / `copy` / `flood` / `restore.failed`.
+
+**Redaction** (`lib/logredact`; on write, on read and on Copy-all). Three layers. *Structure:* keys outside the
+allow-list, nested values and extra ids are dropped, usage is numeric-only — a secret has no field to live in.
+*Value scrub* of every string: registered secrets of any shape, Requesty and `sk-` key shapes, `Bearer …`,
+`name=value` where the name ends in key/token/secret/password/auth/credential/cookie/session, URL credentials
+and sensitive query values, JWTs, hex runs of 32+ digits, `data:` URLs and base64 runs of 120+ characters
+(→ `‹blob N chars›`), and any string over 64 KB. *Caps:* the lengths above. Idempotent; never throws.
+**Never logged by construction:** the API key and header, rules or prompt text (length + hash), image data, SVG
+documents, provider bodies (status + kind + the redacted reason), file contents, handles. *Honest limit:*
+scrubbing is defence in depth — a secret of unknown shape typed into a field that is logged verbatim would pass
+layer 2; the guarantee is layer 1 plus adapters that hand the log facts only. The provider key is registered by
+`svg/keystore` when it is saved and when it is loaded, so a key of no known shape is masked too, and a replaced
+key stays masked for the session.
+
+**Retention.** Max entries is ONE control, stored and displayed: 100 / 250 / 500 / 1 000 / 2 000 / 5 000,
+default 1 000; lowering it trims at once and records `log.max`. *Fold:* the same fold key (default
+feature · action · level · message · ids) as the previous entry within 2 s → `repeat + 1`, content refreshed;
+gestures fold under `gesture:<type>`. *Flood:* more than 100 admissions in a second (folds count) are dropped
+and one `log.flood` records how many. *Persisted:* the newest entries that fit 256 KB; sessions are told apart
+by `sid`. *Clear* empties memory and storage and leaves one `log.clear` breadcrumb. A refused write sets
+`persist: "unavailable"`, the dock says so, one `app.storage.failed` is recorded and the next write retries with
+half the budget. A corrupt stored log starts empty with one `log.restore.failed` — different from a first run.
+`log()` never throws; what it could not record is counted in `dropped`, which the dock shows.
+
+**The dock** (`log/LogDock`). At the bottom of every tab (z-index 10: under the SVG dialogs, above the
+content); minimise/restore is persisted and, minimised (32 px), it still counts entries and unseen errors; it
+publishes `--log-dock-h` so the shell and the fixed toasts clear it. *Follow-scroll* (`lib/logscroll`, 4 px
+tolerance): pinned to the newest entry while the user is at the bottom; paused at once on wheel-up, PageUp,
+ArrowUp, Home or a scroll away from the bottom; what arrives meanwhile is counted ("↓ N new — Jump to latest");
+following resumes at the bottom or on End / Jump; Clear starts over. *Copy all* copies exactly what is stored
+(`formatAll`, scrubbed again with the secrets known now); a blocked clipboard says so. `role="log"` with
+`aria-live="off"`, and a separate status line that announces at most once a second. Not on the undo timeline.
+
+| id | Invariant |
+|---|---|
+| L-1 | No entry is stored unsanitised: the store is the only writer and sanitises first |
+| L-2 | `log()` never throws or blocks a feature; internal failures are counted and shown |
+| L-3 | The log is not a timeline: not undoable, never read by a feature |
+| L-4 | Every toast is mirrored 1:1, text and level from `err` — the four `say`s and the six direct writes |
+| L-5 | Reported and Estimated money are never merged; the basis is in the text |
+| L-6 | Stored = displayed = copied: one maximum, one array |
+| L-7 | The log survives tab switches and unmounts: a run keeps logging after its panel is gone |
+| L-8 | Local only: no network call; the one export is the user's clipboard |
+| L-9 | After a restart the entries return within the limits; a corrupt payload costs one warning |
+
+**Adding a tap.** A new toast goes through the tab's `say`, which logs it. A new state change worth
+reconstructing calls `logger(feature)` with facts. A new run stage is a row in `svg/runlog`'s table and a case
+in `tests/svg_runlog.test.ts`. A new `data` key goes into `LOG_DATA_KEYS` with a test — an unknown key is
+dropped by design.

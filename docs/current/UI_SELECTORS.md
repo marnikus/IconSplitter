@@ -396,10 +396,17 @@ Dialogs:
 
 | Test id | Notes |
 |---|---|
-| `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
-| `svg-manifest` | the ordered "position — name" manifest inside the confirm dialog |
-| `svg-confirm-sampling` | text — the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") |
-| `svg-composite` | contact-sheet preview: `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
+| `svg-confirm` | confirm-before-send backdrop; `svg-confirm-generate` ("Generate now · N requests", disabled while the rules are empty), `svg-confirm-cancel`, `svg-confirm-close` |
+| `svg-confirm-count`, `-requests`, `-model`, `-attempts`, `-endpoint` | facts: selected images, "N × M max", the model, "up to 3 attempts · 90 s timeout", "POST <url>" |
+| `svg-confirm-sampling` | text — the settings **of the request on screen**, read from the request (e.g. "no temperature · 32 000 max tokens · effort default") |
+| `svg-confirm-run-fingerprint`, `svg-confirm-fingerprint` | the run's fingerprint, and the fingerprint of the request on screen — the same values the log carries at `confirm.accept` and `request.sent` |
+| `svg-confirm-prompt` | the preview section; `svg-confirm-pager` with `-prev`, `-next`, `-index` ("2 of 3") |
+| `svg-prompt-block-{id}` | a read-only block as a `<pre>`, `id` ∈ `summary`, `positions`, `protocol`, `naming`; `svg-prompt-note-{id}` is its label ("required by the app · locked", "editable") |
+| `svg-confirm-rules` | the editable rules `<textarea>` (the same stored value as the tab's `svg-prompt`); `svg-confirm-rules-note` appears only when surrounding spaces will be dropped; `svg-confirm-empty-rules` explains a disabled send |
+| `svg-confirm-json` | the request body as JSON (image elided as `image-slot:contact-sheet`); `svg-confirm-json-headers` — method, URL and headers with the key shown as `‹hidden›` |
+| `svg-confirm-copy` | button "Copy exact prompt"; `svg-confirm-copy-status` (`role="status"`: "Copied request 1 of 3" or the blocked-clipboard message) |
+| `svg-manifest` | the ordered "position — name" manifest of ALL requests inside the confirm dialog |
+| `svg-composite` | contact sheet of the request on screen ("request 2 of 3"): `svg-composite-build`, `svg-composite-img`, `svg-composite-meta`, `svg-composite-error` |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
 
@@ -408,3 +415,26 @@ failure), `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
+
+## Q. Global log dock — `src/log/*` (verified 2026-10-05)
+
+Semantic handles first (RULE 21): the region named **"Application log"**; buttons named **"Copy all"**,
+**"Clear"**, **"Minimize log"** / **"Restore log"**, **"Jump to latest"**; the select labelled
+**"Max entries"**. Rendered by `ui/Workbench` beside the shell, so it is present on every tab.
+
+| Test id | Notes |
+|---|---|
+| `log-dock` | the `<section aria-label="Application log">`; class `min` when minimised |
+| `log-toggle` | minimise/restore button, `aria-expanded`, `aria-controls="log-panel"` |
+| `log-count` | "N entries" — visible when minimised too |
+| `log-badge`, `log-errors` | "● N new" and "✖ N": entries / errors that arrived while the user was not looking at the end (also shown minimised) |
+| `log-list` | the scroll container, `role="log"`, `aria-live="off"`, `tabindex=0` |
+| `log-row` | one entry (`data-entry-id`): `<time title=ISO>`, level word + glyph (`ⓘ INFO`, `▲ WARN`, `✖ ERROR`), feature, action, message, muted details, `×N` |
+| `log-session` | the break drawn where the session id changes (`role="separator"`) |
+| `log-empty`, `log-restore`, `log-persist`, `log-dropped` | the honest notes: no entries yet / the previous log could not be read / not saved to this browser / N entries could not be recorded — four different situations |
+| `log-copy`, `log-clear`, `log-max` | Copy all · Clear (no confirmation, leaves one `log.clear` row) · the max-entries `<select>` (100 / 250 / 500 / 1 000 / 2 000 / 5 000) |
+| `log-status` | `role="status"`: "Copied N entries", the blocked-clipboard message, or "N new entries" — announced at most once a second |
+| `log-jump` | "↓ N new — Jump to latest", only while following is paused |
+
+Text and ids of the rows are the facts of `SYSTEM_OF_RECORD.md` §13.2; a row never contains a key, rules text,
+image data or an SVG.

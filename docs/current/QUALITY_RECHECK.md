@@ -734,3 +734,137 @@ by RULE 17 — one current doc per app, with design detail pushed to
   renders inline, fitted and centred with its own colours.
 * `tests/svg_bg.test.ts` — unchanged and still green: the Bg colour frames the
   preview and changes nothing else.
+
+---
+
+# Quality re-check — 2026-10-05 (SVG confirmation preview + global log, implementation)
+
+Design: [`docs/archive/2026-10-01-svg-confirm-global-log/`](../archive/2026-10-01-svg-confirm-global-log/design.md)
+(design commit `3095626`). Implemented test-first in nine phases (P0–P8), one commit per green phase. The shipped
+contract is `SYSTEM_OF_RECORD.md` §13; the new rule is RULE 25.
+
+## What changed
+
+**Feature 1 — the confirmation is the request.** `lib/svgpayload.prepareRun` is the one builder; the dialog
+renders a `PreparedRun` derived from live state and hands that same object to the runner; `send.ts` re-proves it
+(image slot, `data:image/` URL, fingerprint) before the wire; `composite.ts` refuses a changed file. The dialog
+shows the named blocks, a pager, the rules editor, the JSON with the key hidden, and both fingerprints.
+
+**Feature 2 — the global log.** A module-scope store with one sanitising writer, three redaction layers, a ring /
+fold / flood guard, debounced persistence within 256 KB, a dock on every tab with follow-scroll, and taps for the
+tab, the history, every toast (the four `say`s and the six direct writes), batch processing, the key, the model,
+the rules (length + hash), the confirmation and every stage of a run (request, retry, result, tokens, cost).
+
+**Extractions, characterised first (P0):** `svg/send.ts` out of `runner.ts` (298 → 243), `svg/confirm/*` out of
+`SvgDialogs.tsx` (269 → 170), `batch/usePresetActions.ts` out of `useBatch.ts` (300 → 286), `ui/useToast.ts` out of
+`App.tsx` (581 → 575, legacy cap 607 untouched), `svg/runflow.ts` out of `actions.ts` (272 → 258).
+
+## The numbers (measured)
+
+| lane | before (`9c27981`) | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings (none added) |
+| `tools/quality.mjs` (full and `--changed --allow-legacy`) | GATE PASSED | GATE PASSED, `quality_baseline.json` untouched |
+| tests | 57 files / 517 | **76 files / 875** |
+| coverage (all files, stmts/branch/funcs/lines; `src/lib/**` + `src/log/**`) | 96.85 / 92.68 / 96.22 / 97.47 | **97.39 / 93.27 / 97.20 / 98.05** |
+| jscpd `src --min-tokens 60` | 12 clones / 158 lines (re-measured on the base; the "11" recorded earlier was stale) | 12 clones / 158 lines — none added |
+| build `dist/index.html` | 601.97 kB / gzip 176.88 kB | **639.35 kB / gzip 189.48 kB** (+37.38 / +12.60) |
+
+`bash tools/pre_push_check.sh` (`npm run verify`) → **ALL LANES PASSED** (6/6).
+
+**Over budget, stated plainly:** the design budgeted ≤ +40 kB raw / ≤ +12 kB gzip. Raw is inside it; gzip is
+**0.6 kB over** (+12.60). That is the price of about 2 250 new lines (the redaction layer, the dock and the
+preview UI). Nothing was trimmed to hit the number — a smaller log would be a worse one.
+
+`npx knip` still cannot run in this sandbox (`oxc-parser` fails to allocate its `ArrayBuffer`, on `HEAD` and on the
+base alike). In its place every export of the 52 new/changed source files was checked for a user elsewhere:
+`paramsLabel`, `batchPrompt` and `singlePrompt` had lost their last production caller and were **removed** (their
+wording is pinned by `svg_payload` goldens, and `svg_lib`'s two assertions now call `composePrompt`). What remains
+used only by tests: `resetBoot`, `resetLog`, `uninstallTabLog` — documented test seams for module state — and two
+exports that were already dead on the base (`EFFORT_ORDER`, `hasApiKey`).
+
+## How it was tested (RULE 8)
+
+* **P0 characterisation first.** Before any extraction, 29 tests were written against the UNCHANGED code
+  (`svg_retry` 7, `svg_confirm` 6, `batch_presets` 11, `sheets_toast` 5), proved green, and proved non-vacuous by
+  mutating the code; the four extractions then left the 517 existing tests unedited and green.
+* **RED before GREEN in every phase**, with the reason for the failure checked (a missing module, a missing event,
+  a missing tap — not a typo).
+* **About ninety deliberate mutations** across the phases (drop a check, flip a boundary, skip a redaction, swallow
+  an error) — each must fail at least one test. Five survived the first version of their tests and each produced
+  a new or tightened test: a skipped `assertSendable`, an editor that trims what is typed, a restore that does not
+  trim, a subscriber that is not isolated, and a first-render pin that masked a missing append pin.
+* **A real defect found by the tests, not by reading:** the default fold key was `feature|action|level|message`, so
+  two *different* sources failing with the same words were merged into one entry and the first was lost. The key
+  now includes the ids (`log_store`, `log_svg_flow`).
+* **Verify matrix of the request:** the posted body equals the confirmed request (`svg_wire`), the displayed JSON
+  equals the posted body except the image, the fingerprint shown is the fingerprint of what was posted
+  (`svg_confirm`); a provider that echoes the key, an `Authorization` header and a data URL leaves **none of them**
+  in the log, in anything written to storage or in Copy-all, after a 401 and after a 500 with retries
+  (`log_secret_flow`); a key pasted into the rules is logged by length and hash only.
+
+## RULE 16.7 checklist (final, against the measured gate)
+
+```text
+[x] No new function/component >30 lines          max 29 (usePresetActions, moved verbatim from useBatch); 305 new functions
+[x] No new file >300 lines                       30 new TS/TSX files, max 175 (logredact.ts); useSelection.ts 296, useBatch.ts 286
+[x] No new function with >4 params               one has 4: usePresetActions(ctx, setS, say, applyHandles) — the design allows it
+[x] CC <=10, nesting <=4 on new/edited functions new max CC 7 (foldInto), max nesting 2; classifyHttp/onKey stay at their recorded 10
+[x] tsc --noEmit and lint clean                  0 errors; 8 warnings, the same 8 as the base
+[x] every new lib function has a test that fails if deleted   lib/log* 96.9–100 % lines; svgpayload 100 %; mutation kill lists per phase
+[x] no new duplication; no dead code left behind jscpd 12 → 12; paramsLabel/batchPrompt/singlePrompt removed (see above)
+[x] did not game metrics                         no partN names (gate's anti-gaming lane passes); one rename from *Step to *Failure
+[x] RULE 18 ideals; deviations carry a reason    below
+[x] remediation in RULE 19 order                 the one CC overrun (an append effect, 11) was fixed by concept (appendedSince in lib/logscroll), not by size
+[x] SYSTEM_OF_RECORD.md + docs/README.md updated  §6 storage, §7 modules, §8 tests, §10, §11, new §13; UI_SELECTORS §P + new §Q; RULE 25
+```
+
+## RULE 18 re-check
+
+New code: of 305 functions, 302 are ≤ 20 lines; the three above it are `usePresetActions` 29 (moved verbatim — four small
+callbacks composed in one hook), `createSaver` 24 (three closures over one timer) and `listen` 21 (three listeners
+and their undo). Every new file is 22–175 lines; those under 150 each own one rule, and merging them would mix
+responsibilities. `src/log/` holds 11 files plus its stylesheet and `src/svg/confirm/` 5 — inside the 5–15 ideal;
+`src/svg/` grew by 6 files (`send`, `runevent`, `runflow`, `runlog`, and the `confirm/` directory kept apart), against
+an ideal of 15 it already exceeded.
+
+Pre-existing functions that grew past 20 lines: `useTimeline` 19 → 21, `useRunActions` 22 → 23, `useModelSync`
+22 → 24 — each by the one line a log call needs, all far inside the 30-line fail line.
+
+Context files: `SYSTEM_OF_RECORD.md` is 821 lines and this log 870 — the debt already recorded on 2026-09-30
+and re-affirmed by RULE 17 (one current doc per app, design detail in `docs/archive/`); the `ideal-size:` comment in
+the system of record was refreshed with the new count and reason. No new current doc was added.
+
+## Deviations from the design (RULE 17: recorded here, the archive stays frozen)
+
+1. **Three more source files than planned:** `log/session.ts` (so the store can stamp its own breadcrumbs without
+   importing the logger), `svg/runflow.ts` (the run lifecycle, split from `actions.ts` before log lines went in) and
+   `svg/runevent.ts` (so `send.ts` and `runlog.ts` do not depend on `runner.ts`, which would be a cycle).
+2. **The flood guard counts folded repeats too** (design: fold, then flood). An effect loop logs one message; counting
+   only entries that survive folding would never trip on it.
+3. **The vocabulary constants live in `lib/logredact`** (re-exported by `lib/logentry`), the lowest layer, so the two
+   never import each other.
+4. **The default fold key includes the ids** (see the defect above).
+5. `request-retry` carries the failure kind as `failure` (`kind` is the discriminator of `RunEvent`); the log's data key
+   is still `kind`. `svg.request.failed` has no `status` (the event has none). The runner's `cancelled` event is not
+   logged — the user's Cancel logs `svg.run.cancel` and `svg.run.done` carries `cancelled`.
+6. **Levels of `svg.run.*`:** start `info`, done `info` or `warn` (a failure, an invalid or missing result, a cancel),
+   cancel `warn` — the design listed info/warn/error across the three.
+7. The tab a session restores at boot is **not** logged as a switch (the tap is installed after the restore).
+8. **A replaced API key stays masked for the session** (it may still be a live secret elsewhere); only an explicit
+   clear forgets it.
+9. `batchPrompt`, `singlePrompt` and `paramsLabel` were **removed**, not kept as wrappers (no production caller was left).
+   `lib/modelcaps` exports `groupDigits`, the former private `group`.
+10. The confirm dialog's styles are in `index.css` (+22 lines) beside the other SVG dialogs; the dock's are in `log/log.css`.
+11. Existing tests that changed: `svg_cost_io` (its fixture fingerprints now match what `getFile()` reports, and it passes
+    `prepared`), `svg_send` +1, `workbench_ui` +1, `svg_lib` (two assertions call `composePrompt`), `modelcaps` (the
+    `paramsLabel` case moved to `svg_payload` as `describeRequest`).
+
+## Not verified here, and why
+
+* **No real browser was available.** Layout, `overflow-anchor`, the `clamp()` height of the dock, scroll feel and the look
+  of the dock and the preview were checked only as far as happy-dom allows (geometry is stubbed; the compiled CSS of the
+  `--log-dock-h` offsets was read in the build output). The follow-scroll *rules* are unit-tested as plain numbers.
+* Rendering 5 000 un-windowed rows was not profiled; the design's escape hatch (windowing inside `LogList` only) is unused.
+* Two browser windows overwrite each other's persisted tail (last writer wins), exactly as session and history do today.
