@@ -5,6 +5,7 @@ import { canvasToBlob, cropRect, renderIcon, squareInfo, type ExportOpts } from 
 import { download, loadImage } from "./lib/dom";
 import { SIZES } from "./lib/exportopts";
 import { useSheetsEdit } from "./ui/useSheetsEdit";
+import { useToast } from "./ui/useToast";
 
 interface Sheet {
   id: string;
@@ -31,20 +32,13 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
+  const { toast, say } = useToast();
   // in the store above the tabs: restored on restart, undoable like any change
   const sheetsEdit = useSheetsEdit();
   const { padding, size, transparent } = sheetsEdit.opts;
   const fileRef = useRef<HTMLInputElement>(null);
-  const toastTimer = useRef<number>(0);
 
   const opts: ExportOpts = useMemo(() => ({ padding, size, transparent }), [padding, size, transparent]);
-
-  const say = useCallback((msg: string, err = false) => {
-    setToast({ msg, err });
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 3200);
-  }, []);
 
   const active = sheets.find((s) => s.id === activeId) ?? null;
 

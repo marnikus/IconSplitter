@@ -13,7 +13,8 @@ import { syncAndCollect, applyOutcomes, type StateKey, type Outcome } from "./st
 import { processItems, type BatchItem, type ItemResult } from "./process";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
-import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
+import { loadPresets, loadLastName, loadHandles } from "./store";
+import { usePresetActions } from "./usePresetActions";
 import type { SourceStatus } from "../lib/statefile";
 
 export interface Row extends AiImageEntry {
@@ -38,10 +39,10 @@ const initial: BatchState = {
   preset: defaultPreset("Default"), presetNames: [], refWarnings: [],
 };
 
-type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
+export type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
 
 /** Mutable context shared by the orchestration functions (grouped, RULE 3). */
-interface Ctx {
+export interface Ctx {
   root: { current: DirHandleLike | null };
   dest: { current: DirHandleLike | null };
   keys: { current: StateKey[] };
@@ -59,7 +60,7 @@ export function useBatch() {
     s, say,
     ...useCoreActions(ctx, setS, say),
     ...useViewActions(ctx, setS),
-    ...usePresetActions(ctx, setS, say),
+    ...usePresetActions(ctx, setS, say, applyHandles),
     supported: fsSupported(),
   };
 }
@@ -107,34 +108,6 @@ function useViewActions(ctx: Ctx, setS: Setter) {
   }, [ctx]);
 
   return { toggle, selectAll, thumbUrl };
-}
-
-function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
-  const setPreset = useCallback((patch: Partial<Preset>) => {
-    setS((p) => ({ ...p, preset: { ...p.preset, ...patch } }));
-  }, [setS]);
-
-  const savePreset = useCallback(async (name: string) => {
-    const named = { ...ctx.state.current.preset, name };
-    savePresets([...loadPresets().filter((p) => p.name !== name), named]);
-    saveLastName(name);
-    await saveHandles(name, { source: ctx.root.current ?? undefined, dest: ctx.dest.current ?? undefined });
-    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset “${name}” saved` } }));
-  }, [ctx, setS]);
-
-  const loadPreset = useCallback(async (name: string) => {
-    const found = loadPresets().find((p) => p.name === name);
-    if (!found) return say(`Preset “${name}” not found`, true);
-    saveLastName(name);
-    await applyHandles(ctx, setS, found);
-  }, [ctx, setS, say]);
-
-  const deletePreset = useCallback((name: string) => {
-    savePresets(loadPresets().filter((p) => p.name !== name));
-    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset “${name}” deleted` } }));
-  }, [setS]);
-
-  return { setPreset, savePreset, loadPreset, deletePreset };
 }
 
 function selectable(r: Row): boolean {

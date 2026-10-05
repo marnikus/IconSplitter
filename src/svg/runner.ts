@@ -6,12 +6,10 @@
 // never guesses a mapping — an unmatched or duplicate result is reported.
 
 import { batchManifest, planBatches, type BatchPlan, type BatchSource } from "../lib/svgbatch";
-import { batchPrompt, singlePrompt } from "../lib/svgprompt";
 import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
-import { buildChatRequest, sendChatRequest, type Failure, type Usage } from "../lib/svgrequest";
+import type { Failure, Usage } from "../lib/svgrequest";
 import { allocateUsage, sumUsage } from "../lib/svgusage";
 import { costInfoFor } from "../lib/svgpricing";
-import { redact } from "../lib/svgsecret";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { DirHandleLike } from "../lib/fs";
@@ -19,6 +17,7 @@ import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { recordFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import { saveSidecar } from "./sidecar";
+import { sendBatch } from "./send";
 import { toBatchSource, type SvgSource } from "./sources";
 
 export type RunEvent =
@@ -118,7 +117,7 @@ async function runBatch(state: RunState, plan: BatchPlan): Promise<void> {
   if (composite === null) return; // nothing was sent: every item is already failed
   announceStart(ctx, composite);
   ctx.hash = composite.hash;
-  const sent = await sendBatch(state, plan, items, composite);
+  const sent = await sendBatch(state.args, plan, items, composite);
   if (!sent.ok) failBatch(ctx, sent.error, sent.failure, sent.retryAfterMs);
   else await saveMatches(ctx, sent.text, sent.usage);
   state.args.onEvent({ kind: "batch-done", batchId: plan.id, ...ctx.tally });
@@ -155,28 +154,6 @@ async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
     failBatch(ctx, `composite failed: ${message(error)}`, "payload", null);
     return null;
   }
-}
-
-interface SendOk { ok: true; text: string; usage: Usage }
-interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
-
-async function sendBatch(state: RunState, plan: BatchPlan, items: SvgSource[], composite: BuiltComposite): Promise<SendOk | SendBad> {
-  const manifest = batchManifest(plan.items);
-  const prompt = items.length === 1 ? singlePrompt(state.args.prompt, items[0].stem) : batchPrompt(state.args.prompt, manifest);
-  const request = buildChatRequest({
-    model: state.args.config.model, prompt, image: composite.dataUrl,
-    caps: state.args.caps, params: state.args.params,
-  });
-  for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
-    if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
-    const out = await sendChatRequest({ config: state.args.config, apiKey: state.args.apiKey, request, signal: state.args.signal });
-    if (out.ok) return { ok: true, text: out.text, usage: out.usage };
-    if (!out.failure.retryable || attempt === state.args.config.retries) {
-      return { ok: false, error: redact(out.failure.message, state.args.apiKey), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
-    }
-    await delay(out.failure.retryAfterMs ?? backoff(attempt), state.args.signal);
-  }
-  return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
 }
 
 async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
@@ -278,20 +255,4 @@ function toBatchSources(sources: readonly SvgSource[]): BatchSource[] {
 
 export function message(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
-}
-
-function backoff(attempt: number): number {
-  return Math.min(8_000, 500 * 2 ** attempt);
-}
-
-async function delay(ms: number, signal: AbortSignal): Promise<void> {
-  if (ms <= 0) return;
-  await new Promise<void>((resolve) => {
-    const done = () => {
-      window.clearTimeout(timer);
-      resolve();
-    };
-    const timer = window.setTimeout(done, ms);
-    signal.addEventListener("abort", done, { once: true });
-  });
 }
