@@ -23,6 +23,7 @@ Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated a
 | `archive/2026-10-01-svg-batches-limits-preview/design.md` | Generate SVG fixes: one request per batch with a paginated confirmation, reasoning-tier caps + timeout floors, per-request outcomes, one zoom value, layout-only preview stylesheet |
 | `archive/2026-10-01-svg-preview-cost/design.md` | SVG preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |
 | `archive/2026-10-01-svg-preview-rendering/design.md` | SVG preview: root cause of "copies but paints nothing", the sanitize/fit/inline pipeline, id scoping, rejected alternatives |
+| `archive/2026-10-05-svg-confirm-log/design.md` | Final-prompt confirmation preview + the docked global activity log: ownership, event schema, storage, redaction, retention, tests |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

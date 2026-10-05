@@ -19,6 +19,8 @@ export interface SvgDialogsProps {
   config: SvgConfig;
   caps: ModelCaps;
   params: SamplingParams;
+  /** The stored prompt the confirmation previews and the runner sends. */
+  prompt: string;
   rootRef: { current: DirHandleLike | null };
   readCode: (id: string, version: number) => Promise<string | null>;
   onConfirm: () => void;
@@ -31,7 +33,7 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   if (dialog === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
-      rootRef={p.rootRef} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
+      prompt={p.prompt} rootRef={p.rootRef} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);
   if (!row) return null;

@@ -6,6 +6,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatEntryBody } from "../src/lib/log";
+import { getLogState, resetLogStore } from "../src/log/logstore";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
@@ -153,6 +155,7 @@ beforeEach(async () => {
   await clearApiKey();
   window.localStorage.clear();
   stored.clear();
+  resetLogStore();
   resetAppStore();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -657,6 +660,31 @@ describe("Generate SVG panel", () => {
     await act(async () => { (q("[data-testid=hist-undo]") as HTMLButtonElement).click(); });
     await settle();
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("Pending");
+  });
+
+  it("records its user actions in the global log, with the key as a mask only", async () => {
+    await mount(await makeRoot());
+    await selectEffort("high");
+    await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
+    await settle();
+    await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "ui_log_key_1234"));
+    await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
+    await settle();
+    await act(async () => { input("[data-testid=svg-check-all]").click(); });
+    await settle();
+    await act(async () => { (q("[data-testid=svg-generate-selected]") as HTMLButtonElement).click(); });
+    await settle();
+    await act(async () => { (q(`[data-testid=svg-approve-${FOG}]`) as HTMLButtonElement).click(); });
+    await settle();
+
+    const logged = getLogState().entries.map(formatEntryBody).join("\n");
+    expect(logged).toContain("svg.sampling-changed");
+    expect(logged).toContain("svg.key-saved");
+    expect(logged).toContain("svg.confirm-opened");
+    expect(logged).toContain("sources=2");
+    expect(logged).toContain("svg.review-decided");
+    expect(logged).toContain("history.push"); // the decision is an undoable state change
+    expect(logged).not.toContain("ui_log_key_1234"); // the key itself is never logged
   });
 });
 

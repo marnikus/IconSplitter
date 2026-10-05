@@ -3,6 +3,8 @@
 // an undo pressed on one tab able to reverse an action made on another (RULE 12).
 
 import App from "../App";
+import LogDock from "../log/LogDock";
+import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
 import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
@@ -53,12 +55,14 @@ function Shell() {
       {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
       {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
       {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
+      <LogDock />
     </div>
   );
 }
 
 /** Switching tabs is navigation, not an edit — it is restored, but not undoable. */
 function openTab(tab: AppState["tab"]): void {
+  log({ feature: "app", action: "open-tab", detail: `tab=${tab}`, data: { tab } });
   setAppState({ tab });
 }
 

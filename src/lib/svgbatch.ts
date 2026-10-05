@@ -137,6 +137,8 @@ export interface BatchOutcome {
   cost: CostInfo;
   /** Redacted reason when the request failed; null after an answer. */
   error: string | null;
+  /** Provider request id when it reported one — the audit handle (never a key). */
+  requestId: string | null;
 }
 
 export interface OutcomeInput {
@@ -148,6 +150,8 @@ export interface OutcomeInput {
   missing: number;
   usage: Usage;
   error: string | null;
+  /** Absent when the request never got an answer. */
+  requestId?: string | null;
 }
 
 /** The outcome of one request: counts, tokens and the one cost decision. */
@@ -164,5 +168,6 @@ export function batchOutcome(input: OutcomeInput): BatchOutcome {
     usage,
     cost: costInfoFor(input.model, usage),
     error: input.error,
+    requestId: input.requestId ?? null,
   };
 }

@@ -8,7 +8,10 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { formatLogText } from "../src/lib/log";
 import { containsSecret, findSecrets } from "../src/lib/svgsecret";
+import { LOG_KEY, flushLog, getLogState, log, resetLogStore } from "../src/log/logstore";
+import { readKey } from "../src/state/safestorage";
 
 const SAMPLE = ["rq", "live", "QwErTy7UiOpAsDfGh4JkLzXcVbNm2"].join("_");
 const TEXT_EXT = /\.(ts|tsx|js|mjs|json|md|html|css|bat|sh|yml|yaml|txt)$/i;
@@ -32,6 +35,26 @@ function walk(dir: string, depth = 0): string[] {
     return walk(full, depth + 1);
   });
 }
+
+describe("the global log never leaks a key", () => {
+  it("redacts a logged key in the store, the stored payload and the copied text", () => {
+    localStorage.clear();
+    resetLogStore();
+    log({ feature: "svg", action: "key-saved", detail: `stored ${SAMPLE}`, data: { apiKey: SAMPLE, keyMask: "rq_live_••••" } });
+    flushLog();
+
+    const state = getLogState();
+    const storedPayload = readKey(LOG_KEY) ?? "";
+    const copied = formatLogText(state.entries);
+    for (const text of [state.entries[0].detail ?? "", JSON.stringify(state.entries[0].data), storedPayload, copied]) {
+      expect(text).not.toContain(SAMPLE);
+      expect(findSecrets(text)).toEqual([]);
+    }
+    expect(copied).toContain("•");
+    localStorage.clear();
+    resetLogStore();
+  });
+});
 
 describe("secret hygiene", () => {
   it("detects a key-shaped literal (the gate itself works)", () => {

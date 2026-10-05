@@ -7,12 +7,15 @@
 // dialog's lifetime. A plan that cannot be mapped is refused here (RULE 15).
 
 import { useEffect, useMemo, useState } from "react";
-import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
+import { batchManifest, planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
 import { effectivePerRequest, limitNote, timeoutLabel } from "../lib/effortlimits";
 import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelcaps";
+import { buildPayload } from "../lib/svgpayload";
+import { svgFileName } from "../lib/svgfile";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
 import { buildComposite, type BuiltComposite } from "./composite";
+import SvgPromptPreview from "./SvgPromptPreview";
 import { toBatchSource, type SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 
@@ -22,6 +25,8 @@ export interface SvgConfirmProps {
   config: SvgConfig;
   caps: ModelCaps;
   params: SamplingParams;
+  /** The user's editable prompt — what every request will carry (feature §1). */
+  prompt: string;
   rootRef: { current: DirHandleLike | null };
   onConfirm: () => void;
   onDismiss: () => void;
@@ -77,7 +82,7 @@ function PlanBody({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
   }
   if (plan.active === null) return null;
   return <BatchPager plan={plan.active} page={plan.page} pages={plan.plans.length}
-    picked={plan.picked} rootRef={p.rootRef} cache={plan.cache} onPage={plan.setPage} />;
+    picked={plan.picked} rootRef={p.rootRef} cache={plan.cache} p={p} onPage={plan.setPage} />;
 }
 
 function Actions({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
@@ -121,36 +126,83 @@ interface PagerProps {
   picked: SvgRow[];
   rootRef: { current: DirHandleLike | null };
   cache: Map<string, BuiltComposite>;
+  p: SvgConfirmProps;
   onPage: (page: number) => void;
 }
 
-/** One page = one request: its grid, its ordered filenames, its composite. */
-function BatchPager({ plan, page, pages, picked, rootRef, cache, onPage }: PagerProps) {
+function PagerHead({ plan, page, pages, onPage }: Pick<PagerProps, "plan" | "page" | "pages" | "onPage">) {
+  return (
+    <div className="svg-field-label">
+      <span data-testid="svg-batch-page">{plan.id} · Request {page + 1} of {pages}</span>
+      <span className="svg-pager-buttons">
+        <button type="button" className="svg-btn tiny" data-testid="svg-batch-prev" disabled={page === 0}
+          onClick={() => onPage(page - 1)}>← Previous</button>
+        <button type="button" className="svg-btn tiny" data-testid="svg-batch-next" disabled={page >= pages - 1}
+          onClick={() => onPage(page + 1)}>Next →</button>
+      </span>
+    </div>
+  );
+}
+
+function PagerFacts({ plan }: { plan: BatchPlan }) {
+  return (
+    <div className="svg-batch-shape">
+      <span data-testid="svg-batch-grid">{plan.cols}×{plan.rows} grid · {plan.items.length} image(s)</span>
+      <span data-testid="svg-batch-empty">{plan.emptyCells} empty cell(s)</span>
+    </div>
+  );
+}
+
+/** The ordered `position — name` manifest: what the model is told to draw. */
+function BatchItems({ plan }: { plan: BatchPlan }) {
+  return (
+    <ol className="svg-batch-items" data-testid="svg-batch-items">
+      {plan.items.map((item) => (
+        <li key={item.position}>
+          <span>{item.position} — {item.name}</span>{" → "}
+          <span className="svg-batch-file" data-testid="svg-batch-file">{svgFileName(item.name, 1)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** One page = one request: its grid, its ordered filenames, its composite and
+    the exact prompt/payload that will be sent for it. */
+function BatchPager({ plan, page, pages, picked, rootRef, cache, p, onPage }: PagerProps) {
   const sources = useMemo(() => plan.items
     .map((i) => picked.find((r) => r.source.id === i.sourceId)?.source)
     .filter((s): s is SvgSource => s !== undefined), [plan, picked]);
   const composite = usePageComposite(rootRef, plan.id, sources, cache);
+  const payload = useMemo(() => buildPayload({
+    model: p.config.model, userPrompt: p.prompt, manifest: batchManifest(plan.items),
+    image: composite.built?.dataUrl ?? "", caps: p.caps, params: p.params,
+  }), [p.config.model, p.prompt, p.caps, p.params, plan.items, composite.built]);
   return (
     <div className="svg-batch-pager" data-testid="svg-composite">
-      <div className="svg-field-label">
-        <span data-testid="svg-batch-page">{plan.id} · Request {page + 1} of {pages}</span>
-        <span className="svg-pager-buttons">
-          <button type="button" className="svg-btn tiny" data-testid="svg-batch-prev" disabled={page === 0}
-            onClick={() => onPage(page - 1)}>← Previous</button>
-          <button type="button" className="svg-btn tiny" data-testid="svg-batch-next" disabled={page >= pages - 1}
-            onClick={() => onPage(page + 1)}>Next →</button>
-        </span>
-      </div>
-      <div className="svg-batch-shape">
-        <span data-testid="svg-batch-grid">{plan.cols}×{plan.rows} grid · {plan.items.length} image(s)</span>
-        <span data-testid="svg-batch-empty">{plan.emptyCells} empty cell(s)</span>
-      </div>
-      <ol className="svg-batch-items" data-testid="svg-batch-items">
-        {plan.items.map((item) => <li key={item.position}><span>{item.position} — {item.name}</span></li>)}
-      </ol>
+      <PagerHead plan={plan} page={page} pages={pages} onPage={onPage} />
+      <PagerFacts plan={plan} />
+      <BatchItems plan={plan} />
+      <NamingNote />
       <Composite state={composite} />
+      <SvgPromptPreview prompt={payload.prompt} request={payload.request} state={previewState(composite)} />
     </div>
   );
+}
+
+/** Saving is versioned: the plain name first, `_vN` after that (RULE 22). */
+function NamingNote() {
+  return (
+    <p className="svg-note" data-testid="svg-confirm-naming">
+      Each answer is saved beside its source under the file name shown above. A source that already
+      has SVGs receives the next free <code>_vN</code> name — an existing file is never overwritten.
+    </p>
+  );
+}
+
+function previewState(composite: CompositeState): "building" | "ready" | "blocked" {
+  if (composite.built !== null) return "ready";
+  return composite.error === null ? "building" : "blocked";
 }
 
 interface CompositeState {

@@ -295,7 +295,7 @@ describe("runner events and the review decision", () => {
       failed: status === "done" ? 0 : 4, missing: 0,
       usage: { input: null, output: null, total: null, cost: null, currency: "USD" },
       cost: { actual: null, estimated: null, currency: "USD", pricing: "requesty-2026-10-01", basis: "none" as const },
-      error,
+      error, requestId: null,
     });
     const line = summaryLine({
       perRequest: 4, batches: 2, saved: 4, failed: 4, missing: 0, invalid: 0, cancelled: false,
@@ -320,7 +320,7 @@ describe("runner events and the review decision", () => {
         id: "batch_1_4", index: 1, count: 4, status: "done", saved: 3, failed: 1, missing: 0,
         usage: { input: 1000, output: 2000, total: 3000, cost: 0.05, currency: "USD" },
         cost: { actual: 0.05, estimated: null, currency: "USD", pricing: "requesty-2026-10-01", basis: "provider" },
-        error: null,
+        error: null, requestId: "req_7",
       }],
     });
     expect(line).toBe("SVG generation: 3 saved · 1 invalid · 0 missing · 3,000 tokens · $0.0500 reported");

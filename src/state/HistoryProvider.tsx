@@ -15,6 +15,7 @@ import {
   pushCoalesced as coalesce, pushEntry, redoLabel as nextRedoLabel, stepForward,
   undoLabel as nextUndoLabel, stepBack, type HistoryEntry, type Timeline,
 } from "../lib/history";
+import { log } from "../log/logstore";
 import { isTextField } from "../selection/hotkeys";
 import { applyEntry } from "./apply";
 import { loadHistory, saveHistory } from "./historystore";
@@ -82,6 +83,11 @@ function useTimeline(): TimelineStore {
   }, []);
   const record = useCallback((entry: NewEntry, gesture: boolean) => {
     setError(null);
+    // Every state change is visible in the global log, one line per gesture.
+    log({
+      level: "debug", feature: "history", action: gesture ? "push-gesture" : "push",
+      ids: targetIds(entry.ids), detail: entry.label, data: { type: entry.type, ids: entry.ids.length },
+    });
     commit(gesture ? coalesce(ref.current, stamp(entry), Date.now(), COALESCE_MS) : pushEntry(ref.current, stamp(entry)));
   }, [commit]);
   return {
@@ -99,9 +105,15 @@ function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, 
     const step = dir === "undo" ? stepBack(ref.current) : stepForward(ref.current);
     if (!step.entry) return;
     busy.current = true;
+    log({ feature: "history", action: dir, ids: targetIds(step.entry.ids), detail: step.entry.label, data: { type: step.entry.type } });
     const ok = await applyEntry(step.entry, dir === "undo" ? step.entry.before : step.entry.after);
     busy.current = false;
-    if (!ok) return setError(APPLY_FAILED); // cursor untouched: the timeline stays consistent
+    if (!ok) {
+      // cursor untouched: the timeline stays consistent, and the log says why
+      setError(APPLY_FAILED);
+      log({ level: "error", feature: "history", action: "apply-failed", detail: APPLY_FAILED, data: { type: step.entry.type } });
+      return;
+    }
     setError(null);
     commit(step.timeline);
   }, [commit, ref, setError]);
@@ -126,6 +138,11 @@ function useHotkeys(run: (dir: "undo" | "redo") => Promise<void>): void {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [run]);
+}
+
+/** The one id a log entry may name, so a bulk edit never dumps a whole list. */
+function targetIds(ids: string[]): Record<string, string> {
+  return ids.length === 1 ? { target: ids[0] } : {};
 }
 
 let seq = 0;

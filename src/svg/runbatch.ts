@@ -9,9 +9,9 @@
 
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
 import { timeoutHint } from "../lib/effortlimits";
-import { batchPrompt, singlePrompt } from "../lib/svgprompt";
 import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
-import { buildChatRequest, sendChatRequest, type Failure, type Usage } from "../lib/svgrequest";
+import { buildPayload } from "../lib/svgpayload";
+import { sendChatRequest, type Failure, type Usage } from "../lib/svgrequest";
 import { allocateUsage } from "../lib/svgusage";
 import { redact } from "../lib/svgsecret";
 import { newSidecar, withVersion, type SvgSidecar } from "../lib/svgfile";
@@ -24,14 +24,18 @@ import type { RunState } from "./runtypes";
 export async function runBatch(state: RunState, plan: BatchPlan, index: number): Promise<void> {
   const items = plan.items.map((i) => state.args.sources.find((s) => s.id === i.sourceId)).filter(isSource);
   if (items.length === 0) return;
-  const ctx = newBatchCtx({ state, plan, index, items, hash: "", usage: null, share: null, error: null });
+  const ctx = newBatchCtx({ state, plan, index, items, hash: "", usage: null, share: null, error: null, requestId: null });
   const composite = await tryComposite(ctx);
   if (composite === null) return finishBatch(ctx); // nothing was sent: every item is already failed
   announceStart(ctx, composite);
   ctx.hash = composite.hash;
   const sent = await sendBatch(ctx, composite);
-  if (!sent.ok) failBatch(ctx, sent.error, sent.failure, sent.retryAfterMs);
-  else await saveMatches(ctx, sent.text, sent.usage);
+  if (sent.ok) {
+    ctx.requestId = sent.requestId;
+    await saveMatches(ctx, sent.text, sent.usage);
+  } else {
+    failBatch(ctx, sent.error, sent.failure, sent.retryAfterMs);
+  }
   finishBatch(ctx);
 }
 
@@ -58,6 +62,8 @@ interface BatchCtx {
   share: Usage | null;
   /** Redacted reason the request failed; null after an answer. */
   error: string | null;
+  /** Provider request id once the request answered; null before and on failure. */
+  requestId: string | null;
 }
 
 interface Tally {
@@ -86,34 +92,53 @@ function finishBatch(ctx: BatchCtx): void {
   const report = batchOutcome({
     plan, index, model: state.args.config.model,
     saved: tally.saved, failed: tally.failed, missing: tally.missing,
-    usage: ctx.usage ?? zeroUsage(), error: ctx.error,
+    usage: ctx.usage ?? zeroUsage(), error: ctx.error, requestId: ctx.requestId,
   });
   state.outcomes.push(report);
   state.args.onEvent({ kind: "batch-done", report });
 }
 
-interface SendOk { ok: true; text: string; usage: Usage }
+interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
 
 async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promise<SendOk | SendBad> {
-  const { state, plan, items } = ctx;
-  const manifest = batchManifest(plan.items);
-  const prompt = items.length === 1 ? singlePrompt(state.args.prompt, items[0].stem) : batchPrompt(state.args.prompt, manifest);
-  const request = buildChatRequest({
-    model: state.args.config.model, prompt, image: composite.dataUrl,
+  const { state, plan } = ctx;
+  // The prompt/request come from the ONE builder the confirmation previews, so
+  // the text a page shows is the text this request carries (feature §1).
+  const payload = buildPayload({
+    model: state.args.config.model, userPrompt: state.args.prompt,
+    manifest: batchManifest(plan.items), image: composite.dataUrl,
     caps: state.args.caps, params: state.args.params,
   });
   const config = { ...state.args.config, timeoutMs: state.timeoutMs };
   for (let attempt = 0; attempt <= config.retries; attempt++) {
     if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
-    const out = await sendChatRequest({ config, apiKey: state.args.apiKey, request, signal: state.args.signal });
-    if (out.ok) return { ok: true, text: out.text, usage: out.usage };
+    const out = await sendChatRequest({ config, apiKey: state.args.apiKey, request: payload.request, signal: state.args.signal });
+    if (out.ok) return { ok: true, text: out.text, usage: out.usage, requestId: out.requestId };
     if (!out.failure.retryable || attempt === config.retries) {
       return { ok: false, error: failureText(state, out.failure), failure: out.failure.kind, retryAfterMs: out.failure.retryAfterMs };
     }
-    await delay(out.failure.retryAfterMs ?? backoff(attempt), state.args.signal);
+    await waitToRetry(state, { batchId: plan.id, attempt, retries: config.retries, failure: out.failure });
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
+}
+
+/** Everything one retry decision carries (RULE 16.4: four params is the cap). */
+interface RetryPlan {
+  batchId: string;
+  attempt: number;
+  retries: number;
+  failure: Failure;
+}
+
+/** Announces the retry and its wait, then waits — the log reads this event. */
+async function waitToRetry(state: RunState, plan: RetryPlan): Promise<void> {
+  const delayMs = plan.failure.retryAfterMs ?? backoff(plan.attempt);
+  state.args.onEvent({
+    kind: "request-retry", batchId: plan.batchId, attempt: plan.attempt + 1, retries: plan.retries,
+    failure: plan.failure.kind, status: plan.failure.status, delayMs,
+  });
+  await delay(delayMs, state.args.signal);
 }
 
 /** The user-facing reason: redacted, and for a timeout it names the tier and the fix. */

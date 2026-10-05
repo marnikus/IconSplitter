@@ -6,10 +6,14 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { effectivePerRequest } from "../src/lib/effortlimits";
 import { capsFor, type SamplingParams } from "../src/lib/modelcaps";
+import { batchManifest, planBatches } from "../src/lib/svgbatch";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
+import { buildPayload, payloadLines } from "../src/lib/svgpayload";
 import { toRow } from "../src/svg/rowmodel";
+import { toBatchSource } from "../src/svg/sources";
 import SvgConfirm from "../src/svg/SvgConfirm";
 import type { SvgRow } from "../src/svg/types";
 import type { SvgSource } from "../src/svg/sources";
@@ -52,6 +56,10 @@ function rows(n: number): SvgRow[] {
   });
 }
 
+/** A distinctive prompt: the preview must carry it verbatim, nothing added. */
+const PROMPT = "Create flat icons with clean geometry.\nNever leave a visible gap.";
+const PARAMS: SamplingParams = { temperature: null, maxTokens: 8_000, effort: null };
+
 interface MountOpts {
   count: number;
   perRequest?: number;
@@ -66,6 +74,7 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
       <SvgConfirm
         ids={all.map((r) => r.source.id)}
         rows={all}
+        prompt={PROMPT}
         config={{ ...DEFAULT_CONFIG, imagesPerRequest: opts.perRequest ?? 4 }}
         caps={capsFor(DEFAULT_CONFIG.model)}
         params={{ temperature: null, maxTokens: 8_000, effort: opts.effort ?? null }}
@@ -79,7 +88,7 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
   return all;
 }
 
-const items = () => Array.from(host.querySelectorAll("[data-testid=svg-batch-items] span")).map((s) => s.textContent ?? "");
+const items = () => Array.from(host.querySelectorAll("[data-testid=svg-batch-items] li")).map((li) => li.textContent ?? "");
 const click = async (sel: string) => {
   await act(async () => { (q(sel) as HTMLButtonElement).click(); });
   await settle();
@@ -110,13 +119,16 @@ describe("SvgConfirm — the whole plan before any request", () => {
   it("paginates every batch with its own composite and exact ordered filenames", async () => {
     const all = await mount({ count: 5, perRequest: 4 });
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 2");
-    expect(items()).toEqual(["1 — icon-1_AI", "2 — icon-2_AI", "3 — icon-3_AI", "4 — icon-4_AI"]);
+    expect(items()).toEqual([
+      "1 — icon-1_AI → icon-1_AI.svg", "2 — icon-2_AI → icon-2_AI.svg",
+      "3 — icon-3_AI → icon-3_AI.svg", "4 — icon-4_AI → icon-4_AI.svg",
+    ]);
     expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src).toContain(all.slice(0, 4).map((r) => r.source.relPath).join("|"));
     expect((q("[data-testid=svg-batch-prev]") as HTMLButtonElement).disabled).toBe(true);
 
     await click("[data-testid=svg-batch-next]");
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 2 of 2");
-    expect(items()).toEqual(["1 — icon-5_AI"]);
+    expect(items()).toEqual(["1 — icon-5_AI → icon-5_AI.svg"]);
     expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src).toContain(all[4].source.relPath);
 
     // one composite built per visited page — going back does not rebuild
@@ -140,8 +152,9 @@ describe("SvgConfirm — the whole plan before any request", () => {
     // positions restart at 1 inside EVERY request (they name the contact
     // sheet's cells), while the file names carry on with the real image
     const first = (pages - 1) * 4 + 1;
-    expect(shown[0]).toBe(`1 — icon-${first}_AI`);
-    expect(shown[shown.length - 1]).toBe(`${shown.length} — icon-${first + shown.length - 1}_AI`);
+    expect(shown[0]).toBe(`1 — icon-${first}_AI → icon-${first}_AI.svg`);
+    const last = first + shown.length - 1;
+    expect(shown[shown.length - 1]).toBe(`${shown.length} — icon-${last}_AI → icon-${last}_AI.svg`);
     // a partial page keeps a square grid with the cells it could not fill
     const shape = q("[data-testid=svg-batch-grid]")?.textContent ?? "";
     const cells = (() => { const m = /(\d+)×(\d+) grid/.exec(shape); return m ? Number(m[1]) * Number(m[2]) : 0; })();
@@ -155,7 +168,11 @@ describe("SvgConfirm — the whole plan before any request", () => {
     await click("[data-testid=svg-batch-next]");
     await click("[data-testid=svg-batch-next]");
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 3 of 3");
-    expect(items()).toEqual(["1 — icon-9_AI", "2 — icon-10_AI", "3 — icon-11_AI"]);
+    expect(items()).toEqual([
+      "1 — icon-9_AI → icon-9_AI.svg",
+      "2 — icon-10_AI → icon-10_AI.svg",
+      "3 — icon-11_AI → icon-11_AI.svg",
+    ]);
     expect(q("[data-testid=svg-batch-grid]")?.textContent).toContain("2×2");
     expect(q("[data-testid=svg-batch-empty]")?.textContent).toContain("1");
     expect((q("[data-testid=svg-batch-next]") as HTMLButtonElement).disabled).toBe(true);
@@ -168,7 +185,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
     await act(async () => {
       ui = createRoot(host);
       ui.render(
-        <SvgConfirm ids={all.map((r) => r.source.id)} rows={all} config={DEFAULT_CONFIG}
+        <SvgConfirm ids={all.map((r) => r.source.id)} rows={all} config={DEFAULT_CONFIG} prompt={PROMPT}
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
           rootRef={{ current: new FakeDir("split_root") }} onConfirm={onConfirm} onDismiss={onDismiss} />,
       );
@@ -187,5 +204,59 @@ describe("SvgConfirm — the whole plan before any request", () => {
     await mount({ count: 1 });
     expect(q("[data-testid=svg-composite-error]")?.textContent).toContain("source image gone");
     expect(q("[data-testid=svg-composite-img]")).toBeNull();
+  });
+});
+
+// The preview exists to prove, before a byte is sent, that the prompt and the
+// wire payload on this page are exactly what the runner will send (feature §1).
+const promptText = () => q("[data-testid=svg-confirm-prompt]")?.textContent ?? "";
+const payloadText = () => host.querySelector("[data-testid=svg-confirm-payload]")?.textContent ?? "";
+const payloadItems = () => Array.from(host.querySelectorAll("[data-testid=svg-confirm-payload] li")).map((li) => li.textContent ?? "");
+const fileItems = () => Array.from(host.querySelectorAll("[data-testid=svg-batch-file]")).map((s) => s.textContent ?? "");
+
+/** The payload the runner would build for one page of this selection. */
+function expectedPayload(pageRows: SvgRow[]) {
+  const caps = capsFor(DEFAULT_CONFIG.model);
+  const perRequest = effectivePerRequest(4, caps, PARAMS);
+  const plans = planBatches(pageRows.map((r) => toBatchSource(r.source)), perRequest);
+  return buildPayload({
+    model: DEFAULT_CONFIG.model, userPrompt: PROMPT, manifest: batchManifest(plans[0].items),
+    image: `data:image/png;base64,${pageRows.map((r) => r.source.relPath).join("|")}`,
+    caps, params: PARAMS,
+  });
+}
+
+describe("SvgConfirm — the exact API prompt is previewed", () => {
+  it("shows the batch prompt byte for byte, with the ordered manifest, the naming rule and the wire fields", async () => {
+    const all = await mount({ count: 4 });
+    const expected = expectedPayload(all);
+
+    expect(promptText()).toBe(expected.prompt);
+    expect(promptText()).toContain(PROMPT);
+    expect(promptText()).toContain("1 — icon-1_AI");
+    expect(promptText()).toContain("4 — icon-4_AI");
+    expect(promptText()).toContain("Return the SVGs in the same numeric order");
+    expect(payloadItems()).toEqual(payloadLines(expected.request));
+    expect(payloadText()).toContain("messages[0].content[1]: image_url");
+    expect(fileItems()).toEqual(["icon-1_AI.svg", "icon-2_AI.svg", "icon-3_AI.svg", "icon-4_AI.svg"]);
+  });
+
+  it("shows the single-image prompt (no manifest) on a one-image page", async () => {
+    const all = await mount({ count: 5 });
+    await click("[data-testid=svg-batch-next]");
+    const expected = expectedPayload(all.slice(4));
+
+    expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 2 of 2");
+    expect(promptText()).toBe(expected.prompt);
+    expect(promptText()).toContain("icon-5_AI");
+    expect(promptText()).not.toContain("1 — icon-5_AI");
+    expect(payloadItems()).toEqual(payloadLines(expected.request));
+  });
+
+  it("shows the sampling fields that will really be sent", async () => {
+    await mount({ count: 2 });
+    expect(payloadItems().join("\n")).toContain(`model: ${DEFAULT_CONFIG.model}`);
+    expect(payloadItems().join("\n")).toContain(`${capsFor(DEFAULT_CONFIG.model).tokenField}:`);
+    expect(payloadItems().join("\n")).not.toContain("temperature:");
   });
 });

@@ -17,6 +17,7 @@ export type RunEvent =
   | { kind: "item-start"; batchId: string; position: number; sourceId: string }
   | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; sidecar: SvgSidecar | null }
   | { kind: "item-failed"; batchId: string; position: number; sourceId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
+  | { kind: "request-retry"; batchId: string; attempt: number; retries: number; failure: Failure["kind"]; status: number | null; delayMs: number }
   | { kind: "request-failed"; batchId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null; count: number }
   | { kind: "batch-done"; report: BatchOutcome }
   | { kind: "cancelled" };

@@ -305,7 +305,8 @@ contenteditable — so undo still works after using the zoom slider or a checkbo
 ## P. Generate SVG — `src/svg/*` (verified 2026-10-01)
 
 Source: `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`,
-`SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgPanel.tsx`.
+`SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgPromptPreview.tsx`,
+`SvgDialogs.tsx`, `SvgPanel.tsx`.
 
 Source bar (only after a root is remembered; `svg-root-empty` /
 `svg-unsupported` are the two empty states and stay distinct):
@@ -409,6 +410,7 @@ Dialogs:
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
 | `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
 | `svg-composite-building` / `svg-composite-error` | the honest in-progress and could-not-build states |
+| `svg-confirm-prompt` / `svg-confirm-payload` / `svg-confirm-payload-waiting` | the FINAL prompt text exactly as the request will carry it (same `buildPayload` value the runner sends, never re-typed or extended) and that request's wire fields once the page's composite exists; while it does not, the preview says what it is waiting for instead of guessing |
 | `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
 | `svg-history-dialog` | every version: `svg-history-table`, `svg-history-v{n}` (one row per version), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-close`, `svg-history-done` |
 
@@ -417,3 +419,24 @@ failure), `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
+
+## Q. Global activity log — `src/log/*` (verified 2026-10-05)
+
+`Workbench` mounts the dock once, above the tabs, so every tab shares one
+instance, one timeline and one stored list. `log-minimize` collapses it to the
+header; the spacer keeps the page from jumping when it does.
+
+| Test id | Element | Notes |
+|---|---|---|
+| `log-dock` | `section[aria-label="Activity log"]` | fixed at the bottom on every tab; head + body heights come from `LOG_DOCK_HEAD_PX` / `LOG_DOCK_BODY_PX` |
+| `log-head` | header | `log-count` = "N of max[ · E errors][ · W warnings]"; `log-autoscroll` = "following new entries" or "paused — scroll to the bottom to resume" |
+| `log-max` | `select` | the stored cap (50/100/200/500/1000, default 200); changing it appends one `log.max-entries` entry and trims the list |
+| `log-copy` / `log-clear` / `log-minimize` | buttons | Copy all (a blocked clipboard explains itself in `log-note`; a successful copy appends one debug `log.copied` entry), Clear (leaves exactly one `log.cleared` entry), Minimize/Restore (`aria-expanded`) |
+| `log-note` | `role="status"` text | the last local note ("Copied 42 entries…", "Clipboard is blocked…", "Log cleared") — present only while there is one |
+| `log-body` | `div[role="log"]` (`aria-live="polite"`) | the scrolling surface: it follows the tail only while it is at the bottom (24 px slack) and resumes when the user returns there |
+| `log-list` / `log-entry` | `ul` / `li` | one row per entry, `data-level` ∈ debug/info/warn/error; the text is the formatted line (timestamp, level, feature.action, ids, redacted detail, counts/tokens/cost) |
+| `log-empty` | text | "No activity recorded yet." |
+
+Redaction is a property of the core (`src/lib/log.ts`): key-shaped text and
+`data:` URLs are masked, sensitive key names are dropped, numeric `tokens` are
+kept, and a stored payload that does not re-validate is ignored (RULE 20).

@@ -855,3 +855,108 @@ to `docs/archive/`.
   follow all four tiers (low 120 s/4, medium 300 s/2, high and xhigh 600 s/1).
 * `tests/svg_io.test.ts` — the run summary line names a failed request
   ("1 request failed") while a clean run claims none.
+
+# Quality re-check — 2026-10-05 (final-prompt confirmation preview + global activity log)
+
+Closing check-in for this change set: the confirmation now shows the
+FINAL prompt and the request wire fields byte-for-byte before anything is sent,
+and a single global log dock records user actions, state changes, generation
+stages, requests, retries, errors, tokens and cost on every tab. Design record:
+[`docs/archive/2026-10-05-svg-confirm-log/design.md`](../archive/2026-10-05-svg-confirm-log/design.md).
+
+## What changed
+
+* `src/lib/log.ts` (new) — the pure log core: `LOG_VERSION = 1`, the entry
+  schema, sanitising/redaction (sensitive names dropped, key-shaped text and
+  `data:` URLs masked, numeric `tokens`/`cost` kept, detail/value/ids truncated),
+  `clampLogMax`, `appendEntry` (cap by trimming the oldest), `createEntry`,
+  `formatEntry`/`formatEntryBody`/`formatLogText`, and the payload
+  (de)serialiser that ignores a foreign version or a corrupt row.
+* `src/log/*` (new module) — `logstore.ts` (the one live list: cap, minimized,
+  debounced 150 ms writes, `flushLog`, `resetLogStore`, subscription),
+  `useLog.ts` (the React bridge), `scroll.ts` (`LOG_BOTTOM_SLACK_PX = 24`,
+  `isAtBottom`), `useAutoScroll.ts` (follow the tail only while at the bottom),
+  and the dock `LogDock`/`LogHead`/`LogList`/`LogRow` (minimize/restore, cap
+  select, Copy all, Clear; the note says so when the clipboard is blocked).
+* `src/svg/SvgPromptPreview.tsx` (new) — the confirmation's verbatim preview:
+  the prompt text exactly as `lib/svgpayload` built it and, once the page's
+  composite exists, that request's wire fields; until then it says what it is
+  waiting for instead of guessing.
+* `src/svg/SvgConfirm.tsx` — refactored (265 → 264 lines including the new
+  preview) so the pager head, the facts, the ordered manifest and the composite
+  each keep their own small component; the dialog still sends nothing by being
+  opened.
+* Wiring: `runlog.withRunLog(sink)` (UI sink first, then the log) applied in
+  `actions.ts`; `HistoryProvider` (push/push-gesture/undo/redo/apply-failed),
+  `scan.ts` (scan + warnings + failure), `keystore.ts` (mask-only key
+  save/clear), `actions.ts` (root picked, prompt reset, config/sampling
+  changes, review decision, confirm opened, generate confirmed, cancel
+  requested) and `Workbench.openTab` now emit entries.
+* CSS for `.svg-payload-*`; docs: `SYSTEM_OF_RECORD.md` (§2, §6, §7, §8, §11,
+  I-22…I-26, §13), `UI_SELECTORS.md` (§P source list + preview row, new §Q for
+  the dock), `docs/README.md`.
+
+## The numbers (measured)
+
+| lane | before | after |
+|---|---|---|
+| `tsc --noEmit` | clean | clean |
+| eslint | 0 errors / 8 warnings | 0 errors / 8 warnings |
+| `tools/quality.mjs --changed --allow-legacy` | GATE PASSED | GATE PASSED (23 changed files) |
+| tests | 61 files / 574 | **68 files / 641** |
+| coverage (all files, stmts/branch/funcs/lines) | 97.34 / 92.85 / 96.94 / 98.11 | **97.33 / 92.95 / 97.10 / 98.21** |
+| jscpd `src --min-tokens 60` | 12 clones | 12 clones (no new TS/TSX clone) |
+| build `dist/index.html` | 608.20 kB / gzip 178.81 kB | 626.63 kB / gzip 184.40 kB |
+
+`bash tools/pre_push_check.sh` → **ALL LANES PASSED** (6/6).
+`npx knip` still cannot run in this sandbox (`oxc-parser` fails to allocate its
+`ArrayBuffer`, on `HEAD` as well) — the dead-code lane stays unverified here.
+
+## RULE 18 / RULE 16 re-check
+
+New/changed production files, every one inside the 150–300-line ideal or
+explained by a single responsibility: `lib/log.ts` 211, `svg/actions.ts` 299,
+`svg/SvgConfirm.tsx` 264, `state/HistoryProvider.tsx` 154, `log/logstore.ts`
+119, `svg/runlog.ts` 114, `svg/scan.ts` 107, `ui/Workbench.tsx` 80,
+`svg/keystore.ts` 77, `log/LogHead.tsx` 76, `svg/runtypes.ts` 74,
+`svg/SvgPromptPreview.tsx` 55, `log/LogDock.tsx` 44, `log/useAutoScroll.ts` 43,
+`log/LogList.tsx` 29, `log/LogRow.tsx` 22, `log/scroll.ts` 16, `log/useLog.ts` 10.
+
+The gate caught four real offenders in the first cut and each was fixed in
+RULE 19 order by extracting a responsibility, never by padding or renaming:
+`LogDock`'s 38-line component → the header moved to `LogHead`; `SvgConfirm`'s
+38-line `BatchPager` → `PagerHead` + `PagerFacts` + `BatchItems`; `actions.ts`
+at 302 lines and a 31-line hook → `refreshModelsNow()` moved out; and
+`runbatch.waitToRetry`'s 5 params → the `RetryPlan` object. `lib/log.toEntry`
+was at CC 12 → `isStoredEntry` predicate. No function is above 30 lines /
+4 params / CC 10 / nesting 4, and no anti-gaming name pattern is used. The full
+gate still reports only the three recorded legacy files (`src/App.tsx`,
+`src/lib/detect.ts`, `src/lib/render.ts`), unchanged.
+
+Baseline: **untouched** — `tools/quality_baseline.json` is not re-recorded.
+
+Context files stay above the RULE 18 200-line ideal (`SYSTEM_OF_RECORD.md` 850,
+this log 857, `UI_SELECTORS.md` 442) — the same recorded debt as before, with the
+design detail pushed to `docs/archive/`.
+
+## Regression tests (RULE 8 — each fails if the behaviour is deleted)
+
+* `tests/log_lib.test.ts` — the schema, sanitising, clamping, trimming,
+  formatting, payload round-trip and the corrupt/foreign refusals.
+* `tests/log_store.test.ts` / `tests/log_scroll.test.ts` — debounced writes,
+  cap change, clear-leaves-one, minimize/restore, and the bottom-slack rule.
+* `tests/log_ui.test.tsx` — the dock on every tab with ONE instance and one
+  history, minimize/restore, Copy all and the blocked-clipboard note, Clear,
+  the cap select and the follow/pause status.
+* `tests/log_wiring.test.tsx` — the emitters: history push/undo/apply failure,
+  scan warnings, key save/clear (mask only, never the key).
+* `tests/svg_runlog.test.ts` — every `RunEvent` → entry mapping (stages,
+  retries, failures, tokens, cost) and that no entry carries the composite
+  data URL.
+* `tests/svg_confirm.test.tsx` — the preview equals `buildPayload`'s prompt and
+  `payloadLines`' wire fields for the same page, page by page.
+* `tests/svg_runner.test.ts` — the text actually sent equals that same
+  `buildPayload` value (single and batch), which closes the
+  preview → payload chain.
+* `tests/secret_hygiene.test.ts` — the stored log, its formatted text and the
+  copied text never contain the key.

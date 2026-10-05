@@ -4,6 +4,7 @@
 // used (missing AI image, unreadable file, corrupt decision file).
 
 import type { DirHandleLike } from "../lib/fs";
+import { log } from "../log/logstore";
 import { loadHandles, saveHandles } from "../batch/store";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
 import { loadSidecar } from "./sidecar";
@@ -46,14 +47,38 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
     s.setRows(rows);
     s.setDiscovery(found);
     s.setRootToken();
+    logScan(found, rows.length);
     saveSourceIndex(found.sources.map(toIndexEntry));
     pruneChecked(rows);
     reportScan(found, s.say);
   } catch {
+    log({ level: "error", feature: "svg", action: "scan-failed", detail: "the scan failed — the folder may be unreadable" });
     s.say("Rescan failed — the folder may be unreadable", true);
   } finally {
     s.setBusy(null);
   }
+}
+
+/** What a scan found, so an empty or partial list is never a mystery (§3). */
+function logScan(found: Discovery, eligible: number): void {
+  log({
+    feature: "svg", action: "scan", detail: `found ${eligible} approved source(s)`,
+    data: {
+      eligible, approved: found.approvedTotal, missing: found.missing.length,
+      unreadable: found.unreadable.length, corruptDecisions: found.corruptDecisions,
+    },
+  });
+  for (const warning of scanWarnings(found)) {
+    log({ level: "warn", feature: "svg", action: "scan-warning", detail: warning });
+  }
+}
+
+function scanWarnings(found: Discovery): string[] {
+  return [
+    ...(found.corruptDecisions ? ["review-decisions.json could not be parsed — kept the previous decisions in memory"] : []),
+    ...(found.missing.length > 0 ? [`${found.missing.length} approved pair(s) lost their AI image since the last scan`] : []),
+    ...(found.unreadable.length > 0 ? [`${found.unreadable.length} file(s) could not be read and were skipped`] : []),
+  ];
 }
 
 function reportScan(found: Discovery, say: (m: string, e?: boolean) => void): void {

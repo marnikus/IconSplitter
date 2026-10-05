@@ -1,0 +1,104 @@
+// svg_runlog.test.ts — the SVG feature's log vocabulary (feature §3): every run
+// stage, request, retry, error, token and cost reaches the global log with its
+// stable ids — and the composite's data URL, which travels on the same events
+// the UI needs, never does.
+import { describe, expect, it } from "vitest";
+import { createEntry, formatEntry } from "../src/lib/log";
+import { NO_USAGE, type Usage } from "../src/lib/svgrequest";
+import { batchOutcome, planBatches } from "../src/lib/svgbatch";
+import { runLogSpecs } from "../src/svg/runlog";
+import type { RunEvent } from "../src/svg/runtypes";
+
+/** Assembled from parts so this test file stays free of a key literal. */
+const KEY = ["rq", "live", "QwErTy7UiOpAsDfGh4JkLzXcVbNm2"].join("_");
+const AT = "2026-10-05T12:00:00.000Z";
+const IMAGE = `data:image/png;base64,${"A".repeat(120)}`;
+
+const PLAN = planBatches(
+  [{ sourceId: "pair_1", name: "icon-1_AI", relPath: "arch/icon-1_AI.png", fingerprint: "1:1" }],
+  4,
+)[0];
+
+const USAGE: Usage = { input: 100, output: 200, total: 300, cost: 0.01, currency: "USD" };
+
+const spec = (event: RunEvent) => runLogSpecs(event)[0];
+/** The one line the panel shows, after the log's own redaction. */
+const line = (event: RunEvent) => formatEntry(createEntry(spec(event), AT, "l1"));
+
+const STAGES: RunEvent[] = [
+  { kind: "run-start", batches: 2, perRequest: 4 },
+  { kind: "batch-start", batchId: "batch_1_1", index: 1, count: 1, batches: 2, perRequest: 4, cols: 1, rows: 1, composite: IMAGE, hash: "h1" },
+  { kind: "item-start", batchId: "batch_1_1", position: 1, sourceId: "pair_1" },
+  { kind: "item-saved", batchId: "batch_1_1", position: 1, sourceId: "pair_1", version: 2, icons: 3, warnings: [], usage: USAGE, sidecar: null },
+  { kind: "item-failed", batchId: "batch_1_1", position: 1, sourceId: "pair_1", error: `401 with ${KEY}`, failure: "auth", retryAfterMs: null },
+  { kind: "request-retry", batchId: "batch_1_1", attempt: 1, retries: 2, failure: "rate_limit", status: 429, delayMs: 2_000 },
+  { kind: "request-failed", batchId: "batch_1_1", error: "500 boom", failure: "provider", retryAfterMs: null, count: 4 },
+  { kind: "cancelled" },
+];
+
+describe("runLogSpecs — the run stages and their ids", () => {
+  it("maps every run event kind to one entry of the svg feature", () => {
+    for (const event of STAGES) {
+      const s = spec(event);
+      expect(s.feature).toBe("svg");
+      expect(s.action).not.toBe("");
+    }
+    expect(spec(STAGES[0]).action).toBe("run-start");
+    expect(spec(STAGES[1]).action).toBe("request-start");
+    expect(spec(STAGES[2]).action).toBe("item-start");
+    expect(spec(STAGES[3]).action).toBe("item-saved");
+    expect(spec(STAGES[4]).action).toBe("item-failed");
+    expect(spec(STAGES[5]).action).toBe("request-retry");
+    expect(spec(STAGES[6]).action).toBe("request-failed");
+    expect(spec(STAGES[7]).action).toBe("cancelled");
+  });
+
+  it("names the counts that make a request readable", () => {
+    expect(spec(STAGES[0]).data).toMatchObject({ batches: 2, perRequest: 4 });
+    expect(spec(STAGES[1]).ids).toEqual({ batch: "batch_1_1" });
+    expect(spec(STAGES[1]).data).toMatchObject({ request: 1, batches: 2, images: 1, grid: "1×1", composite: "h1" });
+    expect(spec(STAGES[3]).data).toMatchObject({ version: 2, icons: 3, tokens: 300, cost: 0.01 });
+    expect(spec(STAGES[3]).ids).toEqual({ batch: "batch_1_1", source: "pair_1" });
+    expect(spec(STAGES[5]).level).toBe("warn");
+    expect(spec(STAGES[5]).data).toMatchObject({ attempt: 1, retries: 2, failure: "rate_limit", status: 429, delayMs: 2_000 });
+    expect(spec(STAGES[6]).level).toBe("error");
+    expect(spec(STAGES[7]).level).toBe("warn");
+    expect(spec(STAGES[4]).level).toBe("error");
+  });
+
+  it("never carries the composite's data URL, even though the event does", () => {
+    const start = STAGES[1];
+    expect(start.kind === "batch-start" && start.composite).toBe(IMAGE);
+    expect(JSON.stringify(spec(start))).not.toContain("A".repeat(40));
+    expect(line(start)).toContain("composite=h1");
+    expect(line(start)).not.toContain("A".repeat(40));
+  });
+
+  it("redacts a key-shaped error and keeps the message", () => {
+    const text = line(STAGES[4]);
+    expect(text).not.toContain(KEY);
+    expect(text).toContain("401");
+    expect(text).toContain("•");
+  });
+
+  it("reports a finished request's tokens, cost and provider id", () => {
+    const report = batchOutcome({
+      plan: PLAN, index: 1, model: "openai/gpt-6.1-sol", saved: 1, failed: 0, missing: 0,
+      usage: USAGE, error: null, requestId: "req_1",
+    });
+    const done: RunEvent = { kind: "batch-done", report };
+    expect(spec(done).level).toBe("info");
+    expect(spec(done).data).toMatchObject({ request: 1, saved: 1, tokens: 300, requestId: "req_1" });
+    expect(line(done)).toContain("request 1");
+
+    const failed: RunEvent = {
+      kind: "batch-done",
+      report: batchOutcome({
+        plan: PLAN, index: 2, model: "openai/gpt-6.1-sol", saved: 0, failed: 1, missing: 0,
+        usage: NO_USAGE, error: "500 boom",
+      }),
+    };
+    expect(spec(failed).level).toBe("error");
+    expect(line(failed)).toContain("500 boom");
+  });
+});

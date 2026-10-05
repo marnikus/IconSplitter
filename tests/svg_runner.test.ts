@@ -9,6 +9,7 @@ import { DEFAULT_CONFIG, type SvgConfig } from "../src/lib/svgconfig";
 import { capsFor, type SamplingParams } from "../src/lib/modelcaps";
 import { effectiveTimeoutMs, EFFORT_RULES } from "../src/lib/effortlimits";
 import { compositeLayout } from "../src/lib/svgcomposite";
+import { buildPayload } from "../src/lib/svgpayload";
 import { runGeneration, type RunEvent, type RunSummary } from "../src/svg/runner";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
@@ -73,7 +74,7 @@ function answerFor(items: string[]): Response {
 }
 
 interface Transport {
-  calls: { items: string[]; effort: string | null }[];
+  calls: { items: string[]; effort: string | null; text: string }[];
   fetch: typeof fetch;
 }
 
@@ -82,8 +83,8 @@ function transport(opts: { failAt?: number; never?: boolean } = {}): Transport {
   const calls: Transport["calls"] = [];
   const doFetch = async (_url: string, init: RequestInit): Promise<Response> => {
     const items = requestItems(init);
-    const body = JSON.parse(String(init.body)) as { reasoning_effort?: string };
-    calls.push({ items, effort: body.reasoning_effort ?? null });
+    const body = JSON.parse(String(init.body)) as { reasoning_effort?: string; messages: { content: { text?: string }[] }[] };
+    calls.push({ items, effort: body.reasoning_effort ?? null, text: body.messages[0].content.find((c) => c.text)?.text ?? "" });
     if (opts.never) {
       return new Promise<Response>((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
@@ -283,5 +284,92 @@ describe("runGeneration — one request per batch", () => {
     expect(summary.failed).toBe(1);
     expect(summary.problems.join(" ")).toContain("600s");
     expect(summary.problems.join(" ")).toContain("high");
+  });
+});
+
+// The confirmation previews the prompt through lib/svgpayload; these tests prove
+// the runner sends exactly that text, and that a retry and a provider answer
+// each reach the event stream (which is what the global log records).
+describe("runGeneration — the sent request is the previewed one", () => {
+  it("sends the single-image text for a one-image request, byte for byte", async () => {
+    const { root, sources } = fixture(1);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+
+    await runGeneration(args);
+
+    const expected = buildPayload({
+      model: args.config.model, userPrompt: args.prompt,
+      manifest: [{ position: 1, name: "icon-1_AI", relPath: "architecture/icon-1_AI.png" }],
+      image: "data:image/png;base64,architecture/icon-1_AI.png",
+      caps: args.caps, params: args.params,
+    });
+    expect(t.calls[0].text).toBe(expected.prompt);
+    expect(t.calls[0].text).toContain("icon-1_AI");
+    expect(t.calls[0].text).not.toContain("1 — icon-1_AI");
+  });
+
+  it("sends the ordered manifest for a batch request, byte for byte", async () => {
+    const { root, sources } = fixture(3);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+
+    await runGeneration(args);
+
+    const expected = buildPayload({
+      model: args.config.model, userPrompt: args.prompt,
+      manifest: [
+        { position: 1, name: "icon-1_AI", relPath: "architecture/icon-1_AI.png" },
+        { position: 2, name: "icon-2_AI", relPath: "architecture/icon-2_AI.png" },
+        { position: 3, name: "icon-3_AI", relPath: "architecture/icon-3_AI.png" },
+      ],
+      image: "data:image/png;base64,architecture/icon-1_AI.png|architecture/icon-2_AI.png|architecture/icon-3_AI.png",
+      caps: args.caps, params: args.params,
+    });
+    expect(t.calls[0].text).toBe(expected.prompt);
+  });
+
+  it("records the provider request id on the request's own outcome", async () => {
+    const { root, sources } = fixture(1);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+
+    const summary = await runGeneration(args);
+
+    expect(summary.outcomes[0].requestId).toBe("req_1");
+    expect(summary.outcomes[0].status).toBe("done");
+  });
+
+  it("records no request id for a request that never answered", async () => {
+    const { root, sources } = fixture(1);
+    const t = transport({ failAt: 1 });
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4, retries: 0 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+
+    const summary = await runGeneration(args);
+
+    expect(summary.outcomes[0].requestId).toBeNull();
+    expect(summary.outcomes[0].status).toBe("failed");
+  });
+
+  it("emits the retry attempt and its delay before resending a retryable failure", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(1);
+    const t = transport({ failAt: 1 });
+    vi.stubGlobal("fetch", t.fetch);
+    const { args, events } = runArgs(root, sources, { imagesPerRequest: 4, retries: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+
+    const pending = runGeneration(args);
+    await vi.advanceTimersByTimeAsync(900);
+    const summary = await pending;
+
+    const retries = events.filter((e) => e.kind === "request-retry");
+    expect(retries).toHaveLength(1);
+    expect(retries[0]).toMatchObject({ attempt: 1, retries: 1, failure: "provider" });
+    expect(t.calls).toHaveLength(2); // the second call is the retry, not a new request
+    expect(summary.saved).toBe(1);
   });
 });

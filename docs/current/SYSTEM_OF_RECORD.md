@@ -242,6 +242,24 @@ that makes a network call, only when the user asks it to):
 * The API key is user-provided, stored in the browser's IndexedDB secret
   store (memory-only fallback), masked in the UI, redacted in every error and
   excluded from presets/reports/exports (RULE 20).
+* Confirmation before send (feature §1): opening the confirmation sends
+  nothing and builds each page's contact sheet in memory only — never into the
+  SVG output folder. The dialog shows the FINAL prompt **verbatim**
+  (`svg-confirm-prompt`; the same `buildPayload` value the runner sends, never
+  re-typed or extended with anything the user cannot see) and, once that page's
+  composite exists, the request's wire fields (`svg-confirm-payload`); until
+  then it says what it is waiting for (`svg-confirm-payload-waiting`) instead of
+  claiming a payload that does not exist yet.
+* Activity log (feature §2/§3): a global dock at the bottom of every tab
+  (`log-dock`), one instance mounted by `Workbench` so a tab switch neither
+  forks nor loses the timeline. It minimizes to its header and restores, its cap
+  is configurable (50/100/200/500/1000, default 200), Copy all copies exactly
+  the rows shown (a blocked clipboard says so), Clear leaves one honest entry,
+  and the list auto-scrolls only while the user is at the bottom. Entries record
+  tab switches, undoable state changes, folder/scan/key/prompt/model actions,
+  generation stages, requests, retries, errors, tokens and cost with a
+  timestamp, level, feature, action, stable ids and a redacted detail — never a
+  key, header, image byte, composite data URL or full payload.
 
 ## 3. State model
 
@@ -368,6 +386,29 @@ Batch:
   the inline stylesheet is layout only, the root colour is the document's own
   (or the UA default), and the frame's background and contrast outline stay
   outside the document.
+* **I-22 (SVG confirmation, RULE 4/23):** the confirmation's preview is the
+  request: the prompt text shown comes from the same `lib/svgpayload` call the
+  runner uses, byte-for-byte, with nothing appended that the preview does not
+  show; the wire list is drawn from the same `ChatRequest`, and while the
+  contact sheet does not exist yet the preview says so instead of guessing.
+* **I-23 (activity log, RULE 3/6/24):** one log instance for the whole app —
+  docked by `Workbench` above the tabs, so a tab switch never forks or loses the
+  timeline; the log is read-only for every feature, and features write to it
+  only through `log()` (never by touching its storage).
+* **I-24 (activity log, RULE 20):** an entry never carries an API key, an
+  Authorization header, image bytes, a composite data URL or a full payload —
+  only masks, lengths, counts, tokens, cost and redacted details; sanitising
+  happens in the core on write AND on read, so even a tampered stored payload
+  cannot introduce one.
+* **I-25 (activity log, RULE 13/24):** the stored list is validated and clamped
+  on read (unknown version, corrupt JSON or a bad entry → an empty log, never a
+  guessed one), keeps at most the configured cap (50–1000, default 200), is
+  written debounced (150 ms) and flushed on pagehide, and `clearLog()` leaves
+  exactly one honest `log.cleared` entry.
+* **I-26 (activity log, RULE 24):** the dock follows new entries only while it
+  is at the bottom (24 px slack); scrolling up pauses the follow and says so, and
+  returning to the bottom resumes it — a new entry never yanks a reading user
+  away.
 
 ## 6. Storage map
 
@@ -388,6 +429,7 @@ Batch:
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + sidecar |
 | `<dir>/<stem>.svg.json` | per-source sidecar: versions, prompts, usage, cost, validation, review | atomic write; corrupt → warn, SVGs untouched |
+| localStorage `iconSplitter.log.v1` | the activity log `{ v, max, minimized, entries }` | version-checked and re-sanitised on read; cap 50–1000, default 200; never carries a key, header, image byte or data URL (I-24/I-25) |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -411,8 +453,10 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request + error classification, token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier per-request cap + timeout floor + their wording |
-| SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
-| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
+| SVG IO + state | `src/svg/sources.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `runlog.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
+| SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgPromptPreview.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, the verbatim prompt/payload preview, dialogs, hotkeys, the three sampling controls |
+| Activity log core | `src/lib/log.ts` | one entry's schema, sanitising/redaction, clamping, trimming, one-line formatting and payload (de)serialisation — pure, Node-testable |
+| Activity log IO + UI | `src/log/logstore.ts`, `useLog.ts`, `useAutoScroll.ts`, `scroll.ts`, `LogDock.tsx`, `LogHead.tsx`, `LogList.tsx`, `LogRow.tsx` | the one live list + debounced persistence, the React bridge, the follow-the-tail scroll rule, the docked panel and its controls |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
@@ -516,6 +560,22 @@ and `data-testid` handles):
   every preview background applied to the frame while the document stays
   byte-identical, and the model card + request estimate following all four
   tiers
+
+* `log_lib.test.ts` — the entry schema, sanitising (sensitive names dropped,
+  key-shaped text and `data:` URLs masked, numeric `tokens` kept), clamping,
+  trimming, one-line formatting, payload round-trip and the corrupt/foreign
+  refusals
+* `log_store.test.ts` / `log_scroll.test.ts` — debounced persistence, cap
+  change, clear-leaves-one, minimize/restore and the 24 px bottom-slack rule
+* `log_ui.test.tsx` — the dock on every tab (one instance), minimize/restore,
+  Copy all + the blocked-clipboard note, Clear, the cap select and the
+  follow/pause status
+* `log_wiring.test.tsx` / `svg_runlog.test.ts` — the emitters themselves:
+  history push/undo/apply failure, scan warnings, key save/clear with a mask
+  only, and every `RunEvent` → entry mapping (stages, retries, failures,
+  tokens, cost)
+* `secret_hygiene.test.ts` — the global log (stored rows, formatted text and
+  the copied text) never contains the key
 
 Must exist before the matching change ships:
 
@@ -624,8 +684,14 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-batch-items`, `svg-composite-img` / `svg-composite-meta` /
   `svg-composite-building` / `svg-composite-error`), dialogs
   (`svg-code-dialog`, `svg-history-dialog`), banners (`svg-warn-*`), status bar
-  (`svg-statusbar`), toast + busy (`svg-toast`, `svg-busy`); review undo goes
-  through the shared `hist-*` handles. Full table: `UI_SELECTORS.md` §P.
+  (`svg-statusbar`), toast + busy (`svg-toast`, `svg-busy`); the confirmation's
+  verbatim preview (`svg-confirm-prompt`, `svg-confirm-payload`,
+  `svg-confirm-payload-waiting`); review undo goes through the shared `hist-*`
+  handles. Full table: `UI_SELECTORS.md` §P.
+* Global activity log (every tab): dock (`log-dock`, `log-head`, `log-count`,
+  `log-autoscroll`, `log-max`, `log-copy`, `log-clear`, `log-minimize`,
+  `log-note`) and body (`log-body`, `log-list`, `log-entry`, `log-empty`).
+  Full table: `UI_SELECTORS.md` §Q.
 
 ## 12. Session restore, reset to pending & the global undo timeline (2026-10-01)
 
@@ -754,3 +820,31 @@ datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` o
 `checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
 the zoom slider or clicking a row checkbox — the previous "any input is a text
 field" test killed undo for the two controls the review tab uses most.
+
+## 13. Confirmation preview & the global activity log (2026-10-05)
+
+Design record: `docs/archive/2026-10-05-svg-confirm-log/design.md`.
+
+* Ownership: `src/lib/log.ts` owns the schema, sanitising, formatting,
+  serialisation and retention maths (pure, Node-tested); `src/log/logstore.ts`
+  owns the one live list and its debounced persistence; `src/log/useLog.ts` is
+  the React bridge; every feature writes through `log()` (never storage), and
+  the dock (`LogDock`/`LogHead`/`LogList`/`LogRow`) only reads and controls it.
+  `SvgPromptPreview` renders the confirmation's prompt/payload from the same
+  value `src/lib/svgpayload.ts` hands the runner.
+* Schema: `LOG_VERSION = 1`; an entry is `{ id, at, level, feature, action,
+  ids, detail, data, v }`; the storage key is `iconSplitter.log.v1`, and a
+  payload whose `v` differs, whose JSON is corrupt or whose entry fails
+  re-validation is ignored (an empty log, never a guessed one).
+* Redaction: sensitive key names are dropped, key-shaped text and `data:` URLs
+  are masked, values/ids/details are truncated (200/400 chars) and numeric
+  `tokens`/`cost` survive — the same rules on write and on read (RULE 20).
+* Retention: at most the configured cap (50/100/200/500/1000, default 200);
+  trimming keeps the newest; `clearLog()` leaves exactly one entry; a cap change
+  appends its own entry.
+* Interfaces: `log()`, `clearLog()`, `setLogMax()`, `setLogMinimized()`,
+  `flushLog()`, `useLog()`, `withRunLog(sink)` for the run stream, and
+  `isAtBottom()` / `useAutoScroll()` for the follow rule.
+* Tests: `log_lib`, `log_store`, `log_scroll`, `log_ui`, `log_wiring`,
+  `svg_runlog`, plus the log assertions inside `svg_ui`, `secret_hygiene` and
+  `svg_confirm` (the preview equals the request built by the same call).

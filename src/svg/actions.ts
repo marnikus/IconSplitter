@@ -1,10 +1,9 @@
-// actions.ts — what the user can do on the Generate SVG tab (RULE 2/4/24).
-// Every action is a small hook over one context object: the current model
-// snapshot, the dispatch that changes it, the mutable refs (root handle,
-// sidecars, abort, key) and the shared history. Grouped by concern so no hook
-// grows past RULE 18 and the panel never holds state of its own.
+// actions.ts — what the user can do on the Generate SVG tab (RULE 2/4/24):
+// small hooks over one context object (model, dispatch, refs, shared history),
+// grouped by concern so no hook grows past RULE 18 and the panel holds no state.
 
 import { useCallback, useRef, type Dispatch } from "react";
+import { log } from "../log/logstore";
 import type { ReviewStatus } from "../lib/svgfile";
 import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
 import { effectivePerRequest } from "../lib/effortlimits";
@@ -17,6 +16,7 @@ import { pickDirectory } from "../batch/picker";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { useKeyActions } from "./keyactions";
+import { withRunLog } from "./runlog";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
@@ -123,6 +123,7 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
       if (!handle) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
       c.refs.root.current = handle;
       c.dispatch({ type: "root", name: handle.name });
+      log({ feature: "svg", action: "root-picked", detail: handle.name });
       await rememberRoot(handle);
       await scanSources(c.refs, c);
       c.say(`Approved sources scanned from ${handle.name}`);
@@ -147,6 +148,7 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPr
   const resetPrompt = useCallback(() => {
     const c = latest.current;
     c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
+    log({ feature: "svg", action: "prompt-reset", detail: "the default prompt was restored" });
     c.say("Default prompt restored");
   }, []);
   return { setThumb, setPreviewBg, setProviderOpen, setFilter, setSort, setPrompt, resetPrompt };
@@ -154,8 +156,7 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPr
 
 /**
  * Model and sampling. Changing the model is only a config write: ctx's sync
- * effect re-reads the new model's capabilities and stored settings and warns
- * about anything it had to drop.
+ * effect re-reads its capabilities and stored settings and warns about drops.
  */
 function useModelActions(ctx: SvgCtx): Slice<"setConfig" | "setParams" | "refreshModels"> {
   const latest = useRef(ctx);
@@ -163,28 +164,31 @@ function useModelActions(ctx: SvgCtx): Slice<"setConfig" | "setParams" | "refres
   const setConfig = useCallback((patch: Partial<SvgConfig>) => {
     const c = latest.current;
     c.dispatch({ type: "config", config: parseConfig({ ...c.m.config, ...patch }) });
+    log({ feature: "svg", action: "config-changed", detail: Object.keys(patch).join(", "), data: patch });
   }, []);
   const setParams = useCallback((patch: Partial<SamplingParams>) => {
     const c = latest.current;
     const { params, reset } = sanitizeParams(c.m.caps, { ...c.m.params, ...patch });
     c.dispatch({ type: "params", params });
+    log({ feature: "svg", action: "sampling-changed", detail: Object.keys(patch).join(", "), data: patch });
     saveParamMap(withParams(loadParamMap(), c.m.config.model, params));
     if (reset.length > 0) c.say(reset.join("; "), true);
   }, []);
-  const refreshModels = useCallback(() => {
-    void (async () => {
-      const c = latest.current;
-      try {
-        const models = await refreshCatalog(c.m.config.baseUrl, c.refs.key.current);
-        // Storing the list is enough: the sync effect re-resolves the caps.
-        c.dispatch({ type: "catalog", catalog: models });
-        c.say(`Model list refreshed — ${models.length} models`);
-      } catch (error) {
-        c.say(message(error), true);
-      }
-    })();
-  }, []);
+  const refreshModels = useCallback(() => void refreshModelsNow(latest), []);
   return { setConfig, setParams, refreshModels };
+}
+
+/** Reading the provider's model list is a side effect, not a render concern. */
+async function refreshModelsNow(latest: { current: SvgCtx }): Promise<void> {
+  const c = latest.current;
+  try {
+    const models = await refreshCatalog(c.m.config.baseUrl, c.refs.key.current);
+    // Storing the list is enough: the sync effect re-resolves the caps.
+    c.dispatch({ type: "catalog", catalog: models });
+    c.say(`Model list refreshed — ${models.length} models`);
+  } catch (error) {
+    c.say(message(error), true);
+  }
 }
 
 function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "deselectAll" | "setActive" | "decide"> {
@@ -202,6 +206,7 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
   const deselectAll = useCallback(() => editChecked(latest.current, [], null), []);
   const setActive = useCallback((id: string) => patchSvg({ activeId: id }), []);
   const decide = useCallback((ids: string[], decision: ReviewStatus) => {
+    log({ feature: "svg", action: "review-decided", detail: `${ids.length} source(s) → ${decision}`, data: { sources: ids.length, decision } });
     void decideReview(latest.current, ids, decision);
   }, []);
   return { toggleCheck, selectVisible, deselectAll, setActive, decide };
@@ -219,10 +224,12 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "cancelRun" | "co
     const problems = validateBatchPlan(planOf(c, ids), perRequestOf(c));
     if (problems.length > 0) return c.say(problems[0], true);
     const dialog: Dialog = { kind: "confirm", ids };
+    log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
     c.dispatch({ type: "dialog", dialog });
   }, []);
   const cancelRun = useCallback(() => {
     const c = latest.current;
+    log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "the user asked to cancel — finished results are kept" });
     c.refs.abort.current?.abort();
     c.say("Cancelling — finished results are kept");
   }, []);
@@ -257,6 +264,7 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
   const dialog = ctx.m.dialog;
   if (dialog === null || dialog.kind !== "confirm" || ctx.m.running) return;
   const ids = dialog.ids;
+  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
   ctx.dispatch({ type: "dialog", dialog: null });
   const controller = new AbortController();
   ctx.refs.abort.current = controller;
@@ -268,7 +276,7 @@ async function confirmRun(ctx: SvgCtx): Promise<void> {
     apiKey: ctx.refs.key.current ?? "",
     config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
     sidecars: ctx.refs.sidecars, signal: controller.signal,
-    onEvent: (event) => onRunEvent(event, ctx),
+    onEvent: withRunLog((event) => onRunEvent(event, ctx)),
   });
   ctx.dispatch({ type: "running", running: false });
   // The finished run stays visible: its per-request outcomes are the record of

@@ -5,6 +5,8 @@
 // error/export goes through redact(). When IndexedDB is unavailable the key
 // lives in memory for the session only and the UI says so honestly.
 
+import { log } from "../log/logstore";
+import { maskKey } from "../lib/svgsecret";
 import { idbDelete, idbGet, idbPut } from "../batch/store";
 
 const STORE = "secrets";
@@ -21,12 +23,30 @@ let memory: string | null = null;
  * guards against presented.
  */
 export async function saveApiKey(key: string): Promise<boolean> {
-  memory = key.trim() === "" ? null : key.trim();
+  const trimmed = key.trim();
+  memory = trimmed === "" ? null : trimmed;
+  let stored = false; // a refused/failed write keeps the session copy only
   try {
-    return await idbPut(STORE, KEY, { key: memory });
+    stored = await idbPut(STORE, KEY, { key: memory });
   } catch {
-    return false;
+    // nothing persisted; the honesty line below says so
   }
+  logKeyChange(trimmed, stored);
+  return stored;
+}
+
+/** The log only ever sees the mask and whether the write persisted (RULE 20). */
+function logKeyChange(key: string, stored: boolean): void {
+  if (key === "") {
+    log({ feature: "svg", action: "key-cleared", detail: "the API key was cleared from this device" });
+    return;
+  }
+  const mask = maskKey(key);
+  log({
+    feature: "svg", action: "key-saved",
+    detail: `API key stored as ${mask}${stored ? " on this device" : " for this session only — browser storage refused it"}`,
+    data: { keyMask: mask, persisted: stored },
+  });
 }
 
 export async function loadApiKey(): Promise<string | null> {
@@ -41,12 +61,14 @@ export async function loadApiKey(): Promise<string | null> {
 }
 
 export async function clearApiKey(): Promise<void> {
+  const hadKey = memory !== null;
   memory = null;
   try {
     await idbDelete(STORE, KEY);
   } catch {
     // Nothing to do: the key is already out of memory.
   }
+  if (hadKey) log({ feature: "svg", action: "key-cleared", detail: "the API key was cleared from this device" });
 }
 
 /** True when a key is available for a request right now. */
