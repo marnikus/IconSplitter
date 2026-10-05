@@ -13,6 +13,26 @@ type PickerWindow = { showDirectoryPicker?: () => Promise<unknown> };
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+/** The reported tree: unsplit sheets at the root, the batch's pieces under it. */
+function batchRoot(): FakeDir {
+  const root = new FakeDir("test_processing");
+  root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+  root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
+  const split = new FakeDir("split_01");
+  split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+  split.children.set("icon-sheet_AI_01.png", new FakeFile("icon-sheet_AI_01.png", 20, 1200, "e"));
+  const sheet = new FakeDir("icon-sheet_AI");
+  sheet.children.set("split_01", split);
+  const run = new FakeDir("2026-10-01_10-24-31");
+  run.children.set("icon-sheet_AI", sheet);
+  const month = new FakeDir("2026-10");
+  month.children.set("2026-10-01_10-24-31", run);
+  const out = new FakeDir("_split_output");
+  out.children.set("2026-10", month);
+  root.children.set("_split_output", out);
+  return root;
+}
+
 function fakeRoot(): FakeDir {
   const root = new FakeDir("test_processing");
   const camp = new FakeDir("camp");
@@ -47,6 +67,22 @@ describe("SelectionPanel in a DOM", () => {
     await settle();
     expect(el.querySelector("[data-testid='sel-status']")?.textContent).toContain("Declined");
     expect(el.querySelector("[data-testid='sel-count-declined']")?.textContent).toContain("1");
+    await act(async () => { root.unmount(); });
+  });
+
+  it("scopes a batch tree to its split output and states the scope", async () => {
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(batchRoot());
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root: Root = createRoot(el);
+    resetAppStore();
+    await act(async () => { root.render(<HistoryProvider><SelectionPanel /></HistoryProvider>); });
+    const pick = el.querySelector("[data-testid='sel-root']") as HTMLButtonElement;
+    await act(async () => { pick.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await settle();
+    expect(el.querySelector("[data-testid='sel-scope']")?.textContent).toContain("Scope: split output only");
+    // the unsplit sheet at the root is the batch's input, not a reviewable pair
+    expect(el.querySelectorAll("[data-testid^='sel-row-']")).toHaveLength(1);
     await act(async () => { root.unmount(); });
   });
 });

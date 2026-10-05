@@ -2,9 +2,11 @@
 import { useState } from "react";
 import { counters } from "./state";
 import type { ViewPair } from "../lib/reviewfilter";
+import { scopeText, type ScanScope } from "../lib/splitscope";
 
 export interface HeaderProps {
   rootName: string;
+  scope: ScanScope;
   watcher: boolean;
   pairs: ViewPair[];
   chooseRoot: () => void;
@@ -28,6 +30,9 @@ export default function HeaderRow(p: HeaderProps) {
       >
         {p.watcher ? "● Watcher active" : "○ Watcher paused"}
       </button>
+      {p.rootName !== "" && (
+        <span className="text-xs text-slate-400" data-testid="sel-scope">{scopeText(p.scope)}</span>
+      )}
       <div className="ml-auto flex items-center gap-2">
         <Count n={c.total} label="total" cls="text-slate-200" />
         <Count n={c.pending} label="pending" cls="text-amber-300" />

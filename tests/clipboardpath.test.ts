@@ -73,6 +73,15 @@ describe("adoptCopiedPath", () => {
     expect(notifications).toBe(0);
   });
 
+  it("refuses an SVG document or a URL on the clipboard, writing nothing", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25">';
+    stubClipboard(async () => svg);
+    expect(await adoptCopiedPath(ROOT)).toBeNull();
+    stubClipboard(async () => "http://www.w3.org/2000/svg");
+    expect(await adoptCopiedPath(ROOT)).toBeNull();
+    expect(localStorage.getItem(ROOT_PATH_KEY)).toBeNull();
+  });
+
   it("reports nothing when the clipboard cannot be read at all", async () => {
     expect(await adoptCopiedPath(ROOT)).toBeNull();
   });

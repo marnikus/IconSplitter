@@ -8,6 +8,7 @@
 import type { BatchSource } from "../lib/svgbatch";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
+import { directoryNames, scopeOf } from "../lib/splitscope";
 import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem, type ProblemKind } from "../lib/pairing";
 import { loadDecisions } from "../selection/reviewstore";
 import {
@@ -70,9 +71,13 @@ export const PROBLEM_LABEL: Record<ProblemKind, string> = {
 
 /** Scans the root and lists every approved AI output, in a deterministic order. */
 export async function discoverApprovedSources(root: DirHandleLike): Promise<Discovery> {
-  const entries = walkTree(await readDirTree(root, []), []);
+  const tree = await readDirTree(root, []);
+  // When the tree holds the batch's output, that is the reviewable set: the main
+  // folder keeps the unsplit sheets, which are the batch's input (I-38).
+  const scoped = scopeOf(directoryNames(tree), root.name);
+  const entries = walkTree(tree, []);
   const load = await loadDecisions(root);
-  const picked = selectRows(pairEntries(entries), load.records);
+  const picked = selectRows(pairEntries(entries), load.records, scoped);
   const sources = sortSources(picked.rows.map(toSource));
   return {
     sources,

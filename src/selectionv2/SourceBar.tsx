@@ -4,12 +4,14 @@
 import type { ViewMode } from "../lib/reviewprefs";
 import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
+import { scopeText, type ScanScope } from "../lib/splitscope";
 import RootPathField from "../ui/RootPathField";
 import { useRootLabel } from "../ui/userootpath";
 import SegButton from "./SegButton";
 
 export interface SourceBarProps {
   rootName: string;
+  scope: ScanScope;
   pairs: ViewPair[];
   mode: ViewMode;
   watcher: boolean;
@@ -32,7 +34,9 @@ export default function SourceBar(p: SourceBarProps) {
           {p.watcher ? "● Watcher active" : "○ Watcher paused"}
         </button>
         {p.rootName !== "" && <RootPathField key={p.rootName} rootName={p.rootName} testid="v2-root-path" />}
-        <span className="v2-recursive">Recursive · subfolders included</span>
+        {p.rootName !== "" && (
+          <span className="v2-recursive" data-testid="v2-scan-scope">{scopeText(p.scope)}</span>
+        )}
       </div>
       <div className="v2-toolbar-right">
         <ModeSwitch mode={p.mode} setMode={p.setMode} />

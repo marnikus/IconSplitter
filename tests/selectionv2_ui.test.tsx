@@ -41,11 +41,47 @@ function makeRoot(): FakeDir {
   return root;
 }
 
+/**
+ * The reported tree: the unsplit sheets the batch was given, and the pieces the
+ * batch wrote inside `_split_output` — only the pieces are reviewable (I-38).
+ */
+function makeBatchRoot(): FakeDir {
+  const root = new FakeDir("test_processing");
+  root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+  root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
+  const split = new FakeDir("split_01");
+  split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+  split.children.set("icon-sheet_AI_01.png", new FakeFile("icon-sheet_AI_01.png", 20, 1200, "e"));
+  const sheet = new FakeDir("icon-sheet_AI");
+  sheet.children.set("split_01", split);
+  const run = new FakeDir("2026-10-01_10-24-31");
+  run.children.set("icon-sheet_AI", sheet);
+  const month = new FakeDir("2026-10");
+  month.children.set("2026-10-01_10-24-31", run);
+  const out = new FakeDir("_split_output");
+  out.children.set("2026-10", month);
+  root.children.set("_split_output", out);
+  return root;
+}
+
 describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
     resetAppStore(); // no checked rows / filters leaking between tests
     await dropDb();
+  });
+
+  it("lists only the batch's split output, and says why the list is short", async () => {
+    const { el } = await mount(makeBatchRoot());
+    // the split piece is a row; the unsplit sheet the batch was given is not
+    expect(rows(el).length).toBe(1);
+    expect(text(el, "[data-testid='v2-scan-scope']")).toContain("Scope: split output only");
+    expect(text(el, "[data-testid='v2-scan-scope']")).toContain("not listed");
+  });
+
+  it("keeps the whole folder when no split output exists", async () => {
+    const { el } = await mount(makeRoot());
+    expect(text(el, "[data-testid='v2-scan-scope']")).toContain("no split output found");
   });
 
   it("scans recursively, pairs both sides and lists one row per pair", async () => {

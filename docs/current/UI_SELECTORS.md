@@ -164,6 +164,7 @@ Header + status:
 | `sel-root` | root picker button | label mirrors state (`Root: {name}`), RULE 24 |
 | `sel-rescan` | `↺ Rescan` | re-walks the root |
 | `sel-watcher` | watcher pill | toggles the 30 s auto-rescan |
+| `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
 | `sel-help` | `?` popover | keyboard reference |
 
@@ -212,6 +213,7 @@ Bulk bar (`v2-bulk`):
 | `v2-check-all` | header checkbox | checked / unchecked / **indeterminate** |
 | `v2-selected-count` | `N selected` | checked rows, independent of the filters |
 | `v2-scope` | `across N visible pairs` | the scope "Select visible" and bulk act on |
+| `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — the same two states as `sel-scope`; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
 | `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
 | `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
 | `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
@@ -445,7 +447,8 @@ Shared surfaces: `svg-warn-{noteId}` (corrupt sidecar / `problems` — the
 listed sources that need attention, with the first reasons spelled out /
 `excluded` — the approved sources **not** listed, grouped by kind with the first
 reasons spelled out ("4 approved source(s) are not listed — 2 with no AI image
-on disk, 2 duplicate records."), so a reference image is never mistaken for a
+on disk, 2 duplicate records." — a source outside the split output is reported
+as `outside-split` and never offered, I-38), so a reference image is never mistaken for a
 missing row (I-31) / `unreadable` — the files that could not be read this scan /
 save failure),
 `svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with

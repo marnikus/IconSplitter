@@ -241,6 +241,26 @@ describe("the root's full path (folder copies)", () => {
     }
   });
 
+  it("refuses markup, a URL and a word in the field — the memory stays empty", async () => {
+    await mount(await makeRoot());
+    for (const junk of [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25"/>`,
+      "http://www.w3.org/2000/svg",
+      "hello",
+    ]) {
+      await type("[data-testid=svg-root-path]", junk);
+      await settle();
+      expect(loadRootPath("split_root")).toBe(""); // nothing stored
+      expect(text("[data-testid=svg-root-path-note]")).toContain("That is not a folder path");
+    }
+    // the app never lies about what a copy would hand over
+    expect(text("[data-testid=svg-root]")).toContain("split_root");
+    // and the field can still be cleared by hand
+    await type("[data-testid=svg-root-path]", "");
+    await settle();
+    expect(loadRootPath("split_root")).toBe("");
+  });
+
   it("adopts the copied path on demand, and refuses junk instead of inventing a path", async () => {
     await mount(await makeRoot());
     stubClipboard("F:\\Stocks 2026\\icons testing\\single");

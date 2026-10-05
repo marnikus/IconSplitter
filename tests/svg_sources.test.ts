@@ -231,6 +231,31 @@ describe("the Generate SVG source list", () => {
     expect(found.audit).toMatchObject({ aiSources: 1, rows: 0 });
   });
 
+  it("reports an approved sheet outside the split output, and does not list it", async () => {
+    const root = new FakeDir("test_processing");
+    root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+    root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
+    const piece = dir(root, `${OUT}/icon-sheet_AI/split_01`);
+    piece.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+    piece.children.set("icon-sheet_AI_01.png", new FakeFile("icon-sheet_AI_01.png", 20, 1200, "e"));
+    const sheet = pairId("", "icon-sheet", "");
+    const pieceId = pairId(`${OUT}/icon-sheet_AI/split_01`, "icon-sheet", "_01");
+    withDecisions(root, [
+      record(sheet, "icon-sheet.png", "icon-sheet_AI.png"),
+      record(pieceId, `${OUT}/icon-sheet_AI/split_01/icon-sheet.png`, `${OUT}/icon-sheet_AI/split_01/icon-sheet_AI_01.png`),
+    ]);
+    const found = await discoverApprovedSources(root);
+    // only the batch's piece is a row; the unsplit sheet is the batch's input
+    expect(found.sources.map((s) => s.relPath)).toEqual([`${OUT}/icon-sheet_AI/split_01/icon-sheet_AI_01.png`]);
+    const outside = found.excluded.filter((e) => e.kind === "outside-split");
+    expect(outside).toEqual([{
+      id: sheet, relPath: "icon-sheet_AI.png", kind: "outside-split",
+      reason: "icon-sheet_AI.png is outside the split output — the main folder's unsplit files are not listed",
+    }]);
+    // the audit still accounts for the whole tree it walked
+    expect(found.audit).toMatchObject({ aiSources: 2, rows: 1 });
+  });
+
   it("is byte-identical on a repeat scan, and maps the row to its newest version", async () => {
     const first = await discoverApprovedSources(reportedRoot());
     const again = await discoverApprovedSources(reportedRoot());

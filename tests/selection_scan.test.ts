@@ -33,6 +33,82 @@ function makeRoot(): FakeDir {
   return root;
 }
 
+/**
+ * The reported tree: an unsplit sheet pair at the root (the batch's input) and
+ * the batch's own pieces inside `_split_output`, each beside the reference copy
+ * the batch writes. Only the pieces are reviewable (I-38).
+ */
+function makeBatchRoot(): FakeDir {
+  const root = new FakeDir("test_processing");
+  root.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+  root.children.set("icon-sheet_AI.png", new FakeFile("icon-sheet_AI.png", 20, 1100, "d"));
+  const run = new FakeDir("2026-10-01_10-24-31");
+  const sheet = new FakeDir("icon-sheet_AI");
+  for (const piece of ["01", "02"]) {
+    const split = new FakeDir(`split_${piece}`);
+    split.children.set("icon-sheet.png", new FakeFile("icon-sheet.png", 12, 1000, "c"));
+    split.children.set(`icon-sheet_AI_${piece}.png`, new FakeFile(`icon-sheet_AI_${piece}.png`, 20, 1200, "e"));
+    sheet.children.set(`split_${piece}`, split);
+  }
+  run.children.set("icon-sheet_AI", sheet);
+  const month = new FakeDir("2026-10");
+  month.children.set("2026-10-01_10-24-31", run);
+  const out = new FakeDir("_split_output");
+  out.children.set("2026-10", month);
+  root.children.set("_split_output", out);
+  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, decisionsJson()));
+  return root;
+}
+
+describe("the reviewable set is the split output (I-38)", () => {
+  it("lists the batch's pieces and reports the unsplit sheet it left out", async () => {
+    const h = harness(makeBatchRoot());
+    await rescan(h.ctx, h.set, h.say);
+    const s = h.ctx.state.current;
+    expect(s.pairs.map((p) => p.relDir)).toEqual([
+      "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_01",
+      "_split_output/2026-10/2026-10-01_10-24-31/icon-sheet_AI/split_02",
+    ]);
+    expect(s.pairs[0].ai?.relPath).toContain("icon-sheet_AI_01.png");
+    expect(s.pairs[0].source?.relPath).toContain("split_01/icon-sheet.png");
+    expect(s.scope).toEqual({ split: true, outside: 1 });
+    expect(h.sayings.join(" | ")).toContain("Scope: split output only");
+  });
+
+  it("keeps the decision of a pair the scope hides, as an orphan", async () => {
+    const root = makeBatchRoot();
+    const sheetId = pairId("", "icon-sheet", "");
+    const pieces = JSON.stringify({
+      records: [{
+        pair_id: sheetId, source: "icon-sheet.png", ai_result: "icon-sheet_AI.png",
+        decision: "approved", reviewed_at: "2026-10-01T09:00:00.000Z",
+      }],
+    });
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", pieces.length, 10, pieces));
+    const h = harness(root);
+    await rescan(h.ctx, h.set, h.say);
+    // the sheet is not reviewable in this tree, but its decision is never lost
+    expect(h.ctx.state.current.pairs.some((p) => p.pairId === sheetId)).toBe(false);
+    expect(h.ctx.state.current.records.some((r) => r.pair_id === sheetId)).toBe(true);
+  });
+
+  it("reviews a plain folder as before when no split output exists", async () => {
+    const h = harness(makeRoot());
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.ctx.state.current.scope).toEqual({ split: false, outside: 0 });
+    expect(h.ctx.state.current.pairs.map((p) => p.relDir)).toEqual(["architecture"]);
+  });
+
+  it("stays deterministic: the same tree gives the same scope and order twice", async () => {
+    const a = harness(makeBatchRoot());
+    const b = harness(makeBatchRoot());
+    await rescan(a.ctx, a.set, a.say);
+    await rescan(b.ctx, b.set, b.say);
+    expect(a.ctx.state.current.pairs.map((p) => p.pairId)).toEqual(b.ctx.state.current.pairs.map((p) => p.pairId));
+    expect(a.ctx.state.current.scope).toEqual(b.ctx.state.current.scope);
+  });
+});
+
 type RescanArgs = Parameters<typeof rescan>;
 
 /** A ctx + setter pair that mirrors how the hook holds its state (RULE 24). */

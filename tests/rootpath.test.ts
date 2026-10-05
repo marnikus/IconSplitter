@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ROOT_PATH_KEY,
   folderCopyText,
+  isFolderPathText,
   loadRootPath,
   loadRootPathInfo,
   normalizeRootPath,
@@ -185,5 +186,64 @@ describe("the stored record and its revision (I-36)", () => {
     stop();
     saveRootPathInfo(ROOT, "");
     expect(notifications).toBe(2); // unsubscribed
+  });
+});
+
+// The screenshot that started this: an SVG document (the app's own *Copy code*
+// puts one on the clipboard) was adopted as the folder's "full path" because the
+// guard ran after `/` had already been turned into `\`, and the field itself
+// accepted anything at all. A full path is only ever an Explorer folder path.
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 24 24" fill="none">';
+const URL = "http://www.w3.org/2000/svg";
+
+describe("isFolderPathText — what Explorer can hand over, and nothing else", () => {
+  it("accepts drive paths, a bare drive, UNC shares, quotes and forward slashes", () => {
+    for (const text of [
+      "F:\\Stocks 2026\\icons testing\\single\\test_processing",
+      `"F:\\Stocks 2026\\icons"`, "F:/Stocks 2026/icons", "F:\\", "F:", "C:\\a",
+      "\\\\server\\share", "\\\\server\\share\\icons",
+    ]) {
+      expect(isFolderPathText(text)).toBe(true);
+    }
+  });
+
+  it("refuses markup, URLs, words, relative paths, file names and illegal characters", () => {
+    for (const text of [
+      SVG, URL, "hello", "", "   ",
+      "history\\more",                       // relative: no drive, no share
+      "icon-airplane-landing.png",            // a file, not a folder path
+      "F:\\icons\\a<b", "F:\\icons\\a?b", "F:\\icons\\a|b",
+      "F:\\icons\\a:b", "F:\\icons\\a\"b", "F:\\icons\\a\nb",
+    ]) {
+      expect(isFolderPathText(text)).toBe(false);
+    }
+  });
+});
+
+describe("the guard at every entry point (I-39)", () => {
+  it("refuses to remember markup pasted into the field, and keeps the old value", () => {
+    saveRootPath(ROOT, FULL);
+    expect(saveRootPath(ROOT, SVG)).toBe(false);
+    expect(loadRootPath(ROOT)).toBe(FULL);       // unchanged, not "the last thing typed"
+    expect(saveRootPath(ROOT, URL)).toBe(false);
+    expect(saveRootPath(ROOT, "hello")).toBe(false);
+    expect(saveRootPath(ROOT, "")).toBe(true);   // an empty value still forgets
+    expect(loadRootPath(ROOT)).toBe("");
+  });
+
+  it("forgets a junk value written by an older build, instead of showing it", () => {
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: SVG, how: "copied" } }));
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: URL }));
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+    // with no trustworthy memory the copy falls back to the folder's own name —
+    // never to the junk, and never to a path the app guessed
+    expect(folderCopyText(ROOT, "set_A/a_AI.png")).toBe(`${ROOT}\\set_A`);
+  });
+
+  it("never adopts markup or a URL from the clipboard as the picked folder's path", () => {
+    expect(pathFromCopied(SVG, ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied(URL, ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied(`${SVG}"${FULL}"`, ROOT)).toEqual({ path: "", how: null });
   });
 });

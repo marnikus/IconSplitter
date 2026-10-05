@@ -6,8 +6,10 @@
 // ticket-guarded rescan (a stale scan never commits).
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
-import { pairEntries } from "../lib/pairing";
+import { pairEntries, type ReviewPair } from "../lib/pairing";
 import { walkTree } from "../lib/scan";
+import { directoryNames, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
+import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
 import { loadHandles, saveHandles } from "../batch/store";
@@ -65,24 +67,49 @@ export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   ctx.seq.current = ticket.seq;
   setS((p) => ({ ...p, busy: "Scanning folders…" }));
   try {
-    const tree = await readDirTree(root, []);
-    const pairs = pairEntries(walkTree(tree, []));
+    const { pairs, scope } = await scopedPairs(root);
     const load = await loadDecisions(root);
     if (!isCurrent(ctx.seq.current, ticket.id)) return; // a newer scan took over
     // The root's name comes from the handle that was just walked, never from a
     // state snapshot taken before the pick: React may batch a scan commit with
     // the pick's own update, and the snapshot would then carry the OLD name and
     // win (the pill would fall back to "Choose source folder…" — observed).
-    const next = { ...applyScan(ctx.state.current, pairs, load, Date.now()), rootName: root.name };
+    const prevScope = ctx.state.current.scope; // read before the commit, to compare
+    const next = { ...applyScan(ctx.state.current, pairs, load, Date.now()), rootName: root.name, scope };
     setS(next);
     patchView({ selectedId: next.selectedId });
     pruneChecked(next.pairs); // a restored check must not point at a removed pair
+    announce(prevScope, scope, say);
     if (load.corrupt) say("review-decisions.json is corrupt — kept previous decisions in memory", true);
   } catch {
     if (isCurrent(ctx.seq.current, ticket.id)) say("Rescan failed — the folder may be unreadable", true);
   } finally {
     if (isCurrent(ctx.seq.current, ticket.id)) setS((p) => ({ ...p, busy: null }));
   }
+}
+
+/**
+ * Walks the root once and decides the reviewable set (I-38): when the tree holds
+ * a split-output folder, that folder's pairs are the set and the main folder's
+ * unsplit sheets are counted as outside; otherwise every pair is reviewable, so a
+ * folder that never saw a batch behaves exactly as before.
+ */
+async function scopedPairs(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope }> {
+  const tree = await readDirTree(root, []);
+  const scoped = scopeOf(directoryNames(tree), root.name);
+  const { pairs, outside } = splitPairs(pairEntries(walkTree(tree, [])), scoped);
+  return { pairs, scope: { split: scoped, outside: outside.length } };
+}
+
+/**
+ * Says the scope once per change — never on every watcher tick, so a 30 s
+ * rescan stays quiet while a fresh pick explains why the list is short (I-40).
+ */
+function announce(before: ScanScope, scope: ScanScope, say: Say): void {
+  if (before.split === scope.split && before.outside === scope.outside) return;
+  if (!scope.split) return;
+  say(scopeText(scope));
+  log({ feature: "selection", action: "scan-scope", detail: scopeText(scope) });
 }
 
 function pruneChecked(pairs: ViewPair[]): void {

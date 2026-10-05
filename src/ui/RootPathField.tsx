@@ -22,8 +22,8 @@ export default function RootPathField({ rootName, testid }: { rootName: string; 
   const [note, setNote] = useState<string | null>(null);
   const change = (text: string) => {
     setTyped(text);
-    setNote(null);
-    saveRootPath(rootName, text);
+    const accepted = saveRootPath(rootName, text);
+    setNote(accepted ? null : NOT_A_PATH);
   };
   return (
     <label className="pathfield" data-testid={`${testid}-label`}>
@@ -41,6 +41,9 @@ export default function RootPathField({ rootName, testid }: { rootName: string; 
     </label>
   );
 }
+
+/** The refusal wording (I-39): the field is only ever for an Explorer folder. */
+const NOT_A_PATH = "That is not a folder path — paste the folder's path, e.g. F:\\work\\icons";
 
 /** One click: take the path of the folder the user copied in Explorer (I-37). */
 function UseCopiedButton({ rootName, testid, setNote }: { rootName: string; testid: string; setNote: (n: string | null) => void }) {

@@ -17,13 +17,14 @@
 
 import { isEligibleImage, isImageExt, isVersionArtifact } from "../lib/naming";
 import { problemsOf, type ReviewPair, type SideRef } from "../lib/pairing";
+import { pairInSplitScope } from "../lib/splitscope";
 import type { ReviewRecord } from "../lib/reviewfile";
 import type { FileEntry } from "../lib/scan";
 
 /** A pair the list may show: its AI image really exists on disk. */
 export type RowPair = ReviewPair & { ai: SideRef };
 
-export type ExclusionKind = "ai-missing" | "no-files" | "not-ai-output" | "artifact" | "duplicate";
+export type ExclusionKind = "ai-missing" | "no-files" | "not-ai-output" | "artifact" | "duplicate" | "outside-split";
 
 /** One approved source that is NOT listed, with the reason it is not. */
 export interface SourceExclusion {
@@ -87,9 +88,9 @@ export function fileTally(entries: readonly FileEntry[]): Pick<ScanAudit, "files
 }
 
 /** The rows, the exclusions and the dedupe counts for one scan. */
-export function selectRows(pairs: readonly ReviewPair[], records: readonly ReviewRecord[]): ListSelection {
+export function selectRows(pairs: readonly ReviewPair[], records: readonly ReviewRecord[], scoped = false): ListSelection {
   const sink: Sink = { rows: [], excluded: [], claimed: new Map(), approver: new Map(), represented: new Set(), existing: new Set() };
-  for (const pair of pairs) addPair(pair, decide(pair, records), sink);
+  for (const pair of pairs) addPair(pair, decide(pair, records), sink, scoped && !pairInSplitScope(pair));
   for (const r of records) addRecord(r, sink);
   const sorted = [...sink.excluded].sort(byPlace);
   return {
@@ -127,10 +128,11 @@ interface Sink {
  * `ai-missing` exclusion when an approved reference has no AI image beside it,
  * nothing at all when it is simply not approved.
  */
-function addPair(pair: ReviewPair, approved: boolean, sink: Sink): void {
+function addPair(pair: ReviewPair, approved: boolean, sink: Sink, outside: boolean): void {
   if (pair.ai !== null) {
-    sink.existing.add(key(pair.ai.relPath));
+    sink.existing.add(key(pair.ai.relPath)); // it exists, so no record may look "fileless"
     if (!approved) return;
+    if (outside) return excludeOutside(pair, pair.ai.relPath, sink);
     if (isCanonicalAi(baseName(pair.ai.relPath))) addRow(pair as RowPair, sink);
     else {
       const relPath = pair.ai.relPath;
@@ -141,9 +143,19 @@ function addPair(pair: ReviewPair, approved: boolean, sink: Sink): void {
   }
   if (!approved) return;
   const relPath = pair.source?.relPath ?? pair.base;
+  if (outside) return excludeOutside(pair, relPath, sink);
   sink.represented.add(pair.pairId);
   sink.claimed.set(key(relPath), pair.pairId);
   sink.excluded.push({ id: pair.pairId, relPath, kind: "ai-missing", reason: firstProblem(pair) });
+}
+
+/** An approved pair the scope hides: reported with its reason, never listed. */
+function excludeOutside(pair: ReviewPair, relPath: string, sink: Sink): void {
+  sink.represented.add(pair.pairId);
+  sink.excluded.push({
+    id: pair.pairId, relPath, kind: "outside-split",
+    reason: `${relPath} is outside the split output — the main folder's unsplit files are not listed`,
+  });
 }
 
 /** A row per normalized AI path: the first wins, a second pair at the same path is a duplicate. */
@@ -247,6 +259,7 @@ const KINDS: [ExclusionKind, string][] = [
   ["no-files", "with no files left"],
   ["not-ai-output", "with no AI result (reference images)"],
   ["artifact", "with only this app's own SVG output"],
+  ["outside-split", "outside the split output (unsplit sheets)"],
   ["duplicate", "duplicate records"],
 ];
 

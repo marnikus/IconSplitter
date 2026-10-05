@@ -27,7 +27,7 @@ export default function SelectionPanel() {
   if (!api.supported) return <UnsupportedNote onPick={api.chooseRoot} />;
   return (
     <div className="space-y-3">
-      <HeaderRow rootName={api.s.rootName} watcher={api.s.watcher} pairs={api.s.pairs}
+      <HeaderRow rootName={api.s.rootName} scope={api.s.scope} watcher={api.s.watcher} pairs={api.s.pairs}
         chooseRoot={api.chooseRoot} rescan={api.rescan} patch={api.patch} />
       <Banners api={api} />
       {api.s.rootName !== "" && (

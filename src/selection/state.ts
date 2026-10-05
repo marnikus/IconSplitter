@@ -12,6 +12,7 @@ import {
   ALL_FILTER, type Decision, type ListFilter, type ViewPair,
 } from "../lib/reviewfilter";
 import { DEFAULT_SORT, type SortState } from "../lib/reviewsort";
+import type { ScanScope } from "../lib/splitscope";
 
 export interface SelToast {
   msg: string;
@@ -20,6 +21,8 @@ export interface SelToast {
 
 export interface SelState {
   rootName: string;
+  /** Where the scan searched: the split output when the tree holds one (I-38). */
+  scope: ScanScope;
   pairs: ViewPair[];
   records: ReviewRecord[]; // persisted set incl. orphans (never lost)
   lastDiff: PairDiff;
@@ -41,7 +44,8 @@ export interface SelState {
 
 export function initialSelState(): SelState {
   return {
-    rootName: "", pairs: [], records: [], lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
+    rootName: "", scope: { split: false, outside: 0 }, pairs: [], records: [],
+    lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
     corrupt: false, writeWarn: null, awaitingRetry: 0, watcher: true,
     collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,

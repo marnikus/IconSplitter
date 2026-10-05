@@ -1355,3 +1355,62 @@ pick and blank the root name) — pinned by a regression test.
 | pick with the copied **parent** | completed to `…\test_processing`, status "completed from the copied folder — check it" |
 | V2 pick, then the Generate SVG tab | both pills show the captured path without a reload |
 | layout with the long path in the bar | toolbar 107 px / rows band 606 px / dock 237 px; 3 scroll positions per tab: 0 controls under the dock, 0 blocked hit-tests |
+
+## 2026-10-05 — the reviewable set is the split output, and a path is a folder path
+
+Two reports in one sitting. **Bug 1** — *"the selection tab v2 also incorrectly
+adding the full unsplitted batches in to the list but should not use the folder
+with files that was not splitted in root man folder. It should use created folder
+where this files where added like \"_*split*output\""*: `rescan` and
+`discoverApprovedSources` walked the picked folder in full, so a batch root listed
+the unsplit sheet pair (the batch's **input**) beside the split pieces. The scope
+is now decided from the tree's directories (`lib/splitscope`, `/^_.*split.+output/i`),
+the lists keep only pairs inside such a folder, and every hidden pair is counted
+and reported — toolbars, log, `outside-split` exclusions — never silently dropped;
+a tree with no split folder behaves exactly as before (I-38/I-40). **Bug 2** —
+*"why it copy svg to file path. it only for path explorer dir nothing else. bug."*
+with the pill holding `<svg xmlns="http://www.w3.org/2000/svg" …>`: `isPathLike`
+judged the **normalised** text, and normalisation had already turned the markup's
+`/` into `\`, so it passed; the field stored any text at all. `isFolderPathText`
+now judges the **raw** text (drive or UNC only) at the clipboard, `Use copied
+path`, the field's save and on read, and the field states the refusal (I-39).
+
+### Lanes run (`npm run verify`, `/tmp/verify18.log`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors, 8 warnings (all pre-existing baseline) |
+| 3/6 Quality gate (RULE 16/18) | GATE PASSED |
+| 4/6 Tests | **80 files / 786 tests, all green** (was 79 / 763) |
+| 5/6 Coverage (`src/lib`, RULE 16.3) | 97.16 statements · 92.05 branches · 97.35 functions · 98.5 lines |
+| 6/6 Build | `dist/index.html` 648.34 kB / 191.88 kB gzip |
+
+### RULE 16 / RULE 18 numbers for the new and touched files
+
+| File | fns / lines | What it is |
+|---|---|---|
+| `src/lib/splitscope.ts` | 9 / 77 | **new, pure**: the folder-name rule, the tree's directory names, the scope decision, the pair filter + the outside count, the one wording |
+| `src/lib/rootpath.ts` | 28 / 247 | `isFolderPathText` + the guard in `saveRootPath`/`pathFromCopied`/`loadRootPathInfo`; `isPathLike`/`isFolderPath` deleted |
+| `src/selection/rootsource.ts` | 13 / 120 | `scopedPairs` walks once and decides the scope; the scan records it and says it once per change |
+| `src/selection/state.ts` | 33 / 218 | `SelState.scope` (`{ split, outside }`) |
+| `src/selection/HeaderRow.tsx` | 5 / 71 | the V1 scope line (`sel-scope`) |
+| `src/selectionv2/SourceBar.tsx` | 6 / 77 | the V2 scope line (`v2-scan-scope`) replaces the static "Recursive" note |
+| `src/svg/sourcelist.ts` | 26 / 269 | `selectRows(…, scoped)` → out-of-scope pairs become `outside-split` exclusions; a new kind in the summary wording |
+| `src/svg/sources.ts` | 15 / 143 | computes the scope from the walked tree |
+| `src/ui/RootPathField.tsx` | 10 / 88 | refuses a non-path save with its own note (`.pathfield-note.warn` reused) |
+
+Baseline: **untouched**. New debt accepted: none. `src/index.css` needed no
+change — the V2 line reuses `.v2-recursive`, the V1 line Tailwind's muted text,
+the refusal the existing warn tone.
+
+### Browser verification (headless Chromium, 1440×900, real OPFS folder, 18/18 green)
+
+| Scenario | Result |
+|---|---|
+| V2 on a root holding BOTH unsplit sheets and `_split_output/…` | 2 rows — the split pieces; the unsplit sheet is not listed; scope line *"Scope: split output only · 1 pair(s) in the main folder not listed"* |
+| approve both pieces in V2, open Generate SVG | decisions really written; 2 rows; audit *"7 files · 3 AI sources · 3 references excluded · 0 missing files · 0 duplicates removed → 2 rows"* |
+| an approved sheet outside the scope | 1 row (the piece); banner *"⚠ 1 approved source(s) are not listed — 1 outside the split output (unsplit sheets). icon-sheet_AI.png is outside the split output — the main folder's unsplit files are not listed."* |
+| pick with SVG markup on the clipboard | nothing stored (`{}`); field empty; pill still `test_processing`; status "not set — …" |
+| typing the same markup into the field | note *"That is not a folder path — paste the folder's path, e.g. F:\work\icons"*; nothing stored |
+| a row's copy action on a split tree | clipboard `F:\Stocks 2026\icons testing\single\test_processing\_split_output\2026-10\2026-10-01_10-24-31` — the batch folder, never a file |

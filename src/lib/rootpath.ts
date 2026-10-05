@@ -5,7 +5,8 @@
 // come from the user. It is captured when they pick a folder (the clipboard
 // normally still holds Explorer's "Copy as path"), remembered per folder name,
 // reused by every tab, and never invented (I-35): with no memory the copy falls
-// back to the name. `pickroot`/`clipboardpath` do the capturing; this file owns
+// back to the name. Only ever an Explorer FOLDER path — markup, URLs and words
+// are refused at every entry point (I-39). `pickroot`/`clipboardpath` do the capturing; this file owns
 // the string rules and the one storage.
 //
 // The copy itself names a FOLDER, never a file (the user's request): inside a
@@ -55,37 +56,47 @@ export function pathLeaf(text: string): string {
 }
 
 /**
- * The real path of the folder named `folderName`, as told by a copied path
- * (I-35): text whose leaf IS the folder name is adopted as it is; a folder
- * path whose leaf is something else — the parent the user copied — gets the
- * picked name appended and is marked `completed`, so the UI can ask for a
- * second look. A file path and an ordinary word are refused: nothing is
- * invented, and a wrong path is worse than none.
+ * True only for what Explorer can hand over (I-39): a drive path (`F:`, `F:\`,
+ * `F:\a\b` — forward slashes and surrounding quotes forgiven), or a UNC path
+ * (`\\server\share`, `\\server\share\folder`). Markup, URLs, bare words,
+ * relative paths and file names are all refused — a wrong path in the memory is
+ * worse than none, and the app must never invent one.
  */
-export function pathFromCopied(copied: string, folderName: string): RootPathInfo {
-  const path = normalizeRootPath(copied);
-  if (folderName === "" || path === "" || !isPathLike(path)) return UNKNOWN;
-  const leaf = pathLeaf(path);
-  if (leaf.toLowerCase() === folderName.toLowerCase()) return { path, how: "copied" };
-  return isFolderPath(path) ? { path: `${path}\\${folderName}`, how: "completed" } : UNKNOWN;
+const FORBIDDEN = /[<>"|?*]/; // the characters Windows forbids in a name
+
+export function isFolderPathText(text: string): boolean {
+  const path = normalizeRootPath(text);
+  if (path === "" || hasControl(path) || FORBIDDEN.test(path)) return false;
+  const rest = path.replace(/^[A-Za-z]:/, ""); // the drive's own colon is legal
+  if (rest.includes(":")) return false;
+  if (/^[A-Za-z]:$/.test(path)) return true; // the drive root itself
+  if (/^[A-Za-z]:\\/.test(path)) return true;
+  return /^\\\\[^\\]+\\[^\\]+(\\|$)/.test(path); // \\server\share[\…]
+}
+
+/** A control character — a newline pasted along with the text, say: never a path. */
+function hasControl(path: string): boolean {
+  return [...path].some((ch) => ch.charCodeAt(0) < 0x20);
+}
+
+/** A tail that looks like a file name — a folder path never ends in one. */
+function looksLikeFile(path: string): boolean {
+  return /\.[A-Za-z0-9]{1,8}$/.test(path);
 }
 
 /**
- * Path-like at all: a drive or UNC root, or something with a separator in it.
- * A bare word ("hello", or even the folder's own name with no drive) is not a
- * path — storing it would make a copy look authoritative while naming no drive.
+ * The real path of the folder named `folderName`, as told by a copied path
+ * (I-35/I-39): text whose leaf IS the folder name is adopted as it is; a folder
+ * path whose leaf is something else — the parent the user copied — gets the
+ * picked name appended and is marked `completed`, so the UI can ask for a second
+ * look. Anything that is not an Explorer folder path (markup, a URL, a word, a
+ * file) is refused: nothing is invented, and a wrong path is worse than none.
  */
-function isPathLike(path: string): boolean {
-  return /^[A-Za-z]:/.test(path) || path.startsWith("\\\\") || path.includes("\\");
-}
-
-/** A drive or UNC root ("F:", "\\\\server\\share") — the only completable base. */
-function isRootOnly(path: string): boolean {
-  return /^[A-Za-z]:$/.test(path) || /^\\\\[^\\]+\\[^\\]+$/.test(path);
-}
-
-function isFolderPath(path: string): boolean {
-  return isRootOnly(path) || !/\.[A-Za-z0-9]{1,8}$/.test(path);
+export function pathFromCopied(copied: string, folderName: string): RootPathInfo {
+  if (folderName === "" || !isFolderPathText(copied)) return UNKNOWN;
+  const path = normalizeRootPath(copied);
+  if (pathLeaf(path).toLowerCase() === folderName.toLowerCase()) return { path, how: "copied" };
+  return looksLikeFile(path) ? UNKNOWN : { path: `${path}\\${folderName}`, how: "completed" };
 }
 
 /** The remembered full path of a root, or "" when none was captured. */
@@ -99,12 +110,21 @@ export function loadRootPathInfo(rootName: string): RootPathInfo {
   if (typeof value === "string") return fromString(value); // written before `how` existed
   if (!isRecord(value)) return UNKNOWN;
   const path = typeof value.path === "string" ? normalizeRootPath(value.path) : "";
-  return path === "" ? UNKNOWN : { path, how: readHow(value.how) };
+  return valid(path) ? { path, how: readHow(value.how) } : UNKNOWN;
 }
 
 function fromString(value: string): RootPathInfo {
   const path = normalizeRootPath(value);
-  return path === "" ? UNKNOWN : { path, how: "pasted" };
+  return valid(path) ? { path, how: "pasted" } : UNKNOWN;
+}
+
+/**
+ * A stored value is only believed while it is a folder path: one written by an
+ * older build (or by hand) that is markup, a URL or a relative word counts as no
+ * memory, so it can never reach a pill, a status or a copy (I-39).
+ */
+function valid(path: string): boolean {
+  return path !== "" && isFolderPathText(path);
 }
 
 function readHow(value: unknown): PathHow {
@@ -119,6 +139,7 @@ function readHow(value: unknown): PathHow {
 export function saveRootPathInfo(rootName: string, text: string, how: PathHow = "pasted"): RootPathInfo {
   if (rootName === "") return UNKNOWN;
   const path = normalizeRootPath(text);
+  if (path !== "" && !isFolderPathText(path)) return loadRootPathInfo(rootName); // refused
   const info: RootPathInfo = path === "" ? UNKNOWN : { path, how };
   const before = loadRootPathInfo(rootName);
   if (before.path === info.path && before.how === info.how) return info;
@@ -129,9 +150,16 @@ export function saveRootPathInfo(rootName: string, text: string, how: PathHow = 
   return info;
 }
 
-/** Remembers a pasted path (the field's own action). */
-export function saveRootPath(rootName: string, text: string): void {
+/**
+ * Remembers a pasted path (the field's own action). False when the text is not
+ * an Explorer folder path — the caller says so and nothing is written (I-39);
+ * an empty value is not a refusal, it clears the memory.
+ */
+export function saveRootPath(rootName: string, text: string): boolean {
+  if (rootName === "") return false;
+  if (normalizeRootPath(text) !== "" && !isFolderPathText(text)) return false;
   saveRootPathInfo(rootName, text, "pasted");
+  return true;
 }
 
 /** What every copy starts with: the remembered path, else the folder's name. */

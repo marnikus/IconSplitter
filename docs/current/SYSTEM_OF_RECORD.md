@@ -481,6 +481,32 @@ Batch:
   drive itself ("Chrome can't read the drive path") is written in the UI next to
   the action that fixes it (`Use copied path`), instead of leaving the user to
   wonder why the app asks for something it "should" know.
+* **I-38 (the scope is the batch's output, RULE 3/24):** when the picked tree
+  contains a folder whose name matches `/^_.*split.+output/i` (or the picked
+  folder is one), Selection V1/V2 and Generate SVG list **only** pairs with a
+  side inside such a folder — the main folder keeps the unsplit sheets, which are
+  the batch's input, and they are not reviewable and not generatable. The scope
+  is a function of the tree's directories, so a repeated scan decides the same
+  way; every out-of-scope item is counted and reported (both toolbars, the log,
+  `outside-split` exclusions), never silently dropped, and the records of
+  out-of-scope pairs stay as orphans. A tree without such a folder behaves
+  exactly as before.
+* **I-39 (a "full path" is only a folder path, RULE 13):** the value remembered
+  for a root (`iconSplitter.rootpaths.v1`) is either an Explorer-usable **folder**
+  path — a drive path (`F:`, `F:\`, `F:\a\b`; forward slashes and surrounding
+  quotes forgiven) or a UNC path (`\\server\share[\…]`) — or nothing at all.
+  `isFolderPathText` is the only judge, and it runs on the raw text at every
+  entry point (the clipboard adoption at pick time, `Use copied path`, the
+  field's own save) and again on read, so SVG markup, URLs, relative text and
+  file names can never be stored, replayed, shown as the root's path or prefixed
+  to a copy — and the field states the refusal ("That is not a folder path — …")
+  instead of failing silently.
+* **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
+  scope the scan used and, when it hides pairs, how many are not listed
+  ("Scope: split output only · N pair(s) in the main folder not listed" /
+  "Scope: whole folder — no split output found"), and the Generate SVG list
+  reports the same items as `outside-split` exclusions in its banner, audit and
+  log. A user never has to guess why the list is shorter than the folder.
 * **I-31 (SVG list, RULE 3/4):** a Generate SVG row is an **existing canonical
   AI output** whose path an approved decision names — never an invented `_AI`
   name, never a reference image, never a path that is not on disk. A source that
@@ -1121,3 +1147,30 @@ with one, next to the root pill, the rescan and the full-path field. Picking
 there remembers the handle under this tab's own key, so the fallback is only the
 first run.
 
+### 14.6 The reviewable set is the split output, and a path is only a folder path
+
+Two reports, one working session. First: *"the selection tab v2 also incorrectly
+adding the full unsplitted batches in to the list but should not use the folder
+with files that was not splitted in root man folder. It should use created folder
+where this files where added like \"_*split_*output\" fix it"*. The Batch tab has
+always ignored its own output (`presets.ignoreFolders = ["_split_output"]`); the
+Selection tabs and Generate SVG never applied the rule — `rescan` and
+`discoverApprovedSources` walked the picked folder in full, so a batch root was
+listed twice: the unsplit sheet pair at the root (the batch's **input**) and one
+pair per split piece inside `_split_output` (the result). Per I-38 the scope is
+now decided from the tree's directories (`lib/splitscope`), the list keeps only
+what is inside a split-output folder, and everything hidden is counted, said and
+logged (I-40) — the sheet pair the user was told not to review is named as an
+`outside-split` exclusion in Generate SVG and never written.
+
+Second: *"why it copy svg to file path. it only for path explorer dir nothing
+else. bug."* — a screenshot of the root pill and the Full-path field holding
+`<svg xmlns="http://www.w3.org/2000/svg" width="25…`. The guard ran too late:
+`isPathLike` judged the **normalised** text, and `normalizeRootPath` had already
+turned the markup's `/` into `\`, so `…"http:\www.w3.org\2000\svg"…` looked
+like a path and was stored; the field additionally stored any text at all. Per
+I-39 `isFolderPathText` now judges the raw text (drive or UNC only), at the
+clipboard, the button, the field and on read — a junk value written by an older
+build counts as no memory — and the field says *"That is not a folder path —
+paste the folder's path, e.g. F:\work\icons"*. The folder name still shows on
+the pill, so the app never lies about what a copy will hand over.
