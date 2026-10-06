@@ -1413,7 +1413,7 @@ the refusal the existing warn tone.
 | an approved sheet outside the scope | 1 row (the piece); banner *"⚠ 1 approved source(s) are not listed — 1 outside the split output (unsplit sheets). icon-sheet_AI.png is outside the split output — the main folder's unsplit files are not listed."* |
 | pick with SVG markup on the clipboard | nothing stored (`{}`); field empty; pill still `test_processing`; status "not set — …" |
 | typing the same markup into the field | note *"That is not a folder path — paste the folder's path, e.g. F:\work\icons"*; nothing stored |
-| a row's copy action on a split tree | clipboard `F:\Stocks 2026\icons testing\single\test_processing\_split_output\2026-10\2026-10-01_10-24-31` — the batch folder, never a file |
+| a row's copy action on a split tree | clipboard `F:\Stocks 2026\icons testing\single\test_processing\_split_output\2026-10\2026-10-01_10-24-31` — the batch folder **(superseded 2026-10-06: since I-56 the copy names the file's own folder, `…\<piece>\split_NN`)** |
 
 ## 2026-10-05 — one JSON per pair: the approval and the SVG history live beside the images
 
@@ -1559,7 +1559,8 @@ now returns `ScopeRule { split, hideOutside }` (hide only while the output folde
 is strictly *below* the root), `lib/batchlayout.ts` owns the layout's names
 (`_split_output` / `<YYYY-MM>` / `<YYYY-MM-DD_HH-mm-ss>`), and
 `lib/rootpath.folderCopyText` finds the batch folder from either side of the
-root — inside the relative path, at its head, or the root itself.
+root — inside the relative path, at its head, or the root itself. **(I-48 was
+replaced by I-56 on 2026-10-06: the copy now names the folder of the file.)**
 
 ### Lanes run (`npm run verify`)
 
@@ -1773,3 +1774,48 @@ choice and its validation, 308 → ~300 lines), `actions.ts` → `useQueueAction
 object each (≤ 4 params), `SvgList` → `Footer`, `VersionsDialog` → `VersionList`
 + `VersionFacts`. `src/svg/runcontrol.ts` (139) holds the queue's async half so
 `runqueue.ts` (59) stays pure rules only; `actions.ts` is back to 283 lines.
+
+---
+
+## 2026-10-06 — I-56: "Location" names the folder of the file
+
+The report: a deep file's location copied the run folder one level up.
+
+```
+copied   F:\…\test_processing_2\_split_output\2026-10\2026-10-05_18-45-20
+wanted   F:\…\test_processing_2\_split_output\2026-10\2026-10-05_18-45-20\icon-bunny-face_AI_7\split_04
+file     …\icon-bunny-face_AI_7\split_04\icon-bunny-face_AI_7_04_v2.svg
+```
+
+### What was verified (TDD — every test red before the fix)
+
+* `tests/rootpath.test.ts` — the user's exact tree: the `_AI_04.png` piece, its
+  `.svg.json` sidecar, the plain and the `_v2` SVG all resolve to
+  `…\icon-bunny-face_AI_7\split_04`, and the run folder is asserted NOT to be the
+  answer; the same file copied from three different picked roots (the output
+  folder, the month folder, the run folder) gives the same folder, because the
+  root no longer decides anything (I-56).
+* `tests/copypath.test.ts` — the clipboard text and the toast carry that folder.
+* `tests/svg_location.test.tsx` (new, the real panel on the user's own tree) —
+  the shown version (preferred v2) decides the FILE the row names, the copied
+  folder is `…\split_04` and never the run folder, choosing v1 keeps the same
+  folder, and a pair with no version yet still copies its own folder (never a
+  file name). This is also the regression test for the doubled chain: before the
+  fix `openLocation` handed over `…\split_04\…\split_04`-style input, which only
+  looked right while the truncation collapsed it.
+* `tests/selectionv2_ui.test.tsx` — the shared copy now hands over
+  `…\2026-10-01_10-24-31\icon-sheet_AI\split_01` for the split-tree fixture (one
+  rule for every tab; the old batch-folder expectation is gone).
+
+### Gates (full run)
+
+`tools/pre_push_check.sh`: types ✅ · lint 0 errors (8 pre-existing warnings) ·
+`quality.mjs --changed --allow-legacy` **PASSED** · `vitest run` **92 files /
+941 tests** ✅ · coverage ✅ · production build ✅.
+
+RULE 18 recheck — the change SHRANK the touched files rather than growing them:
+`lib/rootpath.ts` 370 → 230 lines (the batch/run segment search is deleted, and
+with it the `batchlayout` dependency), `svg/SvgRow.tsx` 203 → 187 (its local
+`targetPath` and `joinPath` moved to `svg/rowmodel.ts` as the one exported
+`targetPathOf`), `svg/codeactions.ts` 120 → 118, `svg/rowmodel.ts` 114 → 129.
+Every function stays inside the limits; no baseline was touched.
