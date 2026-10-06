@@ -1773,3 +1773,33 @@ choice and its validation, 308 → ~300 lines), `actions.ts` → `useQueueAction
 object each (≤ 4 params), `SvgList` → `Footer`, `VersionsDialog` → `VersionList`
 + `VersionFacts`. `src/svg/runcontrol.ts` (139) holds the queue's async half so
 `runqueue.ts` (59) stays pure rules only; `actions.ts` is back to 283 lines.
+
+## 2026-10-06 — Exact containing-folder clipboard location
+
+* TDD red: the exact bunny SVG fixture failed for input/output/month/run picks
+  (4 failures); the real SVG location button exposed a doubled source directory
+  (1 failure). Sheet/split picks and the ungenerated row were passing controls.
+* Green: all six root levels copy the complete `icon-bunny-face_AI_7/split_04`
+  folder; SVG location works before/after generation. Selection V2's actual
+  location button now asserts the split folder too. Prior assertions enforcing
+  the incorrect run-only location were corrected, not discarded.
+* `npm run verify`: **ALL LANES PASSED** — TypeScript; lint (0 errors, 8 existing
+  warnings); changed-file quality ratchet; **92 files / 946 tests** in both
+  normal and coverage runs; single-file production build.
+* Coverage: lib lines **97.95%**, branches **91.05%**; rootpath lines **100%**.
+  The edited helper is covered; no new production functions were introduced.
+* RULE 18 recheck: gate-reported rootpath **216 lines**, codeactions **116**;
+  the location formatter is 5 body lines, location callback 6. The existing
+  hook registration stays together (22 body lines, one cohesive action API),
+  below the 30-line hard gate. No baseline changes, overrides, parameter bags,
+  dummy extractions or new complexity. Four unused helpers were removed.
+* Duplication review: jscpd reports 12 repository-wide clones (none in the
+  edited production files). Knip could not complete: its OXC parser threw
+  `RangeError: Array buffer allocation failed` in this environment. Manual
+  diff review found no unused added exports/imports or new duplication.
+* Runtime dependencies were reinstalled for Linux verification; those local
+  dependency changes are not part of this fix. The tracked standalone HTML
+  is rebuilt so direct-file users also receive the corrected behavior.
+* Current I-28/I-48 and UI selector documentation now state the exact containing
+  folder contract. No live Windows Explorer test was possible in this Linux
+  sandbox; DOM tests drive the real panel with filesystem/clipboard shims.

@@ -455,11 +455,10 @@ Batch:
   what scrolls. No interactive element is ever painted under the dock, at any
   scroll position, and the app's floating toasts are lifted above the dock's
   published height (`--app-dock-h`).
-* **I-28 (copies, RULE 2/9):** a "copy path" action yields a **folder** path,
-  never a file name: the batch folder for anything inside
-  `_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>`, the item's own folder
-  anywhere else. The text uses backslashes throughout, and a blocked clipboard
-  is reported as an error instead of being swallowed.
+* **I-28 (copies, RULE 2/9):** a location-copy action yields the file's
+  **immediate containing folder**, never its filename or a run ancestor. All
+  sheet/split directories are retained. Text uses backslashes throughout;
+  a blocked clipboard is reported as an error.
 * **I-29 (full path, RULE 13/20):** the full path of a picked root is
   remembered per **folder name** in `iconSplitter.rootpaths.v1`, normalised on
   write (Explorer's surrounding quotes, forward slashes, trailing and doubled
@@ -555,13 +554,11 @@ Batch:
   (`lib/splitscope.ScopeRule { split, hideOutside }`). The scope line names such
   a root (`Scope: split output only`) and never says "in the main folder", which
   is not inside the picked root at all.
-* **I-48 (the batch folder is where a human looks, RULE 4):** a copy stops at the
-  run folder whenever the item belongs to a batch — whether the output chain is
-  inside the relative path (`_split_output/<month>/<stamp>/…`), starts at the
-  root's own level (`<month>/<stamp>/…`), or **is** the root
-  (`<stamp>` as the picked folder, where the copy hands over the root itself).
-  A folder that merely resembles the layout keeps the item's own folder, as
-  before; `lib/batchlayout` owns the names both rules read.
+* **I-48 (exact containing location, RULE 4; corrected 2026-10-06):** copies
+  retain every directory below the picked root, whether that root is the input,
+  output, month, run, sheet or split folder. No batch-name heuristics truncate
+  the path. SVG version paths are already root-relative and are never prefixed
+  with the source directory again; before generation, use the pair's meta path.
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
   capture; when it finds nothing the path is still recoverable without another
   dialog, and the UI says how. `Rescan` (and the Generate SVG rescan) makes one
@@ -677,7 +674,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection IO+UI | `src/selection/state.ts`, `reviewstore.ts`, `handles.ts`, `fmt.ts`, `thumbs.ts`, `hotkeys.ts`, `copypath.ts`, `Surfaces.tsx`, `useSelection.ts`, `SelectionPanel.tsx`, `FilterBar.tsx`, `PairList.tsx`, `CompareView.tsx`, `HeaderRow.tsx`, `StatusFooter.tsx` | reducers, atomic decision IO, bulk reducer, shared hotkeys/surfaces, review UI |
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
-| The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) and `lib/rootpath` (where a copy stops, I-28/I-48) |
+| The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) |
 | The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named and the derivation from one of them (`resolve()` segments, I-51), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
@@ -1214,13 +1211,9 @@ work and say so (`full path not captured`).
 
 `lib/rootpath.folderCopyText(rootName, relPath)` and its one caller
 `lib/copypath.copyFolderText` replace the three hand-written copies (the Batch
-one had its own, with forward slashes). The rule (I-28): inside a run's output
-tree (`_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>/…`) the copy stops at the
-**batch folder** — the folder a human browses — and anywhere else it keeps the
-item's own folder; the file name is dropped in both cases. Since 2026-10-05
-(I-48) the batch chain is found from either side of the picked root: inside the
-relative path, at its head (the output folder or a month folder picked as the
-root), or the root itself being one run folder — see §17. Four surfaces use it:
+one had its own, with forward slashes). The rule (I-28/I-48): drop only the
+filename, preserving every directory below the picked root. There is no
+special batch/run truncation. Four surfaces use it:
 the Batch scan table's row action, Selection V1's and V2's "original / AI
 result" buttons and Generate SVG's "open location".
 
@@ -1406,12 +1399,10 @@ on the clipboard):
 | the run folder | 2 | `whole folder — no split output found` | `…\…_split_output\2026-10\2026-10-05_18-45-20\icon-sheet_AI\split_02` |
 | `_split_output` | **0** | `split output only · 2 pair(s) in the main folder not listed` | *(no row to copy from)* |
 
-After the fix the same probe reads, for **both** picks: 2 rows in Selection V2,
-2 rows in Generate SVG (`Audit — 6 files · 2 AI sources · 2 references excluded ·
-0 missing files · 0 duplicates removed → 2 rows`, no `outside-split`), scope
-`Scope: split output only`, and a copy that hands over
-`…\2026-10\2026-10-05_18-45-20` — the batch folder. Design:
-`archive/2026-10-05-picked-output-root/design.md`.
+The scope fix gives both picks 2 rows in Selection V2 and Generate SVG,
+with `Scope: split output only`. Historical probe/design evidence lives in
+`docs/archive/2026-10-05-picked-output-root/design.md`. The location behavior
+was corrected on 2026-10-06: copies include the sheet and split directories.
 
 Two rules carry it. **Scope (I-47)** is now a decision about the set the picked
 folder defines, not a segment of every relative path:
@@ -1419,16 +1410,9 @@ folder defines, not a segment of every relative path:
 folder is an output folder, a run stamp, or holds one; `hideOutside` **only**
 when the output folder lies strictly below the root (the `test_processing_2`
 case, which keeps hiding and counting the unsplit sheets, I-38/I-40).
-**Copy (I-48)** finds the batch folder from either side of the root: the chain
-inside the relative path (unchanged), the chain at the head of it
-(`<month>/<stamp>` when `_split_output` or a month is the root), or the root
-being one run folder — where the copy hands over the root itself. A near-miss
-(`split_01`, `_split_output/latest`, a `2026-10` folder that holds no run) keeps
-the item's own folder, exactly as before.
-
-`lib/batchlayout.ts` is the one owner of the layout's names — `_split_output`
-(tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — imported by
-`lib/rootpath` and `lib/splitscope` instead of each repeating the patterns;
+**Copy (I-48)** always keeps the item's immediate containing folder, independent
+of the picked ancestor. `lib/rootpath` no longer reads batch layout patterns.
+`lib/batchlayout.ts` remains the owner of layout names for split scoping;
 `svg/sourcelist.selectRows` takes `hideOutside` under its real name.
 
 ## 18. The same folders under any root (2026-10-05, I-49…I-51)

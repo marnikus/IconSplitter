@@ -1,8 +1,7 @@
 // rootpath.test.ts — RULE 2/9/13: the copy gives a FOLDER, as the picked
 // folder's real path with backslashes, and the full path is one the picker
 // captures (the browser only ever knows the folder's name). The example
-// the user gave drives the batch rule: a file deep inside a run's output tree
-// copies the run's folder, because that is the one a human opens in Explorer.
+// the user gave requires the containing sheet/split folder, not the run ancestor.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ROOT_PATH_KEY,
@@ -80,10 +79,10 @@ describe("the remembered full path", () => {
 });
 
 describe("folderCopyText", () => {
-  it("copies the batch folder for a file inside a run's output tree", () => {
+  it("copies the containing folder for a file inside a run's output tree", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
     const rel = "_split_output/2026-10/2026-10-01_10-24-31/icon-airplane-landing_AI_9/split_02/icon-airplane-landing.svg.json";
-    expect(folderCopyText(ROOT, rel)).toBe(`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
+    expect(folderCopyText(ROOT, rel)).toBe(`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31\\icon-airplane-landing_AI_9\\split_02`);
   });
 
   it("copies the containing folder for a source-tree item, never the file", () => {
@@ -116,36 +115,36 @@ describe("folderCopyText", () => {
   it("falls back to the folder's own name when no full path was captured", () => {
     expect(folderCopyText(ROOT, "Category-A/icon_AI.png")).toBe(`${ROOT}\\Category-A`);
     expect(folderCopyText(ROOT, "_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
-      .toBe(`${ROOT}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
+      .toBe(`${ROOT}\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI\\split_01`);
   });
 
-  it("stops at the batch folder when the picked ROOT is the output folder (I-48)", () => {
+  it("keeps the containing folder when the picked ROOT is the output folder (I-48)", () => {
     // the reported pick: F:\\…\\test_processing_2\\_split_output — the run chain is
     // at the head of the relative path, not inside it
     const out = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
     saveRootPathInfo("_split_output", out, "copied");
     expect(folderCopyText("_split_output", "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png"))
-      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20`);
+      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
     // a month folder picked instead: the run stamp is the first segment
     saveRootPathInfo("2026-10", `${out}\\2026-10`, "copied");
     expect(folderCopyText("2026-10", "2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png"))
-      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20`);
+      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
     // an item directly in the output folder keeps its own folder
     expect(folderCopyText("_split_output", "notes/a_AI.png")).toBe(`${out}\\notes`);
   });
 
-  it("stops at the picked ROOT when the root itself is one run folder (I-48)", () => {
+  it("keeps the containing folder when the root itself is one run folder (I-48)", () => {
     // the reported pick: …\\_split_output\\2026-10\\2026-10-05_18-45-20
     const run = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-05_18-45-20";
     saveRootPathInfo("2026-10-05_18-45-20", run, "copied");
-    expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI/split_02/icon-sheet_AI_02.png")).toBe(run);
+    expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI/split_02/icon-sheet_AI_02.png")).toBe(`${run}\\icon-sheet_AI\\split_02`);
     expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI_02.png")).toBe(run);
   });
 
   it("keeps a batch base that is nested under a subfolder of the root", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
     expect(folderCopyText(ROOT, "sub/_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
-      .toBe(`${FULL}\\sub\\_split_output\\2026-10\\2026-10-01_10-24-31`);
+      .toBe(`${FULL}\\sub\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI\\split_01`);
   });
 });
 

@@ -27,10 +27,10 @@ describe("copyFolderText", () => {
     const said: Said[] = [];
     const rel = "_split_output/2026-10/2026-10-01_10-24-31/a_AI_9/split_02/a.svg.json";
     await copyFolderText(ROOT, rel, (msg, err) => said.push({ msg, err }));
-    expect(written).toEqual([`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31`]);
+    expect(written).toEqual([`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI_9\\split_02`]);
     expect(said).toHaveLength(1);
     expect(said[0].msg).toContain("Folder path copied");
-    expect(said[0].msg).toContain(`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
+    expect(said[0].msg).toContain(`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI_9\\split_02`);
     expect(said[0].msg).toContain("can't open Explorer");
     expect(said[0].err).toBeUndefined(); // success, with an honest note
   });

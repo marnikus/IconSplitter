@@ -48,8 +48,8 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
     const c = latest.current;
     const row = c.rows.find((r) => r.source.id === id);
     if (!row) return;
-    const target = previewTargetOf(row)?.svgPath ?? `${row.source.stem}.svg.json`;
-    void copyFolderText(c.m.rootName, joinPath(row.source.dirPath, target), c.say);
+    const target = previewTargetOf(row)?.svgPath ?? row.source.metaPath;
+    void copyFolderText(c.m.rootName, target, c.say);
   }, []);
   const readCode = useCallback((id: string, version: number) => readCodeOf(latest.current, id, version), []);
   const preferVersion = useCallback((id: string, version: number) => preferOf(latest.current, id, version), []);
@@ -112,8 +112,4 @@ async function copyOf(ctx: CodeCtx, id: string, version: number): Promise<void> 
   } catch {
     ctx.say("Clipboard is blocked — open Code and copy manually", true);
   }
-}
-
-function joinPath(dir: string, name: string): string {
-  return dir === "" ? name : `${dir}/${name}`;
 }

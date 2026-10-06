@@ -1006,6 +1006,14 @@ describe("SVG row preview", () => {
     expect(svg?.getAttribute("style") ?? "").not.toContain("color:");
   });
 
+  it.each([FOG, COURT])("copies the actual containing folder, before or after generation: %s", async (id) => {
+    const root = await makePreviewRoot();
+    await mount(root);
+    await act(async () => { (q(`[data-testid=svg-location-${id}]`) as HTMLButtonElement).click(); });
+    await settle();
+    expect(copied).toEqual([`${root.name}\\architecture`]);
+  });
+
   it("previews and copies the SAME version", async () => {
     await mount(await makePreviewRoot());
     expect(frame(FOG)?.dataset.version).toBe("2");

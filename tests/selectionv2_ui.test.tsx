@@ -474,10 +474,10 @@ describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("Scope: split output only");
     expect(text(el, "[data-testid='v2-scan-scope']")).not.toContain("not listed");
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("_split_output");
-    // a copy hands over the RUN folder — the one a human opens in Explorer
+    // a copy hands over the actual split folder, not its run ancestor
     const id = rows(el)[0].getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
     await click(q(el, `[data-testid='v2-open-src-${id}']`)!);
-    expect(written[0]).toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31");
+    expect(written[0]).toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31\\icon-sheet_AI\\split_01");
   });
 
   it("shows the exact full path of a pick inside a folder picked before (I-51)", async () => {
