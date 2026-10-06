@@ -456,10 +456,10 @@ Batch:
   scroll position, and the app's floating toasts are lifted above the dock's
   published height (`--app-dock-h`).
 * **I-28 (copies, RULE 2/9):** a "copy path" action yields a **folder** path,
-  never a file name: the batch folder for anything inside
-  `_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>`, the item's own folder
-  anywhere else. The text uses backslashes throughout, and a blocked clipboard
-  is reported as an error instead of being swallowed.
+  never a file name: the folder that holds the file the action was made from
+  (I-56 — reversed 2026-10-06 from the older "stop at the batch folder" rule).
+  The text uses backslashes throughout, and a blocked clipboard is reported as
+  an error instead of being swallowed.
 * **I-29 (full path, RULE 13/20):** the full path of a picked root is
   remembered per **folder name** in `iconSplitter.rootpaths.v1`, normalised on
   write (Explorer's surrounding quotes, forward slashes, trailing and doubled
@@ -555,11 +555,16 @@ Batch:
   (`lib/splitscope.ScopeRule { split, hideOutside }`). The scope line names such
   a root (`Scope: split output only`) and never says "in the main folder", which
   is not inside the picked root at all.
-* **I-48 (the batch folder is where a human looks, RULE 4):** a copy stops at the
-  run folder whenever the item belongs to a batch — whether the output chain is
-  inside the relative path (`_split_output/<month>/<stamp>/…`), starts at the
-  root's own level (`<month>/<stamp>/…`), or **is** the root
-  (`<stamp>` as the picked folder, where the copy hands over the root itself).
+* **I-56 (the folder of the file, RULE 4 — 2026-10-06):** a copy names the folder
+  that CONTAINS the file the action was made from, at every depth: for
+  `…/<stamp>/<piece>/split_04/<file>` that is `…\<piece>\split_04`, whoever's
+  root was picked (`_split_output`, the month folder, the run folder or any
+  ancestor). **Reverses I-48** (2026-10-05), whose "stop at the run folder" made
+  a deep file's location point one level too high; the run folder is reached by
+  copying an item that really sits in it. `svg/codeactions.openLocation` hands
+  over `targetPathOf(row)` — the same path `svg-target-{id}` shows — so the row's
+  text and the copied folder can never disagree (the older code joined the row's
+  folder onto an already root-relative `svgPath`, doubling the chain).
   A folder that merely resembles the layout keeps the item's own folder, as
   before; `lib/batchlayout` owns the names both rules read.
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
@@ -1214,11 +1219,13 @@ work and say so (`full path not captured`).
 
 `lib/rootpath.folderCopyText(rootName, relPath)` and its one caller
 `lib/copypath.copyFolderText` replace the three hand-written copies (the Batch
-one had its own, with forward slashes). The rule (I-28): inside a run's output
-tree (`_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>/…`) the copy stops at the
-**batch folder** — the folder a human browses — and anywhere else it keeps the
-item's own folder; the file name is dropped in both cases. Since 2026-10-05
-(I-48) the batch chain is found from either side of the picked root: inside the
+one had its own, with forward slashes). The rule (I-28, revised 2026-10-06 by
+I-56): the copy names the **folder that contains the file** — the file name is
+dropped, and no ancestor is skipped for looking like a month, a run stamp or a
+`split_NN`. Until 2026-10-06 the tree rule stopped at the **batch folder**
+instead; that reversal is what the user asked for, and the batch folder is
+reached by copying an item that sits in it. (Historical note: the batch chain
+used to be found from either side of the picked root — inside the
 relative path, at its head (the output folder or a month folder picked as the
 root), or the root itself being one run folder — see §17. Four surfaces use it:
 the Batch scan table's row action, Selection V1's and V2's "original / AI
@@ -1409,8 +1416,8 @@ on the clipboard):
 After the fix the same probe reads, for **both** picks: 2 rows in Selection V2,
 2 rows in Generate SVG (`Audit — 6 files · 2 AI sources · 2 references excluded ·
 0 missing files · 0 duplicates removed → 2 rows`, no `outside-split`), scope
-`Scope: split output only`, and a copy that hands over
-`…\2026-10\2026-10-05_18-45-20` — the batch folder. Design:
+`Scope: split output only`, and a copy that hands over the file's own folder —
+since I-56 that is `…\<piece>\split_NN`, not the run folder. Design:
 `archive/2026-10-05-picked-output-root/design.md`.
 
 Two rules carry it. **Scope (I-47)** is now a decision about the set the picked
@@ -1419,10 +1426,11 @@ folder defines, not a segment of every relative path:
 folder is an output folder, a run stamp, or holds one; `hideOutside` **only**
 when the output folder lies strictly below the root (the `test_processing_2`
 case, which keeps hiding and counting the unsplit sheets, I-38/I-40).
-**Copy (I-48)** finds the batch folder from either side of the root: the chain
-inside the relative path (unchanged), the chain at the head of it
-(`<month>/<stamp>` when `_split_output` or a month is the root), or the root
-being one run folder — where the copy hands over the root itself. A near-miss
+**Copy (I-48, replaced by I-56 on 2026-10-06)** used to find the batch folder from
+either side of the root: the chain inside the relative path, the chain at the
+head of it (`<month>/<stamp>` when `_split_output` or a month is the root), or
+the root being one run folder. Since I-56 the root plays no part in the answer:
+the copy names the containing folder of the file it was given. A near-miss
 (`split_01`, `_split_output/latest`, a `2026-10` folder that holds no run) keeps
 the item's own folder, exactly as before.
 
