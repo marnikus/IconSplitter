@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Installed by tools/install_hooks.sh — runs the RULE 16 verification lanes
+# before every push. Bypass only with `git push --no-verify` and an explicit
+# reason (CODE_VERIFICATION.md, "Git hook").
+exec bash "$(git rev-parse --show-toplevel)/tools/pre_push_check.sh"

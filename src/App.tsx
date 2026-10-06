@@ -2,6 +2,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 import { analyze, detect, type Analysis, type Box } from "./lib/detect";
 import { canvasToBlob, cropRect, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
+import { download, loadImage } from "./lib/dom";
+import { SIZES } from "./lib/exportopts";
+import { useSheetsEdit } from "./ui/useSheetsEdit";
 
 interface Sheet {
   id: string;
@@ -17,40 +20,11 @@ interface Sheet {
   excluded: number[];
 }
 
-const SIZES = [
-  { v: 0, l: "Native (auto)" },
-  { v: 128, l: "128 × 128" },
-  { v: 256, l: "256 × 256" },
-  { v: 512, l: "512 × 512" },
-  { v: 1024, l: "1024 × 1024" },
-  { v: 2048, l: "2048 × 2048" },
-];
-
 const checker =
   "bg-[length:16px_16px] bg-[linear-gradient(45deg,#e5e7eb_25%,transparent_25%,transparent_75%,#e5e7eb_75%),linear-gradient(45deg,#e5e7eb_25%,#fff_25%,#fff_75%,#e5e7eb_75%)] [background-position:0_0,8px_8px]";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const sleep = (ms = 0) => new Promise((r) => setTimeout(r, ms));
-
-function loadImage(url: string) {
-  return new Promise<HTMLImageElement>((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = () => rej(new Error("Could not read image"));
-    i.src = url;
-  });
-}
-
-function download(blob: Blob, name: string) {
-  const u = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = u;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(u), 2000);
-}
 
 export default function App() {
   const [sheets, setSheets] = useState<Sheet[]>([]);
@@ -58,9 +32,9 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
-  const [padding, setPadding] = useState(6);
-  const [size, setSize] = useState(512);
-  const [transparent, setTransparent] = useState(false);
+  // in the store above the tabs: restored on restart, undoable like any change
+  const sheetsEdit = useSheetsEdit();
+  const { padding, size, transparent } = sheetsEdit.opts;
   const fileRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<number>(0);
 
@@ -88,7 +62,7 @@ export default function App() {
           const an = analyze(img);
           const det = detect(an, null);
           const id = crypto.randomUUID();
-          const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w\-]+/g, "_") || "sheet";
+          const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_") || "sheet";
           const sheet: Sheet = {
             id,
             name: f.name,
@@ -164,7 +138,6 @@ export default function App() {
   const copyIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {
     try {
       const blob = await renderBlob(s, it.b, it.sq);
-      // @ts-ignore ClipboardItem typing
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       say(`Icon ${it.n + 1} copied to clipboard`);
     } catch {
@@ -294,16 +267,16 @@ export default function App() {
             </div>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button onClick={() => fileRef.current?.click()} className="btn-ghost">
+            <button data-testid="upload-button" onClick={() => fileRef.current?.click()} className="btn-ghost">
               + Upload images
             </button>
-            <button disabled={!total} onClick={downloadZip} className="btn-primary">
+            <button data-testid="export-zip" disabled={!total} onClick={downloadZip} className="btn-primary">
               ⬇ ZIP ({total})
             </button>
-            <button disabled={!total} onClick={saveFolder} className="btn-ghost">
+            <button data-testid="export-folder" disabled={!total} onClick={saveFolder} className="btn-ghost">
               📁 Save to folder
             </button>
-            <button disabled={!total} onClick={downloadAll} className="btn-ghost">
+            <button data-testid="export-download" disabled={!total} onClick={downloadAll} className="btn-ghost">
               Download files
             </button>
           </div>
@@ -312,6 +285,7 @@ export default function App() {
 
       <input
         ref={fileRef}
+        data-testid="file-input"
         type="file"
         accept="image/*"
         multiple
@@ -325,6 +299,7 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         {!sheets.length ? (
           <div
+            data-testid="dropzone"
             onClick={() => fileRef.current?.click()}
             className="mx-auto mt-10 flex max-w-2xl cursor-pointer flex-col items-center rounded-3xl border-2 border-dashed border-white/15 bg-white/[0.03] px-6 py-20 text-center transition hover:border-indigo-400/60 hover:bg-white/[0.06]"
           >
@@ -362,6 +337,7 @@ export default function App() {
                         </p>
                       </div>
                       <button
+                        data-testid={`sheet-remove-${s.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           removeSheet(s.id);
@@ -387,19 +363,21 @@ export default function App() {
                     <span className="text-slate-400">{padding}%</span>
                   </div>
                   <input
+                    data-testid="padding-slider"
                     type="range"
                     min={0}
                     max={25}
                     value={padding}
-                    onChange={(e) => setPadding(+e.target.value)}
+                    onChange={(e) => sheetsEdit.pad(+e.target.value)}
                     className="w-full accent-indigo-500"
                   />
                 </label>
                 <label className="mt-4 block text-sm">
                   <span className="mb-1 block">Square size</span>
                   <select
+                    data-testid="size-select"
                     value={size}
-                    onChange={(e) => setSize(+e.target.value)}
+                    onChange={(e) => sheetsEdit.size(+e.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"
                   >
                     {SIZES.map((s) => (
@@ -411,9 +389,10 @@ export default function App() {
                 </label>
                 <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm">
                   <input
+                    data-testid="transparent-checkbox"
                     type="checkbox"
                     checked={transparent}
-                    onChange={(e) => setTransparent(e.target.checked)}
+                    onChange={(e) => sheetsEdit.transparent(e.target.checked)}
                     className="h-4 w-4 accent-indigo-500"
                   />
                   Transparent background
@@ -434,6 +413,7 @@ export default function App() {
                     <span className="text-slate-400">{active.manual ? "manual" : "auto"}</span>
                   </div>
                   <input
+                    data-testid="merge-slider"
                     type="range"
                     min={0}
                     max={0.15}
@@ -448,6 +428,7 @@ export default function App() {
                     {active.boxes.length === 1 ? "" : "s"}.
                   </p>
                   <button
+                    data-testid="merge-reset"
                     disabled={!active.manual}
                     onClick={() => redetect(active.id, null)}
                     className="btn-ghost mt-3 w-full"
@@ -487,7 +468,7 @@ export default function App() {
                         const sqi = it ? it.sq : squareInfo(active.boxes, padding);
                         const cr = cropRect(b, sqi.total);
                         return (
-                          <g key={i} onClick={() => toggleBox(active.id, i)} className="cursor-pointer">
+                          <g key={i} data-testid={`box-toggle-${i}`} onClick={() => toggleBox(active.id, i)} className="cursor-pointer">
                             {!off && (
                               <rect
                                 x={cr.x}
@@ -576,17 +557,18 @@ export default function App() {
       )}
 
       {busy && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
+        <div data-testid="busy-overlay" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
           <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl">
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-            <span className="text-sm">{busy}</span>
+            <span data-testid="busy-message" className="text-sm">{busy}</span>
           </div>
         </div>
       )}
 
       {toast && (
         <div
-          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
+          data-testid="toast"
+          className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${
             toast.err ? "bg-rose-600" : "bg-emerald-600"
           }`}
         >

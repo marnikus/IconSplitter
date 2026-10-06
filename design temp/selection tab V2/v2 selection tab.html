@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Operator — Selection</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b16;
+      --surface: #0c1222;
+      --surface-2: #10172a;
+      --surface-3: #151e34;
+      --line: #222c46;
+      --line-strong: #35415f;
+      --text: #e8edfa;
+      --muted: #8591ae;
+      --muted-2: #606d8c;
+      --purple: #745cff;
+      --purple-2: #8c79ff;
+      --green: #32d68b;
+      --green-bg: #12362d;
+      --red: #ff5b7e;
+     --red-bg: #3c1827;
+     --yellow: #ffc45c;
+     --yellow-bg: #3c3018;
+     --thumb-height: 84px;
+     --radius: 7px;
+      --shadow: 0 18px 45px rgb(0 0 0 / 24%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1180px; min-height: 100vh; background: var(--bg); color: var(--text); }
+    button, input, select { font: inherit; }
+    button, select, input { color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--purple-2);
+      outline-offset: 2px;
+    }
+
+    .app { min-height: 100vh; display: grid; grid-template-rows: 62px auto 1fr 40px; }
+    .app-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); paddin: 0 18px; background: #080d1b; }
+    .header-left, .brand, .nav, .app-status, .toolbar, .inline, .summary, .bulk-left, .bulk-right, .pager { display: flex; align-items: center; }
+    .brand { gap: 9px; margin-right: 18px; font-size: 13px; font-weight: 700; }
+    .brand-mark { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(145deg, #9b83ff, #5f46ed); box-shadow: 0 0 20px rgb(116 92 255 / 28%); }
+    .brand-mark::before { content: ""; width: 12px; height: 12px; border: 2px solid white; border-radius: 3px; box-shadow: 4px -4px 0 -2px #fff; }
+    .nav { height: 62px; gap: 2px; }
+    .nav button { align-self: stretch; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 0 15px; font-size: 12px; }
+    .nav button.active { color: white; border-color: var(--purple); background: linear-gradient(180deg, transparent 65%, rgb(116 92 255 / 9%)); }
+    .app-status { gap: 18px; color: var(--muted); font-size: 11px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px rgb(50 214 139 / 60%); }
+    .help { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--muted); }
+
+    .controls { border-bottom: 1px solid var(--line); background: #090f1d; padding: 12px 16px 10px; }
+    .toolbar { justify-content: space-between; gap: 16px; }
+    .toolbar + .toolbar { margin-top: 10px; padding-top: 10px; border-top: 1px solid #151d31; }
+    .source { gap: 9px; min-width: 0; }
+    .path-pill { min-width: 260px; max-width: 380px; padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--radius); color: #b7c1d9; background: var(--surface); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .recursive { gap: 7px; color: var(--muted); font-size: 11px; }
+    .summary { gap: 8px; }
+    .count-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--muted); font-size: 10px; }
+    .count-chip strong { color: var(--text); font-size: 11px; }
+    .count-chip.pending strong { color: var(--yellow); }
+    .count-chip.approved strong { color: var(--green); }
+    .count-chip.declined strong { color: var(--red); }
+
+    .filter-grid { display: grid; grid-template-columns: auto 145px 145px 132px 190px 122px 1fr auto; gap: 10px; align-items: end; width: 100%; }
+    .field { min-width: 0; }
+    .field label { display: block; color: var(--muted-2); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 5px; }
+    .input, select { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 0 10px; font-size: 11px; }
+    .date-tabs { display: flex; height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 3px; }
+    .date-tabs button { border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-size: 10px; padding: 0 11px; }
+    .date-tabs button.active { background: var(--purple); color: white; }
+    .result-copy { align-self: center; color: var(--muted); font-size: 11px; text-align: right; }
+
+    .btn { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); padding: 8px 11px; min-height: 30px; color: #c6cee2; font-size: 10px; font-weight: 650; white-space: nowrap; }
+    .btn:hover { border-color: var(--line-strong); background: var(--surface-3); }
+    .btn.primary { background: var(--purple); border-color: var(--purple); color: white; }
+    .btn.success { background: #143a31; color: var(--green); border-color: #245e4c; }
+    .btn.success.solid { background: #159361; border-color: #1ab274; color: white; }
+    .btn.danger { background: var(--red-bg); color: var(--red); border-color: #713249; }
+    .btn.ghost { background: transparent; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .workspace { padding: 0 16px 10px; background: var(--bg); min-height: 0; overflow: hidden; }
+    .warning { min-height: 38px; margin-bottom: 8px; padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid #5b4624; border-radius: 6px; background: #211b12; color: #d9bf8c; font-size: 10px; }
+    .warning[hidden] { display: none; }
+    .warning strong { color: var(--yellow); }
+
+    .bulk { height: 54px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 7px 7px 0 0; padding: 0 12px; background: var(--surface); box-shadow: var(--shadow); }
+    .bulk-left, .bulk-right { gap: 9px; }
+    .selected-copy { font-size: 11px; font-weight: 700; }
+    .scope-copy { color: var(--muted); font-size: 10px; }
+    .divider { width: 1px; height: 25px; background: var(--line); margin: 0 2px; }
+    .zoom { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
+    .zoom label { font-weight: 700; letter-spacing: .08em; }
+    .zoom input[type="range"] { width: 126px; accent-color: var(--purple); }
+    .zoom-value { min-width: 56px; padding: 6px 8px; border-radius: 6px; background: var(--purple); color: white; text-align: center; font-weight: 800; }
+
+    .list-panel { height: calc(100% - 54px); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 7px 7px; background: var(--surface); overflow: hidden; display: grid; grid-template-rows: 42px 30px 1fr 56px; }
+    .list-head { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--line); }
+    .list-title { display: flex; align-items: baseline; gap: 8px; }
+    .list-title h1 { margin: 0; font-size: 13px; }
+    .list-title span { color: var(--muted); font-size: 10px; }
+    .list-tools { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
+    .columns, .pair-row { display: grid; grid-template-columns: 34px minmax(230px, .8fr) minmax(320px, 1.35fr) 125px 125px 140px 142px 180px; align-items: center; column-gap: 12px; }
+    .columns { padding: 0 12px; border-bottom: 1px solid var(--line); color: var(--muted-2); font-size: 8px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .rows { min-height: 0; overflow: auto; scrollbar-color: #313b58 #0c1222; }
+    .pair-row { min-height: calc(var(--thumb-height) + 22px); padding: 9px 12px; border-bottom: 1px solid #192138; position: relative; transition: background .15s, min-height .15s; }
+    .pair-row:hover { background: #10182b; }
+    .pair-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--purple); }
+    .pair-row.selected:not(.active) { background: #111a31; }
+    .pair-row.approved::after, .pair-row.declined::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 2px; background: var(--green); }
+    .pair-row.declined::after { background: var(--red); }
+    .pair-thumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .thumb-wrap { position: relative; min-width: 0; }
+    .thumb { height: var(--thumb-height); max-width: 126px; aspect-ratio: 4 / 3; border-radius: 5px; border: 1px solid #35405e; background-size: cover; background-position: center; transition: height .15s; }
+    .thumb-tag { position: absolute; left: 4px; top: 4px; padding: 2px 4px; border-radius: 3px; background: rgb(3 7 18 / 78%); color: #dbe3f5; font-size: 7px; font-weight: 800; text-transform: uppercase; }
+    .file-main { min-width: 0; }
+    .file-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; }
+    .file-sub { margin-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font: 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cell { color: #aab4cb; font-size: 9px; }
+    .cell small { display: block; margin-top: 4px; color: var(--muted-2); font-size: 8px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 7px; font-size: 8px; font-weight: 750; }
+    .badge.pending { color: var(--yellow); background: var(--yellow-bg); border-color: #665129; }
+    .badge.approved { color: var(--green); background: var(--green-bg); border-color: #275c4c; }
+    .badge.declined { color: var(--red); background: var(--red-bg); border-color: #693047; }
+    .file-actions, .decision-actions { display: flex; gap: 5px; }
+    .tiny { min-height: 26px; padding: 5px 7px; font-size: 8px; }
+
+    .list-footer { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
+    .pager { gap: 5px; }
+    .pager button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--muted); font-size: 9px; }
+    .pager button.active { background: var(--purple); color: white; border-color: var(--purple); }
+
+    .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--line); background: #080d1b; color: var(--muted); font-size: 9px; }
+    .status-group { display: flex; align-items: center; gap: 14px; }
+    .progress { width: 92px; height: 5px; border-radius: 999px; overflow: hidden; background: #1c2540; }
+    .progress > span { display: block; height: 100%; background: var(--purple); }
+
+    .toast { position: fixed; right: 18px; bottom: 54px; max-width: 340px; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: 7px; background: #141d32; color: #dce4f7; box-shadow: var(--shadow); font-size: 10px; opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--purple); }
+
+    @media (max-width: 1320px) {
+      .columns, .pair-row { grid-template-columns: 32px minmax(205px, .8fr) minmax(260px, 1.2fr) 110px 110px 124px 126px 165px; column-gap: 8px; }
+      .filter-grid { grid-template-columns: auto 130px 130px 120px 165px 110px 1fr auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Image Operator</span></div>
+        <nav class="nav" aria-label="Primary">
+          <button type="button">Single sheets</button>
+          <button type="button">Batch folders</button>
+          <button type="button" class="active" aria-current="page">Selection</button>
+        </nav>
+      </div>
+      <div class="app-status"><span class="inline"><span class="status-dot"></span>&nbsp;Watcher active</span><button class="help" type="button" title="Keyboard shortcuts">?</button></div>
+    </header>
+
+    <section class="controls" aria-label="Review controls">
+      <div class="toolbar">
+        <div class="source inline">
+          <div class="path-pill" title="D:\Design\Image batches\split_root">D:\Design\Image batches\split_root</div>
+          <button class="btn primary" id="rescanBtn" type="button">↻ Rescan</button>
+          <label class="recursive"><input type="checkbox" checked> Recursive · Include subfolders</label>
+        </div>
+        <div class="summary" id="summary"></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="filter-grid">
+          <div class="field">
+            <label>Date filter</label>
+            <div class="date-tabs" role="group" aria-label="Date filter">
+              <button type="button" class="active" data-mode="all">All</button>
+              <button type="button" data-mode="month">Month</button>
+              <button type="button" data-mode="range">Range</button>
+            </div>
+          </div>
+          <div class="field"><label for="fromDate">From</label><input class="input" id="fromDate" type="date" value="2026-01-01"></div>
+          <div class="field"><label for="toDate">To</label><input class="input" id="toDate" type="date" value="2026-12-31"></div>
+          <div class="field"><label for="statusFilter">Status</label><select id="statusFilter"><option value="all">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="declined">Declined</option></select></div>
+          <div class="field"><label for="sortBy">Sort by</label><select id="sortBy"><option value="date">Created date</option><option value="status">Review status</option><option value="name">Filename</option><option value="path">Relative path</option></select></div>
+          <div class="field"><label for="sortOrder">Order</label><select id="sortOrder"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select></div>
+          <div class="result-copy" id="visibleCount">Showing 0 pairs</div>
+          <button class="btn ghost" id="clearFilters" type="button">× Clear filters</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="warning" id="warning" hidden>
+        <span>⚠ <strong>Decision file could not be written.</strong> Your pending change is retained in memory. <code>review-decisions.json</code></span>
+        <button class="btn tiny" id="retryWrite" type="button">↻ Retry write</button>
+      </div>
+
+      <div class="bulk">
+        <div class="bulk-left">
+          <input id="selectVisible" type="checkbox" aria-label="Select all visible image pairs">
+          <span class="selected-copy" id="selectedCount">0 selected</span>
+          <span class="scope-copy" id="selectionScope">across 0 visible pairs</span>
+          <span class="divider"></span>
+          <button class="btn" id="selectAllBtn" type="button">Select visible</button>
+          <button class="btn" id="deselectBtn" type="button">Deselect all</button>
+        </div>
+        <div class="bulk-right">
+          <div class="zoom">
+            <label for="thumbSize">ZOOM</label>
+            <span>48</span>
+            <input id="thumbSize" type="range" min="48" max="240" step="4" value="84" aria-label="Thumbnail maximum height in pixels">
+            <span>240</span>
+            <output class="zoom-value" id="thumbValue" for="thumbSize">84 px</output>
+          </div>
+          <span class="divider"></span>
+          <button class="btn success" id="approveSelected" type="button" disabled>✓ Approve selected</button>
+          <button class="btn success solid" id="approveVisible" type="button">✓ Approve visible list</button>
+        </div>
+      </div>
+
+      <div class="list-panel">
+        <div class="list-head">
+          <div class="list-title"><h1>Image pairs</h1><span>Original and AI results</span></div>
+          <div class="list-tools"><span>Active row is highlighted</span><span>·</span><span><kbd>A</kbd> approve</span><span><kbd>D</kbd> decline</span></div>
+        </div>
+        <div class="columns" aria-hidden="true">
+          <span></span><span>Original / AI result</span><span>File / relative path / pair ID</span><span>Created</span><span>Dimensions / format</span><span>Review status</span><span>Open files</span><span>Decision</span>
+        </div>
+        <div class="rows" id="rows" role="listbox" aria-label="Image review pairs"></div>
+        <footer class="list-footer">
+          <span id="footerSummary">Showing 0 pairs</span>
+          <div class="pager" aria-label="Pagination"><button type="button">‹</button><button class="active" type="button">1</button><button type="button">2</button><button type="button">3</button><button type="button">›</button></div>
+        </footer>
+      </div>
+    </section>
+
+    <footer class="status-bar">
+      <div class="status-group"><span class="inline"><span class="status-dot"></span>&nbsp;Recursive index ready</span><span id="lastScan">Last rescan: just now</span><span>+3 new · 1 renamed · 0 removed · 180 unchanged</span></div>
+      <div class="status-group"><span id="saveStatus">All decisions saved</span><span id="reviewProgress">0 / 0 reviewed</span><span class="progress"><span id="progressFill" style="width:0%"></span></span></div>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const makeThumb = (seed, ai = false) => {
+      const hues = [205, 221, 191, 31, 263, 338];
+      const h = hues[seed % hues.length] + (ai ? 14 : 0);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${h} 32% 24%)"/><stop offset="1" stop-color="hsl(${h + 28} 44% ${ai ? 42 : 30}%)"/></linearGradient></defs>
+        <rect width="320" height="240" fill="url(#g)"/><circle cx="${85 + seed * 11 % 120}" cy="${54 + seed * 7 % 68}" r="34" fill="hsl(${h + 10} 50% 72% / .38)"/>
+        <path d="M0 197 L62 142 L103 169 L162 92 L224 154 L270 116 L320 153 L320 240 L0 240Z" fill="hsl(${h + 15} 35% ${ai ? 22 : 17}%)"/>
+        <path d="M45 200 L112 122 L147 146 L199 74 L256 163" fill="none" stroke="hsl(${h + 5} 34% 78% / .55)" stroke-width="6"/>
+      </svg>`;
+      return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    };
+
+    const basePairs = [
+      ["fog_architecture_04.png", "renders/architecture/fog_architecture_04.png", "2026-09-28", "pending", "512 × 512 · PNG", "pair-8F24"],
+      ["lighthouse_winter_17.png", "renders/winter/lighthouse_winter_17.png", "2026-09-27", "approved", "768 × 512 · PNG", "pair-5D81"],
+      ["courtyard_shadow_31.png", "renders/architecture/courtyard_shadow_31.png", "2026-09-26", "declined", "512 × 512 · PNG", "pair-2A17"],
+      ["harbor_glass_58.png", "renders/coastal/harbor_glass_58.png", "2026-09-25", "pending", "768 × 512 · JPG", "pair-7C40"],
+      ["dunes_lowlight_83.png", "renders/desert/dunes_lowlight_83.png", "2026-09-18", "pending", "512 × 512 · WEBP", "pair-3B66"],
+      ["breakwater_066.png", "renders/coastal/breakwater_066.png", "2026-08-30", "pending", "768 × 512 · PNG", "pair-9E12"],
+      ["monolith_storm_02.png", "renders/concepts/monolith_storm_02.png", "2026-08-12", "approved", "512 × 512 · PNG", "pair-6A55"],
+      ["forest_station_91.png", "renders/forest/forest_station_91.png", "2026-07-22", "declined", "768 × 512 · JPG", "pair-1C73"]
+    ];
+
+    const stored = JSON.parse(localStorage.getItem("image-review-decisions") || "{}");
+    const state = {
+      pairs: basePairs.map((p, i) => ({ id: p[5], name: p[0], path: p[1], date: p[2], status: stored[p[5]] || p[3], dimensions: p[4], selected: i < 3, seed: i })),
+      activeId: "pair-8F24",
+      dateMode: "all",
+      filtered: []
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const toast = (message) => {
+      $("toast").textContent = message;
+      $("toast").classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => $("toast").classList.remove("show"), 2200);
+    };
+
+    const saveDecisions = () => {
+      const decisions = Object.fromEntries(state.pairs.map(p => [p.id, p.status]));
+      localStorage.setItem("image-review-decisions", JSON.stringify(decisions));
+      $("saveStatus").textContent = "All decisions saved";
+      $("warning").hidden = true;
+    };
+
+    const applyFilters = () => {
+      const status = $("statusFilter").value;
+      const from = $("fromDate").value;
+      const to = $("toDate").value;
+      let items = state.pairs.filter(p => status === "all" || p.status === status);
+      if (state.dateMode === "month") {
+        const month = from.slice(0, 7);
+        items = items.filter(p => p.date.startsWith(month));
+      } else if (state.dateMode === "range") {
+        items = items.filter(p => (!from || p.date >= from) && (!to || p.date <= to));
+      }
+      const field = $("sortBy").value;
+      const dir = $("sortOrder").value === "asc" ? 1 : -1;
+      const getValue = p => field === "date" ? p.date : field === "status" ? p.status : field === "path" ? p.path : p.name;
+      items.sort((a, b) => getValue(a).localeCompare(getValue(b)) * dir);
+      state.filtered = items;
+    };
+
+    const statusLabel = s => s[0].toUpperCase() + s.slice(1);
+    const render = () => {
+      applyFilters();
+      const rows = $("rows");
+      rows.innerHTML = "";
+      state.filtered.forEach(pair => {
+        const row = document.createElement("div");
+        row.className = `pair-row ${pair.status} ${pair.selected ? "selected" : ""} ${pair.id === state.activeId ? "active" : ""}`;
+        row.dataset.id = pair.id;
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", pair.id === state.activeId ? "true" : "false");
+        row.tabIndex = pair.id === state.activeId ? 0 : -1;
+        row.innerHTML = `
+          <input type="checkbox" class="row-check" ${pair.selected ? "checked" : ""} aria-label="Select ${pair.name}">
+          <div class="pair-thumbs">
+            <div class="thumb-wrap"><div class="thumb" style="background-image:${makeThumb(pair.seed)}"></div><span class="thumb-tag">Original</span></div>
+            <div class="thumb-wrap"><div class="thumb" style="background-image:${makeThumb(pair.seed, true)}"></div><span class="thumb-tag">AI result</span></div>
+          </div>
+          <div class="file-main"><div class="file-name">${pair.name}</div><div class="file-sub">${pair.path} · ${pair.id}</div></div>
+          <div class="cell">${pair.date}<small>14:${String(12 + pair.seed).padStart(2, "0")} UTC</small></div>
+          <div class="cell">${pair.dimensions}<small>${1.8 + pair.seed * .17 | 0}.${pair.seed + 2} MB</small></div>
+          <div><span class="badge ${pair.status}">${pair.status === "approved" ? "✓" : pair.status === "declined" ? "×" : "●"} ${statusLabel(pair.status)}</span></div>
+          <div class="file-actions"><button type="button" class="btn tiny open" data-kind="original">Original</button><button type="button" class="btn tiny open" data-kind="ai">AI result</button></div>
+          <div class="decision-actions"><button type="button" class="btn tiny danger decline">× Decline</button><button type="button" class="btn tiny success approve">✓ Approve</button></div>`;
+        row.addEventListener("click", event => {
+          if (event.target.closest("button,input")) return;
+          state.activeId = pair.id;
+          render();
+          document.querySelector(`[data-id="${pair.id}"]`)?.focus();
+        });
+        row.querySelector(".row-check").addEventListener("change", event => { pair.selected = event.target.checked; render(); });
+        row.querySelector(".approve").addEventListener("click", () => decide([pair], "approved"));
+        row.querySelector(".decline").addEventListener("click", () => decide([pair], "declined"));
+        row.querySelectorAll(".open").forEach(btn => btn.addEventListener("click", () => toast(`Opening ${btn.dataset.kind === "ai" ? "AI result" : "original"}: ${pair.name}`)));
+        rows.appendChild(row);
+      });
+      updateChrome();
+    };
+
+    const decide = (pairs, decision) => {
+      if (!pairs.length) return;
+      pairs.forEach(p => p.status = decision);
+      saveDecisions();
+      toast(`${pairs.length} image pair${pairs.length === 1 ? "" : "s"} ${decision}`);
+      render();
+    };
+
+    const updateChrome = () => {
+      const all = state.pairs.length;
+      const approved = state.pairs.filter(p => p.status === "approved").length;
+      const declined = state.pairs.filter(p => p.status === "declined").length;
+      const pending = all - approved - declined;
+      $("summary").innerHTML = `<span class="count-chip"><strong>${all}</strong> total</span><span class="count-chip pending"><strong>${pending}</strong> pending</span><span class="count-chip approved"><strong>${approved}</strong> approved</span><span class="count-chip declined"><strong>${declined}</strong> declined</span>`;
+      const selected = state.pairs.filter(p => p.selected);
+      const visibleSelected = state.filtered.filter(p => p.selected);
+      $("selectedCount").textContent = `${selected.length} selected`;
+      $("selectionScope").textContent = `across ${state.filtered.length} visible pairs`;
+      $("visibleCount").textContent = `Showing ${state.filtered.length} pairs`;
+      $("footerSummary").textContent = `Showing ${state.filtered.length} of ${all} pairs · ${pending} pending · ${approved} approved · ${declined} declined`;
+      $("approveSelected").disabled = selected.length === 0;
+      $("approveVisible").disabled = state.filtered.length === 0;
+      $("selectVisible").checked = state.filtered.length > 0 && visibleSelected.length === state.filtered.length;
+      $("selectVisible").indeterminate = visibleSelected.length > 0 && visibleSelected.length < state.filtered.length;
+      const reviewed = approved + declined;
+      $("reviewProgress").textContent = `${reviewed} / ${all} reviewed`;
+      $("progressFill").style.width = `${all ? reviewed / all * 100 : 0}%`;
+    };
+
+    document.querySelectorAll("[data-mode]").forEach(btn => btn.addEventListener("click", () => {
+      state.dateMode = btn.dataset.mode;
+      document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b === btn));
+      render();
+    }));
+    ["fromDate", "toDate", "statusFilter", "sortBy", "sortOrder"].forEach(id => $(id).addEventListener("change", render));
+    $("clearFilters").addEventListener("click", () => {
+      state.dateMode = "all";
+      document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b.dataset.mode === "all"));
+      $("statusFilter").value = "all";
+      $("sortBy").value = "date";
+      $("sortOrder").value = "desc";
+      render();
+    });
+    $("selectVisible").addEventListener("change", event => { state.filtered.forEach(p => p.selected = event.target.checked); render(); });
+    $("selectAllBtn").addEventListener("click", () => { state.filtered.forEach(p => p.selected = true); render(); });
+    $("deselectBtn").addEventListener("click", () => { state.pairs.forEach(p => p.selected = false); render(); });
+    $("approveSelected").addEventListener("click", () => decide(state.pairs.filter(p => p.selected), "approved"));
+    $("approveVisible").addEventListener("click", () => decide(state.filtered, "approved"));
+    $("thumbSize").addEventListener("input", event => {
+      const px = `${event.target.value}px`;
+      document.documentElement.style.setProperty("--thumb-height", px);
+      $("thumbValue").textContent = `${event.target.value} px`;
+      localStorage.setItem("image-review-thumb-height", event.target.value);
+    });
+    $("rescanBtn").addEventListener("click", () => {
+      $("rescanBtn").disabled = true;
+      $("rescanBtn").textContent = "Scanning…";
+      setTimeout(() => {
+        $("rescanBtn").disabled = false;
+        $("rescanBtn").textContent = "↻ Rescan";
+        $("lastScan").textContent = "Last rescan: just now";
+        toast("Recursive scan complete · 8 image pairs indexed");
+      }, 750);
+    });
+    $("retryWrite").addEventListener("click", saveDecisions);
+    document.addEventListener("keydown", event => {
+      if (["INPUT", "SELECT"].includes(document.activeElement.tagName)) return;
+      const active = state.pairs.find(p => p.id === state.activeId);
+      if (!active) return;
+      if (event.key.toLowerCase() === "a") decide([active], "approved");
+      if (event.key.toLowerCase() === "d") decide([active], "declined");
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const index = state.filtered.findIndex(p => p.id === active.id);
+        const next = state.filtered[index + (event.key === "ArrowDown" ? 1 : -1)];
+        if (next) { state.activeId = next.id; render(); document.querySelector(`[data-id="${next.id}"]`)?.scrollIntoView({block:"nearest"}); }
+      }
+    });
+
+    const storedThumb = localStorage.getItem("image-review-thumb-height");
+    if (storedThumb) {
+      $("thumbSize").value = storedThumb;
+      $("thumbValue").textContent = `${storedThumb} px`;
+      document.documentElement.style.setProperty("--thumb-height", `${storedThumb}px`);
+    }
+    render();
+  </script>
+</body>
+</html>
