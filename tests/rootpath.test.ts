@@ -1,8 +1,8 @@
 // rootpath.test.ts — RULE 2/9/13: the copy gives a FOLDER, as the picked
 // folder's real path with backslashes, and the full path is one the picker
-// captures (the browser only ever knows the folder's name). The user's own tree
-// drives the rule (2026-10-06): a file deep inside a run's output tree copies
-// ITS OWN containing folder — `…\<piece>\split_04` — never the run's folder.
+// captures (the browser only ever knows the folder's name). The example
+// the user gave drives the batch rule: a file deep inside a run's output tree
+// copies the run's folder, because that is the one a human opens in Explorer.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ROOT_PATH_KEY,
@@ -80,22 +80,10 @@ describe("the remembered full path", () => {
 });
 
 describe("folderCopyText", () => {
-  // The user's report, verbatim: the file is
-  // `…\2026-10-05_18-45-20\icon-bunny-face_AI_7\split_04\icon-bunny-face_AI_7_04_v2.svg`
-  // and the copy must name `…\split_04`. The run folder one level up is NOT it.
-  const RUN = "_split_output/2026-10/2026-10-05_18-45-20";
-  const PIECE = `${RUN}/icon-bunny-face_AI_7/split_04`;
-  const SHOWN_FOLDER = `${FULL}\\_split_output\\2026-10\\2026-10-05_18-45-20\\icon-bunny-face_AI_7\\split_04`;
-
-  it("copies the folder of the file, never the run's folder (I-56)", () => {
+  it("copies the batch folder for a file inside a run's output tree", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
-    for (const file of ["icon-bunny-face_AI_7_04_v2.svg", "icon-bunny-face_AI_7_04.svg", "icon-bunny-face_AI_7_04_AI.png"]) {
-      expect(folderCopyText(ROOT, `${PIECE}/${file}`)).toBe(SHOWN_FOLDER);
-    }
-    expect(folderCopyText(ROOT, `${PIECE}/icon-bunny-face_AI_7_04.svg.json`)).toBe(SHOWN_FOLDER);
-    // the run folder is one level up and is never what a file's location means
-    expect(folderCopyText(ROOT, `${PIECE}/icon-bunny-face_AI_7_04_v2.svg`))
-      .not.toBe(`${FULL}\\_split_output\\2026-10\\2026-10-05_18-45-20`);
+    const rel = "_split_output/2026-10/2026-10-01_10-24-31/icon-airplane-landing_AI_9/split_02/icon-airplane-landing.svg.json";
+    expect(folderCopyText(ROOT, rel)).toBe(`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
   });
 
   it("copies the containing folder for a source-tree item, never the file", () => {
@@ -104,13 +92,13 @@ describe("folderCopyText", () => {
     expect(folderCopyText(ROOT, "icon_AI.png")).toBe(FULL);
   });
 
-  it("names the run folder only for a file that really sits in it", () => {
+  it("stops at the batch folder when the file sits directly in it", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
-    expect(folderCopyText(ROOT, `${RUN}/icon_AI_02.png`))
-      .toBe(`${FULL}\\_split_output\\2026-10\\2026-10-05_18-45-20`);
+    expect(folderCopyText(ROOT, "_split_output/2026-10/2026-10-01_10-24-31/icon_AI_02.png"))
+      .toBe(`${FULL}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
   });
 
-  it("keeps the whole folder chain, batch-looking or not", () => {
+  it("keeps the whole folder chain when the tree only looks like a batch", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
     expect(folderCopyText(ROOT, "_split_output/2026-10/notes/icon_AI.png"))
       .toBe(`${FULL}\\_split_output\\2026-10\\notes`);
@@ -128,33 +116,36 @@ describe("folderCopyText", () => {
   it("falls back to the folder's own name when no full path was captured", () => {
     expect(folderCopyText(ROOT, "Category-A/icon_AI.png")).toBe(`${ROOT}\\Category-A`);
     expect(folderCopyText(ROOT, "_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
-      .toBe(`${ROOT}\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI\\split_01`);
+      .toBe(`${ROOT}\\_split_output\\2026-10\\2026-10-01_10-24-31`);
   });
 
-  it("names the file's own folder whatever folder was picked as the root (I-56)", () => {
-    // The same deep file, once with the output folder picked as the root and
-    // once with one run folder picked: the answer only ever depends on the file.
+  it("stops at the batch folder when the picked ROOT is the output folder (I-48)", () => {
+    // the reported pick: F:\\…\\test_processing_2\\_split_output — the run chain is
+    // at the head of the relative path, not inside it
     const out = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
-    const deep = "icon-sheet_AI/split_02/icon-sheet_AI_02.png";
     saveRootPathInfo("_split_output", out, "copied");
-    expect(folderCopyText("_split_output", `2026-10/2026-10-05_18-45-20/${deep}`))
-      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
+    expect(folderCopyText("_split_output", "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png"))
+      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20`);
     // a month folder picked instead: the run stamp is the first segment
     saveRootPathInfo("2026-10", `${out}\\2026-10`, "copied");
-    expect(folderCopyText("2026-10", `2026-10-05_18-45-20/${deep}`))
-      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
-    // a run folder picked: the same folder again, said from the root
-    saveRootPathInfo("2026-10-05_18-45-20", `${out}\\2026-10\\2026-10-05_18-45-20`, "copied");
-    expect(folderCopyText("2026-10-05_18-45-20", deep))
-      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
+    expect(folderCopyText("2026-10", "2026-10-05_18-45-20/icon-sheet_AI/split_02/icon-sheet_AI_02.png"))
+      .toBe(`${out}\\2026-10\\2026-10-05_18-45-20`);
     // an item directly in the output folder keeps its own folder
     expect(folderCopyText("_split_output", "notes/a_AI.png")).toBe(`${out}\\notes`);
   });
 
-  it("keeps a batch-looking chain that is nested under a subfolder of the root", () => {
+  it("stops at the picked ROOT when the root itself is one run folder (I-48)", () => {
+    // the reported pick: …\\_split_output\\2026-10\\2026-10-05_18-45-20
+    const run = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-05_18-45-20";
+    saveRootPathInfo("2026-10-05_18-45-20", run, "copied");
+    expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI/split_02/icon-sheet_AI_02.png")).toBe(run);
+    expect(folderCopyText("2026-10-05_18-45-20", "icon-sheet_AI_02.png")).toBe(run);
+  });
+
+  it("keeps a batch base that is nested under a subfolder of the root", () => {
     saveRootPathInfo(ROOT, FULL, "copied");
     expect(folderCopyText(ROOT, "sub/_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
-      .toBe(`${FULL}\\sub\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI\\split_01`);
+      .toBe(`${FULL}\\sub\\_split_output\\2026-10\\2026-10-01_10-24-31`);
   });
 });
 
@@ -271,7 +262,7 @@ describe("the guard at every entry point (I-39)", () => {
     expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
     // with no trustworthy memory the copy falls back to the folder's own name —
     // never to the junk, and never to a path the app guessed
-    expect(folderCopyText(ROOT, "set_A/a_AI.png")).toBe(`${ROOT}\\set_A`); // the file's folder
+    expect(folderCopyText(ROOT, "set_A/a_AI.png")).toBe(`${ROOT}\\set_A`);
   });
 
   it("never adopts markup or a URL from the clipboard as the picked folder's path", () => {

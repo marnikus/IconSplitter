@@ -12,7 +12,7 @@ import { copyFolderText } from "../lib/copypath";
 import { withPreferred } from "../lib/pairpreferred";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
-import { targetPathOf, withMeta } from "./rowmodel";
+import { previewTargetOf, withMeta } from "./rowmodel";
 import { readSvgText } from "./svgfiles";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dispatch } from "react";
@@ -48,11 +48,8 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
     const c = latest.current;
     const row = c.rows.find((r) => r.source.id === id);
     if (!row) return;
-    // The file the row names — `svg-target-{id}` shows the same path — and then
-    // ITS folder (I-56). `targetPathOf` is root-relative and complete: joining
-    // the row's folder onto it doubled the chain before this (the reason a deep
-    // file's location came out at the wrong level).
-    void copyFolderText(c.m.rootName, targetPathOf(row), c.say);
+    const target = previewTargetOf(row)?.svgPath ?? `${row.source.stem}.svg.json`;
+    void copyFolderText(c.m.rootName, joinPath(row.source.dirPath, target), c.say);
   }, []);
   const readCode = useCallback((id: string, version: number) => readCodeOf(latest.current, id, version), []);
   const preferVersion = useCallback((id: string, version: number) => preferOf(latest.current, id, version), []);
@@ -115,4 +112,8 @@ async function copyOf(ctx: CodeCtx, id: string, version: number): Promise<void> 
   } catch {
     ctx.say("Clipboard is blocked — open Code and copy manually", true);
   }
+}
+
+function joinPath(dir: string, name: string): string {
+  return dir === "" ? name : `${dir}/${name}`;
 }

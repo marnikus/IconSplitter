@@ -9,11 +9,11 @@
 // checked one.
 
 import { useEffect, useRef } from "react";
-import type { ReviewStatus } from "../lib/svgfile";
+import { SVG_EXT, type ReviewStatus } from "../lib/svgfile";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
-import { previewTargetOf, shownVersion, targetPathOf } from "./rowmodel";
+import { previewTargetOf, shownVersion } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
 import { PROBLEM_LABEL, type SvgSource } from "./sources";
 import type { SvgRow } from "./types";
@@ -110,7 +110,7 @@ function useActiveScroll(active: boolean) {
 }
 
 function FileCell({ row }: { row: SvgRow }) {
-  const target = targetPathOf(row); // the ONE file a row is about (I-56)
+  const target = targetPath(row);
   return (
     <div className="svg-file-main">
       <div className="svg-file-name" title={row.source.name}>{row.source.name}</div>
@@ -139,12 +139,27 @@ function ProblemLine({ row }: { row: SvgRow }) {
   );
 }
 
+/**
+ * The SVG this row owns: the newest version's real path (already root-relative),
+ * or — while nothing exists yet — the path generation will write. Never the
+ * pair-file name: `<stem>.svg.json` is metadata BESIDE the SVG, and showing it
+ * the artifact made a not-yet-generated row look like a double extension.
+ */
+function targetPath(row: SvgRow): string {
+  const path = shownVersion(row)?.svgPath;
+  return path ? path : joinPath(row.source.dirPath, `${row.source.stem}${SVG_EXT}`);
+}
+
 /** The pair file beside that SVG — the file the persist line reports. */
 function pairFilePathOf(source: SvgSource): string {
   return source.metaPath;
 }
 
 /** "." for the root, so a row never shows a stray leading slash. */
+function joinPath(dir: string, name: string): string {
+  return dir === "" ? name : `${dir}/${name}`;
+}
+
 function StatusCell({ row }: { row: SvgRow }) {
   return (
     <div className="svg-cell" data-testid={`svg-status-${row.source.id}`}>

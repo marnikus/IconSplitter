@@ -3,7 +3,7 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
+import { approvedVersion, chosenVersion, newestValid, preferredVersion } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
@@ -66,22 +66,6 @@ export function previewTargetOf(row: SvgRow): SvgTarget | null {
   const version = shownVersion(row);
   if (version === null || version.svgPath === "") return null;
   return { version: version.version, svgPath: version.svgPath };
-}
-
-/**
- * The file a row is about: the shown version's saved SVG, or — before anything
- * was generated — the path the next one will be written to. `svg-target-{id}`
- * displays it and "Location" copies its folder, so the two can never disagree
- * (I-56): one helper, both readers.
- */
-export function targetPathOf(row: SvgRow): string {
-  const path = previewTargetOf(row)?.svgPath;
-  return path && path !== "" ? path : joinPath(row.source.dirPath, `${row.source.stem}${SVG_EXT}`);
-}
-
-/** Joins a root-relative folder and a file name; used only for display paths. */
-function joinPath(dir: string, name: string): string {
-  return dir === "" ? name : `${dir}/${name}`;
 }
 
 export function toListRow(row: SvgRow): SvgListRow {
