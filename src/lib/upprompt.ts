@@ -24,6 +24,18 @@ Title: [5-7 words focusing on the core abstract concept]. [3-5 words from the tw
 Description: [7-15 words explaining visual meaning]
 Tags: [40 comma-separated keywords, including the 7 required technical terms]`;
 
+/** Stored value → prompt. Empty, missing or unusable means "use the default". */
+export function parseMetaPrompt(raw: unknown): string {
+  if (typeof raw !== "string") return DEFAULT_META_PROMPT;
+  const text = raw.trim();
+  return text === "" ? DEFAULT_META_PROMPT : raw;
+}
+
+/** True when the stored prompt is the default (the UI's "reset" affordance). */
+export function isDefaultMetaPrompt(prompt: string): boolean {
+  return prompt.trim() === DEFAULT_META_PROMPT;
+}
+
 /** The JSON schema sent with the request so the answer is structured, not prose. */
 export const META_RESPONSE_SCHEMA = {
   type: "object",

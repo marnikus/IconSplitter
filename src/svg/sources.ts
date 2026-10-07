@@ -69,6 +69,8 @@ export interface Discovery {
   metas: Map<string, PairMeta>;
   /** Pair files that exist but could not be parsed, by path. */
   corruptFiles: string[];
+  /** Every file the walk saw — the upload tab's export-state scan reads these. */
+  entries: FileEntry[];
   /** The legacy global file could not be parsed — decisions kept in memory. */
   corruptDecisions: boolean;
 }
@@ -81,9 +83,13 @@ export const PROBLEM_LABEL: Record<ProblemKind, string> = {
   "files-missing": "Files missing",
 };
 
-/** Scans the root and lists every approved AI output, in a deterministic order. */
-export async function discoverApprovedSources(root: DirHandleLike): Promise<Discovery> {
-  const tree = await readDirTree(root, []);
+/**
+ * Scans the root and lists every approved AI output, in a deterministic order.
+ * `ignore` drops directories by name during the walk — the upload tab passes
+ * ["export"] so this feature's own outputs can never be discovered as sources.
+ */
+export async function discoverApprovedSources(root: DirHandleLike, ignore: string[] = []): Promise<Discovery> {
+  const tree = await readDirTree(root, ignore);
   // When the tree holds the batch's output, that is the reviewable set: the main
   // folder keeps the unsplit sheets, which are the batch's input (I-38).
   const rule = scopeOf(directoryNames(tree), root.name);
@@ -100,6 +106,7 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
     metas: load.metas,
     corruptFiles: load.corruptFiles,
     corruptDecisions: load.legacyCorrupt,
+    entries,
   };
 }
 
