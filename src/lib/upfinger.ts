@@ -69,7 +69,10 @@ export function planReexport(a: PlanArgs): StagePlan {
     };
   }
   const d = diffsOf(a);
-  const rebuildSvg = d.source || d.visual || d.metadata || d.optimize || !a.outputs.svg;
+  // R07: under the physical-output-stroke contract the delivered SVG (and the
+  // EPS page) depend on the target raster size, so an MP change rebuilds them;
+  // a quality-only change must not.
+  const rebuildSvg = d.source || d.visual || d.metadata || d.optimize || d.rasterGeom || !a.outputs.svg;
   return {
     prepare: rebuildSvg,
     metadata: d.source ? "reconfirm" : "reuse",
@@ -85,6 +88,8 @@ interface Diffs {
   visual: boolean;
   metadata: boolean;
   raster: boolean;
+  /** Target MP changed — the physical stroke depends on it (R07). */
+  rasterGeom: boolean;
   optimize: boolean;
   epsFlag: boolean;
   reasons: string[];
@@ -93,11 +98,15 @@ interface Diffs {
 function diffsOf(a: PlanArgs): Diffs {
   const reasons: string[] = [];
   const record = a.record as NonNullable<PlanArgs["record"]>;
+  const raster = diff(a, "raster", "the raster size or quality changed", reasons);
+  const rasterGeom = record.settings.jpegMpx !== mpxOf(a.current.raster);
+  if (rasterGeom) reasons.push("the target raster size changed (physical stroke)");
   const d: Diffs = {
     source: diff(a, "source", "the source SVG changed", reasons),
     visual: diff(a, "visual", "the visual settings changed", reasons),
     metadata: diff(a, "metadata", "the accepted metadata changed", reasons),
-    raster: diff(a, "raster", "the raster size or quality changed", reasons),
+    raster,
+    rasterGeom,
     optimize: record.settings.optimizeSvg !== flagOf(a.current.flags, 0),
     epsFlag: record.settings.includeEps !== a.includeEps,
     reasons,
@@ -115,7 +124,12 @@ function jpegPlan(d: Diffs, a: PlanArgs): JpegPlan {
 
 function epsPlan(d: Diffs, a: PlanArgs): EpsPlan {
   if (!a.includeEps) return "skip";
-  return d.source || d.visual || d.raster || d.epsFlag || !a.outputs.eps ? "build" : "keep";
+  return d.source || d.visual || d.rasterGeom || d.epsFlag || !a.outputs.eps ? "build" : "keep";
+}
+
+/** The target MP encoded in a raster fingerprint ("v1:<mpx>|<quality>"). */
+function mpxOf(raster: string): number {
+  return Number(raster.replace(/^v1:/, "").split("|")[0] ?? "");
 }
 
 function flagOf(flags: string, part: number): boolean {

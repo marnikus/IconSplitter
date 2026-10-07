@@ -92,6 +92,25 @@ describe("upfinger — the minimal honest plan", () => {
     expect(plan).toMatchObject({ prepare: false, svg: "keep", jpeg: "rebuild" });
   });
 
+  it("R07: a target-MP change invalidates the SVG and EPS geometry, not just the JPEG", () => {
+    const plan = planReexport({
+      record: recordWith({ ...SETTINGS, includeEps: true }),
+      current: prints({ ...SETTINGS, includeEps: true, jpegMpx: 10 }),
+      outputs: ALL, includeEps: true,
+    });
+    expect(plan).toMatchObject({ prepare: true, svg: "rebuild", jpeg: "rebuild", eps: "build" });
+    expect(plan.reasons).toContain("the target raster size changed (physical stroke)");
+  });
+
+  it("R07: a quality-only change leaves the SVG and EPS untouched", () => {
+    const plan = planReexport({
+      record: recordWith({ ...SETTINGS, includeEps: true }),
+      current: prints({ ...SETTINGS, includeEps: true, jpegQuality: 0.95 }),
+      outputs: ALL, includeEps: true,
+    });
+    expect(plan).toMatchObject({ prepare: false, svg: "keep", eps: "keep" });
+  });
+
   it("flag changes touch only the affected output", () => {
     const optimizePlan = planReexport({
       record: recordWith(SETTINGS),
