@@ -185,6 +185,33 @@ describe("the stored record", () => {
     expect(rec?.sourceFingerprint).toBe("20:2100");
   });
 
+  it("never upgrades a missing or unknown status to accepted", () => {
+    const base = {
+      pairId: "p1", title: OK_TITLE, description: OK_DESC, tags: TAGS, at: "now", prompt: "p",
+      provider: "requesty", model: "gemini-3.1-flash-lite", requestId: null,
+      usage: { input: null, output: null, total: null },
+      cost: { actual: null, estimated: null, currency: "USD" }, errors: [], warnings: [],
+      sourceFingerprint: "1:2",
+    };
+    expect(parseMetaRecord(base)?.status).toBe("pending"); // no status at all
+    expect(parseMetaRecord({ ...base, status: "totally-fine" })?.status).toBe("pending");
+    expect(parseMetaRecord({ ...base, status: "accepted" })?.status).toBe("accepted");
+  });
+
+  it("downgrades a stored record that claims acceptance but fails the policy", () => {
+    // A hand-edited file must not export text the provider would have had refused.
+    const forged = parseMetaRecord({
+      pairId: "p1", title: "Two words", description: OK_DESC, tags: ["icon"], at: "now", prompt: "p",
+      provider: "requesty", model: "gemini-3.1-flash-lite", requestId: null,
+      usage: { input: null, output: null, total: null },
+      cost: { actual: null, estimated: null, currency: "USD" }, status: "accepted", errors: [], warnings: [],
+      sourceFingerprint: "1:2",
+    });
+    expect(forged?.status).toBe("rejected");
+    expect((forged?.errors ?? []).length).toBeGreaterThan(0);
+    expect(forged?.title).toBe("Two words"); // kept for the user to fix, never dropped
+  });
+
   it("refuses junk instead of half-loading it", () => {
     expect(parseMetaRecord(null)).toBeNull();
     expect(parseMetaRecord({ tags: ["a"] })).toBeNull();

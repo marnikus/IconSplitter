@@ -12,6 +12,7 @@ import { EXPORT_SCHEMA, fingerprintSettings, type ExportRecord, type SettingsSna
 import { readMetadata } from "../src/lib/svgupload/mime";
 import { FakeDir } from "./helpers/fakefs";
 import type { MetaRecord } from "../src/lib/svgupload/metaprompt";
+import { acceptedMeta } from "./helpers/svgupmeta";
 import { insertMetadata } from "../src/lib/svgupload/jpegseg";
 
 const SOURCE = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="10" stroke="#000" stroke-width="2"/></svg>';
@@ -46,16 +47,9 @@ function item(over: Partial<ExportItem> = {}): ExportItem {
   };
 }
 
+/** An accepted answer that PASSES the policy — the exporter re-checks it. */
 function accepted(over: Partial<MetaRecord> = {}): MetaRecord {
-  return {
-    pairId: "p1", title: "Trophy award icon", description: "A gold trophy drawn with clean editable strokes for winners.",
-    tags: ["icon", "pictogram", "vector", "stroke", "line", "editable", "web", "trophy", "award", "win"],
-    at: "2026-10-07T09:00:00Z", prompt: "the exact prompt", provider: "requesty", model: "gemini-3.1-flash-lite",
-    requestId: "req_9", usage: { input: 900, output: 300, total: 1200 },
-    cost: { actual: 0.0007, estimated: null, currency: "USD" },
-    status: "accepted", errors: [], warnings: [], sourceFingerprint: "100:200",
-    ...over,
-  };
+  return acceptedMeta({ pairId: "p1", sourceFingerprint: "100:200", ...over });
 }
 
 /** A real 1×1 JPEG (SOI…EOI) so the segment writer has honest bytes to work on. */
@@ -127,7 +121,7 @@ describe("stage order and the rendered bytes", () => {
     await exportIcon(item(), f.io);
     const dir = await import("../src/lib/fs").then((fs) => fs.probePath(f.io.root, "run/icon-trophy_AI_7/export"));
     const svgText = await (await dir!.getFileHandle("icon-trophy_AI_7.svg")).getFile().then((file) => file.text());
-    expect(readMetadata(svgText)).toEqual({ title: "Trophy award icon", description: "A gold trophy drawn with clean editable strokes for winners.", tags: accepted().tags });
+    expect(readMetadata(svgText)).toEqual({ title: accepted().title, description: accepted().description, tags: accepted().tags });
     const jpg = new Uint8Array(await (await (await dir!.getFileHandle("icon-trophy_AI_7.jpg")).getFile()).arrayBuffer());
     const { readMetadata: readJpeg } = await import("../src/lib/svgupload/jpegseg");
     expect(readJpeg(jpg)?.tags).toContain("trophy");
@@ -168,7 +162,7 @@ describe("metadata is one paid request, decided by fingerprints", () => {
     expect(out.note).toContain("previous package");
     const after = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
     expect(after.record?.updatedAt).toBe(before.record?.updatedAt);
-    expect(after.record?.metadata?.title).toBe("Trophy award icon");
+    expect(after.record?.metadata?.title).toBe(accepted().title);
   });
 
   it("makes an invalid answer impossible to export, whatever the caller asked for", async () => {

@@ -100,7 +100,7 @@ export interface MetaRecord {
 
 export function parseMetaRecord(raw: unknown): MetaRecord | null {
   if (!isRecord(raw) || typeof raw.pairId !== "string" || typeof raw.title !== "string") return null;
-  return {
+  return enforcePolicy({
     pairId: raw.pairId,
     title: raw.title,
     description: str(raw.description),
@@ -116,7 +116,20 @@ export function parseMetaRecord(raw: unknown): MetaRecord | null {
     errors: strList(raw.errors),
     warnings: strList(raw.warnings),
     sourceFingerprint: str(raw.sourceFingerprint),
-  };
+  });
+}
+
+/**
+ * A record that CLAIMS acceptance is still put through the policy before anyone
+ * believes it: the same validator that refuses a provider answer must refuse a
+ * hand-edited file too, or "invalid metadata can never produce an exported
+ * package" would only hold for answers that arrived over the wire. A failure
+ * DOWNGRADES the record — kept, visible, editable — and never deletes it.
+ */
+function enforcePolicy(record: MetaRecord): MetaRecord {
+  if (record.status !== "accepted") return record;
+  const errors = validateMetadata({ title: record.title, description: record.description, tags: record.tags });
+  return errors.length === 0 ? record : { ...record, status: "rejected", errors };
 }
 
 function str(value: unknown): string {
@@ -141,8 +154,15 @@ function costOf(raw: unknown): MetaRecord["cost"] {
   };
 }
 
+/**
+ * The status a reader trusts: one a writer actually wrote. A missing or unknown
+ * status is NEVER a pass — it reads as "pending" (shown as "not generated yet"),
+ * so a truncated file or a hand edit cannot turn itself into an exportable answer.
+ */
 function statusOf(value: unknown): MetaRecord["status"] {
-  return value === "rejected" || value === "interrupted" || value === "pending" ? value : "accepted";
+  return value === "accepted" || value === "rejected" || value === "interrupted" || value === "pending"
+    ? value
+    : "pending";
 }
 
 function strList(value: unknown): string[] {

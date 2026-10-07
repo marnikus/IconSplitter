@@ -20,7 +20,7 @@ import {
 import type { EpsPlan } from "../lib/svgupload/eps";
 import { planRegeneration, type RegenPlan } from "../lib/svgupload/states";
 import type { MetaText } from "../lib/svgupload/mime";
-import type { MetaRecord } from "../lib/svgupload/metaprompt";
+import { validateMetadata, type MetaRecord } from "../lib/svgupload/metaprompt";
 import { exportDirOf, packageNames, type PackageRead } from "./package";
 import { metaText, widestStroke } from "./exportrecord";
 import type { OptimizeOut } from "./optimizer";
@@ -95,8 +95,14 @@ function planOf(item: ExportItem): RegenPlan {
   });
 }
 
+/**
+ * The last gate before any byte is written: the answer must be accepted AND still
+ * pass the policy. The exporter is reachable from paths the row's own button does
+ * not guard (a bulk retry, a future caller), and "invalid metadata can never
+ * produce a processed export" must hold on every one of them.
+ */
 function hasAcceptedMeta(meta: MetaRecord | null): boolean {
-  return meta !== null && meta.status === "accepted" && meta.title !== "";
+  return meta !== null && meta.status === "accepted" && validateMetadata(meta).length === 0;
 }
 
 /** Reads the SVG an earlier run published, for a rebuild of a missing output. */
