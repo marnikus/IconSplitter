@@ -1791,6 +1791,17 @@ Measured cause, three faults in one path, all in how the key was kept:
 * **A failed read that looked like an empty one.** Every failure path answered
   "no key", so a store that merely could not be read sent the user to paste a
   key the app was still holding.
+* **The folder scan overwrote the key in memory.** The upload tab's scan takes
+  its refs bag from the panel, and its `key` field was the *snapshot* key — so
+  every scan wrote the folder's fingerprint (`6bcab92d`) into the ref that holds
+  the API key. The card went on saying "secured locally" (its state comes from
+  the boot read, which is correct) while the request carried the fingerprint as
+  its key, and the provider answered exactly what the field reported:
+  `400 API key not valid. Please pass a valid API key.` — appearing only after a
+  tab switch, because returning to the tab is what runs the scan. The field is
+  now named `scanKey` in both tabs (`SvgRefs.scanKey`, `UploadRefs.scanKey`,
+  `UploadScanRefs.scanKey`): `key` means the provider key, and nothing else may
+  be called that.
 
 Now (RULE 10/20, `lib/keyvault`):
 
@@ -1807,6 +1818,13 @@ Now (RULE 10/20, `lib/keyvault`):
   write the browser refused keeps the key usable for the session and says so;
 * the key itself never changes place: still one IndexedDB slot per provider,
   masked in the UI, redacted from logs, never in a URL, a preset or an export.
+
+Measured, not guessed: the regression test drives the real panel through the
+real metadata request and asserts the header the provider receives — a tab
+switch, then the send. Before the fix the header read `6bcab92d` (the scan's
+snapshot hash); after it, the saved key. The same invariant is pinned at the
+scan's own seam (`upload_scan.test.ts`: a scan writes `scanKey` and leaves the
+`key` ref beside it untouched).
 
 Honesty note: a key that the provider itself rejects is a different case — this
 fix is about a key the app already holds, and a wrong or revoked key still

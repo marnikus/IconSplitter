@@ -26,8 +26,14 @@ export interface UploadScanSetters {
 export interface UploadScanRefs {
   /** Mutated in place: the monotonic scan ticket state. */
   seq: ScanSeq;
-  /** The snapshot key of the last committed scan (unchanged → no commit). */
-  key: { current: string | null };
+  /**
+   * The FOLDER snapshot key of the last committed scan (unchanged → no
+   * commit). It is NOT the API key: `key` means the provider key everywhere in
+   * this tab, and calling this one the same thing is how a scan overwrote the
+   * saved key with a folder hash — which the provider then answered with
+   * `400 API key not valid`. One ref, one meaning (see SvgRefs.scanKey).
+   */
+  scanKey: { current: string | null };
 }
 
 /** Scans the root and commits one complete snapshot (or nothing). */
@@ -39,11 +45,11 @@ export async function scanUpload(refs: UploadScanRefs, root: DirHandleLike, sett
     const found = await discoverUploadSources(root);
     if (!isCurrent(refs.seq, ticket.id)) return; // a newer scan took over
     const key = scanKeyOf(root.name, found);
-    if (key === refs.key.current) return; // same folder, same snapshot: nothing to do
+    if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
     setters.setRootName(root.name);
     setters.setRows(found.rows);
     setters.setDiscovery(found);
-    refs.key.current = key;
+    refs.scanKey.current = key;
     for (const warning of warnings(found)) setters.say(warning, true);
   } catch {
     if (isCurrent(refs.seq, ticket.id)) {

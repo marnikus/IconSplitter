@@ -61,7 +61,7 @@ function recorder(): Recorder {
 }
 
 function refs(): UploadScanRefs {
-  return { seq: { ...SCAN_IDLE }, key: { current: null } };
+  return { seq: { ...SCAN_IDLE }, scanKey: { current: null } };
 }
 
 describe("scanUpload — one ticket, one complete commit", () => {
@@ -75,7 +75,21 @@ describe("scanUpload — one ticket, one complete commit", () => {
     expect(rec.discovery).toHaveLength(1);
     expect(rec.rootName).toEqual(["test_processing"]);
     expect(rec.busy).toEqual(["Scanning approved SVGs…", null]);
-    expect(r.key.current).not.toBeNull();
+    expect(r.scanKey.current).not.toBeNull();
+  });
+
+  it("writes the folder's snapshot key and never touches the API key beside it", async () => {
+    const rec = recorder();
+    const r = refs();
+    // The panel hands the scan its whole ref bag, and `key` there is the API
+    // key. The reported 400 came from exactly this: a scan that wrote the
+    // folder hash into `key` — the saved key was replaced by `6bcab92d` and the
+    // provider refused it. One ref, one meaning (SvgRefs.scanKey).
+    const apiKey = { current: "the-key-the-user-saved" };
+    const panelRefs: UploadScanRefs & { key: { current: string | null } } = { ...r, key: apiKey };
+    await scanUpload(panelRefs, rootWith("<svg/>"), rec.setters);
+    expect(r.scanKey.current).not.toBeNull();
+    expect(apiKey.current).toBe("the-key-the-user-saved");
   });
 
   it("an unchanged snapshot commits nothing", async () => {

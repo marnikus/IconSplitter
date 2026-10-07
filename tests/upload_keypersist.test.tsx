@@ -18,6 +18,7 @@ import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
+import { minimalJpeg } from "./helpers/minijpeg";
 import { svgVersion } from "./helpers/svgpair";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,6 +72,75 @@ function makeRoot(): BinDir {
   dir.children.set("fog_AI.svg", new BinFile("fog_AI.svg", SAVED_SVG, 3400));
   root.children.set(DIR, dir);
   return root;
+}
+
+/** The model check's transport: it records the header the key really travels in. */
+function modelTransport() {
+  const calls: { url: string; key: string | null }[] = [];
+  const doFetch = async (url: string, init: RequestInit): Promise<Response> => {
+    calls.push({ url: String(url), key: (init.headers as Record<string, string>)["x-goog-api-key"] ?? null });
+    return new Response(JSON.stringify({ models: [{ name: "models/gemini-3.1-flash-lite" }] }), { status: 200 });
+  };
+  return { calls, fetch: doFetch as unknown as typeof fetch };
+}
+
+/**
+ * The ONE metadata transport. It answers 400 the way the provider does when the
+ * header is not a real key — which is what the field reported — so a request
+ * that goes out with anything but the saved key cannot pass this test.
+ */
+function geminiTransport() {
+  const calls: { url: string; key: string | null; body: string }[] = [];
+  const doFetch = async (url: string, init: RequestInit): Promise<Response> => {
+    const key = (init.headers as Record<string, string>)["x-goog-api-key"] ?? null;
+    calls.push({ url: String(url), key, body: String(init.body) });
+    if (key !== KEY) {
+      return new Response(JSON.stringify({ error: { code: 400, message: "API key not valid. Please pass a valid API key." } }), { status: 400 });
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "nothing valid" }] } }] }), { status: 200 });
+  };
+  return { calls, fetch: doFetch as unknown as typeof fetch };
+}
+
+/** happy-dom has no canvas: the two primitives the metadata pipeline renders with. */
+function stubCanvas(): void {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => (
+    { fillStyle: "", fillRect: () => undefined, drawImage: () => undefined } as never
+  ));
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback) {
+    cb(new Blob([minimalJpeg(this.width, this.height) as BlobPart], { type: "image/jpeg" }));
+  });
+  class FakeImage {
+    src = "";
+    naturalWidth = 24;
+    naturalHeight = 24;
+    decode(): Promise<void> { return Promise.resolve(); }
+  }
+  vi.stubGlobal("Image", FakeImage);
+}
+
+/** A click on a control that may still be preparing (the confirmation does). */
+async function clickReady(sel: string): Promise<void> {
+  for (let i = 0; i < 400; i += 1) {
+    const el = q(sel) as HTMLButtonElement | null;
+    if (el !== null && el.disabled !== true) {
+      await act(async () => { el.click(); });
+      await settle();
+      return;
+    }
+    await settle();
+  }
+  throw new Error(`timed out waiting for ${sel} to be enabled`);
+}
+
+/** Waits for a rendered handle — the scan and the row assembly are real work. */
+async function waitForSel(sel: string): Promise<HTMLElement> {
+  for (let i = 0; i < 400; i += 1) {
+    const el = q(sel);
+    if (el !== null) return el;
+    await settle();
+  }
+  throw new Error(`timed out waiting for ${sel}`);
 }
 
 /** Mounts the panel the way the app does — a fresh boot every time. */
@@ -215,4 +285,45 @@ describe("the IndexedDB connection is owned, not leaked", () => {
     });
     expect(upgraded).toBe(true);
   });
+  it("sends the SAVED key — never the scan's snapshot hash — after a tab switch", async () => {
+    const t = modelTransport();
+    vi.stubGlobal("fetch", t.fetch);
+    await mount();
+    await click("[data-testid=upload-key-state]");
+    await typeInto("[data-testid=upload-key-input]", KEY);
+    await click("[data-testid=upload-key-save]");
+
+    // away and back: the boot reads the stored key and THEN scans the folder
+    await act(async () => ui.unmount());
+    await mount();
+    await waitForSel(`[data-testid=upload-check-${FOG}]`);
+
+    await click("[data-testid=upload-model-check]");
+    await settle();
+    expect(t.calls).toHaveLength(1);
+    expect(t.calls[0].key).toBe(KEY); // a snapshot hash here is the reported 400
+  });
+
+  it("carries the saved key in the metadata request after a tab switch", async () => {
+    stubCanvas();
+    const t = geminiTransport();
+    vi.stubGlobal("fetch", t.fetch);
+    await mount();
+    await click("[data-testid=upload-key-state]");
+    await typeInto("[data-testid=upload-key-input]", KEY);
+    await click("[data-testid=upload-key-save]");
+
+    await act(async () => ui.unmount());
+    await mount();
+    await waitForSel(`[data-testid=upload-check-${FOG}]`);
+
+    await click(`[data-testid=upload-check-${FOG}]`);
+    await click(`[data-testid=upload-row-${FOG}]`);
+    await click("[data-testid=upload-meta-selected]");
+    await clickReady("[data-testid=upload-meta-confirm]");
+    expect(t.calls.length).toBeGreaterThan(0);
+    expect(t.calls[0].key).toBe(KEY);
+    expect(t.calls[0].url).toContain("generativelanguage");
+  });
+
 });
