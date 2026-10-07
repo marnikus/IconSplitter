@@ -66,4 +66,16 @@ describe("the shell", () => {
     expect(q("[data-testid='sel-unsupported']")).not.toBeNull();
     expect(q("[data-testid='padding-slider']")).toBeNull();
   });
+
+  it("offers the SVG to upload tab right after Generate SVG, and opens its panel", async () => {
+    mountWorkbench();
+    const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
+    expect(tabs).toEqual(["tab-sheets", "tab-batch", "tab-selection", "tab-selection-v2", "tab-generate-svg", "tab-upload"]);
+    await click("[data-testid='tab-upload']");
+    await settle();
+    expect(getAppState().tab).toBe("upload");
+    // this DOM has no File System Access API, so the panel renders its note
+    expect(q("[data-testid='upload-unsupported']")).not.toBeNull();
+    expect(q("[data-testid='upload-panel']")).toBeNull();
+  });
 });

@@ -15,53 +15,9 @@ import { MANDATORY_TAGS, metadataFingerprint, validateMetadata, type IconMetadat
 import { sha256HexText } from "../src/lib/hash";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import type { WritableLike } from "../src/lib/fs";
 
-/** A binary-safe fake file: bytes round-trip exactly (the real FS API is binary). */
-class BinFile extends FakeFile {
-  bytes: Uint8Array;
-  constructor(name: string, content: string | Uint8Array = "", mtime = 1000) {
-    super(name, 0, mtime, typeof content === "string" ? content : "");
-    this.bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
-    this.size = this.bytes.length;
-  }
-  override async getFile(): Promise<File> {
-    const f = new File([this.bytes as BlobPart], this.name);
-    Object.defineProperty(f, "lastModified", { value: this.mtime });
-    return f;
-  }
-  override async createWritable(): Promise<WritableLike> {
-    const chunks: Blob[] = [];
-    return {
-      write: async (d: Blob) => { chunks.push(d); },
-      close: async () => {
-        this.bytes = new Uint8Array(await new Blob(chunks).arrayBuffer());
-        this.size = this.bytes.length;
-        this.text = new TextDecoder().decode(this.bytes);
-      },
-    };
-  }
-}
-
-/** A fake directory whose created files AND subdirectories are binary-safe. */
-class BinDir extends FakeDir {
-  override async getFileHandle(n: string, opts?: { create?: boolean }): Promise<FakeFile> {
-    const c = this.children.get(n);
-    if (c instanceof FakeFile) return c;
-    if (!opts?.create) throw new DOMException("Not found", "NotFoundError");
-    const f = new BinFile(n);
-    this.children.set(n, f);
-    return f;
-  }
-  override async getDirectoryHandle(n: string, opts?: { create?: boolean }): Promise<FakeDir> {
-    const c = this.children.get(n);
-    if (c instanceof FakeDir) return c;
-    if (!opts?.create) throw new DOMException("Not found", "NotFoundError");
-    const d = new BinDir(n);
-    this.children.set(n, d);
-    return d;
-  }
-}
+import { BinDir, BinFile } from "./helpers/binfakefs";
+import { minimalJpeg } from "./helpers/minijpeg";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import type { UploadRowSource } from "../src/upload/discovery";
@@ -81,17 +37,6 @@ const META: IconMetadata = {
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
-
-/** A minimal baseline JPEG with the given SOF dimensions. */
-function minimalJpeg(width: number, height: number): Uint8Array {
-  const sof = [
-    0xff, 0xc0, 0x00, 0x0b, 0x08,
-    (height >> 8) & 0xff, height & 0xff,
-    (width >> 8) & 0xff, width & 0xff,
-    0x01, 0x01, 0x11, 0x00,
-  ];
-  return new Uint8Array([0xff, 0xd8, ...sof, 0xff, 0xd9]);
-}
 
 /** A fake canvas transport that "encodes" a real minimal JPEG of the target size. */
 function fakeRaster(width: number, height: number, spy?: { renders: number }) {

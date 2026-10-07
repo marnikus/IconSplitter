@@ -173,9 +173,6 @@ The feature prompt was checked against the repo and current web research
 | `types.ts` | `UploadRow`, job states, metadata state, dialog shapes |
 | `discovery.ts` | Approved-SVG discovery: walk (ignore `export`), pair sidecars, split scope, one row per pair with an approved valid SVG version, exclusions with reasons, audit counts |
 | `scan.ts` | Scan orchestration: ticket, snapshot key, one commit, log/report (mirrors `svg/scan.ts`) |
-| `settingsstore.ts` | Global defaults persistence (localStorage, validated on read) |
-| `prefsstore.ts` | View prefs (thumb zoom, provider card open) |
-| `keystore.ts` | Gemini API key (IndexedDB secrets, id `gemini-api-key`), mask + log hygiene |
 | `journal.ts` | In-flight metadata-request journal (restart → `interrupted`, never auto-resent) |
 | `rowmodel.ts` | Row assembly, counts, visible rows, header checkbox, prune checked |
 | `runmetadata.ts` | Metadata pipeline: preview render → Gemini request (bounded concurrency, cancel) → parse/validate → accept/edit → `export.json` metadata stage |
@@ -184,7 +181,16 @@ The feature prompt was checked against the repo and current web research
 | `exportvalidate.ts` | The validation stage (before any commit): SVG parses + metadata readback, JPEG decodes to the recorded dims + XMP readback, EPS verifies |
 | `exportcommit.ts` | The atomic commit: tmp → verify → overwrite → cleanup per output, `export.json` written last (the commit marker) |
 | `uploadundo.ts` | Live applier binding for `uploadSettings` history entries (mirrors `svg/reviewundo.ts`) |
-| `actions.ts`, `useUpload.ts` | Orchestration hook (reducer + actions, mirrors `svg/`) |
+| `statemodel.ts` | The tab's model + table-driven reducer (mirrors `svg/statemodel`) |
+| `settingsstore.ts` | Settings persistence (defaults + overrides map, localStorage, validated on read) |
+| `configstore.ts` | The Gemini provider config persistence (localStorage, validated on read) |
+| `prefsstore.ts` | View prefs (thumb zoom, provider card open, preview background) |
+| `keystore.ts` | Gemini API key (IndexedDB secrets, id `gemini-api-key`), mask + log hygiene |
+| `actions.ts` | The action surface + context object (source, view, settings, provider, key) |
+| `uiactions.ts` | The selection, dialog and clipboard actions (selection is session-persisted, not undoable — §6) |
+| `metaactions.ts` | The metadata actions + their batch runner (bounded concurrency, cancel, journal) |
+| `exportactions.ts` | The export actions + their batch runner (per-item isolation, stage reporting) |
+| `useUpload.ts` | The orchestration hook (boot, persist, derived lists, the flat API) |
 | `UploadPanel.tsx` + `UploadControls.tsx` + `UploadBulkBar.tsx` + `UploadList.tsx` + `UploadRow.tsx` + `UploadMetaFields.tsx` + `UploadSettingsDialog.tsx` + `UploadPreview.tsx` | The tab UI |
 
 ### 3.3 Edits to existing files
@@ -320,9 +326,11 @@ Overrides | null } }` before/after. "Apply settings to selected" pushes ONE
 entry (affected count shown first, armed like the V2 bulk bar). Per-icon
 override set/reset pushes one entry each. Global-defaults edits are persisted
 but **not** on the timeline (same class as presets — recorded in
-SYSTEM_OF_RECORD §12.5's not-undoable column). The apply path lives in
-`state/apply.ts` → `upload/uploadundo.ts` live-applier binding (a mounted
-panel applies; unmounted applies straight to the store).
+SYSTEM_OF_RECORD §12.5's not-undoable column). The checkbox selection and the
+active row are session-persisted (like the tab switch) but also **not** on the
+timeline — the design records only settings edits as undoable for this tab.
+The apply path lives in `state/apply.ts` → `upload/uploadundo.ts` live-applier
+binding (a mounted panel applies; unmounted applies straight to the store).
 
 ---
 
@@ -349,16 +357,22 @@ panel applies; unmounted applies straight to the store).
    invalid metadata blocks export, failure isolation, cancel, journal),
    `upload_runexport.test.ts` (full package per icon, selective re-export
    does no redundant work, partial on EPS failure, restart recovery).
-7. **Stores + undo** — `upload_settings_store.test.ts`,
-   `upload_keystore.test.ts` (secret hygiene), `upload_journal.test.ts`,
-   history apply tests.
-8. **UI** — `upload_ui.test.tsx` (tab order, open folder → rows, counts, row
-   actions, editable/copiable metadata fields, bulk apply = one undo entry,
-   zoom, filters, previews).
+7. **Stores + undo** — `upload_settings_store.test.ts` (settings + config +
+   prefs stores), `upload_keystore.test.ts` (secret hygiene),
+   `upload_journal.test.ts`, `upload_rowmodel.test.ts` (assembly, exact
+   staleness, filters/sort/counts), `upload_undo.test.ts` (payload gate, live
+   binding, persist-only path, undo/redo routing). DONE.
+8. **UI** — `upload_ui.test.tsx` (tab order via `workbench_ui.test.tsx`, open
+   folder → rows, counts, row actions, editable/copiable metadata fields,
+   bulk apply = one undo entry, zoom, filters, previews, the exact-request
+   confirmation, cancel, interrupted-after-restart, export → green committed
+   package, stale → re-export, honest failure) + `tests/helpers/binfakefs.ts`
+   and `tests/helpers/minijpeg.ts` (binary-safe FS fakes + a minimal real JPEG
+   frame shared with the pipeline suite). DONE.
 9. **Gates + docs** — `npx tsc --noEmit`, `npm run lint`,
    `node tools/quality.mjs --changed --allow-legacy`, `npm test`,
    `npm run coverage` (src/lib ≥ 80%), `npm run verify`; SYSTEM_OF_RECORD /
-   docs/README / UI_SELECTORS updated in the same change.
+   docs/README / UI_SELECTORS updated in the same change. DONE at push.
 
 No phase rewrites Generate SVG; every reuse is an import, every new rule a
 small tested module (RULE 16/18 budgets apply to all new code).

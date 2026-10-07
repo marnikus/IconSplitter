@@ -20,7 +20,7 @@ import { metadataFingerprint, type IconMetadata, type MetadataValidation } from 
 import type { GeminiUsage } from "../lib/geminiclient";
 import { redact } from "../lib/svgsecret";
 import {
-  metadataBlock, newExportRecord, planStages,
+  exportDirOf, metadataBlock, newExportRecord, planStages,
   type ExportRecord, type Stage, type StagePlan,
 } from "../lib/uploadexport";
 
@@ -93,7 +93,7 @@ interface PlanFor {
 
 async function planFor(args: ExportRunArgs): Promise<PlanFor> {
   const stem = stemOf(args.row.svgName);
-  const exportDir = `${args.row.dirPath}/export`;
+  const exportDir = exportDirOf(args.row.dirPath);
   const sourceText = await readTextAt(args.root, args.row.svgPath);
   if (sourceText === null) {
     return { plan: { stages: [], rebuild: { svg: false, jpg: false, eps: false } }, sourceText: "", sourceHash: "", exportDir, stem, error: { klass: "preflight", detail: "the source SVG could not be read" } };

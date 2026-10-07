@@ -12,6 +12,11 @@ import type { OptimizeRecord } from "./uploadoptimize";
 
 export const EXPORT_RECORD_VERSION = 1;
 
+/** The export folder beside a pair: `<pair-folder>/export` (root pairs: `export`). */
+export function exportDirOf(dirPath: string): string {
+  return dirPath === "" ? "export" : `${dirPath}/export`;
+}
+
 export type ExportStatus = "processed" | "partial" | "failed" | "cancelled" | "stale" | "interrupted";
 export type ExportStage =
   | "discovered" | "preflight" | "prepare" | "metadata" | "render"
