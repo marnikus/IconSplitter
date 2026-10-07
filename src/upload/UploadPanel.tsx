@@ -5,6 +5,7 @@
 // provider, both pipelines and the undo binding all live in tested modules;
 // this file is the wiring that makes them one screen.
 
+import type { KeySource } from "../lib/keyvault";
 import type { CSSProperties } from "react";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import type { DirHandleLike } from "../lib/fs";
@@ -26,11 +27,12 @@ export default function UploadPanel() {
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
       <UploadControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={g.counts}
-        gemini={g.gemini} modelCheck={g.modelCheck} keySet={g.keySet} keyMask={g.keyMask} providerOpen={g.providerOpen}
+        gemini={g.gemini} modelCheck={g.modelCheck} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
         filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
         promptPanel={promptPanel(g)}
         onChooseRoot={g.chooseRoot} onRescan={g.rescan}
-        onGemini={g.setGemini} onCheckModel={g.checkModel} onProviderOpen={g.setProviderOpen} onSaveKey={g.saveKey}
+        onGemini={g.setGemini} onCheckModel={g.checkModel} onProviderOpen={g.setProviderOpen}
+      onSaveKey={g.saveKey} onForgetKey={g.forgetKey}
         onFilter={g.setFilter} onSort={g.setSort} onClearFilters={g.clearFilters} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
@@ -164,7 +166,7 @@ function StatusBar({ g }: { g: UploadApi }) {
       </div>
       <div className="svg-status-group">
         <span data-testid="upload-status-provider">{PROVIDER_NAME} · {g.gemini.model}</span>
-        <span>{g.keySet ? "key stored locally" : "no API key"}</span>
+        <span>{keyLine(g.keySet, g.keySource)}</span>
         {g.runningMeta > 0 && <span className="running" data-testid="upload-status-meta">metadata in flight</span>}
         {g.runningExport > 0 && <span className="running" data-testid="upload-status-export">export in flight</span>}
       </div>
@@ -199,6 +201,12 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       onResetOverride={g.resetOverride}
       onClose={g.dismissDialog} />
   );
+}
+
+/** The status bar's one word about the key — never "no key" when unreadable. */
+function keyLine(keySet: boolean, source: KeySource): string {
+  if (!keySet) return source === "unreadable" ? "key storage unreadable" : "no API key";
+  return source === "session" ? "key for this session only" : "key stored locally";
 }
 
 /** The toast and the scan spinner, both announced politely. */

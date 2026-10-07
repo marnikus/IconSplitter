@@ -8,7 +8,9 @@
 // No rule lives here — every value comes from the hook and every change goes
 // straight back to it.
 
-import { useState } from "react";
+import type { KeySource } from "../lib/keyvault";
+import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
+
 import {
   CONCURRENCY_MAX, CONCURRENCY_MIN, DEFAULT_MODEL, generateContentUrl,
   clampConcurrency, clampRetries, clampTimeoutMs, PROVIDER_NAME,
@@ -31,6 +33,7 @@ export interface UploadControlsProps {
   modelCheck: ModelCheck;
   keySet: boolean;
   keyMask: string;
+  keySource: KeySource;
   /** false while the provider card is minimized to its header (RULE 6 pref). */
   providerOpen: boolean;
   filter: UploadListFilter;
@@ -45,6 +48,7 @@ export interface UploadControlsProps {
   onCheckModel: () => void;
   onProviderOpen: (open: boolean) => void;
   onSaveKey: (key: string) => void;
+  onForgetKey: () => void;
   onFilter: (patch: Partial<UploadListFilter>) => void;
   onSort: (sort: UploadSort) => void;
   onClearFilters: () => void;
@@ -115,7 +119,7 @@ function ProviderCard({ p }: { p: UploadControlsProps }) {
           <ProviderFields p={p} />
           <ModelCheckField p={p} />
           <div className="svg-provider-foot">
-            <KeyRow keySet={p.keySet} keyMask={p.keyMask} onSave={p.onSaveKey} />
+            <KeyRow keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} onSave={p.onSaveKey} onForget={p.onForgetKey} />
           </div>
           <ProviderNote p={p} />
         </>
@@ -182,32 +186,31 @@ function ProviderNote({ p }: { p: UploadControlsProps }) {
   );
 }
 
-function KeyRow({ keySet, keyMask, onSave }: { keySet: boolean; keyMask: string; onSave: (k: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  if (!editing) {
-    return (
-      <button type="button" className="svg-key-state" data-testid="upload-key-state" onClick={() => setEditing(true)}>
-        <span className="svg-key-line">
-          <span aria-hidden="true">🛡</span>
-          <strong>{keySet ? "Gemini API key secured locally" : "No Gemini API key yet"}</strong>
-          <span className="svg-masked" data-testid="upload-key-mask">{keyMask}</span>
-        </span>
-        <span className="svg-key-note" data-testid="upload-key-note">stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports</span>
-      </button>
-    );
-  }
-  return (
-    <div className="svg-key-edit">
-      <input className="svg-input" data-testid="upload-key-input" type="password" autoComplete="off" spellCheck={false}
-        aria-label="Gemini API key" placeholder="AIza…" value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { onSave(draft); setDraft(""); setEditing(false); } }} />
-      <button type="button" className="svg-btn tiny primary" data-testid="upload-key-save"
-        onClick={() => { onSave(draft); setDraft(""); setEditing(false); }}>Save</button>
-      <button type="button" className="svg-btn tiny" data-testid="upload-key-cancel" onClick={() => setEditing(false)}>Cancel</button>
-    </div>
-  );
+/** The one text shell for the key slot: copy here, behaviour in `KeySlot`. */
+const KEY_TEXT: KeySlotText = { testid: "upload", placeholder: "AIza…", ariaLabel: "Gemini API key" };
+
+function KeyRow({keySet, keyMask, keySource, onSave, onForget}: {
+  keySet: boolean; keyMask: string; keySource: KeySource;
+  onSave: (k: string) => void; onForget: () => void;
+}) {
+  const slot = useKeyDraft();
+  if (slot.editing) return <KeyEditor {...KEY_TEXT} draft={slot.draft} setDraft={slot.setDraft}
+    onSave={onSave} onClose={slot.close} />;
+  return <KeySlot {...KEY_TEXT} keySet={keySet} title={keyTitle(keySet, keySource)} mask={keyMask}
+    note={keyNote(keySource)} onEdit={slot.open} onForget={onForget} />;
+}
+
+/** The one honest headline for the key's state. */
+function keyTitle(keySet: boolean, source: KeySource): string {
+  if (!keySet) return source === "unreadable" ? "Storage could not be read" : "No Gemini API key yet";
+  return source === "session" ? "Gemini key kept for this session only" : "Gemini API key secured locally";
+}
+
+/** ...and the one line that says what will happen after a reload. */
+function keyNote(source: KeySource): string {
+  if (source === "session") return "browser storage refused it — paste again after a reload";
+  if (source === "unreadable") return "this device's storage is unreadable here (private mode?)";
+  return "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports";
 }
 
 function FilterLine({ p }: { p: UploadControlsProps }) {

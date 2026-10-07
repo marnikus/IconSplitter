@@ -4,6 +4,7 @@
 // the rules testable without a DOM and keeps the hook itself tiny. Mirrors
 // svg/statemodel; the selection lives in the appstore upload slice (session).
 
+import type { KeySource } from "../lib/keyvault";
 import type { SentPreview } from "../lib/upload/sentpreview";
 import { useReducer, type Dispatch } from "react";
 import { maskKey } from "../lib/svgsecret";
@@ -44,6 +45,8 @@ export interface UploadModel {
   /** Masked key for display; the key itself lives in upload/keystore. */
   keyMask: string;
   keySet: boolean;
+  /** Where the key in hand came from: the device, this session, or nowhere. */
+  keySource: KeySource;
   /** Bumped by every pick and scan so a preview cannot outlive its folder. */
   rootToken: number;
   thumb: number;
@@ -80,7 +83,7 @@ export type UploadAction =
   | { type: "prompt"; prompt: string }
   | { type: "presets"; presets: PromptPreset[] }
   | { type: "preset-pick"; name: string }
-  | { type: "key"; key: string | null }
+  | { type: "key"; key: string | null; source?: KeySource }
   | { type: "thumb"; px: number }
   | { type: "bg"; bg: PreviewBackground }
   | { type: "provider-open"; open: boolean }
@@ -127,7 +130,7 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
     return { ...m, presets, presetPick: picked };
   },
   "preset-pick": (m, a) => ({ ...m, presetPick: (a as { name: string }).name }),
-  key: (m, a) => keyModel(m, (a as { key: string | null }).key),
+  key: (m, a) => keyModel(m, (a as { key: string | null }).key, (a as { source?: KeySource }).source),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
@@ -154,8 +157,16 @@ export function reduceState(model: UploadModel, action: UploadAction): UploadMod
   return HANDLERS[action.type](model, action);
 }
 
-function keyModel(model: UploadModel, key: string | null): UploadModel {
-  return { ...model, keySet: key !== null, keyMask: key ? maskKey(key) : "not set" };
+/**
+ * The key's display state. `keySource` travels WITH the key: a key that only
+ * lives for this session (storage refused the write) or a store that could not
+ * be read must never look like the ordinary "secured locally" case — and a
+ * failed read must never look like "no key yet", or the user re-pastes a key
+ * the app already holds.
+ */
+function keyModel(model: UploadModel, key: string | null, from?: KeySource): UploadModel {
+  const source = from ?? (key === null ? "none" : "device");
+  return { ...model, keySet: key !== null, keyMask: key ? maskKey(key) : "not set", keySource: source };
 }
 
 /** One override set (or delete, on null/empty) — the caller's map is untouched. */
@@ -205,7 +216,7 @@ export function initialModel(boot: Boot): UploadModel {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     defaults: boot.settings.defaults, overrides: boot.settings.overrides,
     gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, prompt: boot.prompt, presets: boot.presets,
-    presetPick: "", keyMask: "not set", keySet: false, rootToken: 0,
+    presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
     runningMeta: 0, runningExport: 0, progress: null,

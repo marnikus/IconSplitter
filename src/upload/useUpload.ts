@@ -14,7 +14,7 @@ import { SCAN_IDLE } from "../lib/scanseq";
 import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
 import { loadGeminiConfig, saveGeminiConfig } from "./configstore";
-import { loadGeminiKey } from "./keystore";
+import { readGeminiKey } from "./keystore";
 import { log } from "../log/logstore";
 import { interruptedIds, takeRestoreNote } from "./jobstore";
 import { restoredSpec } from "./uploadlog";
@@ -128,9 +128,12 @@ function useBoot(refs: UploadRefs, dispatch: Dispatch<UploadAction>, loadAll: ()
   useEffect(() => {
     void (async () => {
       reportRestore(dispatch);
-      const key = await loadGeminiKey();
-      refs.key.current = key;
-      dispatch({ type: "key", key });
+      // The key's ORIGIN travels with it (RULE 20): "this device's storage could
+      // not be read" must never be shown as "no key yet", or the user re-pastes
+      // a key the app already has.
+      const read = await readGeminiKey();
+      refs.key.current = read.key;
+      dispatch({ type: "key", key: read.key, source: read.source });
       const stored = await bootRoot();
       if (stored === null) return;
       refs.root.current = stored;

@@ -839,6 +839,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
+| The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
 | Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/matrix.ts`, `src/lib/upload/seg.ts`, `src/lib/upload/arc.ts`, `src/lib/upload/path.ts`, `src/lib/upload/bounds.ts`, `src/lib/upload/stroke.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts` | settings domain (defaults/overrides/effective/fingerprint), 96 DPI pt→px + padded fit + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke normalization, sha256, export-SVG preparation (export copy only), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS path model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner |
 | Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
 | Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (inherited/overridden markers, background presets + custom picker), the framed SVG preview |
@@ -980,6 +981,14 @@ with hotkeys and `data-testid` handles):
   whole queue, saying how many batches that was. A waiting batch is a scheduling
   fact, never a row status: nothing about the files changes until its request
   really starts, and the run that finished it says so in its final line.
+* `keyvault.test.ts` — the key rules on their own: a save that storage refused
+  is reported `session` (and the key still loads), `save("")` is `empty` and
+  erases nothing, an unreadable store answers `unreadable` — never `none` — and
+  a corrupt envelope is absent, not a crash
+* `upload_keypersist.test.tsx` — the reported bug, end to end: a key saved once
+  survives an edit, a tab switch and a fresh boot; a session-only key says so
+  instead of asking again; an empty Save cannot destroy a stored key (Save is
+  disabled; `Forget` is what clears); five operations open ONE connection
 * `upload_settings_store.test.ts`, `upload_keystore.test.ts`,
   `upload_journal.test.ts` — the stores (defaults + overrides round-trip,
   corrupt → defaults, clamps), the Gemini key's secret hygiene (own IndexedDB
@@ -1737,3 +1746,45 @@ read happens without the user's own gesture (a boot-time scan is silently
 refused), and no new control appears — the bar is still one green button, one
 `Rescan` and one read-only row. Design:
 `archive/2026-10-05-path-capture-recovery/design.md`.
+
+## 20. The API key that was saved and then gone (2026-10-07)
+
+Report: the key "shows API saved" and is "stored locally", yet the app asks for
+it again as soon as anything changes — an edit, a tab switch — and only a
+freshly pasted key works; requests come back `400 API key not valid. Please pass
+a valid API key.`
+
+Measured cause, three faults in one path, all in how the key was kept:
+
+* **A leaked IndexedDB connection per operation.** The store opened a new
+  connection for every read and every write and closed none. The handles piled
+  up, and a handle left open blocks any later version upgrade of the same
+  database: the second tab's (or a new build's) `open` waits on `onblocked`,
+  which the code answered with "no storage". So the key was written into a page
+  that then had no working storage, and the next boot read nothing.
+* **An empty Save that really wiped.** Saving with an empty field wrote
+  `{key: null}` — clicking Save on a card whose draft had already been spent
+  destroyed the key that was there.
+* **A failed read that looked like an empty one.** Every failure path answered
+  "no key", so a store that merely could not be read sent the user to paste a
+  key the app was still holding.
+
+Now (RULE 10/20, `lib/keyvault`):
+
+* the page keeps **one** connection, closes it the moment another tab needs the
+  database (`versionchange`) and reopens on demand; a connection that errored,
+  closed, was blocked or was taken away is never reused;
+* `save("")` is `empty` — it changes nothing, and clearing is the separate,
+  deliberate `Forget`; the editor's Save is disabled while the field is empty
+  and the draft is dropped when the editor closes;
+* `read()` reports **where the key came from**, and the UI says it: `device`
+  ("secured locally"), `session` ("kept for this session only — paste again
+  after a reload"), `unreadable` ("storage could not be read" / "this device's
+  storage is unreadable here (private mode?)") and `none` ("no key yet"). A
+  write the browser refused keeps the key usable for the session and says so;
+* the key itself never changes place: still one IndexedDB slot per provider,
+  masked in the UI, redacted from logs, never in a URL, a preset or an export.
+
+Honesty note: a key that the provider itself rejects is a different case — this
+fix is about a key the app already holds, and a wrong or revoked key still
+answers `400` from the provider.

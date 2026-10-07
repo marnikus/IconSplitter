@@ -354,9 +354,10 @@ Prompt + provider card:
 | `svg-timeout` | `input[type=number]` | the **stall window** in **seconds**, 5–900, default 120: the longest silence between bytes; there is no total-duration limit. Clamped at the moment of change; the tier floor can raise the effective window, which `svg-limits` and `svg-confirm-timeout` then show |
 | `svg-retries` | `input[type=number]` | retries per request, 0–5, default 2, for failures the provider **confirmed**; a stall is never retried — its outcome is unknown |
 | `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
-| `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
-| `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap |
-| `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"` |
+| `svg-key-state` | button | masked key, with the honest state AND its origin: "API key secured locally" / "API key kept for this session only" / "Storage could not be read" / "No API key yet"; opens the editor |
+| `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap. The note states what a reload does: a device key says "local only · excluded from Git · logs · exports"; a key storage refused says "browser storage refused it — paste again after a reload"; an unreadable store says "this device's storage is unreadable here (private mode?)" |
+| `svg-key-forget` | button | shown only while a key is in hand; deletes the stored key from this device (the one deliberate way to clear it) |
+| `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"`; `svg-key-save` is `disabled` while the field is empty (an empty Save never erases the stored key) |
 
 The provider card (`svg-provider-card`) is **minimizable**: `svg-provider-toggle`
 is a link in the header with `aria-expanded` and `aria-label`
@@ -516,9 +517,10 @@ card — never inside it) and the provider card:
 | `upload-model-check` | `button` | asks the provider's own model list; never substitutes the configured id |
 | `upload-model-state` | `p[data-state]` | the check's one line: `idle` / `checking` / `found` / `missing` / `failed` |
 | `upload-timeout` / `upload-retries` / `upload-concurrency` | `input[type=number]` | clamped at the moment of change (5–900 s, 0–5, 1–8) |
-| `upload-key-state` | button | masked key ("Gemini API key secured locally" / "No Gemini API key yet"); opens the editor |
-| `upload-key-mask` / `upload-key-note` | rows of `upload-key-state` | the masked key above "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports" |
-| `upload-key-input` / `upload-key-save` / `upload-key-cancel` | editor | `input[type=password]`, `aria-label="Gemini API key"` |
+| `upload-key-state` | button | masked key, with the honest state AND its origin: "Gemini API key secured locally" / "Gemini key kept for this session only" / "Storage could not be read" / "No Gemini API key yet"; opens the editor |
+| `upload-key-mask` / `upload-key-note` | rows of `upload-key-state` | the masked key above "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports"; a session-only key says "browser storage refused it — paste again after a reload", an unreadable store says "this device's storage is unreadable here (private mode?)" |
+| `upload-key-forget` | button | shown only while a key is in hand; deletes the stored key from this device (the one deliberate way to clear it) |
+| `upload-key-input` / `upload-key-save` / `upload-key-cancel` | editor | `input[type=password]`, `aria-label="Gemini API key"`; `upload-key-save` is `disabled` while the field is empty (an empty Save never erases the stored key) |
 | `upload-provider-note` | note | endpoint · the key travels in the `x-goog-api-key` header only · each icon's image is sent only inside the one request you confirm · nothing is ever uploaded automatically |
 
 Filters: `upload-filter-status` (all / processed / partial / failed / cancelled /

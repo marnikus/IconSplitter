@@ -19,7 +19,7 @@ import {
 } from "../lib/upload/settings";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
-import { clearGeminiKey, loadGeminiKey, saveGeminiKey } from "./keystore";
+import { clearGeminiKey, saveGeminiKey } from "./keystore";
 import type { UploadDiscovery } from "./discovery";
 import { rememberRoot } from "./scan";
 import type { UploadCounts } from "./rowmodel";
@@ -244,13 +244,17 @@ function useKeyActions(ctx: UploadCtx): Slice<"saveKey" | "forgetKey"> {
   const saveKey = useCallback((key: string) => {
     void (async () => {
       const c = latest.current;
-      const persisted = await saveGeminiKey(key);
-      const stored = await loadGeminiKey();
-      c.refs.key.current = stored;
-      c.dispatch({ type: "key", key: stored });
-      c.say(persisted
+      // An empty field is a slip, not a deletion: it never touches the stored
+      // key (the Save button is disabled for it too), and the toast says how to
+      // really clear one. Never throws.
+      const outcome = await saveGeminiKey(key);
+      if (outcome === "empty") return c.say("Type the key first — an empty field does not erase the stored one", true);
+      const trimmed = key.trim();
+      c.refs.key.current = trimmed;
+      c.dispatch({ type: "key", key: trimmed, source: outcome });
+      c.say(outcome === "device"
         ? "Gemini API key stored on this device"
-        : "Gemini API key kept for this session only — storage refused the write", !persisted);
+        : "Gemini API key kept for this session only — storage refused the write", outcome === "session");
     })();
   }, []);
   const forgetKey = useCallback(() => {
@@ -258,7 +262,7 @@ function useKeyActions(ctx: UploadCtx): Slice<"saveKey" | "forgetKey"> {
       const c = latest.current;
       await clearGeminiKey();
       c.refs.key.current = null;
-      c.dispatch({ type: "key", key: null });
+      c.dispatch({ type: "key", key: null, source: "none" });
       c.say("Gemini API key cleared from this device");
     })();
   }, []);

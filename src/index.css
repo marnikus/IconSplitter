@@ -854,6 +854,11 @@
 
 .svg-key-state strong { color: var(--v2-green); }
 
+/* The key slot: the state button plus, when a key is set, the one deliberate
+   way to delete it — so pressing Save can never double as "erase my key". */
+.svg-key-slot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.svg-key-slot .svg-key-state { flex: 1 1 auto; }
+
 /* One line for the state, one for the note: a long masked key can never run
    into the note beside it — it ellipsises instead. */
 .svg-key-line { display: flex; align-items: center; gap: 9px; min-width: 0; }
