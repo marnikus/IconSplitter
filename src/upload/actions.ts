@@ -24,6 +24,7 @@ import type { UploadDiscovery } from "./discovery";
 import { rememberRoot } from "./scan";
 import type { UploadCounts } from "./rowmodel";
 import { useMetaActions } from "./metaactions";
+import { usePromptActions, type PromptActions } from "./promptactions";
 import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
 import { useUiActions } from "./uiactions";
@@ -52,8 +53,12 @@ export interface UploadCtx {
   setBusy: (b: string | null) => void;
 }
 
-/** The public action surface of the tab, in the order the panel uses them. */
-export interface UploadActions {
+/**
+ * The public action surface of the tab, in the order the panel uses them. The
+ * prompt panel's gestures are part of it (promptactions owns their rules), so
+ * the panel reads ONE surface and never reaches into a store.
+ */
+export interface UploadActions extends PromptActions {
   chooseRoot: () => void;
   rescan: () => void;
   setThumb: (px: number) => void;
@@ -85,6 +90,7 @@ export interface UploadActions {
   exportRows: (ids: string[]) => void;
   exportRow: (id: string) => void;
   cancelExport: () => void;
+  openLocation: (id: string) => void;
 }
 
 /** One hook's share of the action surface, so the composition stays typed. */
@@ -104,6 +110,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useUiActions(ctx),
     ...useMetaActions(ctx),
     ...useExportActions(ctx),
+    ...usePromptActions(ctx),
   };
 }
 

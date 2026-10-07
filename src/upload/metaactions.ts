@@ -148,6 +148,9 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
   if (svgText === null) return unreadable(c, id, row.meta);
   const result = await generateMetadata({
     rowId: id, svgText, config: c.m.gemini, apiKey: ctx.key, signal: ctx.signal,
+    // The prompt the editor shows is the prompt that is sent (and, later, the
+    // prompt the export record names) — never a default the user cannot see.
+    prompt: c.m.prompt,
     deps: { journal: c.refs.journal.current },
   });
   applyMetaResult(ctx.latest, id, row.meta, result);

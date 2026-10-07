@@ -7,10 +7,11 @@
 // atomic commit) lives in runexport + exportstages/validate/commit.
 
 import { useCallback, useRef } from "react";
+import { copyFolderText } from "../lib/copypath";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
+import { publishedJpegPath } from "../lib/upload/export";
 import { effectiveSettings } from "../lib/upload/settings";
-import { DEFAULT_METADATA_PROMPT } from "../lib/upload/meta";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
@@ -20,7 +21,7 @@ import type { UploadRunUpdate } from "./statemodel";
 import type { UploadActions, UploadCtx } from "./actions";
 
 /** The export hooks' share of the action surface (composition stays typed). */
-type ExportSlice = Pick<UploadActions, "exportRows" | "exportRow" | "cancelExport">;
+type ExportSlice = Pick<UploadActions, "exportRows" | "exportRow" | "cancelExport" | "openLocation">;
 
 export function useExportActions(ctx: UploadCtx): ExportSlice {
   const latest = useRef(ctx);
@@ -43,7 +44,27 @@ export function useExportActions(ctx: UploadCtx): ExportSlice {
     c.refs.abortExport.current.abort();
     c.say("Cancelling — finished packages are kept");
   }, [latest]);
-  return { exportRows, exportRow, cancelExport };
+  const openLocation = useCallback((id: string) => {
+    void copyLocation(latest.current, id);
+  }, [latest]);
+  return { exportRows, exportRow, cancelExport, openLocation };
+}
+
+/**
+ * The same code the Generate SVG tab's Location uses: the browser cannot launch
+ * Explorer, so the folder that will hold the package is COPIED, and the toast
+ * says so. The committed artifact names the folder when there is one; the
+ * planned package path names it before the first export.
+ */
+function copyLocation(c: UploadCtx, id: string): void {
+  const row = rowOf(c, id);
+  if (row === null) return;
+  void copyFolderText(c.m.rootName, artifactPathOf(row), c.say);
+}
+
+/** The file that decides which folder a copy names: committed first, plan second. */
+function artifactPathOf(row: UploadRow): string {
+  return row.record?.outputs.jpg?.path ?? publishedJpegPath(row.source.dirPath, row.source.svgName);
 }
 
 /** Why an export batch cannot start right now, or null when it can. */
@@ -111,7 +132,7 @@ async function exportOne(args: ExportOneArgs): Promise<void> {
 function metadataInfoOf(c: UploadCtx, row: UploadRow): ExportRunArgs["metadataInfo"] {
   if (row.meta.state !== "accepted" || row.meta.validation === null) return null;
   return {
-    prompt: DEFAULT_METADATA_PROMPT, provider: PROVIDER_NAME, model: c.m.gemini.model,
+    prompt: c.m.prompt, provider: PROVIDER_NAME, model: c.m.gemini.model,
     requestId: null, usage: row.meta.usage, validation: row.meta.validation,
   };
 }

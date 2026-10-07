@@ -3,11 +3,14 @@
 // selective re-export exactly as design §4.4 specifies.
 import { describe, expect, it } from "vitest";
 import {
+  exportDirOf,
   metadataBlock,
   newExportRecord,
   parseExportRecord,
   planStages,
+  publishedJpegPath,
   serializeExportRecord,
+  stemOf,
   type ExportRecord,
   type PlanInput,
 } from "../src/lib/upload/export";
@@ -59,6 +62,24 @@ function input(over: Partial<PlanInput> = {}): PlanInput {
     ...over,
   };
 }
+
+describe("where a package lands (the Location action's pure half)", () => {
+  it("names the pair's own export folder, root pairs included", () => {
+    expect(exportDirOf("cat/split_01")).toBe("cat/split_01/export");
+    expect(exportDirOf("")).toBe("export");
+  });
+
+  it("strips exactly the .svg extension, whatever its case", () => {
+    expect(stemOf("fog_AI.svg")).toBe("fog_AI");
+    expect(stemOf("fog_AI.SVG")).toBe("fog_AI");
+    expect(stemOf("fog_AI.v2.svg")).toBe("fog_AI.v2");
+  });
+
+  it("points at the committed JPEG whether or not it exists yet", () => {
+    expect(publishedJpegPath("cat/split_01", "fog_AI.svg")).toBe("cat/split_01/export/fog_AI.jpg");
+    expect(publishedJpegPath("", "fog_AI.svg")).toBe("export/fog_AI.jpg");
+  });
+});
 
 describe("the export record — schema v1 round-trip", () => {
   it("serializes and parses back to an equal record", () => {

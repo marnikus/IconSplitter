@@ -7,7 +7,6 @@
 
 import type { CSSProperties } from "react";
 import { generateContentUrl, PROVIDER_NAME } from "../lib/upload/gemini";
-import { DEFAULT_METADATA_PROMPT } from "../lib/upload/meta";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
@@ -15,6 +14,7 @@ import UploadBulkBar from "./UploadBulkBar";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
 import UploadSettingsDialog from "./UploadSettingsDialog";
+import type { UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadRowActions } from "./UploadRow";
 import type { UploadDiscovery, UploadExclusion } from "./discovery";
 
@@ -27,7 +27,8 @@ export default function UploadPanel() {
       <UploadControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={g.counts}
         gemini={g.gemini} modelCheck={g.modelCheck} keySet={g.keySet} keyMask={g.keyMask} providerOpen={g.providerOpen}
         filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
-        onChooseRoot={g.chooseRoot} onRescan={g.rescan} onSettings={() => g.openSettings(null)}
+        promptPanel={promptPanel(g)}
+        onChooseRoot={g.chooseRoot} onRescan={g.rescan}
         onGemini={g.setGemini} onCheckModel={g.checkModel} onProviderOpen={g.setProviderOpen} onSaveKey={g.saveKey}
         onFilter={g.setFilter} onSort={g.setSort} onClearFilters={g.clearFilters} />
       <Banners g={g} />
@@ -37,6 +38,15 @@ export default function UploadPanel() {
       <Overlay g={g} />
     </div>
   );
+}
+
+/** The prompt panel's props in one place, so the controls stay a screen of JSX. */
+function promptPanel(g: UploadApi): UploadPromptPanelProps {
+  return {
+    prompt: g.prompt, presets: g.presets, picked: g.presetPick,
+    onPrompt: g.setPrompt, onReset: g.resetPrompt, onPick: g.pickPreset,
+    onQuickLoad: g.quickLoadPreset, onDelete: g.deletePreset, onSaveAs: g.savePresetAs,
+  };
 }
 
 /** Everything that only exists once a root is picked. */
@@ -49,6 +59,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
     toggleCheck: g.toggleCheck, setActive: g.setActive, openSettings: g.openSettings,
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
     editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
+    openLocation: g.openLocation,
   };
   return (
     <>
@@ -57,6 +68,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
+        onSettings={() => g.openSettings(null)}
         onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
         onMetadata={() => g.requestMetadata(g.checked)} onExport={() => g.exportRows(g.checked)}
         onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
@@ -206,9 +218,9 @@ function MetaDialog({ g }: { g: UploadApi }) {
             automatically, and a timeout or disconnect is never resent on its own.
           </p>
           <MetaFacts g={g} />
-          <p className="svg-note">The exact prompt (the validator enforces every rule it states):</p>
+          <p className="svg-note">The exact prompt that will be sent (the validator enforces every rule it states):</p>
           <textarea className="svg-code" readOnly data-testid="upload-meta-prompt" aria-label="The exact metadata prompt"
-            value={DEFAULT_METADATA_PROMPT} />
+            value={g.prompt} />
           <p className="svg-note">
             Request body: <code>{"{ contents: [{ role: \"user\", parts: [{ text: <the prompt> }, { inlineData: { mimeType: \"image/jpeg\", data: <base64 512 px preview> } }] }] }"}</code>
           </p>

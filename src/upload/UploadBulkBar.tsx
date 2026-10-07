@@ -1,10 +1,12 @@
 // UploadBulkBar.tsx — the bulk bar of the "SVG to upload" tab (design §4.1/
 // §6): the header checkbox with an indeterminate state, the selection scope,
 // the two PREVIEW settings (thumbnail zoom and the frame background — one
-// control per decision, RULE 10), the live progress line, and the four bulk
-// actions: Apply settings to selected (ONE undoable entry), Metadata selected
-// (confirmed against the exact request first), Export selected, and Cancel
-// while a run is in flight. Every bulk action applies to the SELECTION only.
+// control per decision, RULE 10) with the global Export settings button beside
+// them (the reference puts the tools here, not in the provider card), the live
+// progress line, and the four bulk actions: Apply settings to selected (ONE
+// undoable entry), Metadata selected (confirmed against the exact request
+// first), Export selected, and Cancel while a run is in flight. Every bulk
+// action applies to the SELECTION only.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
@@ -23,6 +25,7 @@ export interface UploadBulkBarProps {
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
+  onSettings: () => void;
   onApplySettings: () => void;
   onMetadata: () => void;
   onExport: () => void;
@@ -58,10 +61,13 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
 function BulkRight({ p }: { p: UploadBulkBarProps }) {
   const running = p.runningMeta + p.runningExport;
   return (
-    <div className="svg-bulk-right">
+    <div className="svg-bulk-right" data-testid="upload-bulk-right">
       <PreviewBg bg={p.bg} onBg={p.onBg} />
       <span className="svg-divider" aria-hidden="true" />
       <Zoom thumb={p.thumb} onThumb={p.onThumb} />
+      <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>
+        ⚙ Export settings…
+      </button>
       <span className="svg-divider" aria-hidden="true" />
       <Progress p={p} running={running} />
       {running > 0 && (

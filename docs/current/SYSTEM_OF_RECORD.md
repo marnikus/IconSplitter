@@ -333,9 +333,21 @@ opt-in class as Generate SVG → Requesty; design
   target (15.1 MP → 3886×3886 for a square artboard), verified by decoding the
   SOF back. All of it happens on an export COPY — the approved source is never
   written.
+* The metadata prompt (2026-10-07 UI fix): it lives in its OWN large panel
+  beside the Gemini card — never inside it — and it is EDITABLE and persisted
+  (`iconSplitter.upload.prompt.v1`): the text the editor shows is the text the
+  one confirmed request carries, the text the confirmation dialog previews, and
+  the text the export record names (honesty: one prompt, one owner). Presets are
+  named snapshots under `iconSplitter.upload.prompts.v1` with their own row —
+  the saved list, Quick load, Delete, and Save as with a name field (a new name
+  goes first, an existing one is replaced in place; max 50, names 1–60 chars,
+  text ≤ 8000 chars, all validated on read). Editing the prompt never relaxes
+  the POLICY: the validator keeps enforcing the rules the default prompt states,
+  and the panel says so out loud.
 * Metadata: Gemini (`gemini-3.1-flash-lite`, `x-goog-api-key` header, key in
   IndexedDB under `gemini-api-key`, masked/redacted everywhere) answers the
-  exact default prompt; the answer is parsed deterministically (three labeled
+  prompt above (the documented default until the user edits it); the answer is
+  parsed deterministically (three labeled
   lines) and validated (exactly 40 unique tags incl. the 7 mandatory; title =
   5–7 words + a 3–5-word sentence naming ≥2 of the tags; description 7–15
   words; restricted-content hits are warnings). The fields under each row are
@@ -369,6 +381,17 @@ opt-in class as Generate SVG → Requesty; design
   a remount cannot re-report or re-send. A run marks itself `queued` → `running`
   before it starts and writes its terminal state after the commit, which is why
   a crash mid-run can be reported honestly instead of guessed.
+* Row layout (2026-10-07 UI fix): the row detail is TEXT ONLY — the committed
+  artifact is not rendered inline (a 3886 px JPEG in the detail was the "huge
+  icon below"; that preview is deferred). What replaced it is the LOCATION
+  action: it copies the pair's export folder path with the same shared code the
+  Generate SVG tab's Location uses (`lib/copypath` → `folderCopyText`), naming
+  the committed artifact when there is one and the planned package path before
+  the first export. The reference's tool block is honoured too: the global
+  Export settings button sits in the bulk bar beside the zoom controls, and the
+  Gemini card is one contained grid (Model, Endpoint on its own full-width row,
+  Timeout, Retries, Parallel, then the check row) so no control can overlap or
+  leave its box.
 * Model check (CP-8): the provider card can ask the provider's own model list
   (`GET {base}/models`, same `x-goog-api-key` header, same bounded request
   window) and reports found / missing / failed. The configured id is NEVER
@@ -748,6 +771,8 @@ Batch:
 | IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
 | localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map) | validated/clamped on read (RULE 13); the undo path writes through the same store |
 | localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
+| localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt `{ v, prompt }` | validated on read: missing/empty/junk/foreign version → the documented default (`parsePromptText`, RULE 13); written on every edit, so a restart opens with the user's own text |
+| localStorage `iconSplitter.upload.prompts.v1` | the saved prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50; corrupt → no presets |
 | localStorage `iconSplitter.upload.prefs.v1` | upload view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read; display-only — the zoom never feeds the output scale |
 | localStorage `iconSplitter.upload.journal.v1` | the in-flight metadata-request journal (row id, start time, request id — no key, no prompt, no answer) | validated on read; corrupt = empty; an open entry after a restart is `interrupted`, never resent |
 | localStorage `iconSplitter.upload.meta.v1` | the **accepted-metadata cache** (CP-15), keyed by the sha256 of the SOURCE SVG: `{ v, cache: { [sha256]: { state: generated \| accepted, meta } } }` | validated entry-by-entry on read (junk dropped, foreign version = empty); bounded at 512 entries, oldest evicted first; an entry whose text no longer passes `upload-meta-v1` comes back `invalid`, never exportable: edited artwork misses the cache by construction |

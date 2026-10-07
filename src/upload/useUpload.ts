@@ -25,6 +25,7 @@ import { assembleRows, countsOf, pruneChecked, type UploadCounts } from "./rowmo
 import { headerState, visibleRows } from "./rowlist";
 import { loadUploadSettings, saveUploadSettings } from "./settingsstore";
 import { useUploadActions, type UploadActions, type UploadCtx } from "./actions";
+import { loadPresets, loadPrompt, savePrompt } from "./promptstore";
 import { bindUploadSettingsApplier } from "./uploadundo";
 import { useUploadModel, type Boot, type UploadAction, type UploadModel } from "./statemodel";
 import type { UploadDiscovery, UploadRowSource } from "./discovery";
@@ -159,6 +160,8 @@ function usePersist(model: UploadModel): void {
     saveUploadSettings({ defaults: model.defaults, overrides: model.overrides });
   }, [model.defaults, model.overrides]);
   useEffect(() => saveGeminiConfig(model.gemini), [model.gemini]);
+  // The prompt is text the user owns: every keystroke persists (RULE 13).
+  useEffect(() => savePrompt(model.prompt), [model.prompt]);
   useEffect(() => {
     saveUploadPrefs({ thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg });
   }, [model.thumb, model.providerOpen, model.bg]);
@@ -183,7 +186,10 @@ function useDerived(model: UploadModel, checked: string[]): {
 
 /** Values the tab opens with, read once from local storage (RULE 6). */
 function loadBoot(): Boot {
-  return { settings: loadUploadSettings(), gemini: loadGeminiConfig(), prefs: loadUploadPrefs() };
+  return {
+    settings: loadUploadSettings(), gemini: loadGeminiConfig(), prefs: loadUploadPrefs(),
+    prompt: loadPrompt(), presets: loadPresets(),
+  };
 }
 
 function newRefs(): UploadRefs {

@@ -1,10 +1,12 @@
 // UploadControls.tsx — the control block of the "SVG to upload" tab (design
-// §1/§2.8): the scanned root with its rescan and the honest counts, the global
-// settings button beside the Gemini provider card (endpoint, model,
-// timeout/retries/concurrency, the masked key that lives only on this device,
-// and the fixed metadata prompt the validator enforces), then the
-// filter/sort/search row. No rule lives here — every value comes from the hook
-// and every change goes back to it.
+// §1/§2.8): the scanned root with its rescan and the honest counts, then the
+// metadata PROMPT panel beside the Gemini card (endpoint, model,
+// timeout/retries/concurrency, the masked key that lives only on this device),
+// then the filter/sort/search row. The provider card is one contained grid, so
+// no control can escape or overlap its box at any width; the prompt has its own
+// large panel (UploadPromptPanel) and is never squeezed into that card.
+// No rule lives here — every value comes from the hook and every change goes
+// straight back to it.
 
 import { useState } from "react";
 import {
@@ -13,8 +15,8 @@ import {
   RETRIES_MAX, RETRIES_MIN, TIMEOUT_MAX_MS, TIMEOUT_MIN_MS,
   type GeminiConfig,
 } from "../lib/upload/gemini";
-import { DEFAULT_METADATA_PROMPT } from "../lib/upload/meta";
 import type { ModelCheck, UploadListFilter, UploadSort } from "./types";
+import UploadPromptPanel, { type UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
@@ -35,9 +37,10 @@ export interface UploadControlsProps {
   sort: UploadSort;
   shown: number;
   total: number;
+  /** The whole prompt panel — one prop, so this file stays one screen of props. */
+  promptPanel: UploadPromptPanelProps;
   onChooseRoot: () => void;
   onRescan: () => void;
-  onSettings: () => void;
   onGemini: (patch: Partial<GeminiConfig>) => void;
   onCheckModel: () => void;
   onProviderOpen: (open: boolean) => void;
@@ -51,10 +54,8 @@ export default function UploadControls(p: UploadControlsProps) {
   return (
     <section className="svg-controls" aria-label="SVG to upload controls">
       <SourceLine p={p} />
-      <div className="svg-toolbar">
-        <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>
-          ⚙ Export settings…
-        </button>
+      <div className="svg-toolbar panels">
+        <UploadPromptPanel {...p.promptPanel} />
         <ProviderCard p={p} />
       </div>
       <FilterLine p={p} />
@@ -96,7 +97,7 @@ function Chip({ value, label, cls, testid }: { value: number; label: string; cls
   return <span className={`svg-chip${cls ? ` ${cls}` : ""}`} data-testid={testid}><strong>{value}</strong>{label}</span>;
 }
 
-/** The Gemini provider card: config, the fixed prompt, and the local key. */
+/** The Gemini provider card: the five request settings, the check, the key. */
 function ProviderCard({ p }: { p: UploadControlsProps }) {
   return (
     <div className={`svg-provider${p.providerOpen ? "" : " closed"}`} data-testid="upload-provider-card">
@@ -112,7 +113,7 @@ function ProviderCard({ p }: { p: UploadControlsProps }) {
       {p.providerOpen && (
         <>
           <ProviderFields p={p} />
-          <PromptZone />
+          <ModelCheckField p={p} />
           <div className="svg-provider-foot">
             <KeyRow keySet={p.keySet} keyMask={p.keyMask} onSave={p.onSaveKey} />
           </div>
@@ -123,17 +124,20 @@ function ProviderCard({ p }: { p: UploadControlsProps }) {
   );
 }
 
-/** The five request settings: model, endpoint, timeout, retries, concurrency. */
+/**
+ * The five request settings in one contained grid: short fields share even
+ * columns, the endpoint owns a full-width row (it is a URL), and every control
+ * keeps its own label — nothing has to overlap to fit (RULE 14).
+ */
 function ProviderFields({ p }: { p: UploadControlsProps }) {
   return (
-    <div className="svg-provider-fields">
+    <div className="up-provider-grid" data-testid="upload-provider-grid">
       <label className="svg-field">
         <span className="svg-label">Model</span>
         <input className="svg-input" data-testid="upload-model" aria-label="Gemini model id" spellCheck={false}
           value={p.gemini.model} onChange={(e) => p.onGemini({ model: e.target.value })} />
       </label>
-      <ModelCheckField p={p} />
-      <label className="svg-field">
+      <label className="svg-field up-field-wide">
         <span className="svg-label">Endpoint</span>
         <input className="svg-input" data-testid="upload-endpoint" aria-label="Gemini base URL" spellCheck={false}
           value={p.gemini.baseUrl} onChange={(e) => p.onGemini({ baseUrl: e.target.value })} />
@@ -155,27 +159,15 @@ function ProviderFields({ p }: { p: UploadControlsProps }) {
  */
 function ModelCheckField({ p }: { p: UploadControlsProps }) {
   return (
-    <div className="svg-field">
-      <span className="svg-label">Provider-verified</span>
+    <div className="up-provider-check" data-testid="upload-provider-check">
       <button type="button" className="svg-btn" data-testid="upload-model-check" onClick={p.onCheckModel}
         disabled={p.modelCheck.state === "checking"}>
         {p.modelCheck.state === "checking" ? "Checking…" : "Check model"}
       </button>
       <p className="svg-note" data-testid="upload-model-state" data-state={p.modelCheck.state}>
-        {p.modelCheck.detail || "The model id is checked against the provider's own list and is never substituted for you."}
+        {p.modelCheck.detail || "checked against the provider's own list — the id is never substituted for you."}
       </p>
     </div>
-  );
-}
-
-/** The exact prompt, read-only: the validator enforces every rule it states. */
-function PromptZone() {
-  return (
-    <label className="svg-field">
-      <span className="svg-label">Metadata prompt · fixed — the validator enforces its rules</span>
-      <textarea className="svg-prompt" data-testid="upload-prompt" aria-label="The exact metadata prompt"
-        spellCheck={false} readOnly value={DEFAULT_METADATA_PROMPT} />
-    </label>
   );
 }
 

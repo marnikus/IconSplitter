@@ -15,7 +15,6 @@ import type { DirHandleLike } from "../lib/fs";
 import { statusOf, type UploadCounts } from "./rowmodel";
 import UploadPreview from "./UploadPreview";
 import UploadMetaFields from "./UploadMetaFields";
-import PublishedArtifact from "./PublishedArtifact";
 import type { UploadJobStatus, UploadRow } from "./types";
 
 export interface UploadRowActions {
@@ -30,6 +29,7 @@ export interface UploadRowActions {
   toggleCheck: (id: string) => void;
   setActive: (id: string) => void;
   openSettings: (id: string | null) => void;
+  openLocation: (id: string) => void;
   requestMetadata: (ids: string[]) => void;
   acceptMetadata: (id: string) => void;
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
@@ -64,12 +64,10 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
   );
 }
 
-/** The expandable detail: the committed artifact and the editable metadata. */
+/** The expandable detail: text only — the editable, copiable metadata fields. */
 function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowActions }) {
   return (
     <div className="up-detail" data-testid={`upload-detail-${id}`}>
-      <PublishedArtifact rootRef={a.rootRef} rootToken={a.rootToken} source={row.source}
-        packageStamp={packageStampOf(row)} testid={`upload-published-${id}`} />
       <UploadMetaFields id={id} meta={row.meta}
         onEdit={(patch) => a.editMetadata(id, patch)}
         onAccept={() => a.acceptMetadata(id)}
@@ -77,12 +75,6 @@ function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowAct
         onRegenerate={() => a.requestMetadata([id])} />
     </div>
   );
-}
-
-/** What the committed package looks like right now — the artifact's re-read key. */
-function packageStampOf(row: UploadRow): string {
-  const jpg = row.record?.outputs.jpg ?? null;
-  return `${row.record?.status ?? "none"}:${row.record?.stage ?? ""}:${jpg === null ? "no-jpg" : `${jpg.bytes}:${jpg.hash}`}`;
 }
 
 /** Keeps the active row in view while the list scrolls. */
@@ -160,6 +152,11 @@ function ActionCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
         onClick={click(() => a.requestMetadata([id]))}>Metadata</button>
       <button type="button" className="svg-btn tiny" data-testid={`upload-settings-btn-${id}`}
         onClick={click(() => a.openSettings(id))}>Settings</button>
+      <button type="button" className="svg-btn tiny" data-testid={`upload-location-${id}`}
+        title={row.record === null
+          ? "Copy the export folder path — the folder is created at the first export"
+          : "Copy the export folder path (the browser cannot open Explorer for you)"}
+        onClick={click(() => a.openLocation(id))}>Location</button>
       <button type="button" className="svg-btn tiny primary" data-testid={`upload-export-${id}`}
         onClick={click(() => a.exportRow(id))}>Export</button>
     </div>

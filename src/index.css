@@ -760,6 +760,58 @@
 .svg-provider-fields .svg-field { flex: 1 1 0; }
 .svg-provider-fields .svg-field:first-child { flex: 0 0 118px; }
 
+/* ── the "SVG to upload" tab's own furniture ───────────────────────────────
+   The metadata prompt has its OWN large panel beside the Gemini card (never
+   inside it), and the card is ONE contained grid: short fields share even
+   columns, the endpoint owns a full-width row, and every control keeps its
+   label — so nothing has to overlap or escape its box (RULE 14). */
+
+.svg-toolbar.panels { align-items: stretch; }
+
+.up-prompt-panel {
+  display: grid;
+  gap: 7px;
+  flex: 1 1 520px;
+  min-width: 320px;
+  align-content: start;
+  padding: 9px 11px 11px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: var(--v2-surface);
+}
+
+/* The editor is the point of the panel: tall enough to read the whole prompt
+   at once, and resizable when the user wants more. */
+.up-prompt-editor { min-height: 170px; max-height: 340px; resize: vertical; }
+
+.up-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 9px;
+  align-items: end;
+}
+.up-preset-row.save { grid-template-columns: minmax(0, 1fr) auto; }
+.up-preset-hint { color: var(--v2-muted); font-size: 9px; }
+
+.up-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 9px;
+}
+.up-provider-grid > * { min-width: 0; }
+.up-provider-grid .up-field-wide { grid-column: 1 / -1; }
+
+/* The check is its own row of the card: one button, one line that can use the
+   whole width instead of wrapping into a narrow flex column. */
+.up-provider-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding-top: 2px;
+}
+.up-provider-check .svg-note { margin: 0; }
+
 .svg-field { min-width: 0; display: block; }
 
 .svg-label {

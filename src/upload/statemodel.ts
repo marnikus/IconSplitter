@@ -11,6 +11,7 @@ import type { PreviewBackground } from "../lib/svgbackground";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { UploadDiscovery } from "./discovery";
 import { staleOf } from "./rowmodel";
+import type { PromptPreset } from "../lib/upload/promptpresets";
 import type { OverridesMap, UploadSettingsState } from "./settingsstore";
 import type { UploadPrefs } from "./prefsstore";
 import {
@@ -33,6 +34,12 @@ export interface UploadModel {
   gemini: GeminiConfig;
   /** The last provider-verified model check (CP-8) — never a silent swap. */
   modelCheck: ModelCheck;
+  /** The prompt the one confirmed request carries — editable, saved locally. */
+  prompt: string;
+  /** Named snapshots of that prompt, newest first (RULE 13 bounds). */
+  presets: PromptPreset[];
+  /** Which preset the list row acts on (empty = none picked yet). */
+  presetPick: string;
   /** Masked key for display; the key itself lives in upload/keystore. */
   keyMask: string;
   keySet: boolean;
@@ -69,6 +76,9 @@ export type UploadAction =
   | { type: "overrides-patch"; overrides: Record<string, SettingsOverrides | null> }
   | { type: "gemini"; gemini: GeminiConfig }
   | { type: "model-check"; check: ModelCheck }
+  | { type: "prompt"; prompt: string }
+  | { type: "presets"; presets: PromptPreset[] }
+  | { type: "preset-pick"; name: string }
   | { type: "key"; key: string | null }
   | { type: "thumb"; px: number }
   | { type: "bg"; bg: PreviewBackground }
@@ -102,6 +112,13 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   },
   gemini: (m, a) => ({ ...m, gemini: (a as { gemini: GeminiConfig }).gemini }),
   "model-check": (m, a) => ({ ...m, modelCheck: (a as { check: ModelCheck }).check }),
+  prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
+  presets: (m, a) => {
+    const presets = (a as { presets: PromptPreset[] }).presets;
+    const picked = presets.some((p) => p.name === m.presetPick) ? m.presetPick : "";
+    return { ...m, presets, presetPick: picked };
+  },
+  "preset-pick": (m, a) => ({ ...m, presetPick: (a as { name: string }).name }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
@@ -169,6 +186,8 @@ export interface Boot {
   settings: UploadSettingsState;
   gemini: GeminiConfig;
   prefs: UploadPrefs;
+  prompt: string;
+  presets: PromptPreset[];
 }
 
 /** The model a fresh tab opens with (persisted values are merged in boot). */
@@ -176,7 +195,8 @@ export function initialModel(boot: Boot): UploadModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     defaults: boot.settings.defaults, overrides: boot.settings.overrides,
-    gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, keyMask: "not set", keySet: false, rootToken: 0,
+    gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, prompt: boot.prompt, presets: boot.presets,
+    presetPick: "", keyMask: "not set", keySet: false, rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
     runningMeta: 0, runningExport: 0, progress: null,

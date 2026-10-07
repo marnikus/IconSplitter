@@ -73,18 +73,25 @@ const text = (sel: string) => q(sel)?.textContent ?? "";
 const input = (sel: string) => q(sel) as HTMLInputElement;
 const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 
-async function click(sel: string): Promise<void> {
-  await act(async () => { (q(sel) as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  await settle();
+/**
+ * The rows and dialogs arrive with the async scan/state, so every selector is
+ * waited for before it is clicked — a missing element still fails, but as a
+ * named wait instead of a null dereference under load (coverage lane).
+ */
+async function waitForEl(sel: string): Promise<HTMLElement> {
+  await waitFor(() => q(sel) !== null, sel);
+  return q(sel) as HTMLElement;
 }
 
-async function clickEl(el: HTMLElement): Promise<void> {
+async function click(sel: string): Promise<void> {
+  const el = await waitForEl(sel);
   await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
   await settle();
 }
 
 /** React tracks input values, so the native setter must be used to change one. */
 async function type(sel: string, value: string): Promise<void> {
+  await waitForEl(sel);
   await act(async () => {
     const el = input(sel);
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, value);
@@ -93,7 +100,19 @@ async function type(sel: string, value: string): Promise<void> {
   await settle();
 }
 
+/** Types into a textarea through its own native setter (React tracks values). */
+async function typeArea(sel: string, value: string): Promise<void> {
+  await waitForEl(sel);
+  await act(async () => {
+    const el = q(sel) as HTMLTextAreaElement;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
+}
+
 async function pick(sel: string, value: string): Promise<void> {
+  await waitForEl(sel);
   await act(async () => {
     const el = q(sel) as HTMLSelectElement;
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(el, value);
@@ -103,13 +122,14 @@ async function pick(sel: string, value: string): Promise<void> {
 }
 
 async function check(id: string): Promise<void> {
-  await act(async () => { (q(`[data-testid=upload-check-${id}]`) as HTMLInputElement).click(); });
+  const el = (await waitForEl(`[data-testid=upload-check-${id}]`)) as HTMLInputElement;
+  await act(async () => { el.click(); });
   await settle();
 }
 
 /** The metadata fields render under the ACTIVE row — click it open first. */
 async function activate(id: string): Promise<void> {
-  await clickEl(q(`[data-testid=upload-row-${id}]`) as HTMLElement);
+  await click(`[data-testid=upload-row-${id}]`);
 }
 
 /** Polls until the condition holds — the pipelines do real work per row. */
@@ -289,6 +309,143 @@ describe("selection + the bulk bar", () => {
     expect(text("[data-testid=upload-selected-count]")).toBe("0 selected");
     await click("[data-testid=upload-select-visible]");
     expect(text("[data-testid=upload-selected-count]")).toBe("2 selected");
+  });
+});
+
+describe("the metadata prompt panel — editable, saved, presets", () => {
+  const CUSTOM = "Write metadata for a minimalist line icon. Answer in exactly three labeled lines.";
+
+  it("keeps the prompt in its own editable panel, never inside the Gemini card", async () => {
+    await mount(makeRoot());
+    const editor = q("[data-testid=upload-prompt]") as HTMLTextAreaElement;
+    expect(editor).not.toBeNull();
+    expect(editor.readOnly).toBe(false);
+    expect(editor.value).toContain("exactly 40 unique keywords");
+    // the panel is its own section, and the Gemini card does not contain it
+    expect(q("[data-testid=upload-prompt-panel]")).not.toBeNull();
+    expect(q("[data-testid=upload-provider-card] [data-testid=upload-prompt]")).toBeNull();
+    expect(text("[data-testid=upload-prompt-copy]")).toContain("saved locally");
+    expect(text("[data-testid=upload-prompt-copy]")).toContain("default");
+    // the validator's claim is said out loud, so an edited prompt is an honest choice
+    expect(text("[data-testid=upload-prompt-note]")).toContain("validator");
+    expect(q("[data-testid=upload-preset-list]")).not.toBeNull();
+    expect(q("[data-testid=upload-preset-quick-load]")).not.toBeNull();
+    expect(q("[data-testid=upload-preset-save]")).not.toBeNull();
+  });
+
+  it("survives a restart with the user's own text, and says it is custom", async () => {
+    await mount(makeRoot());
+    await typeArea("[data-testid=upload-prompt]", CUSTOM);
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toBe(CUSTOM);
+    expect(localStorage.getItem("iconSplitter.upload.prompt.v1")).toContain(CUSTOM);
+
+    act(() => ui.unmount());
+    await mount(makeRoot());
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toBe(CUSTOM);
+    expect(text("[data-testid=upload-prompt-copy]")).toContain("custom");
+
+    await click("[data-testid=upload-prompt-reset]");
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("exactly 40 unique keywords");
+    expect(text("[data-testid=upload-prompt-copy]")).toContain("default");
+  });
+
+  it("saves, quick-loads and deletes presets, and they survive a restart", async () => {
+    await mount(makeRoot());
+    await typeArea("[data-testid=upload-prompt]", CUSTOM);
+    await type("[data-testid=upload-preset-name]", "Strict stock rules");
+    await click("[data-testid=upload-preset-save]");
+    const list = () => q("[data-testid=upload-preset-list]") as HTMLSelectElement;
+    expect([...list().options].map((o) => o.value)).toContain("Strict stock rules");
+    expect(text("[data-testid=upload-toast]")).toContain("saved");
+
+    // the editor is not a preset until Quick load says so
+    await typeArea("[data-testid=upload-prompt]", "hand-edited text that was never saved");
+    await pick("[data-testid=upload-preset-list]", "Strict stock rules");
+    await click("[data-testid=upload-preset-quick-load]");
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toBe(CUSTOM);
+    expect(text("[data-testid=upload-toast]")).toContain("Strict stock rules");
+
+    act(() => ui.unmount());
+    await mount(makeRoot());
+    expect([...list().options].map((o) => o.value)).toContain("Strict stock rules");
+    await pick("[data-testid=upload-preset-list]", "Strict stock rules");
+    await click("[data-testid=upload-preset-quick-load]");
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toBe(CUSTOM);
+
+    await click("[data-testid=upload-preset-delete]");
+    expect([...list().options].map((o) => o.value)).not.toContain("Strict stock rules");
+    expect(localStorage.getItem("iconSplitter.upload.prompts.v1")).not.toContain("Strict stock rules");
+  });
+
+  it("refuses a blank preset name instead of storing an unnamed one", async () => {
+    await mount(makeRoot());
+    await type("[data-testid=upload-preset-name]", "   ");
+    await click("[data-testid=upload-preset-save]");
+    expect((q("[data-testid=upload-preset-list]") as HTMLSelectElement).options).toHaveLength(1); // the placeholder only
+    expect(text("[data-testid=upload-toast]")).toContain("name");
+  });
+
+  itSlow("sends the EDITED prompt in the one confirmed request, and records it (honesty)", async () => {
+    const clip = stubClipboard();
+    expect(clip.written).toEqual([]);
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+    await typeArea("[data-testid=upload-prompt]", CUSTOM);
+
+    await check(FOG);
+    await activate(FOG);
+    await click("[data-testid=upload-meta-selected]");
+    // the confirmation shows the prompt that will actually be sent
+    expect((q("[data-testid=upload-meta-prompt]") as HTMLTextAreaElement).value).toBe(CUSTOM);
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
+    expect(JSON.parse(t.calls[0].body).contents[0].parts[0].text).toBe(CUSTOM);
+
+    // and the committed record names the prompt that produced the metadata
+    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    await click("[data-testid=upload-export-selected]"); // the row is still the checked one
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
+    expect(fileText(root, `${DIR}/export/export.json`)).toContain(CUSTOM);
+  });
+});
+
+describe("the Gemini panel and the toolbar — contained, not overlapping", () => {
+  it("lays the provider card out as one contained grid", async () => {
+    await mount(makeRoot());
+    const card = q("[data-testid=upload-provider-card]") as HTMLElement;
+    const grid = q("[data-testid=upload-provider-grid]") as HTMLElement;
+    expect(grid).not.toBeNull();
+    for (const id of ["upload-model", "upload-endpoint", "upload-timeout", "upload-retries", "upload-concurrency"]) {
+      const field = q(`[data-testid=${id}]`) as HTMLElement;
+      expect(field, id).not.toBeNull();
+      expect(grid.contains(field), id).toBe(true);
+      expect(card.contains(field), id).toBe(true);
+    }
+    // the check line is its own row of the card, never a squeezed grid column
+    const check = q("[data-testid=upload-provider-check]") as HTMLElement;
+    expect(check).not.toBeNull();
+    expect(grid.contains(check)).toBe(false);
+    expect(card.contains(check)).toBe(true);
+    expect(check.contains(q("[data-testid=upload-model-state]"))).toBe(true);
+  });
+
+  it("puts the export settings button with the zoom controls, not beside the provider card", async () => {
+    await mount(makeRoot());
+    const settings = q("[data-testid=upload-settings-open]") as HTMLElement;
+    const zoom = q("[data-testid=upload-thumb]") as HTMLElement;
+    expect(settings).not.toBeNull();
+    expect(zoom).not.toBeNull();
+    expect(settings.closest("[data-testid=upload-bulk-right]")).not.toBeNull();
+    expect(zoom.closest("[data-testid=upload-bulk-right]")).not.toBeNull();
+    expect(q(".svg-controls [data-testid=upload-settings-open]")).toBeNull();
+    // and it still opens the defaults dialog
+    await click("[data-testid=upload-settings-open]");
+    expect(q("[data-testid=upload-dialog]") ?? q("[data-testid=upload-dialog-backdrop]")).not.toBeNull();
   });
 });
 
@@ -569,44 +726,19 @@ describe("export — green means a complete committed package", () => {
     expect(text(`[data-testid=upload-export-path-${FOG}]`)).toContain("architecture/export");
   });
 
-  itSlow("shows the committed JPEG, and says so only when it is really gone (CP-5)", async () => {
-    const root = makeRoot();
-    await mount(root);
+  it("copies the pair's export folder location — the Generate SVG way, and no picture in the detail", async () => {
+    const clip = stubClipboard();
+    await mount(makeRoot());
     await activate(FOG);
-    // nothing committed yet: the honest note, never a stand-in image
-    await waitFor(() => q(`[data-testid=upload-published-${FOG}-missing]`) !== null, "the honest missing note");
-    expect(q(`[data-testid=upload-published-${FOG}]`)).toBeNull();
+    // the row detail is text only: no image, no frame — the huge icon is gone
+    const detail = q(`[data-testid=upload-detail-${FOG}]`) as HTMLElement;
+    expect(detail.querySelectorAll("img, figure, svg").length).toBe(0);
 
-    await check(FOG);
-    await click("[data-testid=upload-export-selected]");
-    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
-    await waitFor(() => q(`[data-testid=upload-published-${FOG}]`) !== null, "the committed JPEG");
-    expect((q(`[data-testid=upload-published-${FOG}]`) as HTMLImageElement).src).toContain("blob:");
-
-    // the record still says processed while the file is really gone: say so
-    act(() => ui.unmount());
-    const exp = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
-    exp.children.delete("fog_AI.jpg");
-    await mount(root);
-    await activate(FOG);
-    await waitFor(() => q(`[data-testid=upload-published-${FOG}-missing]`) !== null, "the missing note for the deleted JPEG");
-  });
-
-  itSlow("revokes every object URL it created — 50 open/close cycles, no leak (CP-5)", async () => {
-    const root = makeRoot();
-    const exp = new BinDir("export");
-    exp.children.set("fog_AI.jpg", new BinFile("fog_AI.jpg", minimalJpeg(120, 120), 5000));
-    (root.children.get(DIR) as BinDir).children.set("export", exp);
-    const revoked: string[] = [];
-    URL.revokeObjectURL = (u: string) => { revoked.push(u); };
-    await mount(root);
-    for (let i = 0; i < 50; i++) {
-      await activate(FOG);
-      await waitFor(() => q(`[data-testid=upload-published-${FOG}]`) !== null, "the published JPEG");
-      await activate(ARCH);
-      await waitFor(() => q(`[data-testid=upload-published-${FOG}]`) === null, "the preview to close");
-    }
-    expect(revoked).toHaveLength(50);
+    await click(`[data-testid=upload-location-${FOG}]`);
+    const copied = clip.written.at(-1) ?? "";
+    expect(copied).toContain("architecture");
+    expect(copied).toContain("export");
+    expect(text("[data-testid=upload-toast]")).toContain("Folder path copied");
   });
 
   itSlow("T5 — the paid-work ledger: a click buys one call, and nothing else ever does", async () => {

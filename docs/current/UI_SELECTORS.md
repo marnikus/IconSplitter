@@ -496,18 +496,26 @@ Source bar (always rendered — `upload-open-folder` is the one way in;
 | `upload-audit` | text | the scan's one audit line: rows · SVG files · pairs not listed · corrupt pair files |
 | `upload-count-{icons,processed,partial,failed,stale}` | counter chips | live counts; a failed run counts even with record null |
 
-Settings button + provider card:
+Metadata prompt panel (`upload-prompt-panel`, its own section beside the Gemini
+card — never inside it) and the provider card:
 
-| `upload-settings-open` | button | opens the global-defaults settings dialog |
+| `upload-prompt-copy` | text | "Metadata prompt · saved locally · default/custom" |
+| `upload-prompt-reset` | link | restores the documented default prompt |
+| `upload-prompt` | `textarea` | the EDITABLE prompt the one confirmed request carries and the export record names |
+| `upload-prompt-note` | note | stored locally · the validator still enforces the default prompt's rules |
+| `upload-preset-list` | `select` | saved prompt presets ("Pick a saved prompt (N saved)") |
+| `upload-preset-quick-load` / `upload-preset-delete` | buttons | act on the picked preset; disabled until one is picked |
+| `upload-preset-name` / `upload-preset-save` | input + button | Save as: a named snapshot of exactly the editor's text |
+| `upload-settings-open` | button | opens the global-defaults settings dialog — it lives in the bulk bar BESIDE THE ZOOM controls (`upload-bulk-right`) |
+| `upload-bulk-right` | container | the bulk bar's action half: preview background, zoom, export settings, progress, the bulk actions |
 | `upload-provider-card` | card | minimizable via `upload-provider-toggle` (`aria-expanded`) |
 | `upload-provider` / `upload-limits` | text | "Gemini · metadata generation" / "{timeout}s timeout · N retries · N parallel" |
+| `upload-provider-grid` | grid | Model, Endpoint (full-width row), Timeout, Retries, Parallel — one contained grid |
 | `upload-model` / `upload-endpoint` | `input` | the model id (verified default `gemini-3.1-flash-lite`) and the base URL |
+| `upload-provider-check` | row | the model check: `upload-model-check` + `upload-model-state` |
 | `upload-model-check` | `button` | asks the provider's own model list; never substitutes the configured id |
 | `upload-model-state` | `p[data-state]` | the check's one line: `idle` / `checking` / `found` / `missing` / `failed` |
-| `upload-published-{id}` | `img` | the committed JPEG read out of the pair's own `export/` folder (object URL) |
-| `upload-published-{id}-missing` | `p` | `Not exported yet` — shown only when the file really is absent |
 | `upload-timeout` / `upload-retries` / `upload-concurrency` | `input[type=number]` | clamped at the moment of change (5–900 s, 0–5, 1–8) |
-| `upload-prompt` | `textarea[readonly]` | the EXACT metadata prompt — fixed, the validator enforces its rules |
 | `upload-key-state` | button | masked key ("Gemini API key secured locally" / "No Gemini API key yet"); opens the editor |
 | `upload-key-mask` / `upload-key-note` | rows of `upload-key-state` | the masked key above "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports" |
 | `upload-key-input` / `upload-key-save` / `upload-key-cancel` | editor | `input[type=password]`, `aria-label="Gemini API key"` |
@@ -545,7 +553,7 @@ Row (`upload-row-{id}`):
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
 | `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
-| `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Export |
+| `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
 | `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
 
 Metadata fields (`upload-detail-{id}`, empty until generated):
@@ -569,7 +577,7 @@ deletes the override — one undoable entry), `upload-set-close`.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,
-`upload-meta-prompt` (the exact prompt, read-only), the auth/retries facts,
+`upload-meta-prompt` (the exact prompt that WILL be sent, read-only), the auth/retries facts,
 `upload-meta-confirm` (sends) / `upload-meta-dismiss` /
 `upload-meta-cancel`.
 
