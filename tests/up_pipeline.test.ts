@@ -15,6 +15,7 @@ import { MANDATORY_TAGS, type IconMetadata } from "../src/lib/upmeta";
 import { readExportRecord } from "../src/lib/upexport";
 import { openExportDir, scanExportDir, type StagedCommit } from "../src/upload/exportio";
 import { runUploadJob, runUploadJobs, type JobRequest, type JobResult, type RunnerDeps } from "../src/upload/runner";
+import { embedJpegSegments, jpegMetadataMatches } from "../src/upload/jobartifacts";
 import type { UploadRowSource } from "../src/upload/sources";
 import { DEFAULT_GEMINI_CONFIG } from "../src/lib/gemconfig";
 import { readSvgMetadata } from "../src/lib/upprepare";
@@ -308,6 +309,23 @@ describe("runner — selective re-export (design §9)", () => {
     expect((exportFile(root, "icon-a.svg") as FakeFile).text).toBe(svgBefore); // untouched
     const record = readExportRecord((exportFile(root, "export.json") as FakeFile).text);
     expect(record.ok && record.record.settings.jpegQuality).toBe(0.95);
+  });
+});
+
+describe("jobartifacts — JPEG metadata readback is a semantic gate (R06)", () => {
+  const raster = { rasterize: async () => new Uint8Array(0), decode: async () => true, sha256: async (b: Uint8Array) => `h${b.length}` };
+  it("accepts bytes whose embedded XMP and IPTC read back equal to the metadata", async () => {
+    const embedded = await embedJpegSegments(new Uint8Array(fakeJpeg(64, 64)), META, { raster });
+    expect(embedded).not.toBeNull();
+    if (embedded === null) return;
+    expect(jpegMetadataMatches(embedded.bytes, META)).toBe(true);
+  });
+  it("rejects bytes whose embedded metadata differs from the accepted metadata", async () => {
+    const embedded = await embedJpegSegments(new Uint8Array(fakeJpeg(64, 64)), META, { raster });
+    expect(embedded).not.toBeNull();
+    if (embedded === null) return;
+    const other = { ...META, title: "A Different Title Entirely. Not The Accepted One" };
+    expect(jpegMetadataMatches(embedded.bytes, other)).toBe(false);
   });
 });
 

@@ -12,9 +12,9 @@ import { produceJpeg } from "../lib/upraster";
 import { buildEps, epsPreflight } from "../lib/upeps";
 import { parseMetadataResponse, type IconMetadata } from "../lib/upmeta";
 import { readExportRecord, type ExportRecord } from "../lib/upexport";
-import { readJpegMetadata } from "../lib/upjpegmeta";
+
 import { resolveBackground } from "../lib/svgbackground";
-import { buildJobRecord, embedJpegSegments, optimizeForDelivery, type JpegSegments } from "./jobartifacts";
+import { buildJobRecord, embedJpegSegments, jpegMetadataMatches, optimizeForDelivery, type JpegSegments } from "./jobartifacts";
 import { buildGeminiRequest } from "../lib/geminireq";
 import { fingerprintsOf, planReexport, type StagePlan } from "../lib/upfinger";
 import type { ExportDirScan } from "./sources";
@@ -229,8 +229,9 @@ export class Job {
       || svgBack.tags.join("\u0000") !== meta.tags.join("\u0000")) {
       return "the embedded SVG metadata does not read back equal to the accepted metadata";
     }
-    const jpegBack = readJpegMetadata(this.jpegBytes as Uint8Array);
-    if (jpegBack.xmp === null || jpegBack.iptc === null) return "the embedded JPEG metadata does not read back";
+    if (!jpegMetadataMatches(this.jpegBytes as Uint8Array, meta)) {
+      return "the embedded JPEG metadata does not read back equal to the accepted metadata";
+    }
     return null;
   }
 

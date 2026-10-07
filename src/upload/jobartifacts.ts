@@ -6,8 +6,8 @@
 // state machine that calls them.
 
 import { optimizeExportSvg, rendersMatch, SVGO_CONFIG_NAME, type PixelDeps } from "../lib/upsvgo";
-import { embedJpegMetadata, jpegDimensions } from "../lib/upjpegmeta";
-import { iptcIimRecord, xmpPacket } from "../lib/upmetaxml";
+import { embedJpegMetadata, jpegDimensions, readJpegMetadata } from "../lib/upjpegmeta";
+import { iptcIimRecord, parseIptcIim, xmpPacket, xmpReadFields } from "../lib/upmetaxml";
 import { resolveBackground } from "../lib/svgbackground";
 import { buildExportRecord, type ExportRecord, type OptimizerRecord } from "../lib/upexport";
 import type { IconMetadata } from "../lib/upmeta";
@@ -52,6 +52,21 @@ export async function embedJpegSegments(
       ? { width: 0, height: 0, mpx: 0, sha256: "", bytes: bytes.length }
       : { width: dims.width, height: dims.height, mpx: (dims.width * dims.height) / 1e6, sha256: await deps.raster.sha256(bytes), bytes: bytes.length },
   };
+}
+
+const sameList = (a: string[], b: string[]): boolean => a.join("\u0000") === b.join("\u0000");
+
+/** R06: the embedded JPEG metadata must read back field-equal to the accepted
+ * metadata (both XMP and IPTC), not merely be present. */
+export function jpegMetadataMatches(jpeg: Uint8Array, meta: IconMetadata): boolean {
+  const back = readJpegMetadata(jpeg);
+  if (back.xmp === null || back.iptc === null) return false;
+  const xmp = xmpReadFields(back.xmp);
+  const iim = parseIptcIim(back.iptc);
+  if (xmp === null) return false;
+  const xmpOk = xmp.title === meta.title && xmp.description === meta.description && sameList(xmp.subject, meta.tags);
+  const iimOk = iim.title === meta.title && iim.description === meta.description && sameList(iim.keywords, meta.tags);
+  return xmpOk && iimOk;
 }
 
 export interface RecordInputs {
