@@ -1899,3 +1899,22 @@ at or under the frozen RULE 16 gate's CC 10 (its AST counter differs from
 ESLint's), both are single decision tables over the documented response
 shapes, and they join the tolerated warning class (`App.tsx` 15, `detect.ts`
 32). No file exceeds any frozen limit.
+
+## 2026-10-07 — three-branch SVG-to-upload integration (record)
+
+Integration onto the `d658a5b8` export-engine base per the merge report; see
+`docs/archive/2026-10-07-svg-upload-integration/design.md`. Six release
+blockers repaired, each TDD (failing regression first): R02 content-hash source
+identity, R05 IPTC ObjectName 2:5, R06 semantic JPEG/SVG readback gate, R07
+target-MP invalidates SVG/EPS geometry, R08 final-byte manifest stats, R09
+per-icon exception isolation.
+
+RULE 16 numbers after the integration (frozen limits unchanged; all pass):
+`job.ts` 28 fns / 297 lines (was 300 at the reviewed base; the R06 extraction of
+`svgMetadataMatches` into `jobartifacts.ts` kept it under the 300 new-file
+line), `jobartifacts.ts` within limits, `upfinger.ts` 8/151, `upmetaxml.ts`
+19/165, `runner.ts` 3/84. No recorded baseline offender grew; baseline
+untouched. New tests: 9 (1175 total, was 1166). Lanes run and green: tsc,
+eslint (0 errors), quality gate, vitest, coverage (src/lib ≥ 80%), vite
+single-file build. New debt: none added beyond the two previously tolerated
+complexity warnings (`geminireq.okOutcome`, `job.commit`).

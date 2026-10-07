@@ -305,7 +305,17 @@ generation below):
   excluded from presets/reports/exports (RULE 20).
 
 SVG to upload (the sixth tab, `tab-svg-upload`; design record
-`docs/archive/2026-10-07-svg-to-upload/design.md`):
+`docs/archive/2026-10-07-svg-to-upload/design.md`; the 2026-10-07 three-branch
+integration and its hardening are recorded in
+`docs/archive/2026-10-07-svg-upload-integration/design.md`):
+
+* **Integrity invariants (2026-10-07 integration).** A row's source identity is
+  the SHA-256 of the source SVG's bytes, never its path; the committed record's
+  JPEG sha256/byte count describe the final embedded file on disk; a target-MP
+  change rebuilds SVG+EPS geometry (physical stroke) while quality-only does
+  not; publication is refused unless the embedded SVG and JPEG metadata read
+  back field-equal to the accepted metadata; and a thrown dependency fault in
+  one icon is a typed failure that never rejects the pool or a neighbour.
 
 * **One row is one approved pair that has an approved SVG version.** The row
   shows the pair's chosen version (the pair file's `preferred`, else the
