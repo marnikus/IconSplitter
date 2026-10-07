@@ -5,6 +5,7 @@
 // strip all see the SAME plan (RUN-1).
 
 import { planBatches, type BatchPlan } from "../lib/svgbatch";
+import { inIdOrder } from "../lib/selectionorder";
 import { clampImagesPerRequest } from "../lib/svgconfig";
 import { toBatchSource } from "./sources";
 import type { SvgCtx } from "./actions";
@@ -15,10 +16,15 @@ export interface PlanCtx {
   m: Pick<SvgCtx["m"], "config">;
 }
 
-/** The one split the confirmation and the run both see (RUN-1). */
+/**
+ * The one split the confirmation and the run both see (RUN-1), in the order the
+ * icons were picked: the sheet of the first request carries the first picks, so
+ * the previewed sheet and the sent sheet are the same picture (see
+ * lib/selectionorder).
+ */
 export function planOf(c: PlanCtx, ids: string[]): BatchPlan[] {
-  const sources = c.rows.filter((r) => ids.includes(r.source.id)).map((r) => toBatchSource(r.source));
-  return planBatches(sources, perRequestOf(c));
+  const picked = inIdOrder(c.rows, ids, (r) => r.source.id);
+  return planBatches(picked.map((r) => toBatchSource(r.source)), perRequestOf(c));
 }
 
 /**

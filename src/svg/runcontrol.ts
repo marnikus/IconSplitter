@@ -14,6 +14,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { log } from "../log/logstore";
 import type { SvgAction } from "./statemodel";
 import { planOf } from "./runplan";
+import { inIdOrder } from "../lib/selectionorder";
 import { runGeneration } from "./runner";
 import { withRunLog } from "./runlog";
 import {
@@ -123,7 +124,10 @@ async function startRun(ctx: RunCtx, item: QueueItem): Promise<void> {
   ctx.refs.abort.current = controller;
   ctx.dispatch({ type: "running", running: true });
   ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
-  const sources = ctx.rows.filter((r) => ids.includes(r.source.id)).map((r) => r.source);
+  // The pick order, the same list the confirmation planned and previewed from:
+  // the contact sheet this request carries is drawn cell by cell in it, so the
+  // picture the user approved IS the picture that leaves (lib/selectionorder).
+  const sources = inIdOrder(ctx.rows, ids, (r) => r.source.id).map((r) => r.source);
   const summary = await runGeneration({
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
@@ -149,7 +153,7 @@ function endLine(summary: Parameters<typeof summaryLine>[0], reason: unknown): s
 
 /** "fog_AI.png + 3 more" — enough to recognise the batch while it waits. */
 function labelOf(ctx: RunCtx, ids: string[]): string {
-  const picked = ctx.rows.filter((r) => ids.includes(r.source.id));
+  const picked = inIdOrder(ctx.rows, ids, (r) => r.source.id);
   const first = picked[0]?.source.name ?? `${ids.length} source(s)`;
   const others = picked.length - 1;
   return others <= 0 ? first : `${first} + ${others} more`;

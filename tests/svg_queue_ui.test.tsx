@@ -168,6 +168,66 @@ describe("the generation queue (I-53)", () => {
     expect(txt("[data-testid=svg-toast]")).toContain("wait for the run in flight");
   });
 
+  it("sends the images in the order they were picked, not the list's order", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    // COURT is picked first, FOG second — the row order is the other way round
+    await act(async () => { (q(`[data-testid=svg-check-${COURT}]`) as HTMLInputElement).click(); });
+    await settle();
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await settle();
+    await click("[data-testid=svg-generate-selected]");
+
+    // the confirmation's manifest and its sheet follow the pick order...
+    const manifest = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+      .map((el) => el.textContent ?? "");
+    expect(manifest).toEqual(["1 — court_AI", "2 — fog_AI"]);
+    const previewed = (q("[data-testid=svg-composite-img]") as HTMLImageElement).src;
+    expect(previewed).toContain("architecture/court_AI.png|architecture/fog_AI.png");
+
+    // ...and the ONE request that leaves carries exactly that sheet: the
+    // transport reads the items straight out of the image it received
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the request to leave");
+    expect(callsOf(t)).toEqual([["court_AI.png", "fog_AI.png"]]);
+    // the sheet the transport received is the sheet the dialog drew: same cells,
+    // same order (the payload is the mocked composite's own source list)
+    const previewedNames = previewed.split(",").slice(1).join(",").split("|").map((p) => p.split("/").pop());
+    expect(previewedNames).toEqual(callsOf(t)[0]);
+  });
+
+  it("keeps the list's shortcuts out of an open dialog — only Escape reaches it", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    // COURT is the active row before the dialog opens
+    await act(async () => { (q(`[data-testid=svg-row-${COURT}]`) as HTMLElement).click(); });
+    await settle();
+    await pick(FOG);
+    expect(Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+      .map((el) => el.textContent)).toEqual(["1 — fog_AI"]);
+
+    // "g" under the dialog must not re-plan it for the active row: the dialog is
+    // modal, and a keystroke must never silently change what it will send
+    const key = (k: string) => act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true })); });
+    await key("g");
+    expect(Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+      .map((el) => el.textContent)).toEqual(["1 — fog_AI"]);
+    // and Space must not toggle a checkbox behind it
+    await key(" ");
+    await click("[data-testid=svg-confirm-cancel]");
+    expect(q("[data-testid=svg-confirm]")).toBeNull();
+    await click("[data-testid=svg-generate-selected]");
+    expect(Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+      .map((el) => el.textContent)).toEqual(["1 — fog_AI"]);
+    await key("Escape");
+    expect(q("[data-testid=svg-confirm]")).toBeNull();
+    expect(t.calls).toHaveLength(0); // nothing was ever sent
+  });
+
   it("starts the waiting batch by itself when the run in flight ends", async () => {
     const t = transport({ mode: "silent" });
     vi.stubGlobal("fetch", t.fetch);

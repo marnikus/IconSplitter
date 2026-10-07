@@ -25,6 +25,10 @@ export function useSvgHotkeys(a: SvgHotActions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && a.dialogOpen) return a.dismissDialog();
+      // A dialog is modal: Escape closes it and nothing else reaches the list
+      // behind it. Otherwise a keystroke could re-plan the confirmation (the
+      // "g" shortcut) and silently change what it is about to send.
+      if (a.dialogOpen) return;
       if (swallowed(e)) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") return walk(e, a, e.key === "ArrowDown" ? 1 : -1);
       const row = a.visible.find((r) => r.source.id === a.activeId);

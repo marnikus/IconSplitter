@@ -201,6 +201,19 @@ that makes a network call, only when the user asks it to):
   `position — name` manifest, its grid size and the empty cells of a partial
   last request. Pages are built in memory as they are first shown and cached
   for the dialog's lifetime; the last partial page keeps its square cells.
+* The selection is an ORDER, and the sheet is that order (2026-10-07): the icon
+  order is the order the user picked, decided in ONE place
+  (`lib/selectionorder.inIdOrder`) and read from it by the confirmation's plan
+  (`runplan.planOf`), the dialog's own pick list, the queue's label and the
+  runner's sources (`runcontrol.startRun`) — so the contact sheet the dialog
+  draws is the sheet the request carries, cell for cell, whatever order the list
+  happens to be sorted in. A cached page is identified by the sheet's own
+  content (`lib/svgcomposite.compositeSheetKey`: page label + every source with
+  its fingerprint), never by the page label alone: both single-icon plans are
+  called `batch_1_1`, and a label-only cache showed the first icon the dialog
+  ever built while the request carried the second. The dialog is also modal in
+  the keyboard layer: while one is open only Escape acts, so no list shortcut
+  (`g` especially) can silently re-plan what it is about to send.
 * Per-request outcome: every request records its own status, saved/failed/
   missing counts, tokens, cost and (on failure) its redacted reason, folded
   into one run summary and shown in the run strip — the request in flight
