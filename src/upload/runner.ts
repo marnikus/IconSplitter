@@ -51,9 +51,17 @@ export type JobResult =
   | { ok: true; record: import("../lib/upexport").ExportRecord; plan: import("../lib/upfinger").StagePlan }
   | { ok: false; state: "failed" | "partial" | "cancelled"; error: string; record: import("../lib/upexport").ExportRecord | null };
 
-/** Runs one icon's export job end to end. */
+/** Runs one icon's export job end to end; never throws (R09). A thrown
+ * dependency fault becomes a typed failed result so one icon can never sink
+ * the pool or a neighbour's package. */
 export async function runUploadJob(req: JobRequest, deps: RunnerDeps): Promise<JobResult> {
-  return new Job(req, deps).run();
+  try {
+    return await new Job(req, deps).run();
+  } catch (e) {
+    const kind = e instanceof Error ? e.name : "error";
+    deps.onState?.(req.row.id, "failed");
+    return { ok: false, state: "failed", error: `the export job was interrupted by an unexpected ${kind}`, record: null };
+  }
 }
 
 /** Bounded-concurrency pool; results keyed by pair id. One failure never touches another. */

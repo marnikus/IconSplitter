@@ -328,4 +328,28 @@ describe("runUploadJobs — bounded concurrency, isolated failures", () => {
     expect(exportFile(root, "icon-a.svg")).toBeDefined();
     expect(exportFile(root, "icon-b.svg")).toBeDefined();
   });
+
+  it("R09: a dependency that THROWS becomes a typed failure, never a rejected pool", async () => {
+    const root = rootWithSource();
+    const folder = at(root, DIR) as FakeDir;
+    folder.children.set("icon-b_AI_v1.svg", new FakeFile("icon-b_AI_v1.svg", 6, 3300, SOURCE_SVG));
+    const throwing = deps(root, {
+      readSource: async (relPath) => {
+        if (relPath.includes("icon-b")) throw new Error("disk fault");
+        const file = at(root, relPath);
+        return file instanceof FakeFile ? file.text : null;
+      },
+    });
+    const jobs = ["icon-a", "icon-b"].map((base) =>
+      request({ row: row({ id: `pair-${base}`, iconBase: base, svgRelPath: `${DIR}/${base}_AI_v1.svg` }) }));
+    // Must resolve, not reject, even though a dependency throws.
+    const results = await runUploadJobs(jobs, throwing, { concurrency: 2 });
+    expect(results.size).toBe(2);
+    expect((results.get("pair-icon-a") as JobResult).ok).toBe(true);
+    const bad = results.get("pair-icon-b") as JobResult;
+    expect(bad).toMatchObject({ ok: false, state: "failed" });
+    if (!bad.ok) expect(bad.error).toContain("interrupted");
+    // the healthy icon's package was still committed
+    expect(exportFile(root, "icon-a.svg")).toBeDefined();
+  });
 });
