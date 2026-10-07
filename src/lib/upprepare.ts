@@ -132,9 +132,20 @@ export function readSvgMetadata(svgText: string): SvgMetaReadback | null {
   const title = firstText(root, "title");
   const description = firstText(root, "desc");
   if (title === null || description === null) return null;
-  const tags = allByLocal(root, "li").map((li) => li.textContent ?? "");
+  const tags = bagItems(root);
   if (tags.length === 0) return null;
   return { title, description, tags };
+}
+
+/** Only rdf:Bag list items are tags — the Alt lists of title/desc are not. */
+function bagItems(root: Element): string[] {
+  const out: string[] = [];
+  const visit = (el: Element, inBag: boolean): void => {
+    if (el.localName === "li" && inBag) out.push(el.textContent ?? "");
+    for (const child of Array.from(el.children)) visit(child, inBag || el.localName === "Bag");
+  };
+  for (const child of Array.from(root.children)) visit(child, false);
+  return out;
 }
 
 /** Direct svg children only — the RDF's dc:title must not mask a lost <title>. */

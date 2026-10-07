@@ -3,9 +3,11 @@ import type { DirHandleLike, FileHandleLike, WritableLike } from "../../src/lib/
 
 export class FakeFile implements FileHandleLike {
   kind = "file" as const;
+  /** The exact bytes of the last write (binary-safe); null until written. */
+  public blob: Blob | null = null;
   constructor(public name: string, public size = 10, public mtime = 1000, public text = "data") {}
   async getFile(): Promise<File> {
-    const f = new File([this.text], this.name);
+    const f = new File([this.blob ?? this.text], this.name);
     Object.defineProperty(f, "lastModified", { value: this.mtime });
     return f;
   }
@@ -16,6 +18,7 @@ export class FakeFile implements FileHandleLike {
       // commit on close, like the real writable (RULE 23 atomic delivery)
       close: async () => {
         const merged = new Blob(chunks);
+        this.blob = merged;
         this.text = await merged.text();
         this.size = merged.size;
       },
