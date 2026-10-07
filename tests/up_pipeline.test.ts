@@ -167,6 +167,16 @@ describe("runner — the happy path end to end", () => {
     expect(record.ok).toBe(true);
   });
 
+  it("R08: the committed JPEG hash and byte count describe the file on disk, not the raw render", async () => {
+    const root = rootWithSource();
+    const out = await runUploadJob(request(), deps(root));
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const onDisk = await bytesOf(root, "icon-a.jpg");
+    expect(out.record.outputs.jpeg.sha256).toBe(`h${onDisk.length}`);
+    expect(out.record.outputs.jpeg.bytes).toBe(onDisk.length);
+  });
+
   it("does not call the AI when accepted metadata is in hand", async () => {
     const root = rootWithSource();
     const out = await runUploadJob(request({ metadata: META }), deps(root));

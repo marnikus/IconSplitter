@@ -193,7 +193,9 @@ export class Job {
     const out = await embedJpegSegments(this.jpegBytes as Uint8Array, this.meta as IconMetadata, this.deps);
     if (out === null) return "the JPEG metadata exceeded the 65 502-byte segment limit";
     this.jpegBytes = out.bytes;
-    this.jpegStats = this.jpegStats ?? out.stats;
+    // R08: stats must always describe the FINAL embedded bytes, never the raw
+    // pre-embedding render — the manifest hash has to match the file on disk.
+    this.jpegStats = out.stats;
     return null;
   }
 
