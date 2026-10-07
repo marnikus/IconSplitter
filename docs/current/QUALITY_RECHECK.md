@@ -1,5 +1,10 @@
 # Quality re-check — process and dated records
 
+> **Agents: do not read this file into context.** It is an append-only ledger —
+> append one dated entry at the end (format: the newest entries below), read
+> none of it. The rules live in `AGENT_RULES.md`, the workflow in
+> `CODE_VERIFICATION.md` (`AGENTS.md` §2).
+
 Adapted from `Process-Images-in-Areana/docs/current/QUALITY_RECHECK.md`, which
 is the dated log of full quality re-checks after substantial changes. The
 numbers there belong to that app; this file carries Icon Splitter's own.
@@ -1819,3 +1824,102 @@ with it the `batchlayout` dependency), `svg/SvgRow.tsx` 203 → 187 (its local
 `targetPath` and `joinPath` moved to `svg/rowmodel.ts` as the one exported
 `targetPathOf`), `svg/codeactions.ts` 120 → 118, `svg/rowmodel.ts` 114 → 129.
 Every function stays inside the limits; no baseline was touched.
+
+---
+
+## 2026-10-07 — environment-setup performance: pinned toolchain, AGENTS.md, node verify runner, shallow-safe quality gate
+
+Research + plan of record: `docs/archive/2026-10-07-env-setup-performance/design.md`
+(findings re-verified in-sandbox against the 2026-10-06 environment-setup report).
+No `src/` production code changed; the change is tooling, pins, docs and tests.
+
+* **O1 verified**: HEAD tracks 0 files under `node_modules/` and `dist/`;
+  `origin/main` still tracks both (tree diff = 11,706 files) — merging this
+  lineage removes them from main. History purge stays an owner step.
+* **O2**: root `AGENTS.md` (95 lines) — pinned environment, exact commands with
+  measured times, per-task reading protocol with a never-read list, the REAL
+  handle prefixes (`up-` for SVG to upload, not the report's guessed `upl-`),
+  definition of done + commit format.
+* **O3**: `.nvmrc` 22.12.0 · `engines` `^20.19.0 || >=22.12.0` + npm ≥ 10 ·
+  `packageManager` npm@10.9.2 · `.npmrc` (engine-strict, quiet, prefer-offline)
+  · `npm run setup` = `npm ci`; README + `install_dependencies.bat` switched to
+  `npm ci` (CRLF preserved). `npm ci` measured at 7 s warm.
+* **O5+O9**: `tools/verify.mjs` (62 lines, node, no bash) replaces
+  `tools/pre_push_check.sh` (deleted; hook + every doc reference updated in the
+  same change). Fast mode runs the suite exactly ONCE — via the coverage lane;
+  `--full` adds the standalone lane for pre-push parity; `--plan [--json]`
+  prints the lane plan without running it (the test seam); `--base` forwards to
+  the quality lane.
+* **O6**: browser probes declared OPTIONAL (`CODE_VERIFICATION.md` §9) — the
+  happy-dom suite is the acceptance gate; no playwright/puppeteer dependency.
+* **O7**: `design temp/` → `design/` (121 files, `git mv`, own commit) +
+  `design/README.md` (35 lines): the SPEC.md handoff contract. No retroactive
+  SPEC for the already-built upload tab — its truth is SOR + UI_SELECTORS §R.
+* **O8**: `quality.mjs` gains `--base <ref>` (tree-vs-tree diff, no merge-base
+  needed), `--files <list>` (no git involved; missing file fails loudly, non-src
+  is an honest empty set) and a shallow-clone hint. Pre-fix behaviour
+  demonstrated in this depth-1 sandbox: merge-base exits 1, `HEAD~1` exits 128,
+  the gate printed `Changed files vs merge-base: (none)` → GATE PASSED without
+  measuring anything.
+* **O10**: `.devcontainer/devcontainer.json` added. The CI workflow could NOT
+  be pushed to `.github/workflows/` — the GitHub App token lacks the
+  `workflows` permission (remote rejected the push); it is staged
+  ready-to-paste at
+  `docs/archive/2026-10-07-env-setup-performance/verify.yml` (fetch-depth 0,
+  node from `.nvmrc`, npm cache, `npm ci`, `verify:fast`) and the
+  "CI equivalent" section of CODE_VERIFICATION.md says so.
+* **O11**: `docs/README.md` (55 lines) — archive rows collapsed to one-line
+  pointers, the two missing rows added (`history-session`, `svg-to-upload`),
+  `AGENTS.md` + `design/README.md` listed under "Outside docs/".
+* **O4 deferred** (owner ticket, reasons in the plan): the SOR domain split.
+  Mitigation shipped: reading index at the top of SOR, the stale
+  `ideal-size: 357 lines` comment corrected to the honest 1562, and an
+  append-only "do not read this file" header on QUALITY_RECHECK.md.
+* **RULE 17 drift repaired**: SOR §1 + README "five modes" → six (SVG to upload
+  bullet added), SOR §8 counts 75/704 → 118/1250 + the two tooling-test rows,
+  §10 pointers for both 2026-10-07 archive docs.
+
+### What was verified (TDD — both files red before the tools existed)
+
+* `tests/verify_runner.test.ts` (7 tests) — spawns the real runner: the fast
+  plan contains exactly one vitest lane (coverage), `--full` exactly two, lane
+  order types→lint→quality→(tests)→coverage→build, the quality lane carries
+  `--changed --allow-legacy`, `--base origin/main` reaches its args, `--plan`
+  runs nothing. Red before: the module did not exist (all 7 failed).
+* `tests/quality_base.test.ts` (7 tests) — spawns the real gate: `--files`
+  measures exactly the named src files, non-src → `(none in src)` + GATE PASSED
+  (RULE 4), a missing named file exits 1 with "not found", `--base HEAD` names
+  the ref with no merge-base, an unknown ref exits 1 naming it, the shallow
+  hint prints iff merge-base is unavailable in a shallow repo, flag-less
+  `--changed` stays green (characterization). Red before: 6 of 7 failed.
+
+### Gates (full run — through `node tools/verify.mjs --full` itself, dogfood)
+
+types ✅ 8.9 s · lint ✅ 6.8 s (0 errors, 8 pre-existing warnings) · quality
+gate `--changed` ✅ 0.4 s (honest "(none)" — no `src/` file in this change; the
+shallow hint printed) · vitest ✅ **118 files / 1250 tests** (74.1 s) ·
+coverage ✅ src/lib lines **97.56 %**, branches 89.34 % (threshold 80) · build
+✅ `dist/index.html` 1,418.26 kB (gzip 409.02 kB) in 5.7 s. Total ≈ 3.1 min;
+`verify:fast` ≈ 1.9 min — ≈ 40 % saved by running the suite once instead of
+twice.
+
+RULE 18 recheck: `AGENTS.md` 95 lines (≤ 120 target) · `tools/verify.mjs`
+62 lines, every function ≤ 10 · `tools/quality.mjs` +69/−12, every touched
+function ≤ 15 · `design/README.md` 35 · `docs/README.md` 55 · no src change, so
+the size gate legitimately reports "(none)"; baseline untouched.
+
+### Known debt carried
+
+* O4: SOR is 1562 lines against RULE 18's 60–200 context-file ideal — owner
+  ticket, planned in the archive doc.
+* Previous change (svg-to-upload): no §5 invariants yet, §8 per-test inventory
+  missing the `svgup_*` files, no QR entry of its own — recorded, not silently
+  fixed here.
+* `design/Arena setup analyze/` (34 MB saved web page, 115 tracked files) —
+  removal/external-storage candidate, owner decision.
+* `git filter-repo` purge of `node_modules/`+`dist/` from main's history —
+  after every arena branch merges.
+* CI install (owner): copy
+  `docs/archive/2026-10-07-env-setup-performance/verify.yml` to
+  `.github/workflows/verify.yml` with a token that carries the `workflows`
+  permission.

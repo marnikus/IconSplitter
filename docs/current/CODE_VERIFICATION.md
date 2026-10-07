@@ -22,9 +22,13 @@ options-bag dodges), and silent evidence loss.
 ### 0. Install (once)
 
 ```bash
-npm install          # dependencies + dev tooling (eslint, vitest, coverage, typescript)
+npm run setup           # = npm ci --prefer-offline — pinned toolchain (.nvmrc, engines, .npmrc)
 npm run hooks:install   # optional: enforce the gate automatically on git push
 ```
+
+The lockfile is the contract: `npm ci` replaces `node_modules/` cleanly (a
+tree installed on another platform cannot survive it), and `.npmrc` makes npm
+engine-strict, so a wrong Node fails fast instead of misbehaving later.
 
 ### 1. Types (syntax lane)
 
@@ -51,6 +55,14 @@ node tools/quality.mjs --changed --allow-legacy
 - Checks only files changed vs merge-base `origin/main` (fallback `HEAD~1`),
   including **untracked new files** (`git ls-files --others`) so a brand-new
   over-line file cannot slip past.
+- **Shallow clones** (agent sandboxes are often depth-1): the merge-base does
+  not exist, the gate says so and compares vs the fallback only. Fix with
+  `git fetch --depth=100 origin main`, or pass an explicit base/list:
+  - `--base <ref>` — tree-vs-tree diff against any ref, no merge-base needed
+    (`--changed --base origin/main`); an unknown ref fails loudly.
+  - `--files a.ts,b.ts` — gate exactly these files, no git involved; a named
+    file that does not exist fails (a typo is not an empty set), a selection
+    with nothing in `src/` reports an honest empty result (RULE 4).
 - Hard fail lines (new code): function LOC > 30, params > 4, CC > 10,
   nesting > 4, new file > 300 lines.
 - **Baseline ratchet:** `tools/quality_baseline.json` records per-file line
@@ -98,19 +110,34 @@ npx knip                             # unused exports/deps (vulture equivalent)
 
 Run before releases and after refactors; zero **new** findings on a diff.
 
-### 8. Combined pre-push check (runs lanes 1–6 + build)
+### 8. Combined check — one cross-platform runner (lanes 1–6 + build)
 
 ```bash
-npm run verify          # = bash tools/pre_push_check.sh
+npm run verify:fast   # = node tools/verify.mjs — every commit (~2 min)
+npm run verify        # = node tools/verify.mjs --full — before push (~3.5 min)
 ```
 
-Lanes: tsc + eslint + quality gate (changed, ratchet) + vitest + coverage +
-`vite build` (single-file output must succeed).
+Fast lanes: tsc + eslint + quality gate (changed, ratchet) + **one** suite run
+(the coverage lane already executes every test — the old
+`tools/pre_push_check.sh` ran the suite twice, lanes 4+5) + `vite build`
+(single-file output must succeed). `--full` adds the standalone `vitest run`
+lane for pre-push parity with the historical bash script it replaced.
+`node tools/verify.mjs --plan [--json]` prints the lane plan without running
+it — the contract `tests/verify_runner.test.ts` characterizes.
+`--base <ref>` is forwarded to the quality lane (shallow clones).
+
+### 9. Browser probes (optional)
+
+The happy-dom suite is the acceptance gate (RULE 8). A real headless-browser
+probe is **optional** evidence for layout/OPFS bug reports — no playwright or
+puppeteer dependency is added to the repo for it; use a system browser and a
+throwaway script, and record what the probe showed in the change's archive
+doc. Never let a probe become a second, untested gate.
 
 ## Git hook — automatic enforcement
 
-`tools/hooks/pre-push` runs `tools/pre_push_check.sh` before every push once
-installed (`npm run hooks:install`).
+`tools/hooks/pre-push` execs `node tools/verify.mjs --full` before every push
+once installed (`npm run hooks:install`).
 
 - If any lane fails, the push is blocked.
 - Bypass only with `git push --no-verify` with an explicit reason and manual
@@ -170,10 +197,10 @@ steps 1–3 must be behaviour-preserving (suite stays green).
 
 | File | Purpose |
 |---|---|
-| `tools/quality.mjs` | RULE 16 gate: TS AST metrics + ratchet + changed detection via merge-base + untracked files |
+| `tools/quality.mjs` | RULE 16 gate: TS AST metrics + ratchet + changed detection via merge-base, `--base`/`--files` for shallow clones + untracked files |
 | `tools/quality_baseline.json` | Baseline per-file/per-function offender records — ratchet, grandfathered |
-| `tools/pre_push_check.sh` | Combined lanes: types + lint + gate + tests + coverage + build |
-| `tools/hooks/pre-push` | Hook calling pre_push_check.sh |
+| `tools/verify.mjs` | Combined lanes (cross-platform, node): types + lint + gate + tests + coverage + build; `--full`, `--plan`, `--base` |
+| `tools/hooks/pre-push` | Hook exec-ing `node tools/verify.mjs --full` |
 | `tools/install_hooks.sh` | Installs the hook into .git/hooks |
 | `eslint.config.js` | Hygiene errors + complexity/nesting warns (flat config) |
 | `vitest.config.ts` | Test lane + coverage thresholds (src/lib ≥ 80% lines) |
@@ -181,6 +208,13 @@ steps 1–3 must be behaviour-preserving (suite stays green).
 | `docs/current/CODE_VERIFICATION.md` | This file |
 
 ## CI equivalent
+
+A ready-to-paste GitHub workflow (checkout `fetch-depth: 0` so the gate finds
+the merge-base, Node from `.nvmrc`, npm cache, `npm ci`, `npm run verify:fast`)
+is staged at `docs/archive/2026-10-07-env-setup-performance/verify.yml`.
+Installing it into `.github/workflows/` needs the `workflows` token permission
+(an owner step — the agent push of 2026-10-07 was rejected without it).
+Locally, the same thing is:
 
 ```bash
 node tools/quality.mjs --changed --allow-legacy --json > quality.json
@@ -194,5 +228,5 @@ npm run verify
 2. Design in `docs/archive/<date>-<topic>/` if complexity moves across files
 3. Tests first (RULE 8)
 4. Measure: `node tools/quality.mjs --changed --allow-legacy` — any fail → redesign per RULE 19
-5. Run: `npm run verify` — must pass before push
+5. Run: `npm run verify:fast` per commit, `npm run verify` before push — must pass
 6. Update current docs in the same change (RULE 17)
