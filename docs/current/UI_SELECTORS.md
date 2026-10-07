@@ -107,6 +107,7 @@ doc in the same change (RULE 17).
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
 | `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
 | `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` (template design, §N) |
+| `tab-svg-upload` | `SVG to upload` | mounts `UploadPanel` (§R); Chrome/Edge File System Access |
 
 Semantic fallback: button role + visible text.
 
@@ -472,3 +473,89 @@ save failure),
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
+
+## R. SVG to upload — `src/upload/*` (verified 2026-10-07)
+
+One testid per control, no duplicate names with earlier sections (the batch
+`upload-button` of §B predates this tab and is untouched). `{id}` is the pair's
+own `pair_<hash>` id (I-41); the row set comes from the scan.
+
+Folder bar and shell:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-panel` | root `div` | present whenever the tab is supported |
+| `upload-unsupported` | `section` | the honest File System Access gate (non-Chromium); its own "Try anyway" button has no testid |
+| `upload-open-folder` | button | the shared green folder control (`ui/FolderBar`), picks the tab's root |
+| `upload-folder-path` | read-only path row | the shared `FolderPathRow`; shows the remembered root's name |
+| `upload-rescan` | button | re-runs discovery; nothing else refreshes the list |
+| `upload-busy` | `span` | the live busy text ("" when idle) |
+| `upload-toast` | `div role="status"` | transient result/warning text |
+
+Defaults bar (§E of the tab; every number clamped on the way in):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-defaults` | `section` | the global defaults bar itself |
+| `upload-default-paddingPct` / `upload-default-strokePt` / `upload-default-jpegMpx` / `upload-default-jpegQuality` | `input type="number"` | the four numeric defaults, one handle each |
+| `upload-default-artboard` | `select` | `square` (1000-unit artboard) / `fit` |
+| `upload-default-optimize` / `upload-default-eps` | `input type="checkbox"` | SVGO optimization / include EPS |
+
+Bulk bar:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-bulk` | `section` | the bulk bar itself |
+| `upload-check-all` / `upload-check-none` | buttons | check/uncheck every **visible** row |
+| `upload-apply-settings` | button | ONE undoable `uploadSettings` entry for the whole selection; disabled when 0 checked |
+| `upload-export` | button | opens the confirm dialog; disabled when 0 checked |
+| `upload-counts` | `span` | "N icon(s) · M processed" |
+
+List and rows:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-list` | `div role="list"` | the rows' container |
+| `upload-empty` | `p` | the empty state (no root picked / nothing exportable) |
+| `upload-row-{id}` | `div role="listitem"` | one approved pair; class carries `exportState`, `selected`, `warn` |
+| `upload-check-{id}` | `input type="checkbox"` | per-row selection (shared appstore state, not the model's) |
+| `upload-expand-{id}` | button | toggles the row's metadata editor; `aria-expanded` follows |
+| `upload-name-{id}` / `upload-path-{id}` / `upload-version-{id}` | divs | icon base, SVG rel path (full path in `title`), chosen version + file name |
+| `upload-export-{id}` | `span` chip | the export state read from the pair's own `export/export.json` |
+| `upload-meta-{id}` | `span` chip | the metadata state: no metadata / generating / accepted |
+| `upload-warn-{id}` | `span` | the row's scan warnings, comma-joined |
+
+Metadata editor (inside the expanded row):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-meta-editor-{id}` | `div` | the editor (null until expanded) |
+| `upload-meta-title-{id}` / `upload-meta-desc-{id}` / `upload-meta-tags-{id}` | input / input / `textarea` | the draft fields, validated live |
+| `upload-meta-issues-{id}` | `div` | the joined live validation issues ("" while untouched) |
+| `upload-meta-accept-{id}` | button | disabled while the draft is invalid; also names the settings override state in the row |
+
+Provider card (RULE 20):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-provider` | `section` | the Gemini card |
+| `upload-provider-toggle` | button | label = provider + masked key (`•` mask, never the value) |
+| `upload-key-input` | `input type="password"` | key draft; placeholder states where it is stored |
+| `upload-key-save` / `upload-key-clear` | buttons | save (and clear the draft) / clear the stored key |
+| `upload-endpoint` / `upload-model` | inputs | provider endpoint + model |
+| `upload-timeout` / `upload-concurrency` | `input type="number"` | timeout seconds / pool concurrency |
+| `upload-prompt` | `textarea` | the metadata-generation prompt |
+| `upload-prompt-reset` | button | back to the documented default; disabled when already default |
+
+Confirm dialog (nothing is sent by opening it):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-confirm` | `div role="dialog"` | the modal wrap |
+| `upload-confirm-summary` | `p` | how many packages, written where |
+| `upload-confirm-ai` | `p` | present ONLY when at least one row needs the paid call (no accepted and no cached metadata) |
+| `upload-confirm-request` | `pre` | the redacted exact request (key never appears) |
+| `upload-confirm-cancel` / `upload-confirm-ok` | buttons | ok is disabled when a key is required and missing |
+
+Undo of the apply gesture uses the global bar handles `hist-undo` /
+`hist-redo` (§O).

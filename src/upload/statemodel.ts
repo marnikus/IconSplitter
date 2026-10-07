@@ -57,6 +57,7 @@ export type UploadAction =
   | { type: "check-all"; ids: string[]; on: boolean }
   | { type: "set-defaults"; settings: ExportSettings }
   | { type: "apply-override"; ids: string[]; fields: ExportOverride }
+  | { type: "set-overrides"; overrides: Record<string, ExportOverride | null> }
   | { type: "clear-override"; id: string }
   | { type: "set-filter"; filter: UploadFilter }
   | { type: "set-progress"; progress: UploadProgress | null }
@@ -80,6 +81,7 @@ const HANDLERS: { [K in UploadAction["type"]]: Handler<K> } = {
   // Editing a global default never erases an override (design §5).
   "set-defaults": (m, a) => ({ ...m, defaults: a.settings }),
   "apply-override": (m, a) => ({ ...m, overrides: applyToIds(m.overrides, a.ids, a.fields) }),
+  "set-overrides": (m, a) => ({ ...m, overrides: mergeOverrides(m.overrides, a.overrides) }),
   "clear-override": (m, a) => {
     const { [a.id]: _drop, ...rest } = m.overrides;
     return { ...m, overrides: rest };
@@ -114,6 +116,16 @@ function flipAll(ids: string[], on: boolean): Record<string, boolean> {
 function applyToIds(overrides: UploadModel["overrides"], ids: string[], fields: ExportOverride): UploadModel["overrides"] {
   const out = { ...overrides };
   for (const id of ids) out[id] = { ...(out[id] ?? null), ...fields };
+  return out;
+}
+
+/** Installs one override map exactly: null deletes — the undo/redo path. */
+function mergeOverrides(overrides: UploadModel["overrides"], patch: Record<string, ExportOverride | null>): UploadModel["overrides"] {
+  const out = { ...overrides };
+  for (const [id, override] of Object.entries(patch)) {
+    if (override === null) delete out[id];
+    else out[id] = override;
+  }
   return out;
 }
 

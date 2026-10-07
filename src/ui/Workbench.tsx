@@ -15,6 +15,8 @@ import BatchPanel from "../batch/BatchPanel";
 import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
+import UploadPanel from "../upload/UploadPanel";
+import { useUpload } from "../upload/useUpload";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppState } from "../state/useAppState";
@@ -28,6 +30,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "selection", label: "Selection", testid: "tab-selection" },
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
+  { id: "svgUpload", label: "SVG to upload", testid: "tab-svg-upload" },
 ];
 
 export default function Workbench() {
@@ -62,10 +65,16 @@ function Shell() {
         {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
         {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
         {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
+        {tab === "svgUpload" && <div className="upload-shell px-4 py-3"><UploadTab /></div>}
       </main>
       <LogDock />
     </div>
   );
+}
+
+/** The upload tab keeps its hook one component deep, like every other tab. */
+function UploadTab() {
+  return <UploadPanel u={useUpload()} />;
 }
 
 /** Switching tabs is navigation, not an edit — it is restored, but not undoable. */
