@@ -15,6 +15,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { statusOf, type UploadCounts } from "./rowmodel";
 import UploadPreview from "./UploadPreview";
 import UploadMetaFields from "./UploadMetaFields";
+import PublishedArtifact from "./PublishedArtifact";
 import type { UploadJobStatus, UploadRow } from "./types";
 
 export interface UploadRowActions {
@@ -63,10 +64,12 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
   );
 }
 
-/** The expandable detail: the editable, copiable metadata fields. */
+/** The expandable detail: the committed artifact and the editable metadata. */
 function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowActions }) {
   return (
     <div className="up-detail" data-testid={`upload-detail-${id}`}>
+      <PublishedArtifact rootRef={a.rootRef} rootToken={a.rootToken} source={row.source}
+        packageStamp={packageStampOf(row)} testid={`upload-published-${id}`} />
       <UploadMetaFields id={id} meta={row.meta}
         onEdit={(patch) => a.editMetadata(id, patch)}
         onAccept={() => a.acceptMetadata(id)}
@@ -74,6 +77,12 @@ function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowAct
         onRegenerate={() => a.requestMetadata([id])} />
     </div>
   );
+}
+
+/** What the committed package looks like right now — the artifact's re-read key. */
+function packageStampOf(row: UploadRow): string {
+  const jpg = row.record?.outputs.jpg ?? null;
+  return `${row.record?.status ?? "none"}:${row.record?.stage ?? ""}:${jpg === null ? "no-jpg" : `${jpg.bytes}:${jpg.hash}`}`;
 }
 
 /** Keeps the active row in view while the list scrolls. */
@@ -165,7 +174,7 @@ function label(value: string): string {
 /** The badge colour class per status (the .up-* CSS carries the colours). */
 function badgeClass(status: UploadJobStatus): string {
   if (status === "processed") return "processed";
-  if (status === "partial" || status === "stale") return "partial";
+  if (status === "partial" || status === "stale" || status === "interrupted") return "partial";
   if (status === "failed" || status === "cancelled") return "failed";
   if (status === "discovered") return "pending";
   return "generating";

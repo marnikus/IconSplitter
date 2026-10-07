@@ -355,6 +355,27 @@ opt-in class as Generate SVG → Requesty; design
   (SVG/JPEG stay committed). Green (`processed`) only when every requested
   output validated and committed; `stale` when fingerprints moved since the
   last commit.
+* Restart precedence (P2.6 — the two interruption models reconciled): there are
+  TWO independent memories of work that did not finish, and they never silently
+  disagree. **Disk wins on scan**: `export.json` beside the outputs is the
+  authority — a record that says `processed` is shown as processed even when a
+  stale in-memory state says otherwise, because the package really is on disk.
+  **Memory wins within a session** and only for what disk cannot know: the
+  in-flight journal (`…upload.journal.v1`, a metadata request whose outcome is
+  unknown) and the job store (`…upload.jobs.v1`, a run that was `queued`/`running`
+  at close / crash). Both are read at assembly; a row with no committed record
+  shows `interrupted`, never a quiet `discovered`, and the restore note is
+  emitted exactly ONCE per page load (StrictMode's double-invoke included), so
+  a remount cannot re-report or re-send. A run marks itself `queued` → `running`
+  before it starts and writes its terminal state after the commit, which is why
+  a crash mid-run can be reported honestly instead of guessed.
+* Model check (CP-8): the provider card can ask the provider's own model list
+  (`GET {base}/models`, same `x-goog-api-key` header, same bounded request
+  window) and reports found / missing / failed. The configured id is NEVER
+  substituted from the answer; the outcome is logged once as `model-checked`.
+  A truncated answer (`finishReason` `MAX_TOKENS`/`LENGTH`) is `invalid` with the
+  provider's own reason and is never accepted, even when the half-written tags
+  happen to parse.
 * Undo: one new entry type `uploadSettings` (`{ overrides: { [pairId]: Overrides
   | null } }` before/after) on the shared global timeline; the apply path lives
   in `src/upload/uploadundo.ts` (a mounted panel applies live; unmounted
@@ -729,6 +750,8 @@ Batch:
 | localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.upload.prefs.v1` | upload view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read; display-only — the zoom never feeds the output scale |
 | localStorage `iconSplitter.upload.journal.v1` | the in-flight metadata-request journal (row id, start time, request id — no key, no prompt, no answer) | validated on read; corrupt = empty; an open entry after a restart is `interrupted`, never resent |
+| localStorage `iconSplitter.upload.meta.v1` | the **accepted-metadata cache** (CP-15), keyed by the sha256 of the SOURCE SVG: `{ v, cache: { [sha256]: { state: generated \| accepted, meta } } }` | validated entry-by-entry on read (junk dropped, foreign version = empty); bounded at 512 entries, oldest evicted first; an entry whose text no longer passes `upload-meta-v1` comes back `invalid`, never exportable: edited artwork misses the cache by construction |
+| localStorage `iconSplitter.upload.jobs.v1` | the **per-icon job store** (CP-2): `{ v, states: { [pairId]: queued \| running \| processed \| partial \| failed \| cancelled \| interrupted } }` | validated on read (unknown states dropped), bounded at 1024; a `queued`/`running` entry left by a previous session becomes `interrupted` **once per page load**; the store never re-sends, retries or re-bills anything |
 | IndexedDB `iconSplitter/secrets["gemini-api-key"]` | the Gemini API key | its own slot beside the Requesty key; never in localStorage, logs or exports (RULE 20); a refused write falls back to a session-only key the UI names as such |
 | `<pair-folder>/export/<base>.svg|.jpg|.eps` | the export package (prepared SVG copy, 15.1 MP JPEG, optional genuine EPS) | written only by the validated export commit; the approved source and its sidecar are never touched |
 | `<pair-folder>/export/export.json` | the per-icon export record (schema v1: source/settings fingerprints, svgo + eps tool records, metadata block, outputs with hashes, stage, status, validation, timestamps) | one per icon, no global multi-icon file; written LAST as the commit marker; corrupt/missing → rebuilt, never destroys outputs |

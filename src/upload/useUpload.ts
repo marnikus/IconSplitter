@@ -15,10 +15,14 @@ import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
 import { loadGeminiConfig, saveGeminiConfig } from "./configstore";
 import { loadGeminiKey } from "./keystore";
+import { log } from "../log/logstore";
+import { interruptedIds, takeRestoreNote } from "./jobstore";
+import { restoredSpec } from "./uploadlog";
 import { createStoredJournal } from "./journal";
 import { bootRoot, scanUpload, type UploadScanSetters } from "./scan";
 import { loadUploadPrefs, saveUploadPrefs } from "./prefsstore";
-import { assembleRows, countsOf, headerState, pruneChecked, visibleRows, type UploadCounts } from "./rowmodel";
+import { assembleRows, countsOf, pruneChecked, type UploadCounts } from "./rowmodel";
+import { headerState, visibleRows } from "./rowlist";
 import { loadUploadSettings, saveUploadSettings } from "./settingsstore";
 import { useUploadActions, type UploadActions, type UploadCtx } from "./actions";
 import { bindUploadSettingsApplier } from "./uploadundo";
@@ -109,8 +113,11 @@ async function assembleAndCommit(
   const root = refs.root.current as DirHandleLike | null;
   if (root === null) return;
   const interrupted = new Set(refs.journal.current.pending().map((e) => e.rowId));
+  const interruptedJobs = new Set(interruptedIds());
   const m = modelRef.current;
-  const rows = await assembleRows(root, sources, { defaults: m.defaults, overrides: m.overrides, interrupted });
+  const rows = await assembleRows(root, sources, {
+    defaults: m.defaults, overrides: m.overrides, interrupted, interruptedJobs,
+  });
   dispatch({ type: "rows", rows });
   pruneChecked(rows);
 }
@@ -119,6 +126,7 @@ async function assembleAndCommit(
 function useBoot(refs: UploadRefs, dispatch: Dispatch<UploadAction>, loadAll: () => void): void {
   useEffect(() => {
     void (async () => {
+      reportRestore(dispatch);
       const key = await loadGeminiKey();
       refs.key.current = key;
       dispatch({ type: "key", key });
@@ -129,6 +137,20 @@ function useBoot(refs: UploadRefs, dispatch: Dispatch<UploadAction>, loadAll: ()
       loadAll();
     })();
   }, [refs, dispatch, loadAll]);
+}
+
+/**
+ * The restart note (CP-2): work that was in flight when the app closed is
+ * reported ONCE per page load and never re-sent. `takeRestoreNote` owns the
+ * guard, so StrictMode's double-invoke, a remount or a second panel cannot
+ * produce a second entry; it also flips every in-flight job to `interrupted`.
+ */
+function reportRestore(dispatch: Dispatch<UploadAction>): void {
+  const count = takeRestoreNote();
+  if (count === null) return;
+  log(restoredSpec(count));
+  dispatch({ type: "toast", toast: { msg: `${count} icon${count === 1 ? "" : "s"} did not finish before the app closed — nothing was sent again`, err: true } });
+  window.setTimeout(() => dispatch({ type: "toast", toast: null }), 6000);
 }
 
 /** Settings, provider config and view prefs are remembered locally (RULE 6). */

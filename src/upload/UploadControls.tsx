@@ -14,7 +14,7 @@ import {
   type GeminiConfig,
 } from "../lib/upload/gemini";
 import { DEFAULT_METADATA_PROMPT } from "../lib/upload/meta";
-import type { UploadListFilter, UploadSort } from "./types";
+import type { ModelCheck, UploadListFilter, UploadSort } from "./types";
 import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
@@ -26,6 +26,7 @@ export interface UploadControlsProps {
   busy: string | null;
   counts: UploadCounts;
   gemini: GeminiConfig;
+  modelCheck: ModelCheck;
   keySet: boolean;
   keyMask: string;
   /** false while the provider card is minimized to its header (RULE 6 pref). */
@@ -38,6 +39,7 @@ export interface UploadControlsProps {
   onRescan: () => void;
   onSettings: () => void;
   onGemini: (patch: Partial<GeminiConfig>) => void;
+  onCheckModel: () => void;
   onProviderOpen: (open: boolean) => void;
   onSaveKey: (key: string) => void;
   onFilter: (patch: Partial<UploadListFilter>) => void;
@@ -130,6 +132,7 @@ function ProviderFields({ p }: { p: UploadControlsProps }) {
         <input className="svg-input" data-testid="upload-model" aria-label="Gemini model id" spellCheck={false}
           value={p.gemini.model} onChange={(e) => p.onGemini({ model: e.target.value })} />
       </label>
+      <ModelCheckField p={p} />
       <label className="svg-field">
         <span className="svg-label">Endpoint</span>
         <input className="svg-input" data-testid="upload-endpoint" aria-label="Gemini base URL" spellCheck={false}
@@ -142,6 +145,25 @@ function ProviderFields({ p }: { p: UploadControlsProps }) {
         onChange={(n) => p.onGemini({ retries: clampRetries(n) })} />
       <NumberField label="Parallel" testid="upload-concurrency" value={p.gemini.concurrency} min={CONCURRENCY_MIN} max={CONCURRENCY_MAX}
         onChange={(n) => p.onGemini({ concurrency: clampConcurrency(n) })} />
+    </div>
+  );
+}
+
+/**
+ * The provider-verified model check (CP-8): one button, one honest line. The
+ * configured id is never changed from the provider's answer — a human decides.
+ */
+function ModelCheckField({ p }: { p: UploadControlsProps }) {
+  return (
+    <div className="svg-field">
+      <span className="svg-label">Provider-verified</span>
+      <button type="button" className="svg-btn" data-testid="upload-model-check" onClick={p.onCheckModel}
+        disabled={p.modelCheck.state === "checking"}>
+        {p.modelCheck.state === "checking" ? "Checking…" : "Check model"}
+      </button>
+      <p className="svg-note" data-testid="upload-model-state" data-state={p.modelCheck.state}>
+        {p.modelCheck.detail || "The model id is checked against the provider's own list and is never substituted for you."}
+      </p>
     </div>
   );
 }

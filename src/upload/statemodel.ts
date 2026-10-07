@@ -14,9 +14,9 @@ import { staleOf } from "./rowmodel";
 import type { OverridesMap, UploadSettingsState } from "./settingsstore";
 import type { UploadPrefs } from "./prefsstore";
 import {
-  ALL_UPLOAD_FILTER,
-  type Toast, type UploadDialog, type UploadListFilter, type UploadMetaState,
-  type UploadRow, type UploadSort,
+  ALL_UPLOAD_FILTER, IDLE_MODEL_CHECK,
+  type ModelCheck, type Toast, type UploadDialog, type UploadListFilter,
+  type UploadMetaState, type UploadRow, type UploadSort,
 } from "./types";
 
 /** Everything the upload panel shows, in one snapshot. */
@@ -31,6 +31,8 @@ export interface UploadModel {
   /** Per-icon overrides (pair id → pinned fields); absent = inherited. */
   overrides: OverridesMap;
   gemini: GeminiConfig;
+  /** The last provider-verified model check (CP-8) — never a silent swap. */
+  modelCheck: ModelCheck;
   /** Masked key for display; the key itself lives in upload/keystore. */
   keyMask: string;
   keySet: boolean;
@@ -66,6 +68,7 @@ export type UploadAction =
   | { type: "override"; id: string; patch: SettingsOverrides | null }
   | { type: "overrides-patch"; overrides: Record<string, SettingsOverrides | null> }
   | { type: "gemini"; gemini: GeminiConfig }
+  | { type: "model-check"; check: ModelCheck }
   | { type: "key"; key: string | null }
   | { type: "thumb"; px: number }
   | { type: "bg"; bg: PreviewBackground }
@@ -98,6 +101,7 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
     return restaleAll({ ...m, overrides: map }, m.defaults);
   },
   gemini: (m, a) => ({ ...m, gemini: (a as { gemini: GeminiConfig }).gemini }),
+  "model-check": (m, a) => ({ ...m, modelCheck: (a as { check: ModelCheck }).check }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
@@ -172,7 +176,7 @@ export function initialModel(boot: Boot): UploadModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     defaults: boot.settings.defaults, overrides: boot.settings.overrides,
-    gemini: boot.gemini, keyMask: "not set", keySet: false, rootToken: 0,
+    gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, keyMask: "not set", keySet: false, rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
     runningMeta: 0, runningExport: 0, progress: null,

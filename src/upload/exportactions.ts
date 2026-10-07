@@ -13,6 +13,8 @@ import { effectiveSettings } from "../lib/upload/settings";
 import { DEFAULT_METADATA_PROMPT } from "../lib/upload/meta";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
+import { rememberJob } from "./jobstore";
+import { cancelledSpec, exportedSpec, type IconRef } from "./uploadlog";
 import type { Latest, UploadRow } from "./types";
 import type { UploadRunUpdate } from "./statemodel";
 import type { UploadActions, UploadCtx } from "./actions";
@@ -62,9 +64,10 @@ export async function runExportBatch(latest: Latest, ids: string[]): Promise<voi
   c.dispatch({ type: "running", kind: "export", n: ids.length });
   const tally = { done: 0, total: ids.length };
   c.dispatch({ type: "progress", progress: { ...tally } });
-  log({ feature: "upload", action: "export-run", detail: `${ids.length} icon(s)`, data: { icons: ids.length } });
+  for (const id of ids) rememberJob(id, "queued");
   for (const id of ids) {
     if (abort.signal.aborted) break;
+    rememberJob(id, "running");
     await exportOne({ latest, root, id, signal: abort.signal });
     tally.done += 1;
     c.dispatch({ type: "progress", progress: { ...tally } });
@@ -73,6 +76,7 @@ export async function runExportBatch(latest: Latest, ids: string[]): Promise<voi
   c.dispatch({ type: "running", kind: "export", n: 0 });
   c.dispatch({ type: "progress", progress: null });
   const done = tally.done;
+  if (abort.signal.aborted) log(cancelledSpec(ids.length - done));
   c.say(abort.signal.aborted
     ? `Export stopped after ${done} of ${ids.length} — finished packages are kept`
     : `Exported ${done} icon${done === 1 ? "" : "s"} — each pair's export folder holds the package`);
@@ -122,9 +126,17 @@ function applyExportResult(latest: Latest, id: string, row: UploadRow, result: E
     stale: committed ? false : row.stale,
   };
   c.dispatch({ type: "run", id, run });
-  if (result.status === "failed") log({ level: "warn", feature: "upload", action: "export-failed", ids: { target: id }, detail: run.error });
-  if (result.status === "partial") log({ level: "warn", feature: "upload", action: "export-partial", ids: { target: id }, detail: run.error || "the EPS stage failed" });
-  if (result.status === "cancelled") log({ level: "warn", feature: "upload", action: "export-cancelled", ids: { target: id } });
+  rememberJob(id, result.status);
+  const ref: IconRef = { id: row.source.id, base: row.source.base };
+  log(exportedSpec({ ...ref, status: result.status, note: run.error || noteForStatus(result.status) }));
+}
+
+/** The one-line note an entry carries when the run reported no failure detail. */
+function noteForStatus(status: ExportRunResult["status"]): string {
+  if (status === "processed") return "export.json was written last; the approved source is untouched";
+  if (status === "partial") return "the required outputs committed; the optional EPS stage failed";
+  if (status === "cancelled") return "stopped before commit; the previous package is intact";
+  return "nothing was committed";
 }
 
 /** The live row a run is about — read fresh, never a stale snapshot. */

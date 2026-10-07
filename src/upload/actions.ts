@@ -9,11 +9,10 @@
 // are persisted but not undoable (the same class as presets).
 
 import { useCallback, useRef, type Dispatch } from "react";
-import { log } from "../log/logstore";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
 import type { GeminiConfig } from "../lib/upload/gemini";
-import { parseGeminiConfig, PROVIDER_NAME } from "../lib/upload/gemini";
+import { parseGeminiConfig } from "../lib/upload/gemini";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
   normalizeSettings, type SettingsOverrides, type UploadSettings,
@@ -25,6 +24,7 @@ import type { UploadDiscovery } from "./discovery";
 import { rememberRoot } from "./scan";
 import type { UploadCounts } from "./rowmodel";
 import { useMetaActions } from "./metaactions";
+import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
 import { useUiActions } from "./uiactions";
 import type { UploadAction, UploadModel } from "./statemodel";
@@ -67,6 +67,7 @@ export interface UploadActions {
   resetOverride: (id: string) => void;
   applyDefaultsToSelected: (ids: string[]) => void;
   setGemini: (patch: Partial<GeminiConfig>) => void;
+  checkModel: () => void;
   saveKey: (key: string) => void;
   forgetKey: () => void;
   toggleCheck: (id: string) => void;
@@ -98,6 +99,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useOverrideResetActions(ctx),
     ...useOverrideApplyActions(ctx),
     ...useGeminiActions(ctx),
+    ...useModelCheckActions(ctx),
     ...useKeyActions(ctx),
     ...useUiActions(ctx),
     ...useMetaActions(ctx),
@@ -117,7 +119,6 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
         void rememberRoot(h);
       });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
-      log({ feature: "upload", action: "root-picked", detail: picked.handle.name });
       c.loadAll();
       c.say(picked.message ?? `Approved SVGs scanned from ${picked.handle.name}`);
     })();
@@ -147,7 +148,6 @@ function useDefaultsActions(ctx: UploadCtx): Slice<"setDefaults"> {
     const c = latest.current;
     const defaults = normalizeSettings({ ...c.m.defaults, ...patch });
     c.dispatch({ type: "defaults", defaults });
-    log({ feature: "upload", action: "defaults-changed", detail: Object.keys(patch).join(", "), data: patch });
   }, []);
   return { setDefaults };
 }
@@ -169,7 +169,6 @@ function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
       origin: "upload", ids: [id],
       before: { overrides: { [id]: before } }, after: { overrides: { [id]: after } },
     });
-    log({ feature: "upload", action: "override-set", ids: { target: id }, detail: Object.keys(patch).join(", ") || "cleared" });
   }, []);
   return { setOverride };
 }
@@ -189,7 +188,6 @@ function useOverrideResetActions(ctx: UploadCtx): Slice<"resetOverride"> {
       origin: "upload", ids: [id],
       before: { overrides: { [id]: before } }, after: { overrides: { [id]: null } },
     });
-    log({ feature: "upload", action: "override-reset", ids: { target: id } });
     c.say("Reset to defaults — the icon inherits the global settings again");
   }, []);
   return { resetOverride };
@@ -215,7 +213,6 @@ function useOverrideApplyActions(ctx: UploadCtx): Slice<"applyDefaultsToSelected
       origin: "upload", ids,
       before: { overrides: before }, after: { overrides: after },
     });
-    log({ feature: "upload", action: "settings-applied", detail: `${ids.length} icon(s)`, data: { icons: ids.length } });
     c.say(`Settings applied to ${ids.length} icon${ids.length === 1 ? "" : "s"} — one undo reverses the whole batch`);
   }, []);
   return { applyDefaultsToSelected };
@@ -229,7 +226,6 @@ function useGeminiActions(ctx: UploadCtx): Slice<"setGemini"> {
     const c = latest.current;
     const gemini = parseGeminiConfig({ ...c.m.gemini, ...patch });
     c.dispatch({ type: "gemini", gemini });
-    log({ feature: "upload", action: "provider-changed", detail: `${PROVIDER_NAME}: ${Object.keys(patch).join(", ")}`, data: patch });
   }, []);
   return { setGemini };
 }

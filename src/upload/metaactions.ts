@@ -11,7 +11,9 @@ import type { DirHandleLike } from "../lib/fs";
 import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { readSvgText } from "../svg/svgfiles";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
-import type { Latest, UploadMetaState } from "./types";
+import { rememberMeta } from "./metacache";
+import { namedSpec, nameRefusedSpec, type IconRef } from "./uploadlog";
+import type { Latest, UploadMetaState, UploadRow } from "./types";
 import type { UploadActions, UploadCtx } from "./actions";
 import { rowOf, runExportBatch } from "./exportactions";
 
@@ -33,7 +35,6 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
     const c = latest.current;
     const why = metaGuard(c, ids);
     if (why !== null) return c.say(why, true);
-    log({ feature: "upload", action: "meta-confirm-opened", detail: `${ids.length} icon(s)`, data: { icons: ids.length } });
     c.dispatch({ type: "dialog", dialog: { kind: "meta", ids } });
   }, [latest]);
   const confirmMetadata = useCallback(() => {
@@ -74,7 +75,10 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
       return c.say(validation.errors.join("; "), true);
     }
     c.dispatch({ type: "meta", id, meta: { ...row.meta, state: "accepted", validation, edited: false } });
-    log({ feature: "upload", action: "meta-accepted", ids: { target: id }, detail: `${row.meta.metadata.tags.length} tags` });
+    // Accepted here, remembered for the fingerprint: the next session (or a
+    // crash) never pays for this source again (CP-15).
+    rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: row.meta.metadata });
+    log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: row.meta.metadata.tags.length }));
     c.say("Metadata accepted");
     // The acceptance persists in export.json: a committed record re-embeds (no
     // AI, no render); a never-exported row keeps it until its first export.
@@ -102,7 +106,6 @@ async function runMetadataBatch(latest: Latest, ids: string[]): Promise<void> {
   c.dispatch({ type: "running", kind: "metadata", n: ids.length });
   const tally = { done: 0, ok: 0, total: ids.length };
   c.dispatch({ type: "progress", progress: { done: 0, total: tally.total } });
-  log({ feature: "upload", action: "meta-run", detail: `${ids.length} icon(s)`, data: { icons: ids.length } });
   const ctx: MetaRunCtx = { latest, root, key, queue: [...ids], signal: abort.signal, tally };
   const width = Math.max(1, Math.min(c.m.gemini.concurrency, ids.length));
   await Promise.all(Array.from({ length: width }, () => drainMeta(ctx)));
@@ -161,11 +164,26 @@ function unreadable(c: UploadCtx, id: string, meta: UploadMetaState): boolean {
 /** The run's outcome → the row's metadata state; a failure keeps the prior text. */
 function applyMetaResult(latest: Latest, id: string, base: UploadMetaState, result: MetadataResult): void {
   const c = latest.current;
+  const row = rowOf(c, id);
   c.dispatch({ type: "meta", id, meta: metaFromResult(base, result) });
   c.dispatch({ type: "run", id, run: { running: null } });
-  if (result.outcome === "failed" || result.outcome === "cancelled") {
-    log({ level: "warn", feature: "upload", action: `meta-${result.outcome}`, ids: { target: id }, detail: result.detail });
+  if (row === null) return;
+  const ref = refOf(row);
+  if (result.metadata === null) {
+    if (result.outcome === "failed" || result.outcome === "cancelled") log(nameRefusedSpec({ ...ref, why: result.detail }));
+    return;
   }
+  // A produced answer is paid work: remember it (unaccepted) under the
+  // fingerprint so a crash before acceptance cannot buy it twice (CP-15).
+  rememberMeta(row.sourceHash ?? "", { state: "generated", meta: result.metadata });
+  log(result.outcome === "generated"
+    ? namedSpec({ ...ref, model: c.m.gemini.model, tags: result.metadata.tags.length })
+    : nameRefusedSpec({ ...ref, why: result.detail }));
+}
+
+/** The log's identifying half, straight off the row's source. */
+function refOf(row: UploadRow): IconRef {
+  return { id: row.source.id, base: row.source.base };
 }
 
 function metaFromResult(base: UploadMetaState, result: MetadataResult): UploadMetaState {

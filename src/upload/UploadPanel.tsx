@@ -25,10 +25,10 @@ export default function UploadPanel() {
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
       <UploadControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={g.counts}
-        gemini={g.gemini} keySet={g.keySet} keyMask={g.keyMask} providerOpen={g.providerOpen}
+        gemini={g.gemini} modelCheck={g.modelCheck} keySet={g.keySet} keyMask={g.keyMask} providerOpen={g.providerOpen}
         filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
         onChooseRoot={g.chooseRoot} onRescan={g.rescan} onSettings={() => g.openSettings(null)}
-        onGemini={g.setGemini} onProviderOpen={g.setProviderOpen} onSaveKey={g.saveKey}
+        onGemini={g.setGemini} onCheckModel={g.checkModel} onProviderOpen={g.setProviderOpen} onSaveKey={g.saveKey}
         onFilter={g.setFilter} onSort={g.setSort} onClearFilters={g.clearFilters} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
@@ -80,7 +80,7 @@ function Banners({ g }: { g: UploadApi }) {
 /** One banner per condition, each small enough to read on its own. */
 function bannerNotes(g: UploadApi): Note[] {
   const d = g.discovery;
-  const interrupted = g.rows.filter((r) => r.meta.state === "interrupted").length;
+  const interrupted = g.rows.filter((r) => r.meta.state === "interrupted" || r.status === "interrupted").length;
   return [
     excludedNote(d), corruptNote(d), unreadableNote(d), interruptedNote(interrupted),
   ].filter((n): n is Note => n !== null);
@@ -117,8 +117,8 @@ function unreadableNote(d: UploadDiscovery | null): Note | null {
 function interruptedNote(n: number): Note | null {
   return n === 0 ? null : {
     id: "interrupted",
-    strong: `${n} metadata request(s) were in flight when the app closed`,
-    rest: " — their outcome is unknown and they are never resent automatically; generate again to retry.",
+    strong: `${n} icon(s) did not finish before the app closed`,
+    rest: " — their outcome is unknown and they are never resent automatically; generate or export again to retry.",
   };
 }
 

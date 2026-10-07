@@ -40,6 +40,14 @@ export interface UploadMetaState {
   edited: boolean;
 }
 
+/** The last answer from the provider's own model list (CP-8). */
+export interface ModelCheck {
+  state: "idle" | "checking" | "found" | "missing" | "failed";
+  detail: string;
+}
+
+export const IDLE_MODEL_CHECK: ModelCheck = { state: "idle", detail: "" };
+
 export const EMPTY_META: UploadMetaState = {
   state: "empty", metadata: null, validation: null,
   usage: { input: null, output: null, total: null }, detail: "", edited: false,

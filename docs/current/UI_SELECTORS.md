@@ -502,6 +502,10 @@ Settings button + provider card:
 | `upload-provider-card` | card | minimizable via `upload-provider-toggle` (`aria-expanded`) |
 | `upload-provider` / `upload-limits` | text | "Gemini · metadata generation" / "{timeout}s timeout · N retries · N parallel" |
 | `upload-model` / `upload-endpoint` | `input` | the model id (verified default `gemini-3.1-flash-lite`) and the base URL |
+| `upload-model-check` | `button` | asks the provider's own model list; never substitutes the configured id |
+| `upload-model-state` | `p[data-state]` | the check's one line: `idle` / `checking` / `found` / `missing` / `failed` |
+| `upload-published-{id}` | `img` | the committed JPEG read out of the pair's own `export/` folder (object URL) |
+| `upload-published-{id}-missing` | `p` | `Not exported yet` — shown only when the file really is absent |
 | `upload-timeout` / `upload-retries` / `upload-concurrency` | `input[type=number]` | clamped at the moment of change (5–900 s, 0–5, 1–8) |
 | `upload-prompt` | `textarea[readonly]` | the EXACT metadata prompt — fixed, the validator enforces its rules |
 | `upload-key-state` | button | masked key ("Gemini API key secured locally" / "No Gemini API key yet"); opens the editor |

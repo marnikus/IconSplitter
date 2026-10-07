@@ -108,6 +108,38 @@ describe("generateMetadata — deterministic parse + validation", () => {
   });
 });
 
+describe("generateMetadata — truncation is detected, not guessed (CP-8)", () => {
+  /** The same frame the happy path sends, with the provider's finish reason added. */
+  const withFinish = (text: string, finish: string) => () => jsonResponse(200, {
+    candidates: [{ content: { parts: [{ text }] }, finishReason: finish }],
+    usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 200, totalTokenCount: 300 },
+  });
+
+  it("a MAX_TOKENS answer is invalid with the provider's own reason — never accepted", async () => {
+    const { fetch } = fakeFetch(withFinish(ANSWER, "MAX_TOKENS"));
+    const result = await generateMetadata(args({ deps: { render, fetch } }));
+    expect(result.outcome).toBe("invalid");
+    expect(result.metadata).toBeNull();
+    expect(result.validation).toBeNull();
+    expect(result.detail).toContain("MAX_TOKENS");
+    expect(result.detail).toContain("incomplete");
+  });
+
+  it("LENGTH is the same signal under its other name", async () => {
+    const { fetch } = fakeFetch(withFinish(ANSWER, "LENGTH"));
+    const result = await generateMetadata(args({ deps: { render, fetch } }));
+    expect(result.outcome).toBe("invalid");
+    expect(result.detail).toContain("LENGTH");
+  });
+
+  it("the identical body WITHOUT a length finish still generates (the control)", async () => {
+    const { fetch } = fakeFetch(withFinish(ANSWER, "STOP"));
+    const result = await generateMetadata(args({ deps: { render, fetch } }));
+    expect(result.outcome).toBe("generated");
+    expect(result.validation?.ok).toBe(true);
+  });
+});
+
 describe("generateMetadata — the retry policy (design §5, I-20)", () => {
   it("auto-retries a provider-confirmed 429, honouring Retry-After", async () => {
     const sleeps: number[] = [];

@@ -8,7 +8,7 @@
 // journalled; a restart reports them `interrupted`, never auto-resent.
 
 import {
-  DEFAULT_GEMINI_CONFIG, buildGeminiRequest, sendGemini,
+  DEFAULT_GEMINI_CONFIG, buildGeminiRequest, isTruncatedFinish, sendGemini,
   type FetchLike, type GeminiConfig, type GeminiFailure, type GeminiUsage,
 } from "../lib/upload/gemini";
 import {
@@ -83,15 +83,22 @@ async function requestMetadata(args: MetadataArgs, apiKey: string, deps: Metadat
     if (sent.failure !== null) {
       return failed(args.rowId, redact(sent.failure.message, apiKey), sent.failure, sent.attempts);
     }
-    return interpret(args.rowId, sent.text, sent.usage, sent.attempts);
+    return interpret({ rowId: args.rowId, text: sent.text, usage: sent.usage, attempts: sent.attempts, finish: sent.finish });
   } catch (error) {
     if (args.signal?.aborted) return cancelled(args.rowId);
     return failed(args.rowId, error instanceof Error ? error.message : "unknown error", null, 0);
   }
 }
 
-/** The answer → a deterministic parse + validation outcome. */
-function interpret(rowId: string, text: string, usage: GeminiUsage, attempts: number): MetadataResult {
+/**
+ * The answer → a deterministic parse + validation outcome. A provider-reported
+ * LENGTH finish wins over everything the text appears to say: a half-written
+ * 40-tag list that happens to parse is still a truncated answer and is NEVER
+ * accepted (CP-8, RULE 4).
+ */
+function interpret(input: InterpretInput): MetadataResult {
+  const { rowId, text, usage, attempts, finish } = input;
+  if (isTruncatedFinish(finish)) return truncated(rowId, finish as string, usage, attempts);
   const parsed = parseMetadata(text);
   if (parsed === null) {
     return {
@@ -115,12 +122,31 @@ function interpret(rowId: string, text: string, usage: GeminiUsage, attempts: nu
   };
 }
 
+/** Everything the answer → outcome step reads — one domain object (RULE 16). */
+interface InterpretInput {
+  rowId: string;
+  text: string;
+  usage: GeminiUsage;
+  attempts: number;
+  finish: string | null;
+}
+
+/** The provider stopped early: reported as invalid with the signal named. */
+function truncated(rowId: string, finish: string, usage: GeminiUsage, attempts: number): MetadataResult {
+  return {
+    rowId, outcome: "invalid", metadata: null, validation: null,
+    fingerprint: "", usage, requestId: null, failure: null, attempts,
+    detail: `the provider stopped the answer (${finish}) — it is incomplete; ask again`,
+  };
+}
+
 interface Sent {
   outcome: "ok" | "failed" | "cancelled";
   text: string;
   usage: GeminiUsage;
   failure: GeminiFailure | null;
   attempts: number;
+  finish: string | null;
 }
 
 /**
@@ -135,19 +161,19 @@ async function sendWithPolicy(args: {
   const sleep = args.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   let attempts = 0;
   for (let i = 0; i <= args.config.retries; i++) {
-    if (args.signal?.aborted) return { outcome: "cancelled", text: "", usage: emptyUsage(), failure: null, attempts };
+    if (args.signal?.aborted) return { outcome: "cancelled", text: "", usage: emptyUsage(), failure: null, attempts, finish: null };
     attempts++;
     const out = await sendGemini({
       config: args.config, apiKey: args.apiKey, request: args.request,
       fetch: args.deps.fetch, signal: args.signal,
     });
-    if (out.ok) return { outcome: "ok", text: out.text, usage: out.usage, failure: null, attempts };
+    if (out.ok) return { outcome: "ok", text: out.text, usage: out.usage, failure: null, attempts, finish: out.finish };
     if (!out.failure.retryable || i === args.config.retries) {
-      return { outcome: "failed", text: "", usage: emptyUsage(), failure: out.failure, attempts };
+      return { outcome: "failed", text: "", usage: emptyUsage(), failure: out.failure, attempts, finish: null };
     }
     await sleep(out.failure.retryAfterMs ?? backoffMs(i));
   }
-  return { outcome: "failed", text: "", usage: emptyUsage(), failure: null, attempts };
+  return { outcome: "failed", text: "", usage: emptyUsage(), failure: null, attempts, finish: null };
 }
 
 function backoffMs(attempt: number): number {

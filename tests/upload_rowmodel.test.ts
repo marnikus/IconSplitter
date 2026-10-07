@@ -15,9 +15,11 @@ import {
 } from "../src/lib/upload/export";
 import { getAppState, patchUpload, resetAppStore } from "../src/state/appstore";
 import {
-  applyUploadFilters, assembleRows, countsOf, headerState, metaFromRecord, pruneChecked,
-  sortUploadRows, statusOf, staleOf, toListRow, toRow, visibleRows,
+  assembleRows, countsOf, metaFromRecord, pruneChecked, statusOf, staleOf, toRow,
 } from "../src/upload/rowmodel";
+import {
+  applyUploadFilters, headerState, sortUploadRows, toListRow, visibleRows,
+} from "../src/upload/rowlist";
 import { ALL_UPLOAD_FILTER, EMPTY_META, type UploadRow } from "../src/upload/types";
 import type { UploadRowSource } from "../src/upload/discovery";
 import { BinDir, BinFile } from "./helpers/binfakefs";
@@ -252,11 +254,29 @@ describe("assembleRows — reads the real record + source from the folder", () =
     expect(rows[0].meta.metadata?.tags).toHaveLength(40);
   });
 
-  it("a pair without export.json is discovered with no source read", async () => {
+  it("a pair without export.json is discovered, and still carries its source fingerprint", async () => {
+    // The fingerprint is read even with no record: it is the key the accepted-
+    // metadata cache (CP-15) is found by, and a row that cannot name its own
+    // artwork could not be served a remembered answer without a model call.
     const rows = await assembleRows(pairRoot("pair_fog", false, false), [SRC], { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, interrupted: new Set() });
     expect(rows[0].record).toBeNull();
     expect(rows[0].status).toBe("discovered");
-    expect(rows[0].sourceHash).toBeNull();
+    expect(rows[0].sourceHash).toBe(`sha256:${await sha256HexText(SOURCE_SVG)}`);
+  });
+
+  it("a run the previous session left unresolved shows interrupted, not discovered (CP-2)", async () => {
+    const rows = await assembleRows(pairRoot("pair_fog", false, false), [SRC], {
+      defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, interrupted: new Set(), interruptedJobs: new Set(["pair_fog"]),
+    });
+    expect(rows[0].status).toBe("interrupted");
+    expect(rows[0].stale).toBe(false);
+  });
+
+  it("a committed record outweighs the memory — disk wins on scan", async () => {
+    const rows = await assembleRows(pairRoot("pair_fog", true, true), [SRC], {
+      defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, interrupted: new Set(), interruptedJobs: new Set(["pair_fog"]),
+    });
+    expect(rows[0].status).toBe("processed");
   });
 
   it("a corrupt export.json is null — the pipeline rebuilds it", async () => {

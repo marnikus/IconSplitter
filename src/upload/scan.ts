@@ -4,7 +4,6 @@
 // (scanseq). The setters are plain callbacks so the orchestration is testable
 // without the store.
 
-import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { fnv1a32 } from "../lib/pairing";
@@ -45,11 +44,9 @@ export async function scanUpload(refs: UploadScanRefs, root: DirHandleLike, sett
     setters.setRows(found.rows);
     setters.setDiscovery(found);
     refs.key.current = key;
-    log({ feature: "upload", action: "scan", detail: auditLine(found), data: { ...found.audit, corruptFiles: found.corruptFiles.length } });
     for (const warning of warnings(found)) setters.say(warning, true);
   } catch {
     if (isCurrent(refs.seq, ticket.id)) {
-      log({ level: "error", feature: "upload", action: "scan-failed", detail: "the scan failed — the folder may be unreadable" });
       setters.say("Rescan failed — the folder may be unreadable", true);
     }
   } finally {

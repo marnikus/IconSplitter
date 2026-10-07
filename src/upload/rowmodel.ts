@@ -10,13 +10,12 @@ import { sha256HexText } from "../lib/upload/hash";
 import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
 import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { metadataFingerprint } from "../lib/upload/meta";
-import { compareNames } from "../lib/scan";
 import { getAppState, patchUpload } from "../state/appstore";
+import { cachedMeta, restoredMeta } from "./metacache";
 import type { UploadRowSource } from "./discovery";
 import {
-  ALL_UPLOAD_FILTER, EMPTY_META,
-  type UploadJobStatus, type UploadListFilter, type UploadListRow,
-  type UploadMetaState, type UploadRow, type UploadSort,
+  EMPTY_META,
+  type UploadJobStatus, type UploadMetaState, type UploadRow,
 } from "./types";
 
 export interface UploadCounts {
@@ -36,23 +35,37 @@ export interface RowInputs {
   meta: UploadMetaState;
   /** The settings this icon exports with (defaults under, overrides on top). */
   effective: UploadSettings;
+  /** A run a previous session left unresolved (CP-2) — never silently pending. */
+  interruptedJob?: boolean;
 }
 
 /** One source + its record + its metadata state → one row (pure). */
 export function toRow(source: UploadRowSource, inputs: RowInputs): UploadRow {
   const stale = staleOf({ record: inputs.record, source, effective: inputs.effective, meta: inputs.meta, sourceHash: inputs.sourceHash });
-  const recordStatus = inputs.record?.status ?? "discovered";
   return {
     source,
     record: inputs.record,
     sourceHash: inputs.sourceHash,
-    status: stale ? "stale" : recordStatus,
+    status: rowStatus({ stale, interrupted: inputs.interruptedJob === true, record: inputs.record }),
     stage: null,
     running: null,
     meta: inputs.meta,
     error: inputs.record?.error ?? "",
     stale,
   };
+}
+
+/**
+ * Stale beats everything (the user must re-export anyway); an unresolved run
+ * shows `interrupted` unless a committed record proves how the run ended
+ * (memory wins over a missing record, disk wins over nothing).
+ */
+function rowStatus(input: { stale: boolean; interrupted: boolean; record: ExportRecord | null }): UploadJobStatus {
+  if (input.stale) return "stale";
+  const settled = input.record?.status;
+  if (!input.interrupted) return settled ?? "discovered";
+  const finished = settled === "processed" || settled === "partial" || settled === "failed" || settled === "cancelled";
+  return finished ? settled : "interrupted";
 }
 
 /** Everything a staleness check compares — one domain object (RULE 16). */
@@ -121,7 +134,13 @@ export function statusOf(row: UploadRow): UploadJobStatus {
  */
 export async function assembleRows(
   root: DirHandleLike, sources: readonly UploadRowSource[],
-  opts: { defaults: UploadSettings; overrides: Record<string, SettingsOverrides>; interrupted: ReadonlySet<string> },
+  opts: {
+    defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
+    /** Metadata requests a restart left outcome-unknown (the journal). */
+    interrupted: ReadonlySet<string>;
+    /** Runs a restart left unresolved (the job store, CP-2). */
+    interruptedJobs?: ReadonlySet<string>;
+  },
 ): Promise<UploadRow[]> {
   const rows: UploadRow[] = [];
   for (const source of sources) {
@@ -132,16 +151,33 @@ export async function assembleRows(
 
 async function assembleOne(
   root: DirHandleLike, source: UploadRowSource,
-  opts: { defaults: UploadSettings; overrides: Record<string, SettingsOverrides>; interrupted: ReadonlySet<string> },
+  opts: {
+    defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
+    interrupted: ReadonlySet<string>; interruptedJobs?: ReadonlySet<string>;
+  },
 ): Promise<UploadRow> {
   const record = await readRecordAt(root, source.dirPath);
-  const sourceHash = record === null ? null : `sha256:${await hashAt(root, source.svgPath)}`;
+  const sourceHash = await hashAt(root, source.svgPath);
   return toRow(source, {
     record,
     sourceHash,
-    meta: metaFromRecord(record, opts.interrupted.has(source.id)),
+    meta: restoredRowMeta(record, sourceHash, opts.interrupted.has(source.id)),
     effective: effectiveSettings(opts.defaults, opts.overrides[source.id] ?? {}),
+    interruptedJob: opts.interruptedJobs?.has(source.id) === true,
   });
+}
+
+/**
+ * What the row opens with: the COMMITTED accepted answer wins; otherwise the
+ * accepted-metadata cache answers by source fingerprint (CP-15), so a crash, a
+ * reload or a settings change never re-bills the model for artwork that has not
+ * changed. `interrupted` still wins over both: an in-flight request's outcome
+ * is unknown and must be said out loud (RULE 4).
+ */
+function restoredRowMeta(record: ExportRecord | null, sourceHash: string | null, interrupted: boolean): UploadMetaState {
+  const committed = metaFromRecord(record, interrupted);
+  if (interrupted || committed.state !== "empty") return committed;
+  return restoredMeta(cachedMeta(sourceHash));
 }
 
 /** The pair's export.json → record; null when missing or corrupt (RULE 13). */
@@ -155,9 +191,10 @@ async function readRecordAt(root: DirHandleLike, dirPath: string): Promise<Expor
   }
 }
 
-async function hashAt(root: DirHandleLike, relPath: string): Promise<string> {
+/** The source's content hash, `sha256:<hex>`; "" when it cannot be read. */
+async function hashAt(root: DirHandleLike, relPath: string): Promise<string | null> {
   const bytes = await readBytesAt(root, relPath);
-  return bytes === null ? "" : sha256HexText(new TextDecoder().decode(bytes));
+  return bytes === null ? null : `sha256:${await sha256HexText(new TextDecoder().decode(bytes))}`;
 }
 
 /** Reads one file's bytes under the root; null when any segment is absent. */
@@ -176,78 +213,6 @@ async function readBytesAt(root: DirHandleLike, relPath: string): Promise<Uint8A
 
 // --- list filter / sort ---------------------------------------------------------
 
-export function toListRow(row: UploadRow): UploadListRow {
-  return {
-    id: row.source.id,
-    name: row.source.svgName,
-    relPath: row.source.svgPath,
-    status: row.record === null ? "not-exported" : row.stale ? "stale" : (row.record.status as UploadListRow["status"]),
-    metadata: row.meta.state,
-    approvedValid: row.source.approvedValid,
-  };
-}
-
-export function applyUploadFilters(rows: readonly UploadListRow[], f: UploadListFilter): UploadListRow[] {
-  const needle = f.search.trim().toLowerCase();
-  return rows.filter((r) => inStatus(r, f.status) && inMeta(r, f.metadata) && inSearch(r, needle));
-}
-
-function inStatus(row: UploadListRow, want: UploadListFilter["status"]): boolean {
-  return want === "all" || row.status === want;
-}
-
-function inMeta(row: UploadListRow, want: UploadListFilter["metadata"]): boolean {
-  return want === "all" || row.metadata === want;
-}
-
-function inSearch(row: UploadListRow, needle: string): boolean {
-  if (needle === "") return true;
-  return `${row.name} ${row.relPath} v${row.approvedValid}`.toLowerCase().includes(needle);
-}
-
-/** Sorts a copy — the caller's array is never reordered. */
-export function sortUploadRows(rows: readonly UploadListRow[], sort: UploadSort): UploadListRow[] {
-  const out = [...rows];
-  out.sort((a, b) => COMPARATORS[sort](a, b));
-  return out;
-}
-
-const COMPARATORS: Record<UploadSort, (a: UploadListRow, b: UploadListRow) => number> = {
-  name: (a, b) => compareNames(a.relPath, b.relPath) || compareNames(a.id, b.id),
-  status: (a, b) => rank(a.status) - rank(b.status) || compareNames(a.relPath, b.relPath),
-  metadata: (a, b) => rank(a.metadata) - rank(b.metadata) || compareNames(a.relPath, b.relPath),
-};
-
-const STATUS_RANK: Record<UploadListRow["status"], number> = {
-  all: 0, failed: 1, cancelled: 2, partial: 3, stale: 4, "not-exported": 5, processed: 6,
-};
-const META_RANK: Record<UploadListRow["metadata"], number> = {
-  all: 0, invalid: 1, interrupted: 2, pending: 3, empty: 4, generated: 5, accepted: 6,
-};
-
-function rank(value: string): number {
-  return STATUS_RANK[value as UploadListRow["status"]] ?? META_RANK[value as UploadListRow["metadata"]] ?? 0;
-}
-
-/** Filter + sort a copy of the rows; the caller's array is never reordered. */
-export function visibleRows(rows: readonly UploadRow[], filter: UploadListFilter, sort: UploadSort): UploadRow[] {
-  const byId = new Map(rows.map((r) => [r.source.id, r]));
-  return sortUploadRows(applyUploadFilters([...byId.values()].map(toListRow), filter), sort)
-    .flatMap((l) => {
-      const row = byId.get(l.id);
-      return row ? [row] : [];
-    });
-}
-
-/** Header checkbox state for the visible rows (indeterminate = some). */
-export function headerState(visible: readonly UploadRow[], checked: readonly string[]): "none" | "some" | "all" {
-  if (visible.length === 0) return "none";
-  const on = visible.filter((r) => checked.includes(r.source.id)).length;
-  if (on === 0) return "none";
-  return on === visible.length ? "all" : "some";
-}
-
-/** The counters the source bar shows, straight off the rows (no extra state). */
 export function countsOf(rows: readonly UploadRow[]): UploadCounts {
   const counts: UploadCounts = { icons: rows.length, processed: 0, partial: 0, failed: 0, stale: 0, accepted: 0 };
   for (const r of rows) {
@@ -270,5 +235,3 @@ export function pruneChecked(rows: readonly UploadRow[]): void {
   const kept = checked.filter((id) => known.has(id));
   if (kept.length !== checked.length) patchUpload({ checked: kept });
 }
-
-export { ALL_UPLOAD_FILTER };

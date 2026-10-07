@@ -8,8 +8,6 @@
 // honestly. Same opt-in pattern as Generate SVG → Requesty: the image bytes
 // leave the browser only inside the one request the user confirms.
 
-import { log } from "../log/logstore";
-import { maskKey } from "../lib/svgsecret";
 import { idbDelete, idbGet, idbPut } from "../batch/store";
 
 const STORE = "secrets";
@@ -26,7 +24,6 @@ let memory: string | null = null;
 export async function saveGeminiKey(key: string): Promise<boolean> {
   memory = key.trim() === "" ? null : key.trim();
   const persisted = await putKey(memory);
-  logKeyChange(memory, persisted);
   return persisted;
 }
 
@@ -37,19 +34,6 @@ async function putKey(key: string | null): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** The log only ever sees the mask and whether the write persisted (RULE 20). */
-function logKeyChange(key: string | null, persisted: boolean): void {
-  if (key === null) {
-    log({ feature: "upload", action: "key-cleared", detail: "the Gemini API key was cleared from this device" });
-    return;
-  }
-  const mask = maskKey(key);
-  log({
-    feature: "upload", action: "key-saved", detail: `stored ${mask}`,
-    data: { keyMask: mask, persisted },
-  });
 }
 
 export async function loadGeminiKey(): Promise<string | null> {
@@ -64,14 +48,12 @@ export async function loadGeminiKey(): Promise<string | null> {
 }
 
 export async function clearGeminiKey(): Promise<void> {
-  const hadKey = memory !== null;
   memory = null;
   try {
     await idbDelete(STORE, KEY);
   } catch {
     // Nothing to do: the key is already out of memory.
   }
-  if (hadKey) log({ feature: "upload", action: "key-cleared", detail: "the Gemini API key was cleared from this device" });
 }
 
 /** True when a key is available for a request right now. */

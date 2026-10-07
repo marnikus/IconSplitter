@@ -11,8 +11,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
+import { AUTH_HEADER } from "../src/lib/upload/gemini";
 import { MANDATORY_TAGS } from "../src/lib/upload/meta";
 import { JOURNAL_KEY } from "../src/upload/journal";
+import { UPLOAD_JOBS_KEY, forgetRestoreNote } from "../src/upload/jobstore";
+import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
@@ -209,6 +212,8 @@ beforeEach(() => {
   localStorage.clear();
   stored.clear();
   resetAppStore();
+  resetLogStore();
+  forgetRestoreNote(); // every test gets a fresh page load
   stubCanvas();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -450,6 +455,95 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("interrupted");
     expect(text("[data-testid=upload-warn-interrupted]")).toContain("never resent automatically");
   });
+
+  itSlow("a seeded in-flight job restores as interrupted and nothing is re-sent (T2)", async () => {
+    localStorage.setItem(UPLOAD_JOBS_KEY, JSON.stringify({ v: 1, states: { [FOG]: "running", [ARCH]: "queued" } }));
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      sent.push(String(url));
+      throw new Error("no request may leave the tab on restore");
+    });
+    await mount(makeRoot());
+    // the LAST run of each icon is shown as interrupted — not as quietly pending
+    expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Interrupted");
+    expect(text(`[data-testid=upload-status-${ARCH}]`)).toContain("Interrupted");
+    expect(text("[data-testid=upload-warn-interrupted]")).toContain("never resent automatically");
+    expect(sent).toEqual([]); // a restart is not a retry: zero network calls
+    // and the store itself now says interrupted, so a second boot cannot re-report it
+    const store = JSON.parse(localStorage.getItem(UPLOAD_JOBS_KEY) ?? "{}") as { states?: Record<string, string> };
+    expect(store.states).toEqual({ [FOG]: "interrupted", [ARCH]: "interrupted" });
+    // the note was logged exactly once; a second mount in the same page load adds nothing (T3)
+    const restored = () => getLogState().entries
+      .filter((e) => e.feature === "upload" && e.action === "restored");
+    expect(restored()).toHaveLength(1);
+    act(() => ui.unmount());
+    await mount(makeRoot());
+    expect(restored()).toHaveLength(1);
+    expect(sent).toEqual([]); // and still nothing was re-sent
+  });
+
+  itSlow("a remembered answer comes back with ZERO model calls; edited artwork demands reconfirmation (CP-15)", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG);
+    await activate(FOG);
+    await click("[data-testid=upload-meta-selected]");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
+    expect(t.calls).toHaveLength(1);
+
+    // a reload: the same artwork must not be billed a second time
+    act(() => ui.unmount());
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => { sent.push(String(url)); throw new Error("the cache must answer this"); });
+    const root2 = makeRoot();
+    await mount(root2);
+    await activate(FOG);
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("generated");
+    expect(sent).toEqual([]);
+
+    // the artwork moves: the remembered answer no longer applies to it
+    const dir = root2.children.get(DIR) as BinDir;
+    // a real edit moves size AND mtime — the scan's own fingerprint (design §4.1)
+    dir.children.set("fog_AI.svg", new BinFile("fog_AI.svg", SAVED_SVG.replace("M2 2h20v20H2z", "M1 1h22v22H1z <!-- edited -->"), 7777));
+    await click("[data-testid=upload-rescan]");
+    // the row cell is rendered for every row, so it survives the rescan's re-sort
+    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("empty"), "the edit to invalidate the memory");
+    await activate(FOG);
+    expect(q(`[data-testid=upload-meta-title-${FOG}]`)).toBeNull(); // nothing remembered to show
+    expect(sent).toEqual([]); // a miss costs a click, never a silent paid call
+  });
+
+  itSlow("verifies the model against the provider's own list and never substitutes it (CP-8)", async () => {
+    const calls: { url: string; key: string | null }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), key: (init.headers as Record<string, string>)[AUTH_HEADER] ?? null });
+      return new Response(JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }] }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    });
+    await mount(makeRoot());
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_2"));
+    await click("[data-testid=upload-key-save]");
+    await type("[data-testid=upload-model]", "gemini-9-imaginary");
+    await click("[data-testid=upload-model-check]");
+    await waitFor(() => text("[data-testid=upload-model-state]").includes("does not list"), "the model check to land");
+    expect(input("[data-testid=upload-model]").value).toBe("gemini-9-imaginary"); // never silently substituted
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain("/models");
+    expect(calls[0].url).not.toContain("key=");
+    expect(calls[0].key).toBe(fakeKey("AIza", "ui_test_key_2")); // the header, never the URL
+    const entry = getLogState().entries.at(-1);
+    expect(entry?.action).toBe("model-checked");
+    expect(entry?.level).toBe("warn");
+    expect(JSON.stringify(entry)).not.toContain("ui_test_key_2"); // T12: the log never carries the key
+  });
 });
 
 describe("export — green means a complete committed package", () => {
@@ -473,6 +567,91 @@ describe("export — green means a complete committed package", () => {
     expect(text("[data-testid=upload-count-processed]")).toContain("1");
     // the row's package cell names the committed folder
     expect(text(`[data-testid=upload-export-path-${FOG}]`)).toContain("architecture/export");
+  });
+
+  itSlow("shows the committed JPEG, and says so only when it is really gone (CP-5)", async () => {
+    const root = makeRoot();
+    await mount(root);
+    await activate(FOG);
+    // nothing committed yet: the honest note, never a stand-in image
+    await waitFor(() => q(`[data-testid=upload-published-${FOG}-missing]`) !== null, "the honest missing note");
+    expect(q(`[data-testid=upload-published-${FOG}]`)).toBeNull();
+
+    await check(FOG);
+    await click("[data-testid=upload-export-selected]");
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
+    await waitFor(() => q(`[data-testid=upload-published-${FOG}]`) !== null, "the committed JPEG");
+    expect((q(`[data-testid=upload-published-${FOG}]`) as HTMLImageElement).src).toContain("blob:");
+
+    // the record still says processed while the file is really gone: say so
+    act(() => ui.unmount());
+    const exp = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
+    exp.children.delete("fog_AI.jpg");
+    await mount(root);
+    await activate(FOG);
+    await waitFor(() => q(`[data-testid=upload-published-${FOG}-missing]`) !== null, "the missing note for the deleted JPEG");
+  });
+
+  itSlow("revokes every object URL it created — 50 open/close cycles, no leak (CP-5)", async () => {
+    const root = makeRoot();
+    const exp = new BinDir("export");
+    exp.children.set("fog_AI.jpg", new BinFile("fog_AI.jpg", minimalJpeg(120, 120), 5000));
+    (root.children.get(DIR) as BinDir).children.set("export", exp);
+    const revoked: string[] = [];
+    URL.revokeObjectURL = (u: string) => { revoked.push(u); };
+    await mount(root);
+    for (let i = 0; i < 50; i++) {
+      await activate(FOG);
+      await waitFor(() => q(`[data-testid=upload-published-${FOG}]`) !== null, "the published JPEG");
+      await activate(ARCH);
+      await waitFor(() => q(`[data-testid=upload-published-${FOG}]`) === null, "the preview to close");
+    }
+    expect(revoked).toHaveLength(50);
+  });
+
+  itSlow("T5 — the paid-work ledger: a click buys one call, and nothing else ever does", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG);
+    await activate(FOG);
+    await click("[data-testid=upload-meta-selected]");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the first paid answer");
+    expect(t.calls).toHaveLength(1); // the one click that spends
+
+    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    expect(t.calls).toHaveLength(1);
+
+    // a full export embeds the accepted answer: no further call
+    await click("[data-testid=upload-export-selected]");
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
+    expect(t.calls).toHaveLength(1);
+
+    // a QUALITY-ONLY change re-encodes, and still spends nothing
+    await click("[data-testid=upload-settings-open]");
+    await type("[data-testid=upload-set-quality]", "0.8");
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=upload-export-selected]"); // FOG is still checked
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the re-export");
+    expect(t.calls).toHaveLength(1);
+
+    // a metadata EDIT is re-embedded, and still spends nothing
+    await activate(FOG);
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart");
+    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    expect(t.calls).toHaveLength(1);
+
+    // a SOURCE change invalidates the answer: reconfirmation is a click, not a silent call
+    const dir = root.children.get(DIR) as BinDir;
+    dir.children.set("fog_AI.svg", new BinFile("fog_AI.svg", SAVED_SVG.replace("M2 2h20v20H2z", "M1 1h22v22H1z <!-- edited -->"), 7777));
+    await click("[data-testid=upload-rescan]");
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Stale"), "the source change to mark the row stale");
+    expect(t.calls).toHaveLength(1); // stale is reported; a reconfirmation stays a click
   });
 
   itSlow("marks a row stale when the settings move, and re-export clears it", async () => {

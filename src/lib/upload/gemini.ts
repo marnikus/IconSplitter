@@ -11,6 +11,11 @@
 
 import { isRecord } from "../isrecord";
 import { parseJson, readRetryAfterMs } from "../svgrequest";
+import {
+  classifyGeminiHttp, classifyGeminiTransport, type GeminiFailure,
+} from "./geminifail";
+
+export type { GeminiFailure, GeminiFailKind } from "./geminifail";
 
 export const PROVIDER_NAME = "Gemini";
 export const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -145,6 +150,24 @@ export function readGeminiText(raw: unknown): string | null {
   return text.trim() === "" ? null : text;
 }
 
+/**
+ * candidates[0].finishReason exactly as the provider reports it (CP-8), or null
+ * when the frame says nothing. "MAX_TOKENS" is how a truncated answer announces
+ * itself — the one signal that must never be guessed from the parsed text.
+ */
+export function readGeminiFinish(raw: unknown): string | null {
+  if (!isRecord(raw) || !Array.isArray(raw.candidates) || raw.candidates.length === 0) return null;
+  const first: unknown = raw.candidates[0];
+  if (!isRecord(first)) return null;
+  const reason = first.finishReason;
+  return typeof reason === "string" && reason !== "" && reason !== "FINISH_REASON_UNSPECIFIED" ? reason : null;
+}
+
+/** True when the provider stopped the answer for a LENGTH reason (truncation). */
+export function isTruncatedFinish(reason: string | null): boolean {
+  return reason === "MAX_TOKENS" || reason === "LENGTH";
+}
+
 /** The refusal reason, or null: promptFeedback.blockReason / finishReason SAFETY. */
 export function readGeminiBlock(raw: unknown): string | null {
   if (!isRecord(raw)) return null;
@@ -157,59 +180,6 @@ export function readGeminiBlock(raw: unknown): string | null {
     if (isRecord(first) && first.finishReason === "SAFETY") return "SAFETY";
   }
   return null;
-}
-
-// --- failure classification ---------------------------------------------------
-
-export type GeminiFailKind =
-  | "auth" | "rate_limit" | "model" | "payload" | "provider" | "provider_timeout"
-  | "network" | "timeout" | "aborted" | "blocked" | "malformed";
-
-export interface GeminiFailure {
-  kind: GeminiFailKind;
-  message: string;
-  retryAfterMs: number | null;
-  /** True only for provider-CONFIRMED failures safe to repeat automatically. */
-  retryable: boolean;
-  status: number | null;
-}
-
-/** HTTP failure → classified failure. Body text is used, never trusted raw. */
-export function classifyGeminiHttp(status: number, body: unknown, retryAfterMs: number | null): GeminiFailure {
-  const detail = errorDetail(body);
-  const base = { status, retryAfterMs, message: `${status} ${detail}`.trim() };
-  if (status === 401 || status === 403) return { ...base, kind: "auth", retryable: false };
-  if (status === 429) return { ...base, kind: "rate_limit", retryable: true };
-  if (status === 404) return { ...base, kind: "model", retryable: false };
-  if (status === 400) return { ...base, kind: "payload", retryable: false };
-  // A confirmed provider timeout: the upstream may still be working, so the
-  // request is never repeated automatically (design §5, I-20).
-  if (status === 408 || status === 504) return { ...base, kind: "provider_timeout", retryable: false };
-  if (status >= 500) return { ...base, kind: "provider", retryable: true };
-  return { ...base, kind: "malformed", retryable: false };
-}
-
-function errorDetail(body: unknown): string {
-  if (!isRecord(body)) return "";
-  const err = isRecord(body.error) ? body.error : body;
-  const message = err.message ?? err.code ?? err.type;
-  return typeof message === "string" ? message : "";
-}
-
-/**
- * Transport failure. A disconnect or a client timeout is OUTCOME-UNKNOWN for
- * a paid call — never auto-retried (design §5: no duplicate paid submission);
- * the runner offers an explicit Retry instead.
- */
-export function classifyGeminiTransport(error: unknown, state: { cancelled: boolean; timedOut: boolean }): GeminiFailure {
-  if (state.cancelled) {
-    return { kind: "aborted", message: "cancelled", retryAfterMs: null, retryable: false, status: null };
-  }
-  if (state.timedOut) {
-    return { kind: "timeout", message: "the request window closed — the provider may still be working", retryAfterMs: null, retryable: false, status: null };
-  }
-  const message = error instanceof Error ? error.message : "network error";
-  return { kind: "network", message, retryAfterMs: null, retryable: false, status: null };
 }
 
 // --- the single attempt -------------------------------------------------------
@@ -225,33 +195,45 @@ export interface GeminiSendArgs {
 }
 
 export type GeminiSendOut =
-  | { ok: true; text: string; usage: GeminiUsage; status: number }
+  | { ok: true; text: string; usage: GeminiUsage; status: number; finish: string | null }
   | { ok: false; failure: GeminiFailure };
 
 /** One attempt: POST with the auth header, bounded by the configured timeout. */
 export async function sendGemini(args: GeminiSendArgs): Promise<GeminiSendOut> {
   const { config, apiKey, request } = args;
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, config.timeoutMs);
-  if (args.signal !== undefined) linkAbort(args.signal, controller);
+  const bound = boundedRequest(config.timeoutMs, args.signal);
   try {
     const response = await (args.fetch ?? fetch)(generateContentUrl(config.baseUrl, config.model), {
       method: "POST",
       headers: { "content-type": "application/json", [AUTH_HEADER]: apiKey.trim() },
       body: JSON.stringify(request),
-      signal: controller.signal,
+      signal: bound.signal,
     });
     return await readGeminiResponse(response);
   } catch (error) {
     const cancelled = args.signal?.aborted === true;
-    return { ok: false, failure: classifyGeminiTransport(error, { cancelled, timedOut }) };
+    return { ok: false, failure: classifyGeminiTransport(error, { cancelled, timedOut: bound.timedOut() }) };
   } finally {
-    clearTimeout(timer);
+    bound.done();
   }
+}
+
+/**
+ * One bounded request window: the configured timeout plus an optional outer
+ * cancel. Shared by every request this client makes, so "the request window
+ * closed" means exactly one thing (RULE 10).
+ */
+export function boundedRequest(timeoutMs: number, outer?: AbortSignal): {
+  signal: AbortSignal; timedOut: () => boolean; done: () => void;
+} {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  if (outer !== undefined) linkAbort(outer, controller);
+  return { signal: controller.signal, timedOut: () => timedOut, done: () => clearTimeout(timer) };
 }
 
 function linkAbort(signal: AbortSignal, controller: AbortController): void {
@@ -276,5 +258,5 @@ async function readGeminiResponse(response: Response): Promise<GeminiSendOut> {
   if (answer === null) {
     return { ok: false, failure: { kind: "malformed", message: "no answer text in response", retryAfterMs: null, retryable: false, status: response.status } };
   }
-  return { ok: true, text: answer, usage: readGeminiUsage(body), status: response.status };
+  return { ok: true, text: answer, usage: readGeminiUsage(body), status: response.status, finish: readGeminiFinish(body) };
 }

@@ -4,17 +4,19 @@
 // the single-attempt send (timeout/cancel included). Keys never appear in
 // URLs; disconnects/timeouts are never auto-retryable (design §5).
 import { describe, expect, it } from "vitest";
+import { classifyGeminiHttp, classifyGeminiTransport } from "../src/lib/upload/geminifail";
+import { listGeminiModels, listModelsUrl, readGeminiModelIds } from "../src/lib/upload/geminimodels";
 import {
   AUTH_HEADER,
   DEFAULT_BASE_URL,
   DEFAULT_GEMINI_CONFIG,
   DEFAULT_MODEL,
   buildGeminiRequest,
-  classifyGeminiHttp,
-  classifyGeminiTransport,
   generateContentUrl,
   parseGeminiConfig,
+  isTruncatedFinish,
   readGeminiBlock,
+  readGeminiFinish,
   readGeminiText,
   readGeminiUsage,
   sendGemini,
@@ -92,6 +94,64 @@ describe("response readers", () => {
     expect(readGeminiUsage({})).toEqual({ input: null, output: null, total: null });
   });
 
+  it("reads the provider's own model list and asks for it correctly (CP-8)", async () => {
+    expect(listModelsUrl("https://x/v1beta/")).toBe("https://x/v1beta/models");
+    expect(readGeminiModelIds({ models: [{ name: "models/a" }, { name: "b" }, {}, 7, { name: 9 }] })).toEqual(["a", "b"]);
+    expect(readGeminiModelIds({ models: "junk" })).toEqual([]);
+    expect(readGeminiModelIds(null)).toEqual([]);
+
+    const seen: { url: string; key: string | null }[] = [];
+    const ok = await listGeminiModels({
+      config: DEFAULT_GEMINI_CONFIG, apiKey: "k_test",
+      fetch: async (url, init) => {
+        seen.push({ url, key: (init.headers as Record<string, string>)[AUTH_HEADER] ?? null });
+        return new Response(JSON.stringify({ models: [{ name: "models/gemini-3.1-flash-lite" }] }), { status: 200 });
+      },
+    });
+    expect(ok).toEqual({ ok: true, ids: ["gemini-3.1-flash-lite"], status: 200 });
+    expect(seen[0].url).toBe("https://generativelanguage.googleapis.com/v1beta/models");
+    expect(seen[0].url).not.toContain("key=");
+    expect(seen[0].key).toBe("k_test");
+
+    // a thrown transport error is a classified failure, never a guess
+    const offline = await listGeminiModels({
+      config: DEFAULT_GEMINI_CONFIG, apiKey: "k_test",
+      fetch: async () => { throw new Error("offline"); },
+    });
+    expect(offline.ok).toBe(false);
+    if (!offline.ok) expect(offline.failure).toMatchObject({ kind: "network", retryable: false, status: null });
+
+    // and a cancel is named as a cancel
+    const ac = new AbortController();
+    ac.abort();
+    const stopped = await listGeminiModels({
+      config: DEFAULT_GEMINI_CONFIG, apiKey: "k_test", signal: ac.signal,
+      fetch: async () => { throw new DOMException("aborted", "AbortError"); },
+    });
+    expect(stopped.ok).toBe(false);
+    if (!stopped.ok) expect(stopped.failure.kind).toBe("aborted");
+
+    const bad = await listGeminiModels({
+      config: DEFAULT_GEMINI_CONFIG, apiKey: "k_test",
+      fetch: async () => new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 }),
+    });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.failure).toMatchObject({ kind: "auth", retryable: false });
+  });
+
+  it("surfaces the provider's finish reason, and stays silent when there is none (CP-8)", () => {
+    expect(readGeminiFinish({ candidates: [{ finishReason: "MAX_TOKENS" }] })).toBe("MAX_TOKENS");
+    expect(readGeminiFinish({ candidates: [{ finishReason: "FINISH_REASON_UNSPECIFIED" }] })).toBeNull();
+    expect(readGeminiFinish({ candidates: [{}] })).toBeNull();
+    expect(readGeminiFinish({ candidates: [] })).toBeNull();
+    expect(readGeminiFinish({})).toBeNull();
+    expect(readGeminiFinish(null)).toBeNull();
+    expect(isTruncatedFinish("MAX_TOKENS")).toBe(true);
+    expect(isTruncatedFinish("LENGTH")).toBe(true);
+    expect(isTruncatedFinish("STOP")).toBe(false);
+    expect(isTruncatedFinish(null)).toBe(false);
+  });
+
   it("reads refusals from promptFeedback.blockReason and finishReason", () => {
     expect(readGeminiBlock({ promptFeedback: { blockReason: "SAFETY" } })).toBe("SAFETY");
     expect(readGeminiBlock({ candidates: [{ finishReason: "SAFETY" }] })).toBe("SAFETY");
@@ -106,6 +166,8 @@ describe("failure classification", () => {
     expect(classifyGeminiHttp(403, {}, null).retryable).toBe(false);
     expect(classifyGeminiHttp(429, { error: { message: "quota" } }, 1000)).toMatchObject({ kind: "rate_limit", retryable: true, retryAfterMs: 1000 });
     expect(classifyGeminiHttp(404, {}, null).kind).toBe("model");
+    expect(classifyGeminiHttp(500, "not-an-object", null).message).toBe("500"); // junk body → status only
+    expect(classifyGeminiTransport(new Error("late"), { cancelled: false, timedOut: true }).kind).toBe("timeout");
     expect(classifyGeminiHttp(400, {}, null).kind).toBe("payload");
     expect(classifyGeminiHttp(500, {}, null)).toMatchObject({ kind: "provider", retryable: true });
     expect(classifyGeminiHttp(504, {}, null)).toMatchObject({ kind: "provider_timeout", retryable: false });

@@ -17,6 +17,16 @@ export function exportDirOf(dirPath: string): string {
   return dirPath === "" ? "export" : `${dirPath}/export`;
 }
 
+/** One pair's file stem: the SVG's name without its extension. */
+export function stemOf(svgName: string): string {
+  return svgName.replace(/\.svg$/i, "");
+}
+
+/** Where one pair's committed JPEG lives, whether or not it exists (CP-5). */
+export function publishedJpegPath(dirPath: string, svgName: string): string {
+  return `${exportDirOf(dirPath)}/${stemOf(svgName)}.jpg`;
+}
+
 export type ExportStatus = "processed" | "partial" | "failed" | "cancelled" | "stale" | "interrupted";
 export type ExportStage =
   | "discovered" | "preflight" | "prepare" | "metadata" | "render"
