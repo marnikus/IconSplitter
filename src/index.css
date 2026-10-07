@@ -24,7 +24,7 @@
   }
 }
 
-/* ══ Selection V2 — ported from `design temp/selection tab V2/v2 selection tab.html`.
+/* ══ Selection V2 — ported from `design/selection tab V2/v2 selection tab.html`.
    Tokens live on :root so the Workbench wrapper and the panel share them; every
    component class below is used by src/selectionv2/*. The list panel is a grid
    (head / columns / scrolling rows / footer) and rows take their height from
@@ -560,7 +560,7 @@
   .v2-filters { grid-template-columns: auto 130px 130px 120px 128px 138px 110px 1fr auto; }
 }
 
-/* ══ Generate SVG — ported from `design temp/SVG tab generation/SVG generation Tab.html`.
+/* ══ Generate SVG — ported from `design/SVG tab generation/SVG generation Tab.html`.
    Same tokens, buttons, badges and row grammar as Selection V2 above (RULE 10):
    the only additions are the dual preview cell, the usage cell, the batch
    strip, the dialogs and the toast. Rows take their height from --svg-thumb,
