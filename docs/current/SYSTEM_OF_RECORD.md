@@ -24,7 +24,7 @@ A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
    approve/decline decision per pair in the pair's own `<stem>.svg.json` (I-41).
 4. **Selection V2** (Chrome/Edge only) — the same discovery, decisions and
    decision file as mode 3, presented as the template-driven
-   `design temp/selection tab V2/v2 selection tab.html` design: a full-width
+   `design/selection tab V2/v2 selection tab.html` design: a full-width
    **list review** with paired thumbnails, a thumbnail zoom slider, real
    multi-selection and bulk approve, plus a switchable **comparison** layout.
 5. **Generate SVG** (Chrome/Edge only) — recursively scans the same root and
