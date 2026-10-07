@@ -656,6 +656,16 @@ Batch:
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
 | `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
+| localStorage `iconSplitter.upload.defaults.v1` | the export defaults (padding %, stroke pt, JPEG MP + quality, artboard, SVGO, EPS) | clamped + shape-checked on read (RULE 13) |
+| localStorage `iconSplitter.upload.overrides.v1` | `pairId → override` — only the fields the user set | sanitised on read; junk dropped, never trusted |
+| localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt | empty/missing → the documented default |
+| localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider settings (endpoint, model, timeout, concurrency) | clamped on read; **no key** |
+| localStorage `iconSplitter.upload.meta.v1` | accepted metadata per **source identity** `{ [sha256|size:mtime]: { meta, provenance } }` | shape-checked on read (a pre-R10 bare `meta` still loads, with `provenance: null`) |
+| IndexedDB `iconSplitter/secrets["gemini-api-key"]` | the Gemini API key | never in localStorage, a preset, a log line or an export (RULE 20); a refused write falls back to a session-only key the UI names as such |
+| IndexedDB `iconSplitter/handles["__upload__"]` | the export root handle | falls back to `__svg__`, then `__selection__`; permission re-requested on restore |
+| `<pair>/export/attempts.json` | the durable attempt journal: state, stage outcomes and the accepted-metadata draft (identity, stage, detail, draft) — no key, no prompt, no answer text beyond the accepted metadata | written before the next stage starts (R10); `running` → `interrupted` exactly once, never auto-resumed |
+| `<pair>/export/current.json` | **the only commit pointer** `{ schema, v, generation, record }` | written last and atomically; a missing/corrupt pointer is reported, never guessed at |
+| `<pair>/export/generations/<gen>/` | `<base>.svg`, `<base>.jpg`, optional `<base>.eps` + `record.json` (schema v2) | written whole, then published; the newest two survive a commit |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -687,12 +697,13 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
+| SVG to upload | `src/lib/up*.ts` (scene bounds, fit/artboard, stroke units, SVGO + render-compare, raster/decode/hash, JPEG segment surgery XMP+IPTC, EPS, metadata policy v2, the export record + pointer, the attempt journal, the readback gate), `src/upload/*` (discovery + export-state classification, the stage machine, plan/re-export, the package commit, browser adapters, the metadata stores, the model + undoable settings, the actions, `useUpload`, the panel) |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 75 files / 704 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 116 files / 1213 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
 and `data-testid` handles):
@@ -1528,3 +1539,70 @@ read happens without the user's own gesture (a boot-time scan is silently
 refused), and no new control appears — the bar is still one green button, one
 `Rescan` and one read-only row. Design:
 `archive/2026-10-05-path-capture-recovery/design.md`.
+
+## 20. SVG to upload — the export package (2026-10-07)
+
+The tab after Generate SVG (`svgUpload`, label "SVG to upload"). It takes the
+**approved** SVG of each icon and writes an upload-ready package **into the
+icon's own folder** (`<pair>/export/`): padded/fitted artboard, chosen
+background, declared stroke, SVGO-optimised SVG, a ~15.1 MP JPEG, an optional
+EPS, and one record per generation with the exact size and SHA-256 of every
+output it wrote. Nothing is uploaded anywhere and no API key can reach a log, a
+URL or an export. Contract and module map:
+`archive/2026-10-07-svg-to-upload/design.md`; the three-branch merge that
+delivered it: `archive/2026-10-07-svg-to-upload-merge/design.md`.
+
+* **Discovery is the Generate SVG walk**, called with `export` as an ignored
+  directory, so this feature's own outputs can never re-enter as sources. A row
+  needs an approved **and** generated version; `chooseVersion` takes the pair's
+  `preferred` when it is approved, else the highest approved (I-57). A pair with
+  no approved SVG is reported in `noApprovedSvg`, never silently dropped.
+* **Identity is content, not place.** Every row carries `contentSha` — the
+  SHA-256 of the chosen SVG's bytes (R02) — and the metadata cache keys on it,
+  falling back to `size:mtime` only when the bytes could not be read (R03). An
+  in-place edit with the same size and mtime is a different icon.
+* **Metadata** is the user's (typed, or accepted after review) or Gemini's,
+  validated against the one policy `upload-meta-v2`: a two-segment title (5–7,
+  then 3–5 words), a 7–15 word description, exactly 40 tags including the seven
+  mandatory terms (I-58). An edit that fails the policy is stored as a draft and
+  never exported. Every accepted answer keeps its **provenance** (origin,
+  prompt, model, endpoint host, request id, tokens, estimated cost, time,
+  policy) — a recovered AI answer stays an AI answer.
+* **The job** runs one stage chain per icon: preflight → prepare → metadata →
+  render → embed → eps → validate → commit, with a per-icon plan that rebuilds
+  only what the fingerprint says is stale (`upfinger`: source, visual, raster
+  MP, encode quality, metadata, flags — I-59). A cancel is checked between
+  stages. Failures are never resubmitted automatically.
+* **The commit is atomic and last:** one generation directory is written whole
+  (rebuilt outputs plus byte copies of every kept output), `record.json` inside
+  it states what it wrote, and only then does `current.json` move — one small
+  file, one atomic close (I-60). A failure anywhere leaves the previous
+  generation, its pointer and the row's state exactly as they were. The newest
+  two generations are kept; pruning is best-effort and never fails a commit. A
+  pre-v2 folder (`export.json` written by another build) is classified `stale`
+  and can only be re-exported (R24/I-61).
+* **A required output that cannot be written publishes nothing.** A missing
+  converter for EPS is the only `partial` outcome; a failed SVG or JPEG stage
+  returns before `commit` (I-62). Validate re-reads the bytes it is about to
+  publish (SVG metadata, JPEG XMP + IPTC) and compares them with the accepted
+  metadata — "present" is never assumed.
+* **The journal survives the tab.** `attempts.json` is written before each
+  stage and holds the accepted-metadata draft, so a crash or a closed tab leaves
+  `interrupted` — discovered exactly once on the next scan (the write is the
+  proof) — and a re-export reuses the draft instead of paying for the same
+  answer twice. A run that crashed after its own commit is settled as
+  `processed`, because the pointer, not the journal, is the truth of "did this
+  publish?" (R10). Nothing is resumed, queued or resent by itself.
+* **Settings** are one global set (padding 0–40 %, stroke 0.2–8 pt, JPEG
+  1–30 MP, quality 0.5–0.98, artboard square|fit, SVGO, EPS) with per-icon
+  overrides; "apply to selected" is ONE undoable history entry, and a global
+  edit keeps the icons the user deliberately customised.
+* **Units are explicit:** stroke pt → artboard units via 1 pt = 96/72 px and
+  the raster scale; padding is a percentage of the visible bounds. Cost is
+  always "Estimated" from the versioned rate card.
+
+Not built yet (report §5/§7, later phases): the donor workbench's filters,
+sort, search and dry-run audit line, published-artifact previews that read the
+committed JPEG back, an AbortController around an in-flight provider request,
+IPTC/XMP readback in the UI, and the real-browser probe (canvas + FSA) — the
+tests inject both.
