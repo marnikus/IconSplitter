@@ -47,15 +47,16 @@ lineages diverged corrected (F12, F13 below).
 | O7 (P2) | `SPEC.md` next to the HTML, folder without spaces | **build, adjusted** | rename `design temp/` → `design/` + `design/README.md` handoff convention with the SPEC contract. The one live doc reference (SOR §1 mode 4) and the two live code comments (`src/index.css`) are updated in the same commit; archived docs keep their historical paths (RULE 17). **No retroactive SPEC for the already-built upload tab** — its current truth is SOR + UI_SELECTORS §R; a second spec would be a drift source (RULE 10 spirit) |
 | O8 (P2) | shallow-clone-safe gate | **build** | `quality.mjs` gains `--base <ref>` (direct tree diff, no merge-base needed), `--files <list>` (git-free), and a printed `git fetch --depth=100 origin main` hint when the repo is shallow and merge-base fails |
 | O9 (P2) | cross-platform verify runner | **build, merged with O5** | `tools/verify.mjs` (node, no bash) replaces `pre_push_check.sh`; the pre-push hook execs node; `--plan/--plan --json` prints the lane plan without running it (that is the test seam) |
-| O10 (P2) | devcontainer + CI | **build** | `.devcontainer/devcontainer.json` (node 22, `npm ci` postCreate) + `.github/workflows/verify.yml` (`fetch-depth: 0` so merge-base works, `node-version-file: .nvmrc`, `cache: npm`, `npm run verify:fast`). If the push token rejects `.github/workflows/`, the workflow is staged ready-to-paste inside this folder instead (owner step) |
+| O10 (P2) | devcontainer + CI | **build** | `.devcontainer/devcontainer.json` (node 22, `npm ci` postCreate) + the CI workflow (`fetch-depth: 0` so merge-base works, `node-version-file: .nvmrc`, `cache: npm`, `npm run verify:fast`). The active path `.github/workflows/verify.yml` **was rejected by this session's GitHub App token** (`workflows` permission missing — the same rejection the plan's source branch hit), so the workflow is staged ready-to-paste at `verify.yml` in this folder; installing it is an owner step |
 | O11 (P2) | doc map hygiene | **build** | `docs/README.md` archive rows collapse to one line each; the missing rows added; `AGENTS.md` listed under "Outside docs/" |
 
 ## 3. Change inventory
 
 **Added**: `AGENTS.md` · `.nvmrc` · `.npmrc` · `tools/verify.mjs` ·
-`.devcontainer/devcontainer.json` · `.github/workflows/verify.yml` ·
-`design/README.md` (handoff convention) · `tests/verify_runner.test.ts` ·
-`tests/quality_base.test.ts`.
+`.devcontainer/devcontainer.json` ·
+`docs/archive/2026-10-07-env-setup-performance/verify.yml` (the CI workflow,
+staged — see O10) · `design/README.md` (handoff convention) ·
+`tests/verify_runner.test.ts` · `tests/quality_base.test.ts`.
 
 **Edited**: `package.json` (engines, packageManager, scripts: `setup`,
 `test:fast`, `verify:fast`, `verify`→node) · `tools/quality.mjs` (`--base`,

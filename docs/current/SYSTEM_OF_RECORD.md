@@ -4,13 +4,20 @@ Current behaviour, invariants and flows. If code and this doc disagree, one of
 them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
 Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.md`.
 
-<!-- ideal-size: 357 lines reason=RULE 17 forbids a second current doc, so all four
-     modes' authoritative behaviour lives in this one file; per-mode design detail
-     stays in docs/archive/ instead of growing here. -->
+<!-- ideal-size: 1800 lines reason=RULE 17 keeps all six modes' authoritative behaviour in one
+     current file; the domain split (index here + docs/current/sor/*) is an owner-approved
+     follow-up planned in docs/archive/2026-10-07-env-setup-performance/design.md (O4). -->
+
+**How to read this file (context budget — `AGENTS.md` §2):** do not read it end
+to end. Jump to the section your task touches: §2 behaviour per mode · §3 state
+model · §5 invariants (`I-<n>`, the unit every rule and commit quotes) · §6
+storage map · §7 modules · §8 test inventory · §11 UI inventory. §12–§20 are
+dated deep-dives of behaviour that is still current — read one only when your
+task names it. Appending a mode/flow? Update §2 + §5 + the matching inventory.
 
 ## 1. What this is
 
-A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -848,7 +855,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 114 files / 1212 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 126 files / 1334 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2, Generate SVG and SVG to upload panels and drives them
 with hotkeys and `data-testid` handles):
@@ -1049,6 +1056,12 @@ with hotkeys and `data-testid` handles):
   data URL travelling on the same event never reaches the entry
 * `secret_hygiene.test.ts` (extended) — a key written through the real log store
   appears neither in the entry, the stored payload, nor the copied text
+* `verify_runner.test.ts` — the lane plan of `tools/verify.mjs`, spawned for
+  real: fast mode runs the suite exactly once (the coverage lane), `--full`
+  adds the standalone lane, lane order, quality-lane args, `--base` passthrough
+* `quality_base.test.ts` — `tools/quality.mjs --base/--files`, spawned for
+  real: explicit ref/list, loud failure on an unknown ref or a missing file,
+  honest empty set for non-src, the shallow-clone fetch hint
 
 Must exist before the matching change ships:
 
@@ -1109,6 +1122,16 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   window replacing every total timeout, four distinct outcomes with a stall
   reported as *outcome unknown*, kept request ids, the in-flight journal and
   its explicit restart recovery, ticking elapsed + Cancel).
+* 2026-10-07 — SVG to upload built TDD-first from the prepared template:
+  `docs/archive/2026-10-07-svg-to-upload/design.md` (discovery through the
+  pair sidecars, settings and undo, the Gemini metadata prompt and transport,
+  SVGO/JPEG/EPS pipelines, the per-icon `export.json` and its atomic commit,
+  no automatic uploading).
+* 2026-10-07 — environment-setup performance (agent sandboxes):
+  `docs/archive/2026-10-07-env-setup-performance/design.md` (shallow-clone-safe
+  quality gate `--base/--files`, pinned toolchain, root `AGENTS.md`, the node
+  verify runner replacing `pre_push_check.sh`, devcontainer + CI, doc-map
+  hygiene; the O4 doc split is deferred there with reasons).
 
 ## 11. Current UI — control inventory
 

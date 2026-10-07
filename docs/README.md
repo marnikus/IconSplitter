@@ -1,43 +1,49 @@
 # Docs — Icon Splitter
 
-Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated archive.
+Doc map. Rule 17 (AGENT_RULES) governs this layout: one current doc set, dated
+archive. Archive rows are **one-line pointers** (hygiene item O11 of
+`archive/2026-10-07-env-setup-performance/design.md`) — the detail lives in the
+doc itself, never in this map.
 
 ## Current (true today)
 
 | File | What it is |
 |---|---|
 | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) | Code-quality rules every change MUST follow (24 rules, stable numbers) |
-| [`current/SYSTEM_OF_RECORD.md`](current/SYSTEM_OF_RECORD.md) | Current behaviour, state model, invariants, flows, UI inventory |
-| [`current/CODE_VERIFICATION.md`](current/CODE_VERIFICATION.md) | What to run before every push (`npm run verify`), ratchet, overrides |
+| [`current/SYSTEM_OF_RECORD.md`](current/SYSTEM_OF_RECORD.md) | Current behaviour, state model, invariants (`I-<n>`), flows, UI inventory — read by section, index at its top |
+| [`current/CODE_VERIFICATION.md`](current/CODE_VERIFICATION.md) | What to run before every commit (`verify:fast`) and push (`verify`), ratchet, overrides, optional browser probes |
 | [`current/UI_SELECTORS.md`](current/UI_SELECTORS.md) | Living `data-testid` / semantic handle reference for tests |
-| [`current/QUALITY_RECHECK.md`](current/QUALITY_RECHECK.md) | Dated full quality re-check records (numbers + baseline decisions) |
+| [`current/QUALITY_RECHECK.md`](current/QUALITY_RECHECK.md) | Append-only dated re-check ledger — append an entry, never read it into context |
 
 ## Historical
 
 | Folder | What it records |
 |---|---|
 | `archive/2026-10-01-batch-processing/design.md` | Batch folders: module map, browser constraints, negative tests |
+| `archive/2026-10-01-history-session/design.md` | Shared app-state store above the tabs, the single global undo timeline (RULE 12), session restore snapshot |
 | `archive/2026-10-01-selection-review/design.md` | Selection V1: pairing model, atomic decision protocol, hotkeys, a11y |
 | `archive/2026-10-01-selection-v2/design.md` | Selection V2: template-driven list review, zoom, selection vs decision state, bulk scope |
 | `archive/2026-10-01-generate-svg/design.md` | Generate SVG: approved-only discovery, contact-sheet batching, validation, pair-file versioning |
-| `archive/2026-10-05-per-pair-metadata/design.md` | one JSON per pair: the pair's approval + its SVG history in the folder that holds the images; the read-only legacy fallback (I-41…I-43) |
-| `archive/2026-10-01-svg-batches-limits-preview/design.md` | Generate SVG fixes: one request per batch with a paginated confirmation, reasoning-tier caps + timeout floors, per-request outcomes, one zoom value, layout-only preview stylesheet |
-| `archive/2026-10-01-svg-preview-cost/design.md` | SVG preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |
-| `archive/2026-10-01-svg-preview-rendering/design.md` | SVG preview: root cause of "copies but paints nothing", the sanitize/fit/inline pipeline, id scoping, rejected alternatives |
-| `archive/2026-10-05-recursive-scan-determinism/design.md` | Recursive scan determinism: the filesystem's unspecified enumeration order reaching pairing (raster vs `.svg` for one pair id), approved pairs silently dropped into `missing`, a failed read laundered into `size 0`, a scan that wrote into the folder it scanned, overlapping scans letting the older snapshot win, and the fix — canonical order, order-independent pairing, per-file problem statuses, read-only scans, one ticket, one commit |
-| `archive/2026-10-05-folder-path-copy/design.md` | Copy a folder, not a file: the batch folder for anything inside a run's output tree, the picked root's real full path pasted once and remembered (`iconSplitter.rootpaths.v1` — the browser only knows the folder's name), backslashes for Explorer, and the Generate SVG tab's own "Change folder…" button |
-| `archive/2026-10-05-global-log/design.md` | The global activity log (ported from `arena/01a10c14-iconsplitter`): one docked panel for every tab, what may never enter an entry, and the layout fix the port needed — the source dock was `fixed` over the bottom 236 px of the viewport and took the clicks meant for the row checkboxes painted under it (browser probe before/after, shell column, `--app-dock-h`) |
-| `archive/2026-10-05-folder-bar/design.md` | One folder control, one path row (I-44…I-46): the green `Open folder` button with real hover/active/focus states, the full-width read-only path row below the controls, and the removals the report asked for — the `Use copied path` field and its status, and the 30 s Watcher with its state and effect — the same in Selection (V1/V2) and Generate SVG, with the pick-time capture (I-35) left as the memory's only writer |
-| `archive/2026-10-05-root-path-at-pick/design.md` | The picked folder's full path: why no web page can read it (the handle carries `kind` + `name`; `File.path` is empty; `webkitRelativePath` is relative to the picked folder), what fills the gap — the clipboard read at pick time, matched against the folder that was really picked and never invented — the visible path on both pills with its three states, and the `rescan` root-name race the change exposed |
-| `archive/2026-10-05-svg-source-list-audit/design.md` | The Generate SVG list built from files, not decisions: a row is an existing canonical `_AI` raster output an approved decision names (by pair id or by path), one row per normalized AI path — the two reported symptoms (one AI source listed twice, a reference image `icon-airplane-landing.png` offered as a source) and the rules that remove them, the exclusions reported with their reasons, and the full audit line (files · AI sources · references · missing · duplicates → rows) |
-| `archive/2026-10-05-split-scope-and-path-guard/design.md` | The reviewable set is the batch's output, and a "full path" is a folder path: the Selection tabs / Generate SVG listing the unsplit sheets beside the split pieces (the scope now comes from the tree's `_*split*output` directories, with everything hidden counted and reported), and SVG markup stored as the root's path (`isPathLike` judged the already-normalised text; `isFolderPathText` now judges the raw text at the clipboard, the button, the field and on read) |
-| `archive/2026-10-05-picked-output-root/design.md` | Picking the batch's own output: why `…\_split_output\` filtered itself out (the scope read only relative-path segments, so the folder that IS the split output hid every pair and reported them as "in the main folder"), why a copy handed over a `split_02` folder instead of the run folder (the batch chain was searched below the root only), and the two rules that replace both — `ScopeRule { split, hideOutside }` (I-47) and the batch folder found from either side of the root (I-48) |
-| `archive/2026-10-05-root-independent-pairs/design.md` | Root-independent pairs: why the run folder, `_split_output` and the month folder returned 0 items in Generate SVG (a pair file read with the paths and id of the root that wrote it, so every approved source looked `missing`), why the month root fell back to "whole folder" (only `_split_output` counted as scope evidence), and why the path row lost the month segment (a partial clipboard path completed by appending the folder's name) — and the three rules that replace them: a file is read from where it sits (I-49), a run stamp anywhere in the set is evidence (I-50), and a path is derived only from a folder the app already named (I-51) |
-| `archive/2026-10-06-location-folder-of-file/design.md` | "Location" names the folder of the FILE (I-56): why the deep path `…\2026-10-05_18-45-20\icon-bunny-face_AI_7\split_04\icon-bunny-face_AI_7_04_v2.svg` copied the run folder one level up (the I-48 batch-folder rule, now reversed), why the same fix had to repair `openLocation`'s doubled chain (it joined the row's folder onto an already root-relative `svgPath`, which the truncation hid), and why `targetPathOf(row)` is the single file a row's target line and its Location action both speak about |
-| `archive/2026-10-05-path-capture-recovery/design.md` | Capturing the picked folder's path when the first try fails: why `full path not captured` was a dead end (a Ctrl+C'd folder object, a blocked read, a copy made after the pick — all indistinguishable), the three ways the app now talks the user out of it — `Rescan` retries one exact-match read, `Ctrl+V` anywhere outside a field adopts the path even where the Clipboard API is blocked, and the row/toast name the reason and the action (I-52) — and the honesty rules that stay: exact match only, gesture only, no invented path, no new control |
-| `archive/2026-10-05-queue-variants-zoom/design.md` | The generation queue, the version chooser and 800 px zoom (I-53/54/55): why a confirmed batch must be APPENDED while a run is in flight (`refs.queue` as the synchronous authority, `refs.abort` as "busy", one drain loop so no batch is ever lost or started twice, a session-only queue so nothing waits after a restart, Cancel dropping it and saying so), why a preferred version is an additive `preferred` key beside `versions[]` (chosen by the user, read back from the folder, never deleting history, and part of the scan key so the panel cannot quietly revert it), and why the zoom is one owner (`lib/zoom` + `ui/PairedThumbs`, 48–800 px, `max-content` columns so an 800 px pair scrolls instead of being clipped) shared by Selection V2 and Generate SVG |
-| `archive/2026-10-05-svg-long-requests/design.md` | Long SVG generations: the user's batch size at every tier (the 2026-10-01 caps reversed), SSE streaming + keepalives, the stall window instead of any total timeout, `stalled` as an unknown outcome, kept request ids, the in-flight journal + restart recovery, ticking elapsed + Cancel |
-| `archive/2026-10-06-svg-to-upload/design.md` | The "SVG to upload" tab: approved-SVG discovery, export settings + undo, Gemini metadata generation, SVGO/EPS/JPEG pipelines, the export record + stage planner, the atomic commit, and the UI/state layer — with the research record of what was reused vs built new |
+| `archive/2026-10-01-svg-batches-limits-preview/design.md` | Generate SVG fixes: one request per batch + paginated confirmation, tier caps/timeouts (reversed 2026-10-05), per-request outcomes, one zoom value |
+| `archive/2026-10-01-svg-preview-cost/design.md` | Preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |
+| `archive/2026-10-01-svg-preview-rendering/design.md` | SVG preview: root cause of "copies but paints nothing", the sanitize/fit/inline pipeline, id scoping |
+| `archive/2026-10-05-per-pair-metadata/design.md` | One JSON per pair: approval + SVG history beside the images, read-only legacy fallback (I-41…I-43) |
+| `archive/2026-10-05-recursive-scan-determinism/design.md` | Scan determinism: canonical order, order-independent pairing, per-file problem statuses, read-only scans, one ticket one commit |
+| `archive/2026-10-05-folder-path-copy/design.md` | Copy a folder not a file; the picked root's real full path captured once and remembered (`iconSplitter.rootpaths.v1`) |
+| `archive/2026-10-05-global-log/design.md` | Global activity log: one docked panel for every tab, entry exclusions, and the dock layout fix (`--app-dock-h`) |
+| `archive/2026-10-05-folder-bar/design.md` | One folder control, one path row (I-44…I-46); removal of the `Use copied path` field and the 30 s Watcher |
+| `archive/2026-10-05-root-path-at-pick/design.md` | Why no web page can read the picked folder's real path, and the pick-time clipboard capture that fills the gap (I-35) |
+| `archive/2026-10-05-svg-source-list-audit/design.md` | Generate SVG list built from files not decisions: one row per normalized AI path, exclusions with reasons, the audit line |
+| `archive/2026-10-05-split-scope-and-path-guard/design.md` | The reviewable set is the batch's `_*split*output` tree; `isFolderPathText` guards the raw clipboard/button/field text |
+| `archive/2026-10-05-picked-output-root/design.md` | Picking the batch's own output: `ScopeRule { split, hideOutside }` (I-47), batch folder found from either side (I-48) |
+| `archive/2026-10-05-root-independent-pairs/design.md` | A file is read from where it sits (I-49), run stamps are evidence (I-50), paths derive only from named folders (I-51) |
+| `archive/2026-10-05-path-capture-recovery/design.md` | When the first path capture fails: Rescan retry, Ctrl+V adoption, honest reasons, no invented path (I-52) |
+| `archive/2026-10-05-queue-variants-zoom/design.md` | Generation queue, additive `preferred` version key, one shared 48–800 px zoom (I-53…I-55) |
+| `archive/2026-10-05-svg-long-requests/design.md` | Long generations: SSE streaming + keepalives, the stall window instead of total timeouts, journal + restart recovery |
+| `archive/2026-10-06-location-folder-of-file/design.md` | "Location" names the folder of the FILE (I-56); `targetPathOf(row)` as the single-file rule |
+| `archive/2026-10-06-svg-to-upload/design.md` | SVG to upload: the phase-0 research record — reuse map over `src/svg/*`, the package contract, what was built new |
+| `archive/2026-10-07-svg-to-upload/design.md` | SVG to upload (design of record): discovery through the pair sidecars, settings, the Gemini metadata prompt, SVG/JPEG/EPS pipelines, per-icon `export.json`, job model, no automatic uploading |
+| `archive/2026-10-07-svg-to-upload-merge/ADR.md` | The three-branch "SVG to upload" merge: P0 adjudications before any donor file moved, the phase plan and its exit gates |
 | `archive/2026-10-07-env-setup-performance/design.md` | Environment-setup performance: re-verified findings, the O1–O11 decisions (O4 deferred), TDD plan for `tools/verify.mjs` + shallow-safe `quality.mjs` |
 
 Archived docs are dated by the day they were written and never edited afterwards.
@@ -46,4 +52,6 @@ Archived docs are dated by the day they were written and never edited afterwards
 
 | File | What it is |
 |---|---|
+| [`../AGENTS.md`](../AGENTS.md) | **Agent bootstrap — read first**: pinned environment, exact commands, per-task reading protocol, hard limits |
 | [`../README.md`](../README.md) | User-facing: what the app does, install/run instructions (bat files, PyCharm) |
+| [`../design/README.md`](../design/README.md) | UI handoff convention: the `SPEC.md` contract beside each design template |
