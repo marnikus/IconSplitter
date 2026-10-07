@@ -85,6 +85,9 @@ async function waitForEl(sel: string): Promise<HTMLElement> {
 
 async function click(sel: string): Promise<void> {
   const el = await waitForEl(sel);
+  // A control that is still preparing (the confirmation, while it renders the
+  // images it will send) is disabled: a user waits, so the test waits.
+  await waitFor(() => (el as HTMLButtonElement).disabled !== true, `${sel} to be enabled`);
   await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
   await settle();
 }
@@ -201,6 +204,93 @@ function stubCanvas(): void {
   url.revokeObjectURL = () => undefined;
 }
 
+/**
+ * The canvas stub that makes ONE thing checkable: which SVG document a produced
+ * JPEG was rendered from. The SVG blob is remembered per object URL, the 2d
+ * context records what was drawn, and the encoder writes a real APP1 segment
+ * carrying that document's marker before the SOF — a valid JPEG (SOI first, EOI
+ * last, dimensions readable, XMP embedding still works) whose bytes name their
+ * source. `drawn` lists every document in render order.
+ */
+function stubCanvasTagged(opts: { slowDecode?: boolean } = {}): { drawn: string[] } {
+  const drawn: string[] = [];
+  const textOf = new WeakMap<object, string>();
+  const svgOf = new Map<string, string>();
+  const RealBlob = globalThis.Blob;
+  class MarkedBlob extends RealBlob {
+    constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+      super(parts, options);
+      if (typeof parts[0] === "string") textOf.set(this, parts[0]);
+    }
+  }
+  vi.stubGlobal("Blob", MarkedBlob);
+  let n = 0;
+  const url = URL as unknown as { createObjectURL?: (b: Blob) => string; revokeObjectURL?: (u: string) => void };
+  url.createObjectURL = (blob: Blob) => {
+    const key = `blob:tagged-${n++}`;
+    svgOf.set(key, textOf.get(blob) ?? "");
+    return key;
+  };
+  url.revokeObjectURL = () => undefined;
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: HTMLCanvasElement) {
+    const canvas = this as HTMLCanvasElement & { source?: string };
+    return { fillStyle: "", fillRect: () => undefined, drawImage: (img: { src: string }) => { canvas.source = svgOf.get(img.src) ?? ""; } } as never;
+  });
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback) {
+    const source = (this as HTMLCanvasElement & { source?: string }).source ?? "";
+    drawn.push(source);
+    cb(new Blob([taggedJpeg(this.width, this.height, markerOf(source)) as BlobPart], { type: "image/jpeg" }));
+  });
+  class FakeImage {
+    src = "";
+    naturalWidth = 24;
+    naturalHeight = 24;
+    decode(): Promise<void> {
+      return opts.slowDecode === true ? new Promise((r) => setTimeout(r, 40)) : Promise.resolve();
+    }
+  }
+  vi.stubGlobal("Image", FakeImage);
+  return { drawn };
+}
+
+/** The row marker inside an SVG document (`data-icon="ARCH"`), or "" when absent. */
+function markerOf(svgText: string): string {
+  return /data-icon="([^"]+)"/.exec(svgText)?.[1] ?? "";
+}
+
+/** A baseline JPEG naming its source in an APP1 segment (valid: SOI … EOI). */
+function taggedJpeg(width: number, height: number, marker: string): Uint8Array {
+  const body = minimalJpeg(width, height);
+  const text = new TextEncoder().encode(`SVGSRC:${marker}`);
+  const app1 = [0xff, 0xe1, ((text.length + 2) >> 8) & 0xff, (text.length + 2) & 0xff, ...text];
+  return new Uint8Array([body[0], body[1], ...app1, ...body.slice(2)]);
+}
+
+/** Texts of the SVGs that differ per row, so a mix-up is visible in the bytes. */
+const distinctSvg = (mark: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-icon="${mark}"><path d="${pathOf(mark)}"/></svg>`;
+
+/** One distinct path per marker — also readable out of the row's shadow preview. */
+function pathOf(mark: string): string {
+  if (mark === "FOG") return "M2 2h20v20H2z";
+  if (mark === "ARCH2") return "M3 3h3v3H3z";
+  return "M4 4h8v8H4z";
+}
+
+/** The row preview's own markup, out of its shadow root (or nothing yet). */
+function previewHtml(id: string): string {
+  return q(`[data-testid=upload-prev-${id}]`)?.shadowRoot?.innerHTML ?? "";
+}
+
+/** makeRoot with per-row artwork: arch's file is emphatically NOT fog's. */
+function makeDistinctRoot(): BinDir {
+  const root = makeRoot();
+  const dir = root.children.get(DIR) as BinDir;
+  for (const [name, mark] of [["fog_AI.svg", "FOG"], ["arch_AI.svg", "ARCH"]] as const) {
+    dir.children.set(name, new BinFile(name, distinctSvg(mark), 3400));
+  }
+  return root;
+}
+
 function stubClipboard(): { written: string[] } {
   const written: string[] = [];
   Object.defineProperty(navigator, "clipboard", {
@@ -218,6 +308,12 @@ async function mount(root: BinDir): Promise<void> {
   });
   await waitFor(() => q("[data-testid=upload-row-count]") !== null, "the list to render");
   await settle();
+}
+
+/** The text inside a base64 payload (the fake encoder writes readable markers). */
+function decoded(base64: string): string {
+  const bytes = Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
 /** Reads one file's text back out of the fake folder. */
@@ -554,6 +650,96 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
+  });
+
+  itSlow("shows the ONE selected row's own 512 px JPEG, and sends exactly those bytes", async () => {
+    const root = makeDistinctRoot();
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const canvas = stubCanvasTagged();
+    await mount(root);
+    // the SECOND row acts — the first row's image must never travel
+    await click(`[data-testid=upload-meta-${ARCH}]`);
+    await waitFor(() => q(`[data-testid=upload-preview-${ARCH}]`) !== null, "the preview to render");
+    expect(q(`[data-testid=upload-preview-${FOG}]`)).toBeNull();
+    expect(canvas.drawn).toEqual([distinctSvg("ARCH")]); // only that icon's own document
+    const img = input(`[data-testid=upload-preview-${ARCH}]`);
+    expect(img.src.startsWith("data:image/jpeg;base64,")).toBe(true);
+    expect(text(`[data-testid=upload-preview-caption-${ARCH}]`)).toContain("arch_AI.svg");
+    expect(text(`[data-testid=upload-preview-caption-${ARCH}]`)).toContain("512×512");
+
+    await act(async () => {
+      (q("[data-testid=upload-key-state]") as HTMLElement).click();
+    });
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_3"));
+    await click("[data-testid=upload-key-save]");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 1, "the one request");
+    const body = JSON.parse(t.calls[0].body);
+    const sent: string = body.contents[0].parts[1].inlineData.data;
+    expect(sent).toBe(img.src.split(",")[1]); // byte-identical: what you saw is what was sent
+    expect(decoded(sent)).toContain("SVGSRC:ARCH");
+    expect(decoded(sent)).not.toContain("FOG");
+    expect(canvas.drawn).toHaveLength(1); // no second render: the shown image IS the sent image
+  });
+
+  itSlow("cannot be paid for before the images it shows are rendered", async () => {
+    const root = makeDistinctRoot();
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    stubCanvasTagged({ slowDecode: true });
+    await mount(root);
+    await click(`[data-testid=upload-meta-${ARCH}]`);
+    // first paint: the strip is still empty, the send button is held back
+    expect(text("[data-testid=upload-preview-busy]")).toContain("Rendering the 512 px JPEG");
+    expect(input("[data-testid=upload-meta-confirm]").disabled).toBe(true);
+    await waitFor(() => !input("[data-testid=upload-meta-confirm]").disabled, "the previews to be ready");
+    expect(q("[data-testid=upload-preview-busy]")).toBeNull();
+    expect(input(`[data-testid=upload-preview-${ARCH}]`).src).toContain("data:image/jpeg;base64,");
+    expect(t.calls).toHaveLength(0); // nothing was paid for while waiting
+  });
+
+  it("previews each row's own approved SVG, before and after a rescan", async () => {
+    const root = makeDistinctRoot();
+    vi.stubGlobal("fetch", geminiTransport(GOOD_ANSWER).fetch);
+    await mount(root);
+    await waitFor(() => previewHtml(FOG).includes("M2 2h20v20H2z"), "fog's artwork");
+    expect(previewHtml(ARCH)).toContain("M4 4h8v8H4z"); // never the neighbour's drawing
+    expect(previewHtml(ARCH)).not.toContain("M2 2h20v20H2z");
+    // the user replaces the approved SVG on disk and rescans: only that row changes
+    const dir = root.children.get(DIR) as BinDir;
+    dir.children.set("arch_AI.svg", new BinFile("arch_AI.svg", distinctSvg("ARCH2"), 3600));
+    await click("[data-testid=upload-rescan]");
+    await waitFor(() => previewHtml(ARCH).includes("M3 3h3v3H3z"), "the new artwork");
+    expect(previewHtml(FOG)).toContain("M2 2h20v20H2z"); // untouched
+  });
+
+  itSlow("labels one preview per selected icon, and no image ever crosses rows", async () => {
+    const root = makeDistinctRoot();
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const canvas = stubCanvasTagged();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_4"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG);
+    await check(ARCH);
+    await click("[data-testid=upload-meta-selected]");
+    await waitFor(() => text("[data-testid=upload-preview-strip]").includes("arch_AI.svg"), "both previews");
+    expect(text(`[data-testid=upload-preview-caption-${FOG}]`)).toContain("fog_AI.svg");
+    const srcFog = input(`[data-testid=upload-preview-${FOG}]`).src;
+    const srcArch = input(`[data-testid=upload-preview-${ARCH}]`).src;
+    expect(srcFog).not.toBe(srcArch);
+    expect(canvas.drawn).toHaveLength(2);
+
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 2, "both requests");
+    const sent = t.calls.map((c) => JSON.parse(c.body).contents[0].parts[1].inlineData.data as string);
+    expect(new Set(sent).size).toBe(2); // two icons, two different images
+    expect(sent).toContain(srcFog.split(",")[1]);
+    expect(sent).toContain(srcArch.split(",")[1]);
+    expect(canvas.drawn).toHaveLength(2); // both sent images were the shown ones
   });
 
   itSlow("copies each field to the clipboard", async () => {

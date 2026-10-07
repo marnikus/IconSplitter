@@ -4,6 +4,7 @@
 // the rules testable without a DOM and keeps the hook itself tiny. Mirrors
 // svg/statemodel; the selection lives in the appstore upload slice (session).
 
+import type { SentPreview } from "../lib/upload/sentpreview";
 import { useReducer, type Dispatch } from "react";
 import { maskKey } from "../lib/svgsecret";
 import type { GeminiConfig } from "../lib/upload/gemini";
@@ -86,10 +87,17 @@ export type UploadAction =
   | { type: "filter"; patch: Partial<UploadListFilter> }
   | { type: "sort"; sort: UploadSort }
   | { type: "dialog"; dialog: UploadDialog | null }
+  | { type: "previews"; previews: SentPreview[]; preparing: boolean }
   | { type: "meta"; id: string; meta: UploadMetaState }
   | { type: "run"; id: string; run: UploadRunUpdate }
   | { type: "progress"; progress: { done: number; total: number } | null }
   | { type: "running"; kind: "metadata" | "export"; n: number };
+
+/** The previews land on the meta dialog they belong to — never on a new one. */
+function previewsOf(m: UploadModel, a: { previews: SentPreview[]; preparing: boolean }): UploadModel {
+  if (m.dialog === null || m.dialog.kind !== "meta") return m;
+  return { ...m, dialog: { ...m.dialog, previews: a.previews, preparing: a.preparing } };
+}
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) => UploadModel> = {
@@ -126,6 +134,7 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<UploadListFilter> }).patch } }),
   sort: (m, a) => ({ ...m, sort: (a as { sort: UploadSort }).sort }),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: UploadDialog | null }).dialog }),
+  previews: (m, a) => previewsOf(m, a as { previews: SentPreview[]; preparing: boolean }),
   meta: (m, a) => {
     const act = a as { id: string; meta: UploadMetaState };
     return { ...m, rows: restaleRows(m.rows, m.defaults, m.overrides, (r) => r.source.id === act.id ? { ...r, meta: act.meta } : r) };

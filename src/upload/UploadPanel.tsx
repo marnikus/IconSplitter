@@ -6,13 +6,14 @@
 // this file is the wiring that makes them one screen.
 
 import type { CSSProperties } from "react";
-import { generateContentUrl, PROVIDER_NAME } from "../lib/upload/gemini";
+import { PROVIDER_NAME } from "../lib/upload/gemini";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
 import UploadBulkBar from "./UploadBulkBar";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
+import UploadMetaDialog from "./UploadMetaDialog";
 import UploadSettingsDialog from "./UploadSettingsDialog";
 import type { UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadRowActions } from "./UploadRow";
@@ -173,10 +174,11 @@ function StatusBar({ g }: { g: UploadApi }) {
 
 /** The settings dialog (global or one icon) and the metadata confirmation. */
 function Dialogs({ g }: { g: UploadApi }) {
+  const dialog = g.dialog;
   return (
     <>
       <SettingsDialog g={g} />
-      <MetaDialog g={g} />
+      {dialog !== null && dialog.kind === "meta" && <UploadMetaDialog g={g} dialog={dialog} />}
     </>
   );
 }
@@ -196,62 +198,6 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       onOverride={g.setOverride}
       onResetOverride={g.resetOverride}
       onClose={g.dismissDialog} />
-  );
-}
-
-/** The exact request, shown before any paid submission (design §2.4/§5). */
-function MetaDialog({ g }: { g: UploadApi }) {
-  const dialog = g.dialog;
-  if (dialog === null || dialog.kind !== "meta") return null;
-  const ids = dialog.ids;
-  return (
-    <div className="svg-backdrop" data-testid="upload-meta-backdrop" onClick={g.dismissDialog}>
-      <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="upload-meta-title"
-        onClick={(e) => e.stopPropagation()}>
-        <header className="svg-modal-head">
-          <h2 id="upload-meta-title">Generate metadata for {ids.length} icon{ids.length === 1 ? "" : "s"}</h2>
-          <button type="button" className="svg-btn tiny" data-testid="upload-meta-cancel" onClick={g.dismissDialog}>Cancel</button>
-        </header>
-        <div className="svg-modal-body">
-          <p className="svg-note">
-            Each icon's image is sent to Gemini inside this one request — nothing is uploaded
-            automatically, and a timeout or disconnect is never resent on its own.
-          </p>
-          <MetaFacts g={g} />
-          <p className="svg-note">The exact prompt that will be sent (the validator enforces every rule it states):</p>
-          <textarea className="svg-code" readOnly data-testid="upload-meta-prompt" aria-label="The exact metadata prompt"
-            value={g.prompt} />
-          <p className="svg-note">
-            Request body: <code>{"{ contents: [{ role: \"user\", parts: [{ text: <the prompt> }, { inlineData: { mimeType: \"image/jpeg\", data: <base64 512 px preview> } }] }] }"}</code>
-          </p>
-          <DialogActions onDismiss={g.dismissDialog} onConfirm={g.confirmMetadata} />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/** Confirm sends; dismiss only closes — the request is never sent twice. */
-function DialogActions({ onDismiss, onConfirm }: { onDismiss: () => void; onConfirm: () => void }) {
-  return (
-    <div className="up-dialog-actions">
-      <button type="button" className="svg-btn" data-testid="upload-meta-dismiss" onClick={onDismiss}>Cancel</button>
-      <button type="button" className="svg-btn primary" data-testid="upload-meta-confirm" onClick={onConfirm}>
-        ✦ Generate metadata
-      </button>
-    </div>
-  );
-}
-
-/** The four facts the confirmation states: provider, endpoint, auth, retries. */
-function MetaFacts({ g }: { g: UploadApi }) {
-  return (
-    <div className="svg-facts">
-      <div className="svg-fact"><span>Provider</span><strong data-testid="upload-meta-provider">{PROVIDER_NAME} · {g.gemini.model}</strong></div>
-      <div className="svg-fact"><span>Endpoint</span><strong data-testid="upload-meta-endpoint">{generateContentUrl(g.gemini.baseUrl, g.gemini.model)}</strong></div>
-      <div className="svg-fact"><span>Auth</span><strong>x-goog-api-key header — the key never enters a URL or a log</strong></div>
-      <div className="svg-fact"><span>Retries</span><strong>{g.gemini.retries} · only provider-confirmed failures</strong></div>
-    </div>
   );
 }
 

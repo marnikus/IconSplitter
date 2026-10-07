@@ -9,7 +9,9 @@ import { useCallback, useRef } from "react";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { previewFor, type SentPreview } from "../lib/upload/sentpreview";
 import { readSvgText } from "../svg/svgfiles";
+import { preparePreviews } from "./metapreview";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
 import { rememberMeta } from "./metacache";
 import { namedSpec, nameRefusedSpec, type IconRef } from "./uploadlog";
@@ -35,14 +37,18 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
     const c = latest.current;
     const why = metaGuard(c, ids);
     if (why !== null) return c.say(why, true);
-    c.dispatch({ type: "dialog", dialog: { kind: "meta", ids } });
+    c.dispatch({ type: "dialog", dialog: { kind: "meta", ids, previews: [], preparing: true } });
+    // The images the request will carry are rendered NOW, so the confirmation
+    // shows exactly the bytes that will be sent (design §2.4).
+    void fillPreviews(latest, ids);
   }, [latest]);
   const confirmMetadata = useCallback(() => {
     const c = latest.current;
     const dialog = c.m.dialog;
     if (dialog === null || dialog.kind !== "meta") return;
+    const previews = dialog.previews;
     c.dispatch({ type: "dialog", dialog: null });
-    void runMetadataBatch(latest, dialog.ids);
+    void runMetadataBatch(latest, dialog.ids, previews);
   }, [latest]);
   const cancelMetadata = useCallback(() => {
     const c = latest.current;
@@ -60,6 +66,26 @@ function metaGuard(c: UploadCtx, ids: string[]): string | null {
   if (c.refs.key.current === null || c.refs.key.current.trim() === "") return "No Gemini API key — add one in the provider card";
   if (c.m.runningMeta > 0) return "A metadata request is already in flight — cancel it or wait";
   return null;
+}
+
+/**
+ * Renders the previews for an open confirmation: each selected icon's own
+ * approved SVG, bounded, in the selection's order. It lands only on the dialog
+ * that asked for it — a dialog the user closed (or reopened for another
+ * selection) is never repainted (RULE 24).
+ */
+async function fillPreviews(latest: Latest, ids: string[]): Promise<void> {
+  const c = latest.current;
+  const root = c.refs.root.current as DirHandleLike | null;
+  if (root === null) return;
+  const wanted = new Set(ids);
+  const sources = c.rows
+    .filter((r) => wanted.has(r.source.id))
+    .map((r) => ({ id: r.source.id, svgPath: r.source.svgPath, svgName: r.source.svgName, fingerprint: r.source.fingerprint }));
+  const previews = await preparePreviews({ root, sources, ids });
+  const dialog = latest.current.m.dialog;
+  if (dialog === null || dialog.kind !== "meta" || dialog.ids.join("\u0000") !== ids.join("\u0000")) return;
+  latest.current.dispatch({ type: "previews", previews, preparing: false });
 }
 
 // --- accept + edit ----------------------------------------------------------------
@@ -96,7 +122,7 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
 // --- the batch ---------------------------------------------------------------------
 
 /** One metadata batch: bounded concurrency, per-item isolation, cancel-aware. */
-async function runMetadataBatch(latest: Latest, ids: string[]): Promise<void> {
+async function runMetadataBatch(latest: Latest, ids: string[], previews: readonly SentPreview[] = []): Promise<void> {
   const c = latest.current;
   const root = c.refs.root.current as DirHandleLike | null;
   const key = c.refs.key.current;
@@ -106,7 +132,7 @@ async function runMetadataBatch(latest: Latest, ids: string[]): Promise<void> {
   c.dispatch({ type: "running", kind: "metadata", n: ids.length });
   const tally = { done: 0, ok: 0, total: ids.length };
   c.dispatch({ type: "progress", progress: { done: 0, total: tally.total } });
-  const ctx: MetaRunCtx = { latest, root, key, queue: [...ids], signal: abort.signal, tally };
+  const ctx: MetaRunCtx = { latest, root, key, queue: [...ids], previews, signal: abort.signal, tally };
   const width = Math.max(1, Math.min(c.m.gemini.concurrency, ids.length));
   await Promise.all(Array.from({ length: width }, () => drainMeta(ctx)));
   c.refs.abortMeta.current = null;
@@ -121,6 +147,8 @@ interface MetaRunCtx {
   root: DirHandleLike;
   key: string;
   queue: string[];
+  /** The images the confirmation showed, keyed by row id + source revision. */
+  previews: readonly SentPreview[];
   signal: AbortSignal;
   tally: { done: number; ok: number; total: number };
 }
@@ -146,11 +174,16 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
   c.dispatch({ type: "run", id, run: { running: "metadata" } });
   const svgText = await readSvgText(ctx.root, row.source.svgPath);
   if (svgText === null) return unreadable(c, id, row.meta);
+  // The image the confirmation showed for THIS icon and THIS source revision is
+  // sent unchanged; when there is none (or the file changed since), the runner
+  // renders that icon's own SVG here instead of sending a stranger's picture.
+  const prepared = previewFor(ctx.previews, id, row.source.fingerprint);
   const result = await generateMetadata({
     rowId: id, svgText, config: c.m.gemini, apiKey: ctx.key, signal: ctx.signal,
     // The prompt the editor shows is the prompt that is sent (and, later, the
     // prompt the export record names) — never a default the user cannot see.
     prompt: c.m.prompt,
+    ...(prepared === null ? {} : { image: prepared.image }),
     deps: { journal: c.refs.journal.current },
   });
   applyMetaResult(ctx.latest, id, row.meta, result);

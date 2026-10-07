@@ -577,9 +577,13 @@ deletes the override — one undoable entry), `upload-set-close`.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,
-`upload-meta-prompt` (the exact prompt that WILL be sent, read-only), the auth/retries facts,
-`upload-meta-confirm` (sends) / `upload-meta-dismiss` /
-`upload-meta-cancel`.
+`upload-meta-prompt` (the exact prompt that WILL be sent, read-only, wrapping),
+the auth/retries facts, the images the request will carry
+(`upload-preview-strip`, one `upload-preview-{id}` with its own
+`upload-preview-caption-{id}`, `upload-preview-count`,
+`upload-preview-busy` while they render, `upload-preview-none` when none could
+be), `upload-meta-confirm` (sends; disabled until the previews are ready) /
+`upload-meta-dismiss` / `upload-meta-cancel`.
 
 Banners: `upload-warn-excluded`, `upload-warn-corrupt`,
 `upload-warn-unreadable`, `upload-warn-interrupted` (a metadata request in

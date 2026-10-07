@@ -392,6 +392,21 @@ opt-in class as Generate SVG → Requesty; design
   Gemini card is one contained grid (Model, Endpoint on its own full-width row,
   Timeout, Retries, Parallel, then the check row) so no control can overlap or
   leave its box.
+* The confirmation shows the image it sends (2026-10-07): the metadata dialog
+  renders, BEFORE anything is paid for, the very bytes the request will carry —
+  one 512 px JPEG per selected icon, each read from that icon's OWN approved SVG
+  and captioned with its file name (`upload-preview-{id}` +
+  `upload-preview-caption-{id}`). The prepared data URL is bound to the pair id
+  AND the SVG's `size:mtime` fingerprint (`lib/upload/sentpreview.previewFor`);
+  the runner sends it unchanged when both still match and re-renders that icon's
+  own document when they do not, so a stale or neighbouring icon's picture can
+  never travel. `upload-meta-confirm` stays disabled until the previews are
+  ready, the strip is bounded (24, `PREVIEW_LIMIT`) and says how many it left
+  out, one unrenderable icon never costs the others their preview, and the
+  caption reads "… · image/jpeg · 512×512 · N.N KB · sent unchanged". Both row
+  previews (this tab and Generate SVG) now read their document through ONE hook
+  (`svg/usesvgtext`), which returns a text only for the folder generation +
+  path it was read for — a row can never paint another row's artwork.
 * Model check (CP-8): the provider card can ask the provider's own model list
   (`GET {base}/models`, same `x-goog-api-key` header, same bounded request
   window) and reports found / missing / failed. The configured id is NEVER
@@ -1181,7 +1196,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-set-bg-{white,black,gray,green,red,custom}`,
   `upload-set-bg-value`, `upload-set-marker-*`, `upload-set-reset`,
   `upload-set-close`), the metadata confirmation (`upload-meta-backdrop`,
-  `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`),
+  `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`,
+  `upload-preview-strip` / `upload-preview-{id}` +
+  `upload-preview-caption-{id}`, `upload-preview-{count,busy,none}`),
   banners (`upload-warn-{excluded,corrupt,unreadable,interrupted}`), status
   bar (`upload-statusbar`, `upload-status-{counts,provider,meta,export}`),
   toast + busy (`upload-toast`, `upload-busy`); settings undo goes through

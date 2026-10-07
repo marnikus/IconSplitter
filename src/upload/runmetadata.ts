@@ -16,13 +16,14 @@ import {
   type IconMetadata, type MetadataValidation,
 } from "../lib/upload/meta";
 import { rasterizeJpeg } from "../lib/upload/raster";
+import { PREVIEW_PX, type PreviewRender } from "../lib/upload/sentpreview";
 import { redact } from "../lib/svgsecret";
 import { createMemoryJournal, type MetadataJournal } from "./journal";
 
 export { DEFAULT_METADATA_PROMPT };
 
 /** The preview size sent to Gemini (px, square) — small, the model needs no more. */
-export const PREVIEW_SIZE = 512;
+export const PREVIEW_SIZE = PREVIEW_PX;
 
 export type MetadataOutcome = "generated" | "invalid" | "failed" | "cancelled";
 
@@ -43,7 +44,7 @@ export interface MetadataResult {
 export interface MetadataDeps {
   fetch?: FetchLike;
   /** Renders the icon SVG to a JPEG data URL for the request (injectable). */
-  render?: (svgText: string, size: number) => Promise<string>;
+  render?: PreviewRender;
   journal?: MetadataJournal;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -55,6 +56,12 @@ export interface MetadataArgs {
   config?: GeminiConfig;
   apiKey: string;
   prompt?: string;
+  /**
+   * The preview the confirmation showed for THIS icon (design §2.4): sent
+   * unchanged, so the image a human approved is the image the model receives.
+   * Absent when the dialog could not prepare one — then it is rendered here.
+   */
+  image?: string;
   signal?: AbortSignal;
   deps?: MetadataDeps;
 }
@@ -76,7 +83,7 @@ export async function generateMetadata(args: MetadataArgs): Promise<MetadataResu
 
 async function requestMetadata(args: MetadataArgs, apiKey: string, deps: MetadataDeps): Promise<MetadataResult> {
   try {
-    const image = await (deps.render ?? renderPreview)(args.svgText, PREVIEW_SIZE);
+    const image = args.image ?? await (deps.render ?? renderPreviewDataUrl)(args.svgText, PREVIEW_SIZE);
     const request = buildGeminiRequest(args.prompt ?? DEFAULT_METADATA_PROMPT, image);
     const sent = await sendWithPolicy({ config: args.config ?? DEFAULT_GEMINI_CONFIG, apiKey, request, signal: args.signal, deps });
     if (sent.outcome === "cancelled") return cancelled(args.rowId);
@@ -200,8 +207,12 @@ function failed(rowId: string, message: string, failure: GeminiFailure | null, a
   };
 }
 
-/** The browser preview: the export SVG rasterized small, as a data URL. */
-async function renderPreview(svgText: string, size: number): Promise<string> {
+/**
+ * The browser preview: the export SVG rasterized small, as a data URL. ONE
+ * primitive: the dialog's preview and a runner-side re-render produce the same
+ * bytes (RULE 10).
+ */
+export async function renderPreviewDataUrl(svgText: string, size: number): Promise<string> {
   const result = await rasterizeJpeg(svgText, {
     width: size, height: size, quality: 0.8, background: "#ffffff",
   });

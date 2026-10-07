@@ -52,6 +52,23 @@ describe("the upload tab's panel furniture", () => {
     expect(body(".up-provider-grid .svg-field:first-child")).not.toContain("0 0 118px");
   });
 
+  it("wraps the confirmation's prompt instead of scrolling it sideways", () => {
+    // the .svg-code default is `pre` (one line, horizontal scrollbar) — the
+    // metadata prompt is prose and must wrap in its own block
+    expect(body(".up-meta-prompt")).toContain("white-space: pre-wrap");
+    const min = px(".up-meta-prompt", "min-height");
+    expect(Math.max(...min)).toBeGreaterThanOrEqual(120);
+  });
+
+  it("tiles the sent-image previews on shrinkable grid tracks", () => {
+    expect(body(".up-preview-strip")).toContain("grid-template-columns");
+    expect(body(".up-preview-strip > *")).toContain("min-width: 0");
+    expect(body(".up-preview-img")).toContain("object-fit: contain");
+    for (const needle of [".up-preview-strip", ".up-preview-card", ".up-preview-img"]) {
+      expect(body(needle), needle).not.toContain("position: absolute");
+    }
+  });
+
   it("keeps the preset rows and the settings button on grid tracks, never on floats", () => {
     expect(body(".up-preset-row")).toContain("grid-template-columns");
     expect(body(".up-preset-row")).toContain("minmax(0, 1fr)");

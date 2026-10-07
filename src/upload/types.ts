@@ -4,6 +4,7 @@
 
 import type { ExportRecord, ExportStage, ExportStatus } from "../lib/upload/export";
 import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
+import type { SentPreview } from "../lib/upload/sentpreview";
 import type { GeminiUsage } from "../lib/upload/gemini";
 import type { ScanSeq } from "../lib/scanseq";
 import type { MetadataJournal } from "./journal";
@@ -100,7 +101,11 @@ export interface UploadListRow {
 
 export type UploadDialog =
   | { kind: "settings"; id: string | null } // null = the global defaults
-  | { kind: "meta"; ids: string[] }; // the exact request preview, before any paid send
+  /** The exact request preview, before any paid send, with the images it carries. */
+  | { kind: "meta"; ids: string[]; previews: SentPreview[]; preparing: boolean };
+
+/** The metadata confirmation, narrowed (its own module renders it). */
+export type MetaDialog = Extract<UploadDialog, { kind: "meta" }>;
 
 /** A mutable mirror of the context, so async loops read live state (RULE 24). */
 export type Latest = { current: UploadCtx };

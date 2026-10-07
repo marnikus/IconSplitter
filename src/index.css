@@ -1608,4 +1608,33 @@
 
 .up-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
+/* The confirmation's prose fields WRAP: a 20-line prompt must never become one
+   horizontally scrolled line (the .svg-code default is pre, for code). */
+.up-meta-prompt { min-height: 190px; max-height: 340px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The images the request will carry: one card per selected icon, 96 px each,
+   the file named underneath so a mismatched picture is impossible to miss. */
+.up-preview-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 8px;
+  background: var(--v2-surface);
+}
+.up-preview-strip > * { min-width: 0; }
+.up-preview-strip .svg-note { grid-column: 1 / -1; margin: 0; }
+.up-preview-card { display: grid; gap: 5px; margin: 0; justify-items: center; }
+.up-preview-img {
+  width: 96px;
+  height: 96px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 7px;
+  background: #fff;
+  object-fit: contain;
+}
+.up-preview-card figcaption { color: var(--v2-muted); font-size: 9px; line-height: 1.45; text-align: center; word-break: break-word; }
+
 .up-overridden { color: var(--v2-purple-2); }

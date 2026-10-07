@@ -5,12 +5,12 @@
 // the document itself is never modified. The box comes from the one zoom rule
 // (lib/zoom), so this tab zooms exactly like Generate SVG (I-55).
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { previewFrame, type PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { buildSvgPreview } from "../lib/svgpreview";
 import { zoomBoxRatio } from "../lib/zoom";
-import { readSvgText } from "../svg/svgfiles";
+import { useSvgText } from "../svg/usesvgtext";
 import SvgPreviewBox from "../svg/SvgPreview";
 
 export interface UploadPreviewProps {
@@ -41,21 +41,4 @@ export default function UploadPreview({ rootRef, rootToken, path, thumb, bg, tes
 function ratioOf(svg: string | null): number {
   const art = svg === null ? null : buildSvgPreview(svg);
   return art !== null && art.ok ? art.ratio : 1;
-}
-
-/** Text of the saved SVG the row previews; null when there is none yet. */
-function useSvgText(rootRef: { current: DirHandleLike | null }, rootToken: number, relPath: string): string | null {
-  const [text, setText] = useState<string | null>(null);
-  // The file to read is (folder generation, path): a rescan has to re-read it.
-  const wanted = useMemo(() => ({ token: rootToken, path: relPath }), [rootToken, relPath]);
-  useEffect(() => {
-    let live = true;
-    const root = rootRef.current;
-    setText((prev) => (prev === null ? prev : null));
-    if (root !== null && wanted.path !== "") {
-      void readSvgText(root, wanted.path).then((t) => live && setText(t), () => live && setText(null));
-    }
-    return () => { live = false; };
-  }, [wanted, rootRef]);
-  return text;
 }

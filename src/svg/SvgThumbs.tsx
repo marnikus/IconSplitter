@@ -11,14 +11,14 @@
 // each side gets the box its OWN ratio asks for at the slider's height, so
 // neither is stretched, capped or cut.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { buildSvgPreview } from "../lib/svgpreview";
 import { zoomBox, zoomBoxRatio } from "../lib/zoom";
 import { useSideThumbs } from "../selection/thumbs";
 import PairedThumbs, { type PreviewSlot } from "../ui/PairedThumbs";
-import { readSvgText } from "./svgfiles";
+import { useSvgText } from "./usesvgtext";
 import { previewTargetOf } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
 import type { SvgRow } from "./types";
@@ -118,22 +118,4 @@ function useImageUrl(rootRef: { current: DirHandleLike | null }, relPath: string
     return () => { live = false; };
   }, [relPath, thumbFor]);
   return url;
-}
-
-/** Text of the saved SVG the row previews; null when there is none yet. */
-function useSvgText(rootRef: { current: DirHandleLike | null }, rootToken: number, relPath: string): string | null {
-  const [text, setText] = useState<string | null>(null);
-  // The file to read is (folder generation, path): a rescan has to re-read it,
-  // or the row would keep painting a version Copy no longer hands out.
-  const wanted = useMemo(() => ({ token: rootToken, path: relPath }), [rootToken, relPath]);
-  useEffect(() => {
-    let live = true;
-    const root = rootRef.current;
-    setText((prev) => (prev === null ? prev : null));
-    if (root !== null && wanted.path !== "") {
-      void readSvgText(root, wanted.path).then((t) => live && setText(t), () => live && setText(null));
-    }
-    return () => { live = false; };
-  }, [wanted, rootRef]);
-  return text;
 }
