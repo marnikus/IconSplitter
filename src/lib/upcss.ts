@@ -68,3 +68,8 @@ export function cssPropsFor(el: Element, rules: StyleRule[]): Partial<Record<Geo
   }
   return out;
 }
+
+/** A plain class or tag selector — the only kind this cascade promises to resolve. */
+export function isSimpleSelector(selector: string): boolean {
+  return /^(\.[\w-]+|[a-zA-Z][\w-]*)$/.test(selector);
+}

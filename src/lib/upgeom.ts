@@ -8,7 +8,7 @@
 import { IDENTITY, multiply, parseTransform, type Matrix, type Pt } from "./upmatrix";
 import { allCommandPoints, parsePathData, type PathCommand } from "./uppath";
 import { normalizeColorRef } from "./upcolor";
-import { collectStyleRules, cssPropsFor, type GeomProp, type StyleRule } from "./upcss";
+import { collectStyleRules, cssPropsFor, isSimpleSelector, type GeomProp, type StyleRule } from "./upcss";
 import { jointExtents } from "./upbounds";
 
 export interface Bounds {
@@ -30,6 +30,7 @@ export interface GeomShape {
   stroke: string | null;
   strokeWidth: number;
   linejoin: "miter" | "round" | "bevel";
+  linecap: "butt" | "round" | "square";
   miterlimit: number;
   fillRule: "nonzero" | "evenodd";
   dash: number[] | null;
@@ -48,13 +49,14 @@ interface Inherit {
   stroke: string | null;
   strokeWidth: number;
   linejoin: GeomShape["linejoin"];
+  linecap: GeomShape["linecap"];
   miterlimit: number;
   fillRule: GeomShape["fillRule"];
   dash: number[] | null;
 }
 
 const ROOT_INHERIT: Inherit = {
-  fill: "#000000", stroke: null, strokeWidth: 1, linejoin: "miter", miterlimit: 4, fillRule: "nonzero", dash: null,
+  fill: "#000000", stroke: null, strokeWidth: 1, linejoin: "miter", linecap: "butt", miterlimit: 4, fillRule: "nonzero", dash: null,
 };
 
 const SHAPE_TAGS = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text"]);
@@ -67,14 +69,29 @@ const NO_DRAW_TAGS = new Set(["defs", "symbol", "clipPath", "mask", "pattern", "
 interface WalkCtx {
   rules: StyleRule[];
   scene: GeomScene;
+  visit: ShapeVisit;
+}
+
+/** A visitation for every drawing element, with its resolved style and matrix. */
+export type ShapeVisit = (el: Element, resolved: ResolvedProps, matrix: Matrix) => void;
+
+/**
+ * Walks the document once and returns its scene, visiting every drawing
+ * element on the way. parseScene collects geometry; upprepare reuses the same
+ * walk to normalize the export copy — ONE cascade, no second resolver.
+ */
+export function walkScene(doc: Document, visit: ShapeVisit): GeomScene {
+  const root = doc.documentElement;
+  if (root === null || root.nodeName !== "svg") return { shapes: [], unsupported: new Set() };
+  const rules = collectStyleRules(root);
+  const scene: GeomScene = { shapes: [], unsupported: new Set() };
+  if (rules.some((r) => !isSimpleSelector(r.selector))) scene.unsupported.add("complex-css");
+  walk(root, IDENTITY, ROOT_INHERIT, { rules, scene, visit });
+  return scene;
 }
 
 export function parseScene(doc: Document): GeomScene {
-  const root = doc.documentElement;
-  if (root === null || root.nodeName !== "svg") return { shapes: [], unsupported: new Set() };
-  const ctx: WalkCtx = { rules: collectStyleRules(root), scene: { shapes: [], unsupported: new Set() } };
-  walk(root, IDENTITY, ROOT_INHERIT, ctx);
-  return ctx.scene;
+  return walkScene(doc, () => undefined);
 }
 
 function walk(el: Element, matrix: Matrix, inherit: Inherit, ctx: WalkCtx): void {
@@ -89,7 +106,10 @@ function walk(el: Element, matrix: Matrix, inherit: Inherit, ctx: WalkCtx): void
   if (props.display === "none") return;
   trackUnsupportedPaint(el, ctx);
   const m = multiply(matrix, parseTransform(el.getAttribute("transform") ?? ""));
-  if (SHAPE_TAGS.has(tag)) pushShape(el, m, props, ctx);
+  if (SHAPE_TAGS.has(tag)) {
+    ctx.visit(el, props, m);
+    pushShape(el, m, props, ctx);
+  }
   if (shouldDescend(tag, el)) for (const child of Array.from(el.children)) walk(child, m, props, ctx);
 }
 
@@ -106,7 +126,7 @@ function shouldDescend(tag: string, el: Element): boolean {
   return !SHAPE_TAGS.has(tag) && el.children.length > 0;
 }
 
-interface ResolvedProps extends Inherit {
+export interface ResolvedProps extends Inherit {
   display: string | null;
 }
 
@@ -119,6 +139,7 @@ function resolveProps(el: Element, inherit: Inherit, rules: StyleRule[]): Resolv
     stroke: asColor(merged.stroke),
     strokeWidth: asNumber(merged["stroke-width"], inherit.strokeWidth),
     linejoin: asJoin(merged["stroke-linejoin"], inherit.linejoin),
+    linecap: asCap(merged["stroke-linecap"], inherit.linecap),
     miterlimit: clampMiter(asNumber(merged["stroke-miterlimit"], inherit.miterlimit)),
     fillRule: merged["fill-rule"] === "evenodd" ? "evenodd" : inherit.fillRule,
     dash: asDash(merged["stroke-dasharray"], inherit.dash),
@@ -128,7 +149,7 @@ function resolveProps(el: Element, inherit: Inherit, rules: StyleRule[]): Resolv
 
 function attrProps(el: Element): Partial<Record<GeomProp, string>> {
   const out: Partial<Record<GeomProp, string>> = {};
-  for (const name of ["fill", "stroke", "stroke-width", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "stroke-dasharray", "display"] as GeomProp[]) {
+  for (const name of ["fill", "stroke", "stroke-width", "stroke-linejoin", "stroke-linecap", "stroke-miterlimit", "fill-rule", "stroke-dasharray", "display"] as GeomProp[]) {
     const v = el.getAttribute(name);
     if (v !== null) out[name] = v;
   }
@@ -159,6 +180,7 @@ function buildShape(el: Element, kind: ShapeKind, m: Matrix, p: ResolvedProps): 
     stroke,
     strokeWidth: stroke === null ? p.strokeWidth : Math.max(0, p.strokeWidth),
     linejoin: p.linejoin,
+    linecap: p.linecap,
     miterlimit: p.miterlimit,
     fillRule: p.fillRule,
     dash: p.dash,
@@ -240,6 +262,10 @@ function asColor(v: unknown): string | null {
 function asNumber(v: unknown, dflt: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : dflt;
+}
+
+function asCap(v: unknown, dflt: GeomShape["linecap"]): GeomShape["linecap"] {
+  return v === "round" || v === "square" ? v : dflt;
 }
 
 function asJoin(v: unknown, dflt: GeomShape["linejoin"]): GeomShape["linejoin"] {
