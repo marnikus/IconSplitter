@@ -506,8 +506,27 @@ controls. Handles in the order they appear on screen.
 | `up-verdict-{id}` | the policy's verdict on the current text; `up-meta-state-{id}` the state word |
 | `up-{save,copy}`-`{id}` | save the edit (re-validated: a bad edit can only be stored as a draft) and copy all three fields |
 | `up-export-note-{id}` | why the export is not available yet (or what it will write) |
+| `up-settings-line-{id}` | the row's settings cell: the effective stroke, padding, scale and JPEG target ("stroke 2.2 pt · pad 10 pt · JPEG 15.1 MP") |
+| `up-act-{generate,export,retry}-{id}` | painted per the template: Metadata `primary`, Export `success`, Retry `danger` (the template's own tones) |
 | `up-preview-dialog{,-x}`, `up-preview-{svg,jpeg,jpeg-missing,bg,zoom,meta}` | the preview dialog and its parts; the JPEG side says "Not exported yet" until a package exists |
 | `up-settings-dialog{,-x}`, `up-dialog-{padding,scale,stroke,mp,quality,background,converter,svgo,eps,eps-warning,reset,close}` | the per-icon settings dialog; each field shows its origin, and `eps-warning` appears when EPS is ticked with no converter configured (the export would be Partial) |
 
 EPS is never faked: with no converter the dialog says no `.eps` file is written
 at all (research: a browser cannot produce genuine EPS).
+
+The preview dialog shows the **published JPEG** (an object URL of the file in the
+icon's own `export/` folder) as soon as that file exists — the artifact itself,
+never a second render — and "Not exported yet" when it does not.
+
+**The tab has no log of its own.** Its events go to the shell's one activity log
+(§Q): `upload.named` (info, the icon + the model + the tag count),
+`upload.name-refused` (warn, the policy's reason), `upload.exported`
+(info/warn/error for processed / partial / cancelled / failed),
+`upload.cancelled`, `upload.restored` (warn — unfinished work came back as
+interrupted and nothing was sent again) and `upload.model-checked`. No entry ever
+carries the metadata text, the prompt, the response body or the API key.
+
+**Restart.** `iconSplitter.upload.jobs.v1` remembers the last state of every
+icon. A restart maps `running`/`queued` to `interrupted — needs review`
+(`restoreInterrupted`), says so in the log and the toast, and sends nothing; the
+row's Retry stays a deliberate click.

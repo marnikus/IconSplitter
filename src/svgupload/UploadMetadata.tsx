@@ -143,8 +143,8 @@ function RowActions({ p, draft, record }: { p: UploadMetadataProps; draft: { tit
     <span className="up-meta-actions">
       <button className="svg-btn" data-testid={`up-save-${p.id}`} disabled={p.busy || !dirty}
         onClick={(e) => { e.stopPropagation(); p.onSave(p.id, { title: draft.title, description: draft.description, tags: splitTags(draft.tags) }); }}>Save</button>
-      <button className="svg-btn ghost" data-testid={`up-copy-${p.id}`}
-        onClick={(e) => { e.stopPropagation(); p.onCopy(copyText(draft)); }}>Copy</button>
+      <button className="svg-btn ghost" data-testid={`up-copy-${p.id}`} title="Copy title, description and keywords as three lines"
+        onClick={(e) => { e.stopPropagation(); p.onCopy(copyText(draft)); }}>Copy all fields</button>
       <button className="svg-btn ghost" data-testid={`up-regenerate-${p.id}`} disabled={p.busy}
         onClick={(e) => { e.stopPropagation(); p.onGenerate(p.id); }}>Regenerate</button>
     </span>

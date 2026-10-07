@@ -23,6 +23,9 @@ import { UPLOAD_SETTINGS_KEY } from "../src/svgupload/settingsstore";
 import { UPLOAD_META_KEY, resetMetaStoreCache } from "../src/svgupload/metastore";
 import { resetUploadSettingsCache } from "../src/svgupload/settingsstore";
 import { parseMetaStore } from "../src/lib/svgupload/meta";
+import { UPLOAD_JOBS_KEY, resetJobStoreCache } from "../src/svgupload/jobstore";
+import { resetSessionRestore } from "../src/svgupload/useUploadJobs";
+import { clearLog, getLogState } from "../src/log/logstore";
 import { setMetaStore } from "../src/svgupload/metastore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
@@ -81,6 +84,25 @@ const AI_NAME = "icon-trophy-star_AI_7_04.png";
 const STEM = "icon-trophy-star_AI_7_04";
 const ID = pairId(PIECE_DIR, "icon-trophy-star", "_7_04");
 
+/** The split_04 folder of the fixture tree, for planting a published package. */
+function dirOf(): FakeDir {
+  const root = (stored.get("__svg__") as { source: FakeDir }).source;
+  let dir = root;
+  for (const name of PIECE_DIR.split("/")) {
+    const next = dir.children.get(name);
+    if (!(next instanceof FakeDir)) throw new Error(`missing ${name}`);
+    dir = next;
+  }
+  return dir;
+}
+
+/** The `export/` folder with one published JPEG in it. */
+function exportDirOfWith(jpeg: FakeFile): FakeDir {
+  const dir = new FakeDir("export");
+  dir.children.set(jpeg.name, jpeg);
+  return dir;
+}
+
 let host: HTMLDivElement;
 let ui: Root;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
@@ -137,6 +159,9 @@ async function type(sel: string, value: string): Promise<void> {
 
 let clipboard = "";
 beforeEach(async () => {
+  // jsdom has no object URLs; the dialog makes one per published JPEG.
+  URL.createObjectURL = () => `blob:test-${Math.random().toString(36).slice(2)}`;
+  URL.revokeObjectURL = () => undefined;
   hoisted.id = ID;
   hoisted.fingerprint = `${SVG_DOC.length}:2201`; // the v2 file's size:mtime, as the scan reports it
   localStorage.clear();
@@ -145,6 +170,7 @@ beforeEach(async () => {
   setMetaStore(parseMetaStore(null));
   resetMetaStoreCache();
   resetUploadSettingsCache();
+  resetJobStoreCache();
   stored.clear();
   stored.set("__svg__", { source: makeTree() });
   calls.length = 0;
@@ -246,6 +272,44 @@ describe("exporting from a row", () => {
   });
 });
 
+describe("a restart", () => {
+  it("shows unfinished work as needs review and never re-sends it", async () => {
+    // The state a closed app left behind: one icon was mid-run.
+    localStorage.setItem(UPLOAD_JOBS_KEY, JSON.stringify({ states: { [ID]: "running" } }));
+    resetSessionRestore(); // the module read storage once already, before this test
+    await mount();
+    expect(txt(`[data-testid=up-state-${ID}]`)).toContain("Interrupted");
+    expect(txt(`[data-testid=up-state-${ID}]`)).toContain("needs review");
+    expect(calls).toEqual([]); // nothing was sent again by itself
+    const retry = q(`[data-testid=up-act-retry-${ID}]`) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false); // retrying stays the user's own action
+    expect(txt("[data-testid=up-toast]")).toContain("interrupted");
+  });
+});
+
+describe("the activity log", () => {
+  it("records the naming and the export in the one global log, without the payload", async () => {
+    clearLog();
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-act-export-${ID}]`);
+    await click(`[data-testid=up-act-export-${ID}]`);
+    const until = Date.now() + 4000;
+    await act(async () => {
+      while (!getLogState().entries.some((e) => e.action === "exported") && Date.now() < until) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+    });
+    const mine = getLogState().entries.filter((e) => e.feature === "upload");
+    expect(mine.map((e) => e.action)).toContain("named");
+    expect(mine.map((e) => e.action)).toContain("exported");
+    // The icon is named; the metadata text never reaches the log.
+    expect(JSON.stringify(mine)).toContain("icon-trophy-star_AI_7_04");
+    expect(JSON.stringify(mine)).not.toContain("Trophy award symbol");
+    expect(JSON.stringify(mine)).not.toContain("test-key");
+  });
+});
+
 describe("the counts and the selection", () => {
   it("shows the seven numbers the request names, next to the phase-B ones", async () => {
     await mount();
@@ -267,6 +331,20 @@ describe("the counts and the selection", () => {
   });
 });
 
+describe("the row's own colours and the metadata head", () => {
+  it("marks Metadata primary, Export success and Retry danger, and copies all fields", async () => {
+    await mount();
+    expect(q(`[data-testid=up-act-generate-${ID}]`)?.className).toContain("primary");
+    expect(q(`[data-testid=up-act-export-${ID}]`)?.className).toContain("success");
+    expect(q(`[data-testid=up-act-retry-${ID}]`)?.className).toContain("danger");
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-copy-${ID}]`);
+    expect(txt(`[data-testid=up-copy-${ID}]`)).toContain("Copy all fields");
+    await click(`[data-testid=up-copy-${ID}]`);
+    expect(clipboard.split("\n")).toHaveLength(3);
+  });
+});
+
 describe("Edit settings", () => {
   it("writes ONE field as an override for that icon only", async () => {
     await mount();
@@ -279,6 +357,22 @@ describe("Edit settings", () => {
     expect(txt(`[data-testid=up-origin-${ID}]`)).toContain("inherited settings");
     await click("[data-testid=up-dialog-close]");
     expect(q("[data-testid=up-settings-dialog]")).toBeNull();
+  });
+
+  it("shows the published JPEG once a package exists, read from the folder", async () => {
+    // A package exists on disk: the dialog must show THAT file, not a re-render.
+    const jpeg = new FakeFile(`${STEM}.jpg`, 4, 2400);
+    jpeg.data = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" });
+    dirOf().children.set("export", exportDirOfWith(jpeg));
+    await mount();
+    await click(`[data-testid=up-act-preview-${ID}]`);
+    await waitFor("[data-testid=up-preview-dialog]");
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    const img = q("[data-testid=up-preview-jpeg] img") as HTMLImageElement | null;
+    expect(img, "the published JPEG was not shown").not.toBeNull();
+    expect(img?.src.startsWith("blob:")).toBe(true);
+    expect(txt("[data-testid=up-preview-jpeg]")).not.toContain("Not exported yet");
+    await click("[data-testid=up-preview-dialog-x]");
   });
 
   it("previews the SVG that will be written and says the JPEG is not there yet", async () => {

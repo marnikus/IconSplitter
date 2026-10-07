@@ -11,6 +11,8 @@ import type { MetaRecord, MetaText } from "../lib/svgupload/metaprompt";
 import type { JobKind } from "../lib/svgupload/rows";
 import type { RunContext } from "./runupload";
 import { providerCard } from "./runupload";
+import { log } from "../log/logstore";
+import { acceptSpec, exportSpec, rejectSpec } from "./uploadlog";
 import { getMetaStore, putRecordOnStore } from "./metastore";
 import type { JobDeps } from "./useUploadJobs";
 
@@ -34,6 +36,7 @@ export async function requestNames(id: string, io: StepIo): Promise<void> {
   const card = providerCard({ config: ctx.config, catalog: ctx.catalog, model: ctx.metaStore.model });
   if (!card.choice.ok) { io.say(`Nothing was sent: ${card.choice.reason}`); io.mark(id, "failed"); return; }
   const out = await io.deps.nameOne({ ...ctx, metaStore: { ...ctx.metaStore, model: card.choice.model }, onProgress: (msg) => io.say(msg) });
+  logName(out, ctx.row.exportBase, id, out.meta !== null);
   if (out.meta !== null) putRecordOnStore(getMetaStore(), out.record);
   io.say(out.meta === null ? `Metadata not accepted: ${out.error ?? "the answer was refused."}` : `Metadata accepted for ${ctx.row.exportBase}.`);
   io.mark(id, out.meta === null ? "failed" : "queued");
@@ -45,6 +48,7 @@ export async function publishExport(id: string, io: StepIo & { signal: AbortSign
   if (ctx === null) return { state: "failed", note: "The icon cannot be exported: no usable SVG." };
   io.mark(id, "running");
   const out = await io.deps.exportOne(ctx);
+  log(exportSpec({ id, base: ctx.row.exportBase, status: out.status, note: out.note }));
   if (out.meta !== null) putRecordOnStore(getMetaStore(), out.meta);
   io.say(out.note);
   const state = terminalOf(out.status);
@@ -53,6 +57,15 @@ export async function publishExport(id: string, io: StepIo & { signal: AbortSign
 }
 
 type Terminal = "processed" | "partial" | "failed" | "cancelled";
+
+/** The naming outcome, in the one log: accepted names the model, refused says why. */
+function logName(out: { record: MetaRecord; error?: string | null; meta: unknown }, base: string, id: string, accepted: boolean): void {
+  if (accepted) {
+    log(acceptSpec({ id, base, model: out.record.model, tags: out.record.tags.length }));
+    return;
+  }
+  log(rejectSpec({ id, base, why: out.error ?? "the answer did not pass the policy" }));
+}
 
 /** The four terminal states the queue understands; anything else is a failure. */
 export function terminalOf(status: string): Terminal {

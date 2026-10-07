@@ -34,6 +34,8 @@ export interface UploadRowProps {
   busy: boolean;
   /** False when this icon overrides the global defaults. */
   inherited: boolean;
+  /** The effective stroke/pad/JPEG line, from the same values the export uses. */
+  settingsText: string;
   onCheck: (id: string, on: boolean) => void;
   onActivate: (id: string) => void;
   onLoadCode: (relPath: string) => void;
@@ -45,14 +47,22 @@ export interface UploadRowProps {
 
 export type RowAction = "preview" | "settings" | "generate" | "export" | "open" | "retry";
 
-export const ROW_ACTIONS: readonly { id: RowAction; label: string }[] = [
-  { id: "preview", label: "Preview" },
-  { id: "settings", label: "Edit settings" },
-  { id: "generate", label: "Generate metadata" },
-  { id: "export", label: "Export" },
-  { id: "open", label: "Open export folder" },
-  { id: "retry", label: "Retry" },
+export const ROW_ACTIONS: readonly { id: RowAction; label: string; tone: RowTone }[] = [
+  { id: "preview", label: "Preview", tone: "ghost" },
+  { id: "settings", label: "Edit settings", tone: "ghost" },
+  { id: "generate", label: "Generate metadata", tone: "primary" },
+  { id: "export", label: "Export", tone: "success" },
+  { id: "open", label: "Open export folder", tone: "ghost" },
+  { id: "retry", label: "Retry", tone: "danger" },
 ];
+
+/** The template's own tone per action: Metadata primary, Export success, Retry danger. */
+export type RowTone = "primary" | "success" | "danger" | "ghost";
+
+/** The button class for a tone — one mapping, so no row paints itself differently. */
+export function actionClass(tone: RowTone): string {
+  return `svg-btn ${tone}`;
+}
 
 export default function UploadRow(p: UploadRowProps) {
   const { row } = p;
@@ -99,6 +109,7 @@ function Details({ p }: { p: UploadRowProps }) {
         </span>
         <StateChip p={p} />
         {!p.inherited && <ResetButton p={p} />}
+        <span className="up-settings-line" data-testid={`up-settings-line-${p.row.id}`}>{settingsLine(p)}</span>
       </div>
       <div className="svg-source">{p.row.dirPath}</div>
       <UploadMetadata id={p.row.id} state={metaStateOf(p.meta, p.row.fingerprint)} record={p.meta} busy={p.busy}
@@ -128,6 +139,15 @@ function metaLabel(state: MetaState): string {
   return { none: "no metadata", accepted: "metadata ok", stale: "metadata stale", rejected: "metadata needs review", interrupted: "metadata interrupted" }[state];
 }
 
+/**
+ * The row's settings cell, in the template's words: the effective stroke and
+ * padding, then the output. Read from the row itself, so it can never advertise a
+ * number the export will not use.
+ */
+function settingsLine(p: UploadRowProps): string {
+  return p.settingsText;
+}
+
 function ResetButton({ p }: { p: UploadRowProps }) {
   return (
     <button className="svg-btn ghost" data-testid={`up-reset-row-${p.row.id}`}
@@ -140,7 +160,7 @@ function Actions({ p }: { p: UploadRowProps }) {
   return (
     <div className="up-actions" data-testid={`up-actions-${p.row.id}`}>
       {ROW_ACTIONS.map((action) => (
-        <button key={action.id} className={`svg-btn${action.id === "export" ? "" : " ghost"}`}
+        <button key={action.id} className={actionClass(action.tone)}
           data-testid={`up-act-${action.id}-${p.row.id}`} disabled={p.busy || !enabled(p, action.id)}
           title={enabled(p, action.id) ? action.label : whyDisabled(p, action.id)}
           onClick={(e) => { e.stopPropagation(); p.onAction(action.id, p.row.id); }}>

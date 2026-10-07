@@ -16,6 +16,8 @@ import { editRecord, recordFor, type MetaStore } from "../lib/svgupload/meta";
 import type { JobKind } from "../lib/svgupload/rows";
 import { ExportQueue } from "./jobctl";
 import { exportDirOf } from "./package";
+import { log } from "../log/logstore";
+import { cancelSpec, providerSpec } from "./uploadlog";
 import { getMetaStore, putRecordOnStore } from "./metastore";
 import { providerCard } from "./runupload";
 import { publishExport, requestNames, type CtxOf, type MarkFn, type SayFn } from "./jobsteps";
@@ -86,7 +88,9 @@ function useJobControls(io: ActionIo, starters: Pick<JobActions, "exportRows">):
   }, [io, starters, setNote]);
 
   const cancel = useCallback(() => {
+    const stopped = io.queue.current?.waiting().length ?? 0;
     io.queue.current?.cancel();
+    log(cancelSpec(stopped));
     setNote("Cancelled — completed packages were kept.");
   }, [io, setNote]);
 
@@ -130,6 +134,7 @@ function useFolderActions(io: ActionIo): Pick<JobActions, "openExport" | "checkP
     void (async () => {
       const provider = await deps.providerOf();
       const card = providerCard({ config: provider.config, catalog: provider.catalog, model: io.storeRef.current.model });
+      log(providerSpec({ model: card.choice.ok ? card.choice.model : io.storeRef.current.model, ok: card.choice.ok, reason: card.choice.ok ? "" : card.choice.reason }));
       setNote(card.choice.ok
         ? `Metadata model: ${card.choice.model} — verified against the provider's list.`
         : card.choice.reason);

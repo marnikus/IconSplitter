@@ -8,7 +8,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   DEFAULT_UPLOAD, LIMITS, applyBulk, effectiveSettings, inheritedFields,
-  parseUploadSettings, resetOverride, setOverride, type UploadSettings,
+  parseUploadSettings, resetOverride, setOverride, settingsLineOf, type UploadSettings,
 } from "../src/lib/svgupload/settings";
 import { loadUploadSettings, saveUploadSettings, UPLOAD_SETTINGS_KEY } from "../src/svgupload/settingsstore";
 
@@ -164,5 +164,22 @@ describe("persistence — the effective settings survive a restart", () => {
   it("never persists a zoom — display state has no place here", () => {
     saveUploadSettings({ defaults: DEFAULT_UPLOAD, overrides: {} });
     expect(localStorage.getItem(UPLOAD_SETTINGS_KEY)).not.toContain("zoom");
+  });
+});
+
+describe("the row's settings line", () => {
+  it("states the effective numbers in the units the user chose", () => {
+    const values = { ...DEFAULT_UPLOAD, stroke: { value: 2.2, unit: "pt" as const, enabled: true }, padding: { value: 10, unit: "pt" as const } };
+    expect(settingsLineOf(values)).toBe("stroke 2.2 pt · pad 10 pt · JPEG 15.1 MP");
+  });
+
+  it("says 'no stroke' instead of pretending a width is applied", () => {
+    const values = { ...DEFAULT_UPLOAD, stroke: { value: 2.2, unit: "pt" as const, enabled: false } };
+    expect(settingsLineOf(values)).toContain("no stroke");
+  });
+
+  it("reads the same values the export uses — no second vocabulary", () => {
+    const values = { ...DEFAULT_UPLOAD, jpeg: { ...DEFAULT_UPLOAD.jpeg, targetMp: 8, quality: 0.8 } };
+    expect(settingsLineOf(values)).toContain("8 MP");
   });
 });

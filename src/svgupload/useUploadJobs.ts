@@ -23,6 +23,9 @@ import type { ExportQueue } from "./jobctl";
 import { generateMetadataFor, runExport, type RunContext, type RunOut } from "./runupload";
 import { useJobActions } from "./jobactions";
 import { getMetaStore, subscribeMetaStore } from "./metastore";
+import { getJobStore, rememberJobs, rememberOutcome, setJobStore } from "./jobstore";
+import { restoreSpec } from "./uploadlog";
+import { log } from "../log/logstore";
 
 /** What a run reports back, whichever kind it was. */
 export interface RunReport {
@@ -83,6 +86,42 @@ export interface JobsApi {
 }
 
 /**
+ * What the LAST session left behind, with the one rule a restart must honour:
+ * an unfinished job comes back as `interrupted` (visible, retried only by a
+ * click) and never as a job that quietly spends money again. The note and the
+ * log line are written here, once, so the panel does not have to remember to.
+ */
+function restoreFromLastSession(): { states: Record<string, JobKind>; note: string | null } {
+  const restored = rememberJobs(getJobStore().states);
+  if (Object.keys(restored.states).length > 0) setJobStore(restored);
+  if (restored.note !== null) log(restoreSpec(countInterrupted(restored.states)));
+  return restored;
+}
+
+/** How many of the restored states are the interrupted ones. */
+function countInterrupted(states: Record<string, JobKind>): number {
+  return Object.values(states).filter((state) => state === "interrupted").length;
+}
+
+/**
+ * Read ONCE per page load: computed on first use and remembered, so React's
+ * StrictMode double-invoke cannot log the restart twice and every mount of the
+ * tab sees the same answer. `resetSessionRestore` is the test seam for a scan of
+ * storage that happens after this module was imported.
+ */
+let restoredSession: ReturnType<typeof restoreFromLastSession> | null = null;
+
+function sessionOf(): ReturnType<typeof restoreFromLastSession> {
+  restoredSession ??= restoreFromLastSession();
+  return restoredSession;
+}
+
+/** Test seam: forget the restored session so the next read looks at storage again. */
+export function resetSessionRestore(): void {
+  restoredSession = null;
+}
+
+/**
  * The context one run needs; null when the row cannot be exported at all. Kept
  * out of the hook body: it is the one place a row, a root and a provider config
  * are combined, and that rule deserves its own name.
@@ -109,9 +148,9 @@ function useMetaStore(): MetaStore {
 
 export function useUploadJobs(input: UploadJobsInput, deps: JobDeps = REAL_DEPS): JobsApi {
   const store = useMetaStore();
-  const [jobs, setJobs] = useState<Record<string, JobKind>>({});
+  const [jobs, setJobs] = useState<Record<string, JobKind>>(() => sessionOf().states);
   const [busyIds, setBusyIds] = useState<string[]>([]);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(() => sessionOf().note);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const queue = useRef<ExportQueue | null>(null);
   const state = useRef(input);
@@ -119,6 +158,7 @@ export function useUploadJobs(input: UploadJobsInput, deps: JobDeps = REAL_DEPS)
   const storeRef = useRef(store);
   storeRef.current = store;
   const mark = useCallback((id: string, value: JobKind) => {
+    rememberOutcome(id, value);
     setJobs((current) => ({ ...current, [id]: value }));
   }, []);
   const context = useContextOf(deps, state, storeRef);

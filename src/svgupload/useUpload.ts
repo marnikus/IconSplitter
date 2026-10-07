@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { loadHandles, saveHandles } from "../batch/store";
 import { readSvgText } from "../svg/svgfiles";
+import { readPublishedJpeg } from "./exporter";
 import { SVG_HANDLE_KEY } from "../svg/reviewundo";
 import { discoverApprovedSources } from "../svg/sources";
 import { pickRootWithPath } from "../ui/pickroot";
@@ -18,7 +19,7 @@ import { DEFAULT_PREVIEW_BACKGROUND, type PreviewBackground } from "../lib/svgba
 import { ZOOM_DEFAULT } from "../lib/zoom";
 import { buildUploadRows, type UploadRow } from "../lib/svgupload/rows";
 import {
-  effectiveSettings, parseUploadSettings, setDefault, setOverride, SETTING_FIELDS, type SettingField,
+  effectiveSettings, parseUploadSettings, setDefault, setOverride, settingsLineOf, SETTING_FIELDS, type SettingField,
   type UploadDefaults, type UploadSettings,
 } from "../lib/svgupload/settings";
 import { DEFAULT_UPLOAD_VIEW, uploadCounts, visibleUploadRows, type UploadView } from "../lib/svgupload/view";
@@ -51,10 +52,14 @@ export interface UploadApi {
   toggleCheck: (id: string, on: boolean) => void;
   toggleAll: (on: boolean) => void;
   loadCode: (relPath: string) => void;
+  /** The published JPEG of one icon as an object URL, or null while/without it. */
+  jpegFor: (id: string) => string | null;
   changeDefaults: (patch: Partial<UploadDefaults>) => void;
   applySelection: () => void;
   resetRows: (ids: string[]) => void;
   inheritedFor: (id: string) => boolean;
+  /** The row's settings cell, from the same effective values the export reads. */
+  settingsTextFor: (id: string) => string;
   settings: UploadSettings;
   /** The effective values for one row, with each field's origin. */
   effectiveOf: (id: string) => ReturnType<typeof effectiveSettings>;
@@ -75,13 +80,14 @@ export function useUpload(): UploadApi {
   const rows = useRowsWithJobs(scan.rows, jobs, settings);
   const derived = useDerivedRows(rows, ui.view);
   const loadCode = useCodeCache(scan.root, ui.codes, ui.setCodes);
+  const jpegFor = useJpegCache(scan.root, rows);
   const acts = useUploadActions(scan, ui, settings);
   const dialogRow = useMemo(() => jobs.dialog === null ? null : rows.find((r) => r.id === jobs.dialog?.id) ?? null, [jobs.dialog, rows]);
   const patchRow = useCallback((id: string, field: SettingField, value: unknown) => {
     setUploadSettings(setOverride(getUploadSettings(), id, { [field]: value } as Partial<UploadDefaults>));
   }, []);
   return {
-    ...scan, ...ui, loadCode, ...acts, rows, jobs, settings, patchRow,
+    ...scan, ...ui, loadCode, jpegFor, ...acts, rows, jobs, settings, patchRow,
     effectiveOf: useCallback((id: string) => effectiveSettings(getUploadSettings(), id), []),
     dialog: jobs.dialog, dialogRow,
     defaults: settings.defaults, counts: derived.counts, visible: derived.visible,
@@ -89,6 +95,7 @@ export function useUpload(): UploadApi {
     // field, not just the scale (editing the padding used to leave it saying
     // "inherited settings").
     inheritedFor: useCallback((id: string) => effectiveSettings(settings, id).inherited.length === SETTING_FIELDS.length, [settings]),
+    settingsTextFor: useCallback((id: string) => settingsLineOf(effectiveSettings(getUploadSettings(), id).values), []),
   };
 }
 
@@ -230,6 +237,42 @@ function useCodeCache(
     setCodes((c) => ({ ...c, [rel]: "" }));
     void readSvgText(root, rel).then((text) => setCodes((c) => ({ ...c, [rel]: text ?? "" })));
   }, [root, setCodes]);
+}
+
+/**
+ * The published JPEG per icon, read from the icon's own export folder and
+ * released when the tab unmounts. The FILE is the evidence: if it is there the
+ * dialog shows it, if it is not the dialog says "Not exported yet" — a record
+ * that failed to parse can never make the dialog claim a picture it does not have.
+ */
+function useJpegCache(root: DirHandleLike | null, rows: readonly UploadRow[]): (id: string) => string | null {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const urlsRef = useRef(urls);
+  urlsRef.current = urls;
+  useJpegsFor(root, rows, setUrls);
+  useEffect(() => () => {
+    for (const url of Object.values(urlsRef.current)) URL.revokeObjectURL(url);
+  }, []);
+  return useCallback((id: string) => urls[id] ?? null, [urls]);
+}
+
+/** Loads one object URL per row that has a package; a missing file loads nothing. */
+function useJpegsFor(
+  root: DirHandleLike | null, rows: readonly UploadRow[],
+  setUrls: (fn: (u: Record<string, string>) => Record<string, string>) => void,
+): void {
+  useEffect(() => {
+    if (root === null) return;
+    let alive = true;
+    for (const row of rows) {
+      if (row.blocked !== null) continue;
+      void readPublishedJpeg(root, row.dirPath, row.exportBase).then((file) => {
+        if (!alive || file === null) return;
+        setUrls((u) => ({ ...u, [row.id]: URL.createObjectURL(file) }));
+      });
+    }
+    return () => { alive = false; };
+  }, [root, rows, setUrls]);
 }
 
 function toggle(ids: string[], id: string, on: boolean): string[] {

@@ -86,7 +86,7 @@ function Rows({ u }: { u: UploadApi }) {
           checked={u.checked.includes(row.id)} active={row.id === u.activeId}
           code={row.svgPath === null ? null : u.codes[row.svgPath] ?? null}
           meta={u.jobs.meta[row.id] ?? null} busy={u.jobs.busyIds.includes(row.id)}
-          inherited={u.inheritedFor(row.id)}
+          inherited={u.inheritedFor(row.id)} settingsText={u.settingsTextFor(row.id)}
           onCheck={u.toggleCheck} onActivate={u.setActive} onLoadCode={u.loadCode}
           onResetRow={(id) => u.resetRows([id])} onAction={(action, id) => act(u, action, id)}
           onSaveMeta={u.jobs.saveMeta} onCopy={u.jobs.copyToClipboard} />
@@ -112,7 +112,7 @@ function Dialogs({ u }: { u: UploadApi }) {
   const code = row.svgPath === null ? null : u.codes[row.svgPath] ?? null;
   const meta = u.jobs.meta[row.id] ?? null;
   if (u.dialog.kind === "preview") {
-    return <PreviewDialog row={row} code={code} background={u.background} zoom={u.zoom} jpegUrl={null} meta={meta}
+    return <PreviewDialog row={row} code={code} background={u.background} zoom={u.zoom} jpegUrl={u.jpegFor(row.id)} meta={meta}
       onZoom={u.setZoom} onBackground={u.setBackground} onClose={u.jobs.closeDialog} />;
   }
   const eff = u.effectiveOf(row.id);

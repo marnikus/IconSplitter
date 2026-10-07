@@ -111,4 +111,19 @@ export async function readPublishedSvg(root: DirHandleLike, dirPath: string, bas
   }
 }
 
+/**
+ * Reads the JPEG an earlier run published (the preview dialog shows the FILE, so
+ * what the user compares is the artifact, not a second render of it).
+ */
+export async function readPublishedJpeg(root: DirHandleLike, dirPath: string, base: string): Promise<Blob | null> {
+  const dir = await probePath(root, exportDirOf(dirPath));
+  if (dir === null) return null;
+  try {
+    const handle = await dir.getFileHandle(packageNames(base).jpg);
+    return await handle.getFile();
+  } catch {
+    return null;
+  }
+}
+
 export { fingerprintSettings, metaText, widestStroke };

@@ -47,7 +47,8 @@ export interface UploadRowInput {
 }
 
 /** The job states a row can be in (mirrors jobctl's JobState). */
-export type JobKind = "queued" | "running" | "processed" | "partial" | "failed" | "cancelled" | "interrupted";
+export const JOB_KINDS = ["queued", "running", "processed", "partial", "failed", "cancelled", "interrupted"] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
 /** What the metadata field holds for this icon right now. */
 export type MetaKind = "none" | "accepted" | "stale" | "rejected" | "interrupted";
 

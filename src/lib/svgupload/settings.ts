@@ -27,6 +27,23 @@ export const LIMITS = {
 
 export type JpegProfile = "sRGB-implied";
 
+/**
+ * The row's settings cell in the template's words: the effective stroke, the
+ * padding and the JPEG target. Read from the values the export uses, so a row can
+ * never advertise a number the pipeline will not apply.
+ */
+export function settingsLineOf(values: UploadDefaults): string {
+  const stroke = values.stroke.enabled ? `stroke ${trim(values.stroke.value)} ${values.stroke.unit}` : "no stroke";
+  const pad = `pad ${trim(values.padding.value)} ${values.padding.unit}`;
+  const scale = values.outputScale === 1 ? "" : ` · scale ${trim(values.outputScale)}×`;
+  return `${stroke} · ${pad}${scale} · JPEG ${trim(values.jpeg.targetMp)} MP`;
+}
+
+/** 2.20 -> "2.2", 10 -> "10": numbers as the user typed them, never 2.2000001. */
+function trim(value: number): string {
+  return String(Number(value.toFixed(2)));
+}
+
 export interface PaddingSetting {
   value: number;
   unit: LengthUnit;

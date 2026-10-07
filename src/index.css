@@ -1505,3 +1505,11 @@
   color: #1a7f37;
   font-style: normal;
 }
+
+/* The row's settings cell: the effective numbers, quiet under the state chips. */
+.up-settings-line {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--v2-muted, #8b98b1);
+  white-space: nowrap;
+}
