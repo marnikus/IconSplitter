@@ -62,7 +62,12 @@ w.fetch = () => Promise.reject(new Error("the AI must not be called in this test
 const DIR = "pairs";
 const ID = pairId(DIR, "icon-a", "");
 const SOURCE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M 4 20 L 12 4 L 20 20 Z" fill="none" stroke="#101010" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const FINGERPRINT = `${SOURCE_SVG.length}:3300`;
+/** The cache identity is the source's CONTENT hash (R02/R03), not its stat. */
+async function computeContentKey(): Promise<string> {
+  const { subtleSha256 } = await import("../src/lib/upraster");
+  return subtleSha256(new TextEncoder().encode(SOURCE_SVG));
+}
+const contentKey = await computeContentKey();
 const META = {
   title: "Forward Motion and Fast Growth. The Vector Icon of Speed",
   description: "Arrow symbolising fast upward movement and success",
@@ -135,7 +140,7 @@ beforeEach(() => {
   resetAppStore(); // the appstore is module state: one test's checks must not leak
   localStorage.clear();
   stored.clear();
-  localStorage.setItem("iconSplitter.upload.meta.v1", JSON.stringify({ cache: { [FINGERPRINT]: META } }));
+  localStorage.setItem("iconSplitter.upload.meta.v1", JSON.stringify({ cache: { [contentKey]: META } }));
   host = document.createElement("div");
   document.body.appendChild(host);
 });
@@ -181,14 +186,24 @@ describe("the export run", () => {
     await act(async () => { q('[data-testid="upload-confirm-ok"]')?.click(); });
     await waitFor(() => txt(`[data-testid="upload-export-${ID}"]`) === "Processed", "the row turns processed");
     expect(txt('[data-testid="upload-toast"]')).toContain("Exported 1 of 1 icon");
-    // the package is committed: outputs + export.json LAST
+    // the package is committed atomically: one generation + the pointer (R01),
+    // and the durable journal settles to processed beside them (R10)
     const exportDir = (picked.children.get(DIR) as FakeDir).children.get("export") as FakeDir;
-    expect([...exportDir.children.keys()].sort()).toEqual(["export.json", "icon-a.jpg", "icon-a.svg"]);
-    const record = JSON.parse((exportDir.children.get("export.json") as FakeFile).text);
-    expect(record.v).toBe(1);
+    expect([...exportDir.children.keys()].sort()).toEqual(["attempts.json", "current.json", "generations"]);
+    const journal = JSON.parse((exportDir.children.get("attempts.json") as FakeFile).text);
+    expect(journal.state).toBe("processed");
+    expect(journal.source.relPath).toBe(`${DIR}/icon-a_AI_v1.svg`);
+    expect(journal.attempts.at(-1).stage).toBe("commit");
+    const pointer = JSON.parse((exportDir.children.get("current.json") as FakeFile).text);
+    expect(pointer.v).toBe(2);
+    expect(pointer.generation).toBe(pointer.record.generation);
+    const record = pointer.record;
     expect(record.state).toBe("processed");
     expect(record.metadata).toEqual(META);
-    expect((exportDir.children.get("icon-a.svg") as FakeFile).text).toContain("<title>");
+    expect(record.provenance.origin).toBe("user");
+    const gen = (exportDir.children.get("generations") as FakeDir).children.get(pointer.generation) as FakeDir;
+    expect([...gen.children.keys()].sort()).toEqual(["icon-a.jpg", "icon-a.svg", "record.json"]);
+    expect((gen.children.get("icon-a.svg") as FakeFile).text).toContain("<title>");
   });
 
   it("shows the redacted request when the paid call is really needed", async () => {
@@ -258,7 +273,9 @@ describe("the metadata editor (design §8)", () => {
     await act(async () => { q(`[data-testid="upload-meta-accept-${ID}"]`)?.click(); });
     await waitFor(() => txt(`[data-testid="upload-meta-${ID}"]`) === "Accepted", "the chip turns accepted");
     const cache = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1") ?? "{}");
-    expect(cache.cache[FINGERPRINT]).toEqual(META);
+    expect(cache.cache[contentKey].meta).toEqual(META);
+    // the accepted answer is remembered WITH its provenance (report §5)
+    expect(cache.cache[contentKey].provenance.origin).toBe("user");
   });
 });
 

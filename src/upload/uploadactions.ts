@@ -17,12 +17,15 @@ import type { UploadRowSource } from "./sources";
 import { makeRunnerDeps } from "./browserdeps";
 import { runUploadJobs, type JobRequest, type JobResult, type JobState, type RunnerDeps } from "./runner";
 import { acceptMetadata, effectiveFor, type UploadAction, type UploadModel, type UploadRow } from "./statemodel";
-import { loadMetaCache, saveGeminiConfig, saveMetaCache, saveMetaPrompt } from "./stores";
+import { knownMeta, knownProvenance, rememberMeta, saveGeminiConfig, saveMetaPrompt } from "./stores";
+import { userProvenanceFor } from "./jobartifacts";
 import { saveGeminiKey } from "./gemkey";
 
 /** The live snapshot the gestures read — never a stale closure. */
 export interface LatestState {
   model: UploadModel;
+  /** The picked root's identity (captured path, else the handle's name). */
+  rootName: string;
   key: string | null;
   gemini: GeminiConfig;
   prompt: string;
@@ -106,11 +109,8 @@ export function saveKeyOnDevice(ctx: UploadCtx, k: string): void {
 export function acceptRowMeta(ctx: UploadCtx, row: UploadRowSource, meta: IconMetadata): void {
   const next = acceptMetadata(ctx.latest.current.model, row.id, meta);
   ctx.dispatch({ type: "meta-accepted", id: row.id, metadata: meta });
-  if (row.svgFingerprint !== null) {
-    const cache = { ...loadMetaCache() };
-    cache[row.svgFingerprint] = meta;
-    saveMetaCache(cache);
-  }
+  const cur = ctx.latest.current;
+  rememberMeta(row, meta, userProvenanceFor(cur.prompt, cur.gemini, new Date().toISOString()));
   ctx.say(next.toast ?? "Metadata accepted");
 }
 
@@ -176,17 +176,22 @@ function selectedRows(cur: LatestState): UploadRow[] {
 }
 
 function jobRequestsFor(cur: LatestState, rows: UploadRow[], allowAi: boolean): JobRequest[] {
-  const cache = loadMetaCache();
   return rows.map((row) => ({
     row: row.source,
+    rootName: cur.rootName,
     settings: effectiveFor(cur.model, row.source.id),
     prompt: cur.prompt,
     apiKey: cur.key ?? "",
     gemini: cur.gemini,
-    metadata: row.metadata ?? (row.source.svgFingerprint !== null ? cache[row.source.svgFingerprint] ?? null : null),
+    // One resolver answers "does this icon already have metadata?" (R03/R10),
+    // and the provenance says where that metadata came from.
+    metadata: knownMeta(row),
+    metadataProvenance: knownProvenance(row),
     allowAi,
   }));
 }
+
+
 
 function exportDeps(ctx: UploadCtx, root: DirHandleLike): RunnerDeps {
   return makeRunnerDeps({

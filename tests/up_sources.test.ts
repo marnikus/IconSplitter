@@ -13,7 +13,7 @@ import { loadPairDecisions } from "../src/selection/pairstore";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { discoverApprovedSources } from "../src/svg/sources";
 import { MANDATORY_TAGS, type IconMetadata } from "../src/lib/upmeta";
-import { buildExportRecord, serializeExportRecord } from "../src/lib/upexport";
+import { buildExportRecord } from "../src/lib/upexport";
 import { DEFAULT_EXPORT_SETTINGS } from "../src/lib/upsettings";
 import { classifyExport, discoverUploadRows, type ExportDirScan } from "../src/upload/sources";
 
@@ -65,26 +65,44 @@ async function buildRoot(pairs: PairSpec[]): Promise<FakeDir> { // the sidecar t
   return root;
 }
 
-function exportJsonFor(base: string): string {
-  return serializeExportRecord(buildExportRecord({
+/** A scan payload with the v2 fields filled in — the shape scanExportDir returns. */
+function scanOf(over: Partial<ExportDirScan>): ExportDirScan {
+  return { exportJson: null, outputs: [], generation: null, legacy: false, corruptPointer: false, ...over };
+}
+
+/** The v2 record a committed generation holds, for one base. */
+function recordFor(base: string, generation = "gen-1"): ReturnType<typeof buildExportRecord> {
+  return buildExportRecord({
     pairId: pairIdOf(base),
-    iconBase: base,
-    source: { relPath: `${DIR}/${base}_AI_v3.svg`, version: 3, sha256: "abc" },
+    iconBase: base, rootName: "root", dirPath: DIR,
+    source: { relPath: `${DIR}/${base}_AI_v3.svg`, version: 3, sha256: "abc", bytes: 1200 },
     settings: { ...DEFAULT_EXPORT_SETTINGS },
     metadata: META,
+    provenance: {
+      origin: "user", prompt: "p", model: "", endpointHost: "",
+      requestId: null, inputTokens: null, outputTokens: null, estimatedCostUsd: null,
+      generatedAt: "2026-10-07T10:00:00.000Z", policy: "upload-meta-v2",
+    },
+    requested: { svg: true, jpeg: true, eps: false },
     outputs: {
-      svg: { relPath: `${DIR}/export/${base}.svg`, bytes: 900, sha256: "d1", optimizer: null },
-      jpeg: { relPath: `${DIR}/export/${base}.jpg`, bytes: 500_000, sha256: "d2", width: 3886, height: 3886, mpx: 15.1, quality: 0.92 },
+      svg: { relPath: `${DIR}/export/generations/${generation}/${base}.svg`, bytes: 900, sha256: "d1", optimizer: null },
+      jpeg: { relPath: `${DIR}/export/generations/${generation}/${base}.jpg`, bytes: 500_000, sha256: "d2", width: 3886, height: 3886, mpx: 15.1, quality: 0.92 },
       eps: null,
     },
+    generation,
     state: "processed",
     failure: null,
     committedAt: "2026-10-07T10:00:00.000Z",
-  }));
+  });
+}
+
+/** What scanExportDir reports for a committed generation: the record text. */
+function recordJsonFor(base: string, generation = "gen-1"): string {
+  return JSON.stringify(recordFor(base, generation));
 }
 
 function readerFor(scans: Record<string, ExportDirScan>) {
-  return async (dirPath: string): Promise<ExportDirScan> => scans[dirPath] ?? { exportJson: null, outputs: [] };
+  return async (dirPath: string): Promise<ExportDirScan> => scans[dirPath] ?? scanOf({});
 }
 
 describe("upload sources — rows, chosen versions, exclusions", () => {
@@ -140,7 +158,7 @@ describe("upload sources — scan-time export state (design §9)", () => {
     const root = await buildRoot([
       { base: "icon-a", versions: [svgVersion(`${DIR}/icon-a_AI_v1.svg`, { version: 1, review: "approved" })] },
     ]);
-    const found = await discoverUploadRows(root, readerFor({ [DIR]: { exportJson: exportJsonFor("icon-a"), outputs: ["icon-a.svg", "icon-a.jpg"] } }));
+    const found = await discoverUploadRows(root, readerFor({ [DIR]: scanOf({ exportJson: recordJsonFor("icon-a"), outputs: ["icon-a.svg", "icon-a.jpg"], generation: "gen-1" }) }));
     expect(found.rows[0].exportState).toBe("processed");
     expect(found.rows[0].record?.iconBase).toBe("icon-a");
   });
@@ -149,7 +167,7 @@ describe("upload sources — scan-time export state (design §9)", () => {
     const root = await buildRoot([
       { base: "icon-a", versions: [svgVersion(`${DIR}/icon-a_AI_v1.svg`, { version: 1, review: "approved" })] },
     ]);
-    const found = await discoverUploadRows(root, readerFor({ [DIR]: { exportJson: "{corrupt", outputs: ["icon-a.svg"] } }));
+    const found = await discoverUploadRows(root, readerFor({ [DIR]: scanOf({ exportJson: "{corrupt", outputs: ["icon-a.svg"] }) }));
     expect(found.rows[0].exportState).toBe("interrupted");
     expect(found.rows[0].record).toBeNull();
   });
@@ -163,9 +181,11 @@ describe("upload sources — scan-time export state (design §9)", () => {
   });
 
   it("classifyExport keeps the pure rules visible", () => {
-    expect(classifyExport({ exportJson: null, outputs: [] })).toEqual({ state: "discovered", record: null });
-    expect(classifyExport({ exportJson: "junk", outputs: [] }).state).toBe("interrupted");
-    expect(classifyExport({ exportJson: null, outputs: ["x.svg"] }).state).toBe("interrupted");
+    expect(classifyExport(scanOf({}))).toEqual({ state: "discovered", record: null });
+    expect(classifyExport(scanOf({ exportJson: "junk" })).state).toBe("interrupted");
+    expect(classifyExport(scanOf({ outputs: ["x.svg"] })).state).toBe("interrupted");
+    // A v1 folder is a foreign package: stale, and never misread as "not exported".
+    expect(classifyExport(scanOf({ legacy: true, outputs: ["x.svg"] })).state).toBe("stale");
   });
 });
 

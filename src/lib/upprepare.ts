@@ -43,11 +43,72 @@ export function buildExportSvg(a: BuildArgs): string | null {
   root.setAttribute("viewBox", `0 0 ${a.plan.artboard.w} ${a.plan.artboard.h}`);
   root.removeAttribute("width");
   root.removeAttribute("height");
-  const scene = walkScene(doc, (el, resolved, matrix) => normalizeStroke(el, resolved, matrix, a));
+  const scene = walkScene(
+    doc,
+    (el, resolved, matrix) => normalizeStroke(el, resolved, matrix, a),
+    (el, resolved, parent) => materialize(el, resolved, parent),
+  );
   moveContentIntoGroup(doc, root, a);
   if (!scene.unsupported.has("complex-css")) bakeOutStyles(doc);
   return new XMLSerializer().serializeToString(doc);
 }
+
+/**
+ * The presentation values the export copy must carry once <style> is gone
+ * (R04). A value equal to the SVG initial value is skipped — an absent
+ * attribute means exactly that — so the copy stays as small as the source was.
+ */
+function materialize(el: Element, p: ResolvedProps, parent: ResolvedProps): void {
+  for (const [name, value] of presentation(p, parent)) if (value !== null) el.setAttribute(name, value);
+}
+
+type Pair = [string, string | null];
+
+/**
+ * The resolved presentation of one element, written only where it DIFFERS from
+ * what the parent already carries. That single rule covers both failure modes:
+ * a class-styled value survives the stylesheet's removal, and a reset
+ * (`stroke: none` under a stroked group) stays a reset — while a source
+ * without a stylesheet never gets an invented attribute.
+ */
+function presentation(p: ResolvedProps, parent: ResolvedProps): Pair[] {
+  return [
+    ["fill", paintOf(p.fill, parent.fill)],
+    ["stroke", paintOf(p.stroke, parent.stroke)],
+    ...strokePairs(p, parent),
+    ["fill-rule", valueOf(p.fillRule, parent.fillRule)],
+    ["display", valueOf(p.display ?? "inline", parent.display ?? "inline")],
+  ];
+}
+
+/** null paint means `none` — it must be said out loud once inherited paint exists. */
+function paintOf(value: string | null, inherited: string | null): string | null {
+  if (value === inherited) return null;
+  return value ?? "none";
+}
+
+function valueOf(value: string, inherited: string): string | null {
+  return value === inherited ? null : value;
+}
+
+function strokePairs(p: ResolvedProps, parent: ResolvedProps): Pair[] {
+  if (p.stroke === null) return [];
+  const dash = p.dash === null || p.dash.length === 0 ? null : p.dash.join(" ");
+  const parentDash = parent.dash === null || parent.dash.length === 0 ? null : parent.dash.join(" ");
+  const width = num(p.strokeWidth, parent.strokeWidth);
+  return [
+    ["stroke-width", width === null ? null : width],
+    ["stroke-linejoin", valueOf(p.linejoin, parent.linejoin)],
+    ["stroke-linecap", valueOf(p.linecap, parent.linecap)],
+    ["stroke-miterlimit", num(p.miterlimit, parent.miterlimit)],
+    ["stroke-dasharray", dash === parentDash ? null : dash],
+  ];
+}
+
+function num(value: number, inherited: number): string | null {
+  return value === inherited ? null : String(value);
+}
+
 
 /** The one stroke rule: the configured pt, expressed in this element's units. */
 function normalizeStroke(el: Element, resolved: ResolvedProps, matrix: Matrix, a: BuildArgs): void {

@@ -69,6 +69,15 @@ export function geminiProviderLabel(c: GeminiConfig): string {
   return `${GEMINI_PROVIDER_NAME} · ${c.model}`;
 }
 
+/** The endpoint's hostname for the record — the only endpoint detail stored. */
+export function endpointHostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "";
+  }
+}
+
 /** The versioned rate card — the ONLY source of cost, always an estimate. */
 export const RATE_CARD_VERSION = "gemini-3.1-flash-lite@2026-10-07";
 export const RATE_CARD = { inputPerMToken: 0.25, outputPerMToken: 1.5, currency: "USD" } as const;

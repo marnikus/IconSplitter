@@ -18,9 +18,16 @@ const ALL = { svg: true, jpeg: true, eps: true };
 
 function recordWith(settings: ExportSettings, meta: IconMetadata = META): ExportRecord {
   return buildExportRecord({
-    pairId: "p", iconBase: "icon-a",
-    source: { relPath: "pairs/icon-a_AI_v1.svg", version: 1, sha256: "sha-1" },
+    pairId: "p", iconBase: "icon-a", rootName: "root", dirPath: "pairs",
+    source: { relPath: "pairs/icon-a_AI_v1.svg", version: 1, sha256: "sha-1", bytes: 9 },
     settings, metadata: meta,
+    provenance: {
+      origin: "user", prompt: "p", model: "", endpointHost: "",
+      requestId: null, inputTokens: null, outputTokens: null, estimatedCostUsd: null,
+      generatedAt: "2026-10-07T10:00:00.000Z", policy: "upload-meta-v2",
+    },
+    requested: { svg: true, jpeg: true, eps: false },
+    generation: "gen-1",
     outputs: {
       svg: { relPath: "e/a.svg", bytes: 1, sha256: "s", optimizer: null },
       jpeg: { relPath: "e/a.jpg", bytes: 1, sha256: "j", width: 3886, height: 3886, mpx: 15.1, quality: settings.jpegQuality },
@@ -40,8 +47,8 @@ describe("upfinger — fingerprints", () => {
     expect(f.source).toBe("v1:sha-1");
     expect(f.visual).toContain("2.2");        // strokePt
     expect(f.visual).toContain("square");     // artboard
-    expect(f.raster).toContain("15.1");       // mpx
-    expect(f.raster).toContain("0.92");       // quality
+    expect(f.raster).toContain("15.1");       // mpx — it scales the geometry
+    expect(f.encode).toContain("0.92");       // quality — it never does
     expect(f.flags).toContain("true|false");  // optimizeSvg|includeEps
     expect(f.metadata).toContain(META.tags[9]);
     expect(prints(SETTINGS)).toEqual(prints(SETTINGS));

@@ -15,8 +15,8 @@ import type { UploadRowSource } from "../src/upload/sources";
 function row(id: string, over: Partial<UploadRowSource> = {}): UploadRowSource {
   return {
     id, iconBase: id, name: `${id}_AI.png`, dirPath: "pairs", metaPath: `pairs/${id}_AI.svg.json`,
-    version: 1, svgName: `${id}_AI_v1.svg`, svgRelPath: `pairs/${id}_AI_v1.svg`, svgFingerprint: "40:3300",
-    warnings: [], exportState: "discovered", record: null, ...over,
+    version: 1, svgName: `${id}_AI_v1.svg`, svgRelPath: `pairs/${id}_AI_v1.svg`, svgFingerprint: "40:3300", contentSha: `sha-${id}`,
+    warnings: [], exportState: "discovered", record: null, recovery: null, ...over,
   };
 }
 

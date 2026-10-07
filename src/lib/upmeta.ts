@@ -5,6 +5,9 @@
 // deterministic parsers (structured JSON first, labelled text second) and the
 // advisory style-phrase warnings. Nothing here promises legal or IP clearance.
 
+/** The policy identity this validator implements; stored with every record. */
+export const META_POLICY_VERSION = "upload-meta-v2";
+
 export const TAG_COUNT = 40;
 export const MANDATORY_TAGS = ["icon", "pictogram", "vector", "stroke", "line", "editable", "web"] as const;
 
@@ -153,6 +156,25 @@ export function parseMetadataResponse(text: string): ParseResult {
 }
 
 const STYLE_PHRASES = ["in the style of", "inspired by", "à la"];
+
+/**
+ * The donor's two-named-tags rule (report §5): the title's second segment is
+ * meant to name the two most relevant tags. It is a REVIEW rule, not a hard
+ * failure — the model can word a valid title differently — so it is reported
+ * next to the restricted-wording warnings and a human decides.
+ */
+export function titleTagRuleIssues(m: IconMetadata): string[] {
+  const segs = splitTitleSegments(m.title);
+  if (segs === null) return [];
+  const named = m.tags.slice(0, 2).filter((t) => new RegExp(`(?<![\\w-])${escapeRegExp(t)}(?![\\w-])`, "i").test(segs[1]));
+  if (named.length === 2) return [];
+  const missing = m.tags.slice(0, 2).filter((t) => !named.includes(t));
+  return [`the title's second segment does not name: ${missing.join(", ")}`];
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /** Advisory warnings only — model output is never legal or IP clearance. */
 export function styleWarnings(m: IconMetadata): string[] {

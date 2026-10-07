@@ -58,6 +58,8 @@ interface Inherit {
 const ROOT_INHERIT: Inherit = {
   fill: "#000000", stroke: null, strokeWidth: 1, linejoin: "miter", linecap: "butt", miterlimit: 4, fillRule: "nonzero", dash: null,
 };
+/** The root's own resolution: what a top-level element inherits from. */
+const ROOT_PROPS: ResolvedProps = { ...ROOT_INHERIT, display: "inline" };
 
 const SHAPE_TAGS = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text"]);
 /** Elements the pipeline cannot draw and reports by name. */
@@ -70,23 +72,31 @@ interface WalkCtx {
   rules: StyleRule[];
   scene: GeomScene;
   visit: ShapeVisit;
+  onResolved: ResolvedVisit | null;
 }
 
 /** A visitation for every drawing element, with its resolved style and matrix. */
 export type ShapeVisit = (el: Element, resolved: ResolvedProps, matrix: Matrix) => void;
 
 /**
+ * A visitation for EVERY element the walk resolves, before the display check —
+ * upprepare uses it to materialize resolved presentation on the export copy
+ * (R04), including elements the scene itself would skip.
+ */
+export type ResolvedVisit = (el: Element, resolved: ResolvedProps, parent: ResolvedProps) => void;
+
+/**
  * Walks the document once and returns its scene, visiting every drawing
  * element on the way. parseScene collects geometry; upprepare reuses the same
  * walk to normalize the export copy — ONE cascade, no second resolver.
  */
-export function walkScene(doc: Document, visit: ShapeVisit): GeomScene {
+export function walkScene(doc: Document, visit: ShapeVisit, onResolved: ResolvedVisit | null = null): GeomScene {
   const root = doc.documentElement;
   if (root === null || root.nodeName !== "svg") return { shapes: [], unsupported: new Set() };
   const rules = collectStyleRules(root);
   const scene: GeomScene = { shapes: [], unsupported: new Set() };
   if (rules.some((r) => !isSimpleSelector(r.selector))) scene.unsupported.add("complex-css");
-  walk(root, IDENTITY, ROOT_INHERIT, { rules, scene, visit });
+  walk(root, IDENTITY, ROOT_PROPS, { rules, scene, visit, onResolved });
   return scene;
 }
 
@@ -94,7 +104,7 @@ export function parseScene(doc: Document): GeomScene {
   return walkScene(doc, () => undefined);
 }
 
-function walk(el: Element, matrix: Matrix, inherit: Inherit, ctx: WalkCtx): void {
+function walk(el: Element, matrix: Matrix, inherit: ResolvedProps, ctx: WalkCtx): void {
   const tag = el.localName;
   if (NO_DRAW_TAGS.has(tag)) return;
   if (FOREIGN_TAGS.has(tag)) {
@@ -103,6 +113,7 @@ function walk(el: Element, matrix: Matrix, inherit: Inherit, ctx: WalkCtx): void
   }
   if (tag === "text") ctx.scene.unsupported.add("text");
   const props = resolveProps(el, inherit, ctx.rules);
+  ctx.onResolved?.(el, props, inherit);
   if (props.display === "none") return;
   trackUnsupportedPaint(el, ctx);
   const m = multiply(matrix, parseTransform(el.getAttribute("transform") ?? ""));

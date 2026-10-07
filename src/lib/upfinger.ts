@@ -12,7 +12,10 @@ import type { IconMetadata } from "./upmeta";
 export interface Fingerprints {
   source: string;
   visual: string;
+  /** Output raster size — it scales the geometry (physical stroke, §6.3). */
   raster: string;
+  /** JPEG encode quality — it never touches the geometry. */
+  encode: string;
   metadata: string;
   flags: string;
 }
@@ -23,7 +26,8 @@ export function fingerprintsOf(a: { sourceSha: string; settings: ExportSettings;
   return {
     source: `v1:${a.sourceSha}`,
     visual: `v1:${s.paddingPct}|${s.background.preset}|${s.background.custom}|${s.strokePt}|${s.artboard}`,
-    raster: `v1:${s.jpegMpx}|${s.jpegQuality}`,
+    raster: `v1:${s.jpegMpx}`,
+    encode: `v1:${s.jpegQuality}`,
     metadata: `v1:${a.metadata.title}\u0000${a.metadata.description}\u0000${a.metadata.tags.join(",")}`,
     flags: `v1:${s.optimizeSvg}|${s.includeEps}`,
   };
@@ -57,8 +61,9 @@ export interface PlanArgs {
  * The minimal honest plan (design §9): source change → everything incl.
  * metadata reconfirmation; visual change → SVG/JPEG/EPS rebuild, metadata
  * kept but flagged; metadata-only → segments re-embedded, no AI call, no
- * raster; raster change → JPEG re-encode (and the EPS page); flag change →
- * only the affected output; missing output → rebuild only what is missing.
+ * raster; raster change → SVG/EPS geometry (physical stroke) plus the JPEG
+ * re-encode; flag change → only the affected output; missing output → rebuild
+ * only what is missing.
  */
 export function planReexport(a: PlanArgs): StagePlan {
   if (a.record === null) {
@@ -69,7 +74,9 @@ export function planReexport(a: PlanArgs): StagePlan {
     };
   }
   const d = diffsOf(a);
-  const rebuildSvg = d.source || d.visual || d.metadata || d.optimize || !a.outputs.svg;
+  // The stroke width is physical: it is derived from the JPEG's raster size
+  // (§6.3), so a megapixel change rebuilds the SVG and the EPS page too (R07).
+  const rebuildSvg = d.source || d.visual || d.metadata || d.raster || d.optimize || !a.outputs.svg;
   return {
     prepare: rebuildSvg,
     metadata: d.source ? "reconfirm" : "reuse",
@@ -85,6 +92,7 @@ interface Diffs {
   visual: boolean;
   metadata: boolean;
   raster: boolean;
+  encode: boolean;
   optimize: boolean;
   epsFlag: boolean;
   reasons: string[];
@@ -97,7 +105,8 @@ function diffsOf(a: PlanArgs): Diffs {
     source: diff(a, "source", "the source SVG changed", reasons),
     visual: diff(a, "visual", "the visual settings changed", reasons),
     metadata: diff(a, "metadata", "the accepted metadata changed", reasons),
-    raster: diff(a, "raster", "the raster size or quality changed", reasons),
+    raster: diff(a, "raster", "the output raster size changed", reasons),
+    encode: diff(a, "encode", "the JPEG quality changed", reasons),
     optimize: record.settings.optimizeSvg !== flagOf(a.current.flags, 0),
     epsFlag: record.settings.includeEps !== a.includeEps,
     reasons,
@@ -108,9 +117,9 @@ function diffsOf(a: PlanArgs): Diffs {
 }
 
 function jpegPlan(d: Diffs, a: PlanArgs): JpegPlan {
-  const reembedOnly = d.metadata && !d.source && !d.visual && !d.raster && a.outputs.jpeg;
-  if (reembedOnly) return "reembed";
-  return d.source || d.visual || d.raster || !a.outputs.jpeg ? "rebuild" : "keep";
+  const pixelsSame = !d.source && !d.visual && !d.raster && !d.encode;
+  if (d.metadata && pixelsSame && a.outputs.jpeg) return "reembed";
+  return pixelsSame && a.outputs.jpeg ? "keep" : "rebuild";
 }
 
 function epsPlan(d: Diffs, a: PlanArgs): EpsPlan {

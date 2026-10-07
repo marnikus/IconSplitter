@@ -11,7 +11,7 @@ import { isDefaultMetaPrompt, DEFAULT_META_PROMPT } from "../lib/upprompt";
 import { geminiProviderLabel } from "../lib/gemconfig";
 import { maskKey } from "../lib/svgsecret";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
-import { loadMetaCache } from "./stores";
+import { knownMeta } from "./stores";
 import type { UploadRow } from "./statemodel";
 import type { UploadApi } from "./useUpload";
 import UploadRowView from "./UploadRow";
@@ -198,9 +198,8 @@ function PromptField({ u }: { u: UploadApi }) {
 
 /** The exact-request confirmation before anything is sent (design §7). */
 function ConfirmDialog({ u, rows, onClose }: { u: UploadApi; rows: UploadRow[]; onClose: () => void }) {
-  // The cache counts as accepted: only rows with neither need the paid call.
-  const cache = loadMetaCache();
-  const pending = rows.filter((r) => r.metadata === null && (r.source.svgFingerprint === null || cache[r.source.svgFingerprint] === undefined));
+  // The cache and a recovered draft both count: only true gaps need the paid call.
+  const pending = rows.filter((r) => knownMeta(r) === null);
   const aiCount = pending.length;
   const needKey = aiCount > 0 && u.key === null;
   const preview = aiCount > 0 ? u.requestPreview(pending[0].source) : null;

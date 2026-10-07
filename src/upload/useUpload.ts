@@ -21,6 +21,8 @@ import type { IconMetadata } from "../lib/upmeta";
 import { pruneIds } from "../lib/session";
 import { discoverUploadRows, type UploadRowSource } from "./sources";
 import { scanExportDir } from "./exportio";
+import { makeJournalStore } from "./jobjournal";
+import { makeSourceSha } from "./browserdeps";
 import { bindUploadSettingsApplier, setOverridesAction, type UploadSettingsPatch } from "./undoable";
 import {
   loadGeminiConfig, loadMetaPrompt, loadUploadDefaults, loadUploadOverrides,
@@ -106,8 +108,8 @@ function useUploadCore(): UploadCore {
   const [busy, setBusy] = useState<string | null>(null);
   const [gemini, setGeminiState] = useState<GeminiConfig>(() => loadGeminiConfig());
   const [prompt, setPromptState] = useState<string>(() => loadMetaPrompt());
-  const latest = useRef({ model, key, gemini, prompt, app });
-  latest.current = { model, key, gemini, prompt, app };
+  const latest = useRef({ model, rootName, key, gemini, prompt, app });
+  latest.current = { model, rootName, key, gemini, prompt, app };
   const run = useRef({ root: null as import("../lib/fs").DirHandleLike | null, cancelled: false, running: false });
   const say = useCallback((msg: string, err = false) => {
     dispatch({ type: "toast", message: err ? `${msg}` : msg });
@@ -168,7 +170,11 @@ async function scanOnce(p: {
   if (handle === null) return;
   p.setBusy("Scanning approved sources…");
   try {
-    const found = await discoverUploadRows(handle, (dirPath) => scanExportDir(handle, dirPath));
+    const journal = makeJournalStore(handle);
+    const found = await discoverUploadRows(handle, (dirPath) => scanExportDir(handle, dirPath), {
+      recovery: { read: (dirPath) => journal.load(dirPath), write: (dirPath, j) => journal.save(dirPath, j) },
+      sourceSha: makeSourceSha(handle),
+    });
     p.dispatch({ type: "scan", rows: found.rows });
     const known = new Set(found.rows.map((r) => r.id));
     patchUpload({ checked: pruneIds(p.latest.current.app.upload.checked, known) });

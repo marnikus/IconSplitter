@@ -55,15 +55,19 @@ describe("upload stores — localStorage, tolerant on read (RULE 13)", () => {
     expect(loadGeminiConfig()).toEqual(DEFAULT_GEMINI_CONFIG);
   });
 
-  it("the metadata cache is keyed by fingerprint and shape-checked on read", async () => {
+  it("the metadata cache is keyed by source identity and shape-checked on read", async () => {
     const { loadMetaCache, saveMetaCache } = await import("../src/upload/stores");
-    saveMetaCache({ "40:3300": META });
-    expect(loadMetaCache()["40:3300"]).toEqual(META);
-    // a source change (different fingerprint) simply misses the cache
-    expect(loadMetaCache()["41:3300"]).toBeUndefined();
-    localStorage.setItem("iconSplitter.upload.meta.v1", JSON.stringify({ cache: { good: META, bad: { title: "x" }, worse: 7 } }));
+    saveMetaCache({ "sha-40": { meta: META, provenance: null } });
+    expect(loadMetaCache()["sha-40"].meta).toEqual(META);
+    // a source change (different content hash) simply misses the cache
+    expect(loadMetaCache()["sha-41"]).toBeUndefined();
+    // the bare-metadata shape older builds wrote still loads, origin unknown
+    localStorage.setItem("iconSplitter.upload.meta.v1", JSON.stringify({
+      cache: { good: META, entry: { meta: META, provenance: { origin: "ai", prompt: "p", generatedAt: "t", policy: "upload-meta-v2" } }, bad: { title: "x" }, worse: 7 },
+    }));
     const loaded = loadMetaCache();
-    expect(loaded.good).toEqual(META);
+    expect(loaded.good).toMatchObject({ meta: META, provenance: null });
+    expect(loaded.entry.provenance?.origin).toBe("ai");
     expect(loaded.bad).toBeUndefined();
     expect(loaded.worse).toBeUndefined();
   });

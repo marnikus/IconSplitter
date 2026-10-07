@@ -10,6 +10,7 @@ import { browserPixelDeps } from "../lib/upsvgo";
 import { sendGeminiRequest, type GeminiRequest } from "../lib/geminireq";
 import type { GeminiConfig } from "../lib/gemconfig";
 import { openExportDir, scanExportDir } from "./exportio";
+import { makeJournalStore, type JournalStore } from "./jobjournal";
 import type { RunnerDeps } from "./runner";
 
 /** The canvas-dependent trio the runner needs (injectable for tests). */
@@ -27,16 +28,17 @@ export interface DepsArgs {
   onState?: RunnerDeps["onState"];
   cancelled?: RunnerDeps["cancelled"];
   canvas?: CanvasDeps;
+  /** Injectable for tests; the real one reads/writes below the picked root. */
+  journal?: JournalStore;
 }
 
 /** Builds the runner's dependency bundle from the picked root. */
 export function makeRunnerDeps(a: DepsArgs): RunnerDeps {
   const canvas = a.canvas ?? browserCanvasDeps();
   return {
-    readSource: (relPath) => readSourceFile(a.root, relPath),
+    readSourceBytes: (relPath) => readSourceBytes(a.root, relPath),
     scanExport: (dirPath) => scanExportDir(a.root, dirPath),
     openExport: (dirPath) => openExportDir(a.root, dirPath),
-    hashText: async (text) => subtleSha256(new TextEncoder().encode(text)),
     raster: { rasterize: canvas.rasterize, decode: browserDecode, sha256: subtleSha256 },
     pixels: { renderPixels: canvas.renderPixels },
     renderPreviewPng: canvas.previewPng,
@@ -46,18 +48,29 @@ export function makeRunnerDeps(a: DepsArgs): RunnerDeps {
     now: () => new Date().toISOString(),
     onState: a.onState,
     cancelled: a.cancelled,
+    // The durable attempt journal (R10): every stage is on disk before the
+    // next one starts, so a closed tab is visible as an interrupted run.
+    journal: a.journal ?? makeJournalStore(a.root),
   };
 }
 
-/** Reads one file below the root by its scan-relative path. */
-async function readSourceFile(root: DirHandleLike, relPath: string): Promise<string | null> {
+/** The scan-time content identity of a source: SHA-256 of its actual bytes. */
+export function makeSourceSha(root: DirHandleLike): (relPath: string) => Promise<string | null> {
+  return async (relPath) => {
+    const bytes = await readSourceBytes(root, relPath);
+    return bytes === null ? null : await subtleSha256(bytes);
+  };
+}
+
+/** Reads one file below the root by its scan-relative path, as bytes. */
+export async function readSourceBytes(root: DirHandleLike, relPath: string): Promise<Uint8Array | null> {
   try {
     let dir = root;
     const parts = relPath.split("/");
     const name = parts.pop() as string;
     for (const part of parts) dir = await dir.getDirectoryHandle(part);
     const file = await (await dir.getFileHandle(name)).getFile();
-    return await file.text();
+    return new Uint8Array(await file.arrayBuffer());
   } catch {
     return null;
   }

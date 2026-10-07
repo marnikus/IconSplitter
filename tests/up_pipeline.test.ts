@@ -7,12 +7,12 @@
 // and cancellation lands in `cancelled`.
 import { describe, expect, it, vi } from "vitest";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import { buildExportRecord } from "../src/lib/upexport";
+import { buildExportRecord, type ExportRecord } from "../src/lib/upexport";
+import { readPointer } from "../src/lib/upexportread";
 import { pairFile } from "./helpers/pairfile";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { DEFAULT_EXPORT_SETTINGS, type ExportSettings } from "../src/lib/upsettings";
 import { MANDATORY_TAGS, type IconMetadata } from "../src/lib/upmeta";
-import { readExportRecord } from "../src/lib/upexport";
 import { openExportDir, scanExportDir, type StagedCommit } from "../src/upload/exportio";
 import { runUploadJob, runUploadJobs, type JobRequest, type JobResult, type RunnerDeps } from "../src/upload/runner";
 import type { UploadRowSource } from "../src/upload/sources";
@@ -32,8 +32,8 @@ const META: IconMetadata = {
 function row(over: Partial<UploadRowSource> = {}): UploadRowSource {
   return {
     id: "pair-1", iconBase: "icon-a", name: "icon-a_AI.png", dirPath: DIR, metaPath: `${DIR}/icon-a_AI.svg.json`,
-    version: 1, svgName: "icon-a_AI_v1.svg", svgRelPath: `${DIR}/icon-a_AI_v1.svg`, svgFingerprint: "6:3300",
-    warnings: [], exportState: "discovered", record: null, ...over,
+    version: 1, svgName: "icon-a_AI_v1.svg", svgRelPath: `${DIR}/icon-a_AI_v1.svg`, svgFingerprint: "6:3300", contentSha: "sha-source",
+    warnings: [], exportState: "discovered", record: null, recovery: null, ...over,
   };
 }
 
@@ -52,13 +52,12 @@ function rootWithSource(): FakeDir {
 function deps(root: FakeDir, over: Partial<RunnerDeps> = {}): RunnerDeps {
   const rasterized = fakeJpeg(3886, 3886);
   return {
-    readSource: async (relPath) => {
+    readSourceBytes: async (relPath) => {
       const file = at(root, relPath);
-      return file instanceof FakeFile ? file.text : null;
+      return file instanceof FakeFile ? new TextEncoder().encode(file.text) : null;
     },
     scanExport: (dirPath) => scanExportDir(root, dirPath),
     openExport: (dirPath) => openExportDir(root, dirPath),
-    hashText: async (text) => `sha:${text.length}`,
     raster: {
       rasterize: async () => new Uint8Array(rasterized),
       decode: async () => true,
@@ -86,6 +85,7 @@ function at(root: FakeDir, relPath: string): FakeDir | FakeFile | undefined {
 function request(over: Partial<JobRequest> = {}): JobRequest {
   return {
     row: row(),
+    rootName: "test_pipeline",
     settings: { ...DEFAULT_EXPORT_SETTINGS },
     prompt: "Task: Analyze the icon image.",
     apiKey: "KEY",
@@ -98,52 +98,130 @@ function request(over: Partial<JobRequest> = {}): JobRequest {
 
 const exportFile = (root: FakeDir, name: string) => at(root, `${DIR}/export/${name}`);
 
-/** Byte-accurate readback of a written file (binary-safe through the fake). */
+/** The generation the pointer names — the only place a committed file lives. */
+function generationOf(root: FakeDir): string {
+  const pointer = JSON.parse((exportFile(root, "current.json") as FakeFile).text) as { generation: string };
+  return pointer.generation;
+}
+
+/** A committed file inside the generation the pointer names. */
+const committedFile = (root: FakeDir, name: string) =>
+  at(root, `${DIR}/export/generations/${generationOf(root)}/${name}`);
+
+/** The committed record, read back through the real pointer reader. */
+function committedRecord(root: FakeDir): ExportRecord {
+  const read = readPointer((exportFile(root, "current.json") as FakeFile).text);
+  return (read as { record: ExportRecord }).record;
+}
+
+/** Byte-accurate readback of a committed file (binary-safe through the fake). */
 async function bytesOf(root: FakeDir, name: string): Promise<Uint8Array> {
-  const file = exportFile(root, name) as FakeFile;
+  const file = committedFile(root, name) as FakeFile;
   return new Uint8Array(await (await file.getFile()).arrayBuffer());
 }
 
-describe("exportio — the staged commit (design §9)", () => {
-  it("writes outputs first and export.json last, in the pair's export folder", async () => {
+describe("exportio — the atomic commit pointer (R01)", () => {
+  it("writes the generation whole and moves the pointer LAST", async () => {
     const root = rootWithSource();
     const staged = (await openExportDir(root, DIR)) as StagedCommit;
     expect(await staged.writeOutputs([{ name: "icon-a.svg", bytes: new Uint8Array([1, 2]) }])).toBe(true);
-    expect(exportFile(root, "export.json")).toBeUndefined(); // not yet — outputs only
-    expect(await staged.commitRecord(fullRecord())).toBe(true);
-    expect(JSON.parse((exportFile(root, "export.json") as FakeFile).text).v).toBe(1);
+    expect(exportFile(root, "current.json")).toBeUndefined(); // not yet — the pointer is the commit
+    expect(await staged.commitRecord(fullRecord(staged.generation))).toBe(true);
+    const pointer = JSON.parse((exportFile(root, "current.json") as FakeFile).text) as { v: number; generation: string };
+    expect(pointer.v).toBe(2);
+    expect(pointer.generation).toBe(staged.generation);
+    expect((committedFile(root, "icon-a.svg") as FakeFile).data).not.toBeNull();
   });
 
-  it("scanExportDir reports the record text and the output names", async () => {
+  it("scanExportDir reports the committed record, its generation and its outputs", async () => {
     const root = rootWithSource();
     const staged = (await openExportDir(root, DIR)) as StagedCommit;
     await staged.writeOutputs([
       { name: "icon-a.svg", bytes: new Uint8Array([1]) },
       { name: "icon-a.jpg", bytes: new Uint8Array([2]) },
     ]);
-    await staged.commitRecord(fullRecord());
+    await staged.commitRecord(fullRecord(staged.generation));
     const scan = await scanExportDir(root, DIR);
     expect(scan.outputs).toEqual(["icon-a.jpg", "icon-a.svg"]);
+    expect(scan.generation).toBe(staged.generation);
+    expect(scan.legacy).toBe(false);
     expect(scan.exportJson).not.toBeNull();
+  });
+
+  it("a failed pass never moves the pointer and leaves the previous generation intact", async () => {
+    const root = rootWithSource();
+    const first = (await openExportDir(root, DIR)) as StagedCommit;
+    await first.writeOutputs([{ name: "icon-a.svg", bytes: new Uint8Array([7, 7]) }]);
+    await first.commitRecord(fullRecord(first.generation));
+    const before = (exportFile(root, "current.json") as FakeFile).text;
+
+    const second = (await openExportDir(root, DIR)) as StagedCommit;
+    await second.writeOutputs([{ name: "icon-a.svg", bytes: new Uint8Array([8, 8]) }]); // never committed
+    expect((exportFile(root, "current.json") as FakeFile).text).toBe(before); // untouched
+    const scan = await scanExportDir(root, DIR);
+    expect(scan.generation).toBe(first.generation);
+    const kept = (committedFile(root, "icon-a.svg") as FakeFile).text;
+    expect(kept.length).toBe(2); // the last VALID generation, not the half-written one
+  });
+
+  it("keeps a copied output byte-for-byte in the new generation", async () => {
+    const root = rootWithSource();
+    const first = (await openExportDir(root, DIR)) as StagedCommit;
+    await first.writeOutputs([{ name: "icon-a.jpg", bytes: new Uint8Array([9, 8, 7]) }]);
+    await first.commitRecord(fullRecord(first.generation));
+    const second = (await openExportDir(root, DIR)) as StagedCommit;
+    expect(await second.copyOutput("icon-a.jpg")).toBe(true);
+    await second.commitRecord(fullRecord(second.generation));
+    expect(Array.from(await bytesOf(root, "icon-a.jpg"))).toEqual([9, 8, 7]);
+  });
+
+  it("prunes to the last two generations after a successful commit", async () => {
+    const root = rootWithSource();
+    for (const n of [1, 2, 3]) {
+      const staged = (await openExportDir(root, DIR)) as StagedCommit;
+      await staged.writeOutputs([{ name: "icon-a.svg", bytes: new Uint8Array([n]) }]);
+      await staged.commitRecord(fullRecord(staged.generation));
+      await staged.pruneOldGenerations();
+    }
+    const generations = at(root, `${DIR}/export/generations`) as FakeDir;
+    expect(generations.children.size).toBe(2);
   });
 
   it("a missing export folder scans as nothing", async () => {
     const scan = await scanExportDir(rootWithSource(), DIR);
-    expect(scan).toEqual({ exportJson: null, outputs: [] });
+    expect(scan).toMatchObject({ exportJson: null, outputs: [], generation: null, legacy: false });
+  });
+
+  it("reports a pre-v2 folder as legacy instead of trusting its export.json", async () => {
+    const root = rootWithSource();
+    const folder = at(root, DIR) as FakeDir;
+    const legacy = new FakeDir("export");
+    legacy.children.set("export.json", new FakeFile("export.json", 10, 1, JSON.stringify({ v: 1, pairId: "pair-1", iconBase: "icon-a" })));
+    legacy.children.set("icon-a.svg", new FakeFile("icon-a.svg", 3, 1, "old"));
+    folder.children.set("export", legacy);
+    const scan = await scanExportDir(root, DIR);
+    expect(scan).toMatchObject({ exportJson: null, legacy: true, generation: null });
   });
 });
 
-function fullRecord() {
+function fullRecord(generation = "gen-1") {
   return buildExportRecord({
-    pairId: "pair-1", iconBase: "icon-a",
-    source: { relPath: `${DIR}/icon-a_AI_v1.svg`, version: 1, sha256: "sha:24" },
+    pairId: "pair-1", iconBase: "icon-a", rootName: "test_pipeline", dirPath: DIR,
+    source: { relPath: `${DIR}/icon-a_AI_v1.svg`, version: 1, sha256: "h24", bytes: 24 },
     settings: { ...DEFAULT_EXPORT_SETTINGS },
     metadata: META,
+    provenance: {
+      origin: "user", prompt: "p", model: "gemini-3.1-flash-lite", endpointHost: "generativelanguage.googleapis.com",
+      requestId: null, inputTokens: null, outputTokens: null, estimatedCostUsd: null,
+      generatedAt: "2026-10-07T12:00:00.000Z", policy: "upload-meta-v2",
+    },
+    requested: { svg: true, jpeg: true, eps: false },
     outputs: {
-      svg: { relPath: `${DIR}/export/icon-a.svg`, bytes: 10, sha256: "h10", optimizer: null },
-      jpeg: { relPath: `${DIR}/export/icon-a.jpg`, bytes: 20, sha256: "h20", width: 3886, height: 3886, mpx: 15.1, quality: 0.92 },
+      svg: { relPath: `${DIR}/export/generations/${generation}/icon-a.svg`, bytes: 10, sha256: "h10", optimizer: null },
+      jpeg: { relPath: `${DIR}/export/generations/${generation}/icon-a.jpg`, bytes: 20, sha256: "h20", width: 3886, height: 3886, mpx: 15.1, quality: 0.92 },
       eps: null,
     },
+    generation,
     state: "processed", failure: null, committedAt: "2026-10-07T12:00:00.000Z",
   });
 }
@@ -156,15 +234,18 @@ describe("runner — the happy path end to end", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.record.state).toBe("processed");
+    expect(out.record.v).toBe(2);
     expect(out.record.metadata).toEqual(META);
     // stages ran in the design's order
     expect(states).toEqual(["preflight", "prepare", "metadata", "render", "embed", "eps", "validate", "commit", "processed"]);
-    // the files exist and validate
-    const svgText = (exportFile(root, "icon-a.svg") as FakeFile).text;
+    // the files exist inside the committed generation and validate
+    const svgText = (committedFile(root, "icon-a.svg") as FakeFile).text;
     expect(readSvgMetadata(svgText)?.title).toBe(META.title);
     expect(readJpegMetadata(await bytesOf(root, "icon-a.jpg")).xmp).not.toBeNull();
-    const record = readExportRecord((exportFile(root, "export.json") as FakeFile).text);
-    expect(record.ok).toBe(true);
+    const record = committedRecord(root);
+    expect(record.v).toBe(2);
+    expect(record.rootName).toBe("test_pipeline");
+    expect(record.provenance.origin).toBe("user");
   });
 
   it("does not call the AI when accepted metadata is in hand", async () => {
@@ -178,11 +259,13 @@ describe("runner — the happy path end to end", () => {
     const answer = JSON.stringify({ title: META.title, description: META.description, tags: META.tags });
     const out = await runUploadJob(
       request({ metadata: null, allowAi: true }),
-      deps(root, { sendMetadata: async () => ({ ok: true, text: answer, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostUsd: 0 }, requestId: null, finishReason: "STOP" }) }),
+      deps(root, { sendMetadata: async () => ({ ok: true, text: answer, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostUsd: 0 }, requestId: "req-1", finishReason: "STOP" }) }),
     );
     expect(out.ok).toBe(true);
-    const svgText = (exportFile(root, "icon-a.svg") as FakeFile).text;
+    const svgText = (committedFile(root, "icon-a.svg") as FakeFile).text;
     expect(readSvgMetadata(svgText)?.description).toBe(META.description);
+    expect(committedRecord(root).provenance.origin).toBe("ai");
+    expect(committedRecord(root).provenance.requestId).toBe("req-1");
   });
 
   it("an AI refusal fails the job honestly, with nothing written", async () => {
@@ -193,14 +276,14 @@ describe("runner — the happy path end to end", () => {
     );
     expect(out).toMatchObject({ ok: false, state: "failed" });
     if (!out.ok) expect(out.error).toContain("refusal");
-    expect(exportFile(root, "export.json")).toBeUndefined();
+    expect(exportFile(root, "current.json")).toBeUndefined();
   });
 
   it("no metadata and no AI allowance fails before anything is written", async () => {
     const root = rootWithSource();
     const out = await runUploadJob(request({ metadata: null, allowAi: false }), deps(root));
     expect(out).toMatchObject({ ok: false, state: "failed" });
-    expect(exportFile(root, "export.json")).toBeUndefined();
+    expect(exportFile(root, "current.json")).toBeUndefined();
   });
 
   it("an unparsable source fails preflight, never silently", async () => {
@@ -215,7 +298,7 @@ describe("runner — the happy path end to end", () => {
     const root = rootWithSource();
     const out = await runUploadJob(request(), deps(root, { cancelled: () => ++calls > 1 }));
     expect(out).toMatchObject({ ok: false, state: "cancelled" });
-    expect(exportFile(root, "export.json")).toBeUndefined();
+    expect(exportFile(root, "current.json")).toBeUndefined();
   });
 });
 
@@ -225,7 +308,7 @@ describe("runner — EPS and partial states", () => {
     const settings: ExportSettings = { ...DEFAULT_EXPORT_SETTINGS, includeEps: true };
     const out = await runUploadJob(request({ settings }), deps(root));
     expect(out.ok).toBe(true);
-    const eps = (exportFile(root, "icon-a.eps") as FakeFile).text;
+    const eps = (committedFile(root, "icon-a.eps") as FakeFile).text;
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
     expect(eps).toContain("2.2 setlinewidth");
   });
@@ -239,8 +322,7 @@ describe("runner — EPS and partial states", () => {
     expect(out).toMatchObject({ ok: false, state: "partial" });
     if (!out.ok) expect(out.error).toContain("EPS skipped");
     // SVG and JPEG still committed; the record says partial
-    const record = readExportRecord((exportFile(root, "export.json") as FakeFile).text);
-    expect(record.ok && record.record.state).toBe("partial");
+    expect(committedRecord(root).state).toBe("partial");
   });
 });
 
@@ -256,25 +338,22 @@ describe("runner — selective re-export (design §9)", () => {
     } }));
     expect(out.ok).toBe(true);
     expect(rasterize).not.toHaveBeenCalled(); // no AI call, no raster
-    const svgText = (exportFile(root, "icon-a.svg") as FakeFile).text;
+    const svgText = (committedFile(root, "icon-a.svg") as FakeFile).text;
     expect(readSvgMetadata(svgText)?.description).toBe(edited.description);
     const reembedded = await bytesOf(root, "icon-a.jpg");
-    expect(reembedded.length).toBeGreaterThan(firstJpeg.length - firstJpeg.length); // grew by the new segments
     expect(reembedded.length).not.toBe(firstJpeg.length); // not the same bytes — new metadata
-    const record = readExportRecord((exportFile(root, "export.json") as FakeFile).text);
-    expect(record.ok && record.record.metadata.description).toBe(edited.description);
+    expect(committedRecord(root).metadata.description).toBe(edited.description);
   });
 
   it("a quality-only change re-encodes the JPEG and keeps the SVG file", async () => {
     const root = rootWithSource();
     expect((await runUploadJob(request(), deps(root))).ok).toBe(true);
-    const svgBefore = (exportFile(root, "icon-a.svg") as FakeFile).text;
+    const svgBefore = (committedFile(root, "icon-a.svg") as FakeFile).text;
     const settings: ExportSettings = { ...DEFAULT_EXPORT_SETTINGS, jpegQuality: 0.95 };
     const out = await runUploadJob(request({ settings }), deps(root));
     expect(out.ok).toBe(true);
-    expect((exportFile(root, "icon-a.svg") as FakeFile).text).toBe(svgBefore); // untouched
-    const record = readExportRecord((exportFile(root, "export.json") as FakeFile).text);
-    expect(record.ok && record.record.settings.jpegQuality).toBe(0.95);
+    expect((committedFile(root, "icon-a.svg") as FakeFile).text).toBe(svgBefore); // untouched
+    expect(committedRecord(root).settings.jpegQuality).toBe(0.95);
   });
 });
 
@@ -292,7 +371,7 @@ describe("runUploadJobs — bounded concurrency, isolated failures", () => {
     expect((results.get("pair-icon-b") as JobResult).ok).toBe(true);
     expect(results.get("pair-broken")).toMatchObject({ ok: false, state: "failed" });
     // the broken icon's failure left the others' packages whole
-    expect(exportFile(root, "icon-a.svg")).toBeDefined();
-    expect(exportFile(root, "icon-b.svg")).toBeDefined();
+    expect(at(root, `${DIR}/export/generations`)).toBeDefined();
+    expect((results.get("pair-icon-a") as JobResult).ok).toBe(true);
   });
 });

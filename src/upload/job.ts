@@ -1,29 +1,31 @@
 // job.ts — the per-icon export stage machine (design §9): preflight → prepare
 // → metadata → render → embed → eps → validate → commit, every output built
-// and validated in memory first, export.json written LAST. runner.ts owns the
-// public API and the pool; jobartifacts.ts owns the artifact decisions. All
-// dependencies are injected (RULE 8); no key, payload or bytes reach the log.
+// and validated in memory first, the pointer written LAST. All dependencies
+// are injected (RULE 8); no key, payload or bytes ever reach the log.
 
 import { parseScene, type GeomScene } from "../lib/upgeom";
 import { sceneBounds } from "../lib/upbounds";
 import { fitPlan, rasterSize, type FitPlan, type RasterSize } from "../lib/upfit";
-import { buildExportSvg, embedSvgMetadata, parseSvgText, readSvgMetadata } from "../lib/upprepare";
+import { buildExportSvg, embedSvgMetadata, parseSvgText } from "../lib/upprepare";
 import { produceJpeg } from "../lib/upraster";
-import { buildEps, epsPreflight } from "../lib/upeps";
 import { parseMetadataResponse, type IconMetadata } from "../lib/upmeta";
-import { readExportRecord, type ExportRecord } from "../lib/upexport";
-import { readJpegMetadata } from "../lib/upjpegmeta";
+import { readExportRecord } from "../lib/upexportread";
+import type { ExportRecord, MetadataProvenance } from "../lib/upexport";
 import { resolveBackground } from "../lib/svgbackground";
-import { buildJobRecord, embedJpegSegments, optimizeForDelivery, type JpegSegments } from "./jobartifacts";
+import {
+  aiProvenance, buildJobRecord, embedJpegSegments, encodeUtf8, epsCommitted, epsOutcome, keptOutputs,
+  optimizeForDelivery, rebuiltOutputs, userProvenance, validateAccepted, type JpegSegments,
+} from "./jobartifacts";
+import { commitInputs, outputsPresent, planFor } from "./jobplan";
 import { buildGeminiRequest } from "../lib/geminireq";
-import { fingerprintsOf, planReexport, type StagePlan } from "../lib/upfinger";
+import type { StagePlan } from "../lib/upfinger";
 import type { ExportDirScan } from "./sources";
-import type { OutputFile, StagedCommit } from "./exportio";
+import type { StagedCommit } from "./exportio";
 import type { JobRequest, JobResult, JobState, RunnerDeps } from "./runner";
 
 /** The stage chain; each stage returns its failure reason or null. */
 export class Job {
-  private scan: ExportDirScan = { exportJson: null, outputs: [] };
+  private scan: ExportDirScan = { exportJson: null, outputs: [], generation: null, legacy: false, corruptPointer: false };
   private committed: ExportRecord | null = null;
   private staged: StagedCommit | null = null;
   private doc: Document | null = null;
@@ -39,6 +41,10 @@ export class Job {
   private epsText: string | null = null;
   private epsFailure: string | null = null;
   private meta: IconMetadata | null = null;
+  /** Where the accepted metadata came from; the source's content identity. */
+  private provenance: MetadataProvenance | null = null;
+  private sourceSha = "";
+  private sourceBytes = 0;
   private svgSha = "";
   private recordBuilt: ExportRecord | null = null;
 
@@ -62,19 +68,22 @@ export class Job {
       if (error !== null) return this.outcome(error);
     }
     this.deps.onState?.(this.req.row.id, "processed");
-    const record = this.recordBuilt ?? await this.record("processed");
+    const record = this.recordBuilt ?? await this.record("processed", this.staged?.generation ?? "");
     return { ok: true, record, plan: this.stagePlan as StagePlan };
   }
 
-  /** Reads the source, decides the plan; the geometry must be honest. */
+  /** Reads the source, decides the plan; geometry must be honest. */
   private async preflight(): Promise<string | null> {
     this.scan = await this.deps.scanExport(this.req.row.dirPath);
     this.meta = this.req.metadata;
     const read = this.scan.exportJson === null ? null : readExportRecord(this.scan.exportJson);
     this.committed = read !== null && read.ok ? read.record : null;
+    const bytes = await this.deps.readSourceBytes(this.req.row.svgRelPath);
+    if (bytes === null) return `the chosen SVG is unreadable: ${this.req.row.svgRelPath}`;
+    this.sourceSha = await this.deps.raster.sha256(bytes);
+    this.sourceBytes = bytes.length;
     this.stagePlan = await this.plan();
-    const text = await this.deps.readSource(this.req.row.svgRelPath);
-    if (text === null) return `the chosen SVG is unreadable: ${this.req.row.svgRelPath}`;
+    const text = new TextDecoder().decode(bytes);
     this.doc = parseSvgText(text);
     if (this.doc === null) return "the chosen SVG does not parse";
     this.scene = parseScene(this.doc);
@@ -83,29 +92,15 @@ export class Job {
     return null;
   }
 
-  /** The selective plan (§9): compare the committed record with today. */
+  /** The selective plan (§9) — jobplan owns the rule, preflight owns the facts. */
   private async plan(): Promise<StagePlan> {
-    const sha = await this.deps.hashText(this.req.row.svgRelPath);
-    // No metadata in hand → a sentinel that matches nothing, so the plan
-    // re-embeds whatever the (possibly generated) metadata turns out to be.
-    const meta = this.req.metadata ?? (this.req.allowAi ? PENDING_META : this.committed?.metadata ?? PENDING_META);
-    const plan = planReexport({
-      record: this.committed,
-      current: fingerprintsOf({ sourceSha: sha, settings: this.req.settings, metadata: meta }),
-      outputs: this.outputsPresent(),
-      includeEps: this.req.settings.includeEps,
+    return planFor({
+      committed: this.committed, sourceSha: this.sourceSha, settings: this.req.settings,
+      metadata: this.req.metadata, allowAi: this.req.allowAi,
+      present: outputsPresent(this.scan, this.req.row.iconBase),
     });
-    return this.meta === null && this.req.allowAi ? { ...plan, metadata: "generate" } : plan;
   }
 
-  private outputsPresent(): { svg: boolean; jpeg: boolean; eps: boolean } {
-    const base = this.req.row.iconBase;
-    return {
-      svg: this.scan.outputs.includes(`${base}.svg`),
-      jpeg: this.scan.outputs.includes(`${base}.jpg`),
-      eps: this.scan.outputs.includes(`${base}.eps`),
-    };
-  }
 
   private async prepare(): Promise<string | null> {
     const bounds = sceneBounds(this.scene as GeomScene);
@@ -127,7 +122,11 @@ export class Job {
 
   /** Metadata: provided/cached first; the AI call is the paid fallback. */
   private async metadata(): Promise<string | null> {
-    if (this.meta !== null) return null;
+    if (this.meta !== null) {
+      this.provenance = this.provenance ?? this.req.metadataProvenance ?? userProvenance(this.req, this.deps.now());
+      await this.deps.onMetadata?.(this.req.row.id, this.meta, this.provenance);
+      return null;
+    }
     if (!this.req.allowAi) return "no accepted metadata for this icon and AI generation is not allowed";
     const svgForPreview = this.exportSvg === "" ? await this.buildExportCopy() : this.exportSvg;
     if (svgForPreview === null) return "the export copy could not be built for the metadata request";
@@ -141,6 +140,10 @@ export class Job {
     const parsed = parseMetadataResponse(out.text);
     if (!parsed.ok) return `the generated metadata does not pass validation: ${parsed.issues.join("; ")}`;
     this.meta = parsed.meta;
+    this.provenance = aiProvenance(this.req, out, this.deps.now());
+    // The paid result becomes durable BEFORE it is used (report §5): a crash
+    // after this point can reuse it, and never asks the model again.
+    await this.deps.onMetadata?.(this.req.row.id, parsed.meta, this.provenance);
     return null;
   }
 
@@ -154,15 +157,11 @@ export class Job {
     }
     const embedded = embedSvgMetadata(this.exportSvg, meta);
     if (embedded === null) return "the SVG metadata could not be embedded";
-    this.finalSvg = await this.optimize(embedded);
-    this.svgSha = await this.deps.raster.sha256(encode(this.finalSvg));
+    const optimized = await optimizeForDelivery(embedded, this.req, this.deps);
+    this.optimizer = optimized.optimizer;
+    this.finalSvg = optimized.svg;
+    this.svgSha = await this.deps.raster.sha256(encodeUtf8(this.finalSvg));
     return this.rasterize();
-  }
-
-  private async optimize(embedded: string): Promise<string> {
-    const out = await optimizeForDelivery(embedded, this.req, this.deps);
-    this.optimizer = out.optimizer;
-    return out.svg;
   }
 
   private async rasterize(): Promise<string | null> {
@@ -193,74 +192,82 @@ export class Job {
     const out = await embedJpegSegments(this.jpegBytes as Uint8Array, this.meta as IconMetadata, this.deps);
     if (out === null) return "the JPEG metadata exceeded the 65 502-byte segment limit";
     this.jpegBytes = out.bytes;
-    this.jpegStats = this.jpegStats ?? out.stats;
+    // R08: the manifest describes the bytes that are actually committed —
+    // always recomputed after the segment surgery, never the pre-embed stats.
+    this.jpegStats = out.stats;
     return null;
   }
 
   private async epsStage(): Promise<string | null> {
-    if (!this.req.settings.includeEps || this.stagePlan?.eps !== "build") return null;
-    const issues = epsPreflight(this.scene as GeomScene);
-    if (issues.length > 0) {
-      this.epsFailure = `EPS skipped (${issues.join(", ")})`;
-      return null;
-    }
-    const out = buildEps({
-      svg: this.exportSvg, raster: this.raster, strokePt: this.req.settings.strokePt,
+    const out = epsOutcome({
+      scene: this.scene as GeomScene, settings: this.req.settings, plan: this.stagePlan,
+      exportSvg: this.exportSvg, raster: this.raster, strokePt: this.req.settings.strokePt,
       title: (this.meta as IconMetadata).title,
     });
-    if (typeof out !== "string") {
-      this.epsFailure = `EPS failed: ${out.error}`;
-      return null;
-    }
-    this.epsText = out;
+    this.epsText = out.text;
+    this.epsFailure = out.failure;
     return null;
   }
 
-  /** Both formats re-read and compared field-by-field before any write. */
+  /** The export boundary (RULE 15, R06) — jobartifacts performs the readback. */
   private async validate(): Promise<string | null> {
-    const meta = this.meta as IconMetadata;
-    const svgBack = readSvgMetadata(this.finalSvg);
-    if (svgBack === null || svgBack.title !== meta.title || svgBack.description !== meta.description
-      || svgBack.tags.join("\u0000") !== meta.tags.join("\u0000")) {
-      return "the embedded SVG metadata does not read back equal to the accepted metadata";
-    }
-    const jpegBack = readJpegMetadata(this.jpegBytes as Uint8Array);
-    if (jpegBack.xmp === null || jpegBack.iptc === null) return "the embedded JPEG metadata does not read back";
-    return null;
+    return validateAccepted({
+      meta: this.meta as IconMetadata, finalSvg: this.finalSvg,
+      jpegBytes: this.jpegBytes as Uint8Array, provenance: this.provenance,
+    });
   }
 
-  /** The commit pass: files first, export.json LAST (design §9). */
+  /**
+   * The commit pass (R01): the generation is written WHOLE — rebuilt files plus
+   * byte copies of every kept output — and only then does the pointer move, so
+   * a failure leaves the previous generation untouched.
+   */
   private async commit(): Promise<string | null> {
     const staged = await this.stagedOrOpen();
     if (staged === null) return "failed: the export folder could not be created";
-    const files: OutputFile[] = [];
-    const base = this.req.row.iconBase;
-    if (this.stagePlan?.svg === "rebuild") files.push({ name: `${base}.svg`, bytes: encode(this.finalSvg) });
-    if (this.stagePlan?.jpeg !== "keep") files.push({ name: `${base}.jpg`, bytes: this.jpegBytes as Uint8Array });
-    if (this.epsText !== null) files.push({ name: `${base}.eps`, bytes: encode(this.epsText) });
-    if (!(await staged.writeOutputs(files))) {
-      return "partial: an output write failed — the previous record still describes the last valid state";
-    }
-    const state = this.epsCommitted() ? "processed" : "partial";
-    this.recordBuilt = await this.record(state);
+    const failure = await this.publishOutputs(staged);
+    if (failure !== null) return failure;
+    const state = epsCommitted(this.commitInputs()) ? "processed" : "partial";
+    this.recordBuilt = await this.record(state, staged.generation);
     if (!(await staged.commitRecord(this.recordBuilt))) {
-      return "partial: the commit record could not be written — retry";
+      return "partial: the commit pointer could not be written — the previous package still stands; retry";
     }
-    return this.epsCommitted() ? null : `partial: ${this.epsFailure ?? "an EPS output was requested but not committed"}`;
+    await staged.pruneOldGenerations();
+    return epsCommitted(this.commitInputs()) ? null : `partial: ${this.epsFailure ?? "an EPS output was requested but not committed"}`;
   }
 
-  /** EPS is committed when built now, kept from a valid package, or not wanted. */
-  private epsCommitted(): boolean {
-    if (this.epsText !== null) return true;
-    if (this.epsFailure !== null) return false;
-    if (!this.req.settings.includeEps) return true;
-    return this.stagePlan?.eps === "keep" && this.outputsPresent().eps;
+  /** Every R07/R12/R21 decision reads ONE bundle (jobartifacts owns the rules). */
+  private commitInputs() {
+    return commitInputs({
+      plan: this.stagePlan, base: this.req.row.iconBase,
+      present: outputsPresent(this.scan, this.req.row.iconBase),
+      settings: this.req.settings, epsText: this.epsText, epsFailure: this.epsFailure,
+    });
   }
 
-  private async record(state: "processed" | "partial"): Promise<ExportRecord> {
+  /** Writes the rebuilt outputs, then carries every kept one into the generation. */
+  private async publishOutputs(staged: StagedCommit): Promise<string | null> {
+    const rebuilt = rebuiltOutputs({
+      plan: this.stagePlan, base: this.req.row.iconBase, finalSvg: this.finalSvg,
+      jpegBytes: this.jpegBytes, epsText: this.epsText,
+    });
+    if (rebuilt.length > 0 && !(await staged.writeOutputs(rebuilt))) {
+      return "partial: an output write failed — the previous package still stands; retry";
+    }
+    for (const kept of keptOutputs(this.commitInputs())) {
+      if (!(await staged.copyOutput(kept))) {
+        return `partial: the kept output ${kept} could not be carried into the new generation — retry`;
+      }
+    }
+    return null;
+  }
+
+  private async record(state: "processed" | "partial", generation: string): Promise<ExportRecord> {
     return buildJobRecord({
       req: this.req, deps: this.deps, meta: this.meta as IconMetadata, finalSvg: this.finalSvg,
-      svgSha: this.svgSha, optimizer: this.optimizer, jpeg: this.jpegStats as import("./jobartifacts").JpegSegments["stats"],
+      svgSha: this.svgSha, sourceSha: this.sourceSha, sourceBytes: this.sourceBytes,
+      provenance: this.provenance as MetadataProvenance, generation,
+      optimizer: this.optimizer, jpeg: this.jpegStats as JpegSegments["stats"],
       epsText: this.epsText, epsFailure: this.epsFailure, state, now: this.deps.now(),
     });
   }
@@ -283,17 +290,10 @@ export class Job {
     return { ok: false, state: "cancelled", error: "cancelled", record: null };
   }
 
-  /** A "partial:" failure is a partial package; everything else is failed. */
+  /** A "partial:" failure is a partial package; anything else is failed. */
   private outcome(error: string): JobResult {
     const partial = error.startsWith("partial:");
     this.deps.onState?.(this.req.row.id, partial ? "partial" : "failed", error);
     return { ok: false, state: partial ? "partial" : "failed", error, record: null };
   }
-}
-
-/** Matches no real print, so a pending generation plans an honest re-embed. */
-const PENDING_META: IconMetadata = { title: "\u2026pending generation", description: "\u2026pending generation", tags: ["pending-generation"] };
-
-function encode(text: string): Uint8Array {
-  return new TextEncoder().encode(text);
 }
