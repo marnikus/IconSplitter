@@ -45,13 +45,17 @@ export function toPx(length: Length, basis: number): number {
   return length.value;
 }
 
-/** How much of the shorter side padding may take before it hides the artwork. */
-export const PADDING_CAP_RATIO = 0.45;
+/**
+ * Padding never crops anything (it is added AROUND the artwork), so the cap is
+ * only a typo guard: more than twice the shorter side per edge is a mistake, and
+ * capping it keeps a stray "5000" from producing a canvas nothing can open.
+ */
+export const PADDING_CAP_RATIO = 2;
 
 /** The ranges the settings form validates against (design §5). */
 export const LIMITS = { paddingMax: 50, strokeMax: 50 } as const;
 
-/** Padding can never swallow the icon: capped at 45% of the shorter side. */
+/** Padding is capped at twice the shorter side — see PADDING_CAP_RATIO. */
 export function clampPaddingPx(px: number, shorterSide: number): number {
   if (!Number.isFinite(px) || px <= 0) return 0;
   const cap = Math.abs(shorterSide) * PADDING_CAP_RATIO;

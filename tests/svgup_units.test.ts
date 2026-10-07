@@ -55,10 +55,14 @@ describe("toPx — one conversion for both consumers", () => {
   });
 });
 
-describe("clampPaddingPx — padding can never swallow the artwork", () => {
-  it("leaves a sane padding alone and caps one that would collapse the artboard", () => {
+describe("clampPaddingPx — a typo guard, not a layout rule", () => {
+  it("leaves a real padding alone — a 36 pt margin is a design choice", () => {
     expect(clampPaddingPx(8, 100)).toBe(8);
     expect(clampPaddingPx(0, 100)).toBe(0);
-    expect(clampPaddingPx(500, 100)).toBe(45); // 45% of the shorter side, the documented cap
+    expect(clampPaddingPx(48, 100)).toBe(48); // 36 pt = 48 px, kept as typed
+  });
+
+  it("caps only what would be a mistake", () => {
+    expect(clampPaddingPx(5000, 100)).toBe(200); // twice the shorter side, the documented cap
   });
 });
