@@ -49,14 +49,24 @@ export function buildExportSvg(a: BuildArgs): string | null {
   return new XMLSerializer().serializeToString(doc);
 }
 
-/** The one stroke rule: the configured pt, expressed in this element's units. */
+/** The one stroke rule plus baking of resolved presentation values so the export copy is standalone. */
 function normalizeStroke(el: Element, resolved: ResolvedProps, matrix: Matrix, a: BuildArgs): void {
-  if (resolved.stroke === null) return; // fills and stroke-only geometry preserved
+  // Bake resolved presentation values as attributes — stylesheet removal must not lose them (R04).
+  if (resolved.fill === null) el.setAttribute("fill", "none");
+  else el.setAttribute("fill", resolved.fill);
+  if (resolved.stroke === null) el.removeAttribute("stroke");
+  else el.setAttribute("stroke", resolved.stroke);
+  el.setAttribute("stroke-linejoin", resolved.linejoin);
+  el.setAttribute("stroke-linecap", resolved.linecap);
+  el.setAttribute("stroke-miterlimit", String(resolved.miterlimit));
+  if (resolved.dash === null) el.removeAttribute("stroke-dasharray");
+  else el.setAttribute("stroke-dasharray", resolved.dash.join(","));
+  if (resolved.stroke === null) return;
   const width = strokeInUserUnits(a.strokePt, a.plan, a.raster, {
     fitScale: a.plan.scale, elemScale: avgScale(matrix),
   });
   el.setAttribute("stroke-width", round(width));
-  el.removeAttribute("vector-effect"); // sizing is deterministic in the export
+  el.removeAttribute("vector-effect");
 }
 
 /** Appends the background rect, then wraps every existing child in the fit group. */

@@ -22,7 +22,7 @@ export function fingerprintsOf(a: { sourceSha: string; settings: ExportSettings;
   const s = a.settings;
   return {
     source: `v1:${a.sourceSha}`,
-    visual: `v1:${s.paddingPct}|${s.background.preset}|${s.background.custom}|${s.strokePt}|${s.artboard}`,
+    visual: `v1:${s.paddingPct}|${s.background.preset}|${s.background.custom}|${s.strokePt}|${s.artboard}|${s.jpegMpx}`,
     raster: `v1:${s.jpegMpx}|${s.jpegQuality}`,
     metadata: `v1:${a.metadata.title}\u0000${a.metadata.description}\u0000${a.metadata.tags.join(",")}`,
     flags: `v1:${s.optimizeSvg}|${s.includeEps}`,

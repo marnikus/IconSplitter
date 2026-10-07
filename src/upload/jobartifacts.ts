@@ -6,10 +6,11 @@
 // state machine that calls them.
 
 import { optimizeExportSvg, rendersMatch, SVGO_CONFIG_NAME, type PixelDeps } from "../lib/upsvgo";
-import { embedJpegMetadata, jpegDimensions } from "../lib/upjpegmeta";
-import { iptcIimRecord, xmpPacket } from "../lib/upmetaxml";
+import { embedJpegMetadata, jpegDimensions, readJpegMetadata } from "../lib/upjpegmeta";
+import { iptcIimRecord, parseIptcIim, xmpPacket, xmpReadFields } from "../lib/upmetaxml";
 import { resolveBackground } from "../lib/svgbackground";
 import { buildExportRecord, type ExportRecord, type OptimizerRecord } from "../lib/upexport";
+import { readSvgMetadata } from "../lib/upprepare";
 import type { IconMetadata } from "../lib/upmeta";
 import type { JobRequest, RunnerDeps } from "./runner";
 
@@ -60,28 +61,60 @@ export interface RecordInputs {
   meta: IconMetadata;
   finalSvg: string;
   svgSha: string;
+  sourceSha: string;
   optimizer: OptimizerRecord | null;
   jpeg: { width: number; height: number; mpx: number; sha256: string; bytes: number };
   epsText: string | null;
   epsFailure: string | null;
+  committedEps: ExportRecord["outputs"]["eps"];
   state: "processed" | "partial";
   now: string;
+}
+
+export function validateArtifacts(
+  finalSvg: string, jpegBytes: Uint8Array, meta: IconMetadata,
+): string | null {
+  const svgBack = readSvgMetadata(finalSvg);
+  if (!svgMatches(svgBack, meta)) return "the embedded SVG metadata does not read back equal to the accepted metadata";
+  const jpegBack = readJpegMetadata(jpegBytes);
+  if (jpegBack.xmp === null || jpegBack.iptc === null) return "the embedded JPEG metadata does not read back";
+  if (!xmpMatches(jpegBack.xmp, meta)) return "the embedded JPEG XMP does not read back equal to the accepted metadata";
+  if (!iptcMatches(jpegBack.iptc, meta)) return "the embedded JPEG IPTC does not read back equal to the accepted metadata";
+  return null;
+}
+
+function svgMatches(back: ReturnType<typeof readSvgMetadata>, meta: IconMetadata): boolean {
+  return back !== null && back.title === meta.title && back.description === meta.description
+    && back.tags.join("\0") === meta.tags.join("\0");
+}
+
+function xmpMatches(packet: string, meta: IconMetadata): boolean {
+  const f = xmpReadFields(packet);
+  return f !== null && f.title === meta.title && f.description === meta.description && f.subject.join("\0") === meta.tags.join("\0");
+}
+
+function iptcMatches(iptc: Uint8Array, meta: IconMetadata): boolean {
+  const f = parseIptcIim(iptc);
+  return f.title === meta.title && f.description === meta.description && f.keywords.join("\0") === meta.tags.join("\0");
 }
 
 /** The committed record: identity, effective settings, accepted metadata, outputs. */
 export async function buildJobRecord(a: RecordInputs): Promise<ExportRecord> {
   const base = a.req.row.iconBase;
   const dir = a.req.row.dirPath;
+  const epsOut = a.epsText !== null
+    ? { relPath: `${dir}/export/${base}.eps`, bytes: new TextEncoder().encode(a.epsText).length }
+    : a.committedEps ?? null;
   return buildExportRecord({
     pairId: a.req.row.id,
     iconBase: base,
-    source: { relPath: a.req.row.svgRelPath, version: a.req.row.version, sha256: await a.deps.hashText(a.req.row.svgRelPath) },
+    source: { relPath: a.req.row.svgRelPath, version: a.req.row.version, sha256: a.sourceSha },
     settings: a.req.settings,
     metadata: a.meta,
     outputs: {
       svg: { relPath: `${dir}/export/${base}.svg`, bytes: new TextEncoder().encode(a.finalSvg).length, sha256: a.svgSha, optimizer: a.optimizer },
       jpeg: { relPath: `${dir}/export/${base}.jpg`, bytes: a.jpeg.bytes, sha256: a.jpeg.sha256, width: a.jpeg.width, height: a.jpeg.height, mpx: a.jpeg.mpx, quality: a.req.settings.jpegQuality },
-      eps: a.epsText === null ? null : { relPath: `${dir}/export/${base}.eps`, bytes: new TextEncoder().encode(a.epsText).length },
+      eps: epsOut,
     },
     state: a.state,
     failure: a.state === "partial" ? (a.epsFailure ?? "an EPS output was requested but not committed") : null,

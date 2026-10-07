@@ -7,14 +7,13 @@
 import { parseScene, type GeomScene } from "../lib/upgeom";
 import { sceneBounds } from "../lib/upbounds";
 import { fitPlan, rasterSize, type FitPlan, type RasterSize } from "../lib/upfit";
-import { buildExportSvg, embedSvgMetadata, parseSvgText, readSvgMetadata } from "../lib/upprepare";
+import { buildExportSvg, embedSvgMetadata, parseSvgText } from "../lib/upprepare";
 import { produceJpeg } from "../lib/upraster";
 import { buildEps, epsPreflight } from "../lib/upeps";
 import { parseMetadataResponse, type IconMetadata } from "../lib/upmeta";
 import { readExportRecord, type ExportRecord } from "../lib/upexport";
-import { readJpegMetadata } from "../lib/upjpegmeta";
 import { resolveBackground } from "../lib/svgbackground";
-import { buildJobRecord, embedJpegSegments, optimizeForDelivery, type JpegSegments } from "./jobartifacts";
+import { buildJobRecord, embedJpegSegments, optimizeForDelivery, validateArtifacts, type JpegSegments } from "./jobartifacts";
 import { buildGeminiRequest } from "../lib/geminireq";
 import { fingerprintsOf, planReexport, type StagePlan } from "../lib/upfinger";
 import type { ExportDirScan } from "./sources";
@@ -40,6 +39,7 @@ export class Job {
   private epsFailure: string | null = null;
   private meta: IconMetadata | null = null;
   private svgSha = "";
+  private sourceSha = "";
   private recordBuilt: ExportRecord | null = null;
 
   constructor(private req: JobRequest, private deps: RunnerDeps) {}
@@ -72,7 +72,6 @@ export class Job {
     this.meta = this.req.metadata;
     const read = this.scan.exportJson === null ? null : readExportRecord(this.scan.exportJson);
     this.committed = read !== null && read.ok ? read.record : null;
-    this.stagePlan = await this.plan();
     const text = await this.deps.readSource(this.req.row.svgRelPath);
     if (text === null) return `the chosen SVG is unreadable: ${this.req.row.svgRelPath}`;
     this.doc = parseSvgText(text);
@@ -80,12 +79,15 @@ export class Job {
     this.scene = parseScene(this.doc);
     if (this.scene.unsupported.has("complex-css")) return "the source uses CSS this pipeline cannot resolve honestly";
     if (this.scene.unsupported.has("unparsable-path")) return "the source contains an unparsable path";
+    const sha = await this.deps.hashText(text);
+    this.sourceSha = sha;
+    this.stagePlan = await this.plan(sha);
     return null;
   }
 
   /** The selective plan (§9): compare the committed record with today. */
-  private async plan(): Promise<StagePlan> {
-    const sha = await this.deps.hashText(this.req.row.svgRelPath);
+  private async plan(sourceSha: string): Promise<StagePlan> {
+    const sha = sourceSha;
     // No metadata in hand → a sentinel that matches nothing, so the plan
     // re-embeds whatever the (possibly generated) metadata turns out to be.
     const meta = this.req.metadata ?? (this.req.allowAi ? PENDING_META : this.committed?.metadata ?? PENDING_META);
@@ -193,7 +195,7 @@ export class Job {
     const out = await embedJpegSegments(this.jpegBytes as Uint8Array, this.meta as IconMetadata, this.deps);
     if (out === null) return "the JPEG metadata exceeded the 65 502-byte segment limit";
     this.jpegBytes = out.bytes;
-    this.jpegStats = this.jpegStats ?? out.stats;
+    this.jpegStats = out.stats;
     return null;
   }
 
@@ -216,17 +218,8 @@ export class Job {
     return null;
   }
 
-  /** Both formats re-read and compared field-by-field before any write. */
   private async validate(): Promise<string | null> {
-    const meta = this.meta as IconMetadata;
-    const svgBack = readSvgMetadata(this.finalSvg);
-    if (svgBack === null || svgBack.title !== meta.title || svgBack.description !== meta.description
-      || svgBack.tags.join("\u0000") !== meta.tags.join("\u0000")) {
-      return "the embedded SVG metadata does not read back equal to the accepted metadata";
-    }
-    const jpegBack = readJpegMetadata(this.jpegBytes as Uint8Array);
-    if (jpegBack.xmp === null || jpegBack.iptc === null) return "the embedded JPEG metadata does not read back";
-    return null;
+    return validateArtifacts(this.finalSvg, this.jpegBytes as Uint8Array, this.meta as IconMetadata);
   }
 
   /** The commit pass: files first, export.json LAST (design §9). */
@@ -258,10 +251,11 @@ export class Job {
   }
 
   private async record(state: "processed" | "partial"): Promise<ExportRecord> {
+    const committedEps = this.stagePlan?.eps === "keep" ? this.committed?.outputs.eps ?? null : null;
     return buildJobRecord({
       req: this.req, deps: this.deps, meta: this.meta as IconMetadata, finalSvg: this.finalSvg,
-      svgSha: this.svgSha, optimizer: this.optimizer, jpeg: this.jpegStats as import("./jobartifacts").JpegSegments["stats"],
-      epsText: this.epsText, epsFailure: this.epsFailure, state, now: this.deps.now(),
+      svgSha: this.svgSha, sourceSha: this.sourceSha, optimizer: this.optimizer, jpeg: this.jpegStats as import("./jobartifacts").JpegSegments["stats"],
+      epsText: this.epsText, epsFailure: this.epsFailure, committedEps, state, now: this.deps.now(),
     });
   }
 
