@@ -442,7 +442,7 @@ describe("the version a row shows is the user's choice (I-54)", () => {
   const failed3 = svgVersion("", { version: 3, status: "failed", valid: false, error: "invalid SVG" });
   const discovery = (rows: SvgRow[]): Discovery => ({
     sources: [], problems: [], excluded: [], unreadable: [], corruptDecisions: false,
-    metas: new Map(), corruptFiles: [], fileIndex: new Map<string, string>(),
+    metas: new Map(), corruptFiles: [], entries: [],
     audit: { files: 0, aiSources: 0, references: 0, missing: 0, duplicates: 0, rows: rows.length },
   });
 

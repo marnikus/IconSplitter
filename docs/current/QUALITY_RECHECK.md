@@ -1819,3 +1819,83 @@ with it the `batchlayout` dependency), `svg/SvgRow.tsx` 203 → 187 (its local
 `targetPath` and `joinPath` moved to `svg/rowmodel.ts` as the one exported
 `targetPathOf`), `svg/codeactions.ts` 120 → 118, `svg/rowmodel.ts` 114 → 129.
 Every function stays inside the limits; no baseline was touched.
+
+---
+
+# Quality re-check — 2026-10-07 (the SVG-to-upload tab, end to end)
+
+Change: the sixth mode — **SVG to upload** — shipped end to end: the pure
+lib layer (SVG geometry engine, metadata rules + XMP/IPTC/SVG embedding, the
+raster/JPEG-segment/optimizer/EPS artifact stages, `export.json` v1, the
+selective re-export fingerprints, the Gemini provider), the upload IO/state
+layer (approved-source discovery, the staged `export/` commit, localStorage
+stores, the IndexedDB Gemini key, the model + reducer, the `uploadSettings`
+undo bridge, the bounded-concurrency runner + one-icon job), and the UI (the
+`tab-svg-upload` tab: folder bar, defaults bar, bulk bar, row list with the
+live-validating metadata editor, provider card, redacted-request confirm
+dialog). Design record:
+`docs/archive/2026-10-07-svg-to-upload/design.md`; behaviour in
+`SYSTEM_OF_RECORD.md` §1/§2, handles in `UI_SELECTORS.md` §R. One dependency
+added: `svgo ^4.1.0` (the real optimizer, imported from `svgo/browser`).
+
+## Lanes run (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 `tsc --noEmit` | clean |
+| 2/6 ESLint | 0 errors, 10 warnings (8 pre-existing `App.tsx`/`detect.ts`; 2 new, see debt below) |
+| 3/6 RULE 16 gate — changed files (legacy allowed, ratchet) | **GATE PASSED** |
+| 4/6 `vitest run` | **110 files / 1166 tests passed** (the feature's own 18 files carry 225 tests) |
+| 5/6 coverage (`src/lib`, RULE 16.3) | 93.95 stmts / 87.93 branch / 95.08 funcs / 96.39 lines (≥80 floor held) |
+| 6/6 production build | `dist/index.html` 1,319.13 kB, gzip 392.08 kB |
+
+Coverage moved down from the last record (97.21/92.30/97.39/98.44) because the
+feature adds honest branches only a real canvas/socket can reach — the
+32,767-px canvas edges, the PostScript preflight refusals, the JPEG segment
+surgery failure paths — every one of them still driven through fakes that
+exercise the real logic (RULE 8), and every new module has direct tests.
+
+The bundle grew from 642.94 kB / 189.93 kB gzip to 1,319.13 kB / 392.08 kB:
+the single-file build now inlines SVGO v4 (the design requires the genuine
+optimizer in the browser, behind its verification gates — RULE 9 keeps the
+unoptimized copy when the optimizer would change a pixel). Accepted with the
+design; gzip +202 kB.
+
+## RULE 16 / RULE 18 numbers (all new files, frozen limits: fn ≤30 loc / 4 params / CC 10 / nest 4, file ≤300)
+
+| Layer | Files (fns / lines) | Max fn |
+|---|---|---|
+| geometry, pure | `upmatrix` 13/78, `uppath` 16/230, `uparc` 7/97, `upgeom` 27/284, `upbounds` 12/134, `upcolor` 5/55, `upcss` 6/76, `upfit` 8/100 | loc 21, cc 10 |
+| content, pure | `upmeta` 24/163, `upmetaxml` 19/162, `upprompt` 2/49, `upprepare` 15/163, `upsettings` 8/118 | loc 22, cc 10 |
+| artifacts, pure | `upraster` 12/121, `upjpegmeta` 17/196, `upsvgo` 11/157, `upeps` 20/160, `upexport` 15/211, `upfinger` 7/137 | loc 24, cc 10 |
+| provider, pure | `gemconfig` 9/99, `geminireq` 22/235 | loc 22, cc 8 |
+| upload IO/state | `sources` 10/142, `exportio` 12/121, `stores` 13/101, `gemkey` 6/76, `statemodel` 33/169, `undoable` 7/77, `runner` 3/76, `job` 28/300, `jobartifacts` 3/91, `browserdeps` 17/111 | loc 24, cc 10 |
+| upload UI | `useUpload` 41/234, `uploadactions` 23/218, `UploadPanel` 41/245, `UploadRow` 15/122 | loc 26, cc 5 |
+
+Two splits kept files inside the 300-line ceiling without shrinking any
+function artificially: `runner.ts` (396 lines at first) → `runner.ts` (public
+contract + pool) + `job.ts` (the one-icon stage machine) + `jobartifacts.ts`
+(the artifact decisions); and `useUpload.ts` (334) → `useUpload.ts` (the
+wiring hooks, mirroring `useSelection`/`useBatch`) + `uploadactions.ts` (the
+gesture bodies over one context bundle). `job.ts` sits exactly at 300.
+
+Files under the RULE 18 ideal band's lower edge (`upprompt` 49, `upcolor` 55,
+`upmatrix` 78, `upcss` 76, `runner` 76, `gemkey` 76) are single-purpose pure
+modules — same precedent as `svgclock.ts`.
+
+Baseline: **untouched** — every new file passes the frozen hard lines, no
+recorded offender grew, so no integrator re-record is warranted.
+
+Secret hygiene, re-verified with the feature's own tests: the Gemini key is
+masked everywhere (`upload-provider-toggle` shows `•` only), the confirm
+dialog's request preview is redacted (`[redacted]`, never `AIza…`), the key
+lives in IndexedDB (`iconSplitter/secrets["gemini-api-key"]`) and never in
+localStorage, and the UI test asserts the mocked fetch is never called when
+cached metadata suffices.
+
+New debt accepted: two ESLint complexity **warnings** (not errors) in new
+files — `geminireq.ts` `okOutcome` (13) and `job.ts` `commit` (12). Both sit
+at or under the frozen RULE 16 gate's CC 10 (its AST counter differs from
+ESLint's), both are single decision tables over the documented response
+shapes, and they join the tolerated warning class (`App.tsx` 15, `detect.ts`
+32). No file exceeds any frozen limit.

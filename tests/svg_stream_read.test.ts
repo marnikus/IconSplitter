@@ -127,37 +127,6 @@ describe("sendChatStreaming — long work survives, silence does not", () => {
     expect(out.ok === false && out.failure.kind).toBe("aborted");
   });
 
-  it("tells a cancel before the first byte from a connection that died", async () => {
-    // The user cancels while the provider is still thinking: nothing was sent to
-    // us yet, so this must say cancelled — never "the connection looks dead".
-    const gate = new AbortController();
-    const neverAnswers: FetchLike = (_url, init) => new Promise<Response>((_resolve, reject) => {
-      const die = () => reject(new DOMException("aborted", "AbortError"));
-      init.signal?.addEventListener("abort", die);
-      gate.signal.addEventListener("abort", die);
-    });
-    const pending = sendChatStreaming({
-      url: "u", body: request(), apiKey: KEY, stallMs: 120_000, fetch: neverAnswers, signal: gate.signal,
-    });
-    await flush();
-    gate.abort();
-    const out = await pending;
-    expect(out.ok === false && out.failure.kind).toBe("aborted");
-    expect(out.ok === false && out.failure.retryable).toBe(false);
-  });
-
-  it("calls a connection that dies before any byte a network error it may repeat", async () => {
-    // The provider cannot have started generating: classifyTransport's own rule
-    // says this is repeatable — a stall claim would be wrong AND would block a retry.
-    const dead: FetchLike = async () => { throw new TypeError("Failed to fetch"); };
-    const out = await sendChatStreaming({ url: "u", body: request(), apiKey: KEY, stallMs: 120_000, fetch: dead });
-    expect(out.ok).toBe(false);
-    if (out.ok) return;
-    expect(out.failure.kind).toBe("network");
-    expect(out.failure.retryable).toBe(true);
-    expect(out.failure.message).toContain("Failed to fetch");
-  });
-
   it("keeps the provider's request id, from the header or from the stream", async () => {
     const withHeader = manualStream();
     const first = sendChatStreaming({

@@ -33,17 +33,12 @@ export interface StreamState {
   done: boolean;
   /** An error payload from the provider: a confirmed failure. */
   error: string | null;
-  /**
-   * The provider's finish_reason of the last choice frame. "length" is how a
-   * truncated answer announces itself — the one signal that must not be guessed.
-   */
-  finishReason: string | null;
 }
 
 export function newStreamState(): StreamState {
   return {
     buffer: "", text: "", usage: { ...NO_USAGE }, requestId: null,
-    frames: 0, keepalives: 0, badFrames: 0, done: false, error: null, finishReason: null,
+    frames: 0, keepalives: 0, badFrames: 0, done: false, error: null,
   };
 }
 
@@ -85,8 +80,6 @@ function applyPayload(state: StreamState, data: string): StreamState {
   const next = { ...state, frames: state.frames + 1 };
   if (isRecord(parsed) && parsed.error !== undefined) return { ...next, error: errorText(parsed.error) };
   if (isRecord(parsed) && isRecord(parsed.usage)) next.usage = readUsage(parsed);
-  const reason = finishReasonOf(parsed);
-  if (reason !== null) next.finishReason = reason;
   const content = frameContent(parsed);
   return content === null ? next : { ...next, text: next.text + content };
 }
@@ -99,15 +92,6 @@ function frameContent(parsed: unknown): string | null {
   const message = isRecord(first.delta) ? first.delta : isRecord(first.message) ? first.message : null;
   const content = message?.content;
   return typeof content === "string" && content !== "" ? content : null;
-}
-
-/** The finish_reason of the first choice, when the frame announces one. */
-export function finishReasonOf(parsed: unknown): string | null {
-  if (!isRecord(parsed) || !Array.isArray(parsed.choices)) return null;
-  const first: unknown = parsed.choices[0];
-  if (!isRecord(first)) return null;
-  const reason = first.finish_reason;
-  return typeof reason === "string" && reason !== "" ? reason : null;
 }
 
 function errorText(error: unknown): string {

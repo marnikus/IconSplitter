@@ -49,12 +49,18 @@ export interface SessionSvg {
   activeId: string | null;
 }
 
+/** What only the SVG-to-upload tab adds: its own checkbox selection. */
+export interface SessionUpload {
+  checked: string[];
+}
+
 export interface SessionState {
   tab: TabId;
   sheets: SheetOpts;
   selection: SessionSelection;
   selectionV2: SessionV2;
   svg: SessionSvg;
+  upload: SessionUpload;
 }
 
 export const DEFAULT_SELECTION: SessionSelection = {
@@ -64,10 +70,12 @@ export const DEFAULT_SELECTION: SessionSelection = {
 
 export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null };
 
+export const DEFAULT_UPLOAD: SessionUpload = { checked: [] };
+
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
-  svg: DEFAULT_SVG,
+  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD,
 };
 
 /**
@@ -106,7 +114,13 @@ function toSession(raw: unknown): SessionState {
     selection: parseSelection(raw.selection),
     selectionV2: parseV2(raw.selectionV2),
     svg: parseSvgSlice(raw.svg),
+    upload: parseUploadSlice(raw.upload),
   };
+}
+
+function parseUploadSlice(raw: unknown): SessionUpload {
+  if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_UPLOAD;
+  return { checked: raw.checked.filter((id): id is string => typeof id === "string") };
 }
 
 function parseSvgSlice(raw: unknown): SessionSvg {

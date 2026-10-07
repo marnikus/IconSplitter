@@ -10,7 +10,7 @@ import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { metaPathFor, newPairMeta, withDecision, type PairMeta } from "../lib/pairmeta";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { directoryNames, scopeOf } from "../lib/splitscope";
-import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem } from "../lib/pairing";
+import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem, type ProblemKind } from "../lib/pairing";
 import { loadPairDecisions } from "../selection/pairstore";
 import {
   auditText, fileTally, selectRows,
@@ -69,18 +69,27 @@ export interface Discovery {
   metas: Map<string, PairMeta>;
   /** Pair files that exist but could not be parsed, by path. */
   corruptFiles: string[];
-  /** Every readable file the walk found: relPath -> "size:mtime". */
-  fileIndex: Map<string, string>;
+  /** Every file the walk saw — the upload tab's export-state scan reads these. */
+  entries: FileEntry[];
   /** The legacy global file could not be parsed — decisions kept in memory. */
   corruptDecisions: boolean;
 }
 
-/** Short status per problem kind, for the row (D8) — defined once in lib/pairing. */
-export { PROBLEM_LABEL } from "../lib/pairing";
+/** Short status per problem kind, for the row (D8). */
+export const PROBLEM_LABEL: Record<ProblemKind, string> = {
+  "ai-missing": "AI image missing",
+  "original-missing": "Reference missing",
+  unreadable: "Unreadable file",
+  "files-missing": "Files missing",
+};
 
-/** Scans the root and lists every approved AI output, in a deterministic order. */
-export async function discoverApprovedSources(root: DirHandleLike): Promise<Discovery> {
-  const tree = await readDirTree(root, []);
+/**
+ * Scans the root and lists every approved AI output, in a deterministic order.
+ * `ignore` drops directories by name during the walk — the upload tab passes
+ * ["export"] so this feature's own outputs can never be discovered as sources.
+ */
+export async function discoverApprovedSources(root: DirHandleLike, ignore: string[] = []): Promise<Discovery> {
+  const tree = await readDirTree(root, ignore);
   // When the tree holds the batch's output, that is the reviewable set: the main
   // folder keeps the unsplit sheets, which are the batch's input (I-38).
   const rule = scopeOf(directoryNames(tree), root.name);
@@ -96,8 +105,8 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
     unreadable: unreadableFiles(entries),
     metas: load.metas,
     corruptFiles: load.corruptFiles,
-    fileIndex: fileIndexOf(entries),
     corruptDecisions: load.legacyCorrupt,
+    entries,
   };
 }
 
@@ -124,13 +133,6 @@ function toSource(pair: RowPair): SvgSource {
 
 function flattenProblems(sources: SvgSource[]): SourceProblem[] {
   return sources.flatMap((s) => s.problems.map((p) => ({ id: s.id, ...p })));
-}
-
-/** relPath -> "size:mtime" for every readable file (the upload tab's checks). */
-function fileIndexOf(entries: FileEntry[]): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const e of entries) if (e.error === null) out.set(e.relPath, `${e.size}:${e.mtime}`);
-  return out;
 }
 
 /** Every file the walk could not read, with the reason, in path order. */

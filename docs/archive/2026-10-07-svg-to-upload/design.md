@@ -1,246 +1,385 @@
-# SVG to upload — preparing approved icons for the web (2026-10-07)
+# SVG to upload — design (2026-10-07)
 
-Feature (verbatim scope from the request): a new tab **after Generate SVG** that
-turns the *preferred, approved* SVG of each icon into an upload-ready package —
-padded/fitted artboard, chosen background, declared stroke width, conceptual
-metadata from Gemini, SVGO-optimised SVG, a **15.1 MP JPEG**, an optional EPS,
-and one **per-icon `export.json`** — with **no automatic website uploading**.
+Status: implemented by the phased TDD plan in §10. Tab id: `svgUpload`, label
+"SVG to upload", placed after "Generate SVG" in `src/ui/Workbench.tsx`.
 
-This document is the research + design half of the request (its §1 and §20.1) and
-the contract the implementation is held to. Production code starts only after the
-decisions below.
+## 1. Goal and scope
 
----
+Prepare approved SVG icons for external websites (stock-site style packages):
+configure padding / background / stroke, generate conceptual metadata with
+Google Gemini (`gemini-3.1-flash-lite`), optimize the SVG with SVGO, raster a
+~15.1 MP JPEG, optionally write genuine EPS, and commit a per-icon export
+package (`export/` folder + `export.json`) beside the pair. No automatic
+website uploading. The approved source SVGs and the pair files are never
+modified.
 
-## 1. What already exists (reuse map — verified by reading the code)
+## 2. Research findings — what is reused, what is new
 
-| Need (request §) | Reuse | Where | Verdict |
-|---|---|---|---|
-| Approved-source discovery (§2) | `discoverApprovedSources(root)` → `Discovery { sources, problems, excluded, audit, metas, corruptFiles }` | `src/svg/sources.ts` | **reuse as-is** — the new tab calls the same function; the exports it must hide are excluded by extending `sourcelist`/`splitscope`, never by a second walker |
-| Folders / full path / Rescan (§3) | `FolderBar`, `pickroot.pickFolderFor`, `rootcapture`, `rootpath.loadRootPathInfo`, `rootsource` | `src/ui/*`, `src/lib/rootpath.ts`, `src/selection/rootsource.ts` | **reuse as-is** (one control for every tab; no second picker) |
-| The chosen version per icon (§2/§3) | `chosenVersion(versions, preferred)`, `preferredVersion`, `showVersion` row rule, `VersionsDialog` | `src/lib/svgfile.ts`, `src/svg/rowmodel.ts`, `src/svg/VersionsDialog.tsx` | **reuse** — "chosen version" in the new tab means exactly `chosenVersion` |
-| Pair JSON as the link (§2 "use .Jsons to link all correct") | `PairMeta` + `loadMetaAt` / `saveMetaAt` (tmp → verify → overwrite) | `src/lib/pairmeta.ts`, `src/selection/pairstore.ts` | **reuse the reader**; new per-icon export state is written by the same atomic writer pattern |
-| SVG rendering + preview (§6) | `buildSvgPreview` (parse, sanitise, ratio), `SvgPreviewBox` (shadow root), `previewFrame`/`PreviewBackground` | `src/lib/svgpreview.ts`, `src/svg/SvgPreview.tsx`, `src/lib/svgbackground.ts` | **reuse** — the row's SVG thumbnail is the existing preview box, one per row |
-| Row list, filters, sort, search, checkboxes, active row, hotkeys (§3) | `svglist.visibleRows`, `statemodel` action/reducer pattern, `SvgHotkeys`, `SvgBulkBar` layout | `src/svg/*` | **reuse the patterns and CSS language**; the new tab gets its own small model (its states are different) rather than growing `SvgModel` |
-| Thumbnail zoom (§3) | `lib/zoom` (`zoomBox`, `clampZoom`, 48–800) + `ui/PairedThumbs` | `src/lib/zoom.ts`, `src/ui/PairedThumbs.tsx` | **reuse** — one thumbnail per row, so a single slot box from `zoomBoxRatio` |
-| Undo (§4 bulk "one undoable settings action") | `HistoryProvider` + `hist.push({type, label, origin, before, after})` and the apply registry | `src/state/HistoryProvider.tsx`, `src/state/apply.ts` | **reuse** — settings edits push one entry, sourced from this tab |
-| Job states, queue, cancel, no duplicate paid work (§8/§16) | `runqueue` (pure) + `runcontrol` (async, refs authority) + `journal` (in-flight) | `src/svg/runqueue.ts`, `src/svg/runcontrol.ts`, `src/svg/journal.ts` | **reuse the pattern**: metadata requests get their own journal entries; exports run under the same one-in-flight discipline |
-| Provider, key, streaming, usage/cost (§8) | `buildChatRequest` (`ContentPart { type:"image_url" }`), `sendChat`, `readUsage`, `classifyHttp`, `classifyTransport`, `readJsonResponse`, `streamChat`, `keystore`, `catalog.refreshCatalog`, `modelcaps`, `svgpricing` | `src/lib/svgrequest.ts`, `src/lib/svgstream*.ts`, `src/svg/{keystore,catalog}.ts` | **reuse almost entirely** — Gemini is reached through the same OpenAI-compatible transport; only the model id is verified against `/v1/models` |
-| Settings persistence (§4) | `state/safestorage.readKey/writeKey`, the `prefsstore` shape (`DEFAULT_*`, `parse*`, `load*`, `save*`) | `src/state/safestorage.ts`, `src/svg/prefsstore.ts` | **reuse the pattern** — one `svgupload/settingsstore.ts` with validated parse |
-| Logging (§18) | `log({ level, feature, action, detail, data })`, `feature` union | `src/log/logstore.ts` | **reuse**; a new `feature: "upload"` |
-| Atomic file writes, directories (§14) | `ensureDirPath`, `writeFileOverwrite`, `writeFileNew`, `probePath`, `tryGetFile` | `src/lib/fs.ts` | **reuse** |
-| Tab shell (§3) | `TABS` in `ui/Workbench.tsx`, `TabId` in `lib/session.ts`, `AppState` in `state/appstore.ts` | — | extend all three (one id: `svgUpload`) |
+### 2.1 Reused from the existing app (verified by reading the code)
 
-**Not reused, deliberately:** `SvgBatchStrip`/`SvgQueue` (a run's request record —
-the new tab's units are icons, not requests), `PairedThumbs` for anything but the
-thumbnail (§2: "no AI reference alongside it" — one preview, so `PairedThumbs`
-is used with a single slot box, or the plain `zoomBoxRatio` box).
-
-## 2. What is new (module ownership)
-
-```
-src/lib/svgupload/            pure rules — no DOM, no IO (RULE 3/5)
-  units.ts        pt → user units, DPI declaration, unit parsing ("2.2 pt")
-  fit.ts          visible bounds + padding → translate/scale, aspect preserved
-  target.ts       15.1 MP integer dimensions + actual MP, ratio preserved
-  metaprompt.ts   the default prompt + the strict parser/validator
-  mime.ts         SVG title/desc/metadata embedding (XML-escaped, Unicode safe)
-  jpegseg.ts      JPEG segment reader/writer: APP1 XMP, APP13 IPTC-IIM (+verify)
-  optimize.ts     SVGO wrapper (svgo/browser) with the metadata-preserving plugin set
-  exportjson.ts   the export.json schema (build + parse + version)
-  states.ts       job states, fingerprinting, selective re-export decisions
-
-src/svgupload/                wired halves
-  settingsstore.ts   defaults + per-icon overrides (persisted, validated)
-  sourceindex.ts     approved + preferred source resolution (uses pair JSONs)
-  prepare.ts         renders the padded/fitted artboard (measurement seam)
-  raster.ts          canvas rasterisation at the computed dimensions
-  metadata.ts        the Gemini call (reuses svgrequest/svgstream)
-  exporter.ts        per-icon pipeline: prepare → optimize → render → embed → JSON
-  jobctl.ts          one export in flight at a time; cancel; per-item progress
-
-src/svgupload/ (UI)
-  UploadPanel.tsx    the tab shell (FolderBar, controls, bulk bar, list)
-  UploadControls.tsx settings (global defaults) + provider card
-  UploadBulk.tsx     selection + Apply/Generate/Export/Retry + counts + zoom
-  UploadRow.tsx      one icon: preview, path, version, states, actions, warnings
-  UploadMetadata.tsx the editable/metadata fields under the row (§10)
-  UploadDialogs.tsx  preview / settings / prompt-preview / confirm
-```
-
-Every module above is a candidate for the RULE 18 budget (file 150–300 lines,
-function ≤ 30 lines / ≤ 4 params / CC ≤ 10 / nesting ≤ 4); §7 splits anything
-that grows past it.
-
-## 3. Research findings (verified 2026-10-07)
-
-1. **`gemini-3.1-flash-lite` is a real, stable model id.** Google's model page
-   (`ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite`) lists model code
-   `gemini-3.1-flash-lite`, stable, latest update May 2026: **input** text / image
-   / video / audio / PDF, **output** text, 1,048,576 input tokens, 65,536 output
-   tokens, **structured outputs supported**, thinking supported. Vision input is
-   therefore supported — the guide's premise holds. `…-preview` also exists; the
-   stable id is what we default to, and the *actual* id sent is the one verified
-   against the provider's own `/v1/models` list (never a silent substitution —
-   if the exact id is absent the tab refuses with the reason, per §8).
-2. **The transport already fits.** Requesty is OpenAI-compatible
-   (`https://router.requesty.ai/v1`, `chat/completions` with `image_url` data
-   URLs — `docs.requesty.ai`). Gemini itself is OpenAI-compatible too
-   (`generativelanguage.googleapis.com/v1beta/openai/`), so the *same*
-   `buildChatRequest`/`sendChat`/stream machinery serves both, and the base URL
-   stays configurable. No new HTTP client, no new key store.
-3. **SVGO is browser-ready.** SVGO **4.1.0** ships an official browser entry —
-   `import { optimize } from "svgo/browser"` (the v4 migration renamed
-   `svgo/dist/svgo.browser.js` to the `svgo/browser` subpath and made everything
-   a named export). Config is plain data: `optimize(svg, { path, multipass,
-   plugins })`. **Risk found:** `preset-default` includes removers that can strip
-   exactly what §11/§12 require (`removeTitle`, `removeDesc`, `removeMetadata`,
-   plus `collapseGroups`/`convertPathData` touching geometry). The wrapper
-   therefore pins the plugin list explicitly, and a test renders before/after and
-   asserts `<title>`, `<desc>`, `<metadata>`, colours, stroke attributes and the
-   `viewBox` all survive (and that no stroke becomes a fill).
-4. **JPEG metadata has no browser API — it is byte surgery, and that is settled
-   practice.** XMP lives in an **APP1** segment and IPTC-IIM in an **APP13**
-   Photoshop IRB; both are inserted before `SOS` (`0xFFDA`) (Adobe/RidgeRun
-   segment layout, the widely used in-browser inserter approach). We implement it
-   as a pure module: parse segments → replace-or-insert → re-serialise, then
-   **read the bytes back** and compare the values (§11 "reopen and verify").
-   A JPEG from `canvas.toBlob` carries JFIF only, so there is nothing to preserve
-   but the image data itself. Note: canvas files are **96 dpi** by spec, and
-   browsers embed no ICC profile — the export JSON records the colour profile as
-   *implied sRGB* and says so honestly (§7's "configured profile" cannot be
-   promised beyond that without shipping an ICC blob; documented limitation).
-5. **EPS cannot be produced honestly in a browser.** CairoSVG does not write EPS.
-   Genuine EPS needs Inkscape (`--export-ps-level=3`) or Ghostscript's
-   `epswrite` on a PostScript/PDF intermediate (`gsvg` was removed from
-   GhostPDL), and EPS itself cannot represent transparency or (in PS level 2)
-   gradients — converters rasterise or refuse. **Decision:** EPS is a
-   *converter-gated* output. The tab preflights for a configured converter
-   endpoint; with none, an EPS-requested export produces SVG+JPEG and is
-   reported **Partial** with the exact reason (§13), and the UI never writes a
-   `.eps` that is not a real EPS.
-6. **15.1 MP is safe for canvas.** Chromium's canvas limits (max dimension
-   16,384; total area far above 15.1 M) accommodate the target; `drawImage` from
-   an SVG blob URL, then `canvas.toBlob("image/jpeg", q)`, is the supported path
-   (MDN). `toBlob` (not `toDataURL`) keeps a 15 MP image off the string path.
-   Alpha is flattened by filling the canvas with the chosen background first.
-
-## 4. Contradictions resolved (request §9 "resolve before implementation")
-
-| # | Contradiction | Decision (and why) |
+| Need | Reused module | Why |
 |---|---|---|
-| C1 | "Notes request 50 keywords, the detailed prompt/example use 40" | **40** — the default prompt, the template, the validator and the UI counter all say 40. One rule, enforced at parse time; a 50-tag answer is invalid and is shown to the user for correction, never silently accepted |
-| C2 | The example second sentence ("The Vector Icon of X and Y") is 7–9 words, outside the stated 3–5 | The **3–5 word** limit is the rule; the example is illustrative only, and the validator counts words, not wishes. The doc no longer claims the example satisfies its own limit |
-| C3 | "formally valid" metadata vs "legal/IP clearance" | Validation is **structural only** (counts, required terms, banned patterns, duplicates, truncation). The UI says "checked against the rules", never "cleared" |
-| C4 | Padding "in pt" while the SVG/raster work in user units | One **declared document DPI** (CSS: 96 px/in, 72 pt/in ⇒ 1 pt = 4/3 px). The setting stores value **and** unit; the export JSON records the unit, the DPI and the resolved px. Nothing is "unexplained px" |
-| C5 | "stroke width 2.2 pt" vs an icon that already has strokes | The setting is the **desired output stroke width**; the pipeline computes a per-document stroke-scale factor (target ÷ measured median stroke) and records both. Non-scaling strokes (`vector-effect`) and transformed paths are measured after transforms, and are never silently rewritten |
-| C6 | "Include selected background in exported SVG" vs "never recolour the artwork" | Background is emitted as a **full-frame rect behind the artwork** inside the export copy (plus the JPEG flatten). The document's own strokes/fills are byte-identical; the check is a before/after comparison test |
-| C7 | "Green processed check" vs EPS/Partial | Green only when **every requested output** is written AND its JSON validates AND the package committed. Requested-EPS-without-converter = **Partial** (never green) |
-| C8 | "Metadata field below each item" (§10) vs the existing row density | The row gains a compact metadata strip (title · description · tag count · state) with a **Preview/Edit dialog** for the full editable, copyable fields. Empty until generated. The strip is a `<details>`-free single line so 800 px thumbnails stay usable |
-| C9 | "Use .Jsons to link all correct" vs exports creating more JSON | The **pair JSON is the identity link**: source path, chosen version, approval and fingerprints all come from it. `export.json` only *references* the pair (never copies authority), and the export folder is excluded from discovery so a re-scan cannot treat exports as sources (loop prevention, §2) |
-| C10 | Guidance says "CairoSVG-based pipeline" | Rejected: CairoSVG has no EPS writer. A real converter is required and the design treats it as an external capability (research finding 5) |
+| Recursive scan, pairing, decisions | `lib/scan.ts`, `lib/pairing.ts`, `selection/pairstore.ts` | The Generate SVG discovery (`svg/sources.ts`) already walks the root, pairs faces and loads every pair file — the new tab lists the SAME pairs, one row per approved SVG version choice. |
+| Approved-version choice | `lib/pairpreferred.ts`, `lib/svgmodel.ts` (`SvgVersion.review`) | `preferred` + per-version `review` decide which SVG the row exports. |
+| Root picking, path capture, folder control | `ui/pickroot.ts`, `ui/FolderBar.tsx`, `lib/rootpath.ts`, `ui/knownroots.ts` | One green Open-folder button + read-only full-path row per tab (I-35…I-46). |
+| Scan sequencing | `lib/scanseq.ts` | Only the newest scan commits. |
+| Secret storage pattern | `svg/keystore.ts` + `batch/store.ts` IndexedDB `secrets` store | Gemini key: same store, new key id `gemini-api-key`; masked, redacted, never persisted anywhere else. |
+| Request pattern | `lib/svgrequest.ts` (injectable `fetch`, classified errors, no auto-retry on unknown outcome) | `lib/geminireq.ts` follows the same shape for the Google generateContent API. |
+| Preview pipeline | `lib/svgpreview.ts` (parse → sanitize → fit → inline shadow DOM) | The row preview and the export preview reuse the sanitizer; nothing is recoloured (I-17/I-21). |
+| Background presets | `lib/svgbackground.ts` | Same presets + custom picker for the export background. |
+| Zoom | `lib/zoom.ts` | `svg-thumb` is one value shared with Generate SVG (I-55); the new tab mounts the same box rule. |
+| Log | `log/logstore.ts` `log()` | One log, sanitised on write and read (I-23…I-26). |
+| Undo timeline | `state/apply.ts` + `svg/reviewact.ts` pattern | "Apply settings to selected" pushes ONE history entry; a new entry type `uploadSettings` restores per-icon overrides. |
+| FS adapter | `lib/fs.ts` (`ensureDirPath`, `writeFileNew`, `writeFileOverwrite`, `tryGetFile`) | Atomic-per-file writes; no-overwrite for first export, overwrite on re-export commit. |
+| State/session | `state/appstore.ts`, `lib/session.ts` | New `TabId`, new session slice (checked ids + view prefs), validated on read. |
 
-## 5. Data ownership and schemas
+### 2.2 New modules (owned by this feature)
 
-**Per-icon settings** (persisted in `iconSplitter.upload.settings.v1`):
-`{ defaults: UploadDefaults, overrides: Record<pairId, Partial<UploadDefaults>> }`.
-A field is *inherited* until the user edits it for that icon; editing writes only
-that field into the override. `Reset to defaults` deletes the override entry.
+Pure rules in `src/lib/` (RULE 1/3; coverage-gated), IO/UI wiring in `src/upload/`:
 
-```ts
-interface UploadDefaults {
-  padding: { value: number; unit: "pt" | "px" | "%"; perSide?: [n,n,n,n] };
-  outputScale: number;              // 1 = artboard = padded bounds
-  background: PreviewBackground;    // reuse of the existing validated type
-  stroke: { value: number; unit: "pt" | "px"; enabled: boolean };
-  jpeg: { targetMp: 15.1; quality: 0.9; profile: "sRGB-implied" };
-  optimizeSvg: true;
-  includeEps: false;
+| Module | Owns |
+|---|---|
+| `lib/upsettings.ts` | Export settings: defaults, per-icon overrides, effective values, clamping, override flags, reset |
+| `lib/upmeta.ts` | Metadata model, word counting (one rule), validation (title 5-7 + 3-5, description 7-15, exactly 40 unique tags incl. 7 mandatory), labelled-text + JSON parsing, style-phrase warnings |
+| `lib/upprompt.ts` | The default metadata prompt (verbatim from the request), prompt build/reset |
+| `lib/uppath.ts` | SVG path `d` parser (all commands; arcs → cubics) |
+| `lib/upgeom.ts` | SVG scene: elements, transforms, minimal class/tag CSS cascade, stroke-aware visible bounds |
+| `lib/upfit.ts` | Artboard + fit math: padding, proportional scale, centring, pt→unit stroke sizing after scaling |
+| `lib/upprepare.ts` | Build the export SVG copy (viewBox, background rect, transform group, normalised strokes, embedded metadata) |
+| `lib/upraster.ts` | Integer pixel dimensions for a target MP, JPEG encode/verify orchestration (injectable canvas/encoder), decode verification |
+| `lib/upmetaxml.ts` | XMP packet, IPTC IIM record, SVG `<metadata>` RDF — one escaping rule |
+| `lib/upjpegmeta.ts` | JPEG APP1/APP13 segment surgery (embed + read back) |
+| `lib/upsvgo.ts` | SVGO v4 (`svgo/browser`) config that must preserve viewBox/strokes/metadata, version + size/hash record, render-compare gate |
+| `lib/upeps.ts` | Genuine EPSF-3.0 PostScript writer from the parsed scene; unsupported-feature preflight |
+| `lib/gemconfig.ts` | Gemini provider config (endpoint, model, timeout, retries, concurrency) + validation |
+| `lib/geminireq.ts` | generateContent request build, response parse, token/cost handling, classified errors |
+| `lib/upexport.ts` | `export.json` schema v1: build, validate, tolerant read |
+| `lib/upfinger.ts` | Source/settings/metadata fingerprints + the selective re-export stage plan |
+| `upload/sources.ts` | Approved-SVG discovery (one row per pair, chosen approved version, exclusions, export-folder loop prevention) |
+| `upload/statemodel.ts` | Plain model + table reducer (rows, settings, checked, filters, progress, toast) |
+| `upload/stores.ts` | localStorage: defaults, prompt, view prefs, Gemini config; accepted-metadata cache |
+| `upload/gemkey.ts` | Gemini API key in the IndexedDB secrets store |
+| `upload/exportio.ts` | `export/` folder IO: read committed package, staged commit (files then export.json) |
+| `upload/runner.ts` | Job state machine per icon, bounded concurrency, cancel, stage progress |
+| `upload/actions.ts`, `upload/ctx.ts`, `upload/useUpload.ts` | Wiring only (mirrors `svg/actions` pattern) |
+| `upload/UploadPanel.tsx` + row/controls/bulk/dialog components | The tab UI, adapted from the Generate SVG interface |
+
+### 2.3 External research (verified 2026-10-07)
+
+* **`gemini-3.1-flash-lite` exists and is stable** (model code exactly
+  `gemini-3.1-flash-lite`, released 2026-05-07, input text/image, output text,
+  structured outputs supported, 1,048,576-token input / 65,536-token output) —
+  ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite and
+  firebase.google.com/docs/ai-logic/models. No substitution is made; the model
+  id is configurable. `gemini-3.5-flash-lite` is newer but is NOT silently
+  used. The Interactions API (2026-06) is the new Google default while
+  `generateContent` remains supported — this build uses `generateContent`
+  (documented; endpoint configurable).
+* **Pricing**: Google publishes $0.25 / $1M input and $1.50 / $1M output for
+  this tier (typingmind model page, 2026-10). The API returns token counts but
+  no cost, so every cost number this tab shows is **Estimated** with a
+  `pricing` version string; provider-reported tokens are shown as reported.
+* **SVGO v4** ships an official browser entry (`svgo/browser`) — added as a
+  runtime dependency. `preset-default` is used with explicit plugin overrides
+  (see §6.4).
+* **Canvas limits**: Chrome allows 32,767 px per edge and 268,435,456 px area,
+  so a 15.1 MP raster (e.g. 3886×3886) is comfortably inside the limits; the
+  raster runs one icon at a time (bounded concurrency) to keep memory sane.
+* **JPEG metadata**: there is no native browser API; XMP is a UTF-8 XML packet
+  in an APP1 segment (`http://ns.adobe.com/xap/1.0/\0`), IPTC IIM datasets sit
+  inside the Photoshop 8BIM 0x0404 resource in APP13. This build writes those
+  segments itself (pure byte surgery) and reads them back for verification —
+  no re-encoding, pixels untouched.
+* **EPS**: CairoSVG is Python and cannot run in a browser app. A genuine
+  EPSF-3.0 writer (real PostScript path operators, `%%BoundingBox`,
+  `setlinewidth`, bezier curves preserved) is implemented in `lib/upeps.ts`
+  from the parsed SVG scene — the same approach verified browser SVG→EPS
+  converters use. Renaming a PDF/PS file is never done. Unsupported features
+  (text, raster images, gradients, filters, masks, patterns, clip paths) fail
+  EPS preflight clearly; SVG/JPEG-only exports remain available (user decision
+  2026-10-07).
+
+### 2.4 Decisions confirmed by the user (2026-10-07)
+
+1. UI: adapt the existing Generate SVG interface (the referenced
+   `design temp/SVG to upload` folder does not exist in the repo).
+2. Gemini: direct Google API, user's own key.
+3. EPS: built-in genuine PostScript writer with documented subset limits.
+4. Tags: **exactly 40** everywhere (the 7 mandatory terms among them).
+
+## 3. Contradictions resolved
+
+| Conflict in the request | Resolution |
+|---|---|
+| 50 keywords (notes) vs 40 (detailed prompt + template) | **40**, confirmed by the user; single rule in `lib/upmeta.ts` used by prompt, validation and UI. |
+| Title template phrase "The Vector Icon of 'tag 1' and 'tag 2'" exceeds 3-5 words | The phrase is advisory style for the second segment; the enforced rule is segment word counts (5-7 and 3-5). Formal word-count validation wins over example wording. |
+| "Metadata rules help avoid restricted content" vs "IP-compliant" | The UI states that model output is NOT legal/IP clearance; a style-phrase check warns; validation never promises compliance. |
+| CairoSVG named as conversion pipeline | CairoSVG is Python-only (browser app); replaced by the built-in genuine EPSF writer per user decision. |
+| `gemini-3.1-flash-lite` "verify, do not substitute" | Verified stable at ai.google.dev; used verbatim; configurable in the provider card. |
+| Stroke "2.2 pt" must not become unexplained "2.2 px" | 1 pt = 96/72 px (CSS/SVG reference DPI 96); the conversion is stated in the UI and recorded in export.json (`dpi: 96`). |
+
+## 4. Source eligibility (one row, one icon)
+
+* Discovery runs the SAME walk/pair/decision load as Generate SVG
+  (`svg/sources.discoverApprovedSources`), with one difference: directories
+  named `export` are ignored during the walk, so this feature's own outputs
+  can never be discovered as sources (no export loops, no duplicate rows).
+* A row exists for every approved pair that has at least one **generated AND
+  review-approved** SVG version on disk. The chosen version is the pair's
+  `preferred` when that version is approved, else the highest-numbered
+  approved generated version.
+* Approved pairs without an approved SVG version are *reported* (exclusion
+  reason `no-approved-svg`), never listed. A missing SVG file on a listed row
+  is a row problem (warning), never a silent removal or substitution.
+* One row shows ONE SVG thumbnail (the chosen version) — no AI reference
+  beside it (this tab prepares the SVG itself).
+* The row shows filename, full path, chosen version, metadata state, export
+  state and warnings; the committed `export.json` (when present and valid)
+  supplies the export state at scan time.
+
+## 5. Settings — defaults, overrides, effective values
+
+`lib/upsettings.ts` owns the model:
+
+```
+ExportSettings = {
+  paddingPct:   number      // 0–40, default 8   (uniform, % of artboard side)
+  background:   PreviewBackground  // reused presets + custom (default white)
+  strokePt:     number      // 0.2–8, default 2.2, unit "pt" at DPI 96
+  jpegMpx:      number      // 1–30, default 15.1
+  jpegQuality:  number      // 0.5–0.98, default 0.92
+  optimizeSvg:  boolean     // default true
+  includeEps:   boolean     // default false
 }
 ```
 
-**Per-icon export record** (`export/export.json`, schema version 1) — every field
-the request's §15 names: schema version; pair/source/version ids; source
-path + approval + fingerprint; effective settings with their origin
-(`default`/`override` per field); resolved px values + DPI; JPEG dims/MP/quality/
-profile; flags + tool versions (`svgo 4.1.0`, converter, app); accepted
-title/description/tags + the validation policy id; the exact prompt, provider,
-model, request id, tokens, actual-or-estimated cost; per-output path/format/
-bytes/hash/dimensions; timestamps per stage; status; validation results; a
-redacted error; and the recovery fingerprint. Relative paths inside the package;
-atomic write (write `export.json.tmp` → verify parse → overwrite → remove tmp);
-a corrupt or missing `export.json` never deletes valid outputs (§15/§18).
+* Global defaults live in the tab's settings bar and persist in
+  `localStorage iconSplitter.upload.defaults.v1`.
+* Per-icon overrides store ONLY the fields the user set (a partial record,
+  `iconSplitter.upload.overrides.v1`, keyed by pair id); effective = defaults
+  overridden per field. The UI marks inherited vs overridden fields; Reset
+  clears the icon's overrides.
+* Editing a global default never erases an override (it changes only icons
+  that inherit that field).
+* "Apply settings to selected" writes overrides for the selected ids in ONE
+  history entry (`uploadSettings`) showing the affected count; undo restores
+  the previous overrides for every icon it touched.
+* Values are clamped/validated on read (RULE 13); the effective settings are
+  persisted inside each icon's `export.json`.
+* Thumbnail zoom is display-only and never scales output (it is the shared
+  `svg-thumb` value).
 
-**Job states** (§16): `discovered → preflight → prepare → metadata →
-render/optimize → embed → eps → validate → commit → processed`, with `failed`,
-`partial`, `cancelled`, `stale` as terminal/invalidating states. Details worth
-pinning down now:
-* metadata is generated **once** and carried through optimisation and embedding —
-  SVGO runs with the metadata-preserving plugin set, and the embedded values are
-  verified against the accepted fields *after* the write;
-* per-item and per-stage progress, bounded concurrency (default 2 exports, one
-  metadata request at a time — the transport's one-in-flight discipline);
-* `cancel` stops unsent/uncommitted work, keeps completed packages;
-* a green check appears only after the commit step validates the whole package.
+## 6. Geometry, units, rendering
 
-**Selective re-export** (§17) is a pure function of fingerprints:
+### 6.1 Bounds
 
-| Change | Rebuild |
+`lib/upgeom.ts` computes conservative visible bounds from the parsed scene:
+every path control point (bezier hull contains the curve), every shape vertex,
+transformed by the accumulated matrix; expanded per stroked element by
+`strokeWidth/2 × (miter join ? miterlimit : 1)`. Non-scaling strokes are
+treated as user units (documented limitation). Text elements (rare in
+generated icons) are approximated by an em box (documented) and make EPS
+preflight fail. The bound is a superset — nothing is ever clipped.
+
+### 6.2 Artboard and fit (`lib/upfit.ts`)
+
+* Default artboard: **square 1000×1000 units**; setting `artboard: "square" |
+  "fit"` (default square; "fit" takes the content's aspect ratio).
+* Padding `P%` is uniform on every side: the icon fits inside
+  `(100 − 2P)%` of the artboard, centred, scaled by
+  `min(availW/boundsW, availH/boundsH)` — proportional only, never stretched
+  or cropped.
+
+### 6.3 Stroke sizing after scaling (the pt rule)
+
+The configured stroke is the physical stroke of the **output JPEG at its
+rendered resolution**, at reference DPI 96 (1 pt = 96/72 px = 1.25 px):
+
+```
+R                  = jpegWidthPx / 1000            // px per artboard unit
+strokeArtboardUnits = strokePt × (96/72) / R
+strokeUserUnits     = strokeArtboardUnits / fitScale / elemTransformScale
+```
+
+`strokeUserUnits` is written onto each stroked element of the export copy (a
+superset policy: only elements that already stroke get the new width; fills
+are untouched). The exported SVG, EPS and JPEG therefore agree visually, and
+an EPS page is emitted at the JPEG's 96-DPI physical size so the EPS
+`setlinewidth` is exactly `strokePt`. Changing the JPEG **megapixel target**
+changes R and therefore rebuilds the SVG+JPEG; changing only quality re-encodes
+the JPEG without touching the SVG.
+
+### 6.4 Optimization (`lib/upsvgo.ts`)
+
+SVGO v4 `preset-default` with explicit overrides: `removeViewBox: false`,
+`removeMetadata: false`, `removeTitle: false`, `removeDesc: false`,
+`removeUselessStrokeAndFill: false`, `convertShapeToPath` allowed,
+`cleanupIds` scoped. The optimizer runs on the export copy only. After
+optimization the SVG is re-validated (well-formed, one root, viewBox intact,
+title/desc/metadata present) and render-compared against the pre-optimization
+copy at a small preview size with a documented tolerance; a failing compare
+keeps the unoptimized copy and records the reason (RULE 9 — a failed optional
+stage never stalls the pipeline). Optimizer version + config + before/after
+size and hash are recorded in export.json.
+
+### 6.5 Rasterization (`lib/upraster.ts`)
+
+* Dimensions: integer w/h whose product is the closest match ≥/≤ the target MP
+  (square default: side = round(√(mpx×10⁶)); "fit": from the artboard ratio).
+  The row shows the exact dimensions and the actual MP.
+* The prepared SVG is rasterized **from vectors at full size** (SVG → Image →
+  canvas at exact target pixels) — never an enlarged thumbnail. Background is
+  filled first (alpha flattening onto the opaque colour), antialiasing on.
+* The JPEG blob is decoded again to verify format/dimensions/readability, then
+  metadata segments are embedded, then bytes + SHA-256 hash are recorded.
+
+### 6.6 Background
+
+The background presets/custom picker (reused `lib/svgbackground.ts`) choose
+the opaque colour flattened under the JPEG and emitted as an explicit
+`<rect>` as the first child of the exported SVG (documented output policy:
+the export SVG always carries the background). It never recolours strokes or
+fills, never inverts, and applies no CSS/filter overrides (I-17/I-21 hold for
+exports too).
+
+## 7. Gemini provider
+
+* Config (`lib/gemconfig.ts`): endpoint
+  `https://generativelanguage.googleapis.com` (editable), model
+  `gemini-3.1-flash-lite` (editable), timeout 5–900 s (default 120),
+  retries 0–5 (default 2, CONFIRMED failures only), concurrency 1–4
+  (default 2). Persisted in `iconSplitter.upload.gemini.v1`, clamped on read.
+* Key: `upload/gemkey.ts` — IndexedDB `secrets` store, key id
+  `gemini-api-key`; masked in the UI; excluded from presets, exports,
+  reports, logs and Git (RULE 20). A failed auth check never clears the
+  provider choice.
+* Request (`lib/geminireq.ts`): POST
+  `{endpoint}/v1beta/models/{model}:generateContent` with header
+  `x-goog-api-key`, body `contents:[{parts:[{text: prompt},
+  {inline_data:{mime_type:"image/png", data: <base64 of the rendered icon
+  preview>}}]}]`, `generationConfig.response_mime_type:"application/json"` +
+  `response_schema` for `{title, description, tags[]}`. The confirmation
+  dialog shows the exact final request (image payload redacted to a length
+  note) before anything is sent.
+* Failures are classified: `network` (outcome unknown — NEVER auto-resubmitted,
+  reported with request id), `timeout` (unknown outcome, same rule),
+  `rate-limit` (retry-after honoured, retry allowed), `refusal`
+  (SAFETY/RECITATION/prohibited content), `invalid-key`, `bad-request`,
+  `malformed` (unparseable body), `truncated` (MAX_TOKENS), `no-answer`.
+  Truncated/malformed/refused answers are never parsed into metadata.
+* Tokens come from `usageMetadata` (reported as reported); cost is always
+  Estimated from the versioned rate card and labelled as such.
+
+## 8. Metadata: prompt, parsing, review, embedding
+
+Default prompt = the request's text verbatim (40 tags, 7 mandatory terms:
+icon, pictogram, vector, stroke, line, editable, web), editable and persisted
+(`iconSplitter.upload.prompt.v1`), resettable to default.
+
+Parsing (`lib/upmeta.ts`): a JSON body is preferred (requested via
+response_schema); a labelled `Title:/Description:/Tags:` text body is parsed
+deterministically. Word counting: whitespace-split, hyphenated compounds are
+one word, surrounding punctuation stripped. Validation (fail-closed):
+
+* Title: two period-separated segments, 5–7 and 3–5 words.
+* Description: 7–15 words.
+* Tags: exactly 40, comma-separated, non-empty, unique (case-insensitive),
+  containing all 7 mandatory terms (case-insensitive).
+* Style-reference phrases ("in the style of", artist-name patterns) produce a
+  warning; the UI copy states the output is not legal/IP clearance.
+
+The row shows the accepted (or generated-pending) metadata as **editable,
+copyable fields under the SVG and JPEG previews** — empty until generated.
+Edits re-validate live; invalid metadata cannot produce a processed export.
+Accepted metadata is cached per source fingerprint
+(`iconSplitter.upload.meta.v1`) so a crash never repeats paid AI work, and is
+written into export.json on commit. A source change invalidates the cache for
+that icon (fingerprint mismatch) and the metadata must be regenerated or
+reconfirmed.
+
+Embedding (`lib/upmetaxml.ts`, `lib/upjpegmeta.ts`):
+
+* SVG: `<title>`, `<desc>`, and `<metadata>` carrying a Dublin Core RDF packet
+  (title/description/subject keywords) — Unicode preserved, XML-escaped, tags
+  as a list.
+* JPEG: XMP APP1 (dc:title, dc:description, dc:subject) + IPTC IIM APP13
+  (2:07 ObjectName, 2:25 Keywords ×40, 2:120 Caption) inserted after existing
+  APP0/APP1 headers, ≤ 65 502 bytes per segment; pixels untouched.
+* Both are re-read from the written files and compared field-by-field to the
+  accepted values before commit; SVGO must preserve them (verified again
+  after optimization).
+
+## 9. Export package, states, recovery
+
+Folder layout (pair folder = the folder holding the pair and its sidecar):
+
+```
+<pair-folder>/
+  …images, approved SVG versions, pair metadata JSON (untouched)…
+  export/
+    <icon-base>.svg     optimized, metadata embedded
+    <icon-base>.jpg     15.1 MP, XMP+IPTC embedded
+    <icon-base>.eps     optional, genuine EPSF-3.0
+    export.json         the per-icon record (LAST write = the commit)
+```
+
+`<icon-base>` = the pair's base name (the AI stem without `_AI`), so all
+formats share one name and one approved source version.
+
+Job states (per icon): `discovered → preflight → prepare → metadata →
+render → embed → eps → validate → commit → processed`, with terminal
+`failed`, `partial` (EPS requested but failed, or a mid-commit write failure),
+`cancelled`, `stale` (source/settings changed vs the committed record),
+`interrupted` (a non-committed export.json found at scan; restored as
+needs-review, never auto-resumed). One icon's failure never touches another's
+package. The green processed check appears only when every requested output
+and export.json validate and commit.
+
+Commit policy (RULE 23 adapted to the File System Access API, which has no
+rename): every output is built and validated in memory first; the commit pass
+writes the files (each FSA write is an atomic swap on close), `export.json`
+last. A failure before the pass leaves the previous package fully intact; a
+failure during it leaves the old export.json describing the last valid state
+and the row reports partial + Retry. Corrupt/missing export.json never
+deletes output files.
+
+Selective re-export (`lib/upfinger.ts`): fingerprints (source content SHA-256,
+effective visual settings, metadata, quality, flags) are compared with the
+committed record: source change → everything incl. metadata reconfirmation;
+visual settings change → SVG/JPEG/EPS rebuild, metadata kept but flagged for
+reconfirmation; metadata-only change → segments re-embedded into the existing
+JPEG bytes (no AI call, no raster); quality-only change → JPEG re-encode only;
+optimize/eps flag change → only the affected outputs; missing/corrupt output
+→ rebuild only the required stages. Nothing stale is ever silently reused.
+
+Logging: every stage writes through `log()` with time, item id, stage, duration
+and a safe cause — no key, no payload, no image bytes (I-23/I-24).
+
+## 10. Phased TDD plan
+
+Each phase lands tests-first and keeps `npm run verify` green:
+
+1. **Pure rules**: `upsettings`, `upmeta`, `upprompt` (+ tests).
+2. **Geometry**: `uppath`, `upgeom`, `upfit` (+ tests).
+3. **Render/embed**: `upmetaxml`, `upjpegmeta`, `upraster` (+ tests).
+4. **Optimize/EPS**: `upsvgo` (real SVGO), `upeps` (+ tests).
+5. **Provider**: `gemconfig`, `geminireq` (+ fake-transport tests).
+6. **Discovery/state**: `upload/sources`, `upload/statemodel`, `upload/stores` (+ tests).
+7. **Pipeline**: `upexport`, `upfinger`, `upload/exportio`, `upload/runner` (+ tests).
+8. **UI**: tab in Workbench + session/appstore, panel components, undo entry, UI tests.
+9. **Integration + docs**: end-to-end package tests, `SYSTEM_OF_RECORD.md`,
+   `UI_SELECTORS.md`, `QUALITY_RECHECK.md`.
+
+## 11. Acceptance mapping
+
+| Request §21 | Where |
 |---|---|
-| padding / scale / background / stroke | prepare → optimize → JPEG → embed → JSON (metadata text kept, relevance flagged) |
-| metadata text only | embed (SVG + JPEG) → JSON (no AI request) |
-| JPEG quality / target MP | raster → embed → JSON |
-| optimizeSvg toggled | optimize → JPEG → embed → JSON |
-| includeEps toggled | eps stage → JSON |
-| source version / SVG hash | everything (including metadata relevance → `stale`) |
-| missing / corrupt output | only the stages that produced it |
-
-## 6. Failure policy (one table, so the code has one answer per case)
-
-| Failure | Reported as | Package kept? |
-|---|---|---|
-| no full path captured | preflight warning; export still allowed (paths are root-relative) | yes |
-| converter missing while EPS requested | **Partial** + reason, SVG/JPEG exported | yes (SVG+JPEG) |
-| Gemini auth / model missing / refusal / truncated / malformed | metadata stage **Failed** with the provider's own reason; nothing embedded | no export written; prior package preserved |
-| metadata invalid (counts, required terms, banned patterns) | item **Needs review**; user edits/regenerates | prior package preserved |
-| unsent completion (timeout / lost stream) | journal entry, item `interrupted — needs review`, **no duplicate paid request** | prior package preserved |
-| render/optimize error | stage Failed with the tool + reason | staging discarded; prior package preserved |
-| disk full / write error | stage Failed; tmp removed; **last valid package intact** | yes |
-| corrupt `export.json` found on scan | warning on the row; outputs listed from the filesystem; rebuild offered | yes (files untouched) |
-
-## 7. Phased plan (TDD; each phase green and pushable)
-
-| Phase | Deliverable | Tests first (names are the contract) |
-|---|---|---|
-| **A. cores** (this commit) | `units.ts`, `fit.ts`, `target.ts` + sources index | `svgup_units.test.ts` (pt/px/% parsing, 96-dpi conversion, 2.2 pt = 2.9333 px), `svgup_fit.test.ts` (bounds+padding → transform; proportional; centred; per-side; never cropped; stroke margin), `svgup_target.test.ts` (15.1 MP integer dims, ratio preserved, actual MP reported, never distorted) |
-| **B. discovery + settings** | `sourceindex.ts`, `settingsstore.ts`, tab shell + row list + bulk counts | `svgup_sources.test.ts` (approved+preferred only; export folder excluded; missing/changed → warning), `svgup_settings.test.ts` (defaults→override→reset; validation; one undo entry for Apply-to-selected) |
-| **C. prepare + raster** | `prepare.ts`, `raster.ts` | `svgup_prepare.test.ts` (geometry applied to the export copy only; background rect behind artwork; strokes not recoloured), `svgup_raster.test.ts` (real canvas in happy-dom? no — a seam: dimension math pure; browser probe asserts 15.1 MP decode) |
-| **D. metadata** | `metaprompt.ts`, `metadata.ts`, provider card, prompt preview, review UI | `svgup_metaprompt.test.ts` (build + parse + every rejection: counts, required 7 terms, duplicates, truncation, mixed prose), `svgup_metadata.test.ts` (transport reuse, refusal/error mapping, journal, no duplicate submission) |
-| **E. embed + verify** | `mime.ts`, `jpegseg.ts` | `svgup_mime.test.ts` (Unicode, escaping, readback equals accepted), `svgup_jpegseg.test.ts` (insert/replace/verify XMP+IPTC on real bytes; malformed input refused) |
-| **F. optimize + EPS gate** | `optimize.ts`, converter preflight | `svgup_optimize.test.ts` (geometry/colours/strokes/metadata preserved; size recorded), `svgup_eps.test.ts` (missing converter → preflight refusal + Partial; a present converter is exercised through a fake endpoint) |
-| **G. package + states** | `exportjson.ts`, `states.ts`, `exporter.ts`, `jobctl.ts` | `svgup_exportjson.test.ts` (schema round-trip, atomic write, corrupt file tolerated), `svgup_job.test.ts` (stage order, per-item independence, cancel, fingerprints/selective re-export matrix) |
-| **H. integration** | panel wiring, browser probe | `svgup_ui.test.tsx` (row states, bulk actions, undo), probe: real OPFS tree, one icon end-to-end with a fake provider and a real 15.1 MP JPEG read back |
-
-Phases A–C need no network; D–F need a provider (tests use the existing fake
-transport); G–H are local only. **No Generate SVG code is rewritten** — the two
-tabs share libraries, never state.
-
-## 8. Acceptance mapping (§21 → where it is proven)
-
-approved-only rows → `svgup_sources`; global/local settings → `svgup_settings`;
-15.1 MP from vectors → `svgup_target` + probe; one metadata policy → `svgup_metaprompt`;
-optimisation preserves appearance → `svgup_optimize`; genuine EPS or none →
-`svgup_eps`; per-icon folder + JSON → `svgup_exportjson`; green = committed →
-`svgup_job`; selective re-export → `svgup_job`; sources untouched →
-`svgup_prepare` + probe.
-
-## 9. Open limitations (declared, not hidden)
-
-* **ICC profile** — JPEG output is sRGB *by convention*; browsers write no profile
-  and the app ships none. Recorded as `sRGB-implied` in the JSON.
-* **EPS** — needs an external converter; without one the output is Partial.
-* **Fonts in SVG** — text elements render with the browser's fallback when the
-  original font is unavailable; the tab warns when the chosen version contains
-  `<text>` rather than pretending the raster is identical.
-* **Tag policy** — 40 required, and the seven mandatory terms must appear; a
-  provider answer that misses them is shown to the user, never auto-fixed.
+| Only approved SVGs, one thumbnail per icon | `upload/sources.ts` (§4 above) |
+| Global/local settings predictable | `lib/upsettings.ts` + one undoable apply |
+| JPEG from vectors at declared MP | `lib/upraster.ts` (§6.5) |
+| Valid conceptual metadata, one policy, embedded | `lib/upmeta.ts`, `lib/upmetaxml.ts`, `lib/upjpegmeta.ts` (§8) |
+| Optimization preserves appearance/metadata; genuine EPS | `lib/upsvgo.ts`, `lib/upeps.ts` (§6.4, §2.3) |
+| Per-icon export folder + JSON | `upload/exportio.ts` (§9) |
+| Green = complete package committed | `upload/runner.ts` state machine (§9) |
+| Selective regeneration | `lib/upfinger.ts` (§9) |
+| Sources untouched | everything writes only into `export/` |

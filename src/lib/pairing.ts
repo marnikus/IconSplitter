@@ -31,15 +31,6 @@ export interface ReviewPair {
 /** Why one file of a pair is not usable; `files-missing` = only the record is left. */
 export type ProblemKind = "ai-missing" | "original-missing" | "unreadable" | "files-missing";
 
-/** Short status per problem kind, for a row (D8). ONE wording: both the
- * Generate SVG tab and the SVG-to-upload tab read this map. */
-export const PROBLEM_LABEL: Record<ProblemKind, string> = {
-  "ai-missing": "AI image missing",
-  "original-missing": "Reference missing",
-  unreadable: "Unreadable file",
-  "files-missing": "Files missing",
-};
-
 /** One per-file reason, shown on the row instead of hiding the pair (D4/D8). */
 export interface PairProblem {
   kind: ProblemKind;

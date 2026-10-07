@@ -82,19 +82,6 @@ export interface Usage {
 
 export const NO_USAGE: Usage = { input: null, output: null, total: null, cost: null, currency: "USD" };
 
-/**
- * The provider's finish_reason on a non-streamed body. The streamed path reads
- * the same field in lib/svgstream (which imports this module, so the two stay
- * separate rather than forming an import cycle).
- */
-function finishReasonOf(body: unknown): string | null {
-  if (!isRecord(body) || !Array.isArray(body.choices)) return null;
-  const first: unknown = body.choices[0];
-  if (!isRecord(first)) return null;
-  const reason = first.finish_reason;
-  return typeof reason === "string" && reason !== "" ? reason : null;
-}
-
 /** Reads usage straight from the response — never invents a missing number. */
 export function readUsage(raw: unknown): Usage {
   const usage = isRecord(raw) && isRecord(raw.usage) ? raw.usage : null;
@@ -210,7 +197,7 @@ export interface SendArgs {
 }
 
 export type SendOut =
-  | { ok: true; text: string; usage: Usage; requestId: string | null; status: number; frames?: number; finishReason?: string | null }
+  | { ok: true; text: string; usage: Usage; requestId: string | null; status: number; frames?: number }
   | { ok: false; failure: Failure };
 
 /**
@@ -226,7 +213,7 @@ export async function readJsonResponse(response: Response): Promise<SendOut> {
   if (content === null) {
     return { ok: false, failure: { kind: "malformed", message: "no message content in response", retryAfterMs: readRetryAfterMs(response.headers), retryable: false, status: response.status } };
   }
-  return { ok: true, text: content, usage: readUsage(body), requestId: readRequestId(response.headers), status: response.status, frames: 1, finishReason: finishReasonOf(body) };
+  return { ok: true, text: content, usage: readUsage(body), requestId: readRequestId(response.headers), status: response.status, frames: 1 };
 }
 
 export function parseJson(text: string): unknown {
