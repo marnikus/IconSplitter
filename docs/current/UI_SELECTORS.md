@@ -107,6 +107,8 @@ doc in the same change (RULE 17).
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
 | `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
 | `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` (template design, §N) |
+| `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` (§P) |
+| `tab-upload` | `SVG to upload` | mounts `UploadPanel` (§R), after Generate SVG |
 
 Semantic fallback: button role + visible text.
 
@@ -473,60 +475,109 @@ save failure),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
 
-## R. SVG to upload — `src/svgupload/*` (verified 2026-10-07)
+## R. SVG to upload — `src/upload/*` (verified 2026-10-07)
 
-The tab after Generate SVG. It reuses the panel furniture of §P (Rescan, search,
-filters, sorting, checkboxes, active row, thumbnail zoom) and adds the export
-controls. Handles in the order they appear on screen.
+Source: `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`,
+`UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`,
+`UploadPreview.tsx`, `UploadPanel.tsx`. The panel root carries both `svg` and
+`up` classes, so the whole Generate SVG look applies; `.up-*` CSS adds the row
+grammar with the expandable metadata detail, the package-status badge colours
+and the settings dialog's inherited/overridden markers.
 
-| Test id | Element / notes |
-|---|---|
-| `tab-svg-upload` | the workbench tab itself (`src/lib/session.ts` `TabId "svgUpload"`) |
-| `up-panel` | the whole tab; `up-controls` its control bar |
-| `up-open-folder` / `up-folder-path` / `up-rescan` | the green folder button, the read-only full-path row, the rescan (same behaviour as §P) |
-| `up-search`, `up-only`, `up-sort` | search box, filter select, sort select |
-| `up-provider` | the metadata model line: "Metadata model: … — verified against the provider's list" or the refusal |
-| `up-count-{icons,eligible,awaiting,ready,processing,processed,stale,failed,blocked,warned}` | the ten counts; `eligible` filters first, so a blocked row is never counted as processing |
-| `up-thumb` / `up-thumb-value` | the shared zoom control (display only — never the output size) |
-| `up-preview-bg` | the preview background preset (`PreviewBackground`) |
-| `up-{padding,padding-unit,scale,bg,bg-custom,stroke-on,stroke,stroke-unit,jpeg-mp,jpeg-quality,svgo,eps}` | the global defaults the new icons start from |
-| `up-apply` / `up-reset-selected` | "Apply to selected" (one undoable entry, reports the count) and reset |
-| `up-bulk` / `up-check-all` | the bulk bar and its select-all |
-| `up-{generate-selected,export-selected,retry-failed,cancel}` | bulk actions; `cancel` is disabled with nothing running |
-| `up-rows`, `up-row-{id}`, `up-check-{id}`, `up-preview-{id}`, `up-state-{id}`, `up-version-{id}`, `up-origin-{id}`, `up-warn-{id}`, `up-reset-row-{id}` | one row: selection, thumbnail, job state, version pill, settings origin ("inherited settings"/"custom settings"), its warnings, its reset |
-| `up-act-{preview,settings,generate,export,open,retry}-{id}` | the row actions; `export` is disabled with the policy's reason in `title` until the metadata is accepted |
-| `up-{busy,toast,pick,unsupported}` | the in-flight strip, the status line, the picker, the unsupported-browser note |
-| `up-meta-{id}` (+ `data-meta-state`) | the metadata strip under the row — **empty until generated**; `none/accepted/stale/rejected/interrupted` |
-| `up-policy-{id}` | the tag policy in the user's words ("40 tags required · includes icon, pictogram, …") |
-| `up-{generate,regenerate}-{id}` | start a naming run (the first one and a fresh one) |
-| `up-head-{title,description,tags}-{id}` | a field's own head: its name, its rule and its counter |
-| `up-copy-{title,description,tags}-{id}` | copy **that one field** |
-| `up-keywords-{id}` | "40/40 keywords ✓" — the tick appears only when the export's own policy passes (count *and* the seven mandatory terms) |
-| `up-{title,description,tags}-{id}` | the editable inputs |
-| `up-verdict-{id}` | the policy's verdict on the current text; `up-meta-state-{id}` the state word |
-| `up-{save,copy}`-`{id}` | save the edit (re-validated: a bad edit can only be stored as a draft) and copy all three fields |
-| `up-export-note-{id}` | why the export is not available yet (or what it will write) |
-| `up-settings-line-{id}` | the row's settings cell: the effective stroke, padding, scale and JPEG target ("stroke 2.2 pt · pad 10 pt · JPEG 15.1 MP") |
-| `up-act-{generate,export,retry}-{id}` | painted per the template: Metadata `primary`, Export `success`, Retry `danger` (the template's own tones) |
-| `up-preview-dialog{,-x}`, `up-preview-{svg,jpeg,jpeg-missing,bg,zoom,meta}` | the preview dialog and its parts; the JPEG side says "Not exported yet" until a package exists |
-| `up-settings-dialog{,-x}`, `up-dialog-{padding,scale,stroke,mp,quality,background,converter,svgo,eps,eps-warning,reset,close}` | the per-icon settings dialog; each field shows its origin, and `eps-warning` appears when EPS is ticked with no converter configured (the export would be Partial) |
+Source bar (always rendered — `upload-open-folder` is the one way in;
+`upload-root-empty` / `upload-unsupported` are the two empty states):
 
-EPS is never faked: with no converter the dialog says no `.eps` file is written
-at all (research: a browser cannot produce genuine EPS).
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-open-folder` | green `Open folder` button | the shared control (I-44), offered whether or not a root is loaded; `upload-root-empty`'s button is `upload-open-folder-empty` |
+| `upload-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar (I-46) |
+| `upload-rescan` | `↻ Rescan` | re-walks the root (busy label while scanning) |
+| `upload-scope-copy` | text | "Approved SVGs only · recursive · N icons" |
+| `upload-audit` | text | the scan's one audit line: rows · SVG files · pairs not listed · corrupt pair files |
+| `upload-count-{icons,processed,partial,failed,stale}` | counter chips | live counts; a failed run counts even with record null |
 
-The preview dialog shows the **published JPEG** (an object URL of the file in the
-icon's own `export/` folder) as soon as that file exists — the artifact itself,
-never a second render — and "Not exported yet" when it does not.
+Settings button + provider card:
 
-**The tab has no log of its own.** Its events go to the shell's one activity log
-(§Q): `upload.named` (info, the icon + the model + the tag count),
-`upload.name-refused` (warn, the policy's reason), `upload.exported`
-(info/warn/error for processed / partial / cancelled / failed),
-`upload.cancelled`, `upload.restored` (warn — unfinished work came back as
-interrupted and nothing was sent again) and `upload.model-checked`. No entry ever
-carries the metadata text, the prompt, the response body or the API key.
+| `upload-settings-open` | button | opens the global-defaults settings dialog |
+| `upload-provider-card` | card | minimizable via `upload-provider-toggle` (`aria-expanded`) |
+| `upload-provider` / `upload-limits` | text | "Gemini · metadata generation" / "{timeout}s timeout · N retries · N parallel" |
+| `upload-model` / `upload-endpoint` | `input` | the model id (verified default `gemini-3.1-flash-lite`) and the base URL |
+| `upload-timeout` / `upload-retries` / `upload-concurrency` | `input[type=number]` | clamped at the moment of change (5–900 s, 0–5, 1–8) |
+| `upload-prompt` | `textarea[readonly]` | the EXACT metadata prompt — fixed, the validator enforces its rules |
+| `upload-key-state` | button | masked key ("Gemini API key secured locally" / "No Gemini API key yet"); opens the editor |
+| `upload-key-mask` / `upload-key-note` | rows of `upload-key-state` | the masked key above "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports" |
+| `upload-key-input` / `upload-key-save` / `upload-key-cancel` | editor | `input[type=password]`, `aria-label="Gemini API key"` |
+| `upload-provider-note` | note | endpoint · the key travels in the `x-goog-api-key` header only · each icon's image is sent only inside the one request you confirm · nothing is ever uploaded automatically |
 
-**Restart.** `iconSplitter.upload.jobs.v1` remembers the last state of every
-icon. A restart maps `running`/`queued` to `interrupted — needs review`
-(`restoreInterrupted`), says so in the log and the toast, and sends nothing; the
-row's Retry stays a deliberate click.
+Filters: `upload-filter-status` (all / processed / partial / failed / cancelled /
+stale / not exported), `upload-filter-metadata` (all / empty / generating /
+generated / invalid / accepted / interrupted), `upload-sort` (name / package
+status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
+`upload-clear-filters`.
+
+Bulk bar (`upload-bulk`):
+
+| `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
+| `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
+| `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |
+| `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
+| `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
+| `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
+| `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
+| `upload-meta-selected` | button | opens the exact-request confirmation (disabled at 0 selected) |
+| `upload-export-selected` | button | runs the export pipeline on the selection (disabled at 0 selected) |
+| `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
+
+List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),
+`upload-attention-count` ("N need attention"), `upload-rows` (role `listbox`),
+`upload-row-{pairId}`, `upload-empty`, `upload-footer-summary`.
+
+Row (`upload-row-{id}`):
+
+| `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
+| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
+| `upload-target-{id}` | text | the row's source path (the approved SVG) |
+| `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" |
+| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
+| `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
+| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
+| `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Export |
+| `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
+
+Metadata fields (`upload-detail-{id}`, empty until generated):
+`upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
+`upload-meta-title-{id}` / `upload-meta-description-{id}` /
+`upload-meta-tags-{id}` (each with its live count), the per-field copy buttons
+`upload-copy-{title,description,tags}-{id}`, the validation line
+`upload-meta-validation-{id}`, and the actions row `upload-meta-state-{id}`
+/ `upload-meta-usage-{id}` / `upload-meta-detail-{id}` /
+`upload-meta-regen-{id}` / `upload-meta-accept-{id}` (disabled when accepted
+and unedited).
+
+Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
+`upload-dialog-scope` (the global-defaults vs per-icon wording),
+`upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
+change), `upload-set-{optimize,eps}` (checkboxes), the background
+(`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
+`upload-set-bg-value`), the per-field marker `upload-set-marker-{field}`
+("inherited" / "overridden", icon scope only), `upload-set-reset` (icon scope:
+deletes the override — one undoable entry), `upload-set-close`.
+
+Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
+request — `upload-meta-provider`, `upload-meta-endpoint`,
+`upload-meta-prompt` (the exact prompt, read-only), the auth/retries facts,
+`upload-meta-confirm` (sends) / `upload-meta-dismiss` /
+`upload-meta-cancel`.
+
+Banners: `upload-warn-excluded`, `upload-warn-corrupt`,
+`upload-warn-unreadable`, `upload-warn-interrupted` (a metadata request in
+flight at restart — never resent automatically).
+
+Status bar (`upload-statusbar`): `upload-status-counts`
+("N processed · N partial · N failed · N stale"), `upload-status-provider`
+("Gemini · {model}"), the key state, `upload-status-meta` /
+`upload-status-export` ("… in flight").
+
+Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
+settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
+(§O).

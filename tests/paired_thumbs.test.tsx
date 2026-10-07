@@ -92,15 +92,14 @@ describe("PairedThumbs — two slots, real boxes, one layout", () => {
 });
 
 describe("the shared list scroller — 800 px is honoured, not squeezed", () => {
-  it("reserves the pair's own width in both rows", () => {
-    // max-content in the preview column of EVERY template that draws a preview:
-    // the column is exactly as wide as the boxes I-55 computed, whatever ratio
-    // they are — including the SVG-to-upload row, which shares the same rule
+  it("reserves the pair's own width in every row", () => {
+    // max-content in the preview column of EVERY template: the column is exactly
+    // as wide as the boxes I-55 computed, whatever ratio they are
     const templates = css().match(/grid-template-columns:\s*34px\s*max-content[^;]*/g) ?? [];
-    expect(templates.length).toBeGreaterThanOrEqual(2);
+    expect(templates.length).toBe(3);
     expect(templates.some((t) => t.includes("280px"))).toBe(true); // the SVG row
     expect(templates.some((t) => t.includes("320px"))).toBe(true); // the V2 row
-    expect(templates.some((t) => t.includes("240px"))).toBe(true); // the upload row
+    expect(templates.some((t) => t.includes("minmax(240px, 1fr)"))).toBe(true); // the upload row
   });
 
   it("never sizes the preview column from the zoom value at any width", () => {
