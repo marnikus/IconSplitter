@@ -9,9 +9,10 @@ import {
   BG_PRESETS, normalizeHex,
 } from "../lib/svgbackground";
 import {
+  ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
   clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
-  type SettingsOverrides, type UploadSettings,
+  type Artboard, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 
 export interface UploadSettingsDialogProps {
@@ -75,9 +76,8 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <NumberSetting p={p} effective={effective} field="strokePt" label="Stroke width (pt)" testid="stroke"
         min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePt}
         hint="0 = leave the artwork's strokes untouched · 1 pt = 4/3 px at 96 DPI" />
-      <NumberSetting p={p} effective={effective} field="jpegMegapixels" label="JPEG (MP)" testid="mp"
-        min={MP_MIN} max={MP_MAX} step={0.1} clamp={clampMegapixels}
-        hint="rendered from the vectors at this resolution (default 15.1)" />
+      <ArtboardSetting p={p} effective={effective} />
+      <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
         min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
       <ToggleSetting p={p} effective={effective} field="optimizeSvg" label="Optimize SVG (SVGO)" testid="optimize"
@@ -132,6 +132,91 @@ function ToggleSetting({ p, effective, field, label, testid, hint }: {
         onChange={(e) => change(p, field, e.target.checked)} />
       <small className="up-hint">{hint}</small>
     </label>
+  );
+}
+
+/**
+ * The artboard: the final px size of the export. `content` hugs the artwork
+ * (padding as a share of it); a preset or a custom width×height pins EXACT px,
+ * scaling the artwork into that box — which is where the aspect ratio lives.
+ */
+function ArtboardSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  const a = effective.artboard;
+  const pinned = artboardSize(a);
+  const patch = (next: Partial<Artboard>) => change(p, "artboard", clampArtboard({ ...a, ...next }));
+  return (
+    <div className="svg-field up-set-field">
+      <span className="svg-label">Artboard<Marker p={p} field="artboard" testid="artboard" /></span>
+      <select className="svg-input" data-testid="upload-set-artboard" aria-label="Artboard size"
+        value={a.mode === "preset" ? String(a.size) : a.mode}
+        onChange={(e) => patch(fromChoice(e.target.value, a))}>
+        <option value="content">Fit the artwork</option>
+        {ARTBOARD_PRESETS.map((size) => <option key={size} value={String(size)}>{size}×{size}</option>)}
+        <option value="custom">Custom…</option>
+      </select>
+      {a.mode === "custom" && <CustomSize a={a} patch={patch} />}
+      <small className="up-hint" data-testid="upload-set-artboard-note">{artboardNote(pinned)}</small>
+    </div>
+  );
+}
+
+/** The custom width × height, and the ratio they spell out. */
+function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>) => void }) {
+  return (
+    <div className="up-bg-row">
+      <input className="svg-input" type="number" data-testid="upload-set-artboard-w" aria-label="Artboard width in px"
+        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.width}
+        onChange={(e) => patch({ width: Number(e.target.value) })} />
+      <output className="svg-bg-value" data-testid="upload-set-artboard-ratio">{ratioOf(a)}</output>
+      <input className="svg-input" type="number" data-testid="upload-set-artboard-h" aria-label="Artboard height in px"
+        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.height}
+        onChange={(e) => patch({ height: Number(e.target.value) })} />
+      <output className="svg-bg-value" data-testid="upload-set-artboard-mp">{mpOf(a)}</output>
+    </div>
+  );
+}
+
+/** The select's value → the artboard it means (a preset keeps its square edge). */
+function fromChoice(choice: string, a: Artboard): Partial<Artboard> {
+  if (choice === "content") return { mode: "content" };
+  if (choice === "custom") return { mode: "custom", width: a.mode === "custom" ? a.width : 512, height: a.mode === "custom" ? a.height : 512 };
+  return { mode: "preset", size: Number(choice) };
+}
+
+function artboardNote(pinned: { width: number; height: number } | null): string {
+  if (pinned === null) return "hugs the artwork — the padding is a share of its largest side";
+  return `exactly ${pinned.width}×${pinned.height} px, artwork scaled in, padding a share of the artboard`;
+}
+
+/** A readable ratio: 16:9, 2:1, or the reduced integer pair. */
+function ratioOf(a: Artboard): string {
+  const g = gcd(a.width, a.height);
+  return `${Math.round(a.width / g)}:${Math.round(a.height / g)}`;
+}
+
+function mpOf(a: Artboard): string {
+  return `${((a.width * a.height) / 1e6).toFixed(2)} MP`;
+}
+
+function gcd(x: number, y: number): number {
+  return y === 0 ? Math.max(1, x) : gcd(y, x % y);
+}
+
+/** The JPEG resolution, which a pinned artboard simply overrides. */
+function MegapixelSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  const pinned = artboardSize(effective.artboard) !== null;
+  return (
+    <div className="svg-field up-set-field">
+      <span className="svg-label">JPEG (MP)<Marker p={p} field="jpegMegapixels" testid="mp" /></span>
+      <input className="svg-input" data-testid="upload-set-mp" type="number" aria-label="JPEG megapixels"
+        min={MP_MIN} max={MP_MAX} step={0.1} value={effective.jpegMegapixels} disabled={pinned}
+        onChange={(e) => change(p, "jpegMegapixels", clampMegapixels(Number(e.target.value)))} />
+      <small className="up-hint" data-testid="upload-set-mp-note">
+        {pinned
+          ? "not used here — the artboard pins the exact px size"
+          : "rendered from the vectors at this resolution (default 15.1)"}
+      </small>
+    </div>
   );
 }
 

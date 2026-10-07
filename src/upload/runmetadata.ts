@@ -100,7 +100,7 @@ async function requestMetadata(args: MetadataArgs, apiKey: string, deps: Metadat
 /**
  * The answer → a deterministic parse + validation outcome. A provider-reported
  * LENGTH finish wins over everything the text appears to say: a half-written
- * 40-tag list that happens to parse is still a truncated answer and is NEVER
+ * half-written tag list that happens to parse is still a truncated answer and is NEVER
  * accepted (CP-8, RULE 4).
  */
 function interpret(input: InterpretInput): MetadataResult {

@@ -8,9 +8,12 @@
 // the export renders the configured width at its intrinsic size. Content the
 // geometry math cannot answer for (text, image, geometry-restyle CSS, a
 // transform on the root) fails the preparation honestly instead of being
-// guessed.
+// guessed. Clean code (2026-10-08) is part of the copy: SVG 1.1, a real
+// viewBox, no raster, no `<style>`, and no ids, classes or editor bloat —
+// see lib/upload/clean.
 
-import { BACKGROUND_DEFAULT, type UploadSettings } from "./settings";
+import { BACKGROUND_DEFAULT, artboardSize, type UploadSettings } from "./settings";
+import { cleanExportDom, unsupportedContent } from "./clean";
 import { normalizeHex } from "../svgbackground";
 import { scaleOf } from "./geom/matrix";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
@@ -31,6 +34,7 @@ export interface PreparedSvg {
   background: string;
 }
 
+export type PrepareFailure = Extract<PrepareResult, { ok: false }>;
 export type PrepareResult =
   | ({ ok: true } & PreparedSvg)
   | { ok: false; code: PrepareFailureCode; detail: string };
@@ -40,20 +44,20 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   const doc = parseSvgDocument(sourceSvg);
   if (doc === null) return fail("parse", "the source is not well-formed XML");
   const root = doc.documentElement;
-  if (root === null || name(root) !== "svg") {
-    return fail("parse", "the document root is not an <svg> element");
-  }
-  if (root.getAttribute("transform") !== null) {
-    return fail("unsupported", "a transform on the root <svg> element");
-  }
+  const veto = sourceVeto(root);
+  if (veto !== null) return veto;
+  cleanExportDom(root as Element, { keepRootEmbeds: false });
   const vb = visibleBounds(root);
   if (vb !== null && vb.unsupported.length > 0) {
     return fail("unsupported", `unsupported content: ${vb.unsupported.join(", ")}`);
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
-  const fit = fitArtboard(vb.bounds, settings.paddingPct);
+  const fit = fitArtboard(vb.bounds, settings.paddingPct, artboardSize(settings.artboard));
+  // The stroke width is a width in the FINAL file, so it is divided by the
+  // artboard's scale as well: a 2.2 pt stroke stays 2.2 pt whatever size the
+  // artboard pinned the artwork to.
   const strokesNormalized = settings.strokePt > 0
-    ? normalizeStrokes(root, ptToPx(settings.strokePt))
+    ? normalizeStrokes(root, ptToPx(settings.strokePt) / fit.scale)
     : 0;
   const background = normalizeHex(settings.background) ?? BACKGROUND_DEFAULT;
   applyArtboard(root, fit, background);
@@ -62,6 +66,23 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
     svg: new XMLSerializer().serializeToString(doc),
     fit, bounds: vb.bounds, strokesNormalized, background,
   };
+}
+
+/**
+ * Only failures the SOURCE itself causes, checked before anything is built:
+ * a root that is not a plain `<svg>`, a root transform, and the content the
+ * clean policy refuses outright (raster, unfoldable stylesheets) — fail-closed,
+ * because cleaning those WOULD change the picture.
+ */
+function sourceVeto(root: Element | null): PrepareFailure | null {
+  if (root === null || name(root) !== "svg") {
+    return fail("parse", "the document root is not an <svg> element");
+  }
+  if (root.getAttribute("transform") !== null) {
+    return fail("unsupported", "a transform on the root <svg> element");
+  }
+  const unsupported = unsupportedContent(root);
+  return unsupported === null ? null : fail("unsupported", unsupported);
 }
 
 function parseSvgDocument(source: string): Document | null {
@@ -73,7 +94,7 @@ function parseSvgDocument(source: string): Document | null {
   return doc;
 }
 
-function fail(code: PrepareFailureCode, detail: string): PrepareResult {
+function fail(code: PrepareFailureCode, detail: string): PrepareFailure {
   return { ok: false, code, detail };
 }
 
@@ -118,7 +139,8 @@ function applyArtboard(root: Element, fit: ArtboardFit, background: string): voi
   root.setAttribute("height", fmt(fit.artH));
   const doc = root.ownerDocument;
   const group = doc.createElementNS(SVG_NS, "g");
-  group.setAttribute("transform", `translate(${fmt(fit.offsetX)} ${fmt(fit.offsetY)})`);
+  const scale = fit.scale === 1 ? "" : ` scale(${fmt(fit.scale)})`;
+  group.setAttribute("transform", `translate(${fmt(fit.offsetX)} ${fmt(fit.offsetY)})${scale}`);
   for (const child of Array.from(root.children)) group.appendChild(child);
   root.appendChild(group);
   root.insertBefore(backgroundRect(doc, fit, background), group);
@@ -131,6 +153,9 @@ function backgroundRect(doc: Document, fit: ArtboardFit, background: string): El
   rect.setAttribute("width", fmt(fit.artW));
   rect.setAttribute("height", fmt(fit.artH));
   rect.setAttribute("fill", background);
+  // Fill ONLY: `stroke` is inherited, so an artwork that strokes on the root
+  // (or a group) would otherwise paint a border around the whole artboard.
+  rect.setAttribute("stroke", "none");
   return rect;
 }
 

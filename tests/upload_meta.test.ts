@@ -1,22 +1,22 @@
 // RULE 8 — the metadata rules run for real: the exact default prompt states
 // every enforced constraint, the labeled-text parser is deterministic, and
-// validation applies the resolved rules (design §2.1–2.3: exactly 40 unique
-// tags incl. the 7 mandatory; title = 5–7-word sentence + 3–5-word sentence
-// naming ≥2 of the tags; description 7–15 words; restricted content warns).
+// validation applies the resolved rules. The policy is a MINIMUM policy (the
+// user's 2026-10-08 change): at least 10 unique tags incl. the 7 mandatory,
+// a title of at least 5 words, a description of at least 7 words — longer is
+// always accepted, and nothing is refused for being too wordy.
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_METADATA_PROMPT,
   MANDATORY_TAGS,
-  TAG_COUNT,
+  TAGS_MIN,
   countWords,
   metadataFingerprint,
   parseMetadata,
-  splitTitleSentences,
   validateMetadata,
   type IconMetadata,
 } from "../src/lib/upload/meta";
 
-/** 40 unique tags: the 7 mandatory + 33 concept keywords. */
+/** The ideal answer: the 7 mandatory tags + 33 concept keywords (still valid). */
 const TAGS: string[] = [
   ...MANDATORY_TAGS,
   "speed", "growth", "chart", "arrow", "up", "business", "finance", "analytics", "data", "trend",
@@ -36,22 +36,25 @@ function meta(over: Partial<IconMetadata> = {}): IconMetadata {
 }
 
 describe("the default prompt states every enforced constraint", () => {
-  it("names all 7 mandatory tags and the exact tag count", () => {
+  it("names all 7 mandatory tags and the minimum tag count", () => {
     for (const tag of MANDATORY_TAGS) expect(DEFAULT_METADATA_PROMPT).toContain(tag);
-    expect(DEFAULT_METADATA_PROMPT).toContain("40");
+    expect(DEFAULT_METADATA_PROMPT).toContain(`at least ${TAGS_MIN} unique`);
   });
 
-  it("states the title, description and IP rules", () => {
-    expect(DEFAULT_METADATA_PROMPT).toContain("5-7 words");
-    expect(DEFAULT_METADATA_PROMPT).toContain("3-5 words");
-    expect(DEFAULT_METADATA_PROMPT).toContain("7-15 words");
+  it("states the minimum title and description lengths, never a maximum", () => {
+    expect(DEFAULT_METADATA_PROMPT).toContain("at least 5 words");
+    expect(DEFAULT_METADATA_PROMPT).toContain("at least 7 words");
+    expect(DEFAULT_METADATA_PROMPT).not.toContain("exactly 40");
+  });
+
+  it("states the IP rules", () => {
     expect(DEFAULT_METADATA_PROMPT).toContain("brand");
     expect(DEFAULT_METADATA_PROMPT).toContain("in the style of");
     expect(DEFAULT_METADATA_PROMPT).toContain("artist");
   });
 });
 
-describe("countWords / splitTitleSentences (design §2.3)", () => {
+describe("countWords", () => {
   it("counts whitespace-separated tokens", () => {
     expect(countWords("Speed and growth")).toBe(3);
     expect(countWords("  a   b  ")).toBe(2);
@@ -62,20 +65,6 @@ describe("countWords / splitTitleSentences (design §2.3)", () => {
     expect(countWords("line-art icon")).toBe(2);
   });
 
-  it("splits the title on the first \". \" into two sentences", () => {
-    expect(splitTitleSentences("Minimal line icon of growth. Speed and growth pictogram"))
-      .toEqual(["Minimal line icon of growth", "Speed and growth pictogram"]);
-  });
-
-  it("tolerates a trailing period on the second sentence", () => {
-    expect(splitTitleSentences("One two three four five. Speed growth pictogram."))
-      .toEqual(["One two three four five", "Speed growth pictogram"]);
-  });
-
-  it("rejects one sentence or three", () => {
-    expect(splitTitleSentences("only one sentence here")).toBeNull();
-    expect(splitTitleSentences("One two three. Four five six. Seven eight nine.")).toBeNull();
-  });
 });
 
 describe("parseMetadata — deterministic labeled-text parsing", () => {
@@ -85,14 +74,14 @@ describe("parseMetadata — deterministic labeled-text parsing", () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.title).toBe(VALID.title);
     expect(parsed?.description).toBe("Clean line icon showing growth");
-    expect(parsed?.tags).toHaveLength(TAG_COUNT);
+    expect(parsed?.tags).toHaveLength(TAGS.length);
     expect(parsed?.tags[0]).toBe("icon");
   });
 
   it("is case-insensitive on labels and ignores extra lines", () => {
     const parsed = parseMetadata(`notes: hello\nTITLE: ${VALID.title}\ndescription: ${VALID.description}\nTAGS: ${TAGS.join(",")}\nbye`);
     expect(parsed?.title).toBe(VALID.title);
-    expect(parsed?.tags).toHaveLength(TAG_COUNT);
+    expect(parsed?.tags).toHaveLength(TAGS.length);
   });
 
   it("returns null when any label is missing", () => {
@@ -114,9 +103,17 @@ describe("validateMetadata — the resolved rules", () => {
     expect(v.ok).toBe(true);
   });
 
-  it("enforces exactly 40 tags", () => {
-    expect(validateMetadata(meta({ tags: TAGS.slice(1) })).errors[0]).toContain("exactly 40");
-    expect(validateMetadata(meta({ tags: [...TAGS, "extra"] })).errors[0]).toContain("exactly 40");
+  it("requires at least 10 tags and accepts any number above that", () => {
+    const nine = [...TAGS.slice(0, 9)];
+    expect(validateMetadata(meta({ tags: nine })).errors[0]).toContain("at least 10");
+    expect(validateMetadata(meta({ tags: TAGS })).errors).toEqual([]);
+    expect(validateMetadata(meta({ tags: [...TAGS, "extra", "extra2"] })).errors).toEqual([]);
+  });
+
+  it("accepts exactly the minimum: 10 tags", () => {
+    const ten = [...MANDATORY_TAGS, "growth", "speed", "arrow"];
+    expect(ten).toHaveLength(TAGS_MIN);
+    expect(validateMetadata(meta({ tags: ten })).errors).toEqual([]);
   });
 
   it("rejects duplicate tags case-insensitively", () => {
@@ -131,29 +128,23 @@ describe("validateMetadata — the resolved rules", () => {
     expect(v.errors.some((e) => e.includes("missing mandatory tags: web"))).toBe(true);
   });
 
-  it("enforces the title sentence word counts", () => {
-    expect(validateMetadata(meta({ title: "Too short. Speed growth pictogram" })).errors[0]).toContain("title sentence 1");
-    expect(validateMetadata(meta({ title: "One two three four five six seven eight. Speed growth pictogram" })).errors[0]).toContain("title sentence 1");
-    expect(validateMetadata(meta({ title: "Minimal line icon of growth. Speed pictogram" })).errors[0]).toContain("title sentence 2");
-    expect(validateMetadata(meta({ title: "Minimal line icon of growth. One two three four five six" })).errors[0]).toContain("title sentence 2");
+  it("requires at least 5 title words and no upper limit", () => {
+    expect(validateMetadata(meta({ title: "Too short" })).errors[0]).toContain("at least 5 words");
+    expect(validateMetadata(meta({ title: "One two three four" })).errors[0]).toContain("at least 5 words");
+    expect(validateMetadata(meta({ title: "Five words are the minimum here" })).errors).toEqual([]);
   });
 
-  it("requires the second sentence to name at least two of the tags", () => {
-    // names only "pictogram" (speed/growth removed from the tag list)
-    const tags = TAGS.filter((t) => t !== "speed" && t !== "growth");
-    const v = validateMetadata(meta({ tags: [...tags, "filler", "extra2"], title: "Minimal line icon of growth. Speed and growth pictogram" }));
-    expect(v.errors.some((e) => e.includes("must name at least 2"))).toBe(true);
+  it("accepts a single-sentence title and a very long one (no structure rule)", () => {
+    expect(validateMetadata(meta({ title: "Minimal line icon of steady business growth" })).errors).toEqual([]);
+    const long = Array.from({ length: 14 }, (_, i) => `w${i}`).join(" ");
+    expect(validateMetadata(meta({ title: long })).errors).toEqual([]);
   });
 
-  it("accepts a second sentence naming two tags as ordinary words", () => {
-    const v = validateMetadata(meta({ title: "Minimal line icon of growth. Speed and growth pictogram" }));
-    expect(v.errors).toEqual([]);
-  });
-
-  it("enforces the description word count", () => {
-    expect(validateMetadata(meta({ description: "Too short" })).errors[0]).toContain("description");
-    const long = Array.from({ length: 16 }, (_, i) => `w${i}`).join(" ");
-    expect(validateMetadata(meta({ description: long })).errors[0]).toContain("description");
+  it("requires at least 7 description words and no upper limit", () => {
+    expect(validateMetadata(meta({ description: "Too short" })).errors[0]).toContain("at least 7 words");
+    expect(validateMetadata(meta({ description: "Seven words is the minimum for this" })).errors).toEqual([]);
+    const long = Array.from({ length: 24 }, (_, i) => `w${i}`).join(" ");
+    expect(validateMetadata(meta({ description: long })).errors).toEqual([]);
   });
 
   it("warns on restricted content without blocking", () => {

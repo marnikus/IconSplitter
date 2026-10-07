@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitArtboard,
+  pinnedDimensions,
   parseSvgLength,
   ptToPx,
   pxToPt,
@@ -39,6 +40,48 @@ describe("units — pt is never silently px", () => {
     expect(parseSvgLength("50%")).toBeNull();
     expect(parseSvgLength("auto")).toBeNull();
     expect(parseSvgLength(null)).toBeNull();
+  });
+});
+
+describe("fitArtboard — a pinned artboard scales the artwork into it", () => {
+  const bounds: Bounds = { minX: 10, minY: 10, width: 80, height: 80 };
+
+  it("keeps today's behaviour when the artboard hugs the content (scale 1)", () => {
+    const fit = fitArtboard(bounds, 8);
+    expect(fit.artW).toBeCloseTo(92.8);
+    expect(fit.scale).toBe(1);
+    expect(fit.viewBox).toBe("0 0 92.8 92.8");
+  });
+
+  it("lands exactly on 512×512 with the padding as a share of the artboard", () => {
+    const fit = fitArtboard(bounds, 8, { width: 512, height: 512 });
+    expect(fit.viewBox).toBe("0 0 512 512");
+    expect(fit.artW).toBe(512);
+    expect(fit.pad).toBeCloseTo(40.96); // 8% of 512
+    expect(fit.scale).toBeCloseTo((512 - 2 * 40.96) / 80);
+    // centred: the scaled 80×80 artwork sits in the middle
+    const scaled = 80 * fit.scale;
+    expect(fit.offsetX + bounds.minX * fit.scale).toBeCloseTo((512 - scaled) / 2);
+  });
+
+  it("falls back to scale 1 when the artwork or the box is degenerate", () => {
+    const empty: Bounds = { minX: 0, minY: 0, width: 0, height: 0 };
+    const flat = fitArtboard(empty, 8, { width: 512, height: 512 });
+    expect(flat.scale).toBe(1);
+    expect(flat.viewBox).toBe("0 0 512 512");
+  });
+
+  it("never pins a zero or negative size — the smallest legal artboard wins", () => {
+    expect(pinnedDimensions({ width: -4, height: 0 })).toMatchObject({ width: 1, height: 1 });
+    expect(pinnedDimensions({ width: 12.6, height: 300.4 })).toMatchObject({ width: 13, height: 300 });
+  });
+
+  it("fits a non-square artboard by letterboxing, never by stretching", () => {
+    const fit = fitArtboard(bounds, 0, { width: 512, height: 256 });
+    expect(fit.viewBox).toBe("0 0 512 256");
+    expect(fit.scale).toBeCloseTo(256 / 80); // the SHORT side decides
+    expect(fit.offsetY + bounds.minY * fit.scale).toBeCloseTo(0);
+    expect(fit.offsetX + bounds.minX * fit.scale).toBeCloseTo((512 - 80 * fit.scale) / 2);
   });
 });
 

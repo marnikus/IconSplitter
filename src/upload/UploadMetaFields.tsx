@@ -1,5 +1,5 @@
 // UploadMetaFields.tsx — the editable, copiable metadata fields below an
-// active row (design §2.13): Title, Description and the 40 Tags, EMPTY until
+// active row (design §2.13): Title, Description and the Tags, EMPTY until
 // generated, each with its own copy button. Accept re-validates the edited
 // text and refuses with the exact rule violations; the last validation's
 // errors and warnings show under the fields. Nothing here writes files: the
@@ -58,7 +58,7 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
         hint="7–15 words" multiline
         onEdit={(v) => onEdit({ description: v })} onCopy={() => onCopy("description")} />
       <Field id={id} label="Tags" testid="tags" value={m.tags.join(", ")} count={m.tags.length}
-        hint="exactly 40 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
+        hint="at least 10 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
         multiline onEdit={(v) => onEdit({ tags: v.split(",").map((t) => t.trim()).filter((t) => t !== "") })}
         onCopy={() => onCopy("tags")} />
     </>

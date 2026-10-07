@@ -23,6 +23,8 @@ export interface UploadSettings {
   optimizeSvg: boolean;
   /** Also write a genuine EPS (default off). */
   includeEps: boolean;
+  /** The artboard the export is built at: content-hugging, or an exact px size. */
+  artboard: Artboard;
 }
 
 export type SettingsOverrides = Partial<UploadSettings>;
@@ -41,6 +43,30 @@ export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
 export const BACKGROUND_DEFAULT = "#ffffff";
 
+/**
+ * The export artboard's size. `content` hugs the artwork (the padded fit, the
+ * original behaviour); `preset`/`custom` pin an EXACT size in px, so the
+ * artwork is scaled into it — `custom` is also how a non-square aspect ratio is
+ * chosen (width : height).
+ */
+export interface Artboard {
+  mode: "content" | "preset" | "custom";
+  /** Square edge in px for `preset` mode — always one of ARTBOARD_PRESETS. */
+  size: number;
+  /** Exact px for `custom` mode; their ratio is the aspect ratio. */
+  width: number;
+  height: number;
+}
+
+/** The popular square icon sizes a stock site asks for. */
+export const ARTBOARD_PRESETS = [256, 512, 1024, 2048, 4096];
+export const ARTBOARD_MIN = 16;
+export const ARTBOARD_MAX = 8192;
+/** The canvas/JPEG ceiling shared with MP_MAX: a pinned artboard may not exceed it. */
+export const ARTBOARD_MAX_PIXELS = MP_MAX * 1e6;
+export const CONTENT_ARTBOARD: Artboard = { mode: "content", size: 512, width: 512, height: 512 };
+
+
 export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   paddingPct: PADDING_DEFAULT,
   background: BACKGROUND_DEFAULT,
@@ -49,6 +75,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
   includeEps: false,
+  artboard: { ...CONTENT_ARTBOARD },
 };
 
 export function clampPaddingPct(value: unknown): number {
@@ -61,6 +88,48 @@ export function clampStrokePt(value: unknown): number {
 
 export function clampMegapixels(value: unknown): number {
   return clampNum(value, MP_MIN, MP_MAX, MP_DEFAULT);
+}
+
+/** A stored/patch artboard → a valid one; anything unreadable becomes `content`. */
+export function clampArtboard(value: unknown): Artboard {
+  if (!isRecord(value)) return { ...CONTENT_ARTBOARD };
+  const mode = value.mode;
+  if (mode !== "content" && mode !== "preset" && mode !== "custom") return { ...CONTENT_ARTBOARD };
+  if (mode === "content") return { ...CONTENT_ARTBOARD, mode: "content" };
+  if (mode === "preset") return { mode, size: nearestPreset(value.size), width: 512, height: 512 };
+  const fitted = fitIntoCeiling(clampEdge(value.width), clampEdge(value.height));
+  return { mode, size: 512, width: fitted.width, height: fitted.height };
+}
+
+/** The exact px size an artboard pins, or null when it hugs the content. */
+export function artboardSize(a: Artboard): { width: number; height: number } | null {
+  if (a.mode === "preset") return { width: a.size, height: a.size };
+  if (a.mode === "custom") return { width: a.width, height: a.height };
+  return null;
+}
+
+function nearestPreset(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return CONTENT_ARTBOARD.size;
+  let best = ARTBOARD_PRESETS[0];
+  for (const preset of ARTBOARD_PRESETS) {
+    if (Math.abs(preset - n) < Math.abs(best - n)) best = preset;
+  }
+  return best;
+}
+
+function clampEdge(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return CONTENT_ARTBOARD.width;
+  return Math.round(Math.min(ARTBOARD_MAX, Math.max(ARTBOARD_MIN, n)));
+}
+
+/** Over the pixel ceiling both edges shrink together — the aspect ratio survives. */
+function fitIntoCeiling(width: number, height: number): { width: number; height: number } {
+  const area = width * height;
+  if (area <= ARTBOARD_MAX_PIXELS) return { width, height };
+  const k = Math.sqrt(ARTBOARD_MAX_PIXELS / area);
+  return { width: Math.max(ARTBOARD_MIN, Math.round(width * k)), height: Math.max(ARTBOARD_MIN, Math.round(height * k)) };
 }
 
 export function clampQuality(value: unknown): number {
@@ -84,6 +153,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
     includeEps: raw.includeEps === true,
+    artboard: clampArtboard(raw.artboard),
   };
 }
 
@@ -91,17 +161,46 @@ export function normalizeSettings(raw: unknown): UploadSettings {
 export function parseOverrides(raw: unknown): SettingsOverrides {
   if (!isRecord(raw)) return {};
   const out: SettingsOverrides = {};
-  if (typeof raw.paddingPct === "number") out.paddingPct = clampPaddingPct(raw.paddingPct);
-  if (typeof raw.strokePt === "number") out.strokePt = clampStrokePt(raw.strokePt);
-  if (typeof raw.jpegMegapixels === "number") out.jpegMegapixels = clampMegapixels(raw.jpegMegapixels);
-  if (typeof raw.jpegQuality === "number") out.jpegQuality = clampQuality(raw.jpegQuality);
-  if (typeof raw.background === "string") {
-    const hex = normalizeHex(raw.background);
-    if (hex !== null) out.background = hex;
-  }
-  if (typeof raw.optimizeSvg === "boolean") out.optimizeSvg = raw.optimizeSvg;
-  if (typeof raw.includeEps === "boolean") out.includeEps = raw.includeEps;
+  readNumbers(raw, out);
+  readFlags(raw, out);
+  readBackground(raw, out);
+  readArtboard(raw, out);
   return out;
+}
+
+/** The numeric fields and their clamps, so adding one is a single line here. */
+const NUMERIC_FIELDS: [string, (value: number) => number][] = [
+  ["paddingPct", clampPaddingPct],
+  ["strokePt", clampStrokePt],
+  ["jpegMegapixels", clampMegapixels],
+  ["jpegQuality", clampQuality],
+];
+
+function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  for (const [key, clamp] of NUMERIC_FIELDS) {
+    const value = raw[key];
+    if (typeof value === "number") Object.assign(out, { [key]: clamp(value) });
+  }
+}
+
+function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  for (const key of ["optimizeSvg", "includeEps"]) {
+    const value = raw[key];
+    if (typeof value === "boolean") Object.assign(out, { [key]: value });
+  }
+}
+
+function readBackground(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  const value = raw.background;
+  if (typeof value !== "string") return;
+  const hex = normalizeHex(value);
+  if (hex !== null) out.background = hex;
+}
+
+/** The artboard is stored only when it really pins something (content ≠ an override). */
+function readArtboard(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  const value = raw.artboard;
+  if (isRecord(value) && value.mode !== "content") out.artboard = clampArtboard(value);
 }
 
 /** The settings one icon exports with: defaults under, overrides on top. */
@@ -117,7 +216,12 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
   return a.paddingPct === b.paddingPct && a.background === b.background && a.strokePt === b.strokePt
     && a.jpegMegapixels === b.jpegMegapixels && a.jpegQuality === b.jpegQuality
-    && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps;
+    && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps
+    && artboardsEqual(a.artboard, b.artboard);
+}
+
+function artboardsEqual(a: Artboard, b: Artboard): boolean {
+  return a.mode === b.mode && a.size === b.size && a.width === b.width && a.height === b.height;
 }
 
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
@@ -125,6 +229,7 @@ export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
     round3(s.paddingPct), s.background, round3(s.strokePt),
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
+    [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

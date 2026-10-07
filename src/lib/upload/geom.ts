@@ -18,6 +18,13 @@ import type { Bounds } from "./geom/bounds";
 export { visibleBounds } from "./geom/bounds";
 export type { Bounds, BoundsResult } from "./geom/bounds";
 
+export interface TargetSize {
+  width: number;
+  height: number;
+  /** The real pixel count in megapixels (width × height / 1e6). */
+  megapixels: number;
+}
+
 export const SVG_DPI = 96;
 export const PT_PER_INCH = 72;
 
@@ -52,32 +59,65 @@ export interface ArtboardFit {
   viewBox: string;
   artW: number;
   artH: number;
-  /** Translation applied to the artwork group: pad − bounds origin. */
+  /** Translation applied to the artwork group. */
   offsetX: number;
   offsetY: number;
   /** Uniform padding actually applied (user units). */
   pad: number;
+  /** How much the artwork is scaled: 1 when the artboard hugs the content. */
+  scale: number;
 }
 
-/** Padded artboard around the visible bounds; content centred, scale 1. */
-export function fitArtboard(bounds: Bounds, paddingPct: number): ArtboardFit {
-  const pad = (Math.max(bounds.width, bounds.height) * Math.max(0, paddingPct)) / 100;
-  const artW = bounds.width + 2 * pad;
-  const artH = bounds.height + 2 * pad;
+/**
+ * The padded artboard. Without `target` it hugs the artwork (scale 1, padding a
+ * share of the artwork's largest side). With a pinned `target` the artboard IS
+ * that size, padding is a share of ITS largest side, and the artwork is scaled
+ * by the same factor on both axes to fit inside — centred, never stretched,
+ * never cropped, so a non-square target letterboxes instead of distorting.
+ */
+export function fitArtboard(bounds: Bounds, paddingPct: number, target?: PinnedSize | null): ArtboardFit {
+  const pct = Math.max(0, paddingPct);
+  if (target === undefined || target === null) {
+    const pad = (Math.max(bounds.width, bounds.height) * pct) / 100;
+    const artW = bounds.width + 2 * pad;
+    const artH = bounds.height + 2 * pad;
+    return {
+      viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH,
+      offsetX: pad - bounds.minX, offsetY: pad - bounds.minY, pad, scale: 1,
+    };
+  }
+  const artW = Math.max(1, target.width);
+  const artH = Math.max(1, target.height);
+  const pad = (Math.max(artW, artH) * pct) / 100;
+  const scale = fitScale(bounds, artW - 2 * pad, artH - 2 * pad);
   return {
-    viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`,
-    artW, artH,
-    offsetX: pad - bounds.minX,
-    offsetY: pad - bounds.minY,
-    pad,
+    viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH,
+    offsetX: (artW - bounds.width * scale) / 2 - bounds.minX * scale,
+    offsetY: (artH - bounds.height * scale) / 2 - bounds.minY * scale,
+    pad, scale,
   };
 }
 
-export interface TargetSize {
+/** The exact px size a pinned artboard asks for. */
+export interface PinnedSize {
   width: number;
   height: number;
-  /** The real pixel count in megapixels (width × height / 1e6). */
-  megapixels: number;
+}
+
+/** Uniform factor that fits the bounds inside the box; 1 when the box is degenerate. */
+function fitScale(bounds: Bounds, boxW: number, boxH: number): number {
+  const usableW = Math.max(0, boxW);
+  const usableH = Math.max(0, boxH);
+  if (bounds.width <= 0 || bounds.height <= 0) return 1;
+  const k = Math.min(usableW / bounds.width, usableH / bounds.height);
+  return k > 0 ? k : 1;
+}
+
+/** The target size of a pinned artboard: integer px, exactly as configured. */
+export function pinnedDimensions(target: PinnedSize): TargetSize {
+  const width = Math.max(1, Math.round(target.width));
+  const height = Math.max(1, Math.round(target.height));
+  return { width, height, megapixels: (width * height) / 1e6 };
 }
 
 /**

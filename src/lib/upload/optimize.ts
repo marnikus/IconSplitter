@@ -17,6 +17,8 @@ export interface OptimizeRecord {
   afterBytes: number;
   beforeHash: string;
   afterHash: string;
+  /** True when the optimizer's output needed the clean pass to be rebuilt. */
+  cleanRebuilt?: boolean;
 }
 
 export interface OptimizeResult {
@@ -44,7 +46,7 @@ export const OPTIMIZE_CONFIG: Config = {
 
 /** Optimizes the export copy (or passes it through when disabled). */
 export async function optimizeSvg(svgText: string, enabled: boolean): Promise<OptimizeResult> {
-  const beforeBytes = new TextEncoder().encode(svgText).length;
+  const beforeBytes = byteLength(svgText);
   const beforeHash = await sha256HexText(svgText);
   if (!enabled) {
     return {
@@ -56,7 +58,7 @@ export async function optimizeSvg(svgText: string, enabled: boolean): Promise<Op
     };
   }
   const out = optimize(svgText, OPTIMIZE_CONFIG);
-  const afterBytes = new TextEncoder().encode(out.data).length;
+  const afterBytes = byteLength(out.data);
   return {
     svg: out.data,
     record: {
@@ -64,6 +66,24 @@ export async function optimizeSvg(svgText: string, enabled: boolean): Promise<Op
       beforeBytes, afterBytes, beforeHash, afterHash: await sha256HexText(out.data),
     },
   };
+}
+
+/**
+ * The record after the clean pass: when the clean pass had to rebuild the
+ * optimizer's output, the recorded size and hash are the FILE's own — a record
+ * that described SVGO's discarded intermediate would be a lie (RULE 15).
+ */
+export async function recordAfterClean(record: OptimizeRecord, svgText: string, rebuilt: boolean): Promise<OptimizeRecord> {
+  if (!rebuilt) return record;
+  return {
+    ...record, cleanRebuilt: true,
+    afterBytes: byteLength(svgText), afterHash: await sha256HexText(svgText),
+  };
+}
+
+/** UTF-8 byte length as the browser writes it (never a character count). */
+export function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
 }
 
 function configJson(): string {

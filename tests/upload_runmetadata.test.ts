@@ -98,13 +98,13 @@ describe("generateMetadata — deterministic parse + validation", () => {
   });
 
   it("reports a rule-breaking answer as invalid with the validation errors", async () => {
-    const bad = ANSWER.replace(`Tags: ${TAGS.join(", ")}`, `Tags: ${TAGS.slice(1).join(", ")}`); // 39 tags
+    const bad = ANSWER.replace(`Tags: ${TAGS.join(", ")}`, `Tags: ${TAGS.slice(0, 9).join(", ")}`); // 9 tags
     const { fetch } = fakeFetch(() => jsonResponse(200, okBody(bad)));
     const result = await generateMetadata(args({ deps: { render, fetch } }));
     expect(result.outcome).toBe("invalid");
-    expect(result.metadata?.tags).toHaveLength(39);
+    expect(result.metadata?.tags).toHaveLength(9);
     expect(result.validation?.ok).toBe(false);
-    expect(result.validation?.errors[0]).toContain("exactly 40");
+    expect(result.validation?.errors[0]).toContain("at least 10");
   });
 });
 

@@ -576,6 +576,13 @@ change), `upload-set-{optimize,eps}` (checkboxes), the background
 `upload-set-bg-value`), the per-field marker `upload-set-marker-{field}`
 ("inherited" / "overridden", icon scope only), `upload-set-reset` (icon scope:
 deletes the override — one undoable entry), `upload-set-close`.
+The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
+the square presets / Custom), its hint `upload-set-artboard-note`, and — only
+for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
+clamped on change) with the reduced-gcd ratio `upload-set-artboard-ratio` and
+the megapixel readout `upload-set-artboard-mp`. When the artboard pins the px
+size, `upload-set-mp` is disabled and `upload-set-mp-note` says the artboard
+decides the size instead of the MP target.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,

@@ -30,6 +30,37 @@ function prepared(source: string, overrides: SettingsOverrides = {}) {
 
 const RECT_ICON = `<svg ${NS} viewBox="0 0 100 100" width="100" height="100"><rect x="10" y="10" width="80" height="80" fill="#000000"/></svg>`;
 
+describe("prepareExportSvg — a pinned artboard (the final px size)", () => {
+  it("lands on exactly 512×512, scales the artwork and centres it", () => {
+    const { result, root } = prepared(RECT_ICON, { artboard: { mode: "preset", size: 512, width: 512, height: 512 } });
+    expect(result.fit.viewBox).toBe("0 0 512 512");
+    expect(root.getAttribute("width")).toBe("512");
+    expect(root.getAttribute("height")).toBe("512");
+    // pad 8% of 512 = 40.96; scale = (512 − 2·40.96)/80 = 5.376
+    expect(result.fit.scale).toBeCloseTo(5.376);
+    expect(root.querySelector("g")?.getAttribute("transform")).toBe("translate(-12.8 -12.8) scale(5.376)");
+    expect(root.querySelector("rect")?.getAttribute("width")).toBe("512");
+  });
+
+  it("keeps a non-square artboard's aspect ratio: custom 512×256 letterboxes", () => {
+    const { result, root } = prepared(RECT_ICON, { artboard: { mode: "custom", size: 512, width: 512, height: 256 } });
+    expect(result.fit.viewBox).toBe("0 0 512 256");
+    // pad 8% of 512 = 40.96 → usable 430.08 × 174.08; the SHORT side decides
+    expect(result.fit.scale).toBeCloseTo((256 - 2 * 40.96) / 80);
+    expect(root.querySelector("g")?.getAttribute("transform")).toContain("scale(2.176)");
+  });
+
+  it("scales the configured stroke with the artwork, so the output width really is 2.2 pt", () => {
+    const src = `<svg ${NS} viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none" stroke="#000"/></svg>`;
+    const { root } = prepared(src, { strokePt: 2.2, artboard: { mode: "preset", size: 512, width: 512, height: 512 } });
+    const path = root.querySelector("g path");
+    const scale = Number(/scale\(([\d.]+)\)/.exec(root.querySelector("g")?.getAttribute("transform") ?? "")?.[1]);
+    expect(scale).toBeGreaterThan(1);
+    // 2.2 pt = 2.9333 px of the FINAL 512 px file, expressed in user units
+    expect(Number(path?.getAttribute("stroke-width"))).toBeCloseTo(2.9333 / scale, 3);
+  });
+});
+
 describe("prepareExportSvg — the re-rooted export copy", () => {
   it("re-roots the viewBox to the padded artboard and centres the artwork", () => {
     const { result, root } = prepared(RECT_ICON); // default padding 8%
@@ -121,12 +152,14 @@ describe("prepareExportSvg — stroke normalization (pt at 96 DPI)", () => {
     expect(result.strokesNormalized).toBe(1);
   });
 
-  it("an inline style loses to the explicit width", () => {
+  it("an inline style is folded into attributes, and the explicit width still wins", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" style="stroke-width:5;fill:none"/></svg>`;
     const { root } = prepared(src, { strokePt: 1.5 });
     const rect = root.querySelector("g > rect");
     expect(rect?.getAttribute("stroke-width")).toBe("2"); // 1.5 pt = 2 px
-    expect(rect?.getAttribute("style")).toBe("fill:none");
+    // `style` is gone; its paint declarations are plain attributes now (2026-10-08)
+    expect(rect?.getAttribute("style")).toBeNull();
+    expect(rect?.getAttribute("fill")).toBe("none");
   });
 
   it("normalizes strokes inherited from a group onto each child", () => {
@@ -175,18 +208,46 @@ describe("prepareExportSvg — honest failures", () => {
     }
   });
 
-  it("names a <style> block that could restyle geometry", () => {
-    const result = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{stroke-width:9}</style><rect class="a" x="1" y="1" width="10" height="10" fill="none"/></svg>`);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.code).toBe("unsupported");
-      expect(result.detail).toContain("style");
-    }
+  it("folds a stylesheet's stroke width into the element, and refuses what it cannot fold", () => {
+    const folded = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{stroke-width:9}</style><rect class="a" x="1" y="1" width="10" height="10" fill="none"/></svg>`);
+    expect(folded.ok).toBe(true);
+    if (folded.ok) expect(folded.svg).toContain(`stroke-width="9"`);
+
+    const hidden = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{display:none}</style><rect class="a" x="1" y="1" width="10" height="10" fill="none"/></svg>`);
+    expect(hidden.ok).toBe(false);
+    if (!hidden.ok) expect(hidden.detail).toContain("style");
   });
 
-  it("accepts a fill-only <style> block (it cannot move geometry)", () => {
+  it("folds a fill-only <style> block into the elements and drops the class names", () => {
     const result = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{fill:#123456}</style><rect class="a" x="1" y="1" width="10" height="10"/></svg>`);
     expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.svg).not.toContain("<style");
+    expect(result.svg).not.toContain("class");
+    expect(result.svg).toContain(`fill="#123456"`);
+  });
+
+  it("refuses a stylesheet that could move or clip geometry", () => {
+    const moved = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{transform:scale(2)}</style><rect class="a" x="1" y="1" width="10" height="10"/></svg>`);
+    expect(moved.ok).toBe(false);
+    if (!moved.ok) expect(moved.code).toBe("unsupported");
+    const imported = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>@import url(https://x/a.css);</style><rect x="1" y="1" width="10" height="10" fill="#000"/></svg>`);
+    expect(imported.ok).toBe(false);
+  });
+
+  it("normalizes a stroke width that was set inline, and keeps the rest of the style", () => {
+    const result = prepare(
+      `<svg ${NS} viewBox="0 0 24 24"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#000" style="stroke-width:7;font-family:Arial"/></svg>`,
+      { strokePt: 2.2 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // the FIRST <rect> is the background the prepare pass paints — the artwork
+    // lives inside the transform group, and that is the one under test here.
+    const rect = new DOMParser().parseFromString(result.svg, "image/svg+xml").querySelector("g rect");
+    expect(rect?.getAttribute("style")).toBe("font-family:Arial");
+    expect(Number(rect?.getAttribute("stroke-width"))).toBeGreaterThan(0);
+    expect(Number(rect?.getAttribute("stroke-width"))).toBeLessThan(2.9334); // the artboard scale divides it down
   });
 
   it("rejects a transform on the root svg", () => {

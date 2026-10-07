@@ -1925,3 +1925,95 @@ the size gate legitimately reports "(none)"; baseline untouched.
   carried no QUALITY_RECHECK entry of its own; the ledger's last entry before
   this one is therefore dated 2026-10-06, and this entry is the first measured
   record of the tree that includes it — src/lib lines 97.52 % (floor 80).
+
+## 2026-10-08 — the seven-point SVG-to-upload batch: metadata minima, clean export SVG, pinned artboard
+
+The user's seven points, as implemented in one change: (1) tags are a MINIMUM
+now — `tags must be at least 10 (got N)`, no maxima anywhere; (2) `title must
+be at least 5 words (got N)`; (3) `description must be at least 7 words (got
+N)`; (4) the background rectangle is fill-only (`stroke="none"`) so an artwork
+that strokes on the root no longer gets a border painted around the artboard;
+(5) the artboard is a settings field with a `content` mode, the square px
+presets 256/512/1024/2048/4096 and an exact CUSTOM W×H (the aspect-ratio
+control), clamped to 16–8192 px per edge and a 64 MP ceiling that shrinks both
+edges together; (6) the shipped SVG declares `version="1.1"` (SVGO strips it, so
+the clean pass re-adds it and the export re-verifies the committed text); (7)
+the clean policy — no raster content, no editor bloat, no names: no `id`,
+`class`, `data-*`, `aria-*`, `role`, `xml:space`, `enable-background`, no
+foreign elements/attributes/namespaces, and a referenced id survives only as
+`a`/`b`/`c`… with its references rewritten.
+
+Design of the clean pass: ONE rule list (`src/lib/upload/clean.ts`, 17 fns /
+173 lines) plus ONE rebuilding pass it re-checks against (`cleandom.ts`, 25 fns
+/ 231 lines) over shared DOM readers (`svgdom.ts`, 13 fns / 88 lines) — three
+call sites (prepare → after the optimizer → before commit) can no longer
+disagree about what "clean" means. A paint-only `<style>`/`style=""` is folded
+into the elements (that is what lets the class names go); anything that could
+move, hide or clip geometry is refused as `unsupported` with the reason, never
+guessed.
+
+### Gates (full run — `npm run verify`, the pre-push hook's own check)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types `tsc --noEmit` | ✅ | 9.8 s |
+| 2/6 lint | ✅ | 0 errors, **9 warnings** (unchanged legacy) |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED`; `--allow-legacy` still holds the 3 RULE 16.5 hotspots (`App.tsx`, `lib/detect.ts`, `lib/render.ts`) |
+| 4/6 tests | ✅ | **128 files / 1374 tests** (96.4 s; was 126 / 1334) |
+| 5/6 tests + coverage | ✅ | statements **95.73 %** (floor 95.2 by the merge report §12 — was 94.81 before this entry's tests), branches **89.21 %** (floor 88.0 — was 87.93), functions 96.81 %, lines 97.74 % |
+| 6/6 build | ✅ | `dist/index.html` 1,484.03 kB (gzip 425.99 kB) in 6.9 s |
+
+Total ≈ 4 m 0 s; `ALL LANES PASSED`.
+
+### What the new tests proved (and the two defects they caught)
+
+`tests/upload_cleandom.test.ts` (11) drives the rebuilding pass fold by fold:
+non-document input, unusable viewBox, a foreign editor vocabulary (Illustrator
+`xmlns:i` + `i:extraneous`, `data-name`, `aria-label`, `xml:space`, a foreign
+element), used vs unused `xmlns:xlink`, a referenced id renamed to `a` with
+`href="#a"` rewritten, an unreferenced id removed, a DUPLICATE id collapsed,
+27 referenced ids renamed `a…z` then `aa`, class and tag rules folded, the
+inline paint fold, and eight stylesheet shapes refused (no value, compound
+selector, `#id` selector, external `url(`, `var(`, trailing garbage, `@import`,
+`transform`).
+
+Two real defects surfaced while writing those tests, both fixed in this change:
+the rebuild used to DELETE a foldable `<style>` block instead of folding it
+(which silently changed the picture — now the block is folded first, and a
+block it cannot fold is left in place so the violation survives and the file
+ships unchanged), and it never dropped foreign `xmlns:*` declarations, so a
+rebuilt Illustrator file stayed dirty (now only a USED `xmlns:xlink` survives).
+The suite also closed a gate gap: the merge report §12 floors (≥95.2 % stmts,
+≥88.0 % branches) are NOT what `vitest.config.ts` enforces (`lines: 80`), so the
+batch's new code had quietly dropped the aggregate to 94.81 / 87.93 while
+`verify` stayed green. 15 added tests (11 + 4 for the artboard/geom/prepare
+edges) brought it to 95.73 / 89.21.
+
+### RULE 18 recheck
+
+`clean.ts` 172 lines / 17 fns · `cleandom.ts` 230 / 25 · `svgdom.ts` 87 / 13 ·
+`tests/upload_cleandom.test.ts` 157 · `prepare.ts` 165 / 13 · `settings.ts` 244
+/ 24 · `UploadSettingsDialog.tsx` 255 / 30 — every one under the 300-line file
+target, and no function over 30 lines. The RULE 19 order was obeyed for the
+three functions the gate flagged mid-work: `prepareExportSvg` lost its guard
+clause to a `sourceVeto` helper, `parseOverrides` became a field table
+(`readNumbers`/`readFlags`/`readBackground`/`readArtboard`), and the 437-line
+`clean.ts` was split by responsibility into check / rebuild / DOM readers.
+
+### Known debt carried
+
+* The §2 field ranges (padding 0–40 %, stroke 0.2–8 pt, JPEG 1–30 MP, quality
+  0.5–0.98) are still the pre-merge values in `settings.ts` (0–50 / 0–24 /
+  1–64 / 0.5–1). Changing the stroke default to 2.2 pt would alter every
+  prepared/committed SVG, so it is scoped as its own change, not smuggled into
+  this batch.
+* The report's named test obligations still open: T17 (tag-count refusal at the
+  new minimum), T19 (65,502-byte APP1 limit), T25 (12-row mockup walkthrough,
+  belongs to P5), T27 (cost receipt), T28 (duplicate-name dance).
+* Point 4 was fixed at the mechanism the user named (fill-only background);
+  deeper research into stroked-artwork edge cases is not done.
+* `docs/README.md` §10 still lacks pointers for the 2026-10-06
+  `location-folder-of-file`, 2026-10-07 `svg-to-upload-merge` and 2026-10-08
+  `env-setup-performance` designs.
+* `design/Arena setup analyze/` (the 21 MB saved web page) — owner decision on
+  removal, scheduled with P5's `design/SVG to upload/` landing.

@@ -59,7 +59,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 const GOOD_ANSWER = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
-const BAD_ANSWER = `Title: Too short. No tags named\nDescription: way too short\nTags: icon, pictogram`;
+const BAD_ANSWER = `Title: Tiny\nDescription: way too short\nTags: icon, pictogram`;
 
 let host: HTMLDivElement;
 let ui: Root;
@@ -122,6 +122,22 @@ async function pick(sel: string, value: string): Promise<void> {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await settle();
+}
+
+/** A <select> change the way the browser does it (React listens to change). */
+async function selectOption(sel: string, value: string): Promise<void> {
+  await waitForEl(sel);
+  await act(async () => {
+    const el = q(sel) as HTMLSelectElement;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(el, value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
+/** The stored global defaults, straight from localStorage (what really persisted). */
+function storedDefaults(): { artboard: { mode: string; size: number; width: number; height: number } } {
+  return JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").defaults ?? {};
 }
 
 async function check(id: string): Promise<void> {
@@ -416,7 +432,7 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     const editor = q("[data-testid=upload-prompt]") as HTMLTextAreaElement;
     expect(editor).not.toBeNull();
     expect(editor.readOnly).toBe(false);
-    expect(editor.value).toContain("exactly 40 unique keywords");
+    expect(editor.value).toContain("at least 10 unique keywords");
     // the panel is its own section, and the Gemini card does not contain it
     expect(q("[data-testid=upload-prompt-panel]")).not.toBeNull();
     expect(q("[data-testid=upload-provider-card] [data-testid=upload-prompt]")).toBeNull();
@@ -441,7 +457,7 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     expect(text("[data-testid=upload-prompt-copy]")).toContain("custom");
 
     await click("[data-testid=upload-prompt-reset]");
-    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("exactly 40 unique keywords");
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("at least 10 unique keywords");
     expect(text("[data-testid=upload-prompt-copy]")).toContain("default");
   });
 
@@ -586,7 +602,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("7 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("8 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -598,6 +614,38 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const undone = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(undone.overrides).toEqual({});
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
+  });
+
+  it("pins a popular artboard size, or a custom one with its own aspect ratio", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+
+    // the global scope: a preset is one choice and lands in the stored defaults
+    expect((q("[data-testid=upload-set-artboard]") as HTMLSelectElement).value).toBe("content");
+    await selectOption("[data-testid=upload-set-artboard]", "512");
+    await settle();
+    expect(storedDefaults().artboard).toMatchObject({ mode: "preset", size: 512 });
+    expect(text("[data-testid=upload-set-artboard-note]")).toContain("512");
+
+    // the custom size is where the aspect ratio lives, and it reads back
+    await selectOption("[data-testid=upload-set-artboard]", "custom");
+    await type("[data-testid=upload-set-artboard-w]", "1024");
+    await type("[data-testid=upload-set-artboard-h]", "576");
+    await settle();
+    expect(storedDefaults().artboard).toMatchObject({ mode: "custom", width: 1024, height: 576 });
+    expect(text("[data-testid=upload-set-artboard-ratio]")).toContain("16:9");
+    expect(text("[data-testid=upload-set-artboard-mp]")).toContain("0.59");
+
+    // the megapixel field is honestly out of play while the artboard pins the size
+    expect((q("[data-testid=upload-set-mp]") as HTMLInputElement).disabled).toBe(true);
+    expect(text("[data-testid=upload-set-mp-note]")).toContain("artboard pins the exact px size");
+
+    // back to hugging the content: the MP field returns and the choice is remembered
+    await selectOption("[data-testid=upload-set-artboard]", "content");
+    await settle();
+    expect((q("[data-testid=upload-set-mp]") as HTMLInputElement).disabled).toBe(false);
+    expect(storedDefaults().artboard.mode).toBe("content");
+    await click("[data-testid=upload-set-close]");
   });
 
   it("resets one icon to the defaults (undoable)", async () => {
@@ -626,7 +674,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     // the exact request preview: prompt, endpoint, provider, auth rule
-    expect(text("[data-testid=upload-meta-prompt]")).toContain("exactly 40 unique keywords");
+    expect(text("[data-testid=upload-meta-prompt]")).toContain("at least 10 unique keywords");
     expect(text("[data-testid=upload-meta-endpoint]")).toContain("generativelanguage.googleapis.com");
     expect(text("[data-testid=upload-meta-provider]")).toContain("Gemini");
     expect(text("[data-testid=upload-meta-backdrop]")).toContain("never resent on its own");
@@ -637,7 +685,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(t.calls[0].key).toBe(fakeKey("AIza", "ui_test_key_1")); // the header, never the URL
     expect(t.calls[0].url).not.toContain("key=");
     const body = JSON.parse(t.calls[0].body);
-    expect(body.contents[0].parts[0].text).toContain("exactly 40 unique keywords");
+    expect(body.contents[0].parts[0].text).toContain("at least 10 unique keywords");
     expect(body.contents[0].parts[1].inlineData.mimeType).toBe("image/jpeg");
 
     // the fields are editable and show the generated text
@@ -769,9 +817,9 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("invalid"), "the invalid state");
-    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("tags must be exactly 40");
+    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("tags must be at least 10");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
-    expect(text("[data-testid=upload-toast]")).toContain("tags must be exactly 40");
+    expect(text("[data-testid=upload-toast]")).toContain("tags must be at least 10");
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("invalid"); // refused, not accepted
   });
 

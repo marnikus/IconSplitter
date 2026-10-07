@@ -6,6 +6,7 @@
 // verify, and the record must round-trip.
 
 import { readEmbeddedMetadata } from "../lib/upload/embed";
+import { verifyExportSvg } from "../lib/upload/clean";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEps } from "../lib/upload/eps";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -33,7 +34,10 @@ function svgCheck(svgOut: string | null, errors: string[]): boolean {
   if (svgOut === null) return true;
   const ok = svgParses(svgOut);
   if (!ok) errors.push("the export SVG does not parse");
-  return ok;
+  // The file that ships is checked, not assumed: clean SVG 1.1 (2026-10-08).
+  const violations = verifyExportSvg(svgOut);
+  errors.push(...violations);
+  return ok && violations.length === 0;
 }
 
 function readbackCheck(svgOut: string | null, metadata: IconMetadata | null, errors: string[]): boolean {

@@ -4,17 +4,18 @@
 // commit, so a failed stage never touches the last valid package.
 
 import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
-import { targetDimensions } from "../lib/upload/geom";
+import { pinnedDimensions, targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
-import { optimizeSvg, type OptimizeRecord } from "../lib/upload/optimize";
+import { optimizeSvg, recordAfterClean, type OptimizeRecord } from "../lib/upload/optimize";
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { writeEps } from "../lib/upload/eps";
-import type { UploadSettings } from "../lib/upload/settings";
+import { artboardSize, type UploadSettings } from "../lib/upload/settings";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { DirHandleLike } from "../lib/fs";
 import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
+import { enforceExportSvg } from "../lib/upload/clean";
 import { readBytesAt } from "./runexport";
 
 /** A stage failure carries its class, so the log names the failing stage. */
@@ -66,8 +67,14 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   if (!prepared.ok) throw new StageError("prepare", `${prepared.code}: ${prepared.detail}`);
   art.prepared = prepared;
   const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg);
-  art.optimizedSvg = optimized.svg;
-  art.optimizeRecord = optimized.record;
+  // SVGO may not smuggle anything back in: check, rebuild if it did, and fail
+  // honestly when even a rebuild cannot make the file clean (RULE 15).
+  const clean = enforceExportSvg(optimized.svg);
+  if (clean.violations.length > 0) {
+    throw new StageError("optimize", `the export SVG breaks the clean rules: ${clean.violations.join("; ")}`);
+  }
+  art.optimizedSvg = clean.svg;
+  art.optimizeRecord = await recordAfterClean(optimized.record, clean.svg, clean.rebuilt);
 }
 
 function embedSvg(art: Artifacts, metadata: IconMetadata | null): string | null {
@@ -90,7 +97,12 @@ function buildEps(art: Artifacts, settings: UploadSettings): void {
 async function buildJpeg(plan: StagePlan, ctx: StageContext, art: Artifacts): Promise<Uint8Array> {
   if (plan.stages.includes("render")) {
     const fit = (art.prepared as PrepareResult & { ok: true }).fit;
-    const target = targetDimensions(fit.artW, fit.artH, ctx.settings.jpegMegapixels);
+    // A pinned artboard decides the pixel size; otherwise the megapixel setting
+    // does, at the artboard's own aspect ratio.
+    const pinned = artboardSize(ctx.settings.artboard);
+    const target = pinned === null
+      ? targetDimensions(fit.artW, fit.artH, ctx.settings.jpegMegapixels)
+      : pinnedDimensions(pinned);
     const raster = await rasterizeJpeg((art.prepared as PrepareResult & { ok: true }).svg, {
       width: target.width, height: target.height,
       quality: ctx.settings.jpegQuality, background: ctx.settings.background,

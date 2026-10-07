@@ -10,6 +10,7 @@ import { parseExportRecord, type ExportRecord } from "../src/lib/upload/export";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
+import { verifyExportSvg } from "../src/lib/upload/clean";
 import { verifyEps } from "../src/lib/upload/eps";
 import { MANDATORY_TAGS, metadataFingerprint, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { sha256HexText } from "../src/lib/upload/hash";
@@ -150,9 +151,34 @@ describe("runExport — the full package commits per icon", () => {
     expect(record.timestamps.committedAt).not.toBeNull();
     // the committed outputs verify
     const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
-    expect(new DOMParser().parseFromString(svgText, "image/svg+xml").querySelector("parsererror")).toBeNull();
+    const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+    expect(doc.querySelector("parsererror")).toBeNull();
+    // ...including the clean-code policy: SVG 1.1, no raster, no naming, no bloat
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    expect(doc.documentElement.getAttribute("version")).toBe("1.1");
+    expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 92.8 92.8");
     const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 3886, height: 3886 });
+  });
+
+  it("a pinned artboard decides the committed size: 512×256 means a 512×256 JPEG and SVG", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = {
+      ...DEFAULT_UPLOAD_SETTINGS,
+      artboard: { mode: "custom", size: 512, width: 512, height: 256 },
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(512, 256) } }));
+    expect(result.status).toBe("processed");
+    const record = readRecord(root);
+    expect(record.jpeg).toMatchObject({ width: 512, height: 256 });
+    expect(record.jpeg.megapixels).toBeCloseTo(0.131, 3);
+    const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+    expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
+    expect(doc.documentElement.getAttribute("width")).toBe("512");
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
+    expect(readJpegDimensions(jpegBytes)).toEqual({ width: 512, height: 256 });
   });
 
   it("never touches the approved source", async () => {
