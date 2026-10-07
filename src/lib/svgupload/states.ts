@@ -17,6 +17,8 @@ export interface RegenInput {
   metadataReady: boolean;
   /** Does the stored metadata still describe the current source? */
   metadataFresh: boolean;
+  /** Is the accepted text different from what the package already carries? */
+  metadataChanged: boolean;
   /** Which outputs the user asked for. */
   requested: Record<OutputFormat, boolean>;
   /** Which of the requested outputs exist on disk right now. */
@@ -35,6 +37,13 @@ export interface RegenPlan {
   needsMetadata: boolean;
   /** True when the stored, accepted metadata is reused byte for byte. */
   reusesMetadata: boolean;
+  /**
+   * True when ONLY the metadata changed: the published SVG and JPEG are
+   * re-stamped with the accepted text, and the artwork is not rebuilt. A 15 MP
+   * render for a renamed title would be waste, and re-rendering could even
+   * change bytes nobody asked to change.
+   */
+  reembed: boolean;
 }
 
 /**
@@ -50,7 +59,7 @@ export function planRegeneration(input: RegenInput): RegenPlan {
     const hasMeta = input.metadataReady && input.metadataFresh;
     return {
       action: "export", stages: fullStages(input, true), reason: "No package exists for this icon yet.",
-      needsMetadata: !hasMeta, reusesMetadata: hasMeta,
+      needsMetadata: !hasMeta, reusesMetadata: hasMeta, reembed: false,
     };
   }
   const cause = staleCause(input);
@@ -59,15 +68,25 @@ export function planRegeneration(input: RegenInput): RegenPlan {
     const fresh = cause !== "source" && input.metadataReady && input.metadataFresh;
     return {
       action: "rebuild", stages: fullStages(input, !fresh, cause === "source"), reason: staleText(cause),
-      needsMetadata: !fresh, reusesMetadata: fresh,
+      needsMetadata: !fresh, reusesMetadata: fresh, reembed: false,
+    };
+  }
+  if (input.metadataChanged && input.metadataReady && input.metadataFresh) {
+    return {
+      action: "rebuild", stages: ["embed", "validate", "commit"], reason: REEMBED_REASON,
+      needsMetadata: false, reusesMetadata: true, reembed: true,
     };
   }
   const missing = missingReason(input);
   if (missing !== null) {
-    return { action: "rebuild", stages: stagesFor(input, false), reason: missing, needsMetadata: false, reusesMetadata: true };
+    return { action: "rebuild", stages: stagesFor(input, false), reason: missing, needsMetadata: false, reusesMetadata: true, reembed: false };
   }
-  return { action: "skip", stages: [], reason: "The package matches the source and the settings — nothing to redo.", needsMetadata: false, reusesMetadata: true };
+  return { action: "skip", stages: [], reason: "The package matches the source and the settings — nothing to redo.", needsMetadata: false, reusesMetadata: true, reembed: false };
 }
+
+/** The sentence the row shows for an edit that only touched the text. */
+export const REEMBED_REASON =
+  "The accepted metadata was edited — the published SVG and JPEG are re-stamped with it, and the artwork is not rebuilt.";
 
 /** Which REQUESTED outputs are not in the package — the wording names them. */
 function missingReason(input: RegenInput): string | null {

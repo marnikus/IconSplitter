@@ -1,11 +1,13 @@
 // eps.ts — the optional EPS output, and the honesty the request demands about it
-// (design §13, C10; research 5). EPS is PostScript: a browser cannot write it, and
-// CairoSVG does not. So the tab treats EPS as a CONVERTER-GATED output — it calls
-// a converter the user configured, and it checks that what came back really is
-// Encapsulated PostScript (the `%!PS-Adobe` header plus an EPSF bounding box)
-// before it writes a single `.eps` byte. A PDF, a renamed SVG or an HTML error
-// page is refused, never renamed into place; with no converter configured the
-// export is SVG+JPEG and is reported PARTIAL, never green.
+// (design §13, C10; merge report §3.2/§9). EPS is PostScript, so the tab's FIRST
+// answer is its own writer (`lib/svgupload/epswrite`) for the subset icons are
+// made of. This module owns the OTHER two things: the converter gate for
+// documents that subset cannot draw, and the check that whatever comes back
+// really is Encapsulated PostScript (the `%!PS-Adobe` header plus an EPSF
+// bounding box) before a single `.eps` byte is written. A PDF, a renamed SVG or
+// an HTML error page is refused, never renamed into place; when neither the local
+// writer nor a converter can produce the file, the export is SVG+JPEG and is
+// reported PARTIAL, never green.
 
 export interface EpsPlan {
   /** True when the user asked for EPS and a converter is configured. */
@@ -16,9 +18,12 @@ export interface EpsPlan {
 }
 
 export const NO_CONVERTER_REASON =
-  "No EPS converter is configured, so the EPS output was skipped — the SVG and the JPEG were still exported (this export is Partial, not Processed).";
+  "The EPS could not be written from the SVG's own geometry and no EPS converter is configured — the SVG and the JPEG were still exported (this export is Partial, not Processed).";
 
-/** The preflight: what will happen to the EPS output, decided up front. */
+/**
+ * Is a converter available at all? The local writer needs no configuration, so
+ * a null converter is no longer a refusal by itself — only the fallback.
+ */
 export function planEps(includeEps: boolean, converter: string | null): EpsPlan {
   if (!includeEps) return { requested: false, converter: null, reason: null };
   const url = converter?.trim() ?? "";

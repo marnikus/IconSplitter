@@ -39,6 +39,20 @@ function tree(): FakeDir {
   return root;
 }
 
+/** A file whose write fails — the disk-full case a rebuild must survive. */
+class FailingWrite extends FakeFile {
+  async createWritable(): Promise<never> {
+    throw new DOMException("Disk full", "QuotaExceededError");
+  }
+}
+
+/** The live export folder of the fixture tree. */
+async function exportFolder(root: DirHandleLike): Promise<DirHandleLike> {
+  const dir = await probePath(root, exportDirOf(DIR));
+  if (dir === null) throw new Error("the export folder was not created");
+  return dir;
+}
+
 /** A folder whose writes fail — the "disk went away" case a rebuild must survive. */
 function deniedDir(): DirHandleLike {
   const err = () => Promise.reject(new DOMException("Denied", "NotAllowedError"));
@@ -137,6 +151,58 @@ describe("readPackage — a broken record never destroys the outputs", () => {
 
   it("reports no package for a folder that does not exist yet", async () => {
     const read = await readPackage(tree(), DIR, BASE);
-    expect(read).toEqual({ exists: false, record: null, corrupt: null, present: { svg: false, jpg: false, eps: false } });
+    expect(read).toEqual({ exists: false, record: null, corrupt: null, incomplete: false, present: { svg: false, jpg: false, eps: false } });
+  });
+});
+
+describe("a publication that failed halfway is rolled back (R01)", () => {
+  it("restores the previous files and record when a later output could not be written", async () => {
+    const root = tree();
+    await publishPackage(root, {
+      dirPath: DIR, base: BASE,
+      svg: { name: `${BASE}.svg`, bytes: bytes("first") },
+      jpg: { name: `${BASE}.jpg`, bytes: bytes("old-jpeg") },
+      eps: null, record: record(),
+    });
+    const before = await readPackage(root, DIR, BASE);
+    // The live JPEG is now a file that refuses to be written: the next publish
+    // replaces the SVG first and then dies on the JPEG.
+    const folder = (await exportFolder(root)) as FakeDir;
+    folder.children.set(`${BASE}.jpg`, new FailingWrite(`${BASE}.jpg`));
+    const out = await publishPackage(root, {
+      dirPath: DIR, base: BASE,
+      svg: { name: `${BASE}.svg`, bytes: bytes("second") },
+      jpg: { name: `${BASE}.jpg`, bytes: bytes("new-jpeg") },
+      eps: null, record: record({ status: "partial" }),
+    });
+    expect(out.ok).toBe(false);
+    const after = await readPackage(root, DIR, BASE);
+    expect(after.record?.status).toBe(before.record?.status);
+    expect(after.record?.updatedAt).toBe(before.record?.updatedAt);
+    const svg = await (await (await probePath(root, exportDirOf(DIR)))!.getFileHandle(`${BASE}.svg`)).getFile().then((f) => f.text());
+    expect(svg).toBe("first"); // the half-written SVG was put back
+  });
+
+  it("writes nothing else beside the package — no backup or staging folder survives", async () => {
+    const root = tree();
+    await publishPackage(root, { dirPath: DIR, base: BASE, svg: { name: `${BASE}.svg`, bytes: bytes("one") }, jpg: null, eps: null, record: record() });
+    const folder = await exportFolder(root);
+    const helpers = await import("../src/lib/fs");
+    expect((await helpers.listChildNames(folder)).sort()).toEqual([RECORD_NAME, `${BASE}.svg`].sort());
+  });
+});
+
+describe("an interrupted publication is reported, never trusted (R01)", () => {
+  it("refuses to reuse a record whose staging folder still holds files", async () => {
+    const root = tree();
+    await publishPackage(root, { dirPath: DIR, base: BASE, svg: { name: `${BASE}.svg`, bytes: bytes("kept") }, jpg: null, eps: null, record: record() });
+    const folder = await exportFolder(root);
+    // What a crash between the file swap and the commit leaves behind:
+    const stage = await folder.getDirectoryHandle(".export-staging", { create: true });
+    await writeFileOverwrite(stage, `${BASE}.jpg`, new Blob(["half written"]));
+    const read = await readPackage(root, DIR, BASE);
+    expect(read.incomplete).toBe(true);
+    expect(read.record).toBeNull(); // never "Processed" on possibly mixed bytes
+    expect(read.present.svg).toBe(true); // the files are still listed, not hidden
   });
 });

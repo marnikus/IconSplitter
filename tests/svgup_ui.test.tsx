@@ -13,6 +13,10 @@ import UploadPanel from "../src/svgupload/UploadPanel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { UPLOAD_SETTINGS_KEY } from "../src/svgupload/settingsstore";
+import { SOURCE_HASH_PREFIX, sha256Hex } from "../src/lib/svgupload/sourcehash";
+import { EMPTY_META_STORE, putRecord } from "../src/lib/svgupload/meta";
+import { UPLOAD_META_KEY, resetMetaStoreCache } from "../src/svgupload/metastore";
+import { acceptedMeta } from "./helpers/svgupmeta";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
@@ -35,6 +39,8 @@ const w = window as unknown as { showDirectoryPicker?: unknown };
 w.showDirectoryPicker = () => Promise.reject(new Error("no picker"));
 
 const SVG_DOC = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
+/** The same length as SVG_DOC, one digit moved: a same-size, same-mtime edit. */
+const SVG_DOC_EDITED = SVG_DOC.replace("M2 2h20v20H2z", "M3 3h20v20H2z");
 const RUN_DIR = "_split_output/2026-10/2026-10-05_23-30-19";
 const PIECE_DIR = `${RUN_DIR}/icon-trophy-star_AI_7/split_04`;
 const AI_NAME = "icon-trophy-star_AI_7_04.png";
@@ -60,8 +66,8 @@ function makeTree(): FakeDir {
   dir.children.set(`${STEM}.svg`, new FakeFile(`${STEM}.svg`, SVG_DOC.length, 2200, SVG_DOC));
   dir.children.set(`${STEM}_v2.svg`, new FakeFile(`${STEM}_v2.svg`, SVG_DOC.length, 2201, SVG_DOC));
   const versions = [
-    svgVersion(`${PIECE_DIR}/${STEM}.svg`, { version: 1 }),
-    svgVersion(`${PIECE_DIR}/${STEM}_v2.svg`, { version: 2 }),
+    svgVersion(`${PIECE_DIR}/${STEM}.svg`, { version: 1, review: "approved" }),
+    svgVersion(`${PIECE_DIR}/${STEM}_v2.svg`, { version: 2, review: "approved" }),
   ];
   const meta = pairFile(PIECE_DIR, AI_NAME, { id: ID, decision: "approved", versions, preferred: 2 });
   dir.children.set(`${STEM}.svg.json`, new FakeFile(`${STEM}.svg.json`, 10, 2300, serializePairMeta(meta)));
@@ -69,6 +75,17 @@ function makeTree(): FakeDir {
     records: [{ pair_id: ID, source: "icon-trophy-star.png", ai_result: `${PIECE_DIR}/${AI_NAME}`, decision: "approved", reviewed_at: "2026-10-05T09:00:00.000Z" }],
   })));
   return root;
+}
+
+/** Walks a fake tree by relative path, so a test can edit one file in place. */
+function descend(root: FakeDir, relPath: string): FakeDir {
+  let dir = root;
+  for (const name of relPath.split("/")) {
+    const child = dir.children.get(name);
+    if (!(child instanceof FakeDir)) throw new Error(`no folder ${relPath} in the fixture`);
+    dir = child;
+  }
+  return dir;
 }
 
 async function waitForRow(): Promise<void> {
@@ -150,5 +167,27 @@ describe("the SVG-to-upload tab", () => {
     });
     // React's controlled input needs the native setter path; the row stays put
     expect(q(`[data-testid=up-row-${ID}]`)).not.toBeNull();
+  });
+
+  // The merge report's acceptance row: an in-place edit that keeps the path, the
+  // SIZE and the mtime must still age the package and the metadata. Only a
+  // content hash can see it — which is why the scan reads the chosen file.
+  it("identifies the source by CONTENT, so a same-size edit ages the metadata", async () => {
+    const hash = `${SOURCE_HASH_PREFIX}${await sha256Hex(new TextEncoder().encode(SVG_DOC))}`;
+    localStorage.setItem(UPLOAD_META_KEY, JSON.stringify(putRecord(EMPTY_META_STORE, acceptedMeta({ pairId: ID, sourceFingerprint: hash }))));
+    resetMetaStoreCache();
+    const tree = makeTree();
+    stored.set("__svg__", { source: tree });
+    await mount();
+    await waitForRow();
+    expect(q(`[data-testid=up-meta-${ID}]`)?.getAttribute("data-meta-state")).toBe("accepted");
+
+    const v2 = descend(tree, PIECE_DIR).children.get(`${STEM}_v2.svg`) as FakeFile;
+    expect(SVG_DOC_EDITED.length).toBe(SVG_DOC.length); // same size as the scan saw
+    v2.text = SVG_DOC_EDITED;                            // same mtime too (2201)
+    await act(async () => ui.unmount());
+    await mount();
+    await waitForRow();
+    expect(q(`[data-testid=up-meta-${ID}]`)?.getAttribute("data-meta-state")).toBe("stale");
   });
 });

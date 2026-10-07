@@ -3,7 +3,7 @@
 // hides a problem, plus the counters the bulk bar shows. Pure, so the rules hold
 // whether the list is 3 icons or 3 000.
 import { describe, expect, it } from "vitest";
-import { DEFAULT_UPLOAD_VIEW, uploadCounts, visibleUploadRows } from "../src/lib/svgupload/view";
+import { checkableIds, DEFAULT_UPLOAD_VIEW, toggleSelection, uploadCounts, visibleUploadRows } from "../src/lib/svgupload/view";
 import type { UploadRow } from "../src/lib/svgupload/rows";
 
 function row(over: Partial<UploadRow> = {}): UploadRow {
@@ -84,5 +84,29 @@ describe("uploadCounts", () => {
   it("treats a blocked row's warning as the block, not as two problems", () => {
     const c = uploadCounts([row({ id: "b", blocked: "x", warnings: ["y"] })]);
     expect({ icons: c.icons, ready: c.ready, blocked: c.blocked, warned: c.warned }).toEqual({ icons: 1, ready: 0, blocked: 1, warned: 0 });
+  });
+});
+
+describe("select all acts on what is VISIBLE (R19)", () => {
+  const rows = [
+    row({ id: "a" }),
+    row({ id: "blocked", blocked: "No review-approved SVG version — approve one in Generate SVG" }),
+    row({ id: "c" }),
+  ];
+
+  it("offers only the visible rows an action could use", () => {
+    expect(checkableIds(rows)).toEqual(["a", "c"]);
+  });
+
+  it("adds the visible rows on, without dropping a hidden choice", () => {
+    expect(toggleSelection(["hidden"], ["a", "c"], true)).toEqual(["hidden", "a", "c"]);
+  });
+
+  it("never duplicates a row that was already ticked", () => {
+    expect(toggleSelection(["a"], ["a", "c"], true)).toEqual(["a", "c"]);
+  });
+
+  it("removes only the visible rows off, leaving hidden selections alone", () => {
+    expect(toggleSelection(["hidden", "a", "c"], ["a", "c"], false)).toEqual(["hidden"]);
   });
 });

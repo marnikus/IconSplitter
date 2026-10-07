@@ -141,7 +141,7 @@ describe("statusAfter — the single rule", () => {
 describe("planRegeneration — nothing stale is reused, no paid work is repeated", () => {
   const base = {
     record: record(), sourceFingerprint: "2048:1730000001", settingsFingerprint: "abc12345",
-    metadataReady: true, metadataFresh: true,
+    metadataReady: true, metadataFresh: true, metadataChanged: false,
     requested: { svg: true, jpg: true, eps: false }, present: { svg: true, jpg: true, eps: false },
   };
 
@@ -166,6 +166,21 @@ describe("planRegeneration — nothing stale is reused, no paid work is repeated
     expect(plan.reusesMetadata).toBe(true);
     expect(plan.needsMetadata).toBe(false);
     expect(plan.reason).toContain("settings changed");
+  });
+
+  it("re-stamps only the metadata when the accepted text was edited", () => {
+    const plan = planRegeneration({ ...base, metadataChanged: true });
+    expect(plan.action).toBe("rebuild");
+    expect(plan.reembed).toBe(true);
+    expect(plan.stages).toEqual(["embed", "validate", "commit"]);
+    expect(plan.needsMetadata).toBe(false);
+    expect(plan.reason).toContain("re-stamped");
+  });
+
+  it("still rebuilds the artwork when the text changed AND the source moved on", () => {
+    const plan = planRegeneration({ ...base, metadataChanged: true, sourceFingerprint: "moved:1" });
+    expect(plan.reembed).toBe(false);
+    expect(plan.stages).toContain("prepare");
   });
 
   it("reproduces only the missing output", () => {

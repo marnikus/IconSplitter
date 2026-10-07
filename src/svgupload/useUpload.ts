@@ -7,22 +7,19 @@
 // the rules stay testable without a DOM.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DirHandleLike } from "../lib/fs";
-import { loadHandles, saveHandles } from "../batch/store";
 import { readSvgText } from "../svg/svgfiles";
 import { readPublishedJpeg } from "./exporter";
-import { SVG_HANDLE_KEY } from "../svg/reviewundo";
-import { discoverApprovedSources } from "../svg/sources";
-import { pickRootWithPath } from "../ui/pickroot";
 import { useHistory } from "../state/HistoryProvider";
 import { DEFAULT_PREVIEW_BACKGROUND, type PreviewBackground } from "../lib/svgbackground";
 import { ZOOM_DEFAULT } from "../lib/zoom";
-import { buildUploadRows, type UploadRow } from "../lib/svgupload/rows";
+import type { DirHandleLike } from "../lib/fs";
+import type { UploadRow } from "../lib/svgupload/rows";
+import { useScan, type ScanApi } from "./usescan";
 import {
   effectiveSettings, parseUploadSettings, setDefault, setOverride, settingsLineOf, SETTING_FIELDS, type SettingField,
   type UploadDefaults, type UploadSettings,
 } from "../lib/svgupload/settings";
-import { DEFAULT_UPLOAD_VIEW, uploadCounts, visibleUploadRows, type UploadView } from "../lib/svgupload/view";
+import { checkableIds, DEFAULT_UPLOAD_VIEW, toggleSelection, uploadCounts, visibleUploadRows, type UploadView } from "../lib/svgupload/view";
 import { metaStateOf } from "../lib/svgupload/meta";
 import { applyToSelection, resetSelection } from "./settingsactions";
 import { useUploadJobs, type DialogState, type JobsApi } from "./useUploadJobs";
@@ -36,6 +33,8 @@ export interface UploadApi {
   busy: string | null;
   toast: string | null;
   checked: string[];
+  /** The visible rows an action could use — the scope "select all" acts on. */
+  checkable: string[];
   activeId: string | null;
   view: UploadView;
   zoom: number;
@@ -81,7 +80,7 @@ export function useUpload(): UploadApi {
   const derived = useDerivedRows(rows, ui.view);
   const loadCode = useCodeCache(scan.root, ui.codes, ui.setCodes);
   const jpegFor = useJpegCache(scan.root, rows);
-  const acts = useUploadActions(scan, ui, settings);
+  const acts = useUploadActions(scan, ui, settings, derived.checkable);
   const dialogRow = useMemo(() => jobs.dialog === null ? null : rows.find((r) => r.id === jobs.dialog?.id) ?? null, [jobs.dialog, rows]);
   const patchRow = useCallback((id: string, field: SettingField, value: unknown) => {
     setUploadSettings(setOverride(getUploadSettings(), id, { [field]: value } as Partial<UploadDefaults>));
@@ -90,7 +89,7 @@ export function useUpload(): UploadApi {
     ...scan, ...ui, loadCode, jpegFor, ...acts, rows, jobs, settings, patchRow,
     effectiveOf: useCallback((id: string) => effectiveSettings(getUploadSettings(), id), []),
     dialog: jobs.dialog, dialogRow,
-    defaults: settings.defaults, counts: derived.counts, visible: derived.visible,
+    defaults: settings.defaults, counts: derived.counts, visible: derived.visible, checkable: derived.checkable,
     // "Inherited" means the icon overrides NOTHING — the chip must react to any
     // field, not just the scale (editing the padding used to leave it saying
     // "inherited settings").
@@ -128,15 +127,16 @@ function useListState() {
   };
 }
 
-/** Counts and the visible slice — the two derivations the panel renders. */
+/** Counts, the visible slice and the ids a bulk action may use — one place. */
 function useDerivedRows(rows: UploadRow[], view: UploadView) {
   const counts = useMemo(() => uploadCounts(rows), [rows]);
   const visible = useMemo(() => visibleUploadRows(rows, view), [rows, view]);
-  return { counts, visible };
+  const checkable = useMemo(() => checkableIds(visible), [visible]);
+  return { counts, visible, checkable };
 }
 
-/** The three writers: defaults, apply-to-selection (one undo), reset. */
-function useUploadActions(scan: ReturnType<typeof useScan>, ui: ReturnType<typeof useListState>, settings: UploadSettings) {
+/** The three writers: defaults, apply-to-selection (one undo), reset, select-all. */
+function useUploadActions(scan: ScanApi, ui: ReturnType<typeof useListState>, settings: UploadSettings, checkable: readonly string[]) {
   const hist = useHistory();
   const changeDefaults = useCallback((patch: Partial<UploadDefaults>) => {
     const merged = { ...settings.defaults, ...patch };
@@ -150,79 +150,10 @@ function useUploadActions(scan: ReturnType<typeof useScan>, ui: ReturnType<typeo
     const n = resetSelection(hist, ids);
     scan.say(n > 0 ? `${n} icon${n === 1 ? "" : "s"} now inherit the global defaults.` : "Those icons already inherit the defaults.");
   }, [hist, scan]);
-  return { changeDefaults, applySelection, resetRows, toggleAll: (on: boolean) => ui.setChecked(on ? [] : []) };
-}
-
-/** The scan + its outcomes: root handle, rows, busy text, toast. */
-function useScan() {
-  const [root, setRoot] = useState<DirHandleLike | null>(null);
-  const [rows, setRows] = useState<UploadRow[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const token = useRef(0);
-  const clear = useCallback(() => setToast(null), []);
-  const run = useScanRunner(setRows, setBusy, setToast, token);
-  const chooseRoot = useRootPicker(setRoot, run);
-  useBootRestore(setRoot, run);
-  return {
-    root, rows, busy, toast, chooseRoot, dismissToast: clear, say: setToast,
-    rescan: () => { if (root !== null) void run(root); },
-  };
-}
-
-/** Runs one scan; a stale answer from an earlier folder is dropped, not shown. */
-function useScanRunner(
-  setRows: (rows: UploadRow[]) => void, setBusy: (t: string | null) => void,
-  setToast: (t: string | null) => void, token: { current: number },
-) {
-  return useCallback(async (picked: DirHandleLike) => {
-    const id = ++token.current;
-    setBusy("Scanning approved SVGs…");
-    try {
-      const next = await scanRows(picked);
-      if (token.current !== id) return;
-      setRows(next);
-      setToast(next.length === 0 ? "No approved SVGs found in this folder." : null);
-    } catch {
-      if (token.current === id) setToast("The scan could not read this folder — check the permissions and try again.");
-    } finally {
-      if (token.current === id) setBusy(null);
-    }
-  }, [setRows, setBusy, setToast, token]);
-}
-
-/** The folder the other tabs already remember is THIS tab's folder too (I-44). */
-function useBootRestore(setRoot: (h: DirHandleLike) => void, run: (h: DirHandleLike) => Promise<void>) {
-  useEffect(() => {
-    void (async () => {
-      const stored = (await loadHandles(SVG_HANDLE_KEY))?.source ?? (await loadHandles("__selection__"))?.source ?? null;
-      if (stored === null) return;
-      setRoot(stored);
-      await run(stored);
-    })();
-  }, [setRoot, run]);
-}
-
-/** The one picker every tab uses; a cancelled pick changes nothing. */
-function useRootPicker(setRoot: (h: DirHandleLike) => void, run: (h: DirHandleLike) => Promise<void>) {
-  return useCallback(async () => {
-    const picked = await pickRootWithPath();
-    if (picked === null) return;
-    setRoot(picked.handle);
-    await saveHandles(SVG_HANDLE_KEY, { source: picked.handle }); // both SVG tabs share one root
-    await run(picked.handle);
-  }, [setRoot, run]);
-}
-
-/** The scan itself: discovery -> rows, with the file index as the check. */
-async function scanRows(picked: DirHandleLike): Promise<UploadRow[]> {
-  const discovery = await discoverApprovedSources(picked);
-  return buildUploadRows(discovery.sources.map((s) => ({
-    source: s,
-    meta: discovery.metas.get(s.id) ?? null,
-    exists: (rel) => discovery.fileIndex.has(rel),
-    fingerprintOf: (rel) => discovery.fileIndex.get(rel) ?? "",
-  })));
+  const toggleAll = useCallback((on: boolean) => {
+    ui.setChecked((current) => toggleSelection(current, checkable, on));
+  }, [ui, checkable]);
+  return { changeDefaults, applySelection, resetRows, toggleAll };
 }
 
 /** One read per path, remembered; a failed read is remembered as empty. */

@@ -12,15 +12,16 @@ import { EXPORT_SCHEMA, fingerprintSettings, type ExportRecord, type SettingsSna
 import { readMetadata } from "../src/lib/svgupload/mime";
 import { FakeDir } from "./helpers/fakefs";
 import type { MetaRecord } from "../src/lib/svgupload/metaprompt";
-import { acceptedMeta } from "./helpers/svgupmeta";
+import { acceptedMeta, fortyTags, SOURCE_SHA } from "./helpers/svgupmeta";
 import { insertMetadata } from "../src/lib/svgupload/jpegseg";
+import { isContentHash } from "../src/lib/svgupload/sourcehash";
 
 const SOURCE = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="10" stroke="#000" stroke-width="2"/></svg>';
 const DIR = "run/icon-trophy_AI_7";
 
 const pair = (over: Partial<SourceRef> = {}): SourceRef => ({
   pairId: "p1", base: "icon-trophy_AI_7", dirPath: DIR,
-  svgPath: `${DIR}/icon-trophy_AI_7_03.svg`, version: 3, approvedAt: "2026-10-06T10:00:00Z", fingerprint: "100:200",
+  svgPath: `${DIR}/icon-trophy_AI_7_03.svg`, version: 3, approvedAt: "2026-10-06T10:00:00Z", fingerprint: SOURCE_SHA,
   ...over,
 });
 
@@ -49,7 +50,7 @@ function item(over: Partial<ExportItem> = {}): ExportItem {
 
 /** An accepted answer that PASSES the policy — the exporter re-checks it. */
 function accepted(over: Partial<MetaRecord> = {}): MetaRecord {
-  return acceptedMeta({ pairId: "p1", sourceFingerprint: "100:200", ...over });
+  return acceptedMeta({ pairId: "p1", sourceFingerprint: SOURCE_SHA, ...over });
 }
 
 /** A real 1×1 JPEG (SOI…EOI) so the segment writer has honest bytes to work on. */
@@ -80,9 +81,14 @@ function io(over: Partial<ExportIo> = {}, model: MetaRecord | null = accepted())
       const bytes = inserted.ok ? inserted.bytes : JPEG;
       return { ok: true, blob: new Blob([bytes as unknown as BlobPart]), bytes, dims: { width: 3886, height: 3886, mp: 15.101, clamped: false }, md: args.meta, warnings: [] };
     },
-    optimize: (code) => { calls.optimize += 1; return { svg: code.replace(/\n/g, ""), applied: true, version: "4.1.0", bytesBefore: code.length, bytesAfter: code.length, differences: [], warnings: [] }; },
-    eps: async () => { calls.eps += 1; return { ok: true, bytes: new TextEncoder().encode("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 24 24\nshowpage\n%%EOF\n") }; },
+    optimize: async (code) => { calls.optimize += 1; return { svg: code.replace(/\n/g, ""), applied: true, mode: "conservative" as const, version: "4.1.0", bytesBefore: code.length, bytesAfter: code.length, differences: [], warnings: [] }; },
+    eps: async (_svg, _plan, request) => {
+      calls.eps += 1;
+      expect(request.artboard.w).toBeGreaterThan(0); // the size is never zero (report S60)
+      return { ok: true, bytes: new TextEncoder().encode("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 24 24\nshowpage\n%%EOF\n"), via: "converter" as const };
+    },
     publishedSvg: async () => null,
+    publishedJpeg: async () => null,
     now: () => "2026-10-07T10:00:00Z",
   };
   return { io: { ...base, ...over }, calls };
@@ -175,13 +181,102 @@ describe("metadata is one paid request, decided by fingerprints", () => {
   });
 });
 
+describe("a required output that failed never replaces a good package (R20/R21)", () => {
+  /** A first, good package: the one every failure below must leave untouched. */
+  async function goodPackage(): Promise<{ f: Fakes; record: ExportRecord; present: { svg: boolean; jpg: boolean; eps: boolean } }> {
+    const f = io();
+    await exportIcon(item(), f.io);
+    const read = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
+    return { f, record: read.record as ExportRecord, present: read.present };
+  }
+
+  it("keeps the previous package when the requested JPEG could not be rendered", async () => {
+    const { f, record, present } = await goodPackage();
+    const changed = item({ record, present });
+    changed.settings.defaults.jpeg.quality = 0.4; // settings changed: this run really rebuilds
+    const failing: ExportIo = { ...f.io, raster: async () => ({ ok: false, reason: "The canvas could not encode the JPEG." }) };
+    const out = await exportIcon(changed, failing);
+    expect(out.status).toBe("failed");
+    expect(out.note).toContain("previous package");
+    const after = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
+    expect(after.record?.updatedAt).toBe(record.updatedAt);
+    expect(after.record?.fingerprints.jpeg).toBe(record.fingerprints.jpeg);
+    expect(after.present).toEqual(present);
+  });
+
+  it("does not write the freshly prepared SVG when the JPEG failed", async () => {
+    const { f, record, present } = await goodPackage();
+    const dir = await import("../src/lib/fs").then((fs) => fs.probePath(f.io.root, "run/icon-trophy_AI_7/export"));
+    const published = await (await dir!.getFileHandle("icon-trophy_AI_7.svg")).getFile().then((file) => file.text());
+    const changed = item({ record, present });
+    changed.settings.defaults.jpeg.quality = 0.4;
+    const failing: ExportIo = { ...f.io, raster: async () => ({ ok: false, reason: "no JPEG" }) };
+    await exportIcon(changed, failing);
+    const again = await (await dir!.getFileHandle("icon-trophy_AI_7.svg")).getFile().then((file) => file.text());
+    expect(again).toBe(published);
+  });
+
+  it("still publishes the required outputs when only the optional EPS failed", async () => {
+    const { f, record, present } = await goodPackage();
+    const withEps = item({ record, present, requested: { svg: true, jpg: true, eps: true } });
+    withEps.values.epsConverter = "http://localhost:8899/eps";
+    const out = await exportIcon(withEps, { ...f.io, eps: async () => ({ ok: false as const, reason: "The EPS converter could not be reached." }) });
+    expect(out.status).toBe("partial");
+    const after = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
+    expect(after.present).toEqual({ svg: true, jpg: true, eps: false });
+    expect(after.record?.status).toBe("partial");
+  });
+
+  it("never publishes a package it cannot validate, even when every output exists", async () => {
+    const f = io();
+    const noSvg = item();
+    const out = await exportIcon(noSvg, { ...f.io, optimize: async () => ({ svg: "", applied: false, mode: "off" as const, version: "4.1.0", bytesBefore: 0, bytesAfter: 0, differences: [], warnings: [] }) });
+    expect(out.status).toBe("failed");
+    const read = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
+    expect(read.exists).toBe(false);
+  });
+});
+
+describe("cancelling an export stops before the publication boundary (R22)", () => {
+  it("publishes nothing when the run was cancelled while it rendered", async () => {
+    const f = io();
+    const controller = new AbortController();
+    const out = await exportIcon(item(), {
+      ...f.io,
+      signal: controller.signal,
+      raster: async (args) => { controller.abort(new Error("cancelled")); return await f.io.raster(args); },
+    });
+    expect(out.status).toBe("cancelled");
+    expect(out.note).toContain("Cancelled");
+    const read = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
+    expect(read.exists).toBe(false);
+  });
+
+  it("keeps packaging normally when nothing was cancelled", async () => {
+    const f = io();
+    const out = await exportIcon(item(), { ...f.io, signal: new AbortController().signal });
+    expect(out.status).toBe("processed");
+  });
+});
+
 describe("EPS is genuine or it is Partial", () => {
-  it("skips the converter, exports SVG+JPEG and reports Partial when none is configured", async () => {
+  it("offers every requested EPS to the seam — the local writer needs no converter", async () => {
     const f = io();
     const out = await exportIcon(item({ requested: { svg: true, jpg: true, eps: true } }), f.io);
+    expect(f.calls.eps).toBe(1); // no converter configured, and the io is asked anyway
+    expect(out.status).toBe("processed");
+    const read = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
+    expect(read.present.eps).toBe(true);
+    expect(read.record?.tools.find((t) => t.name === "eps")?.version).toBe("converter");
+  });
+
+  it("reports Partial, with the named reason, when nothing could write the EPS", async () => {
+    const f = io();
+    const refused = { ...f.io, eps: async () => ({ ok: false as const, reason: "unsupported for EPS: gradient, text; no converter is configured." }) };
+    const out = await exportIcon(item({ requested: { svg: true, jpg: true, eps: true } }), refused);
     expect(out.status).toBe("partial");
     expect(out.note).toContain("Partial");
-    expect(f.calls.eps).toBe(0);
+    expect(out.note).toContain("gradient");
     const read = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
     expect(read.present).toEqual({ svg: true, jpg: true, eps: false });
     expect(read.record?.status).toBe("partial");
@@ -199,7 +294,7 @@ describe("EPS is genuine or it is Partial", () => {
   });
 
   it("refuses a converter answer that is not PostScript", async () => {
-    const f = io({ eps: async () => ({ ok: true, bytes: new TextEncoder().encode("%PDF-1.4 not an eps") }) });
+    const f = io({ eps: async () => ({ ok: true as const, bytes: new TextEncoder().encode("%PDF-1.4 not an eps"), via: "converter" as const }) });
     const withConverter = item({ requested: { svg: true, jpg: true, eps: true } });
     withConverter.values.epsConverter = "http://localhost:8899/eps";
     const out = await exportIcon(withConverter, f.io);
@@ -284,14 +379,85 @@ describe("the record behind a green row", () => {
     expect(record.stages.map((s) => s.stage)).toContain("commit");
   });
 
-  it("carries the source fingerprint and the approved version, so a later scan can tell", async () => {
+  it("carries the source CONTENT identity and the approved version, so a later scan can tell", async () => {
     const f = io();
     await exportIcon(item(), f.io);
     const read = await readPackage(f.io.root, DIR, "icon-trophy_AI_7");
     const record = read.record as ExportRecord;
-    expect(record.pair.fingerprint).toBe("100:200");
+    expect(record.pair.fingerprint).toBe(SOURCE_SHA);
     expect(record.pair.approvedAt).toBe("2026-10-06T10:00:00Z");
-    expect(record.fingerprints.source).toBe("100:200");
+    // The record's own provenance must be the same identity the row shows and
+    // the metadata store compares — a size:mtime stamp would go stale on a
+    // same-size edit (report R02).
+    expect(record.fingerprints.source).toBe(SOURCE_SHA);
+    expect(isContentHash(record.fingerprints.source)).toBe(true);
+  });
+});
+
+describe("a metadata-only edit re-stamps the published files", () => {
+  /** The published files as they are on disk RIGHT NOW (the run may replace them). */
+  async function onDisk(f: Fakes): Promise<{ svg: string; jpg: Uint8Array }> {
+    const fs = await import("../src/lib/fs");
+    const dir = await fs.probePath(f.io.root, "run/icon-trophy_AI_7/export");
+    const svg = await (await dir!.getFileHandle("icon-trophy_AI_7.svg")).getFile().then((file) => file.text());
+    const jpg = new Uint8Array(await (await (await dir!.getFileHandle("icon-trophy_AI_7.jpg")).getFile()).arrayBuffer());
+    return { svg, jpg };
+  }
+
+  /** The same accepted answer with ONE tag edited — still policy-valid. */
+  function edited(): MetaRecord {
+    const tags = fortyTags();
+    tags[tags.indexOf("graphic")] = "glyph";
+    return accepted({ tags });
+  }
+
+  /** A reader for the run that must reuse the package's own bytes. */
+  const reader = (f: Fakes): Partial<ExportIo> => ({
+    publishedSvg: async () => (await onDisk(f)).svg,
+    publishedJpeg: async () => (await onDisk(f)).jpg,
+  });
+
+  it("writes the edited text into the package with no render and no paid request", async () => {
+    const f = io();
+    const first = await exportIcon(item({ meta: accepted(), metaFresh: true }), f.io);
+    expect(f.calls.raster).toBe(1);
+    const out = await exportIcon(
+      item({ meta: edited(), metaFresh: true, record: first.record, present: { svg: true, jpg: true, eps: false } }),
+      { ...f.io, ...reader(f) },
+    );
+    expect(out.status).toBe("processed");
+    expect(f.calls.raster).toBe(1); // the 15 MP render happened once, not twice
+    expect(f.calls.metadata).toBe(0); // and nothing was sent anywhere
+    const after = await onDisk(f);
+    expect(after.svg).toContain("glyph");
+    expect(after.svg).not.toContain("graphic");
+    const { readMetadata: readJpeg } = await import("../src/lib/svgupload/jpegseg");
+    expect(readJpeg(after.jpg)?.tags).toContain("glyph");
+    expect(readJpeg(after.jpg)?.title).toBe(accepted().title);
+  });
+
+  it("keeps an EPS the package already holds and still calls it complete", async () => {
+    const f = io();
+    const first = await exportIcon(item({ meta: accepted(), metaFresh: true }), f.io);
+    const withEps: ExportRecord = {
+      ...(first.record as ExportRecord),
+      outputs: [...(first.record as ExportRecord).outputs, { format: "eps", path: "icon-trophy_AI_7.eps", bytes: 61, hash: "0badc0de" }],
+    };
+    const out = await exportIcon(
+      item({ meta: edited(), metaFresh: true, record: withEps, present: { svg: true, jpg: true, eps: true }, requested: { svg: true, jpg: true, eps: true } }),
+      { ...f.io, ...reader(f) },
+    );
+    expect(out.status).toBe("processed"); // not Partial: nothing is missing
+    expect(f.calls.eps).toBe(0); // the kept EPS is not rebuilt
+    expect(out.record?.outputs.map((o) => o.format).sort()).toEqual(["eps", "jpg", "svg"]);
+  });
+
+  it("records the accepted metadata a REUSE run embedded, not an empty provenance", async () => {
+    const f = io();
+    const out = await exportIcon(item({ meta: accepted(), metaFresh: true }), f.io);
+    expect(f.calls.metadata).toBe(0); // the stored answer was reused
+    expect(out.record?.metadata?.title).toBe(accepted().title);
+    expect(out.record?.metadata?.tags.length).toBe(40);
   });
 });
 

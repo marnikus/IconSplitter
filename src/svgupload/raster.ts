@@ -7,6 +7,7 @@
 // as an output, and the measured numbers — not the requested ones — are what the
 // export JSON records.
 
+import { COMPARE } from "../lib/svgupload/optimize";
 import { jpegTarget, mpOf, type JpegDims } from "../lib/svgupload/target";
 import { insertMetadata, jpegDimensions, verifyMetadata, type JpegMeta } from "../lib/svgupload/jpegseg";
 
@@ -133,6 +134,30 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null
   return new Promise((resolve) => {
     canvas.toBlob((blob) => { resolve(blob); }, "image/jpeg", quality);
   });
+}
+
+/**
+ * The pixels the optimizer's appearance gate compares (merge report §3.1): one
+ * document flattened on white at the compare size. BOTH sides are rendered the
+ * same way, so the comparison is about the picture rather than the rasteriser.
+ * Null when the document cannot be drawn — the gate reads that as a difference,
+ * never as a pass.
+ */
+export async function renderPixels(svg: string, seams: RasterSeams = defaultSeams()): Promise<Uint8Array | null> {
+  const { width, height } = COMPARE;
+  const url = URL.createObjectURL(new Blob([svg as unknown as BlobPart], { type: "image/svg+xml" }));
+  try {
+    const image = await loadImage(seams.createImage(), url);
+    if (image === null) return null;
+    const canvas = draw(image, seams.createCanvas(width, height), "#ffffff", { width, height, mp: 0, clamped: false });
+    const ctx = canvas.getContext("2d");
+    if (ctx === null) return null;
+    return new Uint8Array(ctx.getImageData(0, 0, width, height).data);
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /**

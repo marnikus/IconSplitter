@@ -39,6 +39,21 @@ export interface UploadCounts {
   failed: number;
 }
 
+/**
+ * What "select all" may act on: the VISIBLE rows an action can use. A hidden
+ * selected row is never touched by it — the user filtered it out on purpose — and
+ * a blocked row is never selected by it, because nothing can be done with it.
+ */
+export function checkableIds(rows: readonly UploadRow[]): string[] {
+  return rows.filter(isEligible).map((r) => r.id);
+}
+
+/** The selection after the header checkbox moved: additive on, subtractive off. */
+export function toggleSelection(current: readonly string[], checkable: readonly string[], on: boolean): string[] {
+  if (!on) return current.filter((id) => !checkable.includes(id));
+  return [...new Set([...current, ...checkable])];
+}
+
 /** The rows the list shows, in the user's order. */
 export function visibleUploadRows(rows: readonly UploadRow[], view: UploadView): UploadRow[] {
   const needle = view.search.trim().toLowerCase();

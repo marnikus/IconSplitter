@@ -26,12 +26,14 @@ export interface StepIo {
   context: CtxOf;
   mark: MarkFn;
   say: SayFn;
+  /** The naming run's own cancellation — absent means "nothing can cancel it". */
+  signal?: AbortSignal;
 }
 
 /** One metadata run: verify the model, name the icon, store the answer. */
 export async function requestNames(id: string, io: StepIo): Promise<void> {
   io.mark(id, "running");
-  const ctx = await io.context(id);
+  const ctx = await io.context(id, io.signal);
   if (ctx === null) { io.say("That icon has no usable SVG — nothing was sent."); io.mark(id, "failed"); return; }
   const card = providerCard({ config: ctx.config, catalog: ctx.catalog, model: ctx.metaStore.model });
   if (!card.choice.ok) { io.say(`Nothing was sent: ${card.choice.reason}`); io.mark(id, "failed"); return; }
@@ -39,7 +41,13 @@ export async function requestNames(id: string, io: StepIo): Promise<void> {
   logName(out, ctx.row.exportBase, id, out.meta !== null);
   if (out.meta !== null) putRecordOnStore(getMetaStore(), out.record);
   io.say(out.meta === null ? `Metadata not accepted: ${out.error ?? "the answer was refused."}` : `Metadata accepted for ${ctx.row.exportBase}.`);
-  io.mark(id, out.meta === null ? "failed" : "queued");
+  io.mark(id, stateAfterName(out.meta !== null, io.signal));
+}
+
+/** A cancelled naming is cancelled, not failed: nothing about it needs review. */
+function stateAfterName(accepted: boolean, signal?: AbortSignal): JobKind {
+  if (accepted) return "queued";
+  return signal?.aborted === true ? "cancelled" : "failed";
 }
 
 /** One export run: the pipeline result decides the row state. */

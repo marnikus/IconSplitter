@@ -5,7 +5,7 @@
 //   · the effective settings and their origin come from the settings store;
 //   · the accepted metadata comes from the metadata store (or is generated now);
 //   · the four expensive seams are the REAL modules: the streaming provider call,
-//     the canvas raster, SVGO and the configured EPS converter;
+//     the canvas raster, SVGO and the EPS writer (local first, converter second);
 //   · the package a row already has is read from its own export folder.
 // A row that cannot be exported never reaches this file — `blocked` is checked by
 // the caller, so a missing source can never be sent to a provider.
@@ -24,11 +24,11 @@ import { EXPORT_SCHEMA } from "../lib/svgupload/exportjson";
 import type { MetaRecord } from "../lib/svgupload/metaprompt";
 import { chooseModel, FLASH_LITE, type CatalogEntry, type ModelChoice } from "../lib/svgupload/provider";
 import type { MetaText } from "../lib/svgupload/metaprompt";
-import { epsRequest } from "../lib/svgupload/eps";
+import { epsBytes } from "./epsio";
 import { generateMetadata, type MetadataArgs } from "./metadata";
-import { rasterize, thumbnailDataUrl } from "./raster";
+import { rasterize, renderPixels, thumbnailDataUrl } from "./raster";
 import { optimizeSvg } from "./optimizer";
-import { exportIcon, readPublishedSvg, type ExportIo, type ExportItem, type ExportOut, type ExportValues } from "./exporter";
+import { exportIcon, readPublishedSvg, type ExportIo, type ExportItem, type ExportOut, type ExportValues, readPublishedJpegBytes } from "./exporter";
 import { exportDirOf, readPackage, RECORD_NAME, type PackageRead } from "./package";
 import type { UploadRow } from "../lib/svgupload/rows";
 import { resolveBackground } from "../lib/svgbackground";
@@ -145,16 +145,19 @@ function settingsSnapshot(values: UploadDefaults, inherited: readonly string[]) 
   };
 }
 
-/** The four real seams: provider, canvas, SVGO and the converter endpoint. */
+/** The four real seams: provider, canvas, SVGO and the EPS writer/converter. */
 export function realIo(ctx: RunContext): ExportIo {
   return {
     root: ctx.root,
     metadata: (item) => generate(ctx, item),
     raster: (args) => rasterize(args),
-    optimize: (code, enabled) => optimizeSvg(code, enabled),
-    eps: (svg, plan) => convertEps(fetch, ctx, svg, plan.converter ?? ""),
+    optimize: (code, enabled) => optimizeSvg(code, enabled, (svg) => renderPixels(svg)),
+    eps: (svg, plan, request) => epsBytes(svg, { plan, request, title: ctx.row.exportBase, fetchImpl: fetch, signal: ctx.signal }),
     publishedSvg: async () => await readPublishedSvg(ctx.root, ctx.row.dirPath, ctx.row.exportBase),
+    publishedJpeg: async () => await readPublishedJpegBytes(ctx.root, ctx.row.dirPath, ctx.row.exportBase),
     now: () => new Date().toISOString(),
+    // The SAME signal the queue aborts: a cancel reaches the export itself.
+    signal: ctx.signal,
   };
 }
 
@@ -213,18 +216,6 @@ function failedRecord(args: FailedArgs): MetaRecord {
 }
 
 /** The converter call; the answer is verified before a single byte is written. */
-async function convertEps(fetchImpl: typeof fetch, ctx: RunContext, svg: string, converter: string): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
-  if (converter === "") return { ok: false, reason: "No EPS converter is configured." };
-  const request = epsRequest(converter, svg, { width: 0, height: 0 });
-  try {
-    const response = await fetchImpl(request.url, { ...request.init, signal: ctx.signal });
-    if (!response.ok) return { ok: false, reason: `The EPS converter answered ${response.status}.` };
-    return { ok: true, bytes: new Uint8Array(await response.arrayBuffer()) };
-  } catch (error) {
-    return { ok: false, reason: `The EPS converter could not be reached (${error instanceof Error ? error.message : "unknown error"}).` };
-  }
-}
-
 /** The provider/model card the panel shows before anything is sent (§8). */
 export function providerCard(args: { config: SvgConfig; catalog: readonly CatalogEntry[] | null; model: string }): { choice: ModelChoice; url: string; fallback: string } {
   return { choice: chooseModel(args.catalog, args.model.trim() === "" ? FLASH_LITE : args.model), url: chatUrl(args.config.baseUrl), fallback: FLASH_LITE };

@@ -86,6 +86,69 @@ export function optimizeConfig(): { multipass: boolean; plugins: { name: string;
   };
 }
 
+/**
+ * The delivery attempt (merge report §3.1): the FULL preset may rewrite geometry,
+ * because a pixel comparison decides afterwards whether the picture survived. The
+ * three overrides are the promises the preset would otherwise break silently —
+ * the description, the embedded metadata and the stroke attributes.
+ */
+export function deliveryConfig(): { multipass: boolean; plugins: { name: string; params: { overrides: Record<string, boolean> } }[] } {
+  return {
+    multipass: false,
+    plugins: [{
+      name: "preset-default",
+      params: { overrides: { removeDesc: false, removeMetadata: false, removeUselessStrokeAndFill: false } },
+    }],
+  };
+}
+
+/** The comparison budget: 256×256, antialiasing tolerated, nothing else. */
+export interface CompareOpts {
+  width: number;
+  height: number;
+  /** Largest per-channel difference that still counts as the same pixel. */
+  tolerance: number;
+  /** Share of the pixels (percent) allowed to exceed the tolerance. */
+  budgetPct: number;
+}
+
+/** The budget the report's pattern uses (design §6.4 of the base branch). */
+export const COMPARE: CompareOpts = { width: 256, height: 256, tolerance: 32, budgetPct: 0.5 };
+
+/**
+ * Two renderings are "the same picture" when at most `budgetPct` percent of their
+ * pixels differ by more than `tolerance` per channel. A side that could not be
+ * rendered — null, or shorter than the frame — is a DIFFERENCE, never a pass: an
+ * unverifiable optimisation must lose to the unoptimised copy.
+ */
+export function rendersMatch(a: Uint8Array | null, b: Uint8Array | null, opts: CompareOpts): boolean {
+  const pixels = opts.width * opts.height;
+  if (a === null || b === null || a.length < pixels * 4 || b.length < pixels * 4) return false;
+  let differing = 0;
+  for (let i = 0; i < pixels; i += 1) if (pixelDiff(a, b, i) > opts.tolerance) differing += 1;
+  return (differing * 100) / pixels <= opts.budgetPct;
+}
+
+function pixelDiff(a: Uint8Array, b: Uint8Array, index: number): number {
+  let max = 0;
+  for (let c = 0; c < 4; c += 1) {
+    const d = Math.abs(a[index * 4 + c] - b[index * 4 + c]);
+    if (d > max) max = d;
+  }
+  return max;
+}
+
+/**
+ * What the pixel gate cannot forgive: a document that no longer opens at the same
+ * frame. Rewritten path data, a dropped comment or a respelled colour are exactly
+ * what the delivery attempt is FOR, so only the frame is named here.
+ */
+export function structuralIssues(before: string, after: string): string[] {
+  return compareSignatures(svgSignature(before), svgSignature(after))
+    .filter((d) => d.kind === "viewBox" || d.kind === "size")
+    .map((d) => `${d.kind}: ${d.before} → ${d.after}`);
+}
+
 /** A comparable reading of a document: the numbers and the artwork, in order. */
 export interface SvgSignature {
   viewBox: string;

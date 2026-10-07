@@ -18,6 +18,8 @@ import { hashBytes } from "../lib/svgupload/exportjson";
 export const EXPORT_DIR = "export";
 export const RECORD_NAME = "export.json";
 export const STAGE_DIR = ".export-staging";
+/** Where the files a publish is about to replace wait until it succeeded. */
+export const BACKUP_DIR = ".export-backup";
 
 export interface PackageFile {
   name: string;
@@ -53,23 +55,82 @@ export function packageNames(base: string): { svg: string; jpg: string; eps: str
 }
 
 /**
- * Publishes a package atomically: every byte goes into the staging folder first,
- * then the live folder receives the files, and export.json is written LAST so a
- * reader that sees a record sees the complete package beside it.
+ * Publishes a package: every byte goes into the staging folder first, then the
+ * live folder receives the files, and export.json is written LAST so a reader
+ * that sees a record sees the complete package beside it. The files being
+ * replaced are copied aside first, so a write that fails halfway puts them back
+ * (R01) — the previous package is restored, not left half-replaced.
  */
 export async function publishPackage(root: DirHandleLike, args: PackageArgs): Promise<PublishOut> {
   try {
     const dir = await ensureDirPath(root, exportDirOf(args.dirPath));
-    const stage = await stageOf(dir);
-    await stageAll(stage, packageNames(args.base), args);
-    const written = await publishFiles(dir, stage, args);
-    await writeRecord(dir, args.record);
-    await clearStage(dir);
-    return { ok: true, written: [...written, RECORD_NAME], errors: [] };
+    return await commit(dir, args);
   } catch (error) {
     // Nothing else is touched here: the previous package keeps its files and its
     // record, which is exactly what "the last valid package survives" means.
     return { ok: false, written: [], errors: [messageOf(error)] };
+  }
+}
+
+/** Stages everything, swaps the live files in, and rolls back if a write fails. */
+async function commit(dir: DirHandleLike, args: PackageArgs): Promise<PublishOut> {
+  const names = packageNames(args.base);
+  const stage = await stageOf(dir);
+  await stageAll(stage, names, args);
+  const backup = await ensureDirPath(dir, BACKUP_DIR);
+  const replaced = everyName(names);
+  const had = await backupLive(dir, backup, replaced);
+  try {
+    const written = await publishFiles(dir, stage, args);
+    await writeRecord(dir, args.record);
+    return { ok: true, written: [...written, RECORD_NAME], errors: [] };
+  } catch (error) {
+    await rollback(dir, backup, had, replaced);
+    return { ok: false, written: [], errors: [messageOf(error)] };
+  } finally {
+    await clearStage(dir);
+    await clearBackup(dir);
+  }
+}
+
+/** Copies the live files this publish may replace; names that were not there. */
+async function backupLive(dir: DirHandleLike, backup: DirHandleLike, names: readonly string[]): Promise<string[]> {
+  const had: string[] = [];
+  for (const name of names) {
+    const file = await tryGetFile(dir, name);
+    if (file === null) continue;
+    await writeFileOverwrite(backup, name, await file.getFile());
+    had.push(name);
+  }
+  return had;
+}
+
+/** Puts the previous files back; a file this publish CREATED is removed again. */
+async function rollback(dir: DirHandleLike, backup: DirHandleLike, had: readonly string[], replaced: readonly string[]): Promise<void> {
+  for (const name of replaced) {
+    if (had.includes(name)) await restoreFile(dir, backup, name);
+    else await removeFile(dir, name);
+  }
+}
+
+/** Every name one publish may touch: the three formats and the record. */
+function everyName(names: ReturnType<typeof packageNames>): string[] {
+  return [names.svg, names.jpg, names.eps, names.record];
+}
+
+async function restoreFile(dir: DirHandleLike, backup: DirHandleLike, name: string): Promise<void> {
+  const file = await tryGetFile(backup, name);
+  if (file !== null) await writeFileOverwrite(dir, name, await file.getFile());
+}
+
+/** Removing a name the failed publish never created is not an error. */
+async function removeFile(dir: DirHandleLike, name: string): Promise<void> {
+  const remove = dir.removeEntry?.bind(dir);
+  if (remove === undefined || (await tryGetFile(dir, name)) === null) return;
+  try {
+    await remove(name);
+  } catch {
+    // a handle we cannot delete is reported by the caller's own error
   }
 }
 
@@ -81,6 +142,11 @@ async function publishFiles(dir: DirHandleLike, stage: DirHandleLike, args: Pack
     written.push(file.name);
   }
   return written;
+}
+
+/** The staging and backup folders are emptied the same way. */
+async function clearBackup(dir: DirHandleLike): Promise<void> {
+  await clearHidden(dir, BACKUP_DIR);
 }
 
 /** Removes the staging folder, or at worst every file inside it. */
@@ -100,6 +166,25 @@ async function clearStage(dir: DirHandleLike): Promise<void> {
     await remove(STAGE_DIR);
   } catch {
     // nothing more to do — an empty staging folder is harmless
+  }
+}
+
+/** The same best-effort removal for a hidden folder, without naming its type. */
+async function clearHidden(dir: DirHandleLike, name: string): Promise<void> {
+  const remove = dir.removeEntry?.bind(dir);
+  if (remove === undefined) return;
+  try {
+    await remove(name, { recursive: true });
+    return;
+  } catch {
+    // fall through: some engines refuse a recursive remove on a directory
+  }
+  const folder = await probePath(dir, name);
+  if (folder === null) return;
+  try {
+    await remove(name);
+  } catch {
+    // an empty hidden folder is harmless
   }
 }
 
@@ -158,6 +243,12 @@ export interface PackageRead {
   record: ExportRecord | null;
   /** Set when export.json exists but could not be read — outputs are untouched. */
   corrupt: string | null;
+  /**
+   * True when the staging folder still holds files: a publication was interrupted
+   * between the file swap and the commit, so the bytes beside the record cannot be
+   * trusted (R01). The record is NOT returned in that case.
+   */
+  incomplete: boolean;
   /** Which output files are really on disk right now. */
   present: { svg: boolean; jpg: boolean; eps: boolean };
 }
@@ -165,7 +256,7 @@ export interface PackageRead {
 /** What an icon's export folder currently holds — the row's status source. */
 export async function readPackage(root: DirHandleLike, dirPath: string, base: string): Promise<PackageRead> {
   const dir = await probePath(root, exportDirOf(dirPath));
-  const empty: PackageRead = { exists: false, record: null, corrupt: null, present: { svg: false, jpg: false, eps: false } };
+  const empty: PackageRead = { exists: false, record: null, corrupt: null, incomplete: false, present: { svg: false, jpg: false, eps: false } };
   if (dir === null) return empty;
   const names = packageNames(base);
   const present = {
@@ -173,12 +264,20 @@ export async function readPackage(root: DirHandleLike, dirPath: string, base: st
     jpg: (await tryGetFile(dir, names.jpg)) !== null,
     eps: (await tryGetFile(dir, names.eps)) !== null,
   };
+  if (await isInterrupted(dir)) return { exists: true, record: null, corrupt: null, incomplete: true, present };
   const recordFile = await tryGetFile(dir, RECORD_NAME);
-  if (recordFile === null) return { exists: true, record: null, corrupt: null, present };
+  if (recordFile === null) return { exists: true, record: null, corrupt: null, incomplete: false, present };
   const text = await (await recordFile.getFile()).text();
   const parsed = parseExportRecordText(text);
-  if (!parsed.ok) return { exists: true, record: null, corrupt: parsed.errors.join(" "), present };
-  return { exists: true, record: parsed.record, corrupt: null, present };
+  if (!parsed.ok) return { exists: true, record: null, corrupt: parsed.errors.join(" "), incomplete: false, present };
+  return { exists: true, record: parsed.record, corrupt: null, incomplete: false, present };
+}
+
+/** A non-empty staging folder is the evidence that a publish never finished. */
+async function isInterrupted(dir: DirHandleLike): Promise<boolean> {
+  const stage = await probePath(dir, STAGE_DIR);
+  if (stage === null) return false;
+  return (await listChildNames(stage)).length > 0;
 }
 
 /** The output records a successful publish writes — bytes and hashes included. */

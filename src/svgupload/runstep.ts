@@ -7,16 +7,19 @@
 // nothing in this file deletes anything — which is why a failed run leaves the
 // previous package exactly as it was (§6).
 import type { ExportPlan } from "../lib/svgupload/prepare";
-import { boundsOfDocument, buildExportSvg, planExport, warningsOf } from "../lib/svgupload/prepare";
-import { metadataEquals, readMetadata, withMetadata, type MetaText } from "../lib/svgupload/mime";
+import { buildExportSvg, warningsOf } from "../lib/svgupload/prepare";
+import { metadataEquals, readMetadata, withMetadata, type MetaText, withoutMetadata } from "../lib/svgupload/mime";
 import type { JpegMeta } from "../lib/svgupload/jpegseg";
-import { EXPORT_SCHEMA, fingerprintSettings, hashText, type ExportRecord, type StageName, type StageRecord, type ToolRecord } from "../lib/svgupload/exportjson";
-import { planEps, verifyEps } from "../lib/svgupload/eps";
+import { type ExportRecord, type OutputRecord, type StageName, type StageRecord, type ToolRecord } from "../lib/svgupload/exportjson";
+import { planEps } from "../lib/svgupload/eps";
+import type { EpsRequest } from "../lib/svgupload/epswrite";
+import { runEpsStage } from "./epsstage";
+import { reembedFiles } from "./reembed";
+import { epsRequestOf, exportPlan, producedFormats, recordFor, validateRun, type Performed, type RunState } from "./runrecord";
 import { statusAfter, type RegenPlan } from "../lib/svgupload/states";
-import { PX_PER_INCH } from "../lib/svgupload/units";
 import type { MetaRecord } from "../lib/svgupload/metaprompt";
 import { exportDirOf, packageNames, publishPackage } from "./package";
-import { latin, metadataRecord, metaText, noteFor, outputRecords, text, widestStroke } from "./exportrecord";
+import { metaText, noteFor, text } from "./exportrecord";
 import type { ExportIo, ExportItem, ExportOut, ExportValues } from "./exporter";
 import type { RasterOut } from "./raster";
 
@@ -40,6 +43,10 @@ export class Run {
   private svgText = "";
   private jpeg: Uint8Array | null = null;
   private epsBytes: Uint8Array | null = null;
+  /** The EPS the previous package already holds: a re-stamp must not lose it. */
+  private keptEps: OutputRecord | null = null;
+  /** Which outputs this run actually worked on (see `Performed`). */
+  private performed: Performed = { jpg: false, eps: false };
 
   constructor(private readonly d: RunDeps) {}
 
@@ -50,20 +57,62 @@ export class Run {
   private get regen(): RegenPlan { return this.d.regen; }
 
   async execute(): Promise<ExportOut> {
+    if (this.regen.reembed) return await this.reembed();
     if (!this.preflight()) return this.fail(this.errors.join(" "));
     if (this.regen.needsMetadata) await this.generate();
     if (this.errors.length > 0) return this.fail(this.errors.join(" "));
     if (!(await this.build())) return this.fail(this.errors.join(" "));
-    if (this.item.requested.jpg) await this.render();
-    if (this.item.requested.eps) await this.convertEps();
+    if (!(await this.produce())) return this.fail(this.errors.join(" "));
+    return await this.publish();
+  }
+
+  /**
+   * Renders what the request asked for. False when a REQUIRED output failed — a
+   * JPEG that could not be encoded stops the run BEFORE anything is published, so
+   * a fresh SVG can never be written beside the previous package's old JPEG
+   * (R20/R21: Partial is for a deliberately optional output, not for a failure).
+   */
+  private async produce(): Promise<boolean> {
+    if (this.item.requested.jpg) {
+      this.performed.jpg = true;
+      await this.render();
+    }
+    if (this.item.requested.eps) {
+      this.performed.eps = true;
+      await this.convertEps();
+    }
+    return this.errors.length === 0;
+  }
+
+  /**
+   * A metadata-only edit: the published SVG and the published JPEG keep their
+   * artwork and are re-stamped with the accepted text. Nothing is rendered, no
+   * request is sent, and the EPS the package already holds is carried over
+   * untouched — the three things a 15 MP re-render would have cost for a renamed
+   * title (report R12: a rebuild must not forget an output it did not touch).
+   */
+  private async reembed(): Promise<ExportOut> {
+    if (this.io.signal?.aborted === true) return this.cancelled();
+    const accepted = this.metaText();
+    if (accepted === null) return this.fail("The accepted metadata is missing, so there is nothing to re-stamp.");
+    const out = await reembedFiles({
+      meta: accepted,
+      embed: (svg) => this.embed(svg),
+      read: async () => ({ svg: await this.io.publishedSvg(this.item), jpg: await this.io.publishedJpeg(this.item) }),
+    });
+    if (!out.ok) return this.fail(out.reason === "" ? this.errors.join(" ") : out.reason);
+    this.svgText = out.svg;
+    this.jpeg = out.jpg;
+    this.keptEps = this.item.present.eps ? (this.item.record?.outputs.find((o) => o.format === "eps") ?? null) : null;
+    this.mark("embed", "ok", "metadata only");
     return await this.publish();
   }
 
   /** Preflight: what would stop the export, said before any work is done. */
   private preflight(): boolean {
     if (!this.item.sourceText.includes("<svg")) this.errors.push("The chosen SVG has no root <svg> element.");
-    const eps = planEps(this.item.requested.eps, this.item.values.epsConverter);
-    if (eps.reason !== null) this.warnings.push(eps.reason); // requested with no converter: Partial, never fake
+    // EPS is NOT gated on a converter any more: the local writer needs none, so
+    // what happens to it is decided by the document (and said when it fails).
     this.warnings.push(...warningsOf(this.item.sourceText));
     this.mark("preflight", this.errors.length > 0 ? "failed" : "ok");
     return this.errors.length === 0;
@@ -85,9 +134,9 @@ export class Run {
   private async build(): Promise<boolean> {
     const built = await this.buildBase();
     if (built === null) return false;
-    const optimized = this.io.optimize(built, this.item.values.optimizeSvg);
+    const optimized = await this.io.optimize(built, this.item.values.optimizeSvg);
     this.warnings.push(...optimized.warnings);
-    this.tools.push({ name: "svgo", version: optimized.version, config: { applied: optimized.applied, differences: optimized.differences.length } });
+    this.tools.push({ name: "svgo", version: optimized.version, config: { mode: optimized.mode, applied: optimized.applied, differences: optimized.differences.length } });
     const text2 = this.embed(optimized.svg);
     if (text2 === null) return false;
     this.svgText = text2;
@@ -117,7 +166,7 @@ export class Run {
   private embed(code: string): string | null {
     const accepted = this.metaText();
     if (accepted === null) return code;
-    const withMeta = withMetadata(code, accepted);
+    const withMeta = withMetadata(withoutMetadata(code), accepted);
     if (!metadataEquals(readMetadata(withMeta), accepted)) {
       this.errors.push("The embedded metadata did not read back as the accepted values.");
       this.mark("embed", "failed", "readback mismatch");
@@ -149,34 +198,40 @@ export class Run {
     return false;
   }
 
-  /** EPS only when a genuine converter exists; otherwise Partial and honest. */
+  /**
+   * EPS, written locally when the document is inside the writer's subset and by
+   * the configured converter otherwise; a refusal is Partial with the named
+   * reason and no invented file (§3.2, §13).
+   */
   private async convertEps(): Promise<void> {
     const plan = planEps(true, this.item.values.epsConverter);
-    if (plan.converter === null) {
-      const reason = plan.reason ?? "No EPS converter is configured.";
-      this.warnings.push(reason);
-      this.mark("eps", "skipped", reason);
+    const stage = await runEpsStage({ svg: this.svgText, plan, request: this.epsRequest(), eps: this.io.eps });
+    if (stage.ok && stage.bytes !== null && stage.tool !== null) {
+      this.epsBytes = stage.bytes;
+      this.tools.push(stage.tool);
+      this.mark("eps", "ok", stage.word);
       return;
     }
-    const out = await this.io.eps(this.svgText, plan);
-    const check = out.ok ? verifyEps(out.bytes) : null;
-    if (out.ok && check !== null && check.ok) {
-      this.epsBytes = out.bytes;
-      this.mark("eps", "ok");
-      return;
-    }
-    const reason = out.ok ? check?.errors[0] ?? "The converter did not return an EPS." : out.reason;
-    this.warnings.push(reason);
-    this.mark("eps", "failed", reason);
+    this.warnings.push(stage.word);
+    this.mark("eps", "failed", stage.word);
   }
 
-  /** Validate, then publish. The record is written last, inside the package. */
+  /** The artboard and the stroke override, as the EPS writer must see them. */
+  private epsRequest(): EpsRequest {
+    return epsRequestOf(this.planFor());
+  }
+
+  /** Validate, then publish. A required gap publishes nothing at all (§15). */
   private async publish(): Promise<ExportOut> {
-    const record = this.recordFor();
-    const validation = this.validate(record);
+    if (this.io.signal?.aborted === true) return this.cancelled();
+    const state = this.state(this.io.now());
+    const record = recordFor(state);
+    const validation = validateRun(state, record);
+    if (!validation.ok) return this.fail(validation.errors.join(" "));
     const status = statusAfter({
       requested: this.item.requested,
-      produced: { svg: true, jpg: this.jpeg !== null, eps: this.epsBytes !== null },
+      // A kept EPS is present in the package even though this run did not build it.
+      produced: producedFormats(state),
       hardFailure: false, cancelled: false, validationOk: validation.ok,
     });
     const final: ExportRecord = { ...record, validation, status };
@@ -192,50 +247,17 @@ export class Run {
     return { status, record: final, note: noteFor(status, this.warnings, validation.errors), folderPath: exportDirOf(this.item.pair.dirPath), skipped: false, meta: this.meta };
   }
 
-  /** The record as far as it is known before validation (§5). */
-  private recordFor(): ExportRecord {
-    const plan = this.planFor();
-    const at = this.io.now();
-    const previous = this.item.record;
+  /** Everything the record and its validation read, in one object (§2). */
+  private state(at: string): RunState {
     return {
-      v: EXPORT_SCHEMA,
-      pair: this.item.pair,
-      settings: { ...this.item.settings, resolved: { dpi: PX_PER_INCH, paddingPx: plan.padding, artboard: plan.artboard, scale: plan.scale, strokWidth: plan.stroke } },
-      metadata: metadataRecord(this.meta),
-      tools: this.tools,
-      outputs: outputRecords(this.item.pair.base, plan, { svg: text(this.svgText), jpg: this.jpeg, eps: this.epsBytes }, this.item.values),
-      stages: this.stages,
-      status: "processed",
-      fingerprints: {
-        source: this.item.pair.fingerprint,
-        settings: fingerprintSettings(this.item.settings),
-        svg: hashText(this.svgText),
-        jpeg: this.jpeg === null ? null : hashText(latin(this.jpeg)),
-      },
-      validation: { ok: false, errors: [], warnings: [] },
-      error: null,
-      createdAt: previous?.createdAt ?? at,
-      updatedAt: at,
+      item: this.item, plan: this.planFor(), stages: this.stages, tools: this.tools, performed: this.performed,
+      svgText: this.svgText, jpeg: this.jpeg, epsBytes: this.epsBytes, keptEps: this.keptEps,
+      meta: this.meta, warnings: this.warnings, at,
     };
   }
 
-  /** What a re-reader must be able to prove about this package (§21). */
-  private validate(record: ExportRecord): { ok: boolean; errors: string[]; warnings: string[] } {
-    const errors: string[] = [];
-    if (this.svgText === "" || !record.outputs.some((o) => o.format === "svg")) errors.push("no SVG output");
-    if (this.item.requested.jpg && this.jpeg === null) errors.push("the requested JPEG was not produced");
-    if (this.item.requested.eps && this.epsBytes === null) errors.push("the requested EPS was not produced");
-    return { ok: errors.length === 0, errors, warnings: [...this.warnings] };
-  }
-
   private planFor(): ExportPlan {
-    if (this.plan === null) {
-      this.plan = planExport({
-        bounds: boundsOfDocument(this.item.sourceText), padding: this.item.values.padding,
-        outputScale: this.item.values.outputScale, stroke: this.item.values.stroke,
-        documentStrokePx: widestStroke(this.item.sourceText), background: this.item.values.background,
-      });
-    }
+    this.plan ??= exportPlan(this.item);
     return this.plan;
   }
 
@@ -252,6 +274,15 @@ export class Run {
     const record: StageRecord = { stage: stageName, at: new Date().toISOString(), ms: Math.max(0, Date.now() - this.started), status };
     this.stages.push(note === undefined ? record : { ...record, note });
     return record;
+  }
+
+  /** Cancelled at the publication boundary: nothing new is written (§22). */
+  private cancelled(): ExportOut {
+    return {
+      status: "cancelled", record: null,
+      note: "Cancelled — nothing new was published; packages finished earlier were kept.",
+      folderPath: exportDirOf(this.item.pair.dirPath), skipped: false, meta: this.meta ?? this.item.meta,
+    };
   }
 
   private fail(reason: string): ExportOut {

@@ -29,6 +29,8 @@ export interface ActionIo {
   context: CtxOf;
   mark: MarkFn;
   queue: { current: ExportQueue | null };
+  /** The in-flight METADATA run's controller — the queue does not own it (§22). */
+  naming: { current: AbortController | null };
   state: { current: UploadJobsInput };
   storeRef: { current: MetaStore };
   setBusyIds: Dispatch<SetStateAction<string[]>>;
@@ -60,8 +62,12 @@ function useJobStarters(io: ActionIo): Pick<JobActions, "runMetadata" | "exportR
   const { deps, context, mark, setNote } = io;
   const runMetadata = useCallback((ids: string[]) => {
     io.setBusyIds((b) => [...new Set([...b, ...ids])]);
-    void runNames(ids, { deps, context, mark, say: setNote }).finally(() =>
-      io.setBusyIds((b) => b.filter((x) => !ids.includes(x))));
+    const controller = new AbortController();
+    io.naming.current = controller; // the cancel button reaches THIS request too
+    void runNames(ids, { deps, context, mark, say: setNote, signal: controller.signal }).finally(() => {
+      io.naming.current = null;
+      io.setBusyIds((b) => b.filter((x) => !ids.includes(x)));
+    });
   }, [context, deps, io, mark, setNote]);
 
   const exportRows = useCallback((ids: string[]) => {
@@ -90,8 +96,9 @@ function useJobControls(io: ActionIo, starters: Pick<JobActions, "exportRows">):
   const cancel = useCallback(() => {
     const stopped = io.queue.current?.waiting().length ?? 0;
     io.queue.current?.cancel();
+    io.naming.current?.abort(new Error("cancelled")); // the paid request stops too
     log(cancelSpec(stopped));
-    setNote("Cancelled — completed packages were kept.");
+    setNote("Cancelled — completed packages were kept; nothing new was sent.");
   }, [io, setNote]);
 
   return { retryFailed, cancel };
@@ -145,8 +152,11 @@ function useFolderActions(io: ActionIo): Pick<JobActions, "openExport" | "checkP
 }
 
 /** Names one icon at a time, in the order the user selected them. */
-async function runNames(ids: string[], io: Pick<ActionIo, "deps" | "context" | "mark"> & { say: SayFn }): Promise<void> {
-  for (const id of ids) await requestNames(id, { deps: io.deps, context: io.context, mark: io.mark, say: io.say });
+async function runNames(ids: string[], io: Pick<ActionIo, "deps" | "context" | "mark"> & { say: SayFn; signal: AbortSignal }): Promise<void> {
+  for (const id of ids) {
+    if (io.signal.aborted) { io.mark(id, "cancelled"); continue; } // never sent, never failed
+    await requestNames(id, { deps: io.deps, context: io.context, mark: io.mark, say: io.say, signal: io.signal });
+  }
 }
 
 /**

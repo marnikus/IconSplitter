@@ -21,6 +21,11 @@ export function ptToPx(pt: number): number {
   return (pt * PX_PER_INCH) / PT_PER_INCH;
 }
 
+/** The inverse of ptToPx: 2.9333 px = 2.2 pt — what a printed page states. */
+export function pxToPt(px: number): number {
+  return (px * PT_PER_INCH) / PX_PER_INCH;
+}
+
 const LENGTH_RE = /^(\d+(?:\.\d+)?)\s*(pt|px|%)$/i;
 
 /**

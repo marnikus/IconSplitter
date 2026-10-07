@@ -7,11 +7,12 @@
 // row and says so, and an export output can never be discovered as a source
 // (otherwise exporting could feed exporting).
 
-import { chosenVersion } from "../svgfile";
+import { chosenApprovedVersion, hasUsableVersion } from "../svgfile";
 import type { SvgVersion } from "../svgmodel";
 import type { PairMeta } from "../pairmeta";
 import { PROBLEM_LABEL, type ProblemKind } from "../pairing";
 import { compareNames } from "../scan";
+import { STATUS_TEXT, type ExportStatus } from "./exportjson";
 import { SVG_EXT } from "../svgmodel";
 
 /** The part of `SvgSource` this tab reads — structurally compatible with it. */
@@ -26,9 +27,30 @@ export interface UploadSourceInput {
 
 /** What the package reader found for this icon (phase G owns the real reader). */
 export interface UploadExportState {
-  status: "processed" | "partial" | "failed" | "stale";
+  status: "processed" | "partial" | "failed" | "stale" | "incomplete";
   at: string;
   note: string;
+}
+
+/** The part of a package read the row needs — structurally compatible with it. */
+export interface ExportStateInput {
+  exists: boolean;
+  /** True when a previous publish was interrupted (the reader refuses the record). */
+  incomplete: boolean;
+  record: { status: ExportStatus; updatedAt: string } | null;
+}
+
+/**
+ * The package state the row SHOWS (never invents): an interrupted publication is
+ * called interrupted instead of being read as "nothing exported yet", and a
+ * record that a reader accepted is reported with its own status and moment.
+ */
+export function exportStateOf(read: ExportStateInput): UploadExportState | null {
+  if (read.incomplete) {
+    return { status: "incomplete", at: "", note: "The last export was interrupted — re-run it to complete the package." };
+  }
+  if (!read.exists || read.record === null) return null;
+  return { status: read.record.status === "cancelled" ? "failed" : read.record.status, at: read.record.updatedAt, note: STATUS_TEXT[read.record.status] };
 }
 
 export interface UploadRowInput {
@@ -40,7 +62,7 @@ export interface UploadRowInput {
   metaState?: MetaKind;
   /** Is this path in the scanned file set? Absent = the scan did not check. */
   exists?: (relPath: string) => boolean;
-  /** size:mtime of the chosen SVG, from the scan; "" when unknown. */
+  /** size:mtime of the chosen SVG, from the scan; "" when unknown (see the row). */
   fingerprintOf?: (relPath: string) => string;
   /** The package this icon already has, or null when none was read. */
   exportState?: UploadExportState | null;
@@ -62,7 +84,13 @@ export interface UploadRow {
   svgPath: string | null;
   version: number | null;
   versionLabel: string;
-  /** size:mtime of the chosen SVG at scan time; "" when the scan could not say. */
+  /**
+   * The chosen SVG's identity: `sha256:<hex>` of its bytes when the scan could
+   * read them, else the size:mtime stamp it was given. Never "" for a row that
+   * has a source. An in-place edit that keeps the path, size and mtime still
+   * changes this value, which is what makes a stale package and stale metadata
+   * visible instead of silently reusable.
+   */
   fingerprint: string;
   metaPath: string;
   /** Visible reasons, never a silent skip. */
@@ -75,6 +103,7 @@ export interface UploadRow {
 }
 
 export const NO_SVG_REASON = "No usable SVG version — regenerate in Generate SVG";
+export const NO_APPROVED_REASON = "No review-approved SVG version — approve one in Generate SVG";
 export const MISSING_SVG_REASON = "The chosen SVG is not on disk — rescan or regenerate";
 
 /** True for any file inside a folder named `export` — our own outputs. */
@@ -103,8 +132,8 @@ export function buildUploadRow(input: UploadRowInput): UploadRow {
     ...identityOf(input.source, ctx),
     ...chosenFields(ctx, input.fingerprintOf),
     id: input.source.id,
-    warnings: warningsOf(input, ctx.chosen, ctx.missing),
-    blocked: blockedReason(ctx.chosen === null, ctx.missing),
+    warnings: warningsOf(input, ctx),
+    blocked: blockedReason(ctx),
     exportState: input.exportState ?? null,
     job: input.job ?? "queued",
     metaState: input.metaState ?? "none",
@@ -115,6 +144,8 @@ interface RowContext {
   chosen: SvgVersion | null;
   version: number | null;
   preferred: number | null;
+  /** True when some version is generated and valid — approved or not. */
+  usable: boolean;
   missing: boolean;
 }
 
@@ -122,8 +153,11 @@ interface RowContext {
 function contextOf(input: UploadRowInput): RowContext {
   const versions = input.meta?.versions ?? [];
   const preferred = input.meta?.preferred ?? null;
-  const chosen = chosenVersion(versions, preferred);
-  return { chosen, version: chosen?.version ?? null, preferred, missing: isMissing(chosen, input.exists) };
+  const chosen = chosenApprovedVersion(versions, preferred);
+  return {
+    chosen, version: chosen?.version ?? null, preferred, usable: hasUsableVersion(versions),
+    missing: isMissing(chosen, input.exists),
+  };
 }
 
 /** Who the icon is — taken from the source, never invented. */
@@ -155,17 +189,25 @@ function isMissing(chosen: SvgVersion | null, exists: ((rel: string) => boolean)
 }
 
 /** Every visible reason the row has: the scan's problems plus its own checks. */
-function warningsOf(input: UploadRowInput, chosen: SvgVersion | null, missing: boolean): string[] {
+function warningsOf(input: UploadRowInput, ctx: RowContext): string[] {
   const out = input.source.problems.map((p) => PROBLEM_LABEL[p.kind]);
   const lastError = (input.meta?.versions ?? []).filter((v) => v.error).at(-1)?.error ?? null;
   if (lastError !== null) out.push(lastError);
-  if (missing && chosen !== null) out.push(`${chosen.svgPath} is not found in the scanned folder`);
+  out.push(...fallbackWarning(ctx));
+  if (ctx.missing && ctx.chosen !== null) out.push(`${ctx.chosen.svgPath} is not found in the scanned folder`);
   return out;
 }
 
-function blockedReason(noVersion: boolean, missing: boolean): string | null {
-  if (noVersion) return NO_SVG_REASON;
-  return missing ? MISSING_SVG_REASON : null;
+/** Never silently swap a declined preference for another file: say it. */
+function fallbackWarning(ctx: RowContext): string[] {
+  if (ctx.preferred === null || ctx.chosen === null || ctx.version === ctx.preferred) return [];
+  return [`The preferred v${ctx.preferred} is not an approved usable version — v${ctx.version} is used instead.`];
+}
+
+/** Which of the three reasons stops this row — the words name the actual cause. */
+function blockedReason(ctx: RowContext): string | null {
+  if (ctx.chosen === null) return ctx.usable ? NO_APPROVED_REASON : NO_SVG_REASON;
+  return ctx.missing ? MISSING_SVG_REASON : null;
 }
 
 /** True when this row may send work: nothing blocks it and it has a source. */
@@ -192,7 +234,8 @@ export function uploadRowState(row: UploadRow): { tone: "ok" | "warn" | "bad" | 
 
 /** Stale covers both halves of the promise: the package and the metadata (§17). */
 export function isStale(row: UploadRow): boolean {
-  return row.exportState?.status === "stale" || row.job === "interrupted" || row.metaState === "stale";
+  const state = row.exportState?.status;
+  return state === "stale" || state === "incomplete" || row.job === "interrupted" || row.metaState === "stale";
 }
 
 function versionLabel(version: number | null, preferred: number | null): string {

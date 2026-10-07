@@ -51,7 +51,7 @@ function Bulk({ u }: { u: UploadApi }) {
   const scope = (): Row[] => u.rows.filter((r) => u.checked.includes(r.id) && r.blocked === null);
   const selected = scope().map((r) => r.id);
   return (
-    <UploadBulk counts={u.counts} checkedCount={u.checked.length} view={u.view} zoom={u.zoom} background={u.background}
+    <UploadBulk counts={u.counts} checked={u.checked} checkable={u.checkable} view={u.view} zoom={u.zoom} background={u.background}
       busy={u.busy !== null} onView={u.setView} onZoom={u.setZoom} onBackground={u.setBackground}
       onToggleAll={u.toggleAll} onApply={u.applySelection} onReset={() => u.resetRows(u.checked)}
       jobs={{

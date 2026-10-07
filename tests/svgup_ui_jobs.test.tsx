@@ -27,6 +27,7 @@ import { UPLOAD_JOBS_KEY, resetJobStoreCache } from "../src/svgupload/jobstore";
 import { resetSessionRestore } from "../src/svgupload/useUploadJobs";
 import { clearLog, getLogState } from "../src/log/logstore";
 import { setMetaStore } from "../src/svgupload/metastore";
+import { SOURCE_HASH_PREFIX, sha256Hex } from "../src/lib/svgupload/sourcehash";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
@@ -40,20 +41,34 @@ vi.mock("../src/svg/keystore", () => ({ loadApiKey: async () => "test-key" }));
 
 const calls: string[] = [];
 /** The pair id the row actually has — the mock cannot import it before hoisting. */
-const hoisted = vi.hoisted(() => ({ id: "", fingerprint: "" }));
+const hoisted = vi.hoisted(() => ({ id: "", fingerprint: "", holdName: false }));
+
+/** Waits until the run's signal aborts — what the real transport does. */
+function heldUntilAborted(signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted === true) { resolve(); return; }
+    signal?.addEventListener("abort", () => resolve(), { once: true });
+    setTimeout(resolve, 3000); // never hangs a suite if the abort never comes
+  });
+}
 vi.mock("../src/svgupload/runupload", async () => {
   const { acceptedMeta } = await import("./helpers/svgupmeta");
   // The record carries the fingerprint the scan reports for the fixture file
-  // ("size:mtime"), so the answer counts as FRESH — the stale path is proven in
-  // svgup_meta.test.ts and in the exporter's re-export matrix.
+  // (its content hash), so the answer counts as FRESH — the stale path is proven
+  // in svgup_meta.test.ts and in the exporter's re-export matrix.
   const named = () => acceptedMeta({ pairId: hoisted.id, sourceFingerprint: hoisted.fingerprint });
   return {
     providerCard: (args: { model: string }) => ({
       choice: args.model === "" ? { ok: true, model: FLASH_LITE, source: "verified" } : { ok: true, model: args.model, source: "verified" },
       url: "https://example.test/v1/chat/completions", fallback: FLASH_LITE,
     }),
-    generateMetadataFor: async () => {
+    generateMetadataFor: async (ctx: { signal?: AbortSignal }) => {
       calls.push("name");
+      if (hoisted.holdName) await heldUntilAborted(ctx.signal);
+      if (ctx.signal?.aborted === true) {
+        // The real module's rule: an aborted request is PENDING, never accepted.
+        return { record: acceptedMeta({ pairId: hoisted.id, status: "pending" }), meta: null, error: "Cancelled." };
+      }
       const record = named();
       return { record, meta: { title: record.title, description: record.description, tags: record.tags }, error: null };
     },
@@ -78,6 +93,8 @@ const w = window as unknown as { showDirectoryPicker?: unknown };
 w.showDirectoryPicker = () => Promise.reject(new Error("no picker"));
 
 const SVG_DOC = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
+/** The content identity the scan computes for the fixture file (report R02). */
+const SVG_HASH = `${SOURCE_HASH_PREFIX}${await sha256Hex(new TextEncoder().encode(SVG_DOC))}`;
 const RUN_DIR = "_split_output/2026-10/2026-10-05_23-30-19";
 const PIECE_DIR = `${RUN_DIR}/icon-trophy-star_AI_7/split_04`;
 const AI_NAME = "icon-trophy-star_AI_7_04.png";
@@ -118,7 +135,7 @@ function makeTree(): FakeDir {
   }
   dir.children.set(AI_NAME, new FakeFile(AI_NAME, 20, 2100, "png"));
   dir.children.set(`${STEM}_v2.svg`, new FakeFile(`${STEM}_v2.svg`, SVG_DOC.length, 2201, SVG_DOC));
-  const versions = [svgVersion(`${PIECE_DIR}/${STEM}_v2.svg`, { version: 2 })];
+  const versions = [svgVersion(`${PIECE_DIR}/${STEM}_v2.svg`, { version: 2, review: "approved" })];
   const meta = pairFile(PIECE_DIR, AI_NAME, { id: ID, decision: "approved", versions, preferred: 2 });
   dir.children.set(`${STEM}.svg.json`, new FakeFile(`${STEM}.svg.json`, 10, 2300, serializePairMeta(meta)));
   root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({
@@ -163,7 +180,8 @@ beforeEach(async () => {
   URL.createObjectURL = () => `blob:test-${Math.random().toString(36).slice(2)}`;
   URL.revokeObjectURL = () => undefined;
   hoisted.id = ID;
-  hoisted.fingerprint = `${SVG_DOC.length}:2201`; // the v2 file's size:mtime, as the scan reports it
+  hoisted.holdName = false;
+  hoisted.fingerprint = SVG_HASH; // the v2 file's CONTENT hash, as the scan reports it
   localStorage.clear();
   // The two module-level stores cache across tests; clear both, or one test's
   // draft would decide the next test's row state.
@@ -265,10 +283,38 @@ describe("exporting from a row", () => {
     expect(txt("[data-testid=up-count-processed]")).toContain("1");
   });
 
+  it("selects the visible rows from the header checkbox (R19)", async () => {
+    await mount();
+    const box = () => q(`[data-testid=up-check-${ID}]`) as HTMLInputElement;
+    expect(box().checked).toBe(false);
+    await click("[data-testid=up-check-all]");
+    expect(box().checked).toBe(true);
+    expect(txt("[data-testid=up-count-icons]")).toContain("1");
+    await click("[data-testid=up-check-all]");
+    expect(box().checked).toBe(false);
+  });
+
   it("cancels from the bulk bar and says the completed packages were kept", async () => {
     await mount();
     await click("[data-testid=up-cancel]"); // nothing is running: the button is disabled
     expect((q("[data-testid=up-cancel]") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("cancels a metadata run that is in flight instead of letting it finish", async () => {
+    hoisted.holdName = true; // the request hangs until the cancel aborts it
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await act(async () => { while (calls.length === 0) await new Promise((r) => setTimeout(r, 2)); });
+    await click("[data-testid=up-cancel]");
+    const until = Date.now() + 4000;
+    await act(async () => {
+      while (!txt(`[data-testid=up-state-${ID}]`).includes("Cancelled") && Date.now() < until) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+    });
+    expect(txt(`[data-testid=up-state-${ID}]`)).toContain("Cancelled");
+    // The aborted answer is stored as pending: never an accepted metadata record.
+    expect(localStorage.getItem(UPLOAD_META_KEY) ?? "").not.toContain("\"accepted\"");
   });
 });
 

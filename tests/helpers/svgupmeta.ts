@@ -16,7 +16,10 @@ export function fortyTags(): string[] {
   return [...REQUIRED_TAGS, ...extra].slice(0, TAG_COUNT);
 }
 
-/** An accepted record for pair `p1`, fingerprint `100:200` unless overridden. */
+/** The content identity a fixture source stands for (sha256 of "abc"). */
+export const SOURCE_SHA = "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+/** An accepted record for pair `p1`, SOURCE_SHA's identity unless overridden. */
 export function acceptedMeta(over: Partial<MetaRecord> = {}): MetaRecord {
   return {
     pairId: "p1",
@@ -33,7 +36,7 @@ export function acceptedMeta(over: Partial<MetaRecord> = {}): MetaRecord {
     status: "accepted",
     errors: [],
     warnings: [],
-    sourceFingerprint: "100:200",
+    sourceFingerprint: SOURCE_SHA,
     ...over,
   };
 }

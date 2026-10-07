@@ -71,6 +71,29 @@ export function chosenVersion(versions: readonly SvgVersion[], preferred: number
   return preferredVersion(versions, preferred) ?? newestValid(versions);
 }
 
+/** Generated, validated and usable at all — the shared half of both choices. */
+function usableVersions(versions: readonly SvgVersion[]): SvgVersion[] {
+  return versions.filter((v) => v.status === "generated" && v.validation.ok);
+}
+
+/**
+ * The version an EXPORT may use (R18). Approving the pair approved the reference
+ * pair, not every SVG it produced, so only a review-approved version is eligible:
+ * the user's preferred one when it qualifies, else the newest one that does — and
+ * null (a visible block) when none does. `chosenVersion` stays the DISPLAY rule,
+ * because a reviewer must still see a version that is waiting for review.
+ */
+export function chosenApprovedVersion(versions: readonly SvgVersion[], preferred: number | null): SvgVersion | null {
+  const approved = usableVersions(versions).filter((v) => v.review === "approved");
+  const wanted = approved.find((v) => v.version === preferred);
+  return wanted ?? approved[approved.length - 1] ?? null;
+}
+
+/** Are there usable versions at all — the question the row's message depends on? */
+export function hasUsableVersion(versions: readonly SvgVersion[]): boolean {
+  return usableVersions(versions).length > 0;
+}
+
 /** The chosen version itself — null when the choice cannot be shown. */
 export function preferredVersion(versions: readonly SvgVersion[], preferred: number | null): SvgVersion | null {
   if (preferred === null) return null;

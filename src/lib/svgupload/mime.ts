@@ -62,6 +62,19 @@ export function svgMetadataBlocks(meta: MetaText): string {
   return `<title>${escapeXml(meta.title)}</title><desc>${escapeXml(meta.description)}</desc>${xmpPacket(meta)}`;
 }
 
+/**
+ * Removes the stamp this module writes, so re-stamping REPLACES the previous
+ * text instead of nesting a second title/desc/metadata triple into the file
+ * (which would also make the readback ambiguous — it reads the first title).
+ * Only our own contiguous triple is matched, so an author's own `<title>` after
+ * the stamp survives untouched.
+ */
+export function withoutMetadata(svg: string): string {
+  return svg.replace(STAMP_RE, "");
+}
+
+const STAMP_RE = /<title>[\s\S]*?<\/title>\s*<desc>[\s\S]*?<\/desc>\s*<metadata>[\s\S]*?<rdf:RDF[\s\S]*?<\/metadata>/;
+
 /** Inserts the blocks right after the root open tag (before all artwork). */
 export function withMetadata(svg: string, meta: MetaText | null): string {
   if (meta === null) return svg;

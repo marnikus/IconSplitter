@@ -153,6 +153,7 @@ export function useUploadJobs(input: UploadJobsInput, deps: JobDeps = REAL_DEPS)
   const [note, setNote] = useState<string | null>(() => sessionOf().note);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const queue = useRef<ExportQueue | null>(null);
+  const naming = useRef<AbortController | null>(null);
   const state = useRef(input);
   state.current = input;
   const storeRef = useRef(store);
@@ -162,7 +163,7 @@ export function useUploadJobs(input: UploadJobsInput, deps: JobDeps = REAL_DEPS)
     setJobs((current) => ({ ...current, [id]: value }));
   }, []);
   const context = useContextOf(deps, state, storeRef);
-  const actions = useJobActions({ deps, context, mark, queue, state, storeRef, setBusyIds, setNote, jobs });
+  const actions = useJobActions({ deps, context, mark, queue, naming, state, storeRef, setBusyIds, setNote, jobs });
   return {
     meta: store.records, jobs, busyIds, note, dialog, ...actions,
     dismissNote: () => setNote(null),

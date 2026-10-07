@@ -10,7 +10,7 @@ import { newPairMeta, withVersion, serializePairMeta, parsePairMeta } from "../s
 import { withPreferred } from "../src/lib/pairpreferred";
 import type { SvgVersion } from "../src/lib/svgmodel";
 import {
-  buildUploadRow, buildUploadRows, exportBaseName, isExportOutput,
+  buildUploadRow, buildUploadRows, exportBaseName, exportStateOf, isExportOutput, isStale,
   type UploadSourceInput,
 } from "../src/lib/svgupload/rows";
 
@@ -98,6 +98,30 @@ describe("buildUploadRow — one row, one approved SVG", () => {
     expect(row.versionLabel).toBe("v1 (preferred)");
   });
 
+  it("never exports a version the reviewer declined, even when it is preferred (R18)", () => {
+    const declined = version(2, { review: "declined" });
+    const row = buildUploadRow({ source: source(), meta: metaWith([version(1), declined], 2) });
+    expect(row.svgPath).toBe(`${DIR}/icon-trophy_AI_7_04.svg`); // v1, the approved one
+    expect(row.versionLabel).toBe("v1");
+    expect(row.blocked).toBeNull();
+    expect(row.warnings.some((w) => w.includes("v2"))).toBe(true); // the fallback is stated
+  });
+
+  it("blocks a pair whose usable versions are all waiting for review", () => {
+    const row = buildUploadRow({ source: source(), meta: metaWith([version(1, { review: "pending" })], 1) });
+    expect(row.blocked).toBe("No review-approved SVG version — approve one in Generate SVG");
+    expect(row.svgPath).toBeNull();
+  });
+
+  it("uses the newest approved version when the preferred one was declined", () => {
+    const row = buildUploadRow({
+      source: source(),
+      meta: metaWith([version(1, { review: "declined" }), version(2, { review: "declined" }), version(3)], 2),
+    });
+    expect(row.svgPath).toBe(`${DIR}/icon-trophy_AI_7_04_v3.svg`);
+    expect(row.versionLabel).toBe("v3");
+  });
+
   it("carries NO AI-image reference — the row is the SVG", () => {
     const row = buildUploadRow({ source: source(), meta: metaWith([version(2)], null) });
     expect(Object.keys(row)).not.toContain("aiPath");
@@ -134,6 +158,25 @@ describe("buildUploadRow — one row, one approved SVG", () => {
     });
     expect(row.blocked).toBe("The chosen SVG is not on disk — rescan or regenerate");
     expect(row.warnings.some((w) => w.includes("not found"))).toBe(true);
+  });
+
+  it("reports an interrupted publication as interrupted, not as nothing exported", () => {
+    const row = buildUploadRow({
+      source: source(), meta: metaWith([version(1)], null),
+      exportState: exportStateOf({ exists: true, incomplete: true, record: null }),
+    });
+    expect(row.exportState?.status).toBe("incomplete");
+    expect(row.exportState?.note).toContain("interrupted");
+    expect(isStale(row)).toBe(true);
+  });
+
+  it("reports the record's own status and moment for a package a reader accepted", () => {
+    const state = exportStateOf({ exists: true, incomplete: false, record: { status: "processed", updatedAt: "2026-10-07T10:00:00Z" } });
+    expect(state).toEqual({ status: "processed", at: "2026-10-07T10:00:00Z", note: "Processed" });
+  });
+
+  it("says nothing about a package that does not exist yet", () => {
+    expect(exportStateOf({ exists: false, incomplete: false, record: null })).toBeNull();
   });
 
   it("keeps the fingerprint of the chosen file for staleness checks", () => {

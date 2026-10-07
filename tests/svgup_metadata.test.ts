@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import type { FetchLike } from "../src/lib/svgrequest";
 import { chatUrlOf, generateMetadata, metadataRequest, readStoredRecord, type MetadataArgs } from "../src/svgupload/metadata";
-import { fortyTags } from "./helpers/svgupmeta";
+import { fortyTags, SOURCE_SHA } from "./helpers/svgupmeta";
 
 const ANSWER = [
   "TITLE: Trophy award symbol for winners. Icon of trophy and award.",
@@ -61,7 +61,7 @@ function argsOf(over: Partial<MetadataArgs> = {}): MetadataArgs {
     image: "data:image/jpeg;base64,AAAA",
     params: { temperature: null, maxTokens: 8000, effort: "low" },
     pairId: "pair_1",
-    sourceFingerprint: "100:200",
+    sourceFingerprint: SOURCE_SHA,
     provider: "requesty",
     stallMs: 120_000,
     ...over,
@@ -97,7 +97,7 @@ describe("an accepted answer", () => {
     expect(out.record.cost.actual).toBe(0.0007);
     expect(out.record.at).toBe("2026-10-07T10:00:00.000Z");
     expect(out.record.model).toBe("gemini-3.1-flash-lite");
-    expect(out.record.sourceFingerprint).toBe("100:200"); // the provenance the store compares
+    expect(out.record.sourceFingerprint).toBe(SOURCE_SHA); // the provenance the store compares
     expect(seen.calls()).toBe(1);
   });
 

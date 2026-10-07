@@ -12,7 +12,9 @@ import { pickBackground } from "./UploadControls";
 
 export interface UploadBulkProps {
   counts: UploadCounts;
-  checkedCount: number;
+  /** The rows the user ticked, and the visible ones "select all" may act on. */
+  checked: string[];
+  checkable: string[];
   view: UploadView;
   zoom: number;
   background: PreviewBackground;
@@ -51,12 +53,16 @@ export default function UploadBulk(p: UploadBulkProps) {
 
 /** The header checkbox plus the four counters — the counts come off the rows. */
 function Scope({ p }: { p: UploadBulkProps }) {
-  const { counts, checkedCount } = p;
+  const { counts } = p;
+  // The header speaks about what the user can SEE: a hidden row left ticked keeps
+  // its tick without making this box look unchecked (R19).
+  const all = p.checkable.length > 0 && p.checkable.every((id) => p.checked.includes(id));
+  const partial = !all && p.checked.length > 0;
   return (
     <label className="up-head">
       <input type="checkbox" data-testid="up-check-all" aria-label="Select all visible icons"
-        checked={counts.icons > 0 && checkedCount === counts.icons}
-        ref={(el) => { if (el) el.indeterminate = checkedCount > 0 && checkedCount < counts.icons; }}
+        checked={all}
+        ref={(el) => { if (el) el.indeterminate = partial; }}
         onChange={(e) => p.onToggleAll(e.target.checked)} />
       <span className="svg-summary" data-testid="up-counts">
         <Chip testid="up-count-icons" text="icons" n={counts.icons} />
@@ -119,11 +125,11 @@ function Zoom({ p }: { p: UploadBulkProps }) {
  * that already committed — the button says so when the cursor rests on it.
  */
 function JobActions({ p }: { p: UploadBulkProps }) {
-  const idle = p.busy || p.checkedCount === 0;
+  const idle = p.busy || p.checked.length === 0;
   return (
     <div className="svg-filters">
       <button className="svg-btn" data-testid="up-generate-selected" disabled={idle} onClick={p.jobs.onGenerate}>
-        Generate metadata for {p.checkedCount}
+        Generate metadata for {p.checked.length}
       </button>
       <button className="svg-btn primary" data-testid="up-export-selected" disabled={idle} onClick={p.jobs.onExport}>
         Export selected
@@ -147,10 +153,10 @@ function Actions({ p }: { p: UploadBulkProps }) {
         {BG_PRESETS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
         <option value="custom">Custom</option>
       </select>
-      <button className="svg-btn primary" data-testid="up-apply" disabled={p.busy || p.checkedCount === 0} onClick={p.onApply}>
-        Apply to {p.checkedCount} selected
+      <button className="svg-btn primary" data-testid="up-apply" disabled={p.busy || p.checked.length === 0} onClick={p.onApply}>
+        Apply to {p.checked.length} selected
       </button>
-      <button className="svg-btn" data-testid="up-reset-selected" disabled={p.busy || p.checkedCount === 0} onClick={p.onReset}>
+      <button className="svg-btn" data-testid="up-reset-selected" disabled={p.busy || p.checked.length === 0} onClick={p.onReset}>
         Reset to defaults
       </button>
     </div>

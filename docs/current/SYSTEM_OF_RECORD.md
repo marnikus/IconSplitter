@@ -1528,3 +1528,135 @@ read happens without the user's own gesture (a boot-time scan is silently
 refused), and no new control appears — the bar is still one green button, one
 `Rescan` and one read-only row. Design:
 `archive/2026-10-05-path-capture-recovery/design.md`.
+
+
+## 20. The "SVG to upload" tab (2026-10-07)
+
+The tab turns the approved SVG of every pair into the files an icon upload
+needs: one package per icon, written into the pair's own folder. What it does
+NOT do is stated as plainly as what it does: it never uploads anything to a
+website, and it never edits an approved source.
+
+```
+<pair folder>/export/<base>.svg   <base>.jpg   <base>.eps (optional)   export.json
+```
+
+The tab id is `svgUpload` (`ui/Workbench.tsx`, `lib/session.ts`, the session
+state), the panel is `svgupload/UploadPanel.tsx`, and the selectors are §R of
+`UI_SELECTORS.md`. The tab shares the folder the other SVG tabs remember
+(`SVG_HANDLE_KEY`) and reads it through `svgupload/usescan.ts` — one picker, one
+race-safe runner, one `readPackage` per row so an interrupted publication is
+visible instead of silently reused.
+
+**Module ownership (design §2).** Everything that can be decided without a
+browser lives in `lib/svgupload/*` and is unit-tested: the length rule
+(`units.ts`), the metadata text and its readback (`mime.ts`), the JPEG segment
+writer (`jpegseg.ts`), the metadata policy (`metaprompt.ts`), the plan and the
+export document (`prepare.ts`, `fit.ts`), the record and its fingerprints
+(`exportjson.ts`, `exportrecord.ts`), the regeneration rules (`states.ts`), the
+row/selection derivations (`rows.ts`, `view.ts`), the EPS rules and the local
+EPS writer (`eps.ts`, `epswrite.ts`), the optimizer policy (`optimize.ts`), and
+the geometry engine (`geom/*`). The browser half in `svgupload/*` owns the
+handles, the canvas, SVGO, the fetch calls and the React wiring, and passes the
+expensive work through the `ExportIo` seams so the pipeline can be tested with
+fakes.
+
+**A run is a sequence of recorded stages** (`svgupload/runstep.ts`):
+`preflight → metadata (only when needed) → prepare (or reuse) → optimize →
+embed → render → eps → validate → commit`. Each stage records itself with its
+status and the reason; nothing is written outside the package folder, and the
+publish step is the only writer.
+
+**Content identity (report R02).** The source a row exports is identified by the
+SHA-256 of its BYTES (`lib/svgupload/sourcehash.ts`, `"sha256:…"`), attached by
+`svgupload/scanhash.ts` during the scan. The same value is the row's
+fingerprint, the metadata record's `sourceFingerprint` and the export record's
+`pair.fingerprint`/**`fingerprints.source`**, so an in-place edit that keeps the
+path, the size and the mtime still makes the package and the metadata stale. An
+empty fingerprint never reaches the staleness compare.
+
+**Metadata** is one paid request per icon, and the answer is kept before any
+export (`iconSplitter.upload.meta.v1`): `draft → accepted | rejected`, with the
+exact prompt, provider, model, request id, usage and cost recorded. An accepted
+answer that passes the policy (40 tags, the seven mandatory terms, title and
+description bounds) is what `export.json` and both file formats carry. An
+accepted answer for the CURRENT source is reused without asking again; a source
+change makes it stale and it is regenerated only when a run needs it. An
+interrupted request is reported as unknown, never silently resent. The tab's log
+entries (`svgupload/uploadlog.ts`) name the icon and the outcome and have no
+field for the metadata text, the prompt, the response body or the key.
+
+**A metadata-only edit does not rebuild the artwork** (`svgupload/reembed.ts`,
+report R12/§5). When the accepted text changed but the source and the settings
+did not, the run re-stamps the ALREADY PUBLISHED SVG and JPEG
+(`publishedSvg`/`publishedJpeg` seams) and carries the kept EPS forward: no
+render, no provider request, and the 15 MP canvas is not touched for a renamed
+title.
+
+**SVG optimization** (report §3.1) runs the full SVGO preset behind an
+appearance gate: with a renderer available, both documents are compared at
+256×256 with a 0.5 % budget at tolerance 32, and an optimisation that changes
+the picture, shrinks nothing, or cannot be verified is refused — the
+unoptimised copy is written and the reason is recorded. With no renderer only
+`removeDoctype` and `removeComments` run. The chosen mode and SVGO's version go
+into the package's tool list.
+
+**EPS is written locally first** (report §3.2, §9; `lib/svgupload/epswrite.ts`,
+`svgupload/epsio.ts`). Icons inside the writer's subset — paths, basic shapes,
+transforms, fills, strokes, dashes, solid colours — produce a real EPSF-3.0 file
+offline: the page is the ARTBOARD at 96 dpi (artboard units × 72/96 points), so
+a configured 2.2 pt stroke prints as `2.2 setlinewidth`, geometry is emitted as
+moveto/lineto/curveto/closepath with SVG's top-left origin flipped, and nothing
+is rasterized. A document the subset cannot draw (gradients, filters, text,
+opacity, markers, clipping, complex CSS) names its features and falls back to
+the configured converter, which is asked with the artboard's real width and
+height. With neither available the EPS is absent, the reason is recorded on the
+row and in the stage, the export is **Partial** — never green — and no file is
+invented. A file that is not genuine PostScript is refused before it is
+written.
+
+**The geometry engine is shared** (`lib/svgupload/geom/*`, ported from the
+reviewed base branch): transforms, path parsing (including arcs), the minimal
+class/tag CSS cascade, and the visible-bounds math that grows geometry bounds by
+the stroke — including the miter-joint extents capped by the miterlimit, so the
+result is a superset that can never crop. The export PLAN still fits the
+document's own canvas (`prepare.boundsOfDocument`); switching the fit to
+measured ink bounds is the open geometry decision (report §9), and the
+`vector-effect: non-scaling-stroke` exemption is carried in the scene so the
+stroke override and the EPS writer both skip exactly those elements.
+
+**Publication is package-atomic** (report R01). Files are staged
+(`.export-staging`), the live files are backed up (`.export-backup`), the
+artifacts are published and `export.json` is written LAST; a failure rolls the
+live files back and a reader that finds no record with the files present reports
+the package as `incomplete`. A run that cannot validate publishes nothing at
+all: a required output failure (the SVG, the requested JPEG) returns BEFORE the
+publish step, while a missing OPTIONAL EPS is Partial with the named reason.
+Cancellation is checked at the publication boundary: nothing new is written and
+packages finished earlier are kept.
+
+**Settings** are per icon with an origin: global defaults
+(`iconSplitter.upload.settings.v1`), an optional per-row override, and every
+field says which of the two it came from. Units are explicit (`pt`, `px`, `%`)
+and the record states the resolved numbers and the DPI (`units.ts`: 96 px/in,
+72 pt/in, so 2.2 pt = 2.9333 px — report §9). A settings change rebuilds the
+affected outputs and REUSES the accepted metadata; it never re-asks the model.
+
+**The record** (`export.json`) is the proof of what happened: schema version,
+the source reference with its content hash, the effective settings with their
+resolved numbers, the accepted metadata with its provenance, the tool list with
+versions and configurations, one output record per file (path, byte count, hash
+of the final bytes), the stage list with statuses and reasons, the validation
+result, the status, and the content fingerprints for source, settings, SVG and
+JPEG.
+
+**Verification.** `tests/svgup_*.ts{,x}` cover the rules above: rows/selection,
+the scan and its content hashes, the metadata policy and the store, the plan and
+the export document, the JPEG segment round trip, the optimizer gate, the
+re-embed path, the job pipeline with fakes for the three expensive seams, the
+package protocol including rollback, the geometry port, the local EPS writer and
+the EPS seam, and the UI through `UploadPanel`. The merge report's §8 acceptance
+matrix is the running list; the rows exercised so far are listed in
+`archive/2026-10-07-svg-upload-branch-merge/design.md` §4, which is also where
+the remaining blockers (per-icon exception isolation, the measured-dimensions
+record fix, one schema/folder identity, preview URL lifecycle) are tracked.

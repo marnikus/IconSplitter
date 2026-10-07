@@ -6,7 +6,10 @@
 // is exercised here on real SVGO output, so the test would catch a policy
 // drift in either direction.
 import { describe, expect, it } from "vitest";
-import { ALLOWED_PLUGINS, PRESET_PLUGINS, REFUSED, compareSignatures, optimizeConfig, svgSignature } from "../src/lib/svgupload/optimize";
+import {
+  ALLOWED_PLUGINS, PRESET_PLUGINS, REFUSED, compareSignatures, deliveryConfig, optimizeConfig, rendersMatch,
+  structuralIssues, svgSignature,
+} from "../src/lib/svgupload/optimize";
 import { optimizeSvg } from "../src/svgupload/optimizer";
 import { buildExportSvg, planExport } from "../src/lib/svgupload/prepare";
 import { readMetadata } from "../src/lib/svgupload/mime";
@@ -50,8 +53,8 @@ describe("the pinned config", () => {
 });
 
 describe("optimizeSvg on a real document", () => {
-  it("keeps viewBox, size, geometry, transforms, colours, strokes and metadata", () => {
-    const out = optimizeSvg(SVG, true);
+  it("keeps viewBox, size, geometry, transforms, colours, strokes and metadata", async () => {
+    const out = await optimizeSvg(SVG, true);
     expect(out.applied).toBe(true);
     expect(out.differences).toEqual([]);
     const sig = svgSignature(out.svg);
@@ -67,32 +70,32 @@ describe("optimizeSvg on a real document", () => {
     expect(out.svg).not.toContain("vector-effect");
   });
 
-  it("parses and keeps a REAL export document — metadata namespaces on the root", () => {
+  it("parses and keeps a REAL export document — metadata namespaces on the root", async () => {
     const meta = { title: "The Vector Icon of Focus and Clarity. Sharp Clean Lines.", description: "A minimal square icon for interfaces, labels, buttons and print.", tags: ["icon", "pictogram", "vector"] };
     const built = buildExportSvg({ source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>`, plan: planFor(), meta });
     expect(built.svg).toContain("xmlns:rdf="); // bound on the root, where a parser looks for it
-    const out = optimizeSvg(built.svg, true);
+    const out = await optimizeSvg(built.svg, true);
     expect(out.differences).toEqual([]);
     expect(out.applied).toBe(true);
     expect(readMetadata(out.svg)).toEqual(meta);
   });
 
-  it("records what it did: version, before/after bytes", () => {
-    const out = optimizeSvg(SVG, true);
+  it("records what it did: version, before/after bytes", async () => {
+    const out = await optimizeSvg(SVG, true);
     expect(out.version).toMatch(/^\d+\.\d+\.\d+/);
     expect(out.bytesBefore).toBe(new TextEncoder().encode(SVG).length);
     expect(out.bytesAfter).toBeLessThanOrEqual(out.bytesBefore + 1); // may grow only by nothing
   });
 
-  it("returns the document untouched when the setting is off", () => {
-    const out = optimizeSvg(SVG, false);
+  it("returns the document untouched when the setting is off", async () => {
+    const out = await optimizeSvg(SVG, false);
     expect(out.svg).toBe(SVG);
     expect(out.applied).toBe(false);
     expect(out.bytesAfter).toBe(out.bytesBefore);
   });
 
-  it("falls back to the original when the document cannot be read", () => {
-    const out = optimizeSvg("<svg><path", true);
+  it("falls back to the original when the document cannot be read", async () => {
+    const out = await optimizeSvg("<svg><path", true);
     expect(out.svg).toBe("<svg><path");
     expect(out.applied).toBe(false);
   });
@@ -136,5 +139,51 @@ describe("compareSignatures — the evidence", () => {
     expect(svgSignature(a.elements.join())).toBeDefined();
     expect(b.paint).toEqual(a.paint);
     expect(compareSignatures(a, b)).toEqual([]);
+  });
+});
+
+// The report's §3.1 pattern: the optimizer is allowed to rewrite geometry ONLY
+// when the two documents still render to the same pixels, and a difference is a
+// refusal rather than a leap of faith. The comparison is pure here, so the budget
+// itself is checkable; the render seam lives in the browser half.
+describe("the appearance gate", () => {
+  const opts = { width: 20, height: 20, tolerance: 32, budgetPct: 0.5 };
+  const white = () => new Uint8Array(20 * 20 * 4).fill(255);
+  /** Blacks out the red channel of the first `count` pixels. */
+  const darken = (count: number) => {
+    const p = white();
+    for (let i = 0; i < count; i += 1) p[i * 4] = 0;
+    return p;
+  };
+
+  it("accepts antialiasing inside the budget and refuses a real difference", () => {
+    const a = white();
+    const close = Uint8Array.from(a);
+    close[5] = 200; // one channel of one pixel: inside the tolerance
+    expect(rendersMatch(a, close, opts)).toBe(true);
+    // 400 pixels allow 2; the third one beyond the tolerance is the difference
+    expect(rendersMatch(a, darken(2), opts)).toBe(true);
+    expect(rendersMatch(a, darken(3), opts)).toBe(false);
+  });
+
+  it("treats a side that could not be rendered as a difference, never as a pass", () => {
+    expect(rendersMatch(white(), null, opts)).toBe(false);
+    expect(rendersMatch(null, white(), opts)).toBe(false);
+    expect(rendersMatch(white(), new Uint8Array(4), opts)).toBe(false);
+  });
+
+  it("states the delivery config as data — the three promises the preset would break, kept", () => {
+    const preset = deliveryConfig().plugins[0];
+    expect(preset.name).toBe("preset-default");
+    expect(preset.params.overrides).toEqual({ removeDesc: false, removeMetadata: false, removeUselessStrokeAndFill: false });
+  });
+
+  it("calls a viewBox or a size change structural, and a rewritten path data none", () => {
+    expect(structuralIssues("<svg viewBox=\"0 0 4 4\"><path d=\"M0 0\"/></svg>", "<svg viewBox=\"0 0 4 4\"><path d=\"M0 0h1v1z\"/></svg>")).toEqual([]);
+    const issues = structuralIssues(
+      "<svg viewBox=\"0 0 4 4\" width=\"4\" height=\"4\"><path d=\"M0 0\"/></svg>",
+      "<svg viewBox=\"0 0 8 8\" width=\"4\" height=\"4\"><path d=\"M0 0\"/></svg>",
+    );
+    expect(issues[0]).toContain("viewBox");
   });
 });
