@@ -17,7 +17,8 @@ export interface PlanCtx {
 
 /** The one split the confirmation and the run both see (RUN-1). */
 export function planOf(c: PlanCtx, ids: string[]): BatchPlan[] {
-  const sources = c.rows.filter((r) => ids.includes(r.source.id)).map((r) => toBatchSource(r.source));
+  const byId = new Map(c.rows.map((r) => [r.source.id, r] as const));
+  const sources = ids.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => r !== undefined).map((r) => toBatchSource(r.source));
   return planBatches(sources, perRequestOf(c));
 }
 

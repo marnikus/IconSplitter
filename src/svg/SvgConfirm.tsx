@@ -70,7 +70,10 @@ interface ConfirmPlan {
 
 /** The whole split, computed once per dialog — the runner uses the same maths. */
 function useConfirmPlan(p: SvgConfirmProps): ConfirmPlan {
-  const picked = useMemo(() => p.rows.filter((r) => p.ids.includes(r.source.id)), [p.rows, p.ids]);
+  const picked = useMemo(() => {
+    const byId = new Map(p.rows.map((r) => [r.source.id, r] as const));
+    return p.ids.map((id) => byId.get(id)).filter((r): r is SvgRow => r !== undefined);
+  }, [p.rows, p.ids]);
   const perRequest = clampImagesPerRequest(p.config.imagesPerRequest);
   const plans = useMemo(() => planBatches(picked.map((r) => toBatchSource(r.source)), perRequest), [picked, perRequest]);
   const problems = validateBatchPlan(plans, perRequest);
@@ -171,6 +174,10 @@ interface CompositeState {
   error: string | null;
 }
 
+function cacheKey(planId: string, sources: readonly SvgSource[]): string {
+  return `${planId}:${sources.map((s) => `${s.id}:${s.fingerprint}`).join("|")}`;
+}
+
 /** Builds the page's contact sheet once, in memory, and remembers it. */
 function usePageComposite(
   rootRef: { current: DirHandleLike | null },
@@ -178,20 +185,21 @@ function usePageComposite(
   sources: readonly SvgSource[],
   cache: Map<string, BuiltComposite>,
 ): CompositeState {
-  const [state, setState] = useState<CompositeState>(() => ({ built: cache.get(planId) ?? null, error: null }));
+  const key = useMemo(() => cacheKey(planId, sources), [planId, sources]);
+  const [state, setState] = useState<CompositeState>(() => ({ built: cache.get(key) ?? null, error: null }));
   useEffect(() => {
-    const hit = cache.get(planId);
+    const hit = cache.get(key);
     if (hit) return setState({ built: hit, error: null });
     const root = rootRef.current;
     if (root === null) return setState({ built: null, error: "Pick the source folder first" });
     let live = true;
     setState({ built: null, error: null });
     void buildComposite(root, sources).then(
-      (built) => { if (live) { cache.set(planId, built); setState({ built, error: null }); } },
+      (built) => { if (live) { cache.set(key, built); setState({ built, error: null }); } },
       (error: unknown) => { if (live) setState({ built: null, error: reason(error) }); },
     );
     return () => { live = false; };
-  }, [rootRef, planId, sources, cache]);
+  }, [rootRef, key, sources, cache]);
   return state;
 }
 
