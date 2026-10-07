@@ -178,5 +178,5 @@ function finish(state: StreamState, headerId: string | null): SendOut {
     const detail = state.badFrames > 0 ? `the provider sent ${state.badFrames} unreadable frame(s)` : "the provider completed without an answer";
     return { ok: false, failure: { kind: "malformed", message: detail, retryAfterMs: null, retryable: false, status: 200 } };
   }
-  return { ok: true, text: state.text, usage: state.usage, requestId: headerId ?? state.requestId, status: 200, frames: state.frames };
+  return { ok: true, text: state.text, usage: state.usage, requestId: headerId ?? state.requestId, status: 200, frames: state.frames, finishReason: state.finishReason };
 }

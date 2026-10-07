@@ -26,7 +26,8 @@ export interface DirHandleLike {
   getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandleLike>;
   getFileHandle(name: string, opts?: { create?: boolean }): Promise<FileHandleLike>;
   entries(): AsyncIterable<[string, DirHandleLike | FileHandleLike]>;
-  removeEntry?(name: string): Promise<void>; // real FS handles provide this
+  /** Real FS handles remove files and (with `recursive`) whole subfolders. */
+  removeEntry?(name: string, opts?: { recursive?: boolean }): Promise<void>;
 }
 
 /** Recursively snapshots a directory into a TreeNode (files get size/mtime). */
