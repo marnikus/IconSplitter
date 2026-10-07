@@ -32,12 +32,12 @@ const RECT_ICON = `<svg ${NS} viewBox="0 0 100 100" width="100" height="100"><re
 
 describe("prepareExportSvg — the re-rooted export copy", () => {
   it("re-roots the viewBox to the padded artboard and centres the artwork", () => {
-    const { result, root } = prepared(RECT_ICON); // default padding 8%
+    const { result, root } = prepared(RECT_ICON); // default padding 8%, default 512 artboard
     // bounds 80×80 at (10,10); pad = 6.4 → artboard 92.8; offset = 6.4 − 10 = −3.6
     expect(result.fit.viewBox).toBe("0 0 92.8 92.8");
     expect(root.getAttribute("viewBox")).toBe("0 0 92.8 92.8");
-    expect(root.getAttribute("width")).toBe("92.8");
-    expect(root.getAttribute("height")).toBe("92.8");
+    expect(root.getAttribute("width")).toBe("512");
+    expect(root.getAttribute("height")).toBe("512");
     const group = root.querySelector("g");
     expect(group?.getAttribute("transform")).toBe("translate(-3.6 -3.6)");
   });
@@ -51,6 +51,21 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
     expect(bg?.getAttribute("x")).toBe("0");
     expect(bg?.getAttribute("y")).toBe("0");
     expect(root.firstElementChild).toBe(bg);
+  });
+
+  it("writes version 1.1 and the SVG namespace onto the root", () => {
+    const { root } = prepared(RECT_ICON);
+    expect(root.getAttribute("version")).toBe("1.1");
+    expect(root.getAttribute("xmlns")).toBe("http://www.w3.org/2000/svg");
+  });
+
+  it("paints the background fill-only (stroke none, never inherits the artwork's stroke)", () => {
+    const stroked = `<svg ${NS} viewBox="0 0 24 24" stroke="#000000"><rect x="2" y="2" width="20" height="20" fill="none" stroke-width="2"/></svg>`;
+    const { root } = prepared(stroked, { background: "#ff0000" });
+    const bg = root.firstElementChild;
+    expect(bg?.nodeName.toLowerCase()).toBe("rect");
+    expect(bg?.getAttribute("fill")).toBe("#ff0000");
+    expect(bg?.getAttribute("stroke")).toBe("none");
   });
 
   it("leaves the artwork itself untouched apart from the wrapper", () => {
@@ -71,9 +86,26 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
 
   it("pads non-square artwork uniformly (percent of the largest side)", () => {
     const src = `<svg ${NS} viewBox="0 0 200 100"><rect x="0" y="0" width="200" height="100" fill="#000"/></svg>`;
+    // default 512 artboard is square: 240×140 padded → 240×240 viewBox, centred
     const { result } = prepared(src, { paddingPct: 10 });
-    // pad = 200·10% = 20 → artboard 240×140
-    expect(result.fit.viewBox).toBe("0 0 240 140");
+    expect(result.fit.viewBox).toBe("0 0 240 240");
+    expect(result.fit.outW).toBe(512);
+    expect(result.fit.outH).toBe(512);
+  });
+
+  it("a custom artboard keeps its own aspect (no stretch)", () => {
+    const src = `<svg ${NS} viewBox="0 0 200 100"><rect x="0" y="0" width="200" height="100" fill="#000"/></svg>`;
+    const { result, root } = prepared(src, { paddingPct: 10, artboard: "custom", artboardWidth: 800, artboardHeight: 600 });
+    expect(result.fit.artW / result.fit.artH).toBeCloseTo(800 / 600, 5);
+    expect(root.getAttribute("width")).toBe("800");
+    expect(root.getAttribute("height")).toBe("600");
+  });
+
+  it("a square preset on square art sets width/height to the preset", () => {
+    const { root, result } = prepared(RECT_ICON, { artboard: "1024" });
+    expect(root.getAttribute("width")).toBe("1024");
+    expect(root.getAttribute("height")).toBe("1024");
+    expect(result.fit.viewBox).toBe("0 0 92.8 92.8");
   });
 
   it("is deterministic and never modifies the source string", () => {

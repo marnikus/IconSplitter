@@ -23,6 +23,12 @@ export interface UploadSettings {
   optimizeSvg: boolean;
   /** Also write a genuine EPS (default off). */
   includeEps: boolean;
+  /** Final artboard preset: square side in px, or "custom" for W×H below. */
+  artboard: string;
+  /** Custom artboard width in px (used only when artboard = "custom"). */
+  artboardWidth: number;
+  /** Custom artboard height in px (used only when artboard = "custom"). */
+  artboardHeight: number;
 }
 
 export type SettingsOverrides = Partial<UploadSettings>;
@@ -40,6 +46,11 @@ export const QUALITY_MIN = 0.5;
 export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
 export const BACKGROUND_DEFAULT = "#ffffff";
+export const ARTBOARD_PRESETS = ["256", "512", "1024", "2048", "4096", "custom"] as const;
+export const ARTBOARD_DEFAULT = "512";
+export const ARTBOARD_MIN = 16;
+export const ARTBOARD_MAX = 4096;
+export const ARTBOARD_SIZE_DEFAULT = 512;
 
 export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   paddingPct: PADDING_DEFAULT,
@@ -49,6 +60,9 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
   includeEps: false,
+  artboard: ARTBOARD_DEFAULT,
+  artboardWidth: ARTBOARD_SIZE_DEFAULT,
+  artboardHeight: ARTBOARD_SIZE_DEFAULT,
 };
 
 export function clampPaddingPct(value: unknown): number {
@@ -65,6 +79,17 @@ export function clampMegapixels(value: unknown): number {
 
 export function clampQuality(value: unknown): number {
   return clampNum(value, QUALITY_MIN, QUALITY_MAX, QUALITY_DEFAULT);
+}
+
+/** A preset id, or the default when unknown (RULE 13: never a guess). */
+export function clampArtboard(value: unknown): string {
+  return typeof value === "string" && (ARTBOARD_PRESETS as readonly string[]).includes(value)
+    ? value
+    : ARTBOARD_DEFAULT;
+}
+
+export function clampArtboardSize(value: unknown): number {
+  return clampNum(value, ARTBOARD_MIN, ARTBOARD_MAX, ARTBOARD_SIZE_DEFAULT);
 }
 
 function clampNum(value: unknown, min: number, max: number, fallback: number): number {
@@ -84,6 +109,9 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
     includeEps: raw.includeEps === true,
+    artboard: clampArtboard(raw.artboard),
+    artboardWidth: clampArtboardSize(raw.artboardWidth),
+    artboardHeight: clampArtboardSize(raw.artboardHeight),
   };
 }
 
@@ -101,12 +129,36 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   }
   if (typeof raw.optimizeSvg === "boolean") out.optimizeSvg = raw.optimizeSvg;
   if (typeof raw.includeEps === "boolean") out.includeEps = raw.includeEps;
+  parseArtboardOverrides(raw, out);
   return out;
+}
+
+function parseArtboardOverrides(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  if (typeof raw.artboard === "string" && (ARTBOARD_PRESETS as readonly string[]).includes(raw.artboard)) {
+    out.artboard = raw.artboard;
+  }
+  if (typeof raw.artboardWidth === "number") out.artboardWidth = clampArtboardSize(raw.artboardWidth);
+  if (typeof raw.artboardHeight === "number") out.artboardHeight = clampArtboardSize(raw.artboardHeight);
 }
 
 /** The settings one icon exports with: defaults under, overrides on top. */
 export function effectiveSettings(defaults: UploadSettings, overrides: SettingsOverrides): UploadSettings {
   return { ...defaults, ...overrides };
+}
+
+export interface ArtboardSize {
+  width: number;
+  height: number;
+}
+
+/** The final artboard px: the preset's square, or the custom W×H. */
+export function artboardSizeOf(s: UploadSettings): ArtboardSize {
+  if (s.artboard === "custom") {
+    return { width: Math.round(clampArtboardSize(s.artboardWidth)), height: Math.round(clampArtboardSize(s.artboardHeight)) };
+  }
+  const side = Number(s.artboard);
+  const square = Number.isFinite(side) ? Math.round(clampArtboardSize(side)) : ARTBOARD_SIZE_DEFAULT;
+  return { width: square, height: square };
 }
 
 /** Which fields an override actually pins — the "overridden" markers in the UI. */
@@ -117,7 +169,8 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
   return a.paddingPct === b.paddingPct && a.background === b.background && a.strokePt === b.strokePt
     && a.jpegMegapixels === b.jpegMegapixels && a.jpegQuality === b.jpegQuality
-    && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps;
+    && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps
+    && a.artboard === b.artboard && a.artboardWidth === b.artboardWidth && a.artboardHeight === b.artboardHeight;
 }
 
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
@@ -125,6 +178,7 @@ export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
     round3(s.paddingPct), s.background, round3(s.strokePt),
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
+    s.artboard, Math.round(s.artboardWidth), Math.round(s.artboardHeight),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

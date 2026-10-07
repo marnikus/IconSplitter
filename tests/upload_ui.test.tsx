@@ -12,7 +12,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { AUTH_HEADER } from "../src/lib/upload/gemini";
-import { MANDATORY_TAGS } from "../src/lib/upload/meta";
 import { JOURNAL_KEY } from "../src/upload/journal";
 import { UPLOAD_JOBS_KEY, forgetRestoreNote } from "../src/upload/jobstore";
 import { getLogState, resetLogStore } from "../src/log/logstore";
@@ -54,10 +53,10 @@ const COURT = pairId(DIR, "court", "");
 /** The one approved SVG document the fixtures hold — the preview never alters it. */
 const SAVED_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>`;
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 const GOOD_ANSWER = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
 const BAD_ANSWER = `Title: Too short. No tags named\nDescription: way too short\nTags: icon, pictogram`;
 
@@ -416,7 +415,7 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     const editor = q("[data-testid=upload-prompt]") as HTMLTextAreaElement;
     expect(editor).not.toBeNull();
     expect(editor.readOnly).toBe(false);
-    expect(editor.value).toContain("exactly 40 unique keywords");
+    expect(editor.value).toContain("at least 10 unique keywords");
     // the panel is its own section, and the Gemini card does not contain it
     expect(q("[data-testid=upload-prompt-panel]")).not.toBeNull();
     expect(q("[data-testid=upload-provider-card] [data-testid=upload-prompt]")).toBeNull();
@@ -441,7 +440,7 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     expect(text("[data-testid=upload-prompt-copy]")).toContain("custom");
 
     await click("[data-testid=upload-prompt-reset]");
-    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("exactly 40 unique keywords");
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("at least 10 unique keywords");
     expect(text("[data-testid=upload-prompt-copy]")).toContain("default");
   });
 
@@ -578,6 +577,31 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await click("[data-testid=upload-set-close]");
   });
 
+  it("pins the artboard preset per icon and shows the final size in the row", async () => {
+    await mount(makeRoot());
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(text("[data-testid=upload-set-marker-artboard]")).toBe("inherited");
+    await pick("[data-testid=upload-set-artboard]", "1024");
+    expect(text("[data-testid=upload-set-marker-artboard]")).toBe("overridden");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("1024×1024");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("1 field overridden");
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG]).toEqual({ artboard: "1024" });
+    await click("[data-testid=upload-set-close]");
+  });
+
+  it("edits a custom W×H artboard and shows it in the row", async () => {
+    await mount(makeRoot());
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await pick("[data-testid=upload-set-artboard]", "custom");
+    await type("[data-testid=upload-set-artboard-width]", "1920");
+    await type("[data-testid=upload-set-artboard-height]", "1080");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("1920×1080");
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG]).toEqual({ artboard: "custom", artboardWidth: 1920, artboardHeight: 1080 });
+    await click("[data-testid=upload-set-close]");
+  });
+
   it("applies the defaults to the selection as ONE undoable entry", async () => {
     await mount(makeRoot());
     await check(FOG);
@@ -586,7 +610,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("7 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("10 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -626,7 +650,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     // the exact request preview: prompt, endpoint, provider, auth rule
-    expect(text("[data-testid=upload-meta-prompt]")).toContain("exactly 40 unique keywords");
+    expect(text("[data-testid=upload-meta-prompt]")).toContain("at least 10 unique keywords");
     expect(text("[data-testid=upload-meta-endpoint]")).toContain("generativelanguage.googleapis.com");
     expect(text("[data-testid=upload-meta-provider]")).toContain("Gemini");
     expect(text("[data-testid=upload-meta-backdrop]")).toContain("never resent on its own");
@@ -637,12 +661,12 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(t.calls[0].key).toBe(fakeKey("AIza", "ui_test_key_1")); // the header, never the URL
     expect(t.calls[0].url).not.toContain("key=");
     const body = JSON.parse(t.calls[0].body);
-    expect(body.contents[0].parts[0].text).toContain("exactly 40 unique keywords");
+    expect(body.contents[0].parts[0].text).toContain("at least 10 unique keywords");
     expect(body.contents[0].parts[1].inlineData.mimeType).toBe("image/jpeg");
 
     // the fields are editable and show the generated text
     expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toContain("Minimal line icon of growth");
-    expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(40);
+    expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(TAGS.length);
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
     // edit + accept (no record yet → no auto export)
@@ -756,7 +780,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click(`[data-testid=upload-copy-title-${FOG}]`);
     await click(`[data-testid=upload-copy-tags-${FOG}]`);
     expect(clip.written[0]).toContain("Minimal line icon of growth");
-    expect(clip.written[1].split(",")).toHaveLength(40);
+    expect(clip.written[1].split(",")).toHaveLength(TAGS.length);
   });
 
   itSlow("shows the validation errors for an invalid answer and refuses to accept it", async () => {
@@ -769,9 +793,9 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("invalid"), "the invalid state");
-    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("tags must be exactly 40");
+    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("tags must be at least 10");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
-    expect(text("[data-testid=upload-toast]")).toContain("tags must be exactly 40");
+    expect(text("[data-testid=upload-toast]")).toContain("tags must be at least 10");
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("invalid"); // refused, not accepted
   });
 
@@ -1004,7 +1028,7 @@ describe("export — green means a complete committed package", () => {
     expect(svg).toContain("<title>Minimal line icon of growth. Speed and growth pictogram</title>");
     const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
     expect(record.metadata.state).toBe("accepted");
-    expect(record.metadata.tags).toHaveLength(40);
+    expect(record.metadata.tags).toHaveLength(TAGS.length);
     expect(record.metadata.cost).toBeNull(); // Gemini reports no cost — never invented
   });
 

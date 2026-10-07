@@ -10,12 +10,12 @@ import {
   readXmpMetadata,
   verifyJpeg,
 } from "../src/lib/upload/jpeg";
-import { MANDATORY_TAGS, type IconMetadata } from "../src/lib/upload/meta";
+import { type IconMetadata } from "../src/lib/upload/meta";
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 
 const META: IconMetadata = {
   title: "Minimal line icon of growth. Speed and growth pictogram",

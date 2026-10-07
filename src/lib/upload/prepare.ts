@@ -1,20 +1,20 @@
 // prepare.ts — the export SVG copy of the "SVG to upload" tab
 // (RULE 1/3). The approved source is parsed, never modified; the export
-// document is a re-rooted copy: viewBox = padded artboard (fitArtboard),
-// artwork translated to centre it, an explicit background rect painted
-// first (output policy: the background IS part of the export), and — when a
-// stroke width is configured — every visible stroke normalized to that width
-// in output px at 96 DPI, `vector-effect="non-scaling-stroke"` included, so
-// the export renders the configured width at its intrinsic size. Content the
-// geometry math cannot answer for (text, image, geometry-restyle CSS, a
-// transform on the root) fails the preparation honestly instead of being
-// guessed.
+// document is a re-rooted copy: viewBox = padded artboard expanded to the
+// chosen artboard's aspect (fitArtboardToSize), artwork translated to centre
+// it, width/height = the final artboard px, an explicit background rect
+// painted first (fill-only: stroke="none", so it never inherits the
+// artwork's stroke), and — when a stroke width is configured — every visible
+// stroke normalized to that width in output px at 96 DPI,
+// `vector-effect="non-scaling-stroke"` included. Content the geometry math
+// cannot answer for (text, image, geometry-restyle CSS, a transform on the
+// root) fails the preparation honestly instead of being guessed.
 
-import { BACKGROUND_DEFAULT, type UploadSettings } from "./settings";
+import { BACKGROUND_DEFAULT, artboardSizeOf, type UploadSettings } from "./settings";
 import { normalizeHex } from "../svgbackground";
 import { scaleOf } from "./geom/matrix";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
-import { fitArtboard, fmt, ptToPx, type ArtboardFit } from "./geom";
+import { fitArtboardToSize, fmt, ptToPx, type ArtboardFit } from "./geom";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -51,7 +51,8 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
     return fail("unsupported", `unsupported content: ${vb.unsupported.join(", ")}`);
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
-  const fit = fitArtboard(vb.bounds, settings.paddingPct);
+  const size = artboardSizeOf(settings);
+  const fit = fitArtboardToSize(vb.bounds, settings.paddingPct, size.width, size.height);
   const strokesNormalized = settings.strokePt > 0
     ? normalizeStrokes(root, ptToPx(settings.strokePt))
     : 0;
@@ -111,11 +112,13 @@ function keyOf(decl: string): string {
   return (at > 0 ? decl.slice(0, at) : decl).trim().toLowerCase();
 }
 
-/** Re-roots the document: padded artboard viewBox, background, centred artwork. */
+/** Re-roots the document: aspect-matched viewBox, final px size, background, centred artwork. */
 function applyArtboard(root: Element, fit: ArtboardFit, background: string): void {
   root.setAttribute("viewBox", fit.viewBox);
-  root.setAttribute("width", fmt(fit.artW));
-  root.setAttribute("height", fmt(fit.artH));
+  root.setAttribute("width", String(fit.outW));
+  root.setAttribute("height", String(fit.outH));
+  root.setAttribute("version", "1.1");
+  if (root.getAttribute("xmlns") === null) root.setAttribute("xmlns", SVG_NS);
   const doc = root.ownerDocument;
   const group = doc.createElementNS(SVG_NS, "g");
   group.setAttribute("transform", `translate(${fmt(fit.offsetX)} ${fmt(fit.offsetY)})`);
@@ -131,6 +134,7 @@ function backgroundRect(doc: Document, fit: ArtboardFit, background: string): El
   rect.setAttribute("width", fmt(fit.artW));
   rect.setAttribute("height", fmt(fit.artH));
   rect.setAttribute("fill", background);
+  rect.setAttribute("stroke", "none");
   return rect;
 }
 

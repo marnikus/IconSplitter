@@ -9,13 +9,13 @@ import {
   META_CACHE_KEY, META_CACHE_LIMIT, META_CACHE_VERSION, cachedMeta, loadMetaCache,
   needsModelCall, parseMetaCache, rememberMeta, restoredMeta, saveMetaCache,
 } from "../src/upload/metacache";
-import { MANDATORY_TAGS, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
+import { validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { EMPTY_META } from "../src/upload/types";
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 
 const META: IconMetadata = {
   title: "Minimal line icon of growth. Speed and growth pictogram",

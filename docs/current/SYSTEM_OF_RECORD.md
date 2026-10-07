@@ -342,7 +342,12 @@ opt-in class as Generate SVG → Requesty; design
   foreignObject, risky `<style>`) are named, never guessed. The artwork is
   fitted proportionally into the padded artboard (uniform padding, % of the
   fitted artwork's largest side), strokes normalized to the configured pt width
-  (1 pt = 4/3 px), and the JPEG rasterizes the VECTORS directly at the integer
+  (1 pt = 4/3 px), then placed UNCROPPED and UNSTRETCHED on the configured
+  final-size artboard: the viewBox expands to the target aspect (never shrinks),
+  the artwork is centred by translation only, `width`/`height` carry the final
+  px size, and the background rect is fill-only (`stroke="none"` — it can never
+  inherit the artwork's stroke). The root carries `version="1.1"` and the SVG
+  namespace. The JPEG rasterizes the VECTORS directly at the integer
   target (15.1 MP → 3886×3886 for a square artboard), verified by decoding the
   SOF back. All of it happens on an export COPY — the approved source is never
   written.
@@ -372,7 +377,8 @@ opt-in class as Generate SVG → Requesty; design
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
   — no AI, no render; a missing output rebuilds just that output; nothing
   changed → no work). Every output validates before it commits (SVG parses +
-  metadata readback; JPEG decodes at the recorded dims + XMP readback; EPS
+  valid viewBox + version 1.1 + zero `<image>` raster elements + metadata
+  readback; JPEG decodes at the recorded dims + XMP readback; EPS
   header + bounding box) and commits atomically (tmp → verify → overwrite →
   cleanup, `export.json` LAST as the commit marker), so a crash mid-commit
   leaves the last valid package in place. EPS is a genuine writer for a
@@ -1216,7 +1222,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   validation,accept,regen,gen}-*`), the settings dialog (`upload-dialog-*`,
   `upload-set-{padding,stroke,mp,quality,optimize,eps}`,
   `upload-set-bg-{white,black,gray,green,red,custom}`,
-  `upload-set-bg-value`, `upload-set-marker-*`, `upload-set-reset`,
+  `upload-set-bg-value`, `upload-set-artboard` (+ `upload-set-artboard-{width,height}`
+  for Custom), `upload-set-marker-*`, `upload-set-reset`,
   `upload-set-close`), the metadata confirmation (`upload-meta-backdrop`,
   `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`,
   `upload-preview-strip` / `upload-preview-{id}` +

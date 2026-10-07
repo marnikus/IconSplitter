@@ -57,6 +57,9 @@ export interface ArtboardFit {
   offsetY: number;
   /** Uniform padding actually applied (user units). */
   pad: number;
+  /** Final intrinsic size in px (`width`/`height` attributes). */
+  outW: number;
+  outH: number;
 }
 
 /** Padded artboard around the visible bounds; content centred, scale 1. */
@@ -69,8 +72,37 @@ export function fitArtboard(bounds: Bounds, paddingPct: number): ArtboardFit {
     artW, artH,
     offsetX: pad - bounds.minX,
     offsetY: pad - bounds.minY,
-    pad,
+    pad, outW: artW, outH: artH,
   };
+}
+
+/**
+ * Padded artboard expanded to the target's aspect, then sized to the target
+ * px. The padded content is centred in the expanded viewBox by translation
+ * only — never stretched, never cropped. `outW`/`outH` are the `width`/
+ * `height` attributes; `artW`/`artH` stay in user units for the JPEG ratio.
+ */
+export function fitArtboardToSize(bounds: Bounds, paddingPct: number, targetW: number, targetH: number): ArtboardFit {
+  const base = fitArtboard(bounds, paddingPct);
+  const tW = targetW > 0 ? targetW : 1;
+  const tH = targetH > 0 ? targetH : 1;
+  const want = tW / tH;
+  const have = base.artW / base.artH;
+  if (Math.abs(have - want) < 1e-9) return { ...base, outW: tW, outH: tH };
+  const expanded = have > want ? growHeight(base, want) : growWidth(base, want);
+  return { ...expanded, outW: tW, outH: tH };
+}
+
+function growHeight(base: ArtboardFit, want: number): ArtboardFit {
+  const artH = base.artW / want;
+  const shift = (artH - base.artH) / 2;
+  return { ...base, artH, viewBox: `0 0 ${fmt(base.artW)} ${fmt(artH)}`, offsetY: base.offsetY + shift };
+}
+
+function growWidth(base: ArtboardFit, want: number): ArtboardFit {
+  const artW = base.artH * want;
+  const shift = (artW - base.artW) / 2;
+  return { ...base, artW, viewBox: `0 0 ${fmt(artW)} ${fmt(base.artH)}`, offsetX: base.offsetX + shift };
 }
 
 export interface TargetSize {

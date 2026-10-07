@@ -9,7 +9,7 @@ import { sha256HexText } from "../src/lib/upload/hash";
 import {
   DEFAULT_UPLOAD_SETTINGS, settingsFingerprint, type SettingsOverrides, type UploadSettings,
 } from "../src/lib/upload/settings";
-import { MANDATORY_TAGS, metadataFingerprint, type IconMetadata } from "../src/lib/upload/meta";
+import { metadataFingerprint, type IconMetadata } from "../src/lib/upload/meta";
 import {
   exportDirOf, metadataBlock, newExportRecord, serializeExportRecord, type ExportRecord,
 } from "../src/lib/upload/export";
@@ -29,10 +29,10 @@ import { svgVersion } from "./helpers/svgpair";
 const DIR = "cat/split_01";
 const SOURCE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#000000"/></svg>`;
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 const META: IconMetadata = {
   title: "Minimal line icon of growth. Speed and growth pictogram",
   description: "Clean line icon showing growth and rising business trends",
@@ -251,7 +251,7 @@ describe("assembleRows — reads the real record + source from the folder", () =
   it("restores accepted metadata from the record", async () => {
     const rows = await assembleRows(pairRoot("pair_fog", true, true), [SRC], { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, interrupted: new Set() });
     expect(rows[0].meta.state).toBe("accepted");
-    expect(rows[0].meta.metadata?.tags).toHaveLength(40);
+    expect(rows[0].meta.metadata?.tags).toHaveLength(TAGS.length);
   });
 
   it("a pair without export.json is discovered, and still carries its source fingerprint", async () => {

@@ -31,9 +31,37 @@ export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null)
 
 function svgCheck(svgOut: string | null, errors: string[]): boolean {
   if (svgOut === null) return true;
-  const ok = svgParses(svgOut);
-  if (!ok) errors.push("the export SVG does not parse");
+  const doc = new DOMParser().parseFromString(svgOut, "image/svg+xml");
+  if (doc.querySelector("parsererror") !== null || doc.documentElement?.nodeName.toLowerCase() !== "svg") {
+    errors.push("the export SVG does not parse");
+    return false;
+  }
+  return cleanCheck(doc.documentElement, doc, errors);
+}
+
+/** The clean gate: valid viewBox, version 1.1, zero raster elements. */
+function cleanCheck(root: Element, doc: Document, errors: string[]): boolean {
+  let ok = true;
+  if (!validViewBox(root.getAttribute("viewBox"))) {
+    errors.push("the export SVG must carry a valid viewBox");
+    ok = false;
+  }
+  if (root.getAttribute("version") !== "1.1") {
+    errors.push("the export SVG must be version 1.1");
+    ok = false;
+  }
+  if (doc.getElementsByTagName("image").length > 0) {
+    errors.push("the export SVG must not contain <image> raster elements");
+    ok = false;
+  }
   return ok;
+}
+
+/** `minX minY w h` with finite numbers and a positive area. */
+function validViewBox(viewBox: string | null): boolean {
+  if (viewBox === null) return false;
+  const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+  return parts.length === 4 && parts.every(Number.isFinite) && parts[2] > 0 && parts[3] > 0;
 }
 
 function readbackCheck(svgOut: string | null, metadata: IconMetadata | null, errors: string[]): boolean {

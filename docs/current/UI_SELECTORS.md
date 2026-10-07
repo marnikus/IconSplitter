@@ -573,7 +573,9 @@ Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
 change), `upload-set-{optimize,eps}` (checkboxes), the background
 (`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
-`upload-set-bg-value`), the per-field marker `upload-set-marker-{field}`
+`upload-set-bg-value`), the artboard (`upload-set-artboard` preset select +
+`upload-set-artboard-{width,height}` `input[type=number]` for Custom, clamped
+16–4096), the per-field marker `upload-set-marker-{field}`
 ("inherited" / "overridden", icon scope only), `upload-set-reset` (icon scope:
 deletes the override — one undoable entry), `upload-set-close`.
 

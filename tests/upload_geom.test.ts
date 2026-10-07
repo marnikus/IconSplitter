@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitArtboard,
+  fitArtboardToSize,
   parseSvgLength,
   ptToPx,
   pxToPt,
@@ -143,6 +144,43 @@ describe("fitArtboard — padded, centred, never stretched", () => {
     expect(fit.offsetX).toBe(-5); // translate the artwork's origin (5,5) to (0,0)
     expect(fit.offsetY).toBe(-5);
     expect(fit.viewBox).toBe("0 0 40 10");
+  });
+});
+
+describe("fitArtboardToSize — padded, aspect-matched, never stretched", () => {
+  it("square target on square art: viewBox stays, out is the target px", () => {
+    const fit = fitArtboardToSize({ minX: 10, minY: 10, width: 80, height: 80 }, 8, 512, 512);
+    expect(fit.viewBox).toBe("0 0 92.8 92.8");
+    expect(fit.outW).toBe(512);
+    expect(fit.outH).toBe(512);
+    expect(fit.offsetX).toBeCloseTo(-3.6);
+    expect(fit.offsetY).toBeCloseTo(-3.6);
+  });
+
+  it("square target on wide art: expands height to square, centres vertically", () => {
+    const fit = fitArtboardToSize({ minX: 0, minY: 0, width: 200, height: 100 }, 10, 512, 512);
+    // pad = 20 → 240×140; square → 240×240, extra 100/2 = 50 above and below
+    expect(fit.artW).toBeCloseTo(240);
+    expect(fit.artH).toBeCloseTo(240);
+    expect(fit.viewBox).toBe("0 0 240 240");
+    expect(fit.outW).toBe(512);
+    expect(fit.outH).toBe(512);
+    expect(fit.offsetX).toBeCloseTo(20);
+    expect(fit.offsetY).toBeCloseTo(70); // pad 20 + centering 50
+  });
+
+  it("custom wide target (800×600) on square art: expands width to 4:3", () => {
+    const fit = fitArtboardToSize({ minX: 0, minY: 0, width: 100, height: 100 }, 0, 800, 600);
+    expect(fit.artW).toBeCloseTo(133.333, 2);
+    expect(fit.artH).toBeCloseTo(100);
+    expect(fit.artW / fit.artH).toBeCloseTo(800 / 600, 3);
+    expect(fit.outW).toBe(800);
+    expect(fit.outH).toBe(600);
+  });
+
+  it("never stretches: the viewBox aspect always equals the target aspect", () => {
+    const fit = fitArtboardToSize({ minX: 5, minY: 7, width: 40, height: 90 }, 8, 1024, 512);
+    expect(fit.artW / fit.artH).toBeCloseTo(2, 5);
   });
 });
 

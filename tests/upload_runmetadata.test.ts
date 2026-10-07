@@ -7,14 +7,14 @@
 import { describe, expect, it } from "vitest";
 import { generateMetadata } from "../src/upload/runmetadata";
 import { createMemoryJournal, createStoredJournal, type StorageLike } from "../src/upload/journal";
-import { DEFAULT_METADATA_PROMPT, MANDATORY_TAGS } from "../src/lib/upload/meta";
+import { DEFAULT_METADATA_PROMPT } from "../src/lib/upload/meta";
 import type { GeminiConfig } from "../src/lib/upload/gemini";
 import { DEFAULT_GEMINI_CONFIG } from "../src/lib/upload/gemini";
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 
 const ANSWER = `Title: Minimal line icon of growth. Speed and growth pictogram
 Description: Clean line icon showing growth and rising business trends
@@ -63,7 +63,7 @@ describe("generateMetadata — the happy path", () => {
     const { fetch, seen } = fakeFetch(() => jsonResponse(200, okBody(ANSWER)));
     const result = await generateMetadata(args({ deps: { render, fetch } }));
     expect(result.outcome).toBe("generated");
-    expect(result.metadata?.tags).toHaveLength(40);
+    expect(result.metadata?.tags).toHaveLength(TAGS.length);
     expect(result.validation?.ok).toBe(true);
     expect(result.usage).toEqual({ input: 100, output: 200, total: 300 });
     expect(result.attempts).toBe(1);
@@ -98,13 +98,13 @@ describe("generateMetadata — deterministic parse + validation", () => {
   });
 
   it("reports a rule-breaking answer as invalid with the validation errors", async () => {
-    const bad = ANSWER.replace(`Tags: ${TAGS.join(", ")}`, `Tags: ${TAGS.slice(1).join(", ")}`); // 39 tags
+    const bad = ANSWER.replace(`Tags: ${TAGS.join(", ")}`, `Tags: ${TAGS.slice(0, 9).join(", ")}`); // 9 tags < 10
     const { fetch } = fakeFetch(() => jsonResponse(200, okBody(bad)));
     const result = await generateMetadata(args({ deps: { render, fetch } }));
     expect(result.outcome).toBe("invalid");
-    expect(result.metadata?.tags).toHaveLength(39);
+    expect(result.metadata?.tags).toHaveLength(9);
     expect(result.validation?.ok).toBe(false);
-    expect(result.validation?.errors[0]).toContain("exactly 40");
+    expect(result.validation?.errors[0]).toContain("at least 10");
   });
 });
 

@@ -3,13 +3,13 @@
 // and read back exactly. The artwork is untouched.
 import { describe, expect, it } from "vitest";
 import { embedMetadataInSvg, readEmbeddedMetadata } from "../src/lib/upload/embed";
-import { MANDATORY_TAGS, type IconMetadata } from "../src/lib/upload/meta";
+import { type IconMetadata } from "../src/lib/upload/meta";
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 
 const META: IconMetadata = {
   title: "Minimal line icon of growth. Speed and growth pictogram",
@@ -30,11 +30,11 @@ describe("embedMetadataInSvg", () => {
     expect(root.children[1].textContent).toBe(META.description);
   });
 
-  it("carries all 40 tags in the dc:subject rdf:Bag", () => {
+  it("carries all tags in the dc:subject rdf:Bag", () => {
     const doc = new DOMParser().parseFromString(embedMetadataInSvg(SOURCE, META), "image/svg+xml");
     const lis = Array.from(doc.getElementsByTagName("*")).filter((el) => el.nodeName.endsWith(":li"));
-    expect(lis).toHaveLength(40);
-    expect(lis[0].textContent).toBe("icon");
+    expect(lis).toHaveLength(TAGS.length);
+    expect(lis[0].textContent).toBe("speed");
   });
 
   it("leaves the artwork untouched", () => {

@@ -123,7 +123,7 @@ describe("metadataBlock", () => {
   });
 
   it("records invalid metadata as invalid (never accepted silently)", () => {
-    const bad = { ...META, tags: META.tags.slice(1) };
+    const bad = { ...META, tags: META.tags.slice(0, 9) };
     const block = metadataBlock(bad, {
       prompt: "p", provider: "Gemini", model: "m", requestId: null,
       usage: { input: null, output: null, total: null },

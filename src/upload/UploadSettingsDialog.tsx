@@ -9,7 +9,8 @@ import {
   BG_PRESETS, normalizeHex,
 } from "../lib/svgbackground";
 import {
-  clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
+  ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS,
+  clampArtboard, clampArtboardSize, clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
   type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
@@ -65,7 +66,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
   );
 }
 
-/** The seven settings, one field component each. */
+/** The export settings, one field component each. */
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
@@ -85,6 +86,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
         hint="a genuine EPS for the documented subset; anything else fails that stage honestly" />
       <BackgroundSetting p={p} effective={effective} />
+      <ArtboardSetting p={p} effective={effective} />
     </div>
   );
 }
@@ -155,6 +157,41 @@ function BackgroundSetting({ p, effective }: { p: UploadSettingsDialogProps; eff
         <output className="svg-bg-value" data-testid="upload-set-bg-value">{effective.background}</output>
       </div>
       <small className="up-hint">the JPEG flattens onto it; the artwork is never recoloured</small>
+    </div>
+  );
+}
+
+/** The final artboard: square presets plus custom W×H (custom sets the aspect). */
+function ArtboardSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  return (
+    <div className="svg-field up-set-field">
+      <span className="svg-label">Artboard (px)<Marker p={p} field="artboard" testid="artboard" /></span>
+      <select className="svg-input" data-testid="upload-set-artboard" aria-label="Artboard (px)"
+        value={effective.artboard} onChange={(e) => change(p, "artboard", clampArtboard(e.target.value))}>
+        {ARTBOARD_PRESETS.map((preset) => (
+          <option key={preset} value={preset}>{preset === "custom" ? "Custom…" : `${preset}×${preset}`}</option>
+        ))}
+      </select>
+      {effective.artboard === "custom" && <CustomSize p={p} effective={effective} />}
+      <small className="up-hint">final width×height; the artwork is centred, never stretched</small>
+    </div>
+  );
+}
+
+/** Custom W×H: two live numbers, each with its own inherited/overridden marker. */
+function CustomSize({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  return (
+    <div className="up-bg-row">
+      <label className="svg-field">W<Marker p={p} field="artboardWidth" testid="artboard-width" />
+        <input className="svg-input" data-testid="upload-set-artboard-width" type="number" aria-label="Custom width"
+          min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={effective.artboardWidth}
+          onChange={(e) => change(p, "artboardWidth", clampArtboardSize(Number(e.target.value)))} />
+      </label>
+      <label className="svg-field">H<Marker p={p} field="artboardHeight" testid="artboard-height" />
+        <input className="svg-input" data-testid="upload-set-artboard-height" type="number" aria-label="Custom height"
+          min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={effective.artboardHeight}
+          onChange={(e) => change(p, "artboardHeight", clampArtboardSize(Number(e.target.value)))} />
+      </label>
     </div>
   );
 }

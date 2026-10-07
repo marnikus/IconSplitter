@@ -11,7 +11,7 @@ import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
 import { verifyEps } from "../src/lib/upload/eps";
-import { MANDATORY_TAGS, metadataFingerprint, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
+import { metadataFingerprint, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { sha256HexText } from "../src/lib/upload/hash";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
@@ -28,10 +28,10 @@ const AI = "fog_AI.png";
 const STEM = "fog_AI";
 const SOURCE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#000000"/></svg>`;
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
+const TAGS = [
+  "speed", "growth", "chart", "arrow", "business", "finance",
+  "analytics", "data", "trend", "increase", "graph", "statistics",
+];
 const META: IconMetadata = {
   title: "Minimal line icon of growth. Speed and growth pictogram",
   description: "Clean line icon showing growth and rising business trends",
