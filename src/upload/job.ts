@@ -40,6 +40,7 @@ export class Job {
   private epsFailure: string | null = null;
   private meta: IconMetadata | null = null;
   private svgSha = "";
+  private sourceSha = "";
   private recordBuilt: ExportRecord | null = null;
 
   constructor(private req: JobRequest, private deps: RunnerDeps) {}
@@ -72,7 +73,6 @@ export class Job {
     this.meta = this.req.metadata;
     const read = this.scan.exportJson === null ? null : readExportRecord(this.scan.exportJson);
     this.committed = read !== null && read.ok ? read.record : null;
-    this.stagePlan = await this.plan();
     const text = await this.deps.readSource(this.req.row.svgRelPath);
     if (text === null) return `the chosen SVG is unreadable: ${this.req.row.svgRelPath}`;
     this.doc = parseSvgText(text);
@@ -80,12 +80,15 @@ export class Job {
     this.scene = parseScene(this.doc);
     if (this.scene.unsupported.has("complex-css")) return "the source uses CSS this pipeline cannot resolve honestly";
     if (this.scene.unsupported.has("unparsable-path")) return "the source contains an unparsable path";
+    // R02: identity is the content hash, read once and carried everywhere.
+    this.sourceSha = await this.deps.hashText(text);
+    this.stagePlan = await this.plan();
     return null;
   }
 
   /** The selective plan (§9): compare the committed record with today. */
   private async plan(): Promise<StagePlan> {
-    const sha = await this.deps.hashText(this.req.row.svgRelPath);
+    const sha = this.sourceSha;
     // No metadata in hand → a sentinel that matches nothing, so the plan
     // re-embeds whatever the (possibly generated) metadata turns out to be.
     const meta = this.req.metadata ?? (this.req.allowAi ? PENDING_META : this.committed?.metadata ?? PENDING_META);
@@ -261,7 +264,8 @@ export class Job {
 
   private async record(state: "processed" | "partial"): Promise<ExportRecord> {
     return buildJobRecord({
-      req: this.req, deps: this.deps, meta: this.meta as IconMetadata, finalSvg: this.finalSvg,
+      req: this.req, deps: this.deps, meta: this.meta as IconMetadata, sourceSha: this.sourceSha,
+      finalSvg: this.finalSvg,
       svgSha: this.svgSha, optimizer: this.optimizer, jpeg: this.jpegStats as import("./jobartifacts").JpegSegments["stats"],
       epsText: this.epsText, epsFailure: this.epsFailure, state, now: this.deps.now(),
     });

@@ -58,6 +58,8 @@ export interface RecordInputs {
   req: JobRequest;
   deps: RunnerDeps;
   meta: IconMetadata;
+  /** SHA-256 of the source SVG's bytes (R02) — never the file path. */
+  sourceSha: string;
   finalSvg: string;
   svgSha: string;
   optimizer: OptimizerRecord | null;
@@ -75,7 +77,7 @@ export async function buildJobRecord(a: RecordInputs): Promise<ExportRecord> {
   return buildExportRecord({
     pairId: a.req.row.id,
     iconBase: base,
-    source: { relPath: a.req.row.svgRelPath, version: a.req.row.version, sha256: await a.deps.hashText(a.req.row.svgRelPath) },
+    source: { relPath: a.req.row.svgRelPath, version: a.req.row.version, sha256: a.sourceSha },
     settings: a.req.settings,
     metadata: a.meta,
     outputs: {

@@ -275,6 +275,29 @@ describe("runner — selective re-export (design §9)", () => {
     expect(record.ok && record.record.metadata.description).toBe(edited.description);
   });
 
+  it("R02: an in-place content edit with the same path and size changes the source identity", async () => {
+    // A content hash, not the fake's length-based one, so same-length edits differ.
+    const contentHash = async (t: string) => {
+      let h = 5381;
+      for (const ch of t) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+      return `c${h}`;
+    };
+    const root = rootWithSource();
+    const first = await runUploadJob(request(), deps(root, { hashText: contentHash }));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const before = first.record.source.sha256;
+    // Same length, different geometry — a size/mtime/path identity would miss it.
+    (at(root, `${DIR}/icon-a_AI_v1.svg`) as FakeFile).text =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M 4 20 L 12 5 L 20 20 Z" fill="none" stroke="#101010" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const second = await runUploadJob(request(), deps(root, { hashText: contentHash }));
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.record.source.sha256).not.toBe(before);
+    expect(second.plan.reasons).toContain("the source SVG changed");
+    expect(second.plan.svg).toBe("rebuild");
+  });
+
   it("a quality-only change re-encodes the JPEG and keeps the SVG file", async () => {
     const root = rootWithSource();
     expect((await runUploadJob(request(), deps(root))).ok).toBe(true);
