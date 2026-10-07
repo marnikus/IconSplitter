@@ -1,7 +1,7 @@
 // upmetaxml.ts — the metadata formats the export embeds (prompt §11).
 // Owns: XML escaping (one rule), the XMP packet (dc:title / dc:description /
 // dc:subject), the binary IPTC IIM record (1:90 UTF-8 charset, 2:00 version,
-// 2:07 ObjectName, 2:25 Keywords — one dataset per tag — 2:120 Caption), the
+// 2:05 ObjectName, 2:25 Keywords — one dataset per tag — 2:120 Caption), the
 // SVG <metadata> RDF block, and the readback parsers that make embedding
 // verifiable field by field. Unicode survives; nothing is truncated silently.
 
@@ -103,7 +103,7 @@ export function iptcIimRecord(m: IconMetadata): Uint8Array {
   const sets: IimDataset[] = [
     { record: 1, dataset: 0x5a, data: UTF8_CHARSET },
     { record: 2, dataset: 0x00, data: RECORD_VERSION },
-    { record: 2, dataset: 0x07, data: utf8(m.title) },
+    { record: 2, dataset: 0x05, data: utf8(m.title) }, // 2:5 ObjectName (title)
     ...m.tags.map((t) => ({ record: 2, dataset: 0x19, data: utf8(t) })), // 2:25 keywords
     { record: 2, dataset: 0x78, data: utf8(m.description) }, // 2:120 caption
   ];
@@ -147,7 +147,10 @@ export function parseIptcIim(data: Uint8Array): IimFields {
 
 function collect(f: IimFields, record: number, dataset: number, value: string): void {
   if (record !== 2) return;
-  if (dataset === 0x07) f.title = value;
+  // 2:5 ObjectName is the interoperable title slot; 2:7 (EditStatus) is only
+  // accepted as a legacy read-back for pre-fix packages, never for writing.
+  if (dataset === 0x05) f.title = value;
+  else if (dataset === 0x07 && f.title === null) f.title = value;
   else if (dataset === 0x19) f.keywords.push(value);
   else if (dataset === 0x78) f.description = value;
 }

@@ -76,6 +76,39 @@ describe("upmetaxml — the IPTC IIM record", () => {
   });
 });
 
+describe("upmetaxml — IPTC ObjectName interop (integration report R05)", () => {
+  // An independent raw-byte reader, deliberately not the module's parser, so the
+  // test proves the on-disk layout matches the IPTC IIM reference (2:5 =
+  // ObjectName, 2:7 = EditStatus) instead of merely agreeing with itself.
+  function rawDatasets(rec: Uint8Array): Array<{ rec: number; ds: number; text: string }> {
+    const out: Array<{ rec: number; ds: number; text: string }> = [];
+    let at = 0;
+    while (at + 5 <= rec.length && rec[at] === 0x1c) {
+      const len = (rec[at + 3] << 8) | rec[at + 4];
+      if (at + 5 + len > rec.length) break;
+      out.push({
+        rec: rec[at + 1],
+        ds: rec[at + 2],
+        text: new TextDecoder().decode(rec.subarray(at + 5, at + 5 + len)),
+      });
+      at += 5 + len;
+    }
+    return out;
+  }
+
+  it("places the title at ObjectName 2:5, never at EditStatus 2:7", () => {
+    const sets = rawDatasets(iptcIimRecord(META));
+    const objectName = sets.find((s) => s.rec === 2 && s.ds === 0x05);
+    const editStatus = sets.find((s) => s.rec === 2 && s.ds === 0x07);
+    expect(objectName?.text).toBe(META.title);
+    expect(editStatus).toBeUndefined();
+  });
+
+  it("the module's reader agrees with the reference mapping", () => {
+    expect(parseIptcIim(iptcIimRecord(META)).title).toBe(META.title);
+  });
+});
+
 describe("upmetaxml — the SVG metadata block", () => {
   it("writes Dublin Core RDF with the tags as a list", () => {
     const xml = svgMetadataXml(META);
