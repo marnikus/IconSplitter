@@ -7,14 +7,14 @@
 import { parseScene, type GeomScene } from "../lib/upgeom";
 import { sceneBounds } from "../lib/upbounds";
 import { fitPlan, rasterSize, type FitPlan, type RasterSize } from "../lib/upfit";
-import { buildExportSvg, embedSvgMetadata, parseSvgText, readSvgMetadata } from "../lib/upprepare";
+import { buildExportSvg, embedSvgMetadata, parseSvgText } from "../lib/upprepare";
 import { produceJpeg } from "../lib/upraster";
 import { buildEps, epsPreflight } from "../lib/upeps";
 import { parseMetadataResponse, type IconMetadata } from "../lib/upmeta";
 import { readExportRecord, type ExportRecord } from "../lib/upexport";
 
 import { resolveBackground } from "../lib/svgbackground";
-import { buildJobRecord, embedJpegSegments, jpegMetadataMatches, optimizeForDelivery, type JpegSegments } from "./jobartifacts";
+import { buildJobRecord, embedJpegSegments, jpegMetadataMatches, optimizeForDelivery, svgMetadataMatches, type JpegSegments } from "./jobartifacts";
 import { buildGeminiRequest } from "../lib/geminireq";
 import { fingerprintsOf, planReexport, type StagePlan } from "../lib/upfinger";
 import type { ExportDirScan } from "./sources";
@@ -80,8 +80,7 @@ export class Job {
     this.scene = parseScene(this.doc);
     if (this.scene.unsupported.has("complex-css")) return "the source uses CSS this pipeline cannot resolve honestly";
     if (this.scene.unsupported.has("unparsable-path")) return "the source contains an unparsable path";
-    // R02: identity is the content hash, read once and carried everywhere.
-    this.sourceSha = await this.deps.hashText(text);
+    this.sourceSha = await this.deps.hashText(text); // R02: content hash, not path
     this.stagePlan = await this.plan();
     return null;
   }
@@ -196,9 +195,7 @@ export class Job {
     const out = await embedJpegSegments(this.jpegBytes as Uint8Array, this.meta as IconMetadata, this.deps);
     if (out === null) return "the JPEG metadata exceeded the 65 502-byte segment limit";
     this.jpegBytes = out.bytes;
-    // R08: stats must always describe the FINAL embedded bytes, never the raw
-    // pre-embedding render — the manifest hash has to match the file on disk.
-    this.jpegStats = out.stats;
+    this.jpegStats = out.stats; // R08: final embedded bytes, never the raw render
     return null;
   }
 
@@ -221,17 +218,11 @@ export class Job {
     return null;
   }
 
-  /** Both formats re-read and compared field-by-field before any write. */
+  /** Both formats re-read and compared field-by-field before any write (R06). */
   private async validate(): Promise<string | null> {
     const meta = this.meta as IconMetadata;
-    const svgBack = readSvgMetadata(this.finalSvg);
-    if (svgBack === null || svgBack.title !== meta.title || svgBack.description !== meta.description
-      || svgBack.tags.join("\u0000") !== meta.tags.join("\u0000")) {
-      return "the embedded SVG metadata does not read back equal to the accepted metadata";
-    }
-    if (!jpegMetadataMatches(this.jpegBytes as Uint8Array, meta)) {
-      return "the embedded JPEG metadata does not read back equal to the accepted metadata";
-    }
+    if (!svgMetadataMatches(this.finalSvg, meta)) return "the embedded SVG metadata does not read back equal to the accepted metadata";
+    if (!jpegMetadataMatches(this.jpegBytes as Uint8Array, meta)) return "the embedded JPEG metadata does not read back equal to the accepted metadata";
     return null;
   }
 
@@ -265,8 +256,7 @@ export class Job {
 
   private async record(state: "processed" | "partial"): Promise<ExportRecord> {
     return buildJobRecord({
-      req: this.req, deps: this.deps, meta: this.meta as IconMetadata, sourceSha: this.sourceSha,
-      finalSvg: this.finalSvg,
+      req: this.req, deps: this.deps, meta: this.meta as IconMetadata, sourceSha: this.sourceSha, finalSvg: this.finalSvg,
       svgSha: this.svgSha, optimizer: this.optimizer, jpeg: this.jpegStats as import("./jobartifacts").JpegSegments["stats"],
       epsText: this.epsText, epsFailure: this.epsFailure, state, now: this.deps.now(),
     });

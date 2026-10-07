@@ -8,6 +8,7 @@
 import { optimizeExportSvg, rendersMatch, SVGO_CONFIG_NAME, type PixelDeps } from "../lib/upsvgo";
 import { embedJpegMetadata, jpegDimensions, readJpegMetadata } from "../lib/upjpegmeta";
 import { iptcIimRecord, parseIptcIim, xmpPacket, xmpReadFields } from "../lib/upmetaxml";
+import { readSvgMetadata } from "../lib/upprepare";
 import { resolveBackground } from "../lib/svgbackground";
 import { buildExportRecord, type ExportRecord, type OptimizerRecord } from "../lib/upexport";
 import type { IconMetadata } from "../lib/upmeta";
@@ -55,6 +56,13 @@ export async function embedJpegSegments(
 }
 
 const sameList = (a: string[], b: string[]): boolean => a.join("\u0000") === b.join("\u0000");
+
+/** R06: the delivered SVG's <metadata> must read back equal to the accepted metadata. */
+export function svgMetadataMatches(svg: string, meta: IconMetadata): boolean {
+  const back = readSvgMetadata(svg);
+  return back !== null && back.title === meta.title && back.description === meta.description
+    && sameList(back.tags, meta.tags);
+}
 
 /** R06: the embedded JPEG metadata must read back field-equal to the accepted
  * metadata (both XMP and IPTC), not merely be present. */
