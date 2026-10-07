@@ -1437,3 +1437,17 @@
   font-size: 11px;
   line-height: 1.4;
 }
+
+/* --- SVG to upload: settings grid, rows and the metadata strip ------------- */
+.up-grid { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-end; }
+.up-grid .svg-field { flex: 1 1 132px; }
+.up-line { display: flex; gap: 6px; align-items: center; }
+.up-switch { display: flex; flex-direction: row; gap: 7px; align-items: center; font-size: 11px; color: var(--v2-muted); }
+.up-row { grid-template-columns: 34px max-content minmax(240px, 1fr); }
+.up-thumb { display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+.up-details { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.up-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.up-title strong { color: var(--v2-text); font-size: 12px; }
+.up-meta { color: var(--v2-muted); font-size: 10px; }
+.up-warn { margin: 0; padding-left: 14px; color: var(--v2-yellow); font-size: 10px; }
+.up-note { color: var(--v2-muted); font-size: 11px; padding: 6px 2px; }

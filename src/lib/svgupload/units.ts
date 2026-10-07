@@ -48,6 +48,9 @@ export function toPx(length: Length, basis: number): number {
 /** How much of the shorter side padding may take before it hides the artwork. */
 export const PADDING_CAP_RATIO = 0.45;
 
+/** The ranges the settings form validates against (design §5). */
+export const LIMITS = { paddingMax: 50, strokeMax: 50 } as const;
+
 /** Padding can never swallow the icon: capped at 45% of the shorter side. */
 export function clampPaddingPx(px: number, shorterSide: number): number {
   if (!Number.isFinite(px) || px <= 0) return 0;
