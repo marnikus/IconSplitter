@@ -130,7 +130,7 @@ function visit(doc: Document, el: Element, parent: Matrix, state: State): void {
   // <defs> holds definitions, not drawings; <use> reaches them explicitly.
   if (tag === "defs") return;
   if (tag === "g" || tag === "a" || tag === "svg") return children(el, doc, matrix, state);
-  if (tag === "use") return use(doc, el, matrix, state);
+  if (tag === "use") return resolveUse(doc, el, matrix, state);
   if (UNSUPPORTED.includes(tag)) return void state.skipped.add(tag === "foreignobject" ? "foreignObject" : tag);
   if (SHAPES.includes(tag)) addShape(el, tag, matrix, state);
 }
@@ -139,7 +139,7 @@ function children(el: Element, doc: Document, matrix: Matrix, state: State): voi
   for (const child of Array.from(el.children)) visit(doc, child, matrix, state);
 }
 
-function use(doc: Document, el: Element, matrix: Matrix, state: State): void {
+function resolveUse(doc: Document, el: Element, matrix: Matrix, state: State): void {
   const id = (svgValue(el, "href") || svgValue(el, "xlink:href")).replace(/^#/, "");
   const target = id === "" ? null : findById(doc, id);
   if (target === null || state.seen.has(id)) return void state.skipped.add("use (unresolved reference)");
