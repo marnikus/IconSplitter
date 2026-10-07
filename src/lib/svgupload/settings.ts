@@ -27,6 +27,23 @@ export const LIMITS = {
 
 export type JpegProfile = "sRGB-implied";
 
+/**
+ * The row's settings cell in the template's words: the effective stroke, the
+ * padding and the JPEG target. Read from the values the export uses, so a row can
+ * never advertise a number the pipeline will not apply.
+ */
+export function settingsLineOf(values: UploadDefaults): string {
+  const stroke = values.stroke.enabled ? `stroke ${trim(values.stroke.value)} ${values.stroke.unit}` : "no stroke";
+  const pad = `pad ${trim(values.padding.value)} ${values.padding.unit}`;
+  const scale = values.outputScale === 1 ? "" : ` · scale ${trim(values.outputScale)}×`;
+  return `${stroke} · ${pad}${scale} · JPEG ${trim(values.jpeg.targetMp)} MP`;
+}
+
+/** 2.20 -> "2.2", 10 -> "10": numbers as the user typed them, never 2.2000001. */
+function trim(value: number): string {
+  return String(Number(value.toFixed(2)));
+}
+
 export interface PaddingSetting {
   value: number;
   unit: LengthUnit;
@@ -56,6 +73,11 @@ export interface UploadDefaults {
   optimizeSvg: boolean;
   /** EPS is optional and converter-gated. */
   includeEps: boolean;
+  /**
+   * The EPS converter endpoint the user configured; "" means none, and a
+   * requested EPS without one is Partial (§13). Only http(s) is accepted.
+   */
+  epsConverter: string;
 }
 
 export type SettingField = keyof UploadDefaults;
@@ -83,6 +105,7 @@ export const DEFAULT_UPLOAD: UploadDefaults = {
   jpeg: { targetMp: 15.1, quality: 0.9, profile: "sRGB-implied" },
   optimizeSvg: true,
   includeEps: false,
+  epsConverter: "",
 };
 
 export interface EffectiveSettings {
@@ -93,7 +116,7 @@ export interface EffectiveSettings {
 }
 
 export const SETTING_FIELDS: readonly SettingField[] = [
-  "padding", "outputScale", "background", "stroke", "jpeg", "optimizeSvg", "includeEps",
+  "padding", "outputScale", "background", "stroke", "jpeg", "optimizeSvg", "includeEps", "epsConverter",
 ];
 
 /** The numbers an icon actually exports with, and where each one came from. */
@@ -180,7 +203,20 @@ function parseOverride(raw: Record<string, unknown>): Partial<UploadDefaults> {
   if (jpeg !== null) out.jpeg = jpeg;
   if (typeof raw.optimizeSvg === "boolean") out.optimizeSvg = raw.optimizeSvg;
   if (typeof raw.includeEps === "boolean") out.includeEps = raw.includeEps;
+  if (typeof raw.epsConverter === "string") out.epsConverter = parseConverter(raw.epsConverter);
   return out;
+}
+
+/** A converter endpoint: an absolute http(s) URL, or "" (none configured). */
+function parseConverter(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "http:" || url.protocol === "https:" ? trimmed : "";
+  } catch {
+    return "";
+  }
 }
 
 function parseLengthSetting(raw: unknown): PaddingSetting | null {
@@ -193,7 +229,8 @@ function parseLengthSetting(raw: unknown): PaddingSetting | null {
 
 function parseStrokeSetting(raw: unknown): StrokeSetting | null {
   if (!isRecord(raw)) return null;
-  if (!isUnit(raw.unit)) return null;
+  // A stroke width in % has no SVG meaning; only pt and px are accepted.
+  if (raw.unit !== "pt" && raw.unit !== "px") return null;
   const value = numOrNull(raw.value);
   if (value === null) return null;
   return { value: clamp(value, 0, LIMITS.strokeMax), unit: raw.unit, enabled: raw.enabled === true };

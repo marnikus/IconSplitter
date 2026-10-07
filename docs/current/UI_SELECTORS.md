@@ -472,3 +472,61 @@ save failure),
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
+
+## R. SVG to upload — `src/svgupload/*` (verified 2026-10-07)
+
+The tab after Generate SVG. It reuses the panel furniture of §P (Rescan, search,
+filters, sorting, checkboxes, active row, thumbnail zoom) and adds the export
+controls. Handles in the order they appear on screen.
+
+| Test id | Element / notes |
+|---|---|
+| `tab-svg-upload` | the workbench tab itself (`src/lib/session.ts` `TabId "svgUpload"`) |
+| `up-panel` | the whole tab; `up-controls` its control bar |
+| `up-open-folder` / `up-folder-path` / `up-rescan` | the green folder button, the read-only full-path row, the rescan (same behaviour as §P) |
+| `up-search`, `up-only`, `up-sort` | search box, filter select, sort select |
+| `up-provider` | the metadata model line: "Metadata model: … — verified against the provider's list" or the refusal |
+| `up-count-{icons,eligible,awaiting,ready,processing,processed,stale,failed,blocked,warned}` | the ten counts; `eligible` filters first, so a blocked row is never counted as processing |
+| `up-thumb` / `up-thumb-value` | the shared zoom control (display only — never the output size) |
+| `up-preview-bg` | the preview background preset (`PreviewBackground`) |
+| `up-{padding,padding-unit,scale,bg,bg-custom,stroke-on,stroke,stroke-unit,jpeg-mp,jpeg-quality,svgo,eps}` | the global defaults the new icons start from |
+| `up-apply` / `up-reset-selected` | "Apply to selected" (one undoable entry, reports the count) and reset |
+| `up-bulk` / `up-check-all` | the bulk bar and its select-all |
+| `up-{generate-selected,export-selected,retry-failed,cancel}` | bulk actions; `cancel` is disabled with nothing running |
+| `up-rows`, `up-row-{id}`, `up-check-{id}`, `up-preview-{id}`, `up-state-{id}`, `up-version-{id}`, `up-origin-{id}`, `up-warn-{id}`, `up-reset-row-{id}` | one row: selection, thumbnail, job state, version pill, settings origin ("inherited settings"/"custom settings"), its warnings, its reset |
+| `up-act-{preview,settings,generate,export,open,retry}-{id}` | the row actions; `export` is disabled with the policy's reason in `title` until the metadata is accepted |
+| `up-{busy,toast,pick,unsupported}` | the in-flight strip, the status line, the picker, the unsupported-browser note |
+| `up-meta-{id}` (+ `data-meta-state`) | the metadata strip under the row — **empty until generated**; `none/accepted/stale/rejected/interrupted` |
+| `up-policy-{id}` | the tag policy in the user's words ("40 tags required · includes icon, pictogram, …") |
+| `up-{generate,regenerate}-{id}` | start a naming run (the first one and a fresh one) |
+| `up-head-{title,description,tags}-{id}` | a field's own head: its name, its rule and its counter |
+| `up-copy-{title,description,tags}-{id}` | copy **that one field** |
+| `up-keywords-{id}` | "40/40 keywords ✓" — the tick appears only when the export's own policy passes (count *and* the seven mandatory terms) |
+| `up-{title,description,tags}-{id}` | the editable inputs |
+| `up-verdict-{id}` | the policy's verdict on the current text; `up-meta-state-{id}` the state word |
+| `up-{save,copy}`-`{id}` | save the edit (re-validated: a bad edit can only be stored as a draft) and copy all three fields |
+| `up-export-note-{id}` | why the export is not available yet (or what it will write) |
+| `up-settings-line-{id}` | the row's settings cell: the effective stroke, padding, scale and JPEG target ("stroke 2.2 pt · pad 10 pt · JPEG 15.1 MP") |
+| `up-act-{generate,export,retry}-{id}` | painted per the template: Metadata `primary`, Export `success`, Retry `danger` (the template's own tones) |
+| `up-preview-dialog{,-x}`, `up-preview-{svg,jpeg,jpeg-missing,bg,zoom,meta}` | the preview dialog and its parts; the JPEG side says "Not exported yet" until a package exists |
+| `up-settings-dialog{,-x}`, `up-dialog-{padding,scale,stroke,mp,quality,background,converter,svgo,eps,eps-warning,reset,close}` | the per-icon settings dialog; each field shows its origin, and `eps-warning` appears when EPS is ticked with no converter configured (the export would be Partial) |
+
+EPS is never faked: with no converter the dialog says no `.eps` file is written
+at all (research: a browser cannot produce genuine EPS).
+
+The preview dialog shows the **published JPEG** (an object URL of the file in the
+icon's own `export/` folder) as soon as that file exists — the artifact itself,
+never a second render — and "Not exported yet" when it does not.
+
+**The tab has no log of its own.** Its events go to the shell's one activity log
+(§Q): `upload.named` (info, the icon + the model + the tag count),
+`upload.name-refused` (warn, the policy's reason), `upload.exported`
+(info/warn/error for processed / partial / cancelled / failed),
+`upload.cancelled`, `upload.restored` (warn — unfinished work came back as
+interrupted and nothing was sent again) and `upload.model-checked`. No entry ever
+carries the metadata text, the prompt, the response body or the API key.
+
+**Restart.** `iconSplitter.upload.jobs.v1` remembers the last state of every
+icon. A restart maps `running`/`queued` to `interrupted — needs review`
+(`restoreInterrupted`), says so in the log and the toast, and sends nothing; the
+row's Retry stays a deliberate click.

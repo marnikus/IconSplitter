@@ -6,7 +6,7 @@
 // back to the id, so a rescan cannot reshuffle a list the user is working in.
 
 import { compareNames } from "../scan";
-import type { UploadRow } from "./rows";
+import { isEligible, isStale, type UploadRow } from "./rows";
 
 export type UploadSort = "path" | "name" | "version" | "state";
 export type UploadOnly = "all" | "ready" | "blocked" | "warnings";
@@ -25,6 +25,18 @@ export interface UploadCounts {
   blocked: number;
   /** Rows with a problem other than being blocked outright. */
   warned: number;
+  /** Can be exported at all (has a source and nothing blocks it). */
+  eligible: number;
+  /** Eligible but with no accepted metadata for the current source yet. */
+  awaitingMeta: number;
+  /** A job is running or waiting for a slot. */
+  processing: number;
+  /** Exported and verified — the only green number in the bar. */
+  processed: number;
+  /** The source or the package moved on: metadata or outputs need attention. */
+  stale: number;
+  /** The last job for these icons did not finish. */
+  failed: number;
 }
 
 /** The rows the list shows, in the user's order. */
@@ -38,11 +50,18 @@ export function visibleUploadRows(rows: readonly UploadRow[], view: UploadView):
 }
 
 export function uploadCounts(rows: readonly UploadRow[]): UploadCounts {
+  const live = rows.filter(isEligible); // a blocked row is its own bucket, never "processing"
   return {
     icons: rows.length,
     ready: rows.filter((r) => r.blocked === null && r.warnings.length === 0).length,
     blocked: rows.filter((r) => r.blocked !== null).length,
     warned: rows.filter((r) => r.blocked === null && r.warnings.length > 0).length,
+    eligible: live.length,
+    awaitingMeta: live.filter((r) => r.metaState !== "accepted").length,
+    processing: live.filter((r) => r.job === "running" || r.job === "queued").length,
+    processed: live.filter((r) => r.job === "processed").length,
+    stale: live.filter(isStale).length,
+    failed: live.filter((r) => r.job === "failed" || r.job === "interrupted").length,
   };
 }
 

@@ -8,14 +8,13 @@
 // payload we ask the model to produce, and the mapping from a transport outcome
 // to a record the UI can show.
 
-import { buildChatRequest, type ChatRequest, type ContentPart, type Failure, type FetchLike, type SendOut } from "../lib/svgrequest";
+import { buildChatRequest, type ChatRequest, type Failure, type FetchLike, type SendOut } from "../lib/svgrequest";
 import { sendChatStreaming } from "../lib/svgstreamread";
 import { capsFor, type SamplingParams } from "../lib/modelcaps";
 import {
   parseMetadataAnswer, parseMetaRecord, POLICY_ID, type MetaRecord, type MetaText,
 } from "../lib/svgupload/metaprompt";
 import { estimateCost } from "../lib/svgupload/provider";
-import type { SvgConfig } from "../lib/svgconfig";
 
 export interface MetadataArgs {
   baseUrl: string;
@@ -117,22 +116,9 @@ function recordBase(args: MetadataArgs, at: string): MetaRecord {
   };
 }
 
-function chatUrlOf(baseUrl: string): string {
+/** The chat endpoint this run posts to (the same rule as the Generate SVG tab). */
+export function chatUrlOf(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
-}
-
-/** The image part of the request, as the preview shows it. */
-export function imagePart(dataUrl: string): ContentPart {
-  return { type: "image_url", image_url: { url: dataUrl } };
-}
-
-/** A configured provider, for the panel and the export record. */
-export interface MetaProvider {
-  baseUrl: string;
-  model: string;
-  apiKey: string;
-  provider: string;
-  config: SvgConfig;
 }
 
 /** Re-reads a stored record, refusing junk (the panel shows "no metadata yet"). */
@@ -140,4 +126,4 @@ export function readStoredRecord(raw: unknown): MetaRecord | null {
   return parseMetaRecord(raw);
 }
 
-export { POLICY_ID };
+export { chatUrlOf as chatUrlFor, POLICY_ID };

@@ -11,9 +11,31 @@ function row(over: Partial<UploadRow> = {}): UploadRow {
     id: "a", name: "icon-a_AI_1.png", dirPath: "run/split_01", exportBase: "icon-a_AI_1",
     svgPath: "run/split_01/icon-a_AI_1.svg", version: 1, versionLabel: "v1",
     fingerprint: "", metaPath: "run/split_01/icon-a_AI_1.svg.json",
-    warnings: [], blocked: null, exportState: null, ...over,
+    warnings: [], blocked: null, exportState: null, job: "queued", metaState: "none", ...over,
   };
 }
+
+describe("the seven counts the bar shows", () => {
+  it("counts eligible, awaiting metadata, processing, processed, stale and failed apart", () => {
+    const rows = [
+      row({ id: "fresh", job: "queued", metaState: "accepted" }),
+      row({ id: "waiting", job: "queued", metaState: "none" }),
+      row({ id: "busy", job: "running", metaState: "accepted" }),
+      row({ id: "done", job: "processed", metaState: "accepted", exportState: { status: "processed", at: "today", note: "" } }),
+      row({ id: "old", job: "processed", metaState: "stale", exportState: { status: "stale", at: "yesterday", note: "" } }),
+      row({ id: "broke", job: "failed", metaState: "accepted" }),
+      row({ id: "stopped", blocked: "No usable SVG version — regenerate in Generate SVG" }),
+    ];
+    const counts = uploadCounts(rows);
+    expect(counts.eligible).toBe(6); // the blocked row cannot be exported
+    expect(counts.awaitingMeta).toBe(2); // "waiting" has none, "old" holds a STALE answer: both need a run
+    expect(counts.processing).toBe(3); // two queued, one running
+    expect(counts.processed).toBe(2);
+    expect(counts.stale).toBe(1); // "old": a stale package with stale metadata
+    expect(counts.failed).toBe(1);
+    expect(counts.blocked).toBe(1);
+  });
+});
 
 describe("visibleUploadRows", () => {
   it("searches the icon name and the folder, case-insensitively", () => {
@@ -55,10 +77,12 @@ describe("visibleUploadRows", () => {
 describe("uploadCounts", () => {
   it("counts icons, ready, blocked and warned rows", () => {
     const rows = [row({ id: "ok" }), row({ id: "blocked", blocked: "x" }), row({ id: "warn", warnings: ["y"] })];
-    expect(uploadCounts(rows)).toEqual({ icons: 3, ready: 1, blocked: 1, warned: 1 });
+    const c = uploadCounts(rows);
+    expect({ icons: c.icons, ready: c.ready, blocked: c.blocked, warned: c.warned }).toEqual({ icons: 3, ready: 1, blocked: 1, warned: 1 });
   });
 
   it("treats a blocked row's warning as the block, not as two problems", () => {
-    expect(uploadCounts([row({ id: "b", blocked: "x", warnings: ["y"] })])).toEqual({ icons: 1, ready: 0, blocked: 1, warned: 0 });
+    const c = uploadCounts([row({ id: "b", blocked: "x", warnings: ["y"] })]);
+    expect({ icons: c.icons, ready: c.ready, blocked: c.blocked, warned: c.warned }).toEqual({ icons: 1, ready: 0, blocked: 1, warned: 0 });
   });
 });

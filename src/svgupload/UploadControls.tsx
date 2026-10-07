@@ -97,7 +97,7 @@ function StrokeField({ defaults, busy, set }: FieldProps) {
         <input className="svg-input" data-testid="up-stroke" type="number" min={0} step={0.1}
           disabled={busy || !stroke.enabled} value={stroke.value}
           onChange={(e) => set({ stroke: { ...stroke, value: numberOr(e.target.value, stroke.value) } })} />
-        <UnitSelect testid="up-stroke-unit" value={stroke.unit} disabled={busy || !stroke.enabled}
+        <UnitSelect testid="up-stroke-unit" value={stroke.unit} units={STROKE_UNITS} disabled={busy || !stroke.enabled}
           onChange={(unit) => set({ stroke: { ...stroke, unit } })} />
       </span>
     </label>
@@ -140,15 +140,18 @@ function SwitchFields({ defaults, busy, set }: FieldProps) {
   );
 }
 
-function UnitSelect({ testid, value, disabled, onChange }: {
-  testid: string; value: LengthUnit; disabled: boolean; onChange: (unit: LengthUnit) => void;
+const LENGTH_UNITS: readonly LengthUnit[] = ["pt", "px", "%"];
+/** A stroke width is a length, not a share: percentage is not offered. */
+const STROKE_UNITS: readonly LengthUnit[] = ["pt", "px"];
+
+function UnitSelect({ testid, value, disabled, units = LENGTH_UNITS, onChange }: {
+  testid: string; value: LengthUnit; disabled: boolean; units?: readonly LengthUnit[];
+  onChange: (unit: LengthUnit) => void;
 }) {
   return (
     <select className="svg-input" data-testid={testid} value={value} disabled={disabled} aria-label="Unit"
       onChange={(e) => onChange(e.target.value as LengthUnit)}>
-      <option value="pt">pt</option>
-      <option value="px">px</option>
-      <option value="%">%</option>
+      {units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
     </select>
   );
 }

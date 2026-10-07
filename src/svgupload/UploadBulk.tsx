@@ -23,6 +23,18 @@ export interface UploadBulkProps {
   onToggleAll: (on: boolean) => void;
   onApply: () => void;
   onReset: () => void;
+  /** The bulk jobs: name, export, retry and cancel what is running. */
+  jobs: BulkJobs;
+}
+
+export interface BulkJobs {
+  /** The icons the four bulk actions apply to (visible ∩ selected). */
+  onGenerate: () => void;
+  onExport: () => void;
+  onRetry: () => void;
+  onCancel: () => void;
+  running: boolean;
+  failed: number;
 }
 
 export default function UploadBulk(p: UploadBulkProps) {
@@ -32,6 +44,7 @@ export default function UploadBulk(p: UploadBulkProps) {
       <ListControls p={p} />
       <Zoom p={p} />
       <Actions p={p} />
+      <JobActions p={p} />
     </section>
   );
 }
@@ -47,7 +60,13 @@ function Scope({ p }: { p: UploadBulkProps }) {
         onChange={(e) => p.onToggleAll(e.target.checked)} />
       <span className="svg-summary" data-testid="up-counts">
         <Chip testid="up-count-icons" text="icons" n={counts.icons} />
+        <Chip testid="up-count-eligible" text="eligible" n={counts.eligible} />
+        <Chip testid="up-count-awaiting" text="awaiting metadata" n={counts.awaitingMeta} />
         <Chip testid="up-count-ready" text="ready" n={counts.ready} tone="approved" />
+        <Chip testid="up-count-processing" text="processing" n={counts.processing} />
+        <Chip testid="up-count-processed" text="processed" n={counts.processed} tone="approved" />
+        <Chip testid="up-count-stale" text="stale" n={counts.stale} />
+        <Chip testid="up-count-failed" text="failed" n={counts.failed} tone="failed" />
         <Chip testid="up-count-blocked" text="blocked" n={counts.blocked} tone="failed" />
         <Chip testid="up-count-warned" text="warnings" n={counts.warned} />
       </span>
@@ -90,6 +109,31 @@ function Zoom({ p }: { p: UploadBulkProps }) {
       <input id="up-thumb" data-testid="up-thumb" type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={ZOOM_STEP}
         value={p.zoom} aria-label="Thumbnail maximum height" onChange={(e) => p.onZoom(clampZoom(Number(e.target.value)))} />
       <output className="svg-zoom-value" data-testid="up-thumb-value" htmlFor="up-thumb">{zoomLabel(p.zoom)}</output>
+    </div>
+  );
+}
+
+/**
+ * The bulk jobs, in the order the work happens: name the selection, export it,
+ * retry what failed, or stop what is still going. Cancelling keeps the packages
+ * that already committed — the button says so when the cursor rests on it.
+ */
+function JobActions({ p }: { p: UploadBulkProps }) {
+  const idle = p.busy || p.checkedCount === 0;
+  return (
+    <div className="svg-filters">
+      <button className="svg-btn" data-testid="up-generate-selected" disabled={idle} onClick={p.jobs.onGenerate}>
+        Generate metadata for {p.checkedCount}
+      </button>
+      <button className="svg-btn primary" data-testid="up-export-selected" disabled={idle} onClick={p.jobs.onExport}>
+        Export selected
+      </button>
+      <button className="svg-btn" data-testid="up-retry-failed" disabled={p.busy || p.jobs.failed === 0} onClick={p.jobs.onRetry}>
+        Retry failed ({p.jobs.failed})
+      </button>
+      <button className="svg-btn ghost" data-testid="up-cancel" disabled={!p.jobs.running} onClick={p.jobs.onCancel}>
+        Cancel
+      </button>
     </div>
   );
 }
