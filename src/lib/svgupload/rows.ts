@@ -34,6 +34,10 @@ export interface UploadExportState {
 export interface UploadRowInput {
   source: UploadSourceInput;
   meta: PairMeta | null;
+  /** The job state the queue last reported for this icon (default: queued). */
+  job?: JobKind;
+  /** The metadata state for the CHOSEN version (see lib/svgupload/meta). */
+  metaState?: MetaKind;
   /** Is this path in the scanned file set? Absent = the scan did not check. */
   exists?: (relPath: string) => boolean;
   /** size:mtime of the chosen SVG, from the scan; "" when unknown. */
@@ -41,6 +45,11 @@ export interface UploadRowInput {
   /** The package this icon already has, or null when none was read. */
   exportState?: UploadExportState | null;
 }
+
+/** The job states a row can be in (mirrors jobctl's JobState). */
+export type JobKind = "queued" | "running" | "processed" | "partial" | "failed" | "cancelled" | "interrupted";
+/** What the metadata field holds for this icon right now. */
+export type MetaKind = "none" | "accepted" | "stale" | "rejected" | "interrupted";
 
 export interface UploadRow {
   id: string;
@@ -60,6 +69,8 @@ export interface UploadRow {
   /** Non-null: the row cannot be exported until this is fixed. */
   blocked: string | null;
   exportState: UploadExportState | null;
+  job: JobKind;
+  metaState: MetaKind;
 }
 
 export const NO_SVG_REASON = "No usable SVG version — regenerate in Generate SVG";
@@ -94,6 +105,8 @@ export function buildUploadRow(input: UploadRowInput): UploadRow {
     warnings: warningsOf(input, ctx.chosen, ctx.missing),
     blocked: blockedReason(ctx.chosen === null, ctx.missing),
     exportState: input.exportState ?? null,
+    job: input.job ?? "queued",
+    metaState: input.metaState ?? "none",
   };
 }
 
@@ -152,6 +165,33 @@ function warningsOf(input: UploadRowInput, chosen: SvgVersion | null, missing: b
 function blockedReason(noVersion: boolean, missing: boolean): string | null {
   if (noVersion) return NO_SVG_REASON;
   return missing ? MISSING_SVG_REASON : null;
+}
+
+/** True when this row may send work: nothing blocks it and it has a source. */
+export function isEligible(row: UploadRow): boolean {
+  return row.blocked === null && row.svgPath !== null;
+}
+
+/** Ready to export: eligible AND holding accepted metadata for the source. */
+export function isReady(row: UploadRow): boolean {
+  return isEligible(row) && row.metaState === "accepted";
+}
+
+/** The row's visible state word — one place, so two rows cannot disagree. */
+export function uploadRowState(row: UploadRow): { tone: "ok" | "warn" | "bad" | "busy" | "idle"; label: string } {
+  if (row.blocked !== null) return { tone: "bad", label: "Blocked" };
+  if (row.job === "running") return { tone: "busy", label: "Processing" };
+  if (row.job === "queued") return { tone: "idle", label: "Queued" };
+  if (row.job === "processed") return { tone: "ok", label: "Processed" };
+  if (row.job === "partial") return { tone: "warn", label: "Partial" };
+  if (row.job === "interrupted") return { tone: "warn", label: "Interrupted — needs review" };
+  if (row.job === "cancelled") return { tone: "idle", label: "Cancelled" };
+  return { tone: "bad", label: "Failed" };
+}
+
+/** Stale covers both halves of the promise: the package and the metadata (§17). */
+export function isStale(row: UploadRow): boolean {
+  return row.exportState?.status === "stale" || row.job === "interrupted" || row.metaState === "stale";
 }
 
 function versionLabel(version: number | null, preferred: number | null): string {

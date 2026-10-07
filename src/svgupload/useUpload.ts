@@ -18,10 +18,13 @@ import { DEFAULT_PREVIEW_BACKGROUND, type PreviewBackground } from "../lib/svgba
 import { ZOOM_DEFAULT } from "../lib/zoom";
 import { buildUploadRows, type UploadRow } from "../lib/svgupload/rows";
 import {
-  effectiveSettings, parseUploadSettings, setDefault, type UploadDefaults, type UploadSettings,
+  effectiveSettings, parseUploadSettings, setDefault, setOverride, SETTING_FIELDS, type SettingField,
+  type UploadDefaults, type UploadSettings,
 } from "../lib/svgupload/settings";
 import { DEFAULT_UPLOAD_VIEW, uploadCounts, visibleUploadRows, type UploadView } from "../lib/svgupload/view";
+import { metaStateOf } from "../lib/svgupload/meta";
 import { applyToSelection, resetSelection } from "./settingsactions";
+import { useUploadJobs, type DialogState, type JobsApi } from "./useUploadJobs";
 import { getUploadSettings, setUploadSettings, subscribeUploadSettings } from "./settingsstore";
 
 export interface UploadApi {
@@ -52,20 +55,55 @@ export interface UploadApi {
   applySelection: () => void;
   resetRows: (ids: string[]) => void;
   inheritedFor: (id: string) => boolean;
+  settings: UploadSettings;
+  /** The effective values for one row, with each field's origin. */
+  effectiveOf: (id: string) => ReturnType<typeof effectiveSettings>;
+  /** Writes ONE field as an override for one icon (the settings dialog). */
+  patchRow: (id: string, field: SettingField, value: unknown) => void;
+  /** The naming/export slice: metadata, jobs, dialogs, clipboard. */
+  jobs: JobsApi;
+  /** The dialog currently open, with the row it belongs to. */
+  dialog: DialogState | null;
+  dialogRow: UploadRow | null;
 }
 
 export function useUpload(): UploadApi {
   const settings = useUploadSettings();
   const scan = useScan();
   const ui = useListState();
-  const derived = useDerivedRows(scan.rows, ui.view);
+  const jobs = useUploadJobs({ root: scan.root, rows: scan.rows, settings, rootName: scan.root?.name ?? "" });
+  const rows = useRowsWithJobs(scan.rows, jobs, settings);
+  const derived = useDerivedRows(rows, ui.view);
   const loadCode = useCodeCache(scan.root, ui.codes, ui.setCodes);
   const acts = useUploadActions(scan, ui, settings);
+  const dialogRow = useMemo(() => jobs.dialog === null ? null : rows.find((r) => r.id === jobs.dialog?.id) ?? null, [jobs.dialog, rows]);
+  const patchRow = useCallback((id: string, field: SettingField, value: unknown) => {
+    setUploadSettings(setOverride(getUploadSettings(), id, { [field]: value } as Partial<UploadDefaults>));
+  }, []);
   return {
-    ...scan, ...ui, loadCode, ...acts,
+    ...scan, ...ui, loadCode, ...acts, rows, jobs, settings, patchRow,
+    effectiveOf: useCallback((id: string) => effectiveSettings(getUploadSettings(), id), []),
+    dialog: jobs.dialog, dialogRow,
     defaults: settings.defaults, counts: derived.counts, visible: derived.visible,
-    inheritedFor: useCallback((id: string) => effectiveSettings(settings, id).origin.outputScale === "default", [settings]),
+    // "Inherited" means the icon overrides NOTHING — the chip must react to any
+    // field, not just the scale (editing the padding used to leave it saying
+    // "inherited settings").
+    inheritedFor: useCallback((id: string) => effectiveSettings(settings, id).inherited.length === SETTING_FIELDS.length, [settings]),
   };
+}
+
+/**
+ * The scan's rows, annotated with what the store knows NOW: the metadata state
+ * (accepted / stale / rejected) and the job state. Recomputing them here — and
+ * not inside the scan — is what keeps a rescan from forgetting a job that just
+ * finished, and keeps the metadata freshness honest after a settings change.
+ */
+function useRowsWithJobs(rows: UploadRow[], jobs: Pick<JobsApi, "meta" | "jobs">, _settings: UploadSettings): UploadRow[] {
+  return useMemo(() => rows.map((row) => ({
+    ...row,
+    metaState: metaStateOf(jobs.meta[row.id] ?? null, row.fingerprint),
+    job: jobs.jobs[row.id] ?? row.job,
+  })), [rows, jobs.meta, jobs.jobs]);
 }
 
 /** The list's local choices: selection, active row, view, zoom, preview colour. */

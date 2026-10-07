@@ -135,6 +135,27 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null
   });
 }
 
+/**
+ * The small JPEG the metadata call LOOKS at. Deliberately not the export: a
+ * vision request needs a legible 512 px image, and the export JPEG must stay a
+ * genuine 15.1 MP render. Returns a data URL, or null when the SVG cannot be
+ * drawn (the caller reports it — no request is sent without an image).
+ */
+export async function thumbnailDataUrl(svg: string, background: string | null, size = 512, seams: RasterSeams = defaultSeams()): Promise<string | null> {
+  const url = URL.createObjectURL(new Blob([svg as unknown as BlobPart], { type: "image/svg+xml" }));
+  try {
+    const image = await loadImage(seams.createImage(), url);
+    if (image === null) return null;
+    const ratio = image.naturalHeight === 0 ? 1 : image.naturalWidth / image.naturalHeight;
+    const width = Math.max(1, Math.round(ratio >= 1 ? size : size * ratio));
+    const height = Math.max(1, Math.round(ratio >= 1 ? size / ratio : size));
+    const canvas = draw(image, seams.createCanvas(width, height), background ?? "#ffffff", { width, height, mp: mpOf(width, height), clamped: false });
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function hasJpegHeader(bytes: Uint8Array): boolean {
   return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8;
 }

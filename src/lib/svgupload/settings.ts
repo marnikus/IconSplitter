@@ -56,6 +56,11 @@ export interface UploadDefaults {
   optimizeSvg: boolean;
   /** EPS is optional and converter-gated. */
   includeEps: boolean;
+  /**
+   * The EPS converter endpoint the user configured; "" means none, and a
+   * requested EPS without one is Partial (§13). Only http(s) is accepted.
+   */
+  epsConverter: string;
 }
 
 export type SettingField = keyof UploadDefaults;
@@ -83,6 +88,7 @@ export const DEFAULT_UPLOAD: UploadDefaults = {
   jpeg: { targetMp: 15.1, quality: 0.9, profile: "sRGB-implied" },
   optimizeSvg: true,
   includeEps: false,
+  epsConverter: "",
 };
 
 export interface EffectiveSettings {
@@ -93,7 +99,7 @@ export interface EffectiveSettings {
 }
 
 export const SETTING_FIELDS: readonly SettingField[] = [
-  "padding", "outputScale", "background", "stroke", "jpeg", "optimizeSvg", "includeEps",
+  "padding", "outputScale", "background", "stroke", "jpeg", "optimizeSvg", "includeEps", "epsConverter",
 ];
 
 /** The numbers an icon actually exports with, and where each one came from. */
@@ -180,7 +186,20 @@ function parseOverride(raw: Record<string, unknown>): Partial<UploadDefaults> {
   if (jpeg !== null) out.jpeg = jpeg;
   if (typeof raw.optimizeSvg === "boolean") out.optimizeSvg = raw.optimizeSvg;
   if (typeof raw.includeEps === "boolean") out.includeEps = raw.includeEps;
+  if (typeof raw.epsConverter === "string") out.epsConverter = parseConverter(raw.epsConverter);
   return out;
+}
+
+/** A converter endpoint: an absolute http(s) URL, or "" (none configured). */
+function parseConverter(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "http:" || url.protocol === "https:" ? trimmed : "";
+  } catch {
+    return "";
+  }
 }
 
 function parseLengthSetting(raw: unknown): PaddingSetting | null {
@@ -193,7 +212,8 @@ function parseLengthSetting(raw: unknown): PaddingSetting | null {
 
 function parseStrokeSetting(raw: unknown): StrokeSetting | null {
   if (!isRecord(raw)) return null;
-  if (!isUnit(raw.unit)) return null;
+  // A stroke width in % has no SVG meaning; only pt and px are accepted.
+  if (raw.unit !== "pt" && raw.unit !== "px") return null;
   const value = numOrNull(raw.value);
   if (value === null) return null;
   return { value: clamp(value, 0, LIMITS.strokeMax), unit: raw.unit, enabled: raw.enabled === true };

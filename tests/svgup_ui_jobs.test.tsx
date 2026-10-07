@@ -1,0 +1,293 @@
+// svgup_ui_jobs.test.tsx — the SVG-to-upload tab with the naming and export
+// wiring in place (design §10/§16). The pipeline itself is proven in
+// svgup_job.test.ts; what THIS file proves is the part the user touches:
+//   · the metadata strip starts empty, fills from a run, and is editable;
+//   · an edit that breaks the policy is saved as a draft the export refuses,
+//     with the policy's own words on screen;
+//   · Copy copies the three fields;
+//   · Export runs through the queue and the row turns Processed only when the
+//     pipeline said so;
+//   · Edit settings writes ONE override for THAT icon.
+// The provider and the pipeline are mocked at their module boundary, so no test
+// here can spend money or touch a network.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { pairId } from "../src/lib/pairing";
+import { serializePairMeta } from "../src/lib/pairmeta";
+import { FLASH_LITE } from "../src/lib/svgupload/provider";
+import { fortyTags } from "./helpers/svgupmeta";
+import UploadPanel from "../src/svgupload/UploadPanel";
+import { HistoryProvider } from "../src/state/HistoryProvider";
+import { UPLOAD_SETTINGS_KEY } from "../src/svgupload/settingsstore";
+import { UPLOAD_META_KEY, resetMetaStoreCache } from "../src/svgupload/metastore";
+import { resetUploadSettingsCache } from "../src/svgupload/settingsstore";
+import { parseMetaStore } from "../src/lib/svgupload/meta";
+import { setMetaStore } from "../src/svgupload/metastore";
+import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { pairFile } from "./helpers/pairfile";
+import { svgVersion } from "./helpers/svgpair";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// --- the fake provider: verified catalog, and a naming call that never leaves ---
+const catalogModels = [{ id: FLASH_LITE, label: "Gemini 3.1 Flash Lite" }];
+vi.mock("../src/svg/catalog", () => ({ loadCatalog: () => ({ models: catalogModels, at: 1 }) }));
+vi.mock("../src/svg/keystore", () => ({ loadApiKey: async () => "test-key" }));
+
+const calls: string[] = [];
+/** The pair id the row actually has — the mock cannot import it before hoisting. */
+const hoisted = vi.hoisted(() => ({ id: "", fingerprint: "" }));
+vi.mock("../src/svgupload/runupload", async () => {
+  const { acceptedMeta } = await import("./helpers/svgupmeta");
+  // The record carries the fingerprint the scan reports for the fixture file
+  // ("size:mtime"), so the answer counts as FRESH — the stale path is proven in
+  // svgup_meta.test.ts and in the exporter's re-export matrix.
+  const named = () => acceptedMeta({ pairId: hoisted.id, sourceFingerprint: hoisted.fingerprint });
+  return {
+    providerCard: (args: { model: string }) => ({
+      choice: args.model === "" ? { ok: true, model: FLASH_LITE, source: "verified" } : { ok: true, model: args.model, source: "verified" },
+      url: "https://example.test/v1/chat/completions", fallback: FLASH_LITE,
+    }),
+    generateMetadataFor: async () => {
+      calls.push("name");
+      const record = named();
+      return { record, meta: { title: record.title, description: record.description, tags: record.tags }, error: null };
+    },
+    runExport: async () => {
+      calls.push("export");
+      return { status: "processed", record: null, note: "Exported and verified.", folderPath: "run/export", skipped: false, meta: named() };
+    },
+  };
+});
+
+const stored = new Map<string, unknown>();
+vi.mock("../src/batch/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/batch/store")>();
+  return {
+    ...actual,
+    saveHandles: vi.fn(async (name: string, handles: unknown) => { stored.set(name, handles); }),
+    loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
+  };
+});
+
+const w = window as unknown as { showDirectoryPicker?: unknown };
+w.showDirectoryPicker = () => Promise.reject(new Error("no picker"));
+
+const SVG_DOC = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
+const RUN_DIR = "_split_output/2026-10/2026-10-05_23-30-19";
+const PIECE_DIR = `${RUN_DIR}/icon-trophy-star_AI_7/split_04`;
+const AI_NAME = "icon-trophy-star_AI_7_04.png";
+const STEM = "icon-trophy-star_AI_7_04";
+const ID = pairId(PIECE_DIR, "icon-trophy-star", "_7_04");
+
+let host: HTMLDivElement;
+let ui: Root;
+const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
+const txt = (sel: string) => q(sel)?.textContent ?? "";
+
+function makeTree(): FakeDir {
+  const root = new FakeDir("test_processing_2");
+  let dir = root;
+  for (const name of PIECE_DIR.split("/")) {
+    const next = new FakeDir(name);
+    dir.children.set(name, next);
+    dir = next;
+  }
+  dir.children.set(AI_NAME, new FakeFile(AI_NAME, 20, 2100, "png"));
+  dir.children.set(`${STEM}_v2.svg`, new FakeFile(`${STEM}_v2.svg`, SVG_DOC.length, 2201, SVG_DOC));
+  const versions = [svgVersion(`${PIECE_DIR}/${STEM}_v2.svg`, { version: 2 })];
+  const meta = pairFile(PIECE_DIR, AI_NAME, { id: ID, decision: "approved", versions, preferred: 2 });
+  dir.children.set(`${STEM}.svg.json`, new FakeFile(`${STEM}.svg.json`, 10, 2300, serializePairMeta(meta)));
+  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({
+    records: [{ pair_id: ID, source: "icon-trophy-star.png", ai_result: `${PIECE_DIR}/${AI_NAME}`, decision: "approved", reviewed_at: "2026-10-05T09:00:00.000Z" }],
+  })));
+  return root;
+}
+
+async function waitFor(sel: string): Promise<void> {
+  const until = Date.now() + 4000;
+  await act(async () => {
+    while (q(sel) === null && Date.now() < until) await new Promise((r) => setTimeout(r, 2));
+  });
+  expect(q(sel), `${sel} never appeared`).not.toBeNull();
+}
+
+async function mount(): Promise<void> {
+  host = document.createElement("div");
+  document.body.append(host);
+  ui = createRoot(host);
+  await act(async () => { ui.render(<HistoryProvider><UploadPanel /></HistoryProvider>); });
+  await waitFor(`[data-testid=up-row-${ID}]`);
+}
+
+async function click(sel: string): Promise<void> {
+  await act(async () => { q(sel)?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+}
+
+/** React's controlled inputs need the native setter path. */
+async function type(sel: string, value: string): Promise<void> {
+  await act(async () => {
+    const input = q(sel) as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+let clipboard = "";
+beforeEach(async () => {
+  hoisted.id = ID;
+  hoisted.fingerprint = `${SVG_DOC.length}:2201`; // the v2 file's size:mtime, as the scan reports it
+  localStorage.clear();
+  // The two module-level stores cache across tests; clear both, or one test's
+  // draft would decide the next test's row state.
+  setMetaStore(parseMetaStore(null));
+  resetMetaStoreCache();
+  resetUploadSettingsCache();
+  stored.clear();
+  stored.set("__svg__", { source: makeTree() });
+  calls.length = 0;
+  clipboard = "";
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async (text: string) => { clipboard = text; } },
+  });
+  if (ui) await act(async () => ui.unmount());
+  document.body.innerHTML = "";
+});
+
+describe("the metadata strip", () => {
+  it("starts empty, states the policy, and fills after one run", async () => {
+    await mount();
+    expect(txt(`[data-testid=up-meta-${ID}]`)).toContain("not generated yet");
+    expect(txt(`[data-testid=up-policy-${ID}]`)).toContain("40 tags required");
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-title-${ID}]`);
+    expect(calls).toEqual(["name"]);
+    expect((q(`[data-testid=up-title-${ID}]`) as HTMLInputElement).value).toContain("Trophy award symbol");
+    expect(txt(`[data-testid=up-meta-state-${ID}]`)).toContain("metadata ok");
+    expect(localStorage.getItem(UPLOAD_META_KEY)).toContain("Trophy award symbol");
+  });
+
+  it("copies title, description and tags with one button", async () => {
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-copy-${ID}]`);
+    await click(`[data-testid=up-copy-${ID}]`);
+    const lines = clipboard.split("\n");
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toContain("Trophy award symbol");
+    expect(lines[2].split(",")).toHaveLength(40);
+  });
+
+  it("copies ONE field from its own head, and counts the keywords", async () => {
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-copy-title-${ID}]`);
+    // The head states the policy the field is judged by, next to its counter.
+    expect(txt(`[data-testid=up-head-title-${ID}]`)).toContain("5");
+    expect(txt(`[data-testid=up-keywords-${ID}]`)).toContain("40/40 keywords");
+    await click(`[data-testid=up-copy-title-${ID}]`);
+    expect(clipboard).toContain("Trophy award symbol");
+    expect(clipboard.split("\n")).toHaveLength(1); // one field, not the whole answer
+    await click(`[data-testid=up-copy-tags-${ID}]`);
+    expect(clipboard.split(",")).toHaveLength(40);
+  });
+
+  it("shows a short answer as a short count, never as a pass", async () => {
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-tags-${ID}]`);
+    await type(`[data-testid=up-tags-${ID}]`, fortyTags().slice(0, 39).join(", "));
+    expect(txt(`[data-testid=up-keywords-${ID}]`)).toContain("39/40");
+    expect(txt(`[data-testid=up-keywords-${ID}]`)).not.toContain("✓");
+  });
+
+  it("saves a 39-tag edit as a draft and refuses to export it", async () => {
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-tags-${ID}]`);
+    await type(`[data-testid=up-tags-${ID}]`, fortyTags().slice(0, 39).join(", "));
+    await click(`[data-testid=up-save-${ID}]`);
+    expect(txt(`[data-testid=up-verdict-${ID}]`)).toContain("40");
+    expect(txt(`[data-testid=up-meta-state-${ID}]`)).toContain("needs review");
+    const exportButton = q(`[data-testid=up-act-export-${ID}]`) as HTMLButtonElement;
+    expect(exportButton.disabled).toBe(true);
+    expect(exportButton.title).toContain("accepted");
+    const storedText = localStorage.getItem(UPLOAD_META_KEY) ?? "";
+    expect(storedText).toContain("\"rejected\""); // a draft, never an accepted answer
+  });
+});
+
+describe("exporting from a row", () => {
+  it("runs the pipeline and turns the row Processed only when it said so", async () => {
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-act-export-${ID}]`);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const button = q(`[data-testid=up-act-export-${ID}]`) as HTMLButtonElement;
+    expect({ disabled: button.disabled, title: button.title, meta: txt(`[data-testid=up-meta-state-${ID}]`) }).toEqual({ disabled: false, title: "Export", meta: "metadata ok" });
+    await click(`[data-testid=up-act-export-${ID}]`);
+    await waitFor(`[data-testid=up-state-${ID}]`);
+    const until = Date.now() + 4000;
+    await act(async () => {
+      while (!txt(`[data-testid=up-state-${ID}]`).includes("Processed") && Date.now() < until) await new Promise((r) => setTimeout(r, 2));
+    });
+    expect(calls).toEqual(["name", "export"]);
+    expect(txt(`[data-testid=up-state-${ID}]`)).toContain("Processed");
+    expect(txt("[data-testid=up-count-processed]")).toContain("1");
+  });
+
+  it("cancels from the bulk bar and says the completed packages were kept", async () => {
+    await mount();
+    await click("[data-testid=up-cancel]"); // nothing is running: the button is disabled
+    expect((q("[data-testid=up-cancel]") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("the counts and the selection", () => {
+  it("shows the seven numbers the request names, next to the phase-B ones", async () => {
+    await mount();
+    for (const id of ["icons", "eligible", "awaiting", "ready", "processing", "processed", "stale", "failed", "blocked", "warned"]) {
+      expect(q(`[data-testid=up-count-${id}]`), `missing count ${id}`).not.toBeNull();
+    }
+    expect(txt("[data-testid=up-count-eligible]")).toContain("1");
+    expect(txt("[data-testid=up-count-awaiting]")).toContain("1"); // no metadata yet
+  });
+
+  it("exports the SELECTION, not the whole list", async () => {
+    await mount();
+    await click(`[data-testid=up-generate-${ID}]`);
+    await waitFor(`[data-testid=up-act-export-${ID}]`);
+    await act(async () => { (q(`[data-testid=up-check-${ID}]`) as HTMLInputElement).click(); });
+    await click("[data-testid=up-export-selected]");
+    await waitFor(`[data-testid=up-state-${ID}]`);
+    expect(calls.filter((c) => c === "export")).toHaveLength(1);
+  });
+});
+
+describe("Edit settings", () => {
+  it("writes ONE field as an override for that icon only", async () => {
+    await mount();
+    await click(`[data-testid=up-act-settings-${ID}]`);
+    await waitFor("[data-testid=up-settings-dialog]");
+    await type("[data-testid=up-dialog-padding]", "18");
+    expect(localStorage.getItem(UPLOAD_SETTINGS_KEY)).toContain(ID);
+    expect(txt(`[data-testid=up-origin-${ID}]`)).toContain("custom settings");
+    await click("[data-testid=up-dialog-reset]");
+    expect(txt(`[data-testid=up-origin-${ID}]`)).toContain("inherited settings");
+    await click("[data-testid=up-dialog-close]");
+    expect(q("[data-testid=up-settings-dialog]")).toBeNull();
+  });
+
+  it("previews the SVG that will be written and says the JPEG is not there yet", async () => {
+    await mount();
+    await click(`[data-testid=up-act-preview-${ID}]`);
+    await waitFor("[data-testid=up-preview-dialog]");
+    expect(q("[data-testid=up-preview-svg] img")).not.toBeNull();
+    expect(txt("[data-testid=up-preview-jpeg]")).toContain("Not exported yet");
+    await click("[data-testid=up-preview-dialog-x]");
+    expect(q("[data-testid=up-preview-dialog]")).toBeNull();
+  });
+});

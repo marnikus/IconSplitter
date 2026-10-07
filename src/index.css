@@ -1451,3 +1451,57 @@
 .up-meta { color: var(--v2-muted); font-size: 10px; }
 .up-warn { margin: 0; padding-left: 14px; color: var(--v2-yellow); font-size: 10px; }
 .up-note { color: var(--v2-muted); font-size: 11px; padding: 6px 2px; }
+
+/* The metadata field under a row, and the row's actions (SVG to upload §10) */
+.up-meta-block { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; border: 1px solid var(--v2-line);
+  border-radius: 8px; background: color-mix(in srgb, var(--v2-bg) 60%, transparent); }
+.up-meta-block[data-meta-state="accepted"] { border-color: color-mix(in srgb, var(--v2-green) 55%, var(--v2-line)); }
+.up-meta-block[data-meta-state="rejected"], .up-meta-block[data-meta-state="stale"] { border-color: color-mix(in srgb, var(--v2-yellow) 55%, var(--v2-line)); }
+.up-meta-text { color: var(--v2-muted); font-size: 11px; }
+.up-policy { color: var(--v2-muted); font-size: 10px; }
+.up-field { display: flex; flex-direction: column; gap: 3px; }
+.up-field-label { display: flex; gap: 7px; align-items: baseline; color: var(--v2-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.up-count { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--v2-muted); }
+.up-input { width: 100%; }
+.up-verdict { font-size: 10px; color: var(--v2-muted); }
+.up-verdict.ok { color: var(--v2-green); }
+.up-verdict.bad { color: var(--v2-yellow); }
+.up-meta-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.up-actions { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 2px; }
+.up-actions .svg-btn { font-size: 10px; padding: 3px 8px; }
+.up-export-note { color: var(--v2-muted); font-size: 10px; }
+.up-inline { display: flex; gap: 6px; align-items: center; }
+.up-bg-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.up-warn-line { color: var(--v2-yellow); font-size: 11px; margin: 0; }
+
+/* The two dialogs: one backdrop, one panel, nothing that traps focus off-screen */
+.up-modal-backdrop { position: fixed; inset: 0; background: rgba(6, 8, 12, .62); display: flex;
+  align-items: center; justify-content: center; z-index: 40; padding: 24px; }
+.up-modal { background: var(--v2-panel); border: 1px solid var(--v2-line); border-radius: 12px; padding: 14px 16px;
+  width: min(760px, 100%); max-height: 86vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.up-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.up-modal-head h3 { margin: 0; font-size: 13px; color: var(--v2-text); }
+.up-preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.up-preview-cell { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.up-preview-frame { display: flex; align-items: center; justify-content: center; border-radius: 8px; min-height: 120px;
+  border: 1px solid var(--v2-line); overflow: auto; }
+.up-preview-frame img { display: block; max-width: 100%; height: auto; }
+.up-preview-cell figcaption { color: var(--v2-muted); font-size: 10px; }
+.up-dialog-meta { display: flex; flex-direction: column; gap: 4px; }
+.up-dialog-meta strong { color: var(--v2-text); font-size: 12px; }
+.up-dialog-meta p { margin: 0; color: var(--v2-muted); font-size: 11px; }
+.up-tags { line-height: 1.5; }
+.up-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* The per-field Copy sits in the field head: small, quiet, never a second Save. */
+.up-mini {
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* The keyword counter turns green only when the POLICY says the tags pass. */
+.up-count.ok {
+  color: #1a7f37;
+  font-style: normal;
+}
