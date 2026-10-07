@@ -1513,3 +1513,93 @@
   color: var(--v2-muted, #8b98b1);
   white-space: nowrap;
 }
+/* SVG to upload ─────────────────────────────────────────────────────────── */
+
+.upload-panel {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+  border: 1px solid var(--v2-line);
+  border-radius: 0 0 var(--v2-radius) var(--v2-radius);
+  background: var(--v2-surface);
+  overflow: hidden;
+}
+
+.upload-head { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--v2-line); }
+.upload-head .folder-path { flex: 1; }
+.upload-busy { color: var(--v2-purple-2); font-size: 10px; }
+
+.upload-defaults {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+  padding: 8px 14px; border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-muted-2); font-size: 10px;
+}
+.upload-defaults label { display: flex; flex-direction: column; gap: 3px; }
+.upload-defaults input[type="number"] { width: 76px; }
+.upload-toggle { flex-direction: row !important; align-items: center; gap: 6px !important; }
+
+.upload-bulk {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 8px 14px; border-bottom: 1px solid var(--v2-line); font-size: 10px;
+  color: var(--v2-muted);
+}
+.upload-bulk .primary { font-weight: 700; }
+
+.upload-list { min-height: 0; overflow: auto; scrollbar-color: #313b58 #0c1222; }
+.upload-empty { padding: 28px; color: var(--v2-muted); font-size: 11px; text-align: center; }
+
+.upload-row {
+  display: grid;
+  grid-template-columns: 34px 26px minmax(240px, 1fr) 150px 120px minmax(120px, 1fr);
+  align-items: center; column-gap: 12px;
+  padding: 6px 12px; border-bottom: 1px solid var(--v2-line);
+}
+.upload-row:hover { background: #10182b; }
+.upload-row.selected { background: #131c36; }
+.upload-row.warn .upload-warn { color: var(--v2-yellow); }
+.upload-expand { background: none; border: none; color: var(--v2-muted); cursor: pointer; }
+.upload-name { font-size: 12px; font-weight: 600; color: #e5eaf6; }
+.upload-path, .upload-version { font-size: 9px; color: var(--v2-muted); }
+.upload-warn { font-size: 9px; color: var(--v2-muted); text-transform: uppercase; }
+.upload-row .chip { font-size: 9px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--v2-line); }
+.chip.export-processed { color: #4ade80; border-color: #4ade8055; }
+.chip.export-partial, .chip.export-interrupted, .chip.export-failed, .chip.export-stale { color: var(--v2-yellow); }
+.chip.meta-accepted { color: #4ade80; }
+
+.upload-meta-editor {
+  grid-column: 1 / -1; display: grid; gap: 8px;
+  padding: 10px 12px; border-top: 1px dashed var(--v2-line);
+  color: var(--v2-muted-2); font-size: 10px;
+}
+.upload-meta-editor label { display: grid; gap: 3px; }
+.upload-meta-editor input, .upload-meta-editor textarea { width: 100%; }
+.upload-meta-issues { color: var(--v2-yellow); }
+.upload-meta-actions { display: flex; align-items: center; gap: 12px; color: var(--v2-muted); }
+
+.upload-provider { padding: 8px 14px; border-top: 1px solid var(--v2-line); font-size: 10px; color: var(--v2-muted); }
+.upload-provider-body { display: grid; gap: 8px; padding-top: 8px; }
+.upload-provider-body label { display: grid; gap: 3px; }
+
+.upload-toast {
+  position: fixed; bottom: 56px; right: 24px; z-index: 40;
+  background: #0f1a33; border: 1px solid var(--v2-line); color: #dbe4f8;
+  border-radius: 10px; padding: 10px 16px; font-size: 11px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.upload-dialog-wrap {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: rgba(4, 8, 18, 0.72);
+}
+.upload-dialog {
+  width: min(720px, 92vw); max-height: 84vh; overflow: auto;
+  background: #0f1a33; border: 1px solid var(--v2-line); border-radius: 14px;
+  padding: 20px; display: grid; gap: 12px; font-size: 11px; color: #c3cde2;
+}
+.upload-dialog h3 { margin: 0; font-size: 14px; color: #e5eaf6; }
+.upload-dialog pre {
+  margin: 0; padding: 10px; background: #0a1226; border: 1px solid var(--v2-line);
+  border-radius: 8px; font-size: 9px; white-space: pre-wrap; word-break: break-all;
+}
+.upload-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.upload-center { padding: 40px; text-align: center; color: var(--v2-muted); }

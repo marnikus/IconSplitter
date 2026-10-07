@@ -71,6 +71,8 @@ export interface Discovery {
   corruptFiles: string[];
   /** Every readable file the walk found: relPath -> "size:mtime". */
   fileIndex: Map<string, string>;
+  /** Every file the walk saw (readable or not) — the upload tab's state scan reads these. */
+  entries: FileEntry[];
   /** The legacy global file could not be parsed — decisions kept in memory. */
   corruptDecisions: boolean;
 }
@@ -78,9 +80,13 @@ export interface Discovery {
 /** Short status per problem kind, for the row (D8) — defined once in lib/pairing. */
 export { PROBLEM_LABEL } from "../lib/pairing";
 
-/** Scans the root and lists every approved AI output, in a deterministic order. */
-export async function discoverApprovedSources(root: DirHandleLike): Promise<Discovery> {
-  const tree = await readDirTree(root, []);
+/**
+ * Scans the root and lists every approved AI output, in a deterministic order.
+ * `ignore` drops directories by name during the walk — the SVG-to-upload tab
+ * passes ["export"] so that tab's own outputs can never be discovered as sources.
+ */
+export async function discoverApprovedSources(root: DirHandleLike, ignore: string[] = []): Promise<Discovery> {
+  const tree = await readDirTree(root, ignore);
   // When the tree holds the batch's output, that is the reviewable set: the main
   // folder keeps the unsplit sheets, which are the batch's input (I-38).
   const rule = scopeOf(directoryNames(tree), root.name);
@@ -97,6 +103,7 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
     metas: load.metas,
     corruptFiles: load.corruptFiles,
     fileIndex: fileIndexOf(entries),
+    entries,
     corruptDecisions: load.legacyCorrupt,
   };
 }
