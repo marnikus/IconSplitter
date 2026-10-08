@@ -4,13 +4,14 @@
 // so a crash mid-commit leaves the last valid package in place. The record's
 // outputs/status/timestamps are filled here, from what was actually written.
 
-import { ensureDirPath, listChildNames, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
+import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEps } from "../lib/upload/eps";
 import { sha256Hex } from "../lib/upload/hash";
 import { parseExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
 import { readBytesAt } from "./runexport";
+import { sweepSuperseded } from "./exportsweep";
 
 export interface CommitValidation {
   svg: boolean; jpeg: boolean; eps: boolean; json: boolean; readback: boolean;
@@ -19,16 +20,13 @@ export interface CommitValidation {
 export interface CommitExportInput {
   root: DirHandleLike;
   exportDir: string;
-  /** The artifact name this commit writes (the icon's own name, see `stemOf`). */
-  stem: string;
   /**
-   * The files the PREVIOUS record named as this icon's package. Their names are
-   * superseded whenever the naming rule changes (`fog_AI.*` -> `fog.*`), and a
-   * package whose files were renamed in place would otherwise leave a second,
-   * stale copy of the same icon in `export/` (2026-10-08). Only paths inside
-   * this icon's own export folder are ever considered.
+   * The artifact name this commit writes (the icon's own name, see `stemOf`).
+   * The folder's superseded artifacts — whatever the previous `export.json`
+   * named, and any orphan the app lost track of — are swept after the write,
+   * by `exportsweep.ts`.
    */
-  previous?: readonly string[];
+  stem: string;
   svgOut: string | null;
   jpeg: Uint8Array | null;
   epsText: string | null;
@@ -54,6 +52,8 @@ export interface CommitExportOutput {
 export async function commitExport(input: CommitExportInput): Promise<CommitExportOutput> {
   const dir = await ensureDirPath(input.root, input.exportDir);
   const outputs: CommitExportOutput["outputs"] = { svg: null, jpg: null, eps: null };
+  // The new files are written and verified FIRST; only then may anything go
+  // (RULE 23: the sweep can never cost the user their only copy).
   if (input.svgOut !== null) {
     await commitFile(dir, `${input.stem}.svg`, encode(input.svgOut), (back) => svgParses(decode(back)));
     outputs.svg = `${input.stem}.svg`;
@@ -66,59 +66,17 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
     await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => verifyEps(decode(back)).ok);
     outputs.eps = `${input.stem}.eps`;
   }
-  const replaced = await dropSuperseded(input, dir);
+  const named = previousNames(input);
+  const removed = await sweepSuperseded(dir, input.stem, named);
+  const replaced = removed.map((n) => `${input.exportDir}/${n}`);
   return { outputs, record: await writeRecord(input, dir, outputs, replaced), replaced };
 }
 
-/**
- * Removes the previous record's own package files once the new ones are
- * committed and verified — and only the ones whose NAME the current rule no
- * longer uses, so a selective re-export (a JPEG that had to be re-rendered,
- * say) never touches the files it did not rewrite. What counts as "in use" is
- * the current artifact name itself, never the subset rebuilt in this run.
- *
- * This is the app's own bookkeeping inside the icon's own export folder: no
- * file the record does not name is ever touched (T28's rule), and the new
- * package is already on disk before anything is removed, so a crash cannot
- * cost the user their export.
- */
-async function dropSuperseded(input: CommitExportInput, dir: DirHandleLike): Promise<string[]> {
-  const present = new Set(await listChildNames(dir));
-  const removed: string[] = [];
-  for (const path of input.previous ?? []) {
-    const name = supersededName(path, input.exportDir, input.stem, present);
-    if (name === null) continue;
-    try {
-      await dir.removeEntry?.(name);
-      removed.push(path);
-    } catch {
-      // a file the browser refuses to remove is left in place, never hidden
-    }
-  }
-  return removed;
-}
-
-/**
- * The name to remove, or null when nothing should be. Outside this icon's own
- * export folder, or already the current name: never. And — the rule that keeps
- * the migration from ever costing a package — only when the CURRENT artifact of
- * that kind is really on disk: this run wrote it, or an earlier run under the
- * new name did. An old-named file whose replacement was not written is the only
- * copy of that output, so it stays.
- */
-function supersededName(
-  path: string, exportDir: string, stem: string, present: ReadonlySet<string>,
-): string | null {
-  if (!path.startsWith(`${exportDir}/`)) return null;
-  const name = path.slice(exportDir.length + 1);
-  if (name === "" || name.includes("/")) return null;
-  const current = `${stem}.${extOf(name)}`;
-  return name === current || !present.has(current) ? null : name;
-}
-
-/** The extension a name carries, lowercased (`fog_AI.EPS` → `eps`). */
-function extOf(name: string): string {
-  return name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+/** The file names the previous record claims, rebased onto this export folder. */
+function previousNames(input: CommitExportInput): Set<string> {
+  const prefix = `${input.exportDir}/`;
+  const outs = [input.record.outputs.svg, input.record.outputs.jpg, input.record.outputs.eps];
+  return new Set(outs.flatMap((o) => (o === null || !o.path.startsWith(prefix) ? [] : [o.path.slice(prefix.length)])));
 }
 
 /** Fills outputs/status/timestamps from what was written, then writes export.json. */

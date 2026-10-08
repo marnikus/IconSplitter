@@ -348,6 +348,30 @@ describe("runExport — selective re-export (no redundant work)", () => {
     expect(spy.renders).toBe(1);
     expect(fileText(root, `${DIR}/export/${ART}.svg`)).toBe(svgBefore); // SVG untouched
     expect(dirAt(root, `${DIR}/export`).children.has(`${ART}.jpg`)).toBe(true);
+    // the record keeps naming the SVG this run did not rewrite (2026-10-08)
+    expect(readRecord(root).outputs.svg).toEqual(expect.objectContaining({ path: `${DIR}/export/${ART}.svg` }));
+  });
+
+  it("sweeps an orphan the record never named — the old-named EPS a real folder keeps", async () => {
+    const root = pairRoot();
+    await runExport(args(root));                       // the current-name package: fog.svg + fog.jpg
+    const dir = dirAt(root, `${DIR}/export`);
+    dir.children.set(`${STEM}.eps`, new BinFile(`${STEM}.eps`, "%!PS-Adobe-3.0 EPSF-3.0", 100));
+    // nothing in the record names that EPS (an older partial run rewrote it),
+    // and something has to be written for the sweep to run: the JPEG is gone.
+    dir.children.delete(`${ART}.jpg`);
+    const result = await runExport(args(root, { record: readRecord(root), deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    expect([...dir.children.keys()].sort()).toEqual(["export.json", `${ART}.jpg`, `${ART}.svg`]);
+    expect(result.outputs).toEqual({ svg: null, jpg: `${ART}.jpg`, eps: null }); // only the JPEG was rebuilt
+    // ...and the record still names the package that is really on disk
+    const record = readRecord(root);
+    expect(record.outputs).toEqual({
+      svg: expect.objectContaining({ path: `${DIR}/export/${ART}.svg` }),
+      jpg: expect.objectContaining({ path: `${DIR}/export/${ART}.jpg` }),
+      eps: null,
+    });
+    expect(record.jpeg.width).toBe(3886); // the JPEG block survives a selective run
   });
 
   it("replaces the package an earlier version left under the bookkeeping name", async () => {
@@ -379,9 +403,9 @@ describe("runExport — selective re-export (no redundant work)", () => {
 
 describe("the rename migration is never allowed to lose a package", () => {
   /** A commit with nothing rebuilt — the migration's own unit seam. */
-  function bareCommit(root: FakeDir, previous: string[], epsText: string | null, record = oldNameRecord()) {
+  function bareCommit(root: FakeDir, epsText: string | null, record = oldNameRecord()) {
     return commitExport({
-      root, exportDir: `${DIR}/export`, stem: ART, previous,
+      root, exportDir: `${DIR}/export`, stem: ART,
       svgOut: null, jpeg: null, epsText, metadata: null,
       jpegExpected: { width: 0, height: 0 },
       record, partial: epsText === null,
@@ -397,7 +421,7 @@ describe("the rename migration is never allowed to lose a package", () => {
     (dirAt(root, DIR) as BinDir).children.set("export", dir);
     dir.children.set(`${STEM}.eps`, new BinFile(`${STEM}.eps`, "%!PS-Adobe-3.0 EPSF-3.0", 100));
     const record = oldNameRecord(true); // the pre-rename record names that EPS
-    const result = await bareCommit(root, [`${DIR}/export/${STEM}.eps`], null, record);
+    const result = await bareCommit(root, null, record);
     expect(dir.children.has(`${STEM}.eps`)).toBe(true); // the only EPS there is stays
     expect(result.replaced).toEqual([]);
     // and the record still names it, because it is still there
@@ -412,7 +436,7 @@ describe("the rename migration is never allowed to lose a package", () => {
     dir.children.set(`${ART}.eps`, new BinFile(`${ART}.eps`, "%!PS-Adobe-3.0 EPSF-3.0", 100));
     // the current artifact IS on disk, so the superseded one goes...
     const record = oldNameRecord(true); // a pre-rename record that really names the EPS
-    const result = await bareCommit(root, [`${DIR}/export/${STEM}.eps`], null, record);
+    const result = await bareCommit(root, null, record);
     expect(dir.children.has(`${STEM}.eps`)).toBe(false);      // ...because its name is superseded
     expect(result.replaced).toEqual([`${DIR}/export/${STEM}.eps`]);
     // ...and the record never keeps pointing at a file that is gone

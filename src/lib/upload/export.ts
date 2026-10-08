@@ -32,10 +32,22 @@ export function exportDirOf(dirPath: string): string {
  *   invented, only trimmed
  */
 export function stemOf(svgName: string): string {
-  const stem = svgName.replace(/\.svg$/i, "").replace(/_v\d+$/i, "");
-  const marked = /^(.*)_AI((?:_v?\d+)*)$/i.exec(stem);
+  return trimArtifactStem(svgName.replace(/\.svg$/i, ""));
+}
+
+/**
+ * The trim itself, on a name that already lost its extension (`fog_AI_v2` →
+ * `fog`, `fog_AI_7_04` → `fog`, `plain` → `plain`). Exported because the export
+ * folder's sweep must recognise the app's own superseded names by exactly the
+ * rule that produces the current ones — one rule, one home (RULE 3).
+ */
+export function trimArtifactStem(stem: string): string {
+  const marked = /^(.*)_AI((?:_v?\d+)*)$/i.exec(stem.replace(/_v\d+$/i, ""));
   return marked === null ? stem : marked[1];
 }
+
+/** The three extensions of an export package, and the only ones a sweep touches. */
+export const ARTIFACT_EXTS = ["svg", "jpg", "eps"] as const;
 
 /** Where one pair's committed JPEG lives, whether or not it exists (CP-5). */
 export function publishedJpegPath(dirPath: string, svgName: string): string {

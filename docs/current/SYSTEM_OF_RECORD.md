@@ -1943,23 +1943,32 @@ One rule, one home: `runexport.ts` no longer keeps a second private `stemOf`
 export-path cell) derives from the same function, so the record, the file and
 the UI cannot disagree.
 
-**The superseded package is removed ONLY when its replacement is on disk.**
-An export folder that still carries a pre-2026-10-08 package (`fog_AI.svg|.jpg|.eps`,
-named by that icon's own previous `export.json`) would otherwise hold two copies
-of the same icon. After the new files are written and verified — and only then —
-the commit removes the files **the previous record itself named** whose name is
-no longer in use (`dropSuperseded`). Three conditions, all of them inside the
-icon's own export folder: the path must belong to `export/`, the name must
-really be superseded (not the current `${stem}.${ext}`), and **the current
-artifact of that kind must be present on disk** — either this run wrote it or an
-earlier run under the new name did. That last rule is what keeps a rename from
-ever costing a package: an old-named file whose replacement was not written is
-the only copy of that output, so it stays (an EPS stage that failed leaves the
-previous EPS alone rather than deleting it). Nothing the record does not name is
-ever touched (a foreign file in `export/` survives, T28), the removal is reported
-in the run's result (`replaced`), and the record stops naming a file that was
-just removed (`pruneRemoved`) — a record that points at a deleted file would be
-a lie the UI repeats.
+**The folder's superseded artifacts are swept once the write is verified**
+(`src/upload/exportsweep.ts`, own test suite). A folder exported before the
+2026-10-08 naming change still carries the OLD artifacts — typically the EPS
+(`fog.svg` + `fog.jpg` + `fog_AI.eps`) — and the user asked for the package to
+end up under ONE name. After the new files are written and verified, and only
+then, the sweep removes **what this app provably wrote and no longer writes**:
+
+* candidates are only the icon's three artifact extensions whose bare name trims
+  to **this icon's stem** under the very rule that produces the current names
+  (`trimArtifactStem`), and which are not already `${stem}.${ext}` — so
+  `export.json`, a readme, another icon's `arch_AI.svg`, `banner.jpg` and a base
+  that is not this icon's (`fogv2.eps`, `fog_AI_x.eps`) are never candidates;
+* a candidate the previous `export.json` still **names** goes only when the
+  current artifact of that kind is on disk — an EPS stage that failed leaves the
+  previous EPS alone rather than deleting the only copy of it;
+* a candidate **no record names** is an orphan (the app lost track of it, no
+  package claims it) — that is what a failed-then-recommitted EPS looks like, and
+  it goes;
+* `*.tmp` leftovers are left to the commit that owns them: the sweep does not
+  guess.
+
+The removals are reported in the run's result (`replaced`) and the record is
+kept honest on both sides: it stops naming a file that was just removed, and it
+KEEPS naming the files this run did not rewrite (`assembleRecord` seeds
+`outputs` and the JPEG block from the previous record) — a selective re-export
+used to blank the record's entries for everything it skipped.
 
 Assumption recorded: one icon per export folder (the user's own tree — the
 batch layout puts one piece per `split_NN` folder). Two paired sources whose
@@ -1974,8 +1983,7 @@ case is not in the corpus and would be caught by T28 when it lands.
 EPS can never carry a different name than its siblings; the EPS's own
 `%%Title` is `${stem}.eps` for the same reason. A differently-named `.eps` in a
 folder can therefore only be a file no export of the current naming wrote: a
-leftover from before the rename. The migration removes such a leftover when the
-icon's own previous `export.json` names it AND the current EPS is on disk; a
-leftover that **no record names** (an orphan the record lost track of, e.g. an
-EPS committed before a `partial` run rewrote the record) is left alone by
-design — the app never deletes a file it cannot prove it wrote.
+leftover from before the rename. The sweep removes such a leftover in both
+shapes: named by the icon's own previous `export.json` (when the current EPS is
+on disk), or an orphan no record names — an orphan still has to pass the naming
+rule that proves the app wrote it, so a foreign file is never a candidate.

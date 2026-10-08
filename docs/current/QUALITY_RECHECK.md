@@ -2209,3 +2209,50 @@ a real folder would look like after a rename:
   deliberately left in place: the app never deletes a file it cannot prove it
   wrote. A folder carrying one needs the user's word before any sweep lands.
 * Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (third) — the export folder sweeps to ONE name; the record stops lying
+
+The user's follow-up: after the rename an export folder still held the old-named
+EPS, and the package must "be the same name as the svg". The record-based
+removal from the previous entry could not see an **orphan** — a superseded file
+the current `export.json` no longer names, which is exactly what a real folder
+has — so it was replaced by a folder sweep (`src/upload/exportsweep.ts`, five
+unit tests + two pipeline tests):
+
+* candidates: the three artifact extensions whose bare name trims to THIS icon's
+  stem under the export rule (`trimArtifactStem`), and which are not the current
+  `${stem}.${ext}` — another icon, a foreign file, `fogv2.eps` and
+  `fog_AI_x.eps` are never candidates;
+* a candidate the previous record still names goes only when its replacement is
+  on disk (a failed EPS stage must not delete the previous EPS); an orphan goes —
+  it passed the naming proof and no package claims it;
+* written and verified first, swept second, reported in `replaced`.
+
+**And the sweep exposed a pre-existing bug worth the record**: `assembleRecord`
+built a fresh record for every run, so a selective re-export (one JPEG, one SVG)
+blanked the record's `outputs` and JPEG block for everything it did not rewrite —
+the record stopped naming files that were sitting right there. `assembleRecord`
+now seeds `outputs` and the JPEG block from the previous record; the commit then
+fills, replaces and prunes them (`writeRecord` + `pruneRemoved`).
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_exportsweep` (new) | our superseded forms (`_AI`, `_AI_v2`, `_AI_7_04`, `_AI_9_01`) go; another icon / foreign file / `export.json` / near-miss bases stay; a claimed old-named file with no replacement stays; an orphan goes; a clean folder is a no-op |
+| `upload_runexport` | the orphan EPS from a real folder is swept and the folder ends `[export.json, fog.svg, fog.jpg]`; the record keeps naming the SVG a JPEG-only rebuild did not rewrite; the old-name package is still replaced |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1395 tests** (was 128 / 1388) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* A superseded file whose base does not trim to this icon's stem (e.g.
+  `fog_AI_x.eps`) is left alone: the naming rule cannot prove this app wrote it.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
