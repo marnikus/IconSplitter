@@ -554,6 +554,7 @@ Bulk bar (`upload-bulk`):
 | `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = the selected icons with NO metadata text yet; opens the exact-request confirmation for those (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
 | `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
+| `upload-download-all` | button | "⤓ Download all" (I-59) — copies the CHECKED icons' committed SVG, EPS and JPG into a folder the user picks in the browser's dialog; disabled at 0 checked; the outcome arrives in `upload-toast` and one `downloaded` log entry per icon |
 | `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
 
 List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),

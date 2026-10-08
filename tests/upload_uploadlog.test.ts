@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, exportedSpec, modelCheckedSpec,
-  nameRefusedSpec, namedSpec, restoredSpec,
+  nameRefusedSpec, namedSpec, restoredSpec, downloadedSpec,
 } from "../src/upload/uploadlog";
 
 const REF = { id: "pair_abc", base: "fog_AI" };
@@ -21,11 +21,12 @@ const ALL = [
   exportedSpec({ ...REF, status: "processed", note: "export.json was written last" }),
   cancelledSpec(3),
   restoredSpec(2),
+  downloadedSpec({ ...REF, written: 1, folder: "Exports", problem: "" }),
   modelCheckedSpec({ model: "gemini-3.1-flash-lite", ok: true, reason: "" }),
 ];
 
 describe("the vocabulary is closed", () => {
-  it("every builder emits one of the six actions (T13)", () => {
+  it("every builder emits one of the seven actions (T13)", () => {
     for (const spec of ALL) {
       expect(UPLOAD_LOG_ACTIONS).toContain(spec.action);
     }
@@ -82,5 +83,23 @@ describe("the module lock — nobody else writes the tab's log", () => {
         expect(window, `${name} log() site`).not.toContain("feature:");
       }
     }
+  });
+});
+
+describe("downloaded (2026-10-08 Download all, D6)", () => {
+  it("is one of the closed actions, and a copy's entry carries no data", () => {
+    expect(UPLOAD_LOG_ACTIONS).toContain("downloaded");
+    const spec = downloadedSpec({ ...REF, written: 3, folder: "Exports", problem: "" });
+    expect(spec.action).toBe("downloaded");
+    expect(spec.level).toBe("info");
+    expect(spec.detail).toContain("3 files");
+    expect(spec.detail).toContain("Exports");
+    expect(Object.keys(spec)).not.toContain("data");
+  });
+
+  it("a copy with a problem is a warning that says what went wrong", () => {
+    const spec = downloadedSpec({ ...REF, written: 1, folder: "Exports", problem: "1 file missing on disk" });
+    expect(spec.level).toBe("warn");
+    expect(spec.detail).toContain("1 file missing on disk");
   });
 });

@@ -15,7 +15,7 @@ export const UPLOAD_FEATURE = "upload";
 
 /** The CLOSED set of actions the tab may emit, in one place for the lock test. */
 export const UPLOAD_LOG_ACTIONS = [
-  "named", "name-refused", "exported", "cancelled", "restored", "model-checked",
+  "named", "name-refused", "exported", "cancelled", "restored", "model-checked", "downloaded",
 ] as const;
 
 export type UploadLogAction = (typeof UPLOAD_LOG_ACTIONS)[number];
@@ -62,6 +62,21 @@ export function exportedSpec(ref: IconRef & { status: string; note: string }): U
     action: "exported",
     ids: { pair: ref.id, base: ref.base },
     detail: `${ref.status} — ${ref.note}`,
+  };
+}
+
+/**
+ * One icon's copy into the chosen folder ("Download all", D6). `problem` is ""
+ * when every file the icon had was written; otherwise it names what was not.
+ */
+export function downloadedSpec(ref: IconRef & { written: number; folder: string; problem: string }): UploadLogSpec {
+  const what = ref.written === 0 ? "nothing copied" : `${countLabel(ref.written, "file", "files")} copied`;
+  return {
+    level: ref.problem === "" ? "info" : "warn",
+    feature: UPLOAD_FEATURE,
+    action: "downloaded",
+    ids: { pair: ref.id, base: ref.base },
+    detail: `${what} to “${ref.folder}”${ref.problem === "" ? "" : ` — ${ref.problem}`}`,
   };
 }
 

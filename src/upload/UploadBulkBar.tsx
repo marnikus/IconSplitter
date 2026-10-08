@@ -31,6 +31,7 @@ export interface UploadBulkBarProps {
   onApplySettings: () => void;
   onMetadata: () => void;
   onExport: () => void;
+  onDownload: () => void;
   onCancel: () => void;
 }
 
@@ -83,9 +84,21 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
           ? "Select icons first"
           : `${p.metaNeeded} of ${p.checkedCount} selected still need metadata — one paid request each`}>
         ✦ Generate metadata ({p.metaNeeded})</button>
+      <DownloadButton checked={p.checkedCount} onDownload={p.onDownload} />
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
     </div>
+  );
+}
+
+/** Download all (2026-10-08): copies the checked icons' exported files to a folder the user picks. */
+function DownloadButton({ checked, onDownload }: { checked: number; onDownload: () => void }) {
+  return (
+    <button type="button" className="svg-btn" data-testid="upload-download-all"
+      disabled={checked === 0} onClick={onDownload}
+      title={checked === 0 ? "Select icons first" : "Copy each selected icon's exported SVG, EPS and JPG into a folder you choose"}>
+      ⤓ Download all
+    </button>
   );
 }
 

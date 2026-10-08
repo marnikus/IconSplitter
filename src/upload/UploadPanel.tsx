@@ -76,6 +76,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
         onSettings={() => g.openSettings(null)}
         onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
         onMetadata={() => g.generateMetadataSelected(g.checked)} onExport={() => g.exportSelected(g.checked)}
+        onDownload={() => g.downloadSelected(g.checked)}
         onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
       <UploadList g={g} actions={actions} />
     </>

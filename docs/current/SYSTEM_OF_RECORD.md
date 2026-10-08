@@ -1409,7 +1409,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-bg-{white,black,gray,green,red}`, `upload-bg-custom`,
   `upload-bg-value`), `upload-estimate` / `upload-progress`,
   `upload-apply-settings`, `upload-meta-selected`,
-  `upload-export-selected`, `upload-cancel-run`), list (`upload-list`,
+  `upload-export-selected`, `upload-download-all` (I-59), `upload-cancel-run`), list (`upload-list`,
   `upload-rows`, `upload-row-*`, `upload-check-*`, `upload-prev-*` +
   `upload-prev-*-frame`, `upload-target-*`, `upload-export-path-*`,
   `upload-status-*`, `upload-meta-cell-*`, `upload-settings-*` +
@@ -2115,3 +2115,35 @@ leftover from before the rename. The sweep removes such a leftover in both
 shapes: named by the icon's own previous `export.json` (when the current EPS is
 on disk), or an orphan no record names — an orphan still has to pass the naming
 rule that proves the app wrote it, so a foreign file is never a candidate.
+
+## Download all — the selected packages into one folder (2026-10-08, I-59)
+
+Design: `docs/archive/2026-10-08-upload-download-all/design.md`. The user chose a flat
+layout: every file of every checked icon goes straight into the folder the user
+picks.
+
+* **I-59 — Download all copies; it never writes into the tree.** `upload-download-all`
+  copies the committed package of every CHECKED icon (the files its `export.json`
+  records: svg, jpg, eps) into a folder the user picks in the browser's own dialog
+  (`showDirectoryPicker`, readwrite). The copy reads the export folder and writes
+  only into the chosen folder: the approved sources and `export/` never change.
+  The names are the export names (`fog.svg`, `fog.jpg`, `fog.eps`).
+* **Nothing is overwritten (RULE 23).** A name the chosen folder already holds, or
+  one an earlier icon of the same batch took, numbers the WHOLE package
+  (`fog_2.svg` + `fog_2.jpg`), compared without case (Windows folders). The toast
+  says how many icons were renamed.
+* **Only prepared packages are copied.** An icon with no committed package is
+  skipped and named in the toast ("N without an export skipped"); this button
+  never exports. A stale package is copied as it stands and counted, so the user
+  knows to re-export.
+* **Honest outcomes.** A cancelled dialog saves nothing and says so. A browser
+  without the folder API gets the tab's own Chrome-or-Edge screen, with no button.
+  The copy is refused while a run is in flight, because that run may be writing the
+  same files. A missing or refused file is counted and reported; the others go on.
+* **One log entry per checked icon** (action `downloaded`, the closed upload
+  vocabulary), skipped icons included, naming the icon, the folder and the outcome.
+  The entry carries no file bytes and no data field.
+* The rules are pure (`upload/downloadplan.ts`); the action is `upload/downloadactions.ts`.
+  Tests: `upload_download.test.ts` (plan), `upload_download_ui.test.tsx` (a real
+  export, then a byte-for-byte copy, the numbering, the cancel, the log) and
+  `upload_uploadlog.test.ts` (the closed vocabulary).

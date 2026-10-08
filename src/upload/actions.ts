@@ -27,6 +27,7 @@ import { useMetaActions } from "./metaactions";
 import { usePromptActions, type PromptActions } from "./promptactions";
 import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
+import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
@@ -95,6 +96,8 @@ export interface UploadActions extends PromptActions {
   exportRow: (id: string) => void;
   cancelExport: () => void;
   openLocation: (id: string) => void;
+  /** Download all: copy every checked icon's committed package into a folder the user picks. */
+  downloadSelected: (ids: string[]) => void;
 }
 
 /** One hook's share of the action surface, so the composition stays typed. */
@@ -114,6 +117,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useUiActions(ctx),
     ...useMetaActions(ctx),
     ...useExportActions(ctx),
+    ...useDownloadActions(ctx),
     ...usePromptActions(ctx),
   };
 }

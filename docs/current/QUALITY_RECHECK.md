@@ -2496,3 +2496,31 @@ SoR I-53 rewritten; I-57 (keep-alive, popup) and I-58 (pinned order) added.
 
 * `knip` needs a run on a machine where its parser can allocate; re-check then.
 * The popup is portalled into `document.body` from `SvgPanel` (as built), not in the keep-alive slot as the design first wrote; documented in I-57.
+
+## 2026-10-08 — SVG to upload: "Download all" (`feat(upload)`)
+
+Design: `docs/archive/2026-10-08-upload-download-all/design.md`. SoR I-59 added (new
+section "Download all"); UI_SELECTORS row `upload-download-all`; README row.
+
+### What changed (RULE 16/18 figures)
+
+* New, all under budget: `src/upload/downloadplan.ts` 125 lines (pure), `src/upload/downloadactions.ts` 143 lines (the action).
+* `src/upload/actions.ts` 284 lines (was 279; ceiling 300) — three wiring lines.
+* `src/upload/UploadBulkBar.tsx` 160 lines: the button is its own `DownloadButton` component, because `BulkRight` went to 33 lines against a limit of 30 (RULE 16) and was split.
+* `src/upload/uploadlog.ts` 126 lines: closed vocabulary gains `downloaded` (six → seven actions).
+* Tests: `upload_download.test.ts` (12, pure plan + summary), `upload_download_ui.test.tsx` (6, real export then copy), `upload_uploadlog.test.ts` (closed set updated, +2).
+* Baseline `tools/quality_baseline.json`: **untouched**.
+
+### Gates (full run)
+
+`npm run verify`: types; lint (0 errors, 10 warnings, the same legacy files as before — none new); quality gate (changed) GATE PASSED; tests 133 files / 1530 tests (1510 before, +20); coverage; build — ALL LANES PASSED. `jscpd src --min-tokens 60`: 30 clones, the same as before this change (none in the new files).
+
+### Notes
+
+* A red-test mutation check: with the plan blind to the folder's names, the no-overwrite UI test fails (the copy would collide). The overwrite-vs-create write mode is a second guard, not the primary one.
+* The panel's unsupported screen is the user's real "no folder API" path; the action's own guard is defensive.
+
+### Known debt carried
+
+* `knip` still does not run in this sandbox (see the entry above).
+* The UI test keeps its own copies of the canvas stub and fixture helpers (as `upload_ui.test.tsx` does); they were not extracted to a shared helper, to keep this change small.
