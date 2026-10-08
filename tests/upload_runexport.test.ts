@@ -9,6 +9,7 @@ import { runExport, type ExportRunArgs, type ExportRunResult } from "../src/uplo
 import { parseExportRecord, type ExportRecord } from "../src/lib/upload/export";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
+import type { RasterDeps } from "../src/lib/upload/raster";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
 import { verifyExportSvg } from "../src/lib/upload/clean";
 import { verifyEps } from "../src/lib/upload/eps";
@@ -40,6 +41,18 @@ const META: IconMetadata = {
 };
 
 /** A fake canvas transport that "encodes" a real minimal JPEG of the target size. */
+/** Records the size the pipeline really asks for, and renders at exactly that. */
+function captureRaster(): { asked: { width: number; height: number }[]; deps: RasterDeps } {
+  const asked: { width: number; height: number }[] = [];
+  const render = async (_svg: string, target: { width: number; height: number }): Promise<HTMLCanvasElement> => {
+    asked.push({ width: target.width, height: target.height });
+    return target as unknown as HTMLCanvasElement;
+  };
+  const encode = async (canvas: HTMLCanvasElement): Promise<Uint8Array> =>
+    minimalJpeg(canvas.width, canvas.height);
+  return { asked, deps: { render, encode } };
+}
+
 function fakeRaster(width: number, height: number, spy?: { renders: number }) {
   return {
     render: async () => {
@@ -179,6 +192,26 @@ describe("runExport — the full package commits per icon", () => {
     expect(verifyExportSvg(svgText)).toEqual([]);
     const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 512, height: 256 });
+  });
+
+  it("lets the user keep the artboard's RATIO at their own megapixels", async () => {
+    const root = pairRoot();
+    // A small artboard must not cap the resolution: 512×256 with "same as the
+    // artboard" off and 4 MP → a 2:1 JPEG of 4 MP, while the SVG stays 512×256.
+    const settings: UploadSettings = {
+      ...DEFAULT_UPLOAD_SETTINGS,
+      jpegMegapixels: 4,
+      jpegMatchArtboard: false,
+      artboard: { mode: "custom", size: 512, width: 512, height: 256 },
+    };
+    const raster = captureRaster();
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: raster.deps } }));
+    expect(result.status).toBe("processed");
+    // what the pipeline ASKED the canvas to render, and what it committed
+    expect(raster.asked).toEqual([{ width: 2828, height: 1414 }]);
+    expect(readRecord(root).jpeg).toMatchObject({ width: 2828, height: 1414 });
+    const doc = new DOMParser().parseFromString(fileText(root, `${DIR}/export/${STEM}.svg`), "image/svg+xml");
+    expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
   });
 
   it("never touches the approved source", async () => {

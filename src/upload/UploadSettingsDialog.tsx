@@ -202,22 +202,55 @@ function gcd(x: number, y: number): number {
   return y === 0 ? Math.max(1, x) : gcd(y, x % y);
 }
 
-/** The JPEG resolution, which a pinned artboard simply overrides. */
+/**
+ * The JPEG resolution. NEVER blocked (2026-10-08): a small artboard must not cap
+ * it, so the field always accepts a number. When the artboard pins a px size the
+ * checkbox says whether the JPEG follows it (the default) or renders at the
+ * megapixels the user typed, keeping the artboard's ratio.
+ */
 function MegapixelSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const pinned = artboardSize(effective.artboard) !== null;
+  const pinned = artboardSize(effective.artboard);
+  // Typing a resolution is the user deciding for the megapixels: one gesture,
+  // so it also unticks "same size as the artboard" in the same change.
+  const onPixels = (value: number) => {
+    const megapixels = clampMegapixels(value);
+    if (pinned === null) return change(p, "jpegMegapixels", megapixels);
+    changeMany(p, { jpegMegapixels: megapixels, jpegMatchArtboard: false });
+  };
   return (
     <div className="svg-field up-set-field">
       <span className="svg-label">JPEG (MP)<Marker p={p} field="jpegMegapixels" testid="mp" /></span>
       <input className="svg-input" data-testid="upload-set-mp" type="number" aria-label="JPEG megapixels"
-        min={MP_MIN} max={MP_MAX} step={0.1} value={effective.jpegMegapixels} disabled={pinned}
-        onChange={(e) => change(p, "jpegMegapixels", clampMegapixels(Number(e.target.value)))} />
+        min={MP_MIN} max={MP_MAX} step={0.1} value={effective.jpegMegapixels}
+        onChange={(e) => onPixels(Number(e.target.value))} />
+      {pinned !== null && <MatchArtboard p={p} effective={effective} />}
       <small className="up-hint" data-testid="upload-set-mp-note">
-        {pinned
-          ? "not used here — the artboard pins the exact px size"
-          : "rendered from the vectors at this resolution (default 15.1)"}
+        {pinned === null
+          ? "rendered from the vectors at this resolution (default 15.1)"
+          : mpNote(pinned, effective.jpegMatchArtboard)}
       </small>
     </div>
   );
+}
+
+/** The choice a pinned artboard creates: same px as the artboard, or the MP above. */
+function MatchArtboard({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  return (
+    <label className="up-hint up-set-field">
+      <input data-testid="upload-set-mp-match" type="checkbox" aria-label="Same size as the artboard"
+        checked={effective.jpegMatchArtboard}
+        onChange={(e) => change(p, "jpegMatchArtboard", e.target.checked)} />
+      {" same size as the artboard"}
+      <Marker p={p} field="jpegMatchArtboard" testid="mp-match" />
+    </label>
+  );
+}
+
+/** What the JPEG will really be, given the artboard and the resolution choice. */
+function mpNote(pinned: { width: number; height: number }, match = true): string {
+  return match
+    ? `the JPEG is the artboard itself: ${pinned.width}×${pinned.height} px — untick for a bigger file`
+    : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
 }
 
 /** The background: the five presets plus one custom picker (I-17/I-21). */
@@ -246,9 +279,14 @@ function BackgroundSetting({ p, effective }: { p: UploadSettingsDialogProps; eff
 
 /** One field change → the global defaults or the icon's override (live). */
 function change<K extends keyof UploadSettings>(p: UploadSettingsDialogProps, field: K, value: UploadSettings[K]): void {
+  changeMany(p, { [field]: value });
+}
+
+/** Several fields at once — one gesture, one undoable override entry. */
+function changeMany(p: UploadSettingsDialogProps, patch: Partial<UploadSettings>): void {
   if (p.id === null) {
-    p.onDefaults({ [field]: value });
+    p.onDefaults(patch);
     return;
   }
-  p.onOverride(p.id, { ...p.overrides, [field]: value });
+  p.onOverride(p.id, { ...p.overrides, ...patch });
 }

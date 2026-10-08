@@ -24,11 +24,12 @@ import {
 const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAULT_UPLOAD_SETTINGS, ...patch });
 
 describe("defaults and clamps", () => {
-  it("ships the documented defaults (8% padding, white, no stroke override, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard)", () => {
+  it("ships the documented defaults (8% padding, white, no stroke override, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
       paddingPct: 8, background: "#ffffff", strokePt: 0,
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
+      jpegMatchArtboard: true,
     });
   });
 
@@ -49,6 +50,26 @@ describe("defaults and clamps", () => {
     expect(clampArtboard({ mode: "weird", size: 512, width: 512, height: 512 })).toEqual(CONTENT_ARTBOARD);
     // a preset rounds to the nearest offered size, so a stored oddity still lands somewhere sane
     expect(clampArtboard({ mode: "preset", size: 1000, width: 1, height: 1 })).toMatchObject({ mode: "preset", size: 1024 });
+  });
+
+  it("keeps the JPEG resolution the user's own decision, artboard or not", () => {
+    // Default: when the artboard pins a px size, that size IS the JPEG — but the
+    // user can say otherwise, and that decision is a stored setting like any other.
+    expect(DEFAULT_UPLOAD_SETTINGS.jpegMatchArtboard).toBe(true);
+    expect(parseOverrides({ jpegMatchArtboard: false })).toEqual({ jpegMatchArtboard: false });
+    expect(parseOverrides({ jpegMatchArtboard: true })).toEqual({ jpegMatchArtboard: true });
+    expect(parseOverrides({ jpegMatchArtboard: "no" })).toEqual({}); // only a real boolean survives
+    expect(parseOverrides({ jpegMatchArtboard: 0 })).toEqual({});
+
+    // a corrupt or missing stored value falls back to the default
+    expect(normalizeSettings({ jpegMatchArtboard: "junk" } as unknown as Record<string, unknown>).jpegMatchArtboard).toBe(true);
+    expect(normalizeSettings({} as Record<string, unknown>).jpegMatchArtboard).toBe(true);
+    expect(normalizeSettings({ jpegMatchArtboard: false }).jpegMatchArtboard).toBe(false);
+
+    // it changes the output, so it must move the fingerprint and the equality check
+    const off: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, jpegMatchArtboard: false };
+    expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, off)).toBe(false);
+    expect(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS)).not.toBe(settingsFingerprint(off));
   });
 
   it("rounds a custom size to whole pixels and falls back where a number is missing", () => {

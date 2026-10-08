@@ -350,9 +350,21 @@ opt-in class as Generate SVG → Requesty; design
   W×H, which is what lets the user set the output aspect ratio. Read back
   through `clampArtboard`: 16–8192 px per edge, a 64 MP total area ceiling that
   shrinks BOTH edges together so the ratio survives, and a preset that snaps to
-  the nearest offered size; a corrupt value becomes `content`. The MP field is
-  disabled (and says why) while a pinned artboard decides the px size, and only
-  a non-`content` artboard is written into the stored overrides.
+  the nearest offered size; a corrupt value becomes `content`. Only a
+  non-`content` artboard is written into the stored overrides.
+* The JPEG resolution is NEVER blocked by the artboard (2026-10-08, the user's
+  correction: "a small artboard must not cap the resolution"). `jpegMatchArtboard`
+  (default true) says whether the JPEG follows a PINNED artboard's exact px;
+  unticking it — which typing a megapixel value does in the same gesture —
+  renders `jpegMegapixels` instead while keeping the artboard's aspect ratio, so
+  a 512×512 artboard can still ship an 8000×8000 JPEG. With a `content`
+  artboard the question does not exist (the artboard follows the MP), so the
+  checkbox is not shown. Both the flag and the megapixels are ordinary settings
+  (defaults + per-icon overrides), the flag is in the fingerprint because it
+  changes the output, and the ONE canonical `SETTINGS_FIELDS` list (which
+  `overridesEqual` in the undo path derives from) names every overrideable
+  field, so a change confined to the artboard or the flag can never be
+  swallowed as "nothing changed".
 * Geometry: the visible bounds include strokes (width/caps/joins), transforms
   and non-scaling-stroke; unsupported elements (text, image, use,
   foreignObject, risky `<style>`) are named, never guessed. The artwork is
@@ -363,9 +375,10 @@ opt-in class as Generate SVG → Requesty; design
   px are exact (`viewBox="0 0 W H"`), and the stroke width is divided by that
   same factor so a 2.2 pt stroke is still 2.2 pt in the final file. Strokes are
   normalized to the configured pt width (1 pt = 4/3 px), and the JPEG
-  rasterizes the VECTORS directly — at the pinned px when the artboard pins
-  them, otherwise at the integer MP target (15.1 MP → 3886×3886 for a square
-  artboard) — verified by decoding the SOF back. All of it happens on an export
+  rasterizes the VECTORS directly — at the artboard's px while
+  `jpegMatchArtboard` is on, otherwise at the integer MP target in the
+  artboard's ratio (15.1 MP on a square artboard → 3886×3886; 4 MP on 512×256 →
+  2828×1414) — verified by decoding the SOF back. All of it happens on an export
   COPY — the approved source is never written.
 * The metadata prompt (2026-10-07 UI fix): it lives in its OWN large panel
   beside the Gemini card — never inside it — and it is EDITABLE and persisted

@@ -6,7 +6,7 @@
 // the same code path (the panel's persist effect writes localStorage); with no
 // panel mounted an undo writes the store directly, which the next mount reads.
 
-import { parseOverrides, type SettingsOverrides } from "../lib/upload/settings";
+import { overridesEqual, parseOverrides, type SettingsOverrides } from "../lib/upload/settings";
 import { loadOverrides, saveOverrides, type OverridesMap } from "./settingsstore";
 
 /** The payload one `uploadSettings` entry carries, on either side. */
@@ -62,13 +62,8 @@ function applyOne(map: OverridesMap, id: string, value: SettingsOverrides | null
   return true;
 }
 
-/** Shallow field-by-field equality over the seven overrideable settings. */
-export function overridesEqual(a: SettingsOverrides, b: SettingsOverrides): boolean {
-  const keys: (keyof SettingsOverrides)[] = [
-    "paddingPct", "background", "strokePt", "jpegMegapixels", "jpegQuality", "optimizeSvg", "includeEps",
-  ];
-  return keys.every((k) => (a[k] ?? undefined) === (b[k] ?? undefined));
-}
+/** Field-by-field equality over every overrideable setting (lib/upload/settings). */
+export { overridesEqual };
 
 /** A history payload → the patch, or null when it carries nothing usable. */
 export function toUploadSettingsPatch(value: unknown): UploadSettingsPatch | null {

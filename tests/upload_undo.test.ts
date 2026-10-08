@@ -47,6 +47,18 @@ describe("overridesEqual", () => {
     expect(overridesEqual({ paddingPct: 8, includeEps: true }, { includeEps: true, paddingPct: 8 })).toBe(true);
     expect(overridesEqual({ paddingPct: 8 }, { paddingPct: 9 })).toBe(false);
     expect(overridesEqual({}, {})).toBe(true);
+    // The artboard is an overrideable field like any other — a change that
+    // touches ONLY it must not compare equal (that is how it got swallowed).
+    const square = { mode: "preset", size: 512, width: 512, height: 512 } as const;
+    const wide = { mode: "custom", size: 512, width: 1024, height: 576 } as const;
+    expect(overridesEqual({ artboard: square }, { artboard: { ...square } })).toBe(true);
+    expect(overridesEqual({ artboard: square }, { artboard: { ...square, size: 1024 } })).toBe(false);
+    expect(overridesEqual({ artboard: square }, { artboard: wide })).toBe(false);
+    expect(overridesEqual({ artboard: square }, {})).toBe(false);
+    // …and so is the JPEG resolution choice
+    expect(overridesEqual({ jpegMatchArtboard: false }, { jpegMatchArtboard: false })).toBe(true);
+    expect(overridesEqual({ jpegMatchArtboard: true }, { jpegMatchArtboard: false })).toBe(false);
+    expect(overridesEqual({ jpegMatchArtboard: true }, {})).toBe(false);
   });
 });
 

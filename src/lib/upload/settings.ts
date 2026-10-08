@@ -25,6 +25,12 @@ export interface UploadSettings {
   includeEps: boolean;
   /** The artboard the export is built at: content-hugging, or an exact px size. */
   artboard: Artboard;
+  /**
+   * When the artboard pins a px size, render the JPEG at exactly those px
+   * (default). Switching it off keeps the artboard's RATIO but renders at
+   * `jpegMegapixels` instead — a small artboard must never cap the resolution.
+   */
+  jpegMatchArtboard: boolean;
 }
 
 export type SettingsOverrides = Partial<UploadSettings>;
@@ -76,6 +82,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   optimizeSvg: true,
   includeEps: false,
   artboard: { ...CONTENT_ARTBOARD },
+  jpegMatchArtboard: true,
 };
 
 export function clampPaddingPct(value: unknown): number {
@@ -154,6 +161,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     optimizeSvg: raw.optimizeSvg !== false,
     includeEps: raw.includeEps === true,
     artboard: clampArtboard(raw.artboard),
+    jpegMatchArtboard: raw.jpegMatchArtboard !== false,
   };
 }
 
@@ -184,7 +192,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -217,6 +225,7 @@ export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
   return a.paddingPct === b.paddingPct && a.background === b.background && a.strokePt === b.strokePt
     && a.jpegMegapixels === b.jpegMegapixels && a.jpegQuality === b.jpegQuality
     && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps
+    && a.jpegMatchArtboard === b.jpegMatchArtboard
     && artboardsEqual(a.artboard, b.artboard);
 }
 
@@ -224,11 +233,34 @@ function artboardsEqual(a: Artboard, b: Artboard): boolean {
   return a.mode === b.mode && a.size === b.size && a.width === b.width && a.height === b.height;
 }
 
+/**
+ * Every overrideable field, in canonical order — the ONE list the undo
+ * equality and the store readers derive from (2026-10-08: the hand-kept copy
+ * in `uploadundo.ts` had already missed the artboard, so a change that only
+ * touched it compared EQUAL and could be swallowed).
+ */
+export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
+  "paddingPct", "background", "strokePt", "jpegMegapixels", "jpegQuality",
+  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
+];
+
+/** Two partial override payloads that pin the same fields with the same values. */
+export function overridesEqual(a: SettingsOverrides, b: SettingsOverrides): boolean {
+  return SETTINGS_FIELDS.every((field) => fieldValuesEqual(a[field], b[field]));
+}
+
+/** Field values are primitives except the artboard, which compares as a whole. */
+function fieldValuesEqual(a: unknown, b: unknown): boolean {
+  if (!isRecord(a) || !isRecord(b)) return a === b;
+  return artboardsEqual(clampArtboard(a), clampArtboard(b));
+}
+
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
     round3(s.paddingPct), s.background, round3(s.strokePt),
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
+    s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");

@@ -2017,3 +2017,59 @@ clause to a `sourceVeto` helper, `parseOverrides` became a field table
   `env-setup-performance` designs.
 * `design/Arena setup analyze/` (the 21 MB saved web page) — owner decision on
   removal, scheduled with P5's `design/SVG to upload/` landing.
+
+## 2026-10-08 — the artboard must not cap the JPEG resolution (user correction)
+
+Reported: "if artboard selected it block to setup the MP custom resolution in MP
+but it should not. User can have big resolution of icon even the icon artboard
+is small so it should let user decide it resolution same as artboard or not."
+
+What was wrong: pinning the artboard `disabled` the MP field and silently used
+the pinned px for the JPEG, so a 512×512 artboard made a bigger file
+impossible. Now `upload-set-mp` is never disabled; with a pinned artboard a
+checkbox (`upload-set-mp-match`, "same size as the artboard", default on) makes
+the choice explicit, and typing a megapixel value unticks it in the SAME
+gesture (one `changeMany` → one override patch, one undo entry). The note says
+what the JPEG will really be either way. With a `content` artboard the question
+does not exist (the artboard follows the MP), so the checkbox is not rendered.
+
+Implementation: `jpegMatchArtboard` is a first-class setting (default true) —
+`UploadSettings`, `readFlags` (so it survives corrupt storage as the default),
+`settingsEqual`, `settingsFingerprint` (it changes the output, so a toggle must
+re-export) — and `buildJpeg` picks `pinnedDimensions` only while it is on,
+otherwise `targetDimensions(fit.artW, fit.artH, jpegMegapixels)`, which keeps
+the artboard's ratio. A latent bug found on the way: `overridesEqual` in
+`uploadundo.ts` kept its OWN list of seven overrideable fields and had already
+missed the artboard, so a change touching only the artboard (or the new flag)
+compared EQUAL and could be swallowed while the panel was unmounted. The list
+is now `SETTINGS_FIELDS` in `lib/upload/settings.ts` — one source of truth —
+and `overridesEqual` derives from it.
+
+Tests: 4 new/updated — `upload_settings` (the flag is a real setting: parse,
+normalize, equality, fingerprint; the defaults object), `upload_runexport` (4 MP
++ 512×256 + match OFF ⇒ the pipeline really asks for and commits a 2828×1414
+JPEG while the SVG stays `0 0 512 256`), `upload_ui` (MP never disabled, the
+checkbox appears only when pinned, typing 4 MP stores both values, the box hands
+the decision back, and `upload-set-mp-match` is absent in content mode), and
+`upload_undo` (artboard-only and flag-only changes are NOT equal).
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 8.9 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` (RULE 19 order used again: `MegapixelSetting` hit 32/30 lines, so the checkbox moved into its own `MatchArtboard` component) |
+| 4/6 tests | ✅ | **128 files / 1376 tests** (was 1374) |
+| 5/6 tests + coverage | ✅ | statements **95.74 %**, branches **89.27 %**, functions 96.82 %, lines 97.75 % |
+| 6/6 build | ✅ | `dist/index.html` 1,485.05 kB (gzip 426.35 kB) |
+
+Note on fingerprints: adding a field to the canonical settings fingerprint makes
+packages committed before this change read `stale` once — by design, since the
+meaning of the settings changed (the artboard no longer implies the JPEG size).
+
+### Known debt carried
+
+* Unchanged from the previous entry: §2 field ranges (padding 0–40, stroke
+  0.2–8 pt, MP 1–30, quality 0.98), T17/T19/T25/T27/T28, P5–P7, and the
+  `docs/README.md` §10 design pointers.

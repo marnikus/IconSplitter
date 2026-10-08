@@ -580,9 +580,13 @@ The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
 clamped on change) with the reduced-gcd ratio `upload-set-artboard-ratio` and
-the megapixel readout `upload-set-artboard-mp`. When the artboard pins the px
-size, `upload-set-mp` is disabled and `upload-set-mp-note` says the artboard
-decides the size instead of the MP target.
+the megapixel readout `upload-set-artboard-mp`. `upload-set-mp` is NEVER disabled (2026-10-08): with a pinned
+artboard the checkbox `upload-set-mp-match` ("same size as the artboard",
+default checked) offers the choice, typing a megapixel value unticks it in the
+same gesture, and `upload-set-mp-note` says what the JPEG will really be
+(`the JPEG is the artboard itself: 1024×576 px — untick for a bigger file` vs
+`rendered from the vectors at this resolution, at the artboard's aspect
+ratio`). With a `content` artboard the checkbox is not rendered at all.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,

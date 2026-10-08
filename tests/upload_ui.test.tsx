@@ -136,7 +136,11 @@ async function selectOption(sel: string, value: string): Promise<void> {
 }
 
 /** The stored global defaults, straight from localStorage (what really persisted). */
-function storedDefaults(): { artboard: { mode: string; size: number; width: number; height: number } } {
+function storedDefaults(): {
+  artboard: { mode: string; size: number; width: number; height: number };
+  jpegMegapixels: number;
+  jpegMatchArtboard: boolean;
+} {
   return JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").defaults ?? {};
 }
 
@@ -602,7 +606,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("8 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("9 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -636,15 +640,34 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     expect(text("[data-testid=upload-set-artboard-ratio]")).toContain("16:9");
     expect(text("[data-testid=upload-set-artboard-mp]")).toContain("0.59");
 
-    // the megapixel field is honestly out of play while the artboard pins the size
-    expect((q("[data-testid=upload-set-mp]") as HTMLInputElement).disabled).toBe(true);
-    expect(text("[data-testid=upload-set-mp-note]")).toContain("artboard pins the exact px size");
+    // The MP field is NEVER blocked: a small artboard must not cap the
+    // resolution — the artboard's px are the default, and the user may disagree.
+    expect((q("[data-testid=upload-set-mp]") as HTMLInputElement).disabled).toBe(false);
+    expect((q("[data-testid=upload-set-mp-match]") as HTMLInputElement).checked).toBe(true);
+    expect(text("[data-testid=upload-set-mp-note]")).toContain("1024×576");
 
-    // back to hugging the content: the MP field returns and the choice is remembered
+    // typing a resolution is the user deciding for the megapixels — one gesture,
+    // one stored choice, not a blocked field
+    await type("[data-testid=upload-set-mp]", "4");
+    await settle();
+    expect(storedDefaults().jpegMegapixels).toBe(4);
+    expect(storedDefaults().jpegMatchArtboard).toBe(false);
+    expect((q("[data-testid=upload-set-mp-match]") as HTMLInputElement).checked).toBe(false);
+
+    // and the checkbox hands the decision back to the artboard
+    await click("[data-testid=upload-set-mp-match]");
+    await settle();
+    expect(storedDefaults().jpegMatchArtboard).toBe(true);
+    expect(storedDefaults().artboard).toMatchObject({ mode: "custom", width: 1024, height: 576 });
+
+    // back to hugging the content: the artboard no longer pins px, so the
+    // "same as the artboard" question is not asked (the artboard follows the MP)
     await selectOption("[data-testid=upload-set-artboard]", "content");
     await settle();
     expect((q("[data-testid=upload-set-mp]") as HTMLInputElement).disabled).toBe(false);
+    expect(q("[data-testid=upload-set-mp-match]")).toBeNull();
     expect(storedDefaults().artboard.mode).toBe("content");
+    expect(storedDefaults().jpegMegapixels).toBe(4); // the user's value survived
     await click("[data-testid=upload-set-close]");
   });
 

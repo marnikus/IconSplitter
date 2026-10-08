@@ -97,9 +97,11 @@ function buildEps(art: Artifacts, settings: UploadSettings): void {
 async function buildJpeg(plan: StagePlan, ctx: StageContext, art: Artifacts): Promise<Uint8Array> {
   if (plan.stages.includes("render")) {
     const fit = (art.prepared as PrepareResult & { ok: true }).fit;
-    // A pinned artboard decides the pixel size; otherwise the megapixel setting
-    // does, at the artboard's own aspect ratio.
-    const pinned = artboardSize(ctx.settings.artboard);
+    // The JPEG resolution is the user's decision (2026-10-08): a pinned artboard
+    // sets the px by default — but a small artboard must not CAP the resolution,
+    // so `jpegMatchArtboard: false` renders the megapixel setting at the
+    // artboard's own aspect ratio instead.
+    const pinned = ctx.settings.jpegMatchArtboard ? artboardSize(ctx.settings.artboard) : null;
     const target = pinned === null
       ? targetDimensions(fit.artW, fit.artH, ctx.settings.jpegMegapixels)
       : pinnedDimensions(pinned);
