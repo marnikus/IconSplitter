@@ -2566,3 +2566,9 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings, none in touched files); `npm run quality:changed` GATE PASSED — `roundedRectOutline` first failed params 6/4 → takes a `box` object; `outline.ts` first hit 303 lines → split into `geom/ops.ts` (primitives, 27 lines) + `geom/shapes.ts` (basic-shape builders, 87 lines), `outline.ts` now 211 (ideal-size tag dropped: it is well under the 300 default).
 * RULE 18: no new directory debt (`src/lib/upload/geom/` 10 files). `src/svg/` 53-file debt unchanged.
 * Tests: 5 red → green at the geometry/EPS layer, 7 red → green at the pipeline/row/log/UI layer; `tests/helpers/uploadpackage.ts` extracted from `upload_download_ui` so the new `upload_epsnote_ui` shares the package fixture (one pair per folder).
+
+## 2026-10-08 — fix(meta): keep every sentence, strip only the final period
+
+* User correction: the clean pass must not cut a second sentence. `cleanPhrase` now keeps the whole text; `sentenceCase` extracted (per-sentence first letter up) so the function stays ≤ 30 lines; `SENTENCE_BREAK` narrowed to `.`/`!`/`?` (a `;`/ellipsis no longer starts a "sentence" and so no longer capitalises the next word); `CAPITALISED` allows trailing punctuation so `Empathy.` lowers like `Empathy`.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED; `npm run verify` ALL LANES PASSED. RULE 18: no size change of note (`meta.ts` +6 lines).
+* Also in this commit: `tests/quality_base.test.ts` "shallow-clone honesty" expected the fetch hint whenever the repo is shallow; after a `git fetch` a shallow sandbox DOES have a merge-base with `origin/main`, so the gate (correctly) prints none. The test now expects the hint only when shallow AND no merge-base — the tool is unchanged.

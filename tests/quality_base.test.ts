@@ -19,6 +19,12 @@ function isShallow(): boolean {
   return r.stdout.trim() === "true";
 }
 
+/** The gate hints only when it had to FALL BACK: a shallow clone whose history still reaches origin/main needs no hint. */
+function hasMergeBase(): boolean {
+  const r = spawnSync("git", ["merge-base", "origin/main", "HEAD"], { encoding: "utf8" });
+  return r.status === 0 && r.stdout.trim() !== "";
+}
+
 describe("--files: explicit list, no git involved", () => {
   it("measures exactly the named src files", () => {
     const r = gate("--files", "src/lib/zoom.ts,src/lib/isrecord.ts", "--json");
@@ -60,7 +66,7 @@ describe("shallow-clone honesty", () => {
   it("hints the fetch fix exactly when a merge-base is unavailable in a shallow repo", () => {
     const r = gate("--changed", "--allow-legacy");
     expect(r.status, r.stderr).toBe(0);
-    if (isShallow()) {
+    if (isShallow() && !hasMergeBase()) {
       expect(r.stdout).toContain("shallow");
       expect(r.stdout).toContain("git fetch --depth");
     } else {

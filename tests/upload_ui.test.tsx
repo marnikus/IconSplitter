@@ -763,16 +763,16 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(40);
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
-    // edit + accept (no record yet → no auto export); the second sentence and
-    // the Title Case the user typed are gone at the accept gate — ONE clean
-    // phrase — and the field shows it at once (RULE 24)
+    // edit + accept (no record yet → no auto export); the Title Case and the
+    // FINAL period the user typed are gone at the accept gate — every sentence
+    // kept — and the field shows it at once (RULE 24)
     await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal Line Icon Of Growth. Speed and growth chart.");
     await typeArea(`[data-testid=upload-meta-description-${FOG}]`, "Clean line icon showing growth and rising trends. Second sentence here.");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
-    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth");
-    expect((q(`[data-testid=upload-meta-description-${FOG}]`) as HTMLTextAreaElement).value).toBe("Clean line icon showing growth and rising trends");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth. Speed and growth chart");
+    expect((q(`[data-testid=upload-meta-description-${FOG}]`) as HTMLTextAreaElement).value).toBe("Clean line icon showing growth and rising trends. Second sentence here");
   });
 
   itSlow("generates metadata for ALL selected icons that need it, and says what it skipped", async () => {

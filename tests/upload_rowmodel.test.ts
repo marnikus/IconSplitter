@@ -151,11 +151,11 @@ describe("metaFromRecord + statusOf", () => {
     expect(meta.metadata).toEqual(META);
   });
 
-  it("cleans the record's title — a pre-fix package reads back one phrase and reports stale", () => {
-    const old = committedRecord(DEFAULT_UPLOAD_SETTINGS, { ...META, title: "Minimal line icon of growth. Speed and growth pictogram" });
+  it("cleans the record's title — a pre-fix package reads back the clean text and reports stale", () => {
+    const old = committedRecord(DEFAULT_UPLOAD_SETTINGS, { ...META, title: "Minimal Line Icon Of Growth. Speed and growth pictogram." });
     const meta = metaFromRecord(old, false);
-    expect(meta.metadata?.title).toBe("Minimal line icon of growth");
-    // the block still carries the two-sentence fingerprint → the FILE must move
+    expect(meta.metadata?.title).toBe("Minimal line icon of growth. Speed and growth pictogram"); // both sentences, no final period
+    // the block still carries the uncleaned fingerprint → the FILE must move
     expect(staleOf({ record: old, source: SRC, effective: DEFAULT_UPLOAD_SETTINGS, meta, sourceHash: SOURCE_HASH })).toBe(true);
   });
 

@@ -63,11 +63,12 @@ describe("the default prompt states every enforced constraint", () => {
   });
 });
 
-describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (stock review 2026-10-08)", () => {
+describe("cleanPhrase — every sentence kept, sentence case, only the END punctuation removed (2026-10-08, second pass)", () => {
   it.each([
-    // the reviewer's title and description, verbatim → the reviewer's phrase
-    ["Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.", "Collaborative unity promoting collective social empathy"],
-    ["Icon of charity and community. A symbol of giving.", "Icon of charity and community"],
+    // a two-sentence answer keeps BOTH sentences; only the final period goes (the user's correction, 2026-10-08)
+    ["Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.", "Collaborative unity promoting collective social empathy. Icon of charity and community"],
+    ["Icon of charity and community. A symbol of giving.", "Icon of charity and community. A symbol of giving"],
+    ["Minimal Line Icon Of Growth. Speed And Growth Chart.", "Minimal line icon of growth. Speed and growth chart"], // each sentence starts with its capital
     // the earlier rule (item 5) still holds: trailing sentence punctuation gone, a question stays
     ["Unity and Compassionate Human Connection.", "Unity and compassionate human connection"],
     ["A B C D E!", "A B C D E"], // single capitals are not Title Case words
@@ -75,10 +76,11 @@ describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (s
     ["Trailing comma, ", "Trailing comma"],
     ["Ellipsis…", "Ellipsis"],
     ["Is this a question?", "Is this a question?"],
-    ["Is this a question? Yes it is.", "Is this a question?"],
-    ["Growth; and more", "Growth"],
-    ["One. Two. Three words of a phrase", "One"],
-    ["A question? Yes, a second sentence starts here.", "A question?"],
+    ["Is this a question? Yes it is.", "Is this a question? Yes it is"],
+    ["Growth; and more", "Growth; and more"],
+    ["One. Two. Three words of a phrase", "One. Two. Three words of a phrase"],
+    ["A question? Yes, a second sentence starts here.", "A question? Yes, a second sentence starts here"],
+    ["Two sentences!! And a tail…", "Two sentences!! And a tail"], // inner punctuation stays, however many marks
     ["Icon of speed…and growth", "Icon of speed…and growth"], // an ellipsis inside a phrase is not a break
     // sentence case keeps acronyms and mixed case, lowers only Capitalised words
     ["Modern SEO Growth Chart For iOS Apps", "Modern SEO growth chart for iOS apps"],
@@ -93,28 +95,28 @@ describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (s
     expect(cleanPhrase(raw)).toBe(clean);
   });
 
-  it("is idempotent — cleaning the cleaned phrase changes nothing", () => {
+  it("is idempotent — cleaning the cleaned text changes nothing", () => {
     const once = cleanPhrase("Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.");
     expect(cleanPhrase(once)).toBe(once);
   });
 
   it("cleanMetadata cleans the title AND the description, never the tags", () => {
     const dirty = meta({ title: "Two Sentence Title Here. Second one.", description: "First sentence of seven words here. Second.", tags: ["Icon", "web"] });
-    expect(cleanMetadata(dirty)).toEqual({ title: "Two sentence title here", description: "First sentence of seven words here", tags: ["Icon", "web"] });
+    expect(cleanMetadata(dirty)).toEqual({ title: "Two sentence title here. Second one", description: "First sentence of seven words here. Second", tags: ["Icon", "web"] });
   });
 
-  it("parseMetadata applies it to both fields, and the default prompt asks for ONE phrase in sentence case", () => {
+  it("parseMetadata applies it to both fields — nothing cut — and the default prompt asks for ONE phrase in sentence case", () => {
     const parsed = parseMetadata(`Title: ${VALID.title}. Second Sentence Here.\nDescription: ${VALID.description}. And another one.\nTags: ${VALID.tags.join(", ")}`);
-    expect(parsed?.title).toBe(VALID.title);
-    expect(parsed?.description).toBe(VALID.description);
+    expect(parsed?.title).toBe(`${VALID.title}. Second sentence here`);
+    expect(parsed?.description).toBe(`${VALID.description}. And another one`);
     expect(DEFAULT_METADATA_PROMPT).toContain("ONE phrase");
     expect(DEFAULT_METADATA_PROMPT).toContain("sentence case");
     expect(DEFAULT_METADATA_PROMPT).not.toContain("one or two sentences");
   });
 
-  it("parseMetadata turns the reviewer's model answer into the reviewer's phrase end to end", () => {
+  it("parseMetadata keeps a two-sentence model answer whole, end to end — only the final period goes", () => {
     const parsed = parseMetadata(`Title: Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.\nDescription: ${VALID.description}\nTags: ${TAGS.join(", ")}`);
-    expect(parsed?.title).toBe("Collaborative unity promoting collective social empathy");
+    expect(parsed?.title).toBe("Collaborative unity promoting collective social empathy. Icon of charity and community");
   });
 });
 

@@ -10,9 +10,11 @@
 // only failure the field reported was a good answer being thrown away.
 //
 // The title and the description share ONE shape rule that is normalized,
-// never refused (stock review, 2026-10-08): each is ONE clean phrase —
-// `cleanPhrase` cuts a second sentence, strips the end punctuation and writes
-// sentence case, so "X Y Z. Icon of Y and Z." ships as "X y z".
+// never refused (stock review, 2026-10-08): clean text — `cleanPhrase` keeps
+// EVERY sentence (a second pass the same day: the first version cut the
+// second sentence, which lost the model's words), strips only the END
+// punctuation and writes sentence case per sentence, so "X Y Z. Icon of Y and
+// Z." ships as "X y z. Icon of y and z".
 
 import { fnv1a32 } from "../pairing";
 
@@ -71,28 +73,34 @@ export function parseMetadata(text: string): IconMetadata | null {
   return cleanMetadata({ title, description, tags });
 }
 
-/** The whitespace of the first sentence break: a word of 2+ letters, end punctuation, space, more text (`2.5`, `e.g.` are not breaks). */
-const SENTENCE_BREAK = /(?<=\p{L}{2}[.!?;…]+)\s+(?=\S)/u;
+/** The whitespace of a sentence break: a word of 2+ letters, `.`/`!`/`?`, space, more text (`2.5`, `e.g.`, a `;` or an ellipsis are not breaks). */
+const SENTENCE_BREAK = /(?<=\p{L}{2}[.!?]+)\s+(?=\S)/gu;
 /** Trailing sentence punctuation stock sites flag (`.`, `!`, `,`, `;`, `:`, `…`) and whitespace, gone; a `?` stays. */
 const PHRASE_TAIL = /[\s.!,;:…]+$/u;
-/** A Title Case word: one capital, then lowercase letters only (`SEO`, `iOS`, `3D` and a lone `A` are not). */
-const CAPITALISED = /^\p{Lu}\p{Ll}+$/u;
+/** A Title Case word, punctuation after it allowed: one capital, then lowercase letters only (`SEO`, `iOS`, `3D` and a lone `A` are not). */
+const CAPITALISED = /^\p{Lu}\p{Ll}+\p{P}*$/u;
 
 /**
  * A title or description as it is stored, shown and embedded (stock review,
- * 2026-10-08): ONE clean phrase — the text up to the first sentence break,
- * with no trailing period or other end punctuation (a `?` stays: a question is
- * a phrase), in sentence case (the first letter up, every later Capitalised
- * word down; acronyms and mixed case untouched). The reviewer's
- * "Collaborative Unity Promoting Collective Social Empathy. Icon of charity
- * and community." is "Collaborative unity promoting collective social
- * empathy". Applied wherever the text enters — the model's answer, the user's
- * edit at Accept, and a remembered answer on read — so the file, the XMP,
- * export.json and the field always agree.
+ * 2026-10-08): the whole text, every sentence kept, with no trailing period
+ * or other end punctuation (a `?` stays: a question is a phrase; punctuation
+ * BETWEEN sentences stays), in sentence case per sentence (each sentence's
+ * first letter up, every later Capitalised word down; acronyms and mixed case
+ * untouched). "Collaborative Unity Promoting Collective Social Empathy. Icon
+ * of charity and community." is "Collaborative unity promoting collective
+ * social empathy. Icon of charity and community". Applied wherever the text
+ * enters — the model's answer, the user's edit at Accept, and a remembered
+ * answer on read — so the file, the XMP, export.json and the field always
+ * agree.
  */
 export function cleanPhrase(text: string): string {
-  const one = text.trim().replace(/\s+/gu, " ").split(SENTENCE_BREAK, 1)[0].replace(PHRASE_TAIL, "");
-  const words = one.split(" ").map((w, i) => (i > 0 && CAPITALISED.test(w) ? w.toLowerCase() : w));
+  const whole = text.trim().replace(/\s+/gu, " ").replace(PHRASE_TAIL, "");
+  return whole.split(SENTENCE_BREAK).map(sentenceCase).join(" ");
+}
+
+/** One sentence: the first letter up, every later Capitalised word down. */
+function sentenceCase(sentence: string): string {
+  const words = sentence.split(" ").map((w, i) => (i > 0 && CAPITALISED.test(w) ? w.toLowerCase() : w));
   return words.join(" ").replace(/^\p{Ll}/u, (c) => c.toUpperCase());
 }
 

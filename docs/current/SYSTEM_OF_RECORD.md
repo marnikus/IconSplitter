@@ -495,26 +495,28 @@ opt-in class as Generate SVG → Requesty; design
   the embed step's output (RDF/DC vocabulary by design), verified by its own
   readback, and the namespace rule still covers it (a declaration inside it is
   a violation, hoisted to the root).
-* Metadata title AND description (2026-10-08, stock review): each is ONE
-  clean phrase — `cleanPhrase` keeps the text up to the first sentence break
-  (end punctuation after a word of 2+ letters, then a space, then more text —
-  `2.5` and `e.g.` are not breaks), strips a trailing `.`, `!`, `;`, `:`,
-  `,`, `…` (a `?` stays: a question is a phrase) and writes sentence case
-  (first letter up, every later Capitalised word down; `SEO`, `iOS` and a
-  lone `A` untouched). The reviewer's "Collaborative Unity Promoting
-  Collective Social Empathy. Icon of charity and community." ships as
-  `<title>Collaborative unity promoting collective social empathy</title>`
-  (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
+* Metadata title AND description (2026-10-08, stock review; corrected the
+  same day — the first version CUT the second sentence, which lost the
+  model's words): clean text — `cleanPhrase` keeps the WHOLE text, every
+  sentence, strips only the END punctuation `.`, `!`, `;`, `:`, `,`, `…` (a
+  `?` stays: a question is a phrase; punctuation between sentences stays) and
+  writes sentence case per sentence (each sentence's first letter up — a
+  sentence starts after `.`/`!`/`?` + space following a word of 2+ letters,
+  so `2.5`, `e.g.`, a `;` and an ellipsis do not start one — every later
+  Capitalised word down; `SEO`, `iOS` and a lone `A` untouched). "Collaborative
+  Unity Promoting Collective Social Empathy. Icon of charity and community."
+  ships as `<title>Collaborative unity promoting collective social empathy.
+  Icon of charity and community</title>` (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
   fields at every gate the text passes: the model's answer
   (`parseMetadata`), the accepted-metadata cache on read, the Accept button
   (an edit) and the committed `export.json` block a reload reads back
   (`metaFromRecord`); the fingerprint is over the cleaned text, so a
   remembered or exported answer the rule changes no longer matches its stored
   fingerprint — the row shows stale and the next export re-embeds the file
-  without a model call. It is a SHAPE rule, never a refusal: a phrase
-  cut below the minimum fails validation like any short answer (nothing is
-  padded). The prompt asks for exactly this ("ONE phrase … sentence case, no
-  period") for both lines; the field hints say the same.
+  without a model call. It is a SHAPE rule, never a refusal, and it never
+  removes words. The prompt still ASKS for one phrase ("ONE phrase … sentence
+  case, no period") for both lines; an answer that comes back as two sentences
+  is kept as written, minus its final period.
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
   — no AI, no render; a missing output rebuilds just that output; nothing
   changed → no work). Every output validates before it commits (SVG parses +
