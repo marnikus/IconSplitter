@@ -2342,3 +2342,55 @@ three). `CODE_VERIFICATION.md` §5 explains the setting and how to debug with
 
 * Unchanged: T17/T19/T25/T27/T28, P5–P7, the version-stem sweep note above, and
   a `fog_AI_v2.*` leftover that only an export of that version removes.
+
+## 2026-10-08 — exact stroke width: every transform baked into the geometry, the px setting written verbatim
+
+The user set a stroke width of 2 and the shipped file read
+`stroke-width="2.6224000000000003"`. Two faults, both real (design:
+`docs/archive/2026-10-08-stroke-width-exact/design.md`): the width was
+finalised in LOCAL units under the artwork's and the artboard's transforms,
+and SVGO's `applyTransforms` re-multiplied it with raw float arithmetic when it
+baked those transforms into the path (`2.384 × 1.1`); and the setting was in
+pt while the user — rightly, for a stock file — thinks in the file's px.
+
+The fix is structural, not a rounding pass: prepare now bakes `artboard × CTM`
+into every shape's coordinates (`lib/upload/bake.ts`), so the file has no
+`transform` and SVGO has nothing to re-multiply, and the stroke width is
+written AFTER that, verbatim (`strokePx: 2` → `stroke-width="2"`). The
+previous entry's "fewest decimals within 10 %" rule is deleted with its tests
+— superseded, no caller. The one lesson worth the record: **a number written
+under a transform is never the number the reader sees** — finish the geometry
+first, then write the numbers.
+
+### Structure work (RULE 3/18/19)
+
+| File | Was | Now |
+| --- | --- | --- |
+| `src/lib/upload/epspath.ts` | 243 lines, the full path grammar welded to PostScript text | 33 lines — only the PostScript writer; the grammar is **`src/lib/upload/geom/outline.ts`** (269 lines, reason comment: one grammar table with its handlers), the ONE outline model the bake and the EPS share (a circle is now the same four-cubic split as an ellipse — one pinned EPS expectation changed, with the reason) |
+| `src/lib/upload/geom/bakeshape.ts` | — | 94 lines — which element survives which matrix (`isAxisAligned`, `isUniform`, the per-shape attribute bakers as a table) |
+| `src/lib/upload/bake.ts` | — | 110 lines — the walk, the named refusals before the tree is touched, widths/dashes following their geometry |
+| `src/lib/upload/prepare.ts` | wrapper `<g transform>` + width ÷ CTM scale | 202 lines — bake → restyle (verbatim) → viewBox + background; no wrapper group |
+| `src/lib/upload/geom.ts` | `ptToPx`/`pxToPt` | gone — no caller; a SOURCE length in pt is still read at 96 DPI |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 9.8 s |
+| 2/6 lint | ✅ | 0 errors, 10 pre-existing warnings (unchanged set) |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **131 files / 1452 tests** (was 1422): `upload_outline` (10), `upload_bake` (15), the prepare suite rewritten for the new contract, one export test through SVGO pinning the SHIPPED text (`stroke-width="2"`, no `transform=`) |
+| 5/6 tests + coverage | ✅ | statements **96.08 %**, branches **89.54 %** |
+| 6/6 build | ✅ | `dist/index.html` 1,416 kB |
+
+### Known debt carried
+
+* Deliberate narrowing (design D6): a stroked shape under a non-uniform or
+  skewed transform, a rotated rounded rect, `userSpaceOnUse` paint servers and
+  clipPath/mask/filter/pattern now refuse by name where they exported before.
+  Composing `gradientTransform` is the follow-up if a real icon hits it.
+* Two of the previous entry's export tests referenced the pre-merge package
+  name (`STEM`) and failed on the merged baseline; fixed in passing (`ART`).
+* The SVGO `removeTitle`/`removeViewBox` stderr line in `upload_runexport`
+  and `upload_eps` predates both entries; the optimizer config still deserves
+  one look, not this commit.

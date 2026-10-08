@@ -6,8 +6,6 @@ import {
   fitArtboard,
   pinnedDimensions,
   parseSvgLength,
-  ptToPx,
-  pxToPt,
   targetDimensions,
   visibleBounds,
   type Bounds,
@@ -24,13 +22,7 @@ function rootOf(inner: string): Element {
 
 const at = (b: Bounds) => [b.minX, b.minY, b.width, b.height];
 
-describe("units — pt is never silently px", () => {
-  it("converts pt at the documented 96 DPI (1 pt = 4/3 px)", () => {
-    expect(ptToPx(72)).toBeCloseTo(96);
-    expect(ptToPx(2.2)).toBeCloseTo(2.9333, 3);
-    expect(pxToPt(ptToPx(2.2))).toBeCloseTo(2.2);
-  });
-
+describe("units — a source length is read at the documented 96 DPI", () => {
   it("parses SVG lengths with units; % and junk are not lengths", () => {
     expect(parseSvgLength("12")).toBe(12);
     expect(parseSvgLength("12px")).toBe(12);

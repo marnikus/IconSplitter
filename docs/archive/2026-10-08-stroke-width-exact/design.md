@@ -127,3 +127,22 @@ Commit: `fix(upload): exact stroke width — bake every transform into the geome
 | Files that exported yesterday now refuse (userSpaceOnUse, clip/mask/filter) | Named reason in the row; recorded here as the deliberate narrowing with its follow-up |
 | 3-decimal coordinates on tiny artworks scaled up | Baking happens AT artboard px, so precision is applied once, in the final units — better than today (local 3 decimals × scale) |
 | The user's stored `strokePt` meant pt after all | D3 carries the number; the dialog shows the unit; one edit fixes any icon |
+
+## 8. As built (2026-10-08) — where the build departed from the plan
+
+* **`bakeGeometry(root, matrix)`** takes no `strokePx`: the bake ALWAYS resolves
+  each stroked shape's width × the baked scale onto the shape (and containers
+  lose theirs), and prepare overwrites it when a setting exists. One rule,
+  one less parameter.
+* **`<pattern>`** joined the D6 refusal list (its content units are user space).
+* **`vector-effect="non-scaling-stroke"`** keeps its number under the bake (it
+  was already in final px) and loses the attribute.
+* **Sizes landed:** `outline.ts` 269 (planned ~190 — the shape builders moved in
+  with the grammar; reason comment on the file), `bake.ts` 110, `bakeshape.ts`
+  94, `epspath.ts` 33, `prepare.ts` 202, `settings.ts` 246. `ptToPx`/`pxToPt`
+  removed (no caller).
+* **Tests:** the prepare suite was rewritten rather than patched — every former
+  `g > rect` selector assumed the wrapper group; the export test asserts the
+  SET of widths in the shipped text because SVGO legitimately hoists an
+  identical width onto the group.
+

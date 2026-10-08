@@ -8,7 +8,7 @@
 
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
-  clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
+  clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
   type Artboard, type UploadSettings,
 } from "../lib/upload/settings";
@@ -61,9 +61,9 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <NumberSetting p={p} effective={effective} field="paddingPct" label="Padding %" testid="padding"
         min={PADDING_MIN} max={PADDING_MAX} step={1} clamp={clampPaddingPct}
         hint="uniform, % of the fitted artwork's largest side" />
-      <NumberSetting p={p} effective={effective} field="strokePt" label="Stroke width (pt)" testid="stroke"
-        min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePt}
-        hint="0 = leave the artwork's strokes untouched · 1 pt = 4/3 px at 96 DPI · written tidy (within 10 %)" />
+      <NumberSetting p={p} effective={effective} field="strokePx" label="Stroke width (px)" testid="stroke"
+        min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePx}
+        hint="0 = leave the artwork's strokes untouched · the number you type is the number in the file" />
       <StrokeColorSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />

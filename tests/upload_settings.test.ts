@@ -11,7 +11,8 @@ import {
   clampMegapixels,
   clampPaddingPct,
   clampQuality,
-  clampStrokePt,
+  clampStrokePx,
+  STROKE_MAX,
   effectiveSettings,
   normalizeSettings,
   overrideKeys,
@@ -31,7 +32,7 @@ const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAUL
 describe("defaults and clamps", () => {
   it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
-      paddingPct: 8, background: "transparent", strokePt: 0, strokeColor: "artwork",
+      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "artwork",
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
@@ -121,8 +122,8 @@ describe("defaults and clamps", () => {
     expect(clampPaddingPct(-5)).toBe(0);
     expect(clampPaddingPct(99)).toBe(50);
     expect(clampPaddingPct("nonsense")).toBe(8);
-    expect(clampStrokePt(2.2)).toBeCloseTo(2.2);
-    expect(clampStrokePt(99)).toBe(24);
+    expect(clampStrokePx(2.2)).toBeCloseTo(2.2);
+    expect(clampStrokePx(99)).toBe(32);
     expect(clampMegapixels(0)).toBe(1);
     expect(clampMegapixels(15.1)).toBeCloseTo(15.1);
     expect(clampMegapixels(1000)).toBe(64);
@@ -146,12 +147,12 @@ describe("defaults and clamps", () => {
 
   it("normalizeSettings repairs a corrupt stored payload field by field", () => {
     const fixed = normalizeSettings({
-      paddingPct: 500, background: "not-a-color", strokePt: -1, strokeColor: ["#000"],
+      paddingPct: 500, background: "not-a-color", strokePx: -1, strokeColor: ["#000"],
       jpegMegapixels: "lots", jpegQuality: 9, optimizeSvg: "yes", includeEps: 1,
     });
     // booleans: only an explicit true/false counts — a nonsensical value falls
     // back to the documented default (optimize on, EPS off)
-    expect(fixed).toEqual({ ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 50, strokePt: 0, jpegQuality: 1 });
+    expect(fixed).toEqual({ ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 50, strokePx: 0, jpegQuality: 1 });
   });
 
   it("normalizeSettings on a non-record returns the defaults wholesale (RULE 13)", () => {
@@ -166,9 +167,9 @@ describe("global defaults + per-icon overrides", () => {
   });
 
   it("an override affects only its own field", () => {
-    const eff = effectiveSettings(DEFAULT_UPLOAD_SETTINGS, { background: "#102030", strokePt: 2.2 });
+    const eff = effectiveSettings(DEFAULT_UPLOAD_SETTINGS, { background: "#102030", strokePx: 2.2 });
     expect(eff.background).toBe("#102030");
-    expect(eff.strokePt).toBeCloseTo(2.2);
+    expect(eff.strokePx).toBeCloseTo(2.2);
     expect(eff.paddingPct).toBe(8); // inherited, not erased
     expect(eff.optimizeSvg).toBe(true);
   });
@@ -183,7 +184,19 @@ describe("global defaults + per-icon overrides", () => {
     const eff = effectiveSettings(changed({ paddingPct: 20 }), {});
     expect(eff.paddingPct).toBe(20);
     expect(overrideKeys({})).toEqual([]);
-    expect(overrideKeys({ strokePt: 1 })).toEqual(["strokePt"]);
+    expect(overrideKeys({ strokePx: 1 })).toEqual(["strokePx"]);
+  });
+
+  it("strokePx is px in the file's own units, 0–32; a stored strokePt (pre-2026-10-08) carries its NUMBER over (the user meant px)", () => {
+    expect(STROKE_MAX).toBe(32);
+    expect(normalizeSettings({ strokePt: 2 }).strokePx).toBe(2);
+    expect(normalizeSettings({ strokePx: 3, strokePt: 2 }).strokePx).toBe(3); // the new key wins
+    expect(normalizeSettings({ strokePx: 40 }).strokePx).toBe(32);
+    expect(parseOverrides({ strokePt: 2.5 })).toEqual({ strokePx: 2.5 });
+    expect(parseOverrides({ strokePx: 1, strokePt: 2.5 })).toEqual({ strokePx: 1 });
+    expect(Object.keys(normalizeSettings({ strokePt: 2 }))).not.toContain("strokePt"); // read as an alias, never written
+    // the same number under the new name is the same fingerprint: no export flips to stale by the rename
+    expect(settingsFingerprint({ ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2 })).toBe(settingsFingerprint(normalizeSettings({ strokePt: 2 })));
   });
 });
 

@@ -26,8 +26,12 @@ export interface UploadSettings {
   paddingPct: number;
   /** `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
   background: string;
-  /** Stroke width in pt at 96 DPI (1 pt = 4/3 px); 0 = leave artwork strokes untouched. */
-  strokePt: number;
+  /**
+   * Stroke width in px — the file's own user units, written verbatim on every
+   * visible stroke (2026-10-08: "2 in the setting is 2 in the SVG"); 0 = leave
+   * the artwork's own strokes (their widths follow the baked geometry).
+   */
+  strokePx: number;
   /** `artwork` (the strokes keep their own paint), or the hex every visible stroke gets. */
   strokeColor: string;
   /** JPEG target resolution in megapixels (default 15.1). */
@@ -54,7 +58,7 @@ export const PADDING_MIN = 0;
 export const PADDING_MAX = 50;
 export const PADDING_DEFAULT = 8;
 export const STROKE_MIN = 0;
-export const STROKE_MAX = 24;
+export const STROKE_MAX = 32;
 export const STROKE_DEFAULT = 0;
 export const MP_MIN = 1;
 export const MP_MAX = 64;
@@ -73,7 +77,7 @@ export const STROKE_COLOR_ARTWORK = "artwork";
 export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   paddingPct: PADDING_DEFAULT,
   background: BACKGROUND_DEFAULT,
-  strokePt: STROKE_DEFAULT,
+  strokePx: STROKE_DEFAULT,
   strokeColor: STROKE_COLOR_ARTWORK,
   jpegMegapixels: MP_DEFAULT,
   jpegQuality: QUALITY_DEFAULT,
@@ -87,7 +91,7 @@ export function clampPaddingPct(value: unknown): number {
   return clampNum(value, PADDING_MIN, PADDING_MAX, PADDING_DEFAULT);
 }
 
-export function clampStrokePt(value: unknown): number {
+export function clampStrokePx(value: unknown): number {
   return clampNum(value, STROKE_MIN, STROKE_MAX, STROKE_DEFAULT);
 }
 
@@ -126,7 +130,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
   return {
     paddingPct: clampPaddingPct(raw.paddingPct),
     background: readPaint(raw.background, TRANSPARENT) ?? BACKGROUND_DEFAULT,
-    strokePt: clampStrokePt(raw.strokePt),
+    strokePx: clampStrokePx(raw.strokePx ?? raw.strokePt), // strokePt: the pre-2026-10-08 name, same number
     strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_ARTWORK,
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
     jpegQuality: clampQuality(raw.jpegQuality),
@@ -151,7 +155,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
 /** The numeric fields and their clamps, so adding one is a single line here. */
 const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["paddingPct", clampPaddingPct],
-  ["strokePt", clampStrokePt],
+  ["strokePx", clampStrokePx],
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
 ];
@@ -164,7 +168,7 @@ const PAINT_FIELDS: ["background" | "strokeColor", string][] = [
 
 function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void {
   for (const [key, clamp] of NUMERIC_FIELDS) {
-    const value = raw[key];
+    const value = raw[key] ?? (key === "strokePx" ? raw.strokePt : undefined); // the old name reads, is never written
     if (typeof value === "number") Object.assign(out, { [key]: clamp(value) });
   }
 }
@@ -206,7 +210,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
  * change that only touched it compared EQUAL and could be swallowed).
  */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
-  "paddingPct", "background", "strokePt", "strokeColor", "jpegMegapixels", "jpegQuality",
+  "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
 ];
 
@@ -228,7 +232,7 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
-    round3(s.paddingPct), s.background, round3(s.strokePt), s.strokeColor,
+    round3(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],

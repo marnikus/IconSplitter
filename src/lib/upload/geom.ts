@@ -2,9 +2,10 @@
 // (RULE 1/3): units with a documented DPI, the padded artboard fit, and the
 // integer JPEG target dimensions. Document bounds come from lib/upload/geom/bounds.
 //
-// Units: SVG user units are CSS px at 96 DPI, and 1 pt = 1/72 in, so
-// 1 pt = 96/72 px = 4/3 px. A configured "2.2 pt" stroke is therefore 2.93 px
-// in the export's user units — never a silent "2.2 px" (design §2.10).
+// Units: SVG user units are CSS px at 96 DPI; a SOURCE length in pt/mm/in is
+// read at that DPI (`parseSvgLength`). The export's own numbers — the artboard,
+// the stroke width setting — are px, written as typed (2026-10-08): the file
+// shows the number the user chose, no unit conversion between them.
 //
 // Fit: padding is a percent of the fitted artwork's LARGEST side, uniform on
 // all four sides; the artwork is centred by translation only — never
@@ -27,16 +28,6 @@ export interface TargetSize {
 
 export const SVG_DPI = 96;
 export const PT_PER_INCH = 72;
-
-/** pt → px at the documented 96 DPI. */
-export function ptToPx(pt: number): number {
-  return (pt * SVG_DPI) / PT_PER_INCH;
-}
-
-/** px → pt at the documented 96 DPI. */
-export function pxToPt(px: number): number {
-  return (px * PT_PER_INCH) / SVG_DPI;
-}
 
 const LENGTH_UNITS: Record<string, number> = {
   "": 1, px: 1, pt: SVG_DPI / PT_PER_INCH, pc: 16, in: SVG_DPI,

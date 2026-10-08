@@ -219,6 +219,26 @@ describe("runExport — the full package commits per icon", () => {
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 512, height: 256 });
   });
 
+  it("the stroke width setting is the number in the SHIPPED file — through SVGO, under an artwork transform and a pinned artboard (2026-10-08)", async () => {
+    // The stock reviewer's file read stroke-width="2.6224000000000003": a width
+    // finalised in local units, then re-multiplied when SVGO baked the transforms.
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="scale(1.1)">`
+      + `<path d="M4 4h16v16H4z" fill="none" stroke="#333"/><circle cx="12" cy="12" r="3" fill="none" stroke="#333"/></g></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2, optimizeSvg: true, includeEps: true, artboard: { mode: "preset", size: 512, width: 512, height: 512 } };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(512, 512) } }));
+    expect(result.status).toBe("processed");
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
+    // SVGO may hoist the identical width onto the group — the NUMBER is the user's, wherever it sits
+    const widths = svgText.match(/stroke-width="([^"]*)"/g) ?? [];
+    expect(widths.length).toBeGreaterThan(0);
+    expect(new Set(widths)).toEqual(new Set([`stroke-width="2"`]));
+    expect(svgText).not.toContain("transform=");
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    expect(readRecord(root).settings.effective.strokePx).toBe(2);
+    expect(verifyEps(fileText(root, `${DIR}/export/${ART}.eps`)).ok).toBe(true);
+  });
+
   it("lets the user keep the artboard's RATIO at their own megapixels", async () => {
     const root = pairRoot();
     // A small artboard must not cap the resolution: 512×256 with "same as the
@@ -545,12 +565,12 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
     expect(result.status).toBe("processed");
     expect(seen).toEqual(["#ffffff"]); // JPEG has no alpha: flattened onto white, never "transparent"
-    const svg = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svg = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(verifyExportSvg(svg)).toEqual([]);
     expect(svg).not.toMatch(/<svg[^>]*\swidth=/); // no px size on the root either
     const shapes = Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("rect, path, circle"));
     expect(shapes.filter((el) => el.getAttribute("stroke") === "none" && el.getAttribute("x") === "0")).toHaveLength(0);
-    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
     expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — no background shape before it
     expect(readRecord(root).settings.effective.background).toBe("transparent");
@@ -567,9 +587,9 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
     expect(result.status).toBe("processed");
     expect(seen).toEqual(["#102030"]);
-    const svg = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svg = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(svg).toContain(`fill="#102030"`);
-    expect(verifyEps(fileText(root, `${DIR}/export/${STEM}.eps`)).ok).toBe(true);
+    expect(verifyEps(fileText(root, `${DIR}/export/${ART}.eps`)).ok).toBe(true);
   });
 
   it("a leftover tmp file is harmless and overwritten", async () => {

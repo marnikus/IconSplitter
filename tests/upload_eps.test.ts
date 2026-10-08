@@ -118,7 +118,7 @@ describe("writeEps — strokes, dashes, caps, joins", () => {
 });
 
 describe("writeEps — the shape subset", () => {
-  it("circle → arc; ellipse → four cubics; line/polyline/polygon → lines", () => {
+  it("circle and ellipse → four cubics each (ONE outline model, 2026-10-08); line/polyline/polygon → lines", () => {
     const src = art(`<circle cx="10" cy="10" r="4" fill="#000"/>`
       + `<ellipse cx="30" cy="10" rx="6" ry="3" fill="#000"/>`
       + `<line x1="1" y1="1" x2="9" y2="9" stroke="#000"/>`
@@ -126,8 +126,9 @@ describe("writeEps — the shape subset", () => {
       + `<polygon points="1,1 5,5 9,1" fill="#000"/>`);
     const result = writeEps(src, "#ffffff");
     expect(result.ok && result.shapes).toBe(5);
-    expect(result.ok && result.eps).toContain("10 10 4 0 360 arc");
-    expect(result.ok && result.eps.match(/curveto/g)).toHaveLength(4); // the ellipse
+    expect(result.ok && result.eps).not.toContain(" arc"); // the circle is the same four-cubic split as the ellipse
+    expect(result.ok && result.eps).toContain("14 10 moveto 14 12.209 12.209 14 10 14 curveto");
+    expect(result.ok && result.eps.match(/curveto/g)).toHaveLength(8); // circle + ellipse
     expect(result.ok && result.eps).toContain("closepath"); // the polygon
   });
 

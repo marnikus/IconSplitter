@@ -591,10 +591,10 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     expect(text("[data-testid=upload-set-marker-padding]")).toBe("inherited");
     await type("[data-testid=upload-set-stroke]", "2.2");
     expect(text("[data-testid=upload-set-marker-stroke]")).toBe("overridden");
-    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("2.2 pt");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("2.2 px");
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("1 field overridden");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.overrides[FOG]).toEqual({ strokePt: 2.2 });
+    expect(saved.overrides[FOG]).toEqual({ strokePx: 2.2 });
     // one gesture entry, and one undo reverses the pin
     await act(async () => { (q("[data-testid=hist-undo]") as HTMLButtonElement).click(); });
     await settle();

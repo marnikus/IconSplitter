@@ -13,7 +13,7 @@ const NS = `xmlns="http://www.w3.org/2000/svg"`;
 
 /** The realistic end of the pipeline: prepare → optimize, as the export runs it. */
 async function exported(source: string): Promise<string> {
-  const prepared = prepareExportSvg(source, { ...DEFAULT_UPLOAD_SETTINGS, strokePt: 2.2 });
+  const prepared = prepareExportSvg(source, { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2.2 });
   if (!prepared.ok) throw new Error(`prepare failed: ${prepared.code} ${prepared.detail}`);
   const optimized = await optimizeSvg(prepared.svg, true);
   // the pipeline's own order, clean pass included — SVGO drops `version`

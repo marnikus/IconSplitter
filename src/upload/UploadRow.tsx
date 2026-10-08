@@ -126,9 +126,9 @@ function MetaCell({ row }: { row: UploadRow }) {
   );
 }
 
-/** "artwork strokes" | "2 pt", then "· stroke #hex" when a colour is pinned. */
+/** "artwork strokes" | "2 px", then "· stroke #hex" when a colour is pinned. */
 function strokeLine(s: UploadSettings): string {
-  const width = s.strokePt === 0 ? "artwork strokes" : `${s.strokePt} pt`;
+  const width = s.strokePx === 0 ? "artwork strokes" : `${s.strokePx} px`;
   return s.strokeColor === STROKE_COLOR_ARTWORK ? width : `${width} · stroke ${s.strokeColor}`;
 }
 

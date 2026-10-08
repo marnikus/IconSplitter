@@ -17,7 +17,7 @@ import {
 
 beforeEach(() => localStorage.clear());
 
-const CUSTOM: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 20, background: "#101010", strokePt: 2.2, jpegMegapixels: 12, jpegQuality: 0.8, optimizeSvg: false, includeEps: true };
+const CUSTOM: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 20, background: "#101010", strokePx: 2.2, jpegMegapixels: 12, jpegQuality: 0.8, optimizeSvg: false, includeEps: true };
 
 describe("settingsstore — defaults + overrides", () => {
   it("round-trips the defaults and the overrides map", () => {
@@ -39,9 +39,9 @@ describe("settingsstore — defaults + overrides", () => {
   });
 
   it("clamps the stored defaults field by field", () => {
-    const parsed = parseUploadSettingsState({ v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 999, strokePt: -4, background: "red", optimizeSvg: "yes" } });
+    const parsed = parseUploadSettingsState({ v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 999, strokePx: -4, background: "red", optimizeSvg: "yes" } });
     expect(parsed.defaults.paddingPct).toBe(50);
-    expect(parsed.defaults.strokePt).toBe(0);
+    expect(parsed.defaults.strokePx).toBe(0);
     expect(parsed.defaults.background).toBe("transparent"); // junk → the documented default (2026-10-08)
     expect(parsed.defaults.optimizeSvg).toBe(true);
   });
@@ -55,7 +55,7 @@ describe("settingsstore — defaults + overrides", () => {
   });
 
   it("writes the overrides map alone for the undo path's persist-only branch", () => {
-    saveUploadSettings({ defaults: DEFAULT_UPLOAD_SETTINGS, overrides: { pair_a: { strokePt: 3 } } });
+    saveUploadSettings({ defaults: DEFAULT_UPLOAD_SETTINGS, overrides: { pair_a: { strokePx: 3 } } });
     saveOverrides({ pair_b: { jpegQuality: 0.7 } });
     expect(loadOverrides()).toEqual({ pair_b: { jpegQuality: 0.7 } });
     expect(loadUploadSettings().defaults).toEqual(DEFAULT_UPLOAD_SETTINGS); // untouched

@@ -1,15 +1,17 @@
 // prepare.ts — the export SVG copy of the "SVG to upload" tab
 // (RULE 1/3). The approved source is parsed, never modified; the export
 // document is a re-rooted copy: viewBox = padded artboard (fitArtboard) — and
-// ONLY the viewBox: the root carries no px width/height (stock review, 2026-10-08),
-// the artwork translated to centre it, an explicit background rect painted
-// first when the background is a colour (none when `transparent`), and — when
-// a stroke width or a stroke colour is configured — every visible stroke
-// restyled: the width normalized to that pt width in output px at 96 DPI and
-// written tidy (lib/upload/geom/stroke), the paint set to the configured hex.
+// ONLY the viewBox: the root carries no px width/height (stock review, 2026-10-08);
+// every transform — the artwork's own and the artboard's translate+scale —
+// BAKED into the geometry (lib/upload/bake), so the file has no `transform`
+// and nothing an optimizer could re-multiply; an explicit background rect
+// painted first when the background is a colour (none when `transparent`);
+// and — when a stroke width or a stroke colour is configured — every visible
+// stroke restyled AFTER the bake: the width written VERBATIM in px (2026-10-08:
+// "2 in the setting is 2 in the SVG"), the paint set to the configured hex.
 // Content the geometry math cannot answer for (text, image, geometry-restyle
-// CSS, a transform on the root) fails the preparation honestly instead of being
-// guessed. Clean code (2026-10-08) is part of the copy: SVG 1.1, a real
+// CSS, a transform on the root, a stroke a bake would distort) fails the
+// preparation honestly instead of being guessed. Clean code (2026-10-08) is part of the copy: SVG 1.1, a real
 // viewBox, no raster, no `<style>`, and no ids, classes or editor bloat —
 // see lib/upload/clean.
 
@@ -17,10 +19,10 @@ import {
   artboardSize, isTransparent, readPaint, STROKE_COLOR_ARTWORK, TRANSPARENT, type UploadSettings,
 } from "./settings";
 import { cleanExportDom, unsupportedContent } from "./clean";
-import { scaleOf } from "./geom/matrix";
+import { bakeGeometry } from "./bake";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
-import { tidyStrokeWidth } from "./geom/stroke";
-import { fitArtboard, fmt, ptToPx, type ArtboardFit } from "./geom";
+import { fitArtboard, fmt, type ArtboardFit } from "./geom";
+import type { Matrix } from "./geom/matrix";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -31,7 +33,9 @@ export interface PreparedSvg {
   svg: string;
   fit: ArtboardFit;
   bounds: Bounds;
-  /** Elements whose stroke-width was normalized (0 when strokePt = 0). */
+  /** Shapes whose coordinates were rewritten in artboard px (every transform spent). */
+  shapesBaked: number;
+  /** Elements whose stroke-width was set to the configured px (0 when strokePx = 0). */
   strokesNormalized: number;
   /** Elements whose stroke paint was set (0 when strokeColor = artwork). */
   strokesRecolored: number;
@@ -46,7 +50,7 @@ export type PrepareResult =
 
 /** What the restyle pass writes onto every visible stroke; null = leave that aspect alone. */
 interface StrokeStyle {
-  /** The width in output px of the FINAL file (already divided by the artboard scale). */
+  /** The width in px of the FINAL file — the setting's own number, geometry already baked. */
   widthPx: number | null;
   color: string | null;
 }
@@ -65,25 +69,32 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
   const fit = fitArtboard(vb.bounds, settings.paddingPct, artboardSize(settings.artboard));
-  const touched = restyleStrokes(root, strokeStyleOf(settings, fit));
+  const baked = bakeGeometry(root, artboardMatrix(fit));
+  if (baked.unsupported.length > 0) return fail("unsupported", `unsupported content: ${baked.unsupported.join(", ")}`);
+  const touched = restyleStrokes(root, strokeStyleOf(settings));
   const background = readPaint(settings.background, TRANSPARENT) ?? TRANSPARENT;
   applyArtboard(root, fit, background);
   return {
     ok: true,
     svg: new XMLSerializer().serializeToString(doc),
     fit, bounds: vb.bounds, background,
-    strokesNormalized: touched.widths, strokesRecolored: touched.colors,
+    shapesBaked: baked.baked, strokesNormalized: touched.widths, strokesRecolored: touched.colors,
   };
 }
 
+/** The artboard's placement as a matrix: translate(offset) · scale(scale) — what the bake absorbs. */
+function artboardMatrix(fit: ArtboardFit): Matrix {
+  return { a: fit.scale, b: 0, c: 0, d: fit.scale, e: fit.offsetX, f: fit.offsetY };
+}
+
 /**
- * The stroke width is a width in the FINAL file, so it is divided by the
- * artboard's scale as well: a 2.2 pt stroke stays 2.2 pt whatever size the
- * artboard pinned the artwork to. The colour is the configured hex, or nothing.
+ * The stroke width is the setting's own number: the geometry is already in
+ * the final px, so nothing divides or multiplies it. The colour is the
+ * configured hex, or nothing.
  */
-function strokeStyleOf(settings: UploadSettings, fit: ArtboardFit): StrokeStyle {
+function strokeStyleOf(settings: UploadSettings): StrokeStyle {
   return {
-    widthPx: settings.strokePt > 0 ? ptToPx(settings.strokePt) / fit.scale : null,
+    widthPx: settings.strokePx > 0 ? settings.strokePx : null,
     color: settings.strokeColor === STROKE_COLOR_ARTWORK ? null : readPaint(settings.strokeColor, STROKE_COLOR_ARTWORK),
   };
 }
@@ -125,8 +136,7 @@ function restyleStrokes(root: Element, want: StrokeStyle): { widths: number; col
   for (const hit of strokeHits(root)) {
     if (hit.stroke.none || !isShape(hit.el)) continue;
     if (want.widthPx !== null) {
-      const k = scaleOf(hit.ctm);
-      setStrokeWidth(hit.el, k > 1e-9 ? want.widthPx / k : want.widthPx);
+      setStrokeWidth(hit.el, want.widthPx);
       touched.widths++;
     }
     if (want.color !== null) {
@@ -137,10 +147,10 @@ function restyleStrokes(root: Element, want: StrokeStyle): { widths: number; col
   return touched;
 }
 
-/** An explicit width wins over inherited and inline-style values; written tidy (stock review item 2). */
+/** An explicit width wins over inherited and inline-style values; the setting's number, verbatim. */
 function setStrokeWidth(el: Element, width: number): void {
   stripStyleKeys(el, ["stroke-width", "vector-effect"]);
-  el.setAttribute("stroke-width", fmt(tidyStrokeWidth(width)));
+  el.setAttribute("stroke-width", fmt(width));
   el.removeAttribute("vector-effect");
 }
 
@@ -165,18 +175,12 @@ function keyOf(decl: string): string {
   return (at > 0 ? decl.slice(0, at) : decl).trim().toLowerCase();
 }
 
-/** Re-roots the document: padded artboard viewBox (no px size), background, centred artwork. */
+/** Re-roots the document: padded artboard viewBox (no px size) and the background — the artwork already sits in it. */
 function applyArtboard(root: Element, fit: ArtboardFit, background: string): void {
   root.setAttribute("viewBox", fit.viewBox);
   root.removeAttribute("width");
   root.removeAttribute("height");
-  const doc = root.ownerDocument;
-  const group = doc.createElementNS(SVG_NS, "g");
-  const scale = fit.scale === 1 ? "" : ` scale(${fmt(fit.scale)})`;
-  group.setAttribute("transform", `translate(${fmt(fit.offsetX)} ${fmt(fit.offsetY)})${scale}`);
-  for (const child of Array.from(root.children)) group.appendChild(child);
-  root.appendChild(group);
-  if (!isTransparent(background)) root.insertBefore(backgroundRect(doc, fit, background), group);
+  if (!isTransparent(background)) root.insertBefore(backgroundRect(root.ownerDocument, fit, background), root.firstChild);
 }
 
 function backgroundRect(doc: Document, fit: ArtboardFit, background: string): Element {
