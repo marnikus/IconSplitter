@@ -1,6 +1,7 @@
 > Status 2026-10-09: commit A (registry, settings, dialog UI, Inkscape
-> client, converter-neutral `verifyEpsDocument` gate) landed; B (helper
-> process) and C (stroke expansion geometry) follow in their own commits.
+> client, converter-neutral `verifyEpsDocument` gate) and B (the helper
+> `tools/bridge/`, the `.bat` launchers, the pre-batch probe) landed; C
+> (stroke expansion geometry) follows in its own commit.
 
 # EPS converters drop list · Inkscape CLI helper · Expand strokes to fills
 

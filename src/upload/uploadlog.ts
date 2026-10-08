@@ -76,11 +76,12 @@ export function exportOutcomeNote(r: { status: string; error: string; notes: str
 }
 
 /** The batch toast: the count, then how many EPS files were auto-fixed (only when any were). */
-export function exportBatchLine(b: { done: number; total: number; aborted: boolean; fixed: number }): string {
+export function exportBatchLine(b: { done: number; total: number; aborted: boolean; fixed: number; epsNote?: string | null }): string {
   const head = b.aborted
     ? `Export stopped after ${b.done} of ${b.total} — finished packages are kept`
     : `Exported ${b.done} icon${b.done === 1 ? "" : "s"} — each pair's export folder holds the package`;
-  return b.fixed === 0 ? head : `${head} · ${b.fixed} EPS auto-fixed`;
+  const fixed = b.fixed === 0 ? head : `${head} · ${b.fixed} EPS auto-fixed`;
+  return b.epsNote ? `${fixed} · ${b.epsNote}` : fixed; // the pre-batch probe's verdict stays on the final line too
 }
 
 /** A cancel: how many unsent jobs it stopped (finished packages were kept). */

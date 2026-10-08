@@ -17,6 +17,7 @@ import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { PACKAGE_SVG as SVG } from "./helpers/uploadpackage";
+import { minimalJpeg } from "./helpers/minijpeg";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -83,6 +84,26 @@ async function mount(): Promise<void> {
   });
   await waitFor(() => q("[data-testid=upload-row-count]") !== null, "the list to render");
   await settle();
+}
+
+/** The browser transports the DOM cannot provide: canvas encode + image decode (as upload_ui does). */
+function stubCanvas(): void {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => (
+    { fillStyle: "", fillRect: () => undefined, drawImage: () => undefined } as never
+  ));
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback) {
+    cb(new Blob([minimalJpeg(this.width, this.height) as BlobPart], { type: "image/jpeg" }));
+  });
+  class FakeImage {
+    src = "";
+    naturalWidth = 24;
+    naturalHeight = 24;
+    decode(): Promise<void> { return Promise.resolve(); }
+  }
+  vi.stubGlobal("Image", FakeImage);
+  const url = URL as unknown as { createObjectURL?: (b: Blob) => string; revokeObjectURL?: (u: string) => void };
+  url.createObjectURL = () => "blob:upload-test";
+  url.revokeObjectURL = () => undefined;
 }
 
 const health = (body: unknown) => async () => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -162,5 +183,24 @@ describe("Expand strokes to fills", () => {
     await settle();
     expect(storedDefaults().expandStrokes).toBe(true);
     expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("strokes → fills");
+  });
+});
+
+describe("the pre-batch probe (RULE 9: the other outputs never wait)", () => {
+  it("with the Inkscape converter and no helper, the batch says so up front, every row still commits SVG + JPEG → Partial", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));
+    stubCanvas();
+    await mount();
+    await click("[data-testid=upload-settings-open]");
+    const eps = q("[data-testid=upload-set-eps]") as HTMLInputElement;
+    await act(async () => { eps.click(); });
+    await choose("[data-testid=upload-set-eps-converter]", "inkscape");
+    await click("[data-testid=upload-set-close]");
+    await click(`[data-testid=upload-export-${FOG}]`);
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Partial"), "the run to end");
+    const toast = text("[data-testid=upload-toast]");
+    expect(toast).toContain("EPS: the Inkscape helper is not reachable at http://127.0.0.1:47391");
+    expect(toast).toContain("1 row will be partial");
+    expect(toast).toContain("run_inkscape_bridge.bat");
   });
 });

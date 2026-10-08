@@ -619,7 +619,10 @@ renders: `upload-eps-helper-url` (the helper URL, saved as typed when valid),
 or the reason + fix (class `warn`): `… not reachable — … run_inkscape_bridge.bat`
 / `the Inkscape helper is running but Inkscape was not found — install
 Inkscape 1.x (inkscape.org) or set INKSCAPE_PATH`. The probe runs when the
-row appears and on Check. `upload-set-expand` (checkbox) is "Expand strokes
+row appears and on Check. Before a batch that wants Inkscape EPS, one probe
+runs: when the helper is not usable the toast (`upload-toast`) says
+`EPS: <reason> — N rows will be partial · <fix>` up front and again on the
+batch's final line. `upload-set-expand` (checkbox) is "Expand strokes
 to fills". The row's settings cell reads `eps off · builtin` /
 `eps on · inkscape` and appends `· strokes → fills` when expansion is on.
 The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /

@@ -563,9 +563,36 @@ opt-in class as Generate SVG → Requesty; design
   the reason AND its fix (`run_inkscape_bridge.bat`; "install Inkscape 1.x
   or set INKSCAPE_PATH") → `partial`, SVG/JPEG stay committed. The record
   names the converter and the writer: `tools.eps.{enabled, converter,
-  writer, fixes?}`. The helper process itself (`tools/bridge/`) ships in the
-  next commit; the helper URL lives in localStorage
-  `iconSplitter.upload.bridge.v1`.
+  writer, fixes?}`. The helper URL lives in localStorage
+  `iconSplitter.upload.bridge.v1`. ONE probe runs before a batch that wants
+  Inkscape EPS (RULE 9): a helper that is not usable is said up front
+  (`EPS: <reason> — N rows will be partial · <fix>`, repeated on the batch's
+  final line) and the batch runs anyway — the SVG and JPEG never wait.
+* The Inkscape helper itself (`tools/bridge/server.mjs` + `inkscape.mjs`,
+  started by `run_inkscape_bridge.bat` / `run_app_inkscape.bat`, any OS:
+  `node tools/bridge/server.mjs [--port] [--inkscape] [--dist]`) is a
+  dependency-free Node HTTP server on **127.0.0.1 only** (RULE 20 adapted:
+  the artwork goes to a process on the user's own machine and nowhere else;
+  the log names method, status, duration and byte counts — never content,
+  never a package file name). `GET /health` → `{ ok, inkscape: { found,
+  path, version, fix? }, port }`, found LIVE on every call (installing
+  Inkscape while the helper runs is seen at the next Check, RULE 24); `POST
+  /convert/eps` (SVG text, ≤ 20 MB) → `200 application/postscript` +
+  `x-inkscape-version`, or JSON `{ reason }`: 400 not an SVG, 413 over the
+  limit, 503 no Inkscape, 502 Inkscape exited non-zero (its last stderr
+  line), 504 killed after 60 s (`BRIDGE_TIMEOUT_MS`), 499 the browser went
+  away (the child is killed at once, RULE 7). Each conversion runs in its own
+  temp folder (`in.svg` → `inkscape --export-type=eps --export-area-page
+  --export-text-to-path --export-ps-level=3`), deleted in `finally` — never
+  a half file; one conversion at a time. Discovery: `--inkscape` →
+  `INKSCAPE_PATH` → PATH → the platform's default install folders. CORS/PNA:
+  `Origin` `null` (a `file://` page), `localhost` and `127.0.0.1` get the
+  allow headers (+ `Access-Control-Allow-Private-Network: true` on the
+  preflight); any other origin is 403. `GET /` serves `dist/` (index.html,
+  files below dist only) so `run_app_inkscape.bat` opens the app from the
+  helper's own origin; without a build it says `run "npm run build"` (404,
+  honest). Tested by spawning the REAL server against a fake Inkscape
+  (`tests/helpers/fakeinkscape.mjs`, `tests/bridge_inkscape.test.ts`).
 * Expand strokes to fills (2026-10-09, same design): the setting
   `expandStrokes` (default off; fingerprinted ONLY when on, so no existing
   package flips to stale) asks the prepare stage to turn every stroke into a

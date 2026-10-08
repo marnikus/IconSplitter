@@ -70,6 +70,8 @@ Double-click these files in the project folder, in order:
 | `install_dependencies.bat` | Checks that Node.js is present and runs `npm ci` (clean install from `package-lock.json`) |
 | `run_app.bat` | Builds the app and **opens it in your default browser** as a standalone browser app (no server needed) |
 | `run_dev_server.bat` | Starts the live-reload dev server at http://localhost:5173/ and opens the browser (use this while editing code; press `Ctrl+C` in the window to stop) |
+| `run_inkscape_bridge.bat` | Starts the **Inkscape EPS helper** on http://127.0.0.1:47391 (optional — see below); keep its window open while exporting |
+| `run_app_inkscape.bat` | Builds the app, starts the helper and opens the app **through it** (`http://127.0.0.1:47391/`) — the no-fuss way to use the Inkscape converter |
 
 Typical first run:
 
@@ -80,6 +82,32 @@ Typical first run:
 
 After `run_app.bat` finishes, the app lives in `dist\index.html` — you can copy
 that one file anywhere and open it directly in a browser.
+
+---
+
+## Inkscape EPS converter (optional)
+
+The **SVG to upload** tab writes EPS with its built-in writer by default. The
+export settings offer a second converter, **Inkscape CLI (local helper)**,
+which hands the prepared SVG to a real Inkscape on your machine — for stocks
+whose EPS checks are stricter than the built-in subset.
+
+1. Install Inkscape 1.x from https://inkscape.org (or set `INKSCAPE_PATH`
+   to its `inkscape.com`).
+2. Start the helper: `run_inkscape_bridge.bat` (any OS:
+   `node tools/bridge/server.mjs [--port 47391] [--inkscape <path>]`). It
+   binds **127.0.0.1 only**; its log names method, status, duration and byte
+   counts — never your artwork or file names.
+3. In the export settings pick **EPS converter → Inkscape CLI (local
+   helper)**. The helper row shows the live state (`helper running · Inkscape
+   1.3.2`, or what to do), **Check** re-probes, and the URL is editable.
+4. Export as usual. If the helper is down the batch says so up front and
+   those rows land **Partial** — the SVG and JPEG still commit.
+
+`run_app_inkscape.bat` opens the app from the helper's own address, so the
+browser never has to cross origins (Chrome's Private Network Access rules
+for `file://` pages do not apply). Opening `dist\index.html` directly also
+works: the helper answers the preflight for `file://` and `localhost` pages.
 
 ---
 
@@ -261,12 +289,14 @@ IconSplitter/
 │   │                        # statefile, presets, output plan, batchsplit
 │   └── lib/render.ts        # Cropping / resizing / export logic
 ├── tests/                   # Vitest — real detect/render/batch logic (RULE 8)
-├── tools/                   # RULE 16 quality gate + cross-platform verify runner
+├── tools/                   # RULE 16 quality gate + verify runner + bridge/ (the Inkscape helper)
 ├── docs/                    # Rules + verification docs (see docs/README.md)
 ├── design/                  # UI handoff templates (SPEC.md contract: design/README.md)
 ├── AGENTS.md                # AI-agent bootstrap: pins, commands, reading protocol
 ├── install_dependencies.bat # Windows: npm ci
 ├── run_app.bat              # Windows: build + open in browser
+├── run_app_inkscape.bat     # Windows: build + Inkscape helper + open the app through it
+├── run_inkscape_bridge.bat  # Windows: the Inkscape EPS helper alone
 └── run_dev_server.bat       # Windows: live-reload dev server
 ```
 

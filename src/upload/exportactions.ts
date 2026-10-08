@@ -17,6 +17,8 @@ import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
 import { loadBridgeConfig } from "./configstore";
+import { CONVERTERS } from "../lib/upload/epsconv/registry";
+import type { ConverterDeps } from "../lib/upload/epsconv/types";
 import { cancelledSpec, exportBatchLine, exportOutcomeNote, exportedSpec, type IconRef } from "./uploadlog";
 import { noteOfRecord } from "./rowmodel";
 import type { Latest, UploadMetaState, UploadRow } from "./types";
@@ -101,6 +103,8 @@ export async function runExportBatch(
   let fixed = 0;
   c.dispatch({ type: "progress", progress: { ...tally } });
   for (const id of ids) rememberJob(id, "queued");
+  const epsNote = await probeEpsNote(c, ids);
+  if (epsNote !== null) c.say(epsNote, true);
   for (const id of ids) {
     if (abort.signal.aborted) break;
     rememberJob(id, "running");
@@ -108,12 +112,38 @@ export async function runExportBatch(
     tally.done += 1;
     c.dispatch({ type: "progress", progress: { ...tally } });
   }
+  finishBatch(c, { done: tally.done, total: ids.length, aborted: abort.signal.aborted, fixed, epsNote });
+}
+
+/** The batch's end: the run flags off, the cancel logged, the one toast line. */
+function finishBatch(c: UploadCtx, b: { done: number; total: number; aborted: boolean; fixed: number; epsNote: string | null }): void {
   c.refs.abortExport.current = null;
   c.dispatch({ type: "running", kind: "export", n: 0 });
   c.dispatch({ type: "progress", progress: null });
-  const done = tally.done;
-  if (abort.signal.aborted) log(cancelledSpec(ids.length - done));
-  c.say(exportBatchLine({ done, total: ids.length, aborted: abort.signal.aborted, fixed }));
+  if (b.aborted) log(cancelledSpec(b.total - b.done));
+  c.say(exportBatchLine(b));
+}
+
+/** The helper's URL from the device config + the browser's own fetch (2026-10-09). */
+function browserConverterDeps(): ConverterDeps {
+  return { bridgeUrl: loadBridgeConfig().url, fetch: (url: string, init?: RequestInit) => globalThis.fetch(url, init) };
+}
+
+/**
+ * One probe BEFORE the batch (design 2026-10-09, RULE 9): when rows want the
+ * Inkscape EPS and the helper is not usable, say so up front — those rows
+ * will be `partial`, their SVG + JPEG commit regardless. Null = nothing to say.
+ */
+async function probeEpsNote(c: UploadCtx, ids: string[]): Promise<string | null> {
+  const wanting = ids.filter((id) => {
+    const s = effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {});
+    return s.includeEps && s.epsConverter === "inkscape";
+  });
+  if (wanting.length === 0) return null;
+  const state = await CONVERTERS.inkscape.probe(browserConverterDeps());
+  if (state.ok) return null;
+  const n = wanting.length;
+  return `EPS: ${state.reason} — ${n} row${n === 1 ? "" : "s"} will be partial · ${state.fix}`;
 }
 
 /** Everything one export run needs — one domain object (RULE 16). */
@@ -141,7 +171,7 @@ async function exportOne(args: ExportOneArgs): Promise<number> {
     metadata: meta === null ? null : meta.metadata,
     metadataInfo: metadataInfoOf(c, meta),
     record: row.record, signal: args.signal,
-    deps: { converter: { bridgeUrl: loadBridgeConfig().url, fetch: (url: string, init?: RequestInit) => globalThis.fetch(url, init) } },
+    deps: { converter: browserConverterDeps() },
   });
   applyExportResult(args.latest, args.id, row, result);
   return result.notes.length > 0 ? 1 : 0;
