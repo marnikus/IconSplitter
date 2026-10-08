@@ -328,24 +328,27 @@ opt-in class as Generate SVG → Requesty; design
   SVG, without a sidecar, outside the split scope and duplicates are reported
   in a banner with their reasons, never listed. Export output is never a
   discovery source (no export loops).
-* Settings: global defaults (padding %, background, stroke width in pt at the
-  documented 96 DPI, JPEG target MP, JPEG quality, SVGO optimize on, optional
-  EPS) plus per-icon overrides; the effective settings are defaults under,
-  overrides on top, and the settings dialog marks every field inherited or
-  overridden. "Apply settings to selected" pins the current defaults onto the
-  selection as ONE undoable `uploadSettings` history entry; per-icon set/reset
-  pushes one entry each; global-defaults edits are persisted but NOT undoable
-  (the same class as presets). The checkbox selection is session-persisted but
-  not on the undo timeline.
-* Geometry: the visible bounds include strokes (width/caps/joins), transforms
-  and non-scaling-stroke; unsupported elements (text, image, use,
-  foreignObject, risky `<style>`) are named, never guessed. The artwork is
-  fitted proportionally into the padded artboard (uniform padding, % of the
-  fitted artwork's largest side), strokes normalized to the configured pt width
-  (1 pt = 4/3 px), and the JPEG rasterizes the VECTORS directly at the integer
-  target (15.1 MP → 3886×3886 for a square artboard), verified by decoding the
-  SOF back. All of it happens on an export COPY — the approved source is never
-  written.
+* Settings: global defaults (padding %, background, stroke width in pt at 96
+  DPI, pixel artboard, JPEG target MP/quality, SVGO optimize on, optional EPS)
+  plus per-icon overrides. The default artboard is 512×512 px; square presets
+  are 128/256/512/1024/2048, with 640×480, 1200×800, 1920×1080, 1080×1920,
+  Fit-to-content and bounded custom dimensions. The effective settings are
+  defaults under, overrides on top, and every field is marked inherited or
+  overridden. "Apply settings to selected" pins the current defaults as ONE
+  undoable `uploadSettings` entry; per-icon set/reset pushes one entry each;
+  global-default edits persist but are NOT undoable. The checkbox selection is
+  session-persisted but not on the undo timeline.
+* Geometry: visible bounds include strokes (width/caps/joins) and transforms;
+  unsupported elements (text, image, use, foreignObject, risky `<style>`) are
+  named, never guessed. Artwork is uniformly scaled to fit and centered on the
+  exact selected board (or uses the old content-sized Fit); it is never cropped
+  or stretched. Strokes are normalized only when already present and configured
+  (1 pt = 4/3 px; default 0 leaves them untouched). A background rect with
+  `fill` and `stroke="none"` is added only for fill-only artwork. The JPEG
+  canvas is independently pre-filled with the selected background, then renders
+  the vectors at the integer target (15.1 MP → 3886×3886 for a square), verified
+  by decoding the SOF. All preparation happens on an export COPY — the approved
+  source is never written.
 * The metadata prompt (2026-10-07 UI fix): it lives in its OWN large panel
   beside the Gemini card — never inside it — and it is EDITABLE and persisted
   (`iconSplitter.upload.prompt.v1`): the text the editor shows is the text the
@@ -360,26 +363,29 @@ opt-in class as Generate SVG → Requesty; design
 * Metadata: Gemini (`gemini-3.1-flash-lite`, `x-goog-api-key` header, key in
   IndexedDB under `gemini-api-key`, masked/redacted everywhere) answers the
   prompt above (the documented default until the user edits it); the answer is
-  parsed deterministically (three labeled
-  lines) and validated (exactly 40 unique tags incl. the 7 mandatory; title =
-  5–7 words + a 3–5-word sentence naming ≥2 of the tags; description 7–15
-  words; restricted-content hits are warnings). The fields under each row are
-  editable and copiable, empty until generated; Accept re-validates and
-  persists through the embed commit. The confirmation dialog shows the exact
-  request (prompt, endpoint, auth rule) before any paid send; a timeout or
-  disconnect is NEVER resent automatically (no duplicate paid submission);
-  in-flight requests are journalled and reported `interrupted` after a restart.
-* Export: the stage planner re-runs only what changed (a metadata edit re-embeds
-  — no AI, no render; a missing output rebuilds just that output; nothing
-  changed → no work). Every output validates before it commits (SVG parses +
-  metadata readback; JPEG decodes at the recorded dims + XMP readback; EPS
-  header + bounding box) and commits atomically (tmp → verify → overwrite →
-  cleanup, `export.json` LAST as the commit marker), so a crash mid-commit
-  leaves the last valid package in place. EPS is a genuine writer for a
-  documented subset; anything outside fails that stage honestly → `partial`
-  (SVG/JPEG stay committed). Green (`processed`) only when every requested
-  output validated and committed; `stale` when fingerprints moved since the
-  last commit.
+  parsed deterministically (three labeled lines) and validated with minimums:
+  at least 10 unique tags, including the seven mandatory terms; at least five
+  total words in the title with no sentence-count or maximum-length rule; and
+  at least seven words in the description with no maximum. Restricted-content
+  hits remain warnings. The editable/copied fields start empty; Accept
+  re-validates and persists through the embed commit. The confirmation dialog
+  shows the exact request before any paid send; a timeout or disconnect is
+  NEVER resent automatically, and in-flight requests are journalled as
+  `interrupted` after restart.
+* Export: the stage planner re-runs only what changed (metadata edits re-embed
+  without AI/render; missing outputs rebuild selectively; unchanged means no
+  work). The SVG cleaner runs whether SVGO compaction is on or off and again at
+  the final SVG boundary before generated upload metadata is embedded. It sets
+  SVG 1.1 and a positive viewBox, strips comments/source metadata/editor
+  namespaces, IDs, classes and object/layer names, and rejects raster content
+  or local ID references that would break appearance. SVGO's preset-default
+  compaction deliberately preserves background `<rect>` elements and their
+  explicit `stroke="none"`. SVG/JPEG/EPS validate
+  before atomic commit (`export.json` LAST), so a crash leaves the last valid
+  package. EPS is a genuine writer for a documented subset; anything outside
+  fails honestly as `partial` (SVG/JPEG stay committed). Green (`processed`)
+  means every requested output validated and committed; `stale` means a
+  fingerprint moved since the last commit.
 * Restart precedence (P2.6 — the two interruption models reconciled): there are
   TWO independent memories of work that did not finish, and they never silently
   disagree. **Disk wins on scan**: `export.json` beside the outputs is the

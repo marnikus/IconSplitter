@@ -1819,3 +1819,66 @@ with it the `batchlayout` dependency), `svg/SvgRow.tsx` 203 → 187 (its local
 `targetPath` and `joinPath` moved to `svg/rowmodel.ts` as the one exported
 `targetPathOf`), `svg/codeactions.ts` 120 → 118, `svg/rowmodel.ts` 114 → 129.
 Every function stays inside the limits; no baseline was touched.
+
+---
+
+## 2026-10-08 — Upload metadata, pixel artboards and clean SVG (doc-first handoff)
+
+This check was run against the complete local implementation candidate. Per the
+user's instruction, this delivery publishes documentation only: implementation
+code and tests remain uncommitted in the working tree. Do not treat the results
+below as verification of a pushed code commit. The design and six-step TDD/
+acceptance sequence are recorded in
+`docs/archive/2026-10-07-upload-metadata-artboard-cleanup/design.md`.
+
+### Verification lanes
+
+| Lane | Result |
+|---|---|
+| TypeScript (`npx tsc --noEmit`) | clean |
+| ESLint (`src tests tools`) | 0 errors; 9 existing warnings in `src/App.tsx`, `src/lib/detect.ts`, and `src/upload/runmetadata.ts`; no new warning in the changed source files |
+| RULE 16 changed-file gate | **passed** (`node tools/quality.mjs --changed --allow-legacy`) |
+| Full Vitest suite | **125 files / 1,327 tests passed** |
+| Coverage | all `src/lib`: 98.03% lines; `src/lib/upload`: 98.66% lines, 95.65% statements, 88.62% branches, 100% functions |
+| Production build | **passed**, single-file `dist/index.html`: 1,470.13 kB (424.09 kB gzip); Vite transformed 273 modules |
+
+The SVGO regression specifically proves that optimized fill-only board output
+keeps a `<rect>` with an explicit `stroke="none"`; the browser entry now uses
+`svgo/browser`, avoiding Node-builtin externalization in the app build.
+
+### RULE 18, duplication and dead-code audit
+
+Changed source files are all below the 300-line hard limit. Their measured sizes
+are: `geom.ts` 129, `meta.ts` 125, `optimize.ts` 68, `prepare.ts` 160,
+`raster.ts` 100, `settings.ts` 229, new `svgclean.ts` 186,
+`UploadMetaFields.tsx` 133, `UploadRow.tsx` 193,
+`UploadSettingsDialog.tsx` 234, `exportstages.ts` 128, and `uploadundo.ts` 98.
+All measured function bodies are at or below RULE 18's 20-line ideal except
+`SettingsGrid` (23) and `BackgroundSetting` (22); each has an adjacent
+`ideal-size` comment explaining why its declarative UI composition stays
+cohesive. No quality threshold or baseline was waived or edited.
+
+`npx jscpd src --min-tokens 60` found 33 clones / 365 duplicated lines (1.28%),
+the same clone count and duplicated lines as the baseline tree (`git archive
+HEAD src`, 1.29%): **no new clone**.
+`npx knip` remains blocked by the sandbox's `oxc-parser`
+`RangeError: Array buffer allocation failed`. The substitute export audit
+confirmed that the new cleaner function/error and artboard API have production
+consumers; unused settings/metadata prop exports and the `UploadCounts`
+re-export were removed, and `OPTIMIZE_CONFIG` remains module-private.
+
+RULE 18's context-file preference remains an existing repository constraint:
+`SYSTEM_OF_RECORD.md`, `UI_SELECTORS.md` and the append-only `QUALITY_RECHECK.md`
+are longer than 200 lines. This work updated the relevant sections in place,
+kept the dated design within 100 lines, and added no standalone top-level doc.
+The longer current references were not broadly reorganized as part of this
+feature review.
+
+### Documentation-only handoff
+
+The archive design contains the requested implementation order: metadata tests,
+settings/persistence tests, fixed/Fit artboard and stroke/background tests,
+SVG-cleaner safety tests, optimizer/UI integration tests, then full verification
+and the RULE 18/dead-code/duplication review. This push contains documentation
+only; keep the implementation pending until it is separately authorized and
+verified on its eventual code commit.

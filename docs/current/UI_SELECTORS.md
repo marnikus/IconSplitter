@@ -554,15 +554,17 @@ Row (`upload-row-{id}`):
 | `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" |
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
-| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
+| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective artboard px dimensions (or Fit), export settings, plus "inherits defaults" / "N fields overridden" |
 | `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
 | `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
 
 Metadata fields (`upload-detail-{id}`, empty until generated):
 `upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
 `upload-meta-title-{id}` / `upload-meta-description-{id}` /
-`upload-meta-tags-{id}` (each with its live count), the per-field copy buttons
-`upload-copy-{title,description,tags}-{id}`, the validation line
+`upload-meta-tags-{id}` (each with its live count), governed by ≥10 unique tags
+(including the seven mandatory), ≥5 total title words and ≥7 description words;
+there are no former exact-40, title sentence/max or description-max rules. The
+per-field copy buttons `upload-copy-{title,description,tags}-{id}`, the validation line
 `upload-meta-validation-{id}`, and the actions row `upload-meta-state-{id}`
 / `upload-meta-usage-{id}` / `upload-meta-detail-{id}` /
 `upload-meta-regen-{id}` / `upload-meta-accept-{id}` (disabled when accepted
@@ -571,11 +573,16 @@ and unedited).
 Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
-change), `upload-set-{optimize,eps}` (checkboxes), the background
-(`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
-`upload-set-bg-value`), the per-field marker `upload-set-marker-{field}`
-("inherited" / "overridden", icon scope only), `upload-set-reset` (icon scope:
-deletes the override — one undoable entry), `upload-set-close`.
+change), `upload-set-{optimize,eps}` (checkboxes), the artboard preset
+`upload-set-artboard`, custom px inputs `upload-set-artboard-width` and
+`upload-set-artboard-height`, and live dimensions `upload-set-artboard-size`.
+Options: Fit, square 128/256/512/1024/2048 px, 640×480, 1200×800, 1920×1080,
+1080×1920, and Custom; default 512×512. The background uses
+`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
+`upload-set-bg-value`. The per-field marker is
+`upload-set-marker-{field}` ("inherited" / "overridden", icon scope only);
+`upload-set-reset` (icon scope) deletes the override in one undoable entry, and
+`upload-set-close` closes the dialog.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,
