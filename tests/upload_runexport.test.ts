@@ -40,7 +40,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -360,7 +360,7 @@ describe("runExport — selective re-export (no redundant work)", () => {
       requestId: null, usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(META),
     };
     await runExport(args(root, { metadata: META, metadataInfo: info }));
-    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress. Speed and growth pictogram" };
+    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress and speed" };
     const spy = { renders: 0 };
     const result = await runExport(args(root, {
       record: readRecord(root),

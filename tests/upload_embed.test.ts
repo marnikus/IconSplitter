@@ -12,7 +12,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -75,7 +75,7 @@ describe("embedMetadataInSvg", () => {
 
   it("XML-escapes special characters and round-trips them", () => {
     const tricky: IconMetadata = {
-      title: "Fish & Chips <Icon> \"quoted\". Speed growth pictogram",
+      title: "Fish & Chips <Icon> \"quoted\" speed growth pictogram",
       description: "A <b>bold</b> & \"quoted\" description here ok",
       tags: TAGS,
     };

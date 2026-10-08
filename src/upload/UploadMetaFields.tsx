@@ -52,7 +52,7 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
   return (
     <>
       <Field id={id} label="Title" testid="title" value={m.title} count={countWords(m.title)}
-        hint="two sentences: 5–7 words, then 3–5 words naming two of the tags"
+        hint="one phrase, at least 5 words — no second sentence, no trailing period"
         onEdit={(v) => onEdit({ title: v })} onCopy={() => onCopy("title")} />
       <Field id={id} label="Description" testid="description" value={m.description} count={countWords(m.description)}
         hint="7–15 words" multiline

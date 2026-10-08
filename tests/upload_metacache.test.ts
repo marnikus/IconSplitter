@@ -18,7 +18,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -93,6 +93,12 @@ describe("what the row opens with", () => {
     expect(restored.state).toBe("invalid");
     expect(restored.detail).toContain("no longer passes the policy");
     expect(validateMetadata(restored.metadata as IconMetadata).ok).toBe(false);
+  });
+
+  it("an entry with a second sentence comes back as the first one (one-phrase rule)", () => {
+    const restored = restoredMeta({ state: "accepted", meta: { ...META, title: "Minimal line icon of growth. Speed and growth pictogram" } });
+    expect(restored.metadata?.title).toBe("Minimal line icon of growth");
+    expect(restored.state).toBe("accepted");
   });
 
   it("an entry remembered with a trailing period comes back without it (stock review item 5)", () => {

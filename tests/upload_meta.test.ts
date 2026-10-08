@@ -28,7 +28,7 @@ const TAGS: string[] = [
 ];
 
 const VALID: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -49,6 +49,12 @@ describe("the default prompt states every enforced constraint", () => {
     expect(DEFAULT_METADATA_PROMPT).not.toContain("exactly 40");
   });
 
+  it("asks for ONE phrase and forbids a second sentence (stock review, 2026-10-08)", () => {
+    expect(DEFAULT_METADATA_PROMPT).toContain("ONE phrase");
+    expect(DEFAULT_METADATA_PROMPT).toContain("a single sentence, never two");
+    expect(DEFAULT_METADATA_PROMPT).toContain("Icon of X and Y");
+  });
+
   it("states the IP rules", () => {
     expect(DEFAULT_METADATA_PROMPT).toContain("brand");
     expect(DEFAULT_METADATA_PROMPT).toContain("in the style of");
@@ -56,7 +62,7 @@ describe("the default prompt states every enforced constraint", () => {
   });
 });
 
-describe("cleanTitle — no trailing sentence punctuation (stock review item 5)", () => {
+describe("cleanTitle — one phrase, no trailing punctuation (stock review, 2026-10-08)", () => {
   it.each([
     ["Unity and Compassionate Human Connection.", "Unity and Compassionate Human Connection"],
     ["A B C D E!", "A B C D E"],
@@ -65,15 +71,45 @@ describe("cleanTitle — no trailing sentence punctuation (stock review item 5)"
     ["Ellipsis…", "Ellipsis"],
     ["Is this a question?", "Is this a question?"],
     ["Clean already", "Clean already"],
+    ["  spaced   out  phrase  ", "spaced out phrase"],
     ["", ""],
   ])("%j → %j", (raw, clean) => {
     expect(cleanTitle(raw)).toBe(clean);
+  });
+
+  it("cuts a second sentence — the reviewer's own title", () => {
+    expect(cleanTitle("Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community."))
+      .toBe("Collaborative Unity Promoting Collective Social Empathy");
+  });
+
+  it.each([
+    ["Growth. Speed and growth pictogram.", "Growth"],
+    ["Growth and speed! Icon of success, team and ideas.", "Growth and speed"],
+    ["A question? Yes, a second sentence starts here.", "A question"],
+    ["One. Two. Three words of a phrase", "One"],
+  ])("keeps only the first sentence: %j", (raw, clean) => {
+    expect(cleanTitle(raw)).toBe(clean);
+  });
+
+  it("never splits a decimal or an ellipsis inside a phrase", () => {
+    expect(cleanTitle("3.5 MP growth chart icon of speed")).toBe("3.5 MP growth chart icon of speed");
+    expect(cleanTitle("Icon of speed…and growth")).toBe("Icon of speed…and growth");
+  });
+
+  it("is idempotent — cleaning the cleaned title changes nothing", () => {
+    const once = cleanTitle("Growth. Speed and growth pictogram.");
+    expect(cleanTitle(once)).toBe(once);
   });
 
   it("parseMetadata applies it, and the default prompt asks for it", () => {
     const parsed = parseMetadata(`Title: ${VALID.title}.\nDescription: ${VALID.description}\nTags: ${VALID.tags.join(", ")}`);
     expect(parsed?.title).toBe(VALID.title);
     expect(DEFAULT_METADATA_PROMPT).toContain("no trailing period");
+  });
+
+  it("parseMetadata cuts the second sentence of a model answer end to end", () => {
+    const parsed = parseMetadata(`Title: Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.\nDescription: ${VALID.description}\nTags: ${TAGS.join(", ")}`);
+    expect(parsed?.title).toBe("Collaborative Unity Promoting Collective Social Empathy");
   });
 });
 
@@ -99,7 +135,7 @@ describe("parseMetadata — deterministic labeled-text parsing", () => {
   });
 
   it("parses the three labeled lines", () => {
-    const text = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
+    const text = `Title: ${VALID.title}\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
     const parsed = parseMetadata(text);
     expect(parsed).not.toBeNull();
     expect(parsed?.title).toBe(VALID.title);

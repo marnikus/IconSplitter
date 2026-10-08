@@ -18,7 +18,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends — ünïcode ✓",
   tags: TAGS,
 };
@@ -106,7 +106,7 @@ describe("verifyJpeg — SOI/EOI + decoded dimensions + XMP readback", () => {
 
   it("rejects metadata that does not match the accepted fields", () => {
     const out = embedXmpMetadata(minimalJpeg(10, 10), META);
-    const other = { ...META, title: "A different title entirely now. Speed growth pictogram" };
+    const other = { ...META, title: "A different title entirely now" };
     expect(verifyJpeg(out, { width: 10, height: 10, metadata: other }).errors[0]).toContain("does not match");
   });
 });
