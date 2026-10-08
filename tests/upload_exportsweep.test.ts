@@ -25,10 +25,26 @@ describe("sweeping the export folder", () => {
     expect(removed.sort()).toEqual(["fog_AI.eps", "fog_AI.jpg", "fog_AI.svg"]);
   });
 
-  it("knows every form of our own bookkeeping", async () => {
-    const dir = dirWith("fog.svg", "fog_AI_v2.svg", "fog_AI_7_04.eps", "fog_AI_9_01.jpg", "fog.jpg", "fog.eps");
-    await sweepSuperseded(dir, "fog", new Set());
+  it("knows every form of OUR OWN name for this icon", async () => {
+    const dir = dirWith("fog.svg", "fog_AI.svg", "fog_AI.eps", "fog_AI.jpg", "fog.jpg", "fog.eps");
+    const removed = await sweepSuperseded(dir, "fog", new Set());
     expect(names(dir)).toEqual(["fog.eps", "fog.jpg", "fog.svg"]);
+    expect(removed.sort()).toEqual(["fog_AI.eps", "fog_AI.jpg", "fog_AI.svg"]);
+  });
+
+  it("leaves a number-tailed file alone — that tail names ANOTHER icon (2026-10-08)", async () => {
+    // `fog_7` is its own pair: its artifacts are `fog_7.*`, so `fog_AI_7.*` is not ours
+    const dir = dirWith("fog.svg", "fog.jpg", "fog.eps", "fog_AI_7_04.svg", "fog_AI_9_01.jpg", "fog_AI_03.eps");
+    expect(await sweepSuperseded(dir, "fog", new Set())).toEqual([]);
+    expect(names(dir)).toEqual(["fog.eps", "fog.jpg", "fog.svg", "fog_AI_03.eps", "fog_AI_7_04.svg", "fog_AI_9_01.jpg"]);
+  });
+
+  it("sweeps the versioned old name when ITS OWN stem is the one being exported", async () => {
+    // the v2 source exports as `fog_v2.*`, so its pre-rename artifact is ours
+    const dir = dirWith("fog_v2.svg", "fog_v2.jpg", "fog_AI_v2.svg", "fog_AI_v2.eps");
+    const removed = await sweepSuperseded(dir, "fog_v2", new Set());
+    expect(names(dir)).toEqual(["fog_v2.jpg", "fog_v2.svg"]);
+    expect(removed.sort()).toEqual(["fog_AI_v2.eps", "fog_AI_v2.svg"]);
   });
 
   it("keeps a superseded file the package CLAIMS when the replacement is not there", async () => {

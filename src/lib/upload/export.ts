@@ -18,18 +18,21 @@ export function exportDirOf(dirPath: string): string {
 }
 
 /**
- * One pair's artifact stem — the name the files in `export/` carry. It is the
- * ICON's name, never the app's bookkeeping (2026-10-08, the user's rule): the
- * `_AI` marker and every numeric tail behind it go, so a destination site sees
- * `fog.svg` / `fog.jpg` / `fog.eps` instead of `fog_AI_7_04_v2.*`.
+ * One pair's artifact stem — the name the files in `export/` carry. The ONLY
+ * thing that goes is the app's `_AI` marker (2026-10-08, corrected by the user
+ * the same day): every number behind it STAYS, because those digits are what
+ * tells one icon from another.
  *
- * * `fog_AI.svg` -> `fog`; `fog_AI_v2.svg` -> `fog` (the approved version is
- *   recorded in `export.json`, not in the file name)
- * * `icon-bunny-face_AI_7_04.svg` -> `icon-bunny-face` (batch + split tails)
- * * `chat_bot_2_AI.svg` -> `chat_bot_2` — a base that really ends in a digit
- *   keeps it, because only what FOLLOWS `_AI` is bookkeeping
- * * anything without the `_AI` marker is returned unchanged: the name is never
- *   invented, only trimmed
+ * * `fog_AI.svg` -> `fog`; `fog_AI_03.svg` -> `fog_03`
+ * * `icon-bunny-face_AI_7_04.svg` -> `icon-bunny-face_7_04` (batch + split tails)
+ * * `fog_AI_v2.svg` -> `fog_v2` — the approved version stays visible in the name
+ * * `chat_bot_2_AI.svg` -> `chat_bot_2`: the `_AI` marker is bookkeeping, the
+ *   rest of the name is the icon's
+ * * no trailing `_AI` marker (or a tail that is not numeric, e.g. `fog_AI_x`) is
+ *   returned unchanged — the name is never invented, only trimmed
+ *
+ * Two icons never collapse into one name this way: `fog_AI.svg` and
+ * `fog_AI_7.svg` are different pairs and stay `fog.*` and `fog_7.*`.
  */
 export function stemOf(svgName: string): string {
   return trimArtifactStem(svgName.replace(/\.svg$/i, ""));
@@ -37,13 +40,13 @@ export function stemOf(svgName: string): string {
 
 /**
  * The trim itself, on a name that already lost its extension (`fog_AI_v2` →
- * `fog`, `fog_AI_7_04` → `fog`, `plain` → `plain`). Exported because the export
- * folder's sweep must recognise the app's own superseded names by exactly the
- * rule that produces the current ones — one rule, one home (RULE 3).
+ * `fog_v2`, `fog_AI_7_04` → `fog_7_04`, `plain` → `plain`). Exported because the
+ * export folder's sweep must recognise the app's own superseded names by exactly
+ * the rule that produces the current ones — one rule, one home (RULE 3).
  */
 export function trimArtifactStem(stem: string): string {
-  const marked = /^(.*)_AI((?:_v?\d+)*)$/i.exec(stem.replace(/_v\d+$/i, ""));
-  return marked === null ? stem : marked[1];
+  const marked = /^(.*)_AI((?:_v?\d+)*)$/i.exec(stem);
+  return marked === null ? stem : `${marked[1]}${marked[2]}`;
 }
 
 /** The three extensions of an export package, and the only ones a sweep touches. */

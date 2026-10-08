@@ -352,6 +352,23 @@ describe("runExport — selective re-export (no redundant work)", () => {
     expect(readRecord(root).outputs.svg).toEqual(expect.objectContaining({ path: `${DIR}/export/${ART}.svg` }));
   });
 
+  it("keeps a numeric tail in the artifact name — `fog_AI_7.svg` exports as `fog_7.*`", async () => {
+    const root = pairRoot();                       // the pair folder holds `fog_AI*`
+    const dir = dirAt(root, DIR);
+    const named = "fog_AI_7.svg";
+    dir.children.set(named, new BinFile(named, SOURCE_SVG, 3400));
+    dir.children.delete(`${STEM}.svg.json`);
+    dir.children.set(`${named}.json`, new BinFile(`${named}.json`, serializePairMeta(pairFile(DIR, "fog_AI_7.png", {
+      id: "pair_7", versions: [svgVersion(`${DIR}/${named}`, { version: 1, review: "approved" })],
+    })), 3300));
+    const result = await runExport(args(root, {
+      row: { ...ROW, id: "pair_7", svgName: named, svgPath: `${DIR}/${named}`, metaPath: `${DIR}/${named}.json` },
+    }));
+    expect(result.status).toBe("processed");
+    expect([...dirAt(root, `${DIR}/export`).children.keys()].sort())
+      .toEqual(["export.json", "fog_7.jpg", "fog_7.svg"]);
+  });
+
   it("sweeps an orphan the record never named — the old-named EPS a real folder keeps", async () => {
     const root = pairRoot();
     await runExport(args(root));                       // the current-name package: fog.svg + fog.jpg

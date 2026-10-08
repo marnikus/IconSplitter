@@ -7,8 +7,9 @@
 //
 // * only inside the icon's own export folder, and only the three artifact
 //   extensions (`ARTIFACT_EXTS`): `export.json`, a readme, another icon's
-//   `arch_AI.svg`, or a base that is not this icon's (`fogv2.eps`,
-//   `fog_AI_x.eps`) are never candidates;
+//   `arch_AI.svg`, a NUMBER-TAILED name that belongs to a different pair
+//   (`fog_AI_7.eps` is icon `fog_7`'s, whose own artifacts are `fog_7.*`), or a
+//   near-miss base (`fogv2.eps`, `fog_AI_x.eps`) are never candidates;
 // * never the current names themselves, so a re-export of an already-named
 //   package removes nothing;
 // * a superseded file the previous `export.json` NAMES is removed only when the

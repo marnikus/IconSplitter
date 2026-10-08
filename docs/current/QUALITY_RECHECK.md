@@ -2256,3 +2256,55 @@ fills, replaces and prunes them (`writeRecord` + `pruneRemoved`).
 * A superseded file whose base does not trim to this icon's stem (e.g.
   `fog_AI_x.eps`) is left alone: the naming rule cannot prove this app wrote it.
 * Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (fourth) — corrected: only `_AI` goes, every number stays
+
+The user corrected the naming rule the same day: *"sorry it was incorrect task.
+only remove `_AI` but keep number `_03` etc."* The rule in
+`lib/upload/export.ts` is now literal — strip the extension, remove the `_AI`
+marker, change nothing else:
+
+| source | before (wrong) | now |
+| --- | --- | --- |
+| `fog_AI.svg` | `fog.*` | `fog.*` (unchanged) |
+| `fog_AI_03.svg` | `fog.*` | **`fog_03.*`** |
+| `icon-bunny-face_AI_7_04.svg` | `icon-bunny-face.*` | **`icon-bunny-face_7_04.*`** |
+| `fog_AI_v2.svg` | `fog.*` | **`fog_v2.*`** |
+| `chat_bot_2_AI.svg` | `chat_bot_2.*` | `chat_bot_2.*` (unchanged) |
+| `fog_AI_x.svg` | `fog_AI_x.*` | `fog_AI_x.*` (a non-numeric tail is not our marker) |
+
+Keeping the digits also removes the collision the previous rule created:
+`fog_AI.svg` and `fog_AI_7.svg` are different pairs and now export as `fog.*`
+and `fog_7.*` instead of collapsing onto one name.
+
+The sweep follows the same, single rule (`trimArtifactStem`): for icon `fog`,
+`fog_AI.eps` is ours and goes when `fog.eps` is on disk, while `fog_AI_7.eps` /
+`fog_AI_9_01.jpg` belong to OTHER icons and are never candidates. A versioned
+source is swept under its own stem: exporting `fog_AI_v2.svg` (stem `fog_v2`)
+replaces `fog_AI_v2.*` with `fog_v2.*`.
+
+### Tests
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_export` | every row of the table above, plus `publishedJpegPath("", "fog_AI_7.svg")` = `export/fog_7.jpg` |
+| `upload_exportsweep` | our own `fog_AI.*` goes; `fog_AI_03.eps`, `fog_AI_7_04.svg`, `fog_AI_9_01.jpg` are LEFT ALONE (another icon's); the versioned old name goes when `fog_v2.*` is the stem being exported |
+| `upload_runexport` | a real export of the `fog_AI_7.svg` pair commits `fog_7.svg` + `fog_7.jpg` |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1398 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.76 %**, branches **89.3 %**, functions 96.83 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* A pre-rename artifact of a DIFFERENT version (`fog_AI_v2.eps` while v1 is the
+  approved source) is left alone: it belongs to the `fog_v2` stem, and only an
+  export of that version sweeps it.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.

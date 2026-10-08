@@ -872,7 +872,7 @@ Batch:
 | localStorage `iconSplitter.upload.meta.v1` | the **accepted-metadata cache** (CP-15), keyed by the sha256 of the SOURCE SVG: `{ v, cache: { [sha256]: { state: generated \| accepted, meta } } }` | validated entry-by-entry on read (junk dropped, foreign version = empty); bounded at 512 entries, oldest evicted first; an entry whose text no longer passes `upload-meta-v1` comes back `invalid`, never exportable: edited artwork misses the cache by construction |
 | localStorage `iconSplitter.upload.jobs.v1` | the **per-icon job store** (CP-2): `{ v, states: { [pairId]: queued \| running \| processed \| partial \| failed \| cancelled \| interrupted } }` | validated on read (unknown states dropped), bounded at 1024; a `queued`/`running` entry left by a previous session becomes `interrupted` **once per page load**; the store never re-sends, retries or re-bills anything |
 | IndexedDB `iconSplitter/secrets["gemini-api-key"]` | the Gemini API key | its own slot beside the Requesty key; never in localStorage, logs or exports (RULE 20); a refused write falls back to a session-only key the UI names as such |
-| `<pair-folder>/export/<base>.svg|.jpg|.eps` | the export package (prepared SVG copy, 15.1 MP JPEG, optional genuine EPS). `<base>` is the **ICON's** name, never the app's bookkeeping: `_AI` and every numeric tail behind it are trimmed (`lib/upload/export.ts` `stemOf`, the ONE rule the commit and the published-JPEG path share) — `fog_AI.svg` → `fog.svg`, `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face.svg`, `fog_AI_v2.svg` → `fog.svg`; a base that really ends in a digit (`chat_bot_2_AI.svg`) keeps it, and a name without the `_AI` marker is returned unchanged, never invented | written only by the validated export commit; the approved source and its sidecar are never touched. The approved version lives in `export.json` (`source.version`), not in the file name |
+| `<pair-folder>/export/<base>.svg|.jpg|.eps` | the export package (prepared SVG copy, 15.1 MP JPEG, optional genuine EPS). `<base>` keeps the icon's own name and drops ONLY the app's `_AI` marker (`lib/upload/export.ts` `stemOf`, the ONE rule the commit and the published-JPEG path share) — `fog_AI.svg` → `fog.svg`, `fog_AI_03.svg` → `fog_03.svg`, `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face_7_04.svg`, `fog_AI_v2.svg` → `fog_v2.svg`; every numeric tail STAYS (the digits are what tell one icon from another — `fog_AI.svg` and `fog_AI_7.svg` are different pairs and stay `fog.*` and `fog_7.*`), and a name without a trailing `_AI` marker (or with a non-numeric tail, `fog_AI_x.svg`) comes back unchanged, never invented | written only by the validated export commit; the approved source and its sidecar are never touched. The approved version also stays in `export.json` (`source.version`) as before |
 | `<pair-folder>/export/export.json` | the per-icon export record (schema v1: source/settings fingerprints, svgo + eps tool records, metadata block, outputs with hashes, stage, status, validation, timestamps) | one per icon, no global multi-icon file; written LAST as the commit marker; corrupt/missing → rebuilt, never destroys outputs |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
@@ -1926,17 +1926,20 @@ answers `400` from the provider.
 
 ## Export naming (2026-10-08, `export-naming`)
 
-The user's rule: *"remove `_AI` and any numeric tail in naming as it is
-exported in the export folder."* A destination site must see the icon, not our
-bookkeeping, so the artifact name is `stemOf(row.svgName)` from
-`lib/upload/export.ts`:
+The user's rule (corrected the same day): *"only remove `_AI` but keep numbers,
+`_03` etc."* A destination site must see the icon, not the app's marker, so the
+artifact name is `stemOf(row.svgName)` from `lib/upload/export.ts`:
 
-* strip the extension, then this app's own version artifact (`_v2`), then the
-  `_AI` marker **and every numeric tail behind it** (`_7`, `_04`, `_9_01`);
-* `fog_AI_7_04_v2.svg` → `fog.svg` / `fog.jpg` / `fog.eps`;
-* `chat_bot_2_AI.svg` → `chat_bot_2.*` — the tail is bookkeeping only when it
-  follows `_AI`;
-* a name with no `_AI` marker comes back unchanged.
+* strip the extension, then the `_AI` marker **and nothing else**;
+* `fog_AI.svg` → `fog.svg` / `fog.jpg` / `fog.eps`; `fog_AI_03.svg` → `fog_03.*`;
+* `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face_7_04.*` (batch + split tails);
+* `fog_AI_v2.svg` → `fog_v2.*` — the approved version stays visible in the name;
+* `chat_bot_2_AI.svg` → `chat_bot_2.*`;
+* no trailing `_AI` marker, or a non-numeric tail (`fog_AI_x.svg`), comes back
+  unchanged — the name is never invented, only trimmed.
+
+Keeping the digits is also what keeps two icons apart: `fog_AI.svg` and
+`fog_AI_7.svg` are different pairs and export as `fog.*` and `fog_7.*`.
 
 One rule, one home: `runexport.ts` no longer keeps a second private `stemOf`
 (RULE 3/16.4), and `publishedJpegPath` (the Location action's path and the
@@ -1953,8 +1956,9 @@ then, the sweep removes **what this app provably wrote and no longer writes**:
 * candidates are only the icon's three artifact extensions whose bare name trims
   to **this icon's stem** under the very rule that produces the current names
   (`trimArtifactStem`), and which are not already `${stem}.${ext}` — so
-  `export.json`, a readme, another icon's `arch_AI.svg`, `banner.jpg` and a base
-  that is not this icon's (`fogv2.eps`, `fog_AI_x.eps`) are never candidates;
+  `export.json`, a readme, another icon's `arch_AI.svg` and every number-tailed
+  name that belongs to a DIFFERENT icon (`fog_AI_7.eps`, `fog_AI_9_01.jpg`) are
+  never candidates; near-misses (`fogv2.eps`, `fog_AI_x.eps`) are not either;
 * a candidate the previous `export.json` still **names** goes only when the
   current artifact of that kind is on disk — an EPS stage that failed leaves the
   previous EPS alone rather than deleting the only copy of it;
