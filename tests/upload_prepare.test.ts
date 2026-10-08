@@ -64,7 +64,8 @@ describe("prepareExportSvg — a pinned artboard (the final px size)", () => {
     const { result, root } = prepared(src, { strokePx: 2, ...SQUARE_512 });
     expect(result.fit.scale).toBeGreaterThan(1);
     const path = root.querySelector("path");
-    expect(path?.getAttribute("stroke-width")).toBe("2");
+    expect(root.getAttribute("stroke-width")).toBe("2"); // once, on the root
+    expect(path?.getAttribute("stroke-width")).toBeNull();
     expect(root.querySelector("[transform]")).toBeNull();
     expect(path?.getAttribute("d")?.startsWith("M")).toBe(true); // baked data, artboard px
     expect(result.strokesNormalized).toBe(1);
@@ -151,68 +152,93 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
   });
 });
 
-describe("prepareExportSvg — stroke colour (2026-10-08, the user's setting)", () => {
+/** Every element carrying the attribute, as `tag=value`, sorted — where a property is defined, in one line. */
+function where(root: Element, attr: string): string[] {
+  return Array.from(root.querySelectorAll("*")).concat(root)
+    .filter((el) => el.hasAttribute(attr))
+    .map((el) => `${el.nodeName}=${el.getAttribute(attr)}`)
+    .sort();
+}
+
+describe("prepareExportSvg — stroke colour: ONE global definition (2026-10-08)", () => {
   const TWO = `<svg ${NS} viewBox="0 0 24 24" stroke="#111"><g style="stroke:#222;fill:none"><rect x="2" y="2" width="8" height="8"/></g>`
     + `<circle cx="18" cy="18" r="4" fill="#0f0" stroke="currentColor" style="stroke:#333; stroke-width:2"/>`
     + `<path d="M1 1h2" stroke="none" fill="#f00"/></svg>`;
 
-  it("gives every visible stroke the configured hex and leaves fills alone — with the width untouched", () => {
-    const { result, root } = prepared(TWO, { strokeColor: "#000000", strokePx: 0 });
+  it("the default is #000000: the root carries it once, the group and the shapes carry no colour, the unstroked path says none", () => {
+    const { result, root } = prepared(TWO, { strokePx: 0 });
     expect(result.strokesRecolored).toBe(2);
     expect(result.strokesNormalized).toBe(0);
-    const rect = root.querySelector("g rect");
-    const circle = root.querySelector("circle");
-    expect(rect?.getAttribute("stroke")).toBe("#000000");
-    expect(circle?.getAttribute("stroke")).toBe("#000000");
-    expect(circle?.getAttribute("style")).toBeNull(); // the clean pass folded the style; the paint is ours now
-    expect(circle?.getAttribute("stroke-width")).toBe("2"); // the inline width survived (content artboard: scale 1)
-    expect(circle?.getAttribute("fill")).toBe("#0f0");
-    expect(root.querySelector("path")?.getAttribute("stroke")).toBe("none"); // not a visible stroke
+    expect(result.globalStroke).toEqual({ stroke: "#000000", strokeWidth: null }); // widths differ (1 inherited vs 2 inline)
+    expect(where(root, "stroke")).toEqual(["path=none", "svg=#000000"]);
+    expect(where(root, "stroke-width")).toEqual(["circle=2", "rect=1"]); // each stroked shape its own, nothing else
+    expect(root.querySelector("circle")?.getAttribute("style")).toBeNull(); // the clean pass folded the style; the paint is ours now
+    expect(root.querySelector("circle")?.getAttribute("fill")).toBe("#0f0");
     expect(root.querySelector("path")?.getAttribute("fill")).toBe("#f00");
   });
 
-  it("`artwork` (the default) recolours nothing", () => {
-    const { result, root } = prepared(TWO);
+  it("`artwork` recolours nothing — mixed paints stay on the shapes that use them, and on nothing else", () => {
+    const { result, root } = prepared(TWO, { strokeColor: "artwork" });
     expect(result.strokesRecolored).toBe(0);
-    expect(root.querySelector("circle")?.getAttribute("stroke")).toBe("#333"); // its own inline paint, folded
+    expect(result.globalStroke.stroke).toBeNull();
+    expect(where(root, "stroke")).toEqual(["circle=#333", "rect=#222"]); // the root's #111 reached no shape: gone; no root paint → the unstroked path needs no `none`
   });
 
-  it("colour and width are independent decisions applied in one pass", () => {
+  it("`artwork` with ONE paint everywhere hoists that paint to the root", () => {
+    const one = `<svg ${NS} viewBox="0 0 24 24" stroke="#123"><g stroke="#123"><rect x="2" y="2" width="8" height="8" fill="none"/></g><circle cx="18" cy="18" r="4" fill="none"/></svg>`;
+    const { result, root } = prepared(one, { strokeColor: "artwork" });
+    expect(result.globalStroke.stroke).toBe("#123");
+    expect(where(root, "stroke")).toEqual(["svg=#123"]);
+  });
+
+  it("colour and width are independent decisions, both global when set", () => {
     const { result, root } = prepared(TWO, { strokeColor: "#ff0000", strokePx: 3 });
     expect(result.strokesRecolored).toBe(2);
     expect(result.strokesNormalized).toBe(2);
-    const circle = root.querySelector("circle");
-    expect(circle?.getAttribute("stroke")).toBe("#ff0000");
-    expect(circle?.getAttribute("stroke-width")).toBe("3");
+    expect(result.globalStroke).toEqual({ stroke: "#ff0000", strokeWidth: "3" });
+    expect(where(root, "stroke")).toEqual(["path=none", "svg=#ff0000"]);
+    expect(where(root, "stroke-width")).toEqual(["svg=3"]);
+  });
+
+  it("the reviewer's document: root #111, group #000/.8, a width on every shape → one stroke, one width, both on <svg>", () => {
+    const src = `<svg ${NS} viewBox="0 0 24 24" stroke="#111"><g stroke="#000" stroke-width=".8" fill="none"><path d="M4 4h16"/><path d="M4 12h16"/></g></svg>`;
+    const { root } = prepared(src, { strokePx: 2, background: "#ffffff" });
+    expect(where(root, "stroke")).toEqual(["rect=none", "svg=#000000"]); // the background rect is the one unstroked shape
+    expect(where(root, "stroke-width")).toEqual(["svg=2"]);
+  });
+
+  it("a filled-only icon defines no stroke at all", () => {
+    const { result, root } = prepared(RECT_ICON, { strokePx: 2 });
+    expect(result.globalStroke).toEqual({ stroke: null, strokeWidth: null });
+    expect(where(root, "stroke")).toEqual([]);
+    expect(where(root, "stroke-width")).toEqual([]);
   });
 });
 
-describe("prepareExportSvg — the stroke width is the number in the file (px)", () => {
+describe("prepareExportSvg — the stroke width is the number in the file (px), defined once", () => {
   const STROKED = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1"/></svg>`;
 
-  it.each([[2, "2"], [2.2, "2.2"], [0.75, "0.75"], [1.5, "1.5"]])("strokePx %s → stroke-width=\"%s\"", (px, written) => {
+  it.each([[2, "2"], [2.2, "2.2"], [0.75, "0.75"], [1.5, "1.5"]])("strokePx %s → stroke-width=\"%s\" on the root, nowhere else", (px, written) => {
     const { result, root } = prepared(STROKED, { strokePx: px });
     expect(result.strokesNormalized).toBe(1);
-    expect(root.querySelector("rect")?.getAttribute("stroke-width")).toBe(written);
+    expect(where(root, "stroke-width")).toEqual([`svg=${written}`]);
   });
 
   it("the same number under an artwork transform AND a pinned artboard — the geometry absorbed both", () => {
     const src = `<svg ${NS} viewBox="0 0 48 48"><g transform="scale(2)"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1"/></g></svg>`;
     const { result, root } = prepared(src, { strokePx: 2.2, ...SQUARE_512 });
     expect(result.strokesNormalized).toBe(1);
-    const rect = root.querySelector("rect");
-    expect(rect?.getAttribute("stroke-width")).toBe("2.2");
-    expect(Number(rect?.getAttribute("width"))).toBeCloseTo(40 * result.fit.scale, 2); // 20 × scale(2) user units, then the artboard's fit (mitered stroke corners included in the bounds)
+    expect(root.getAttribute("stroke-width")).toBe("2.2");
+    expect(Number(root.querySelector("rect")?.getAttribute("width"))).toBeCloseTo(40 * result.fit.scale, 2); // 20 × scale(2) user units, then the artboard's fit (mitered stroke corners included in the bounds)
   });
 
-  it("width 0: the artwork's own width follows its geometry (× the baked scale, 3 decimals)", () => {
+  it("width 0: the artwork's own width follows its geometry (× the baked scale, 3 decimals) and is hoisted when it is the only one", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="7.999906"/></svg>`;
     const content = prepared(src, { strokePx: 0 });
     expect(content.result.strokesNormalized).toBe(0);
-    expect(content.root.querySelector("rect")?.getAttribute("stroke-width")).toBe("8"); // scale 1, written to 3 decimals
+    expect(where(content.root, "stroke-width")).toEqual(["svg=8"]); // scale 1, written to 3 decimals
     const scaled = prepared(`<svg ${NS} viewBox="0 0 24 24"><g transform="scale(1.1)"><path d="M0 0 L10 0" stroke="#000" stroke-width="1.5"/></g></svg>`, { strokePx: 0, paddingPct: 0, ...SQUARE_512 });
-    // 1.5 × 1.1 × (512 / (11 + 1.5·1.1 stroke extent)) — whatever the fit, the width is the artwork's, scaled, with ≤ 3 decimals
-    const width = scaled.root.querySelector("path")?.getAttribute("stroke-width") ?? "";
+    const width = scaled.root.getAttribute("stroke-width") ?? "";
     expect(Number(width)).toBeCloseTo(1.65 * scaled.result.fit.scale, 2);
     expect(width).toMatch(/^\d+(\.\d{1,3})?$/);
   });
@@ -220,29 +246,29 @@ describe("prepareExportSvg — the stroke width is the number in the file (px)",
   it("vector-effect=non-scaling-stroke becomes an explicit width (the setting's, or its own px)", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
     const set = prepared(src, { strokePx: 3 });
-    expect(attrs(set.root.querySelector("rect"), ["vector-effect", "stroke-width"])).toEqual([null, "3"]);
+    expect(set.root.querySelector("rect")?.getAttribute("vector-effect")).toBeNull();
+    expect(where(set.root, "stroke-width")).toEqual(["svg=3"]);
     expect(set.result.strokesNormalized).toBe(1);
     const own = prepared(src, { strokePx: 0, ...SQUARE_512 });
-    expect(attrs(own.root.querySelector("rect"), ["vector-effect", "stroke-width"])).toEqual([null, "1"]); // already final px: not scaled
+    expect(where(own.root, "stroke-width")).toEqual(["svg=1"]); // already final px: not scaled
   });
 
   it("an inline style is folded into attributes, and the explicit width still wins", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" style="stroke-width:5;fill:none"/></svg>`;
     const { root } = prepared(src, { strokePx: 1.5 });
-    const rect = root.querySelector("rect");
-    expect(rect?.getAttribute("stroke-width")).toBe("1.5");
+    expect(where(root, "stroke-width")).toEqual(["svg=1.5"]);
     // `style` is gone; its paint declarations are plain attributes now (2026-10-08)
-    expect(rect?.getAttribute("style")).toBeNull();
-    expect(rect?.getAttribute("fill")).toBe("none");
+    expect(root.querySelector("rect")?.getAttribute("style")).toBeNull();
+    expect(root.querySelector("rect")?.getAttribute("fill")).toBe("none");
   });
 
-  it("writes the width onto each child of a stroked group; the group's own width is spent", () => {
+  it("a stroked group's width and paint end up once on the root; the group carries neither", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><g stroke="#000" stroke-width="1"><rect x="2" y="2" width="8" height="8" fill="none"/><circle cx="18" cy="18" r="4" fill="none"/></g></svg>`;
     const { result, root } = prepared(src, { strokePx: 0.75 });
     expect(result.strokesNormalized).toBe(2);
-    expect(root.querySelector("g rect")?.getAttribute("stroke-width")).toBe("0.75");
-    expect(root.querySelector("g circle")?.getAttribute("stroke-width")).toBe("0.75");
-    expect(root.querySelector("g")?.getAttribute("stroke-width")).toBeNull();
+    expect(where(root, "stroke-width")).toEqual(["svg=0.75"]);
+    expect(where(root, "stroke")).toEqual(["svg=#000000"]);
+    expect(root.querySelector("g")?.attributes.length).toBe(0);
   });
 });
 
@@ -287,9 +313,9 @@ describe("prepareExportSvg — honest failures", () => {
   });
 
   it("folds a stylesheet's stroke width into the element, and refuses what it cannot fold", () => {
-    const folded = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{stroke-width:9}</style><rect class="a" x="1" y="1" width="10" height="10" fill="none"/></svg>`);
+    const folded = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{stroke-width:9}</style><rect class="a" x="1" y="1" width="10" height="10" fill="none" stroke="#000"/></svg>`);
     expect(folded.ok).toBe(true);
-    if (folded.ok) expect(folded.svg).toContain(`stroke-width="9"`);
+    if (folded.ok) expect(folded.svg).toMatch(/<svg[^>]* stroke-width="9"/); // folded, then hoisted: the one definition
 
     const hidden = prepare(`<svg ${NS} viewBox="0 0 24 24"><style>.a{display:none}</style><rect class="a" x="1" y="1" width="10" height="10" fill="none"/></svg>`);
     expect(hidden.ok).toBe(false);
@@ -320,9 +346,9 @@ describe("prepareExportSvg — honest failures", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const rect = new DOMParser().parseFromString(result.svg, "image/svg+xml").querySelector("rect");
-    expect(rect?.getAttribute("style")).toBe("font-family:Arial");
-    expect(rect?.getAttribute("stroke-width")).toBe("2.2"); // the artboard scale lives in the geometry, not in the width
+    const doc = new DOMParser().parseFromString(result.svg, "image/svg+xml");
+    expect(doc.querySelector("rect")?.getAttribute("style")).toBe("font-family:Arial");
+    expect(where(doc.documentElement, "stroke-width")).toEqual(["svg=2.2"]); // the artboard scale lives in the geometry, not in the width
   });
 
   it("rejects a transform on the root svg", () => {

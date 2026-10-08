@@ -675,7 +675,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await click("[data-testid=upload-set-close]");
   });
 
-  it("background: transparent (the default) or a colour; stroke colour: the artwork's own or one hex (2026-10-08)", async () => {
+  it("background: transparent (the default) or a colour; stroke colour: one hex (black by default) or the artwork's own (2026-10-08)", async () => {
     await mount(makeRoot());
     await click("[data-testid=upload-settings-open]");
     // transparent is the shipped default, shown as such
@@ -689,9 +689,11 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await click("[data-testid=upload-set-bg-transparent]");
     expect(storedDefaults().background).toBe("transparent");
     expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("transparent");
-    // the stroke colour: artwork by default, one hex when picked, artwork again on reset
-    expect(q("[data-testid=upload-set-stroke-color-artwork]")?.getAttribute("aria-pressed")).toBe("true");
-    expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("artwork");
+    // the stroke colour: black by default (ONE global stroke="#000", 2026-10-08), one hex when picked, the artwork's own on request
+    expect(q("[data-testid=upload-set-stroke-color-black]")?.getAttribute("aria-pressed")).toBe("true");
+    expect(q("[data-testid=upload-set-stroke-color-artwork]")?.getAttribute("aria-pressed")).toBe("false");
+    expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("#000000");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("stroke #000000");
     await type("[data-testid=upload-set-stroke-color-custom]", "#112233");
     expect(storedDefaults().strokeColor).toBe("#112233");
     expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("#112233");

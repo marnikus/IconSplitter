@@ -29,7 +29,7 @@ const BACKGROUND_ROW: PaintRow = {
 const STROKE_COLOR_ROW: PaintRow = {
   field: "strokeColor", label: "Stroke colour", testid: "stroke-color",
   none: { value: STROKE_COLOR_ARTWORK, label: "Artwork's own", swatchClass: "artwork" },
-  hint: "every visible stroke gets this colour; fills are never touched",
+  hint: "defined once on the file's root — every visible stroke gets it; fills are never touched",
 };
 
 export function BackgroundSetting(p: SettingsFieldProps) {

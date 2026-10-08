@@ -47,6 +47,7 @@ doc itself, never in this map.
 | `archive/2026-10-07-env-setup-performance/design.md` | Environment-setup performance: re-verified findings, the O1–O11 decisions (O4 deferred), TDD plan for `tools/verify.mjs` + shallow-safe `quality.mjs` |
 | `archive/2026-10-08-stock-clean-svg/design.md` | Stock-clean export SVG: the review's findings measured against the code, decisions D1–D7 (namespaces once on the root, 10 % tidy stroke widths, no root px size, titles without trailing period, `transparent` background, stroke colour setting), size budget and the 14-step TDD plan |
 | `archive/2026-10-08-stroke-width-exact/design.md` | Exact stroke width: why `2` became `2.6224000000000003` (width finalised before SVGO baked the transforms; pt vs px), decisions D1–D8 (bake every transform into the geometry in prepare, then write the px setting verbatim; one outline model shared with the EPS writer; named refusals), size budget, 8-step TDD plan |
+| `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

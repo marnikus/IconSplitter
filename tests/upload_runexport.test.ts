@@ -229,14 +229,35 @@ describe("runExport — the full package commits per icon", () => {
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(512, 512) } }));
     expect(result.status).toBe("processed");
     const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
-    // SVGO may hoist the identical width onto the group — the NUMBER is the user's, wherever it sits
-    const widths = svgText.match(/stroke-width="([^"]*)"/g) ?? [];
-    expect(widths.length).toBeGreaterThan(0);
-    expect(new Set(widths)).toEqual(new Set([`stroke-width="2"`]));
+    expect(svgText.match(/stroke-width="([^"]*)"/g)).toEqual([`stroke-width="2"`]); // the NUMBER is the user's, defined once
     expect(svgText).not.toContain("transform=");
     expect(verifyExportSvg(svgText)).toEqual([]);
     expect(readRecord(root).settings.effective.strokePx).toBe(2);
     expect(verifyEps(fileText(root, `${DIR}/export/${ART}.eps`)).ok).toBe(true);
+  });
+
+  it("ships ONE global stroke definition: `stroke` and `stroke-width` exactly once, on <svg>, the colour #000 (2026-10-08)", async () => {
+    // The stock reviewer's second file: `<svg stroke="#111"><g stroke="#000"
+    // stroke-width=".8">` with every <path> carrying its own width. The rules:
+    // the width is defined once, globally; the colour is defined once, globally,
+    // and it is #000; no other definition of either survives — not on the
+    // group, not on the shapes, not on the background rect.
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="#111">`
+      + `<rect width="24" height="24" fill="#fff" stroke="none"/><g stroke="#000" stroke-width=".8" fill="none">`
+      + `<path d="M4 4h16v16H4z" stroke-width=".8"/><path d="M8 8h8v8H8z" stroke-width=".8"/></g></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2, background: "#ffffff", optimizeSvg: true, artboard: { mode: "preset", size: 512, width: 512, height: 512 } };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(512, 512) } }));
+    expect(result.status).toBe("processed");
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
+    const rootTag = svgText.match(/<svg[^>]*>/)?.[0] ?? "";
+    expect(rootTag).toContain(`stroke-width="2"`);
+    expect(rootTag).toContain(`stroke="#000"`);
+    expect(svgText.match(/stroke-width="/g)).toHaveLength(1);
+    expect(svgText.match(/stroke="[^"]*"/g)?.filter((a) => a !== `stroke="none"`)).toEqual([`stroke="#000"`]);
+    expect(svgText).not.toContain("#111");
+    expect(svgText).not.toContain(`stroke-width=".8"`);
+    expect(verifyExportSvg(svgText)).toEqual([]);
   });
 
   it("lets the user keep the artboard's RATIO at their own megapixels", async () => {

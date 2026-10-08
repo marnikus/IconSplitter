@@ -180,7 +180,8 @@ function resolvePaint(el: Element, parent: Paint): Paint {
 }
 
 function strokeOf(p: Paint): Stroke {
-  return { width: p.strokeWidth, none: p.stroke === null, cap: "butt", join: "miter", miter: p.miter };
+  // The EPS keeps its own RGB paint; the inheritance only needs to know whether it strokes.
+  return { width: p.strokeWidth, paint: p.stroke === null ? "none" : "rgb", none: p.stroke === null, cap: "butt", join: "miter", miter: p.miter };
 }
 
 /** A paint keyword → RGB; "none" → null; anything else → Unsupported. */

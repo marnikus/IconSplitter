@@ -2394,3 +2394,44 @@ first, then write the numbers.
 * The SVGO `removeTitle`/`removeViewBox` stderr line in `upload_runexport`
   and `upload_eps` predates both entries; the optimizer config still deserves
   one look, not this commit.
+
+## 2026-10-08 — one global stroke definition (`fix(upload)`)
+
+The stock reviewer's second file: `<svg stroke="#111"><g stroke="#000"
+stroke-width=".8">` with every `<path>` carrying its own `stroke-width`. The
+previous entry wrote the width verbatim onto every visible stroke and left
+the colour where the artwork had it; SVGO then hoisted the identical widths
+onto the group and kept the source root's `#111`. The rule now: each stroke
+property is defined ONCE — `lib/upload/strokeglobal.ts` (49 lines) hoists
+`stroke`/`stroke-width` onto the root when every visibly stroked shape
+agrees, strips it from everything else (attributes and inline styles), and
+gives the shapes that do not stroke `stroke="none"` so the root's paint
+cannot reach them; disagreement means explicit per stroked shape and bare
+containers; nothing stroked means nothing written. The default stroke
+colour becomes `#000000` (the fingerprint moves once; `artwork` stays
+selectable). Lesson: **a property the reader sees once is a property the
+file states once** — SVGO can only tidy what it is given.
+
+### Structure work (RULE 3/18/19)
+
+* `Stroke.paint` joined the resolved stroke (`geom/stroke.ts`, 75 lines);
+  `stripStyleKeys`/`keyOf` moved there from `prepare.ts` (193 lines) so the
+  restyle and the unify passes share one inline-style eraser.
+* `tests/upload_strokeglobal.test.ts` (9), the two stroke describes in
+  `upload_prepare` rewritten around a `where(root, attr)` → `tag=value`
+  helper, one new SHIPPED-text test in `upload_runexport`.
+
+### Gates (full run)
+
+`npm run verify`: types, lint, quality (changed) GATE PASSED, 132 files /
+1465 tests, coverage (`strokeglobal.ts` 100 %), build 1,417 kB — ALL LANES
+PASSED. RULE 16: every new function ≤ 30 lines / ≤ 4 params; RULE 18: no
+file grew past its band.
+
+### Known debt carried
+
+* Unchanged from the previous entry (bake refusals, the SVGO
+  `removeTitle`/`removeViewBox` stderr line).
+* `artwork` colour over a mixed-paint source cannot ship one global colour
+  by definition — it ships one per stroked shape; the stock rule is met by
+  the default, not by that mode.

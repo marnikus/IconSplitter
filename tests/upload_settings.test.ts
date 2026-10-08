@@ -19,6 +19,7 @@ import {
   parseOverrides,
   SETTINGS_FIELDS,
   STROKE_COLOR_ARTWORK,
+  STROKE_COLOR_DEFAULT,
   TRANSPARENT,
   flattenColor,
   isTransparent,
@@ -32,7 +33,7 @@ const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAUL
 describe("defaults and clamps", () => {
   it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
-      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "artwork",
+      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000",
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
@@ -58,13 +59,15 @@ describe("defaults and clamps", () => {
     expect(STROKE_COLOR_ARTWORK).toBe("artwork");
     expect(normalizeSettings({ strokeColor: "#000" }).strokeColor).toBe("#000000");
     expect(normalizeSettings({ strokeColor: "artwork" }).strokeColor).toBe("artwork");
-    expect(normalizeSettings({ strokeColor: 42 }).strokeColor).toBe("artwork");
+    expect(normalizeSettings({ strokeColor: 42 }).strokeColor).toBe("#000000"); // the stock default (2026-10-08), not the artwork's mix
+    expect(normalizeSettings({}).strokeColor).toBe("#000000");
+    expect(STROKE_COLOR_DEFAULT).toBe("#000000");
     expect(parseOverrides({ strokeColor: "#111111" })).toEqual({ strokeColor: "#111111" });
     expect(parseOverrides({ strokeColor: "artwork" })).toEqual({ strokeColor: "artwork" });
     expect(parseOverrides({ strokeColor: "red" })).toEqual({});
     expect(SETTINGS_FIELDS).toContain("strokeColor");
-    expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, changed({ strokeColor: "#000000" }))).toBe(false);
-    expect(settingsFingerprint(changed({ strokeColor: "#000000" }))).not.toBe(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS));
+    expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, changed({ strokeColor: "artwork" }))).toBe(false);
+    expect(settingsFingerprint(changed({ strokeColor: "artwork" }))).not.toBe(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS));
     expect(settingsFingerprint(changed({ background: "#ffffff" }))).not.toBe(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS));
   });
 

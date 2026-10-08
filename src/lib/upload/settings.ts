@@ -32,7 +32,7 @@ export interface UploadSettings {
    * the artwork's own strokes (their widths follow the baked geometry).
    */
   strokePx: number;
-  /** `artwork` (the strokes keep their own paint), or the hex every visible stroke gets. */
+  /** The hex every visible stroke gets, defined ONCE on the root (default `#000000`), or `artwork` (the strokes keep their own paint). */
   strokeColor: string;
   /** JPEG target resolution in megapixels (default 15.1). */
   jpegMegapixels: number;
@@ -73,12 +73,14 @@ export const BACKGROUND_DEFAULT = TRANSPARENT;
 export const FLATTEN_DEFAULT = "#ffffff";
 /** The stroke-colour value that leaves every stroke's own paint alone. */
 export const STROKE_COLOR_ARTWORK = "artwork";
+/** The stock standard for line icons (2026-10-08): ONE global `stroke="#000"` in the file. */
+export const STROKE_COLOR_DEFAULT = "#000000";
 
 export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   paddingPct: PADDING_DEFAULT,
   background: BACKGROUND_DEFAULT,
   strokePx: STROKE_DEFAULT,
-  strokeColor: STROKE_COLOR_ARTWORK,
+  strokeColor: STROKE_COLOR_DEFAULT,
   jpegMegapixels: MP_DEFAULT,
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
@@ -131,7 +133,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     paddingPct: clampPaddingPct(raw.paddingPct),
     background: readPaint(raw.background, TRANSPARENT) ?? BACKGROUND_DEFAULT,
     strokePx: clampStrokePx(raw.strokePx ?? raw.strokePt), // strokePt: the pre-2026-10-08 name, same number
-    strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_ARTWORK,
+    strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_DEFAULT,
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,

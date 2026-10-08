@@ -577,10 +577,11 @@ number typed is the number written in the file, and the row cell reads
 (`upload-set-bg-transparent` — the default, a checkerboard swatch —
 `upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
 `upload-set-bg-value`, which reads `transparent` or the hex), the stroke
-colour (2026-10-08: `upload-set-stroke-color-artwork` — the default, a
-diagonal-cut swatch — `upload-set-stroke-color-{white,black,gray,green,red}` +
+colour (2026-10-08: `upload-set-stroke-color-artwork` — a diagonal-cut
+swatch — `upload-set-stroke-color-{white,black,gray,green,red}` (`black` is
+the default: ONE global `stroke="#000"` in the file) +
 `upload-set-stroke-color-custom` + `upload-set-stroke-color-value`, which
-reads `artwork` or the hex; its marker is `upload-set-marker-stroke-color`),
+reads the hex or `artwork`; its marker is `upload-set-marker-stroke-color`),
 every swatch carrying `aria-pressed`, the per-field marker
 `upload-set-marker-{field}` ("inherited" / "overridden", icon scope only),
 `upload-set-reset` (icon scope: deletes the override — one undoable entry),

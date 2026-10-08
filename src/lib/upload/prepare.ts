@@ -8,7 +8,9 @@
 // painted first when the background is a colour (none when `transparent`);
 // and — when a stroke width or a stroke colour is configured — every visible
 // stroke restyled AFTER the bake: the width written VERBATIM in px (2026-10-08:
-// "2 in the setting is 2 in the SVG"), the paint set to the configured hex.
+// "2 in the setting is 2 in the SVG"), the paint set to the configured hex —
+// then each stroke property defined ONCE: on the root when the shapes agree,
+// on the shape that uses it otherwise, never on a container (lib/upload/strokeglobal).
 // Content the geometry math cannot answer for (text, image, geometry-restyle
 // CSS, a transform on the root, a stroke a bake would distort) fails the
 // preparation honestly instead of being guessed. Clean code (2026-10-08) is part of the copy: SVG 1.1, a real
@@ -21,6 +23,8 @@ import {
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { bakeGeometry } from "./bake";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
+import { stripStyleKeys } from "./geom/stroke";
+import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
 import { fitArtboard, fmt, type ArtboardFit } from "./geom";
 import type { Matrix } from "./geom/matrix";
 
@@ -41,6 +45,8 @@ export interface PreparedSvg {
   strokesRecolored: number;
   /** The background the export paints: `transparent` or the normalized hex. */
   background: string;
+  /** What the root defines once (`stroke`, `stroke-width`); null = per shape, or nothing strokes. */
+  globalStroke: GlobalStroke;
 }
 
 export type PrepareFailure = Extract<PrepareResult, { ok: false }>;
@@ -72,12 +78,13 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   const baked = bakeGeometry(root, artboardMatrix(fit));
   if (baked.unsupported.length > 0) return fail("unsupported", `unsupported content: ${baked.unsupported.join(", ")}`);
   const touched = restyleStrokes(root, strokeStyleOf(settings));
+  const globalStroke = unifyStrokes(root);
   const background = readPaint(settings.background, TRANSPARENT) ?? TRANSPARENT;
   applyArtboard(root, fit, background);
   return {
     ok: true,
     svg: new XMLSerializer().serializeToString(doc),
-    fit, bounds: vb.bounds, background,
+    fit, bounds: vb.bounds, background, globalStroke,
     shapesBaked: baked.baked, strokesNormalized: touched.widths, strokesRecolored: touched.colors,
   };
 }
@@ -158,21 +165,6 @@ function setStrokeWidth(el: Element, width: number): void {
 function setStrokeColor(el: Element, color: string): void {
   stripStyleKeys(el, ["stroke"]);
   el.setAttribute("stroke", color);
-}
-
-function stripStyleKeys(el: Element, keys: string[]): void {
-  const style = el.getAttribute("style");
-  if (style === null) return;
-  const kept = style.split(";")
-    .map((decl) => decl.trim())
-    .filter((decl) => decl !== "" && !keys.includes(keyOf(decl)));
-  if (kept.length === 0) el.removeAttribute("style");
-  else el.setAttribute("style", kept.join("; "));
-}
-
-function keyOf(decl: string): string {
-  const at = decl.indexOf(":");
-  return (at > 0 ? decl.slice(0, at) : decl).trim().toLowerCase();
 }
 
 /** Re-roots the document: padded artboard viewBox (no px size) and the background — the artwork already sits in it. */
