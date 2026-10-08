@@ -1943,18 +1943,39 @@ One rule, one home: `runexport.ts` no longer keeps a second private `stemOf`
 export-path cell) derives from the same function, so the record, the file and
 the UI cannot disagree.
 
-**The superseded package is removed, never left behind.** An export folder that
-still carries a pre-2026-10-08 package (`fog_AI.svg|.jpg|.eps`, named by that
-icon's own previous `export.json`) would otherwise hold two copies of the same
-icon. After the new files are written and verified — and only then — the commit
-removes the files **the previous record itself named** whose name is no longer
-in use (`dropSuperseded`). Nothing the record does not name is ever touched
-(a foreign file in `export/` survives, T28), the removal is reported in the
-run's result (`replaced`), and a selective re-export (a JPEG that had to be
-re-rendered) never removes a file it did not rewrite, because "in use" means
-the current artifact name, not the subset rebuilt in that run.
+**The superseded package is removed ONLY when its replacement is on disk.**
+An export folder that still carries a pre-2026-10-08 package (`fog_AI.svg|.jpg|.eps`,
+named by that icon's own previous `export.json`) would otherwise hold two copies
+of the same icon. After the new files are written and verified — and only then —
+the commit removes the files **the previous record itself named** whose name is
+no longer in use (`dropSuperseded`). Three conditions, all of them inside the
+icon's own export folder: the path must belong to `export/`, the name must
+really be superseded (not the current `${stem}.${ext}`), and **the current
+artifact of that kind must be present on disk** — either this run wrote it or an
+earlier run under the new name did. That last rule is what keeps a rename from
+ever costing a package: an old-named file whose replacement was not written is
+the only copy of that output, so it stays (an EPS stage that failed leaves the
+previous EPS alone rather than deleting it). Nothing the record does not name is
+ever touched (a foreign file in `export/` survives, T28), the removal is reported
+in the run's result (`replaced`), and the record stops naming a file that was
+just removed (`pruneRemoved`) — a record that points at a deleted file would be
+a lie the UI repeats.
 
 Assumption recorded: one icon per export folder (the user's own tree — the
 batch layout puts one piece per `split_NN` folder). Two paired sources whose
 bases trim to the same name in the SAME folder would share one package; that
 case is not in the corpus and would be caught by T28 when it lands.
+
+### One stem for all three artifacts (why the EPS can never be named differently)
+
+`commitExport` writes exactly four names into `export/` — `${stem}.svg`,
+`${stem}.jpg`, `${stem}.eps` and `export.json` — and all three artifacts take
+`stem` from the same `plan.stem` (`stemOf(row.svgName)`), so within one run the
+EPS can never carry a different name than its siblings; the EPS's own
+`%%Title` is `${stem}.eps` for the same reason. A differently-named `.eps` in a
+folder can therefore only be a file no export of the current naming wrote: a
+leftover from before the rename. The migration removes such a leftover when the
+icon's own previous `export.json` names it AND the current EPS is on disk; a
+leftover that **no record names** (an orphan the record lost track of, e.g. an
+EPS committed before a `partial` run rewrote the record) is left alone by
+design — the app never deletes a file it cannot prove it wrote.

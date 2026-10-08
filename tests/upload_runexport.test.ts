@@ -6,7 +6,10 @@
 // failure commits nothing.
 import { describe, expect, it } from "vitest";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "../src/upload/runexport";
-import { newExportRecord, parseExportRecord, serializeExportRecord, type ExportRecord } from "../src/lib/upload/export";
+import {
+  newExportRecord, parseExportRecord, serializeExportRecord, type ExportRecord,
+} from "../src/lib/upload/export";
+import { commitExport } from "../src/upload/exportcommit";
 import { DEFAULT_UPLOAD_SETTINGS, settingsFingerprint, type UploadSettings } from "../src/lib/upload/settings";
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
 import type { RasterDeps } from "../src/lib/upload/raster";
@@ -129,7 +132,7 @@ function readRecord(root: FakeDir): ExportRecord {
 }
 
 /** The record an earlier app version wrote: outputs under the `_AI` name. */
-function oldNameRecord(): ExportRecord {
+function oldNameRecord(withEps = false): ExportRecord {
   const r = newExportRecord({
     pair: { id: ROW.id, base: "fog", suffix: "", dir: DIR },
     source: { svgPath: `${DIR}/${STEM}.svg`, version: 1, approval: "approved", fingerprint: `sha256:${""}` },
@@ -141,7 +144,7 @@ function oldNameRecord(): ExportRecord {
     epsEnabled: false,
   });
   const out = (name: string) => ({ path: `${DIR}/export/${name}`, bytes: 1, hash: "sha256:x" });
-  r.outputs = { svg: out(`${STEM}.svg`), jpg: out(`${STEM}.jpg`), eps: null };
+  r.outputs = { svg: out(`${STEM}.svg`), jpg: out(`${STEM}.jpg`), eps: withEps ? out(`${STEM}.eps`) : null };
   r.stage = "committed";
   r.status = "processed";
   r.timestamps.committedAt = "2026-10-07T00:00:00.000Z";
@@ -371,6 +374,49 @@ describe("runExport — selective re-export (no redundant work)", () => {
     expect(result.stages).toEqual(["prepare", "render", "optimize", "validate", "commit"]);
     expect(result.status).toBe("processed");
     expect(readRecord(root).status).toBe("processed");
+  });
+});
+
+describe("the rename migration is never allowed to lose a package", () => {
+  /** A commit with nothing rebuilt — the migration's own unit seam. */
+  function bareCommit(root: FakeDir, previous: string[], epsText: string | null, record = oldNameRecord()) {
+    return commitExport({
+      root, exportDir: `${DIR}/export`, stem: ART, previous,
+      svgOut: null, jpeg: null, epsText, metadata: null,
+      jpegExpected: { width: 0, height: 0 },
+      record, partial: epsText === null,
+      epsFailure: epsText === null ? "the EPS stage failed" : null,
+      validation: { svg: true, jpeg: true, eps: epsText !== null, json: true, readback: true },
+      now: "2026-10-08T00:00:00.000Z",
+    });
+  }
+
+  it("keeps an old-named file when this run wrote nothing to take its place", async () => {
+    const root = pairRoot();
+    const dir = new BinDir("export"); // only the OLD package: no fog.eps at all
+    (dirAt(root, DIR) as BinDir).children.set("export", dir);
+    dir.children.set(`${STEM}.eps`, new BinFile(`${STEM}.eps`, "%!PS-Adobe-3.0 EPSF-3.0", 100));
+    const record = oldNameRecord(true); // the pre-rename record names that EPS
+    const result = await bareCommit(root, [`${DIR}/export/${STEM}.eps`], null, record);
+    expect(dir.children.has(`${STEM}.eps`)).toBe(true); // the only EPS there is stays
+    expect(result.replaced).toEqual([]);
+    // and the record still names it, because it is still there
+    expect(result.record.outputs.eps?.path).toBe(`${DIR}/export/${STEM}.eps`);
+  });
+
+  it("stops naming a file it just removed", async () => {
+    const root = pairRoot();
+    const dir = new BinDir("export");
+    (dirAt(root, DIR) as BinDir).children.set("export", dir);
+    dir.children.set(`${STEM}.eps`, new BinFile(`${STEM}.eps`, "old", 100));
+    dir.children.set(`${ART}.eps`, new BinFile(`${ART}.eps`, "%!PS-Adobe-3.0 EPSF-3.0", 100));
+    // the current artifact IS on disk, so the superseded one goes...
+    const record = oldNameRecord(true); // a pre-rename record that really names the EPS
+    const result = await bareCommit(root, [`${DIR}/export/${STEM}.eps`], null, record);
+    expect(dir.children.has(`${STEM}.eps`)).toBe(false);      // ...because its name is superseded
+    expect(result.replaced).toEqual([`${DIR}/export/${STEM}.eps`]);
+    // ...and the record never keeps pointing at a file that is gone
+    expect(result.record.outputs.eps).toBeNull();
   });
 });
 

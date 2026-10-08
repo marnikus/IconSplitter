@@ -4,11 +4,11 @@
 // so a crash mid-commit leaves the last valid package in place. The record's
 // outputs/status/timestamps are filled here, from what was actually written.
 
-import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
+import { ensureDirPath, listChildNames, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEps } from "../lib/upload/eps";
 import { sha256Hex } from "../lib/upload/hash";
-import { parseExportRecord, serializeExportRecord, type ExportRecord } from "../lib/upload/export";
+import { parseExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
 import { readBytesAt } from "./runexport";
 
@@ -67,7 +67,7 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
     outputs.eps = `${input.stem}.eps`;
   }
   const replaced = await dropSuperseded(input, dir);
-  return { outputs, record: await writeRecord(input, dir, outputs), replaced };
+  return { outputs, record: await writeRecord(input, dir, outputs, replaced), replaced };
 }
 
 /**
@@ -83,10 +83,10 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
  * cost the user their export.
  */
 async function dropSuperseded(input: CommitExportInput, dir: DirHandleLike): Promise<string[]> {
-  const inUse = new Set(["svg", "jpg", "eps"].map((ext) => `${input.stem}.${ext}`));
+  const present = new Set(await listChildNames(dir));
   const removed: string[] = [];
   for (const path of input.previous ?? []) {
-    const name = supersededName(path, input.exportDir, inUse);
+    const name = supersededName(path, input.exportDir, input.stem, present);
     if (name === null) continue;
     try {
       await dir.removeEntry?.(name);
@@ -98,20 +98,38 @@ async function dropSuperseded(input: CommitExportInput, dir: DirHandleLike): Pro
   return removed;
 }
 
-/** The name to remove, or null when nothing should be (outside the folder, still in use). */
-function supersededName(path: string, exportDir: string, inUse: ReadonlySet<string>): string | null {
+/**
+ * The name to remove, or null when nothing should be. Outside this icon's own
+ * export folder, or already the current name: never. And — the rule that keeps
+ * the migration from ever costing a package — only when the CURRENT artifact of
+ * that kind is really on disk: this run wrote it, or an earlier run under the
+ * new name did. An old-named file whose replacement was not written is the only
+ * copy of that output, so it stays.
+ */
+function supersededName(
+  path: string, exportDir: string, stem: string, present: ReadonlySet<string>,
+): string | null {
   if (!path.startsWith(`${exportDir}/`)) return null;
   const name = path.slice(exportDir.length + 1);
-  if (name === "" || name.includes("/") || inUse.has(name)) return null;
-  return name;
+  if (name === "" || name.includes("/")) return null;
+  const current = `${stem}.${extOf(name)}`;
+  return name === current || !present.has(current) ? null : name;
+}
+
+/** The extension a name carries, lowercased (`fog_AI.EPS` → `eps`). */
+function extOf(name: string): string {
+  return name.slice(name.lastIndexOf(".") + 1).toLowerCase();
 }
 
 /** Fills outputs/status/timestamps from what was written, then writes export.json. */
-async function writeRecord(input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"]): Promise<ExportRecord> {
+async function writeRecord(
+  input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"], replaced: readonly string[],
+): Promise<ExportRecord> {
+  const kept = pruneRemoved(input.record.outputs, replaced, outputs);
   input.record.outputs = {
-    svg: outputs.svg === null ? input.record.outputs.svg : await outputRecord(input, outputs.svg),
-    jpg: outputs.jpg === null ? input.record.outputs.jpg : await outputRecord(input, outputs.jpg),
-    eps: outputs.eps === null ? input.record.outputs.eps : await outputRecord(input, outputs.eps),
+    svg: outputs.svg === null ? kept.svg : await outputRecord(input, outputs.svg),
+    jpg: outputs.jpg === null ? kept.jpg : await outputRecord(input, outputs.jpg),
+    eps: outputs.eps === null ? kept.eps : await outputRecord(input, outputs.eps),
   };
   input.record.stage = "committed";
   input.record.status = input.partial ? "partial" : "processed";
@@ -128,6 +146,27 @@ async function writeRecord(input: CommitExportInput, dir: DirHandleLike, outputs
     }
   });
   return input.record;
+}
+
+/**
+ * The previous outputs, minus any file this commit removed and did not rewrite.
+ * A record that keeps naming a file the commit just deleted is a lie the UI
+ * would repeat (T28: nothing is silently overwritten — or silently claimed).
+ */
+function pruneRemoved(
+  prev: ExportRecord["outputs"], replaced: readonly string[], written: CommitExportOutput["outputs"],
+): ExportRecord["outputs"] {
+  const gone = new Set(replaced);
+  return {
+    svg: keepOrNull(prev.svg, gone, written.svg),
+    jpg: keepOrNull(prev.jpg, gone, written.jpg),
+    eps: keepOrNull(prev.eps, gone, written.eps),
+  };
+}
+
+/** One entry: null when it was removed and nothing took its place. */
+function keepOrNull(out: OutputRecord | null, gone: ReadonlySet<string>, written: string | null): OutputRecord | null {
+  return out !== null && gone.has(out.path) && written === null ? null : out;
 }
 
 /** The tmp → verify → overwrite → cleanup protocol (RULE 23, atomic delivery). */

@@ -2170,3 +2170,42 @@ the files written in THAT run, so a JPEG-only rebuild deleted the SVG.
   the corpus, and T28's guard is still the place where it gets refused.
 * Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake recorded
   in the previous entry.
+
+## 2026-10-08 (later) — the rename migration may never lose a package
+
+Two properties pinned after the export-naming change, both found by asking what
+a real folder would look like after a rename:
+
+1. **A superseded file is removed only when its replacement is present.** The
+   first cut removed every old-named file the previous record named. It was safe
+   under today's planner (a skipped rebuild implies the canonical file exists),
+   but that invariant is invisible in the code and one `planStages` change away
+   from deleting the only copy of an output. `dropSuperseded` now checks the
+   export folder itself (`listChildNames`) and removes an old-named artifact only
+   when `${stem}.${ext}` is really there.
+2. **The record stops naming a file the commit removed.** `writeRecord` prunes
+   the previous outputs through `pruneRemoved`, so `outputs.eps` becomes null
+   when the superseded EPS was removed and no new one was written (the honest
+   half of a failed EPS stage) instead of pointing at a deleted path.
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_runexport` | "keeps an old-named file when this run wrote nothing to take its place" (the only EPS in the folder stays, `replaced` is empty, the record still names it) and "stops naming a file it just removed" (the superseded EPS goes because `fog.eps` is on disk, and `outputs.eps` comes back null) |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **128 files / 1388 tests** (was 1386) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* An **orphaned** superseded artifact — one that no `export.json` names — is
+  deliberately left in place: the app never deletes a file it cannot prove it
+  wrote. A folder carrying one needs the user's word before any sweep lands.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
