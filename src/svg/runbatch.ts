@@ -49,7 +49,7 @@ export async function runBatch(state: RunState, plan: BatchPlan, index: number):
 function announceStart(ctx: BatchCtx, built: BuiltComposite): void {
   const { state, plan, items, index } = ctx;
   state.args.onEvent({
-    kind: "batch-start", batchId: plan.id, index, count: items.length, batches: state.total,
+    kind: "batch-start", batchId: plan.id, index, count: items.length, images: state.images, batches: state.total,
     perRequest: state.perRequest, cols: plan.cols, rows: plan.rows, composite: built.dataUrl, hash: built.hash,
     startedAt: ctx.startedAt,
   });
@@ -112,7 +112,8 @@ function finishBatch(ctx: BatchCtx): void {
   // confirmed anything about it, and the next boot must say so.
   if (!ctx.unsettled) endRequest(plan.id);
   state.outcomes.push(report);
-  state.args.onEvent({ kind: "batch-done", report });
+  state.settled += report.saved + report.failed + report.missing;
+  state.args.onEvent({ kind: "batch-done", report, done: state.settled, images: state.images });
 }
 
 interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }

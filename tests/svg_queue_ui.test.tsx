@@ -300,3 +300,123 @@ describe("the generation queue (I-53)", () => {
     expect(t.calls).toHaveLength(1);
   });
 });
+
+// ── keep-alive plan, step 4 (D3): a waiting row says so, grey, and the stored
+// status is untouched; the list head counts them.
+describe("a waiting row reads Next attempt (D3)", () => {
+  const badge = (id: string) => q(`[data-testid=svg-status-${id}] .svg-badge`);
+
+  it("shows the waiting row as Next attempt and restores its old badge when dropped", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+
+    expect(badge(COURT)?.textContent).toBe("Next attempt");
+    expect(badge(COURT)?.classList.contains("queued")).toBe(true);
+    expect(txt("[data-testid=svg-queued-count]")).toContain("1 next attempt");
+    expect(badge(FOG)?.classList.contains("generating")).toBe(true); // the run in flight is untouched
+
+    await click("[data-testid=svg-queue-drop-1]");
+    expect(badge(COURT)?.textContent).toBe("Not Generated"); // the old truth again
+    expect(badge(COURT)?.classList.contains("queued")).toBe(false);
+    expect(q("[data-testid=svg-queued-count]")).toBeNull();
+  });
+});
+
+// ── keep-alive plan, step 4 (D4): a row's Regenerate while a run is in flight
+// goes to the FRONT of the queue with no dialog; the source leaves every waiting
+// batch; the run in flight is untouched. While idle it confirms as before.
+describe("a row's Regenerate goes to the front (D4)", () => {
+  const queueText = (n: number) => txt(`[data-testid=svg-queue-line-${n}]`);
+
+  it("skips the dialog while a run is in flight, puts the source first and names it", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]"); // COURT waits in the queue
+
+    // Regenerate COURT from its own row: no confirmation dialog while a run is in flight
+    await click(`[data-testid=svg-generate-${COURT}]`);
+    expect(q("[data-testid=svg-confirm]")).toBeNull();
+    expect(txt("[data-testid=svg-toast]")).toContain("court_AI.png — next attempt, first in the queue (1 request)");
+    expect(t.calls).toHaveLength(1); // the run in flight is untouched
+    expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+    expect(queueText(1)).toContain("court_AI.png");
+  });
+
+  it("takes the source out of a waiting batch that carries it too, and says so", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    // a waiting batch of BOTH sources: FOG is still checked from its own pick
+    // (the one in flight), COURT joins it
+    await act(async () => { (q(`[data-testid=svg-check-${COURT}]`) as HTMLInputElement).click(); });
+    await settle();
+    await click("[data-testid=svg-generate-selected]");
+    await click("[data-testid=svg-confirm-generate]");
+    expect(txt("[data-testid=svg-queue-line-1]")).toContain("2 images");
+
+    await click(`[data-testid=svg-generate-${COURT}]`);
+    expect(txt("[data-testid=svg-toast]")).toContain("removed from 1 waiting batch");
+    expect(txt("[data-testid=svg-queue-count]")).toContain("2 queued");
+    expect(queueText(1)).toContain("court_AI.png"); // the regenerated source is first
+    expect(queueText(2)).toContain("fog_AI.png");
+    expect(queueText(2)).toContain("1 image");     // the waiting batch lost COURT, kept FOG
+    expect(t.calls).toHaveLength(1);
+  });
+
+  it("still confirms a row's Regenerate while idle, as before", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await click(`[data-testid=svg-generate-${COURT}]`);
+    expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    expect(t.calls).toHaveLength(0);
+  });
+});
+
+// ── keep-alive plan, step 5 (D6): the run record grows BELOW the list. The header
+// and the first rows keep their place from the first request to the last.
+describe("nothing grows above the list during a run (D6)", () => {
+  /** True when `later` comes after `earlier` in the document. */
+  const after = (earlier: string, later: string) => {
+    const a = q(earlier);
+    const b = q(later);
+    return a !== null && b !== null && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  };
+
+  it("puts the batch strip and the queue after the list, from the start of a run", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    expect(q("[data-testid=svg-batch]")).not.toBeNull();
+    expect(after("[data-testid=svg-list]", "[data-testid=svg-batch]")).toBe(true);
+    expect(after("[data-testid=svg-bulk]", "[data-testid=svg-list]")).toBe(true);
+
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+    expect(after("[data-testid=svg-list]", "[data-testid=svg-queue]")).toBe(true);
+  });
+});

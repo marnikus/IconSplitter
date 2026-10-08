@@ -2475,3 +2475,24 @@ lines, 1 param; RULE 18: `meta.ts` 175 lines.
 * The sentence-break heuristic needs a word of 2+ letters before the
   punctuation, so "plan B. Next" would not be cut — the prompt forbids a
   second sentence anyway; revisit only if the field shows it.
+
+## 2026-10-08 — Generate SVG keep-alive: the run survives the tab, the list stays put (`feat(svg)`)
+
+Design: `docs/archive/2026-10-08-svg-queue-keepalive/design.md` (steps 1–8).
+SoR I-53 rewritten; I-57 (keep-alive, popup) and I-58 (pinned order) added.
+
+### What changed (RULE 16/18 figures)
+
+* `src/svg/actions.ts` 287 lines, `src/svg/runbatch.ts` 299 (was 297), `src/svg/SvgPanel.tsx` 271: all under the 300-line ceiling.
+* New files, all under budget: `RunRecord.tsx` 28, `SvgRunPopup.tsx` 43, `runtotals.ts` 58, `useActivation.ts` 25.
+* `src/ui/Workbench.tsx` 117 lines: the tab switch moved into `TabPanels` (the `Shell` function was 35 lines against a limit of 30, RULE 16) and the keep-alive slot is `useOnceOpened`.
+* Baseline `tools/quality_baseline.json`: **untouched** (no re-record in this change).
+
+### Gates (full run)
+
+`npm run verify`: types, lint (0 errors; the 10 warnings are in legacy files `App.tsx`, `detect.ts`, `runexport.ts`, `runmetadata.ts`, none new), quality gate (changed) GATE PASSED, tests 133 files / 1510 tests, coverage, build — ALL LANES PASSED. The review lanes ran as follows: `jscpd src --min-tokens 60` reports 30 clones, one of which touches `svg/SvgRow.tsx` (the approve/decline button pattern, already present before this change). **`knip` did not run:** it crashes in its `oxc-parser` dependency with `ArrayBuffer allocation failed` in this sandbox, before and after the change; it is not a finding and is recorded here as not run.
+
+### Known debt carried
+
+* `knip` needs a run on a machine where its parser can allocate; re-check then.
+* The popup is portalled into `document.body` from `SvgPanel` (as built), not in the keep-alive slot as the design first wrote; documented in I-57.

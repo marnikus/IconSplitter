@@ -2,7 +2,7 @@
 // secret masking and redaction, prompt + manifest text, response extraction and
 // matching, validation/security, icon counting, versioning + pair-file parsing,
 // batch planning, composite layout, request payload/usage/error classification
-// and usage formatting. Each test fails if the module it covers is deleted.
+// and usage formatting, and the pinned list order (pinOrder). Each test fails if the module it covers is deleted.
 import { describe, expect, it } from "vitest";
 import {
   chatUrl, clampImagesPerRequest, clampRetries, clampTimeoutMs, DEFAULT_CONFIG, modelLabel, parseConfig,
@@ -15,6 +15,7 @@ import {
 } from "../src/lib/svgprompt";
 import { cellOf, emptyPositions, gridSize, planBatches } from "../src/lib/svgbatch";
 import { compositeLayout, fitRect } from "../src/lib/svgcomposite";
+import { pinOrder } from "../src/lib/svglist";
 
 describe("svgconfig", () => {
   it("uses the documented Requesty defaults and the verified model id", () => {
@@ -185,5 +186,23 @@ describe("svgcomposite", () => {
     const broken = fitRect(0, 0, cell);
     expect(broken.w).toBeGreaterThan(0);
     expect(broken.h).toBeGreaterThan(0);
+  });
+});
+
+describe("svglist pinOrder (keep-alive D5)", () => {
+  it("keeps the previous places and drops rows that are gone", () => {
+    expect(pinOrder(["b", "a", "c"], ["a", "b"])).toEqual(["b", "a"]);
+  });
+
+  it("appends newcomers after the kept rows, in sorted order", () => {
+    expect(pinOrder(["b", "a"], ["a", "x", "b", "y"])).toEqual(["b", "a", "x", "y"]);
+  });
+
+  it("gives the sorted order when there is no previous order", () => {
+    expect(pinOrder([], ["a", "x", "b"])).toEqual(["a", "x", "b"]);
+  });
+
+  it("is empty when nothing is left", () => {
+    expect(pinOrder(["a"], [])).toEqual([]);
   });
 });

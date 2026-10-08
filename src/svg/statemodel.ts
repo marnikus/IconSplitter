@@ -14,6 +14,7 @@ import {
   type SamplingParams,
 } from "../lib/modelcaps";
 import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import { visibleRows } from "./rowmodel";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { Discovery } from "./sources";
 import type { QueueItem } from "./runqueue";
@@ -60,6 +61,8 @@ export interface SvgModel {
   running: boolean;
   /** Batches waiting for their turn (I-53); the ref is the authority. */
   queue: QueueItem[];
+  /** The row ids in the order the list was last refreshed (D5): a landing SVG never reorders it. */
+  order: string[];
 }
 
 export type SvgAction =
@@ -86,12 +89,14 @@ export type SvgAction =
   | { type: "progress"; progress: RunProgress | null }
   | { type: "progress-fn"; fn: (p: RunProgress | null) => RunProgress | null }
   | { type: "running"; running: boolean }
-  | { type: "queue"; queue: QueueItem[] };
+  | { type: "queue"; queue: QueueItem[] }
+  /** Re-pins the list order: tab re-activation (sort, filter and scan do it themselves). */
+  | { type: "repin" };
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
   root: (m, a) => ({ ...m, rootName: (a as { name: string }).name, rootToken: m.rootToken + 1 }),
-  rows: (m, a) => ({ ...m, rows: (a as { rows: SvgRow[] }).rows }),
+  rows: (m, a) => repinned({ ...m, rows: (a as { rows: SvgRow[] }).rows }),
   "rows-fn": (m, a) => ({ ...m, rows: (a as { fn: (r: SvgRow[]) => SvgRow[] }).fn(m.rows) }),
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: Discovery | null }).discovery }),
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
@@ -107,14 +112,20 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
-  filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
-  sort: (m, a) => ({ ...m, sort: (a as { sort: SvgSort }).sort }),
+  filter: (m, a) => repinned({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
+  sort: (m, a) => repinned({ ...m, sort: (a as { sort: SvgSort }).sort }),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: Dialog | null }).dialog }),
   progress: (m, a) => ({ ...m, progress: (a as { progress: RunProgress | null }).progress }),
   "progress-fn": (m, a) => ({ ...m, progress: (a as { fn: (p: RunProgress | null) => RunProgress | null }).fn(m.progress) }),
   running: (m, a) => ({ ...m, running: (a as { running: boolean }).running }),
   queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
+  repin: (m) => repinned(m),
 };
+
+/** The list order is refreshed from the rows as they sort NOW (D5). */
+function repinned(m: SvgModel): SvgModel {
+  return { ...m, order: visibleRows(m.rows, m.filter, m.sort).map((r) => r.source.id) };
+}
 
 export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
   return HANDLERS[action.type](model, action);
@@ -151,7 +162,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
     prompt, keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
-    filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false, queue: [],
+    filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false, queue: [], order: [],
   };
 }
 

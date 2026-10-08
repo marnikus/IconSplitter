@@ -6,14 +6,17 @@
 // that makes them one screen.
 
 import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { setAppState } from "../state/appstore";
+import SvgRunPopup from "./SvgRunPopup";
+import { useTabActivation } from "./useActivation";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
-import SvgBatchStrip from "./SvgBatchStrip";
-import SvgQueue from "./SvgQueue";
+import RunRecord from "./RunRecord";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
@@ -23,11 +26,13 @@ import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
 import { exclusionSummary } from "./sourcelist";
 
-export default function SvgPanel() {
+/** `active` is true while this tab is on screen; the panel stays mounted either way (D1). */
+export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
+  useTabActivation(active, g);
   useSvgHotkeys({
-    visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null,
+    active, visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null,
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,
     decide: g.decide, showCode: g.showCode, dismissDialog: g.dismissDialog,
   });
@@ -43,6 +48,8 @@ export default function SvgPanel() {
         onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode}
         onUseVersion={g.preferVersion} running={g.running} />
       <Overlay g={g} />
+      {createPortal(<SvgRunPopup progress={g.progress} queue={g.queue} running={g.running}
+        onOpen={() => setAppState({ tab: "generateSvg" })} onCancel={g.cancelRun} />, document.body)}
     </div>
   );
 }
@@ -74,8 +81,6 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
   };
   return (
     <>
-      {g.progress !== null && <SvgBatchStrip progress={g.progress} running={g.running} onCancel={g.cancelRun} />}
-      <SvgQueue queue={g.queue} onDrop={g.dropQueued} />
       <SvgBulkBar header={g.header} checkedCount={g.checked.length} requestCount={g.requests} visibleCount={g.visible.length}
         decidableCount={decidableCount(g)} thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
         progress={g.progress} running={g.running}
@@ -83,6 +88,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       <SvgList g={g} actions={actions} />
+      <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
     </>
   );
 }

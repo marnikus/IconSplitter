@@ -27,10 +27,10 @@ const spec = (event: RunEvent) => runLogSpecs(event)[0];
 /** The one line the panel shows, after the log's own redaction. */
 const line = (event: RunEvent) => formatEntry(createEntry(spec(event), AT, "l1"));
 
-const START = { kind: "batch-start", batchId: "batch_1_1", index: 1, count: 1, batches: 2, perRequest: 4, cols: 1, rows: 1, composite: IMAGE, hash: "h1", startedAt: 0 } as const;
+const START = { kind: "batch-start", batchId: "batch_1_1", index: 1, count: 1, images: 2, batches: 2, perRequest: 4, cols: 1, rows: 1, composite: IMAGE, hash: "h1", startedAt: 0 } as const;
 
 const STAGES: RunEvent[] = [
-  { kind: "run-start", batches: 2, perRequest: 4 },
+  { kind: "run-start", batches: 2, perRequest: 4, images: 2 },
   START,
   { kind: "item-start", batchId: "batch_1_1", position: 1, sourceId: "pair_1" },
   { kind: "item-saved", batchId: "batch_1_1", position: 1, sourceId: "pair_1", version: 2, icons: 3, warnings: [], usage: USAGE, meta: null },
@@ -42,7 +42,7 @@ const STAGES: RunEvent[] = [
 
 /** One finished request, done or failed or stalled. */
 const done = (extra: Partial<Parameters<typeof batchOutcome>[0]> = {}): RunEvent => ({
-  kind: "batch-done",
+  kind: "batch-done", done: 1, images: 1,
   report: batchOutcome({
     plan: PLAN, index: 1, model: "openai/gpt-6.1-sol", saved: 1, failed: 0, missing: 0,
     usage: USAGE, error: null, elapsedMs: 1_000, requestId: "req_1", ...extra,
@@ -97,6 +97,14 @@ describe("runLogSpecs — the run stages and their ids", () => {
     expect(line(finished)).toContain("request 1");
     expect(line(finished)).toContain("reported");
     expect(line(finished)).toContain("0.01");
+  });
+
+  it("says how many of the run's images are done after each request (keep-alive D7)", () => {
+    expect(spec(STAGES[0]).data).toMatchObject({ images: 2 });
+    expect(spec(STAGES[1]).data).toMatchObject({ runImages: 2 });
+    const finished = { ...done(), done: 1, images: 2 } as Extract<RunEvent, { kind: "batch-done" }>;
+    expect(line(finished)).toContain("request 1 done — 1 of 2 image(s) done");
+    expect(spec(finished).data).toMatchObject({ done: 1, runImages: 2 });
   });
 
   it("keeps a confirmed failure an error and an unconfirmed outcome a warning", () => {

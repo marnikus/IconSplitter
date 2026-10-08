@@ -22,6 +22,7 @@ import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
 import { DEFAULT_SVG_PREFS, SVG_PREFS_KEY, loadSvgPrefs, parseSvgPrefs, saveSvgPrefs } from "../src/svg/prefsstore";
 import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
+import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
@@ -415,6 +416,38 @@ describe("row model", () => {
     expect(parsePairMeta(serializePairMeta(rec)).ok).toBe(true);
   });
 
+  it("keeps the pinned order while a landing SVG changes a row's status (D5)", () => {
+    const mk = (source: SvgSource, status: "generated" | "failed") => ({ ...toRow(source, null, false), status });
+    const before = [mk(FOG_SRC, "failed"), mk(COURT_SRC, "generated")];
+    const pinned = visibleRows(before, { generation: "all", review: "all", search: "" }, "generation", []).map((r) => r.source.id);
+    expect(pinned).toEqual([COURT, FOG]); // the order the user is looking at
+    // FOG's SVG lands: under the status sort it would now jump to the top...
+    const landed = [mk(FOG_SRC, "generated"), mk(COURT_SRC, "generated")];
+    expect(visibleRows(landed, { generation: "all", review: "all", search: "" }, "generation", []).map((r) => r.source.id)).toEqual([FOG, COURT]);
+    // ...but the pin keeps the list where the user left it
+    expect(visibleRows(landed, { generation: "all", review: "all", search: "" }, "generation", pinned).map((r) => r.source.id)).toEqual([COURT, FOG]);
+  });
+
+  it("a re-sort (an empty pin) puts the rows in the new order", () => {
+    const list = [toRow(FOG_SRC, null, false), toRow(COURT_SRC, null, false)];
+    const pinned = [FOG, COURT];
+    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "name", pinned).map((r) => r.source.id)).toEqual([FOG, COURT]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "name", []).map((r) => r.source.id)).toEqual([COURT, FOG]);
+  });
+
+  it("re-pins only on sort, filter, scan commit and tab re-activation (D5)", () => {
+    const cfg = DEFAULT_CONFIG;
+    const prefs = { thumb: 84, providerOpen: true, bg: DEFAULT_PREVIEW_BACKGROUND };
+    const start = initialModel(cfg, "prompt", prefs);
+    const rows = [toRow(FOG_SRC, null, false), toRow(COURT_SRC, null, false)];
+    const scanned = reduceState(start, { type: "rows", rows });
+    expect(scanned.order).toEqual([FOG, COURT]); // a scan commit pins the sorted order (no dates yet: row order)
+    const saved = reduceState(scanned, { type: "rows-fn", fn: (rs) => rs.map((r) => (r.source.id === FOG ? { ...r, status: "generated" as const } : r)) });
+    expect(saved.order).toEqual(scanned.order); // an item-saved never re-pins
+    const resorted = reduceState(saved, { type: "sort", sort: "name" });
+    expect(resorted.order).toEqual([COURT, FOG]);
+    expect(reduceState(resorted, { type: "repin" }).order).toEqual([COURT, FOG]);
+  });
   it("filters, sorts and reports the header checkbox state", () => {
     const mk = (source: SvgSource, status: "generated" | "failed") => ({ ...toRow(source, null, false), status });
     const list = [mk(FOG_SRC, "generated"), mk(COURT_SRC, "failed")];
@@ -506,10 +539,10 @@ describe("runner events and the review decision", () => {
       setProgressFn: (fn) => { written.push(`progressFn:${fn(null) === null ? "null" : "set"}`); },
       setRowsFn: (fn) => { rows.splice(0, rows.length, ...fn(rows)); },
     };
-    onRunEvent({ kind: "run-start", batches: 1, perRequest: 4 }, api);
+    onRunEvent({ kind: "run-start", batches: 1, perRequest: 4, images: 1 }, api);
     // a new run clears whatever progress the last one left behind...
     expect(written[0]).toBe("progress:null");
-    onRunEvent({ kind: "batch-start", batchId: "b1", index: 1, count: 1, batches: 1, perRequest: 4, cols: 1, rows: 1, composite: "data:,", hash: "h", startedAt: Date.now() }, api);
+    onRunEvent({ kind: "batch-start", batchId: "b1", index: 1, count: 1, images: 1, batches: 1, perRequest: 4, cols: 1, rows: 1, composite: "data:,", hash: "h", startedAt: Date.now() }, api);
     // ...then the request in flight is what the strip shows.
     expect(written).toEqual(["progress:null", "progressFn:set"]);
     onRunEvent({ kind: "item-failed", batchId: "b1", position: 1, sourceId: FOG, error: "boom", failure: "malformed", retryAfterMs: null }, api);
@@ -628,7 +661,7 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "progress", progress: null }).progress).toBeNull();
     const patched = reduceState(reduceState(start, { type: "progress", progress: {
       batchId: "b", index: 1, batches: 1, count: 1, cols: 1, rows: 1, composite: "", hash: "h",
-      saved: 0, failed: 0, missing: 0, perRequest: 4, startedAt: Date.now(), outcomes: [],
+      saved: 0, failed: 0, missing: 0, perRequest: 4, startedAt: Date.now(), outcomes: [], images: 1,
     } }), { type: "progress-fn", fn: (p) => (p ? { ...p, saved: 2 } : p) });
     expect(patched.progress?.saved).toBe(2);
     expect(reduceState(start, { type: "filter", patch: { search: "fog" } }).filter.search).toBe("fog");

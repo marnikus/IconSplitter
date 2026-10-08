@@ -83,6 +83,18 @@ export function shownLabel(shown: number, total: number): string {
   return `Showing ${shown} of ${total} approved sources`;
 }
 
+/**
+ * The order the list shows (keep-alive D5). A row keeps the place `previous`
+ * gave it; a row that left the list is dropped; a newcomer takes its sorted
+ * place among the newcomers, at the end. Pure: the caller decides WHEN to pin.
+ */
+export function pinOrder(previous: readonly string[], sorted: readonly string[]): string[] {
+  const present = new Set(sorted);
+  const kept = previous.filter((id) => present.has(id));
+  const known = new Set(kept);
+  return [...kept, ...sorted.filter((id) => !known.has(id))];
+}
+
 /** Totals for the footer: tokens, reported cost and estimated cost, never merged. */
 export interface UsageTotals {
   tokens: number | null;

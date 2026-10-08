@@ -30,6 +30,8 @@ export interface SvgRow {
   status: RowStatus;
   error: string | null;
   running: boolean;
+  /** A waiting batch carries this source (D3): shown as "Next attempt"; the stored status is untouched. */
+  queued: boolean;
 }
 
 /** Live state of the run: the batch in flight plus every finished request. */
@@ -51,16 +53,19 @@ export interface RunProgress {
   startedAt: number;
   /** Icons one request was allowed to carry in this run. */
   perRequest: number;
+  /** Images the whole run carries, across every request (the popup's total). */
+  images: number;
   /** One outcome per finished request, in request order. */
   outcomes: BatchOutcome[];
 }
 
-import type { QueueItem } from "./runqueue";
+import type { Placement, QueueItem } from "./runqueue";
 
 export type { QueueItem } from "./runqueue";
 
 export type Dialog =
-  | { kind: "confirm"; ids: string[] }
+  /** `placement` is where the batch goes once confirmed: the back (default) or the front (a Regenerate). */
+  | { kind: "confirm"; ids: string[]; placement: Placement }
   | { kind: "code"; id: string; version: number }
   | { kind: "history"; id: string };
 

@@ -18,8 +18,8 @@ import { inIdOrder } from "../lib/selectionorder";
 import { runGeneration } from "./runner";
 import { withRunLog } from "./runlog";
 import {
-  dropAll, dropQueued as removeQueued, enqueue, nextRun, queuedCount, queueItem, shiftQueue,
-  type QueueItem,
+  dropAll, dropIdFrom, dropQueued as removeQueued, nextRun, placeItem, queuedCount, queueItem, shiftQueue,
+  type Placement, type QueueItem,
 } from "./runqueue";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "./runstate";
 import type { SvgRefs } from "./types";
@@ -54,17 +54,51 @@ export function setQueue(ctx: RunCtx, queue: QueueItem[]): void {
   ctx.dispatch({ type: "queue", queue });
 }
 
-/** Appends one confirmed batch and reports how many are waiting now. */
-export function enqueueBatch(ctx: RunCtx, ids: string[]): number {
+/** What one enqueue did: the batch, how many wait now, how many waiting batches gave up a source. */
+export interface Placed {
+  item: QueueItem;
+  waiting: number;
+  removedFrom: number;
+}
+
+/**
+ * Adds one confirmed batch at its place (I-53, D4). A FRONT batch first takes its
+ * sources out of every waiting batch (Q2): an image is never generated twice.
+ */
+export function enqueueBatch(ctx: RunCtx, ids: string[], placement: Placement = "back"): Placed {
   const item = queueItem(ids, requestsOf(ctx, ids), labelOf(ctx, ids));
-  const queue = enqueue(ctx.refs.queue.current, item);
+  const freed = placement === "front" ? takeOutOfWaiting(ctx, ids) : { queue: ctx.refs.queue.current, touched: 0 };
+  const queue = placeItem(freed.queue, item, placement);
   setQueue(ctx, queue);
   log({
     feature: "svg", action: "batch-queued",
-    detail: `${ids.length} source(s) → ${item.requests} request(s)`,
-    data: { sources: ids.length, requests: item.requests, waiting: queuedCount(queue) },
+    detail: `${ids.length} source(s) → ${item.requests} request(s)${placement === "front" ? " · first" : ""}`,
+    data: { sources: ids.length, requests: item.requests, waiting: queuedCount(queue), placement, removedFrom: freed.touched },
   });
-  return queuedCount(queue);
+  return { item, waiting: queuedCount(queue), removedFrom: freed.touched };
+}
+
+/** Takes each source out of every waiting batch; `touched` counts the batches that changed. */
+function takeOutOfWaiting(ctx: RunCtx, ids: string[]): { queue: QueueItem[]; touched: number } {
+  let queue = ctx.refs.queue.current;
+  let touched = 0;
+  for (const id of ids) {
+    const next = dropIdFrom(queue, id, (rest) => ({ requests: requestsOf(ctx, rest), label: labelOf(ctx, rest) }));
+    queue = next.queue;
+    touched += next.touched;
+  }
+  return { queue, touched };
+}
+
+/**
+ * A row's Regenerate while a run is in flight (D4, Q1): no dialog. The source goes
+ * FIRST in the queue and the toast names it; the run in flight is never touched.
+ */
+export function regenerateNow(ctx: RunCtx, ids: string[]): void {
+  const placed = enqueueBatch(ctx, ids, "front");
+  const n = placed.item.requests;
+  const removed = placed.removedFrom === 0 ? "" : ` · removed from ${placed.removedFrom} waiting batch${placed.removedFrom === 1 ? "" : "es"}`;
+  ctx.say(`${placed.item.label} — next attempt, first in the queue (${n} request${n === 1 ? "" : "s"})${removed}`);
 }
 
 /** Drops one batch that is still waiting; the run in flight is untouched. */
@@ -98,7 +132,7 @@ export async function confirmRun(ctx: RunCtx): Promise<void> {
   if (dialog === null || dialog.kind !== "confirm") return;
   const ids = dialog.ids;
   ctx.dispatch({ type: "dialog", dialog: null });
-  const waiting = enqueueBatch(ctx, ids);
+  const { waiting } = enqueueBatch(ctx, ids, dialog.placement);
   if (nextRun(ctx.refs.queue.current, busy(ctx)) === null) {
     log({ feature: "svg", action: "batch-waiting", detail: `${waiting} batch(es) waiting`, data: { waiting } });
     return ctx.say(`${ids.length} image(s) added — they wait for the run in flight (${waiting} queued)`);

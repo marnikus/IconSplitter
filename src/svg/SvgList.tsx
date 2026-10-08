@@ -5,6 +5,7 @@
 // same rules the Selection V2 tab uses stay in one place (RULE 10).
 
 import { shownLabel } from "../lib/svglist";
+import { queuedIds } from "./runqueue";
 import SvgRow, { type SvgRowActions } from "./SvgRow";
 import type { SvgGenApi } from "./useSvgGen";
 
@@ -16,6 +17,7 @@ export interface SvgListProps {
 export default function SvgList({ g, actions }: SvgListProps) {
   const running = g.rows.filter((r) => r.running).length;
   const attention = g.rows.filter((r) => r.status === "failed" || r.corrupt).length;
+  const next = queuedIds(g.queue).size;
   return (
     <div className="svg-panel" data-testid="svg-list">
       <header className="svg-head">
@@ -27,6 +29,7 @@ export default function SvgList({ g, actions }: SvgListProps) {
         <div className="svg-attention">
           <span className="running" data-testid="svg-running-count">{running} generating</span>
           <span className="needs" data-testid="svg-attention-count">{attention} need attention</span>
+          {next > 0 && <span className="queued" data-testid="svg-queued-count">{next} next attempt</span>}
         </div>
       </header>
       <div className="pair-table">

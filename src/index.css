@@ -570,6 +570,11 @@
   --svg-thumb: 84px;
 }
 
+/* A tab kept mounted while another is on screen is hidden, never shown beside it (D1). */
+.svg-shell[hidden] {
+  display: none;
+}
+
 .svg-shell {
   height: 100%; /* the band: the panel may floor itself at it (min-height) */
   background: var(--v2-bg);
@@ -1027,6 +1032,7 @@
 .svg-attention { display: flex; gap: 12px; font-size: 9px; text-transform: uppercase; color: var(--v2-muted); }
 .svg-attention .running { color: var(--v2-purple-2); }
 .svg-attention .needs { color: var(--v2-yellow); }
+.svg-attention .queued { color: var(--v2-muted); }
 
 .svg-columns,
 .svg-row {
@@ -1204,6 +1210,8 @@
 
 .svg-badge.generated, .svg-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
+/* Next attempt: waiting for its turn — grey, because nothing has started (D3). */
+.svg-badge.queued { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
 .svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 
@@ -1650,3 +1658,22 @@
 .up-preview-card figcaption { color: var(--v2-muted); font-size: 9px; line-height: 1.45; text-align: center; word-break: break-word; }
 
 .up-overridden { color: var(--v2-purple-2); }
+
+/* The run popup: floats above every tab, under the tab bar (keep-alive D2). */
+.svg-run-popup {
+  position: fixed;
+  top: 64px;
+  right: 18px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  padding: 8px 10px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 7px;
+  background: #151e33;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 36%);
+  color: #dce4f7;
+  font-size: 11px;
+}

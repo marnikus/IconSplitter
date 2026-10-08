@@ -23,7 +23,8 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { guard, perRequestOf, planOf } from "./runplan";
-import { confirmRun, dropQueueForCancel, dropWaiting, type CancelNote } from "./runcontrol";
+import { busy, confirmRun, dropQueueForCancel, dropWaiting, regenerateNow, type CancelNote } from "./runcontrol";
+import type { Placement } from "./runqueue";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, RunProgress, SvgRefs, SvgRow } from "./types";
@@ -85,7 +86,8 @@ export interface SvgActions {
   deselectAll: () => void;
   setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
-  requestGenerate: (ids: string[]) => void;
+  /** Asks for a run; a 'front' request (a Regenerate) skips the dialog while a run is in flight (D4). */
+  requestGenerate: (ids: string[], placement?: Placement) => void;
   cancelRun: () => void;
   confirmGenerate: () => void;
   dismissDialog: () => void;
@@ -223,7 +225,7 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
 function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "dismissDialog"> {
   const latest = useRef(ctx);
   latest.current = ctx;
-  const requestGenerate = useCallback((ids: string[]) => {
+  const requestGenerate = useCallback((ids: string[], placement: Placement = "back") => {
     const c = latest.current;
     const why = guard(c, ids);
     if (why !== null) return c.say(why, true);
@@ -231,7 +233,8 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "dismissDialog"> 
     // one splitter, one effective per-request size, validated before the dialog.
     const problems = validateBatchPlan(planOf(c, ids), perRequestOf(c));
     if (problems.length > 0) return c.say(problems[0], true);
-    const dialog: Dialog = { kind: "confirm", ids };
+    if (placement === "front" && busy(c)) return regenerateNow(c, ids);
+    const dialog: Dialog = { kind: "confirm", ids, placement };
     log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
     c.dispatch({ type: "dialog", dialog });
   }, []);

@@ -899,7 +899,9 @@ Batch:
   name, never a reference image, never a path that is not on disk. A source that
   fails this is excluded **with its reason** and reported (banner + audit + log);
   it is never silently dropped and never offered for generation. The judgement
-  lives in one pure module (`svg/sourcelist.ts`), not inside the scan.
+  lives in one pure module (`svg/sourcelist.ts`), not inside the scan. (2026-10-08:
+  the order on screen is the user's sort, pinned by I-58; the scan's order is
+  I-32's normalized path. Neither changes which rows exist.)
 * **I-32 (identity, RULE 6/24):** one normalized AI path is one row, whatever
   the row index, the split folder or how many decision records name it; rows are
   ordered by normalized path, so a reload or a repeated rescan yields
@@ -1068,6 +1070,11 @@ with hotkeys and `data-testid` handles):
   pagination, the empty cells of a partial last page, confirm/cancel, nothing
   sent by opening it, an honest message when a composite cannot be built, and
   the 1/3/4/5/8/9-image matrix walked page by page
+* `svg_keepalive_ui.test.tsx` — the run survives the tab: the panel is hidden and
+  not unmounted, the row still updates while hidden, the popup shows done/left on
+  another tab, Open returns, Cancel works from the popup, the in-flight run is not
+  started again on return, `G` does nothing on another tab, and an idle return
+  rescans the folder (a source approved meanwhile appears)
 * `svg_lib.test.ts`, `svg_extract.test.ts`, `svg_send.test.ts`,
   `svg_canvas.test.ts` — the SVG pure layer: provider defaults + the verified
   model id, prompt/manifest text, response split + name/title matching,
@@ -1115,15 +1122,53 @@ with hotkeys and `data-testid` handles):
   to "nobody chose" (the newest valid version). It is written through
   `saveMetaAt` (tmp → verify → overwrite), off the undo timeline, and the
   version chooser refuses honestly when it cannot be written.
-* **I-53 — the generation queue.** Confirming a batch while a run is in flight
-  APPENDS it; the run in flight is never interrupted and the button is never
-  disabled by it. `refs.queue` is the synchronous authority and `refs.abort`
-  (non-null) is what "a request is in flight" means, so a stale closure can
-  never start two runs or lose a batch. The queue is session-only — nothing
-  queued is ever sent after a restart — and Cancel stops the run AND drops the
-  whole queue, saying how many batches that was. A waiting batch is a scheduling
-  fact, never a row status: nothing about the files changes until its request
-  really starts, and the run that finished it says so in its final line.
+* **I-53 — the generation queue (rewritten 2026-10-08, keep-alive).** Confirming a
+  batch while a run is in flight APPENDS it; the run in flight is never
+  interrupted and the bulk button is never disabled by it. `refs.queue` is the
+  synchronous authority and `refs.abort` (non-null) is what "a request is in
+  flight" means, so a stale closure can never start two runs or lose a batch. The
+  queue is session-only — nothing queued is ever sent after a restart — and Cancel
+  stops the run AND drops the whole queue, saying how many batches that was.
+  **A waiting source reads "Next attempt" (grey)**: the row's badge is derived from
+  `SvgRow.queued` (the source is in a waiting batch) while nothing of its own is
+  running; the stored status is untouched, so dropping the batch shows the old
+  truth again. A waiting batch still changes nothing on disk; nothing about the
+  files changes until its request really starts, and the run that finished it says
+  so in its final line. **Regenerate on a row** is the one exception to "append":
+  it goes to the FRONT as its own job, and while a run is in flight it skips the
+  confirm dialog (the run in flight is untouched). The same source is then removed
+  from every later waiting batch (`dropIdFrom`; a batch left empty is dropped), so
+  one queue never generates an image twice. The bulk bar, `G` and the recovery
+  banner still append behind a confirm. The run record (batch strip and queue) is
+  drawn BELOW the list (`RunRecord`), so a run never pushes the list down (I-58).
+* **I-57 — the run survives the tab (keep-alive, 2026-10-08, D1/D2).** The Generate
+  SVG panel is mounted on its first visit and afterwards only HIDDEN (`hidden` on
+  `.svg-shell`, the `useOnceOpened` slot in `Workbench`) while another tab is on
+  screen. It is never unmounted, so the hook's refs (rows, queue, abort, progress,
+  root) and the in-flight request stay with the run; a second run cannot start in
+  parallel. Hotkeys answer only while the tab is on screen (`active`). A floating
+  `SvgRunPopup` (`svg-run-popup`) shows on EVERY tab: `Generating · N done · N left
+  · request i of n` with the elapsed time, `Open` (switches to the Generate SVG tab)
+  and `Cancel` (the same stop-and-drop as the strip). When the run ends the line
+  keeps its final words (`Done · N done · N left · N failed`) until it is
+  dismissed or a new run replaces it. The counts come from one pure function
+  (`runTotals`), the same numbers the bulk bar shows. *As built:* the popup is
+  portalled into `document.body` from `SvgPanel` rather than placed in the
+  keep-alive slot, so it floats above the hidden subtree and has a single owner.
+  On RE-activation of the tab the list order is re-pinned (I-58) and the folder is
+  rescanned ONLY when nothing is in flight: a scan during a run would wipe the
+  `generating` rows, and `reloadSidecars` refreshes the finished sources when the
+  run ends. The log carries the same numbers (D7: `run-start.images`,
+  `batch-done.done/images`).
+* **I-58 — the list order is pinned (2026-10-08, D5).** The sort decides the order
+  when it is CHOSEN, not on every landing SVG. `pinOrder(previous, sorted)`
+  (`lib/svglist.ts`) keeps the rows' current places, drops the rows that are gone
+  and appends new rows in sorted order. The pin is refreshed only on a sort change,
+  a filter change, a scan commit and a tab re-activation (I-57) — never on
+  `item-saved` or `item-failed`. The default date sort therefore still shows the
+  newest first when the user comes back or re-sorts, but a finished SVG does not
+  move the list under the cursor. The scan's own row order is unchanged: normalized
+  path (I-32).
 * `keyvault.test.ts` — the key rules on their own: a save that storage refused
   is reported `session` (and the key still loads), `save("")` is `empty` and
   erases nothing, an unreadable store answers `unreadable` — never `none` — and

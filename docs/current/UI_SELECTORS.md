@@ -407,7 +407,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
 | `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
-| `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
+| `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed) — or **"Next attempt"** in grey (class `queued`) while the source waits in a queued batch and is not running (I-53; the stored status is untouched); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the pair file's name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
@@ -415,8 +415,22 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-problem-{sourceId}` | text | the row's scan status when a file of a **listed** source needs attention: "Reference missing" / "Unreadable file" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). An unreadable file or a missing reference is a status on the row, never a removal — but a missing **AI image** means there is no row at all (I-31): that source appears in `svg-warn-excluded` instead |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
-`svg-attention-count` (rows needing attention), `svg-empty` ("No approved
+`svg-attention-count` (rows needing attention), `svg-queued-count` ("N next attempt", I-53), `svg-empty` ("No approved
 source matches these filters."), `svg-footer-summary` (`shownLabel`).
+
+Run record (I-58): `svg-run-record` wraps the batch strip and the queue, drawn
+BELOW the list (`svg-rows`) and absent when there is no run and nothing waits; the
+row's Regenerate (`svg-generate-{sourceId}`) queues at the FRONT (I-53).
+
+Run popup (I-57, `svg-run-popup`): rendered by `SvgPanel` into `document.body`, so
+it shows on every tab while the Generate SVG panel is kept mounted and hidden.
+`svg-run-popup-line` ("Generating · N done · N left · request i of n", or
+"Done · N done · N left · N failed" once the run has ended, kept until
+dismissed), `svg-run-popup-elapsed` (ticking, while running), `svg-run-popup-open`
+(switches to the Generate SVG tab), `svg-run-popup-cancel` (while running; the
+same stop-and-drop as `svg-cancel-run`), `svg-run-popup-dismiss` (after the end).
+The panel itself is `svg-panel` inside the `.svg-shell` slot: `hidden` when another
+tab is on screen, never absent.
 
 Queue (waiting batches, I-53): `svg-queue` is absent when nothing waits; otherwise
 `svg-queue-count` ("N queued — they start as soon as the run in flight ends.

@@ -26,7 +26,7 @@ export function onRunEvent(event: RunEvent, s: RunSetters): void {
     s.setProgressFn((prev) => ({
       batchId: event.batchId, index: event.index, batches: event.batches, count: event.count, cols: event.cols,
       rows: event.rows, composite: event.composite, hash: event.hash, saved: 0, failed: 0, missing: 0,
-      perRequest: event.perRequest, startedAt: event.startedAt, outcomes: prev?.outcomes ?? [],
+      perRequest: event.perRequest, startedAt: event.startedAt, outcomes: prev?.outcomes ?? [], images: event.images,
     }));
   } else if (event.kind === "batch-done") {
     s.setProgressFn((prev) => (prev

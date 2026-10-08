@@ -6,7 +6,7 @@
 import { approvedVersion, chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
-import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
+import { applySvgFilters, pinOrder, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
@@ -21,7 +21,7 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
   const versions = meta?.versions ?? [];
   const failed = versions.some((v) => v.status !== "generated");
   const row = withMeta({
-    source, meta, corrupt, running: false, status: "not-generated", error: null,
+    source, meta, corrupt, running: false, queued: false, status: "not-generated", error: null,
     newest: null, preferred: null, approved: null,
   }, meta);
   return {
@@ -103,14 +103,18 @@ function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "
   };
 }
 
-/** Filter + sort a copy of the rows; the caller's array is never reordered. */
-export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort): SvgRow[] {
+/**
+ * Filter + sort a copy of the rows, then keep the PINNED order (D5): `pinned` is
+ * the order the list was last refreshed in; an empty pin is the plain sort. The
+ * caller's array is never reordered.
+ */
+export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, pinned: readonly string[] = []): SvgRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  return sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort)
-    .flatMap((l) => {
-      const row = byId.get(l.id);
-      return row ? [row] : [];
-    });
+  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort).map((l) => l.id);
+  return pinOrder(pinned, sorted).flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
 }
 
 /** Header checkbox state for the visible rows (indeterminate = some). */

@@ -139,6 +139,10 @@ describe("runGeneration — one request per batch", () => {
     expect(summary.usage.total).toBe(600);
     expect(events.filter((e) => e.kind === "batch-start")).toHaveLength(2);
     expect(events.filter((e) => e.kind === "batch-done")).toHaveLength(2);
+    // the run's total and the running count of settled images (keep-alive D7)
+    expect(events.find((e) => e.kind === "run-start")).toMatchObject({ images: 8 });
+    expect(events.filter((e) => e.kind === "batch-start").map((e) => (e.kind === "batch-start" ? e.images : -1))).toEqual([8, 8]);
+    expect(events.filter((e) => e.kind === "batch-done").map((e) => (e.kind === "batch-done" ? [e.done, e.images] : []))).toEqual([[4, 8], [8, 8]]);
   });
 
   it("keeps the user's batch size at every reasoning level (medium and high too)", async () => {

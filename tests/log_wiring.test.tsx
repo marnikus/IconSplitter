@@ -156,7 +156,7 @@ describe("the run event sink feeds the log", () => {
   it("maps a run event to the log while still handing it to the live UI", () => {
     const seen: RunEvent[] = [];
     const sink = withRunLog((event: RunEvent) => seen.push(event));
-    const event: RunEvent = { kind: "run-start", batches: 3, perRequest: 4 };
+    const event: RunEvent = { kind: "run-start", batches: 3, perRequest: 4, images: 9 };
 
     sink(event);
 

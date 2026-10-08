@@ -8,6 +8,7 @@
 // dock painted over the rows it covered and swallowed their clicks, checkboxes
 // included (design 2026-10-05-global-log §1/§2, invariant I-27).
 
+import { useState } from "react";
 import App from "../App";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
@@ -59,16 +60,40 @@ function Shell() {
         </div>
       </nav>
       <main className="app-main" data-testid="app-main">
-        {tab === "sheets" && <App />}
-        {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
-        {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
-        {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
-        {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
-        {tab === "upload" && <div className="up-shell px-4 py-3"><UploadPanel /></div>}
+        <TabPanels tab={tab} />
       </main>
       <LogDock />
     </div>
   );
+}
+
+/** One panel per tab. Only the Generate SVG panel is kept mounted once visited (D1). */
+function TabPanels({ tab }: { tab: AppState["tab"] }) {
+  const svgOpened = useOnceOpened(tab === "generateSvg");
+  return (
+    <>
+      {tab === "sheets" && <App />}
+      {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
+      {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
+      {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
+      {svgOpened && (
+        <div className="svg-shell px-4 py-3" hidden={tab !== "generateSvg"}>
+          <SvgPanel active={tab === "generateSvg"} />
+        </div>
+      )}
+      {tab === "upload" && <div className="up-shell px-4 py-3"><UploadPanel /></div>}
+    </>
+  );
+}
+
+/**
+ * True once `open` has been true. The Generate SVG tab stays mounted after its
+ * first visit and is only hidden, so a run and its queue survive a tab switch (D1).
+ */
+function useOnceOpened(open: boolean): boolean {
+  const [opened, setOpened] = useState(open);
+  if (open && !opened) setOpened(true);
+  return opened || open;
 }
 
 /** Switching tabs is navigation, not an edit — it is restored, but not undoable. */

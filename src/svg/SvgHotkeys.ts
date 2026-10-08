@@ -9,7 +9,9 @@ import type { ReviewStatus } from "../lib/svgfile";
 import { shownVersion } from "./rowmodel";
 import type { SvgRow } from "./types";
 
+/** `active`: a hidden panel (another tab is on screen) never answers keys (D1). */
 export interface SvgHotActions {
+  active: boolean;
   visible: SvgRow[];
   activeId: string | null;
   dialogOpen: boolean;
@@ -23,6 +25,7 @@ export interface SvgHotActions {
 
 export function useSvgHotkeys(a: SvgHotActions): void {
   useEffect(() => {
+    if (!a.active) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && a.dialogOpen) return a.dismissDialog();
       // A dialog is modal: Escape closes it and nothing else reaches the list

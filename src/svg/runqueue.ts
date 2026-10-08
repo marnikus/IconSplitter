@@ -59,3 +59,53 @@ export function nextRun(queue: readonly QueueItem[], running: boolean): QueueIte
 export function queuedCount(queue: readonly QueueItem[]): number {
   return queue.length;
 }
+
+/** Where a confirmed batch goes: behind the queue, or first (a Regenerate). */
+export type Placement = "front" | "back";
+
+/** A batch that goes FIRST: it starts the moment the run in flight ends. */
+export function enqueueFront(queue: readonly QueueItem[], item: QueueItem): QueueItem[] {
+  return [item, ...queue];
+}
+
+/** One confirmed batch, placed where its placement says. */
+export function placeItem(queue: readonly QueueItem[], item: QueueItem, placement: Placement): QueueItem[] {
+  return placement === "front" ? enqueueFront(queue, item) : enqueue(queue, item);
+}
+
+/** How a waiting batch is described again once a source has left it. */
+export interface Resize {
+  requests: number;
+  label: string;
+}
+
+/**
+ * Takes one source out of EVERY waiting batch that carries it (D4, Q2): an image
+ * is never generated twice by one queue. A batch the removal empties is dropped;
+ * a batch that keeps others keeps its id and position and is described again.
+ */
+export function dropIdFrom(
+  queue: readonly QueueItem[], sourceId: string, resize: (ids: string[]) => Resize,
+): { queue: QueueItem[]; touched: number } {
+  let touched = 0;
+  const next: QueueItem[] = [];
+  for (const item of queue) {
+    if (!item.ids.includes(sourceId)) {
+      next.push(item);
+      continue;
+    }
+    touched += 1;
+    const ids = item.ids.filter((id) => id !== sourceId);
+    if (ids.length > 0) next.push(withIds(item, ids, resize(ids)));
+  }
+  return { queue: next, touched };
+}
+
+function withIds(item: QueueItem, ids: string[], size: Resize): QueueItem {
+  return { ...item, ids, count: ids.length, requests: Math.max(1, size.requests), label: size.label };
+}
+
+/** Every source a waiting batch carries: what the list shows as "Next attempt". */
+export function queuedIds(queue: readonly QueueItem[]): Set<string> {
+  return new Set(queue.flatMap((item) => item.ids));
+}
