@@ -29,7 +29,7 @@ const TAGS = ["icon", "pictogram", "vector", "stroke", "line", "editable", "web"
   "yen", "currency", "cash", "payment", "wallet", "bank", "investment", "profit", "success",
   "target", "goal", "idea", "creative", "design"];
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and rising momentum",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };

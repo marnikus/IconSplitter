@@ -52,10 +52,10 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
   return (
     <>
       <Field id={id} label="Title" testid="title" value={m.title} count={countWords(m.title)}
-        hint="two sentences: 5–7 words, then 3–5 words naming two of the tags"
+        hint="ONE phrase of at least 5 words, sentence case, no period — a second sentence is cut at Accept"
         onEdit={(v) => onEdit({ title: v })} onCopy={() => onCopy("title")} />
       <Field id={id} label="Description" testid="description" value={m.description} count={countWords(m.description)}
-        hint="7–15 words" multiline
+        hint="ONE phrase of at least 7 words, sentence case, no period" multiline
         onEdit={(v) => onEdit({ description: v })} onCopy={() => onCopy("description")} />
       <Field id={id} label="Tags" testid="tags" value={m.tags.join(", ")} count={m.tags.length}
         hint="at least 10 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"

@@ -10,7 +10,7 @@
 import { useCallback, useRef } from "react";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
-import { cleanTitle, validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { cleanMetadata, validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { previewFor, type SentPreview } from "../lib/upload/sentpreview";
 import { readSvgText } from "../svg/svgfiles";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
@@ -70,13 +70,13 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
   return { acceptMetadata, editMetadata };
 }
 
-/** The accept gate: the title loses its trailing period (stock review item 5), then validate, remember, re-embed. */
+/** The accept gate: title and description become ONE clean phrase each (stock review, 2026-10-08), then validate, remember, re-embed. */
 // ideal-size: 22 lines reason=one gate in its documented order (clean → validate → dispatch → remember → re-export); splitting would hide the order
 function acceptOne(latest: Latest, id: string): void {
   const c = latest.current;
   const row = rowOf(c, id);
   if (row === null || row.meta.metadata === null) return c.say("Nothing to accept — generate metadata first", true);
-  const metadata = { ...row.meta.metadata, title: cleanTitle(row.meta.metadata.title) };
+  const metadata = cleanMetadata(row.meta.metadata);
   const validation = validateMetadata(metadata);
   if (!validation.ok) {
     c.dispatch({ type: "meta", id, meta: { ...row.meta, validation } });

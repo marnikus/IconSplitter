@@ -28,13 +28,13 @@ export const DEFAULT_METADATA_PROMPT = `You write search metadata for a minimali
 
 Answer with EXACTLY three lines and nothing else:
 
-Title: <a descriptive phrase of at least 5 words naming the abstract idea, no trailing period>
-Description: <a sentence of at least 7 words>
+Title: <ONE phrase of at least 5 words naming the abstract idea, sentence case, no period>
+Description: <ONE phrase of at least 7 words, sentence case, no period>
 Tags: <at least 10 unique keywords, comma-separated, all lowercase>
 
 Hard rules:
-- Title: at least 5 words — a full descriptive phrase, with no trailing period or other end punctuation. Longer is fine.
-- Description: at least 7 words — more is welcome; one or two sentences.
+- Title: ONE phrase of at least 5 words — never a second sentence. Sentence case (capitalise only the first word), with no trailing period or other end punctuation. Longer is fine.
+- Description: ONE phrase of at least 7 words — never a second sentence. Sentence case, no period or other end punctuation. More words are welcome.
 - Tags: at least 10 unique lowercase keywords, no duplicates, and the list MUST include these seven: icon, pictogram, vector, stroke, line, editable, web. More tags are welcome.
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
 - One line per field, no numbering, no extra commentary, no markdown.`;
@@ -63,20 +63,37 @@ export function parseMetadata(text: string): IconMetadata | null {
   const tagsRaw = labeled(text, "tags");
   if (title === null || description === null || tagsRaw === null) return null;
   const tags = dedupeTags(tagsRaw.split(",").map((t) => t.trim()).filter((t) => t !== ""));
-  return { title: cleanTitle(title), description: description.trim(), tags };
+  return cleanMetadata({ title, description, tags });
 }
 
+/** The whitespace of the first sentence break: a word of 2+ letters, end punctuation, space, more text (`2.5`, `e.g.` are not breaks). */
+const SENTENCE_BREAK = /(?<=\p{L}{2}[.!?;…]+)\s+(?=\S)/u;
 /** Trailing sentence punctuation stock sites flag (`.`, `!`, `,`, `;`, `:`, `…`) and whitespace, gone; a `?` stays. */
-const TITLE_TAIL = /[\s.!,;:…]+$/u;
+const PHRASE_TAIL = /[\s.!,;:…]+$/u;
+/** A Title Case word: one capital, then lowercase letters only (`SEO`, `iOS`, `3D` and a lone `A` are not). */
+const CAPITALISED = /^\p{Lu}\p{Ll}+$/u;
 
 /**
- * The title as it is stored, shown and embedded (stock review item 5,
- * 2026-10-08): no trailing period. Applied wherever a title enters — the
- * model's answer, the user's edit at Accept, and a cache entry written before
- * this rule — so the file, the XMP, export.json and the field always agree.
+ * A title or description as it is stored, shown and embedded (stock review,
+ * 2026-10-08): ONE clean phrase — the text up to the first sentence break,
+ * with no trailing period or other end punctuation (a `?` stays: a question is
+ * a phrase), in sentence case (the first letter up, every later Capitalised
+ * word down; acronyms and mixed case untouched). The reviewer's
+ * "Collaborative Unity Promoting Collective Social Empathy. Icon of charity
+ * and community." is "Collaborative unity promoting collective social
+ * empathy". Applied wherever the text enters — the model's answer, the user's
+ * edit at Accept, and a remembered answer on read — so the file, the XMP,
+ * export.json and the field always agree.
  */
-export function cleanTitle(title: string): string {
-  return title.trim().replace(TITLE_TAIL, "");
+export function cleanPhrase(text: string): string {
+  const one = text.trim().replace(/\s+/gu, " ").split(SENTENCE_BREAK, 1)[0].replace(PHRASE_TAIL, "");
+  const words = one.split(" ").map((w, i) => (i > 0 && CAPITALISED.test(w) ? w.toLowerCase() : w));
+  return words.join(" ").replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+}
+
+/** `cleanPhrase` over the title and the description; the tags are never touched. */
+export function cleanMetadata(meta: IconMetadata): IconMetadata {
+  return { ...meta, title: cleanPhrase(meta.title), description: cleanPhrase(meta.description) };
 }
 
 function labeled(text: string, label: string): string | null {

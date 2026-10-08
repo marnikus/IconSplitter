@@ -492,11 +492,23 @@ opt-in class as Generate SVG → Requesty; design
   the embed step's output (RDF/DC vocabulary by design), verified by its own
   readback, and the namespace rule still covers it (a declaration inside it is
   a violation, hoisted to the root).
-* Metadata titles (2026-10-08, stock review): a title never ends in sentence
-  punctuation — `cleanTitle` strips a trailing `.`, `!`, `;`, `:`, `,`, `…` (a
-  `?` stays: a question is a title) at every gate the text passes: the model's
-  answer (`parseMetadata`), the accepted-metadata cache on read, and the
-  Accept button (an edited title); the prompt's Title line asks for it too.
+* Metadata title AND description (2026-10-08, stock review): each is ONE
+  clean phrase — `cleanPhrase` keeps the text up to the first sentence break
+  (end punctuation after a word of 2+ letters, then a space, then more text —
+  `2.5` and `e.g.` are not breaks), strips a trailing `.`, `!`, `;`, `:`,
+  `,`, `…` (a `?` stays: a question is a phrase) and writes sentence case
+  (first letter up, every later Capitalised word down; `SEO`, `iOS` and a
+  lone `A` untouched). The reviewer's "Collaborative Unity Promoting
+  Collective Social Empathy. Icon of charity and community." ships as
+  `<title>Collaborative unity promoting collective social empathy</title>`
+  (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
+  fields at every gate the text passes: the model's answer
+  (`parseMetadata`), the accepted-metadata cache on read, and the Accept
+  button (an edit); the fingerprint is over the cleaned text, so a remembered
+  answer the rule changes shows stale and the next export re-embeds. A phrase
+  cut below the minimum fails validation like any short answer (nothing is
+  padded). The prompt asks for exactly this ("ONE phrase … sentence case, no
+  period") for both lines; the field hints say the same.
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
   — no AI, no render; a missing output rebuilds just that output; nothing
   changed → no work). Every output validates before it commits (SVG parses +

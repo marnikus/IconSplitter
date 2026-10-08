@@ -18,7 +18,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and rising momentum",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -95,9 +95,10 @@ describe("what the row opens with", () => {
     expect(validateMetadata(restored.metadata as IconMetadata).ok).toBe(false);
   });
 
-  it("an entry remembered with a trailing period comes back without it (stock review item 5)", () => {
-    const restored = restoredMeta({ state: "accepted", meta: { ...META, title: `${META.title}.` } });
+  it("an entry remembered as two sentences comes back as ONE clean phrase in both fields (stock review 2026-10-08)", () => {
+    const restored = restoredMeta({ state: "accepted", meta: { ...META, title: `${META.title}. Icon of charity and community.`, description: `${META.description}. Second sentence.` } });
     expect(restored.metadata?.title).toBe(META.title);
+    expect(restored.metadata?.description).toBe(META.description);
     expect(restored.state).toBe("accepted");
   });
 

@@ -40,7 +40,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and rising momentum",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -328,6 +328,10 @@ describe("runExport — the full package commits per icon", () => {
     expect(result.stages).toContain("embed");
     const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(readEmbeddedMetadata(svgText)).toEqual(META);
+    // the SHIPPED text: <title> and <dc:title> are ONE phrase, no period (stock review 2026-10-08)
+    expect(svgText).toContain("<title>Minimal line icon of growth and rising momentum</title>");
+    expect(svgText).toContain("<dc:title>Minimal line icon of growth and rising momentum</dc:title>");
+    expect(svgText).toContain("<desc>Clean line icon showing growth and rising business trends</desc>");
     const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile);
     expect(verifyJpeg(jpegBytes, { width: 3886, height: 3886, metadata: META }).ok).toBe(true);
     const record = readRecord(root);

@@ -16,7 +16,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 
-const ANSWER = `Title: Minimal line icon of growth. Speed and growth pictogram
+const ANSWER = `Title: Minimal line icon of growth and rising momentum
 Description: Clean line icon showing growth and rising business trends
 Tags: ${TAGS.join(", ")}`;
 

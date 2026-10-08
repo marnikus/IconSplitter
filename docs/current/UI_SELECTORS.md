@@ -560,7 +560,9 @@ Row (`upload-row-{id}`):
 
 Metadata fields (`upload-detail-{id}`, empty until generated):
 `upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
-`upload-meta-title-{id}` / `upload-meta-description-{id}` /
+`upload-meta-title-{id}` / `upload-meta-description-{id}` (2026-10-08: both
+hints read "ONE phrase … sentence case, no period"; Accept rewrites the
+field to that phrase at once) /
 `upload-meta-tags-{id}` (each with its live count), the per-field copy buttons
 `upload-copy-{title,description,tags}-{id}`, the validation line
 `upload-meta-validation-{id}`, and the actions row `upload-meta-state-{id}`

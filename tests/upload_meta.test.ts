@@ -6,7 +6,8 @@
 // always accepted, and nothing is refused for being too wordy.
 import { describe, expect, it } from "vitest";
 import {
-  cleanTitle,
+  cleanMetadata,
+  cleanPhrase,
   DEFAULT_METADATA_PROMPT,
   MANDATORY_TAGS,
   TAGS_MIN,
@@ -28,7 +29,7 @@ const TAGS: string[] = [
 ];
 
 const VALID: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and rising momentum",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -56,24 +57,45 @@ describe("the default prompt states every enforced constraint", () => {
   });
 });
 
-describe("cleanTitle — no trailing sentence punctuation (stock review item 5)", () => {
+describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (stock review 2026-10-08)", () => {
   it.each([
-    ["Unity and Compassionate Human Connection.", "Unity and Compassionate Human Connection"],
-    ["A B C D E!", "A B C D E"],
-    ["x.. ", "x"],
+    // the reviewer's title and description, verbatim → the reviewer's phrase
+    ["Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.", "Collaborative unity promoting collective social empathy"],
+    ["Icon of charity and community. A symbol of giving.", "Icon of charity and community"],
+    // the earlier rule (item 5) still holds: trailing sentence punctuation gone, a question stays
+    ["Unity and Compassionate Human Connection.", "Unity and compassionate human connection"],
+    ["A B C D E!", "A B C D E"], // single capitals are not Title Case words
+    ["x.. ", "X"],
     ["Trailing comma, ", "Trailing comma"],
     ["Ellipsis…", "Ellipsis"],
     ["Is this a question?", "Is this a question?"],
+    ["Is this a question? Yes it is.", "Is this a question?"],
+    ["Growth; and more", "Growth"],
+    // sentence case keeps acronyms and mixed case, lowers only Capitalised words
+    ["Modern SEO Growth Chart For iOS Apps", "Modern SEO growth chart for iOS apps"],
+    ["lowercase start stays otherwise", "Lowercase start stays otherwise"],
+    // a period that is not a sentence break
+    ["Growth of 2.5 percent per year", "Growth of 2.5 percent per year"],
+    ["Terms e.g. unity and empathy", "Terms e.g. unity and empathy"],
+    ["  spaced   out   words ", "Spaced out words"],
     ["Clean already", "Clean already"],
     ["", ""],
   ])("%j → %j", (raw, clean) => {
-    expect(cleanTitle(raw)).toBe(clean);
+    expect(cleanPhrase(raw)).toBe(clean);
   });
 
-  it("parseMetadata applies it, and the default prompt asks for it", () => {
-    const parsed = parseMetadata(`Title: ${VALID.title}.\nDescription: ${VALID.description}\nTags: ${VALID.tags.join(", ")}`);
+  it("cleanMetadata cleans the title AND the description, never the tags", () => {
+    const dirty = meta({ title: "Two Sentence Title Here. Second one.", description: "First sentence of seven words here. Second.", tags: ["Icon", "web"] });
+    expect(cleanMetadata(dirty)).toEqual({ title: "Two sentence title here", description: "First sentence of seven words here", tags: ["Icon", "web"] });
+  });
+
+  it("parseMetadata applies it to both fields, and the default prompt asks for ONE phrase in sentence case", () => {
+    const parsed = parseMetadata(`Title: ${VALID.title}. Second Sentence Here.\nDescription: ${VALID.description}. And another one.\nTags: ${VALID.tags.join(", ")}`);
     expect(parsed?.title).toBe(VALID.title);
-    expect(DEFAULT_METADATA_PROMPT).toContain("no trailing period");
+    expect(parsed?.description).toBe(VALID.description);
+    expect(DEFAULT_METADATA_PROMPT).toContain("ONE phrase");
+    expect(DEFAULT_METADATA_PROMPT).toContain("sentence case");
+    expect(DEFAULT_METADATA_PROMPT).not.toContain("one or two sentences");
   });
 });
 
@@ -99,7 +121,7 @@ describe("parseMetadata — deterministic labeled-text parsing", () => {
   });
 
   it("parses the three labeled lines", () => {
-    const text = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
+    const text = `Title: Minimal line icon of growth and rising momentum\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
     const parsed = parseMetadata(text);
     expect(parsed).not.toBeNull();
     expect(parsed?.title).toBe(VALID.title);

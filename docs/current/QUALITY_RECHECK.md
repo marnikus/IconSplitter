@@ -2435,3 +2435,40 @@ file grew past its band.
 * `artwork` colour over a mixed-paint source cannot ship one global colour
   by definition — it ships one per stroked shape; the stock rule is met by
   the default, not by that mode.
+
+## 2026-10-08 — one clean phrase: metadata title and description (`fix(upload)`)
+
+The stock reviewer's file still read `<title>Collaborative Unity Promoting
+Collective Social Empathy. Icon of charity and community.</title>`. The item-5
+rule (`cleanTitle`) only stripped a TRAILING period; the model's second
+sentence, its Title Case and — in a file exported before that rule — the
+period itself all survived. The field hint even asked for "two sentences".
+Now `cleanPhrase` (`lib/upload/meta.ts`, 175 lines, 100 % covered) makes
+the title and the description ONE phrase each: cut at the first sentence
+break, end punctuation gone, sentence case; `cleanMetadata` applies it to
+both fields at the three gates (parse, cache read, Accept), the prompt and
+the hints ask for it, and the shipped `<title>`/`<dc:title>`/`<desc>` are
+pinned in `upload_runexport`. Lesson: **a rule about the shape of a text
+must describe the whole shape** — "no trailing period" said nothing about
+the sentence in front of it.
+
+### Structure work (RULE 3/18/19)
+
+* `cleanTitle` deleted — one name, one rule, both fields; the test fixture
+  title that was itself two sentences ("… of growth. Speed and growth
+  pictogram") became one phrase in every upload test.
+* Field hints no longer state a policy the validator never had
+  ("two sentences: 5–7 words, then 3–5 words", "7–15 words").
+
+### Gates (full run)
+
+`npm run verify`: types, lint, quality (changed) GATE PASSED, 132 files /
+1475 tests, coverage, build — ALL LANES PASSED. RULE 16: `cleanPhrase` 5
+lines, 1 param; RULE 18: `meta.ts` 175 lines.
+
+### Known debt carried
+
+* Unchanged from the previous entry.
+* The sentence-break heuristic needs a word of 2+ letters before the
+  punctuation, so "plan B. Next" would not be cut — the prompt forbids a
+  second sentence anyway; revisit only if the field shows it.
