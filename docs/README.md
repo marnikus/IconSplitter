@@ -43,6 +43,8 @@ doc itself, never in this map.
 | `archive/2026-10-06-location-folder-of-file/design.md` | "Location" names the folder of the FILE (I-56); `targetPathOf(row)` as the single-file rule |
 | `archive/2026-10-06-svg-to-upload/design.md` | SVG to upload: the phase-0 research record — reuse map over `src/svg/*`, the package contract, what was built new |
 | `archive/2026-10-07-svg-to-upload/design.md` | SVG to upload (design of record): discovery through the pair sidecars, settings, the Gemini metadata prompt, SVG/JPEG/EPS pipelines, per-icon `export.json`, job model, no automatic uploading |
+| `archive/2026-10-08-stock-svg-cleanup-stroke-color/design.md` | Proposal: stock-ready SVG metadata namespaces, scalable dimensions, stroke-width normalization, title punctuation and configurable stroke color; no code implemented yet |
+| `archive/2026-10-08-stock-svg-cleanup-stroke-color/decision.md` | User decision: opt-in transparent SVG background (default off); JPEG/EPS keep the configured background; adds TDD coverage for the setting |
 | `archive/2026-10-07-svg-to-upload-merge/ADR.md` | The three-branch "SVG to upload" merge: P0 adjudications before any donor file moved, the phase plan and its exit gates |
 | `archive/2026-10-07-env-setup-performance/design.md` | Environment-setup performance: re-verified findings, the O1–O11 decisions (O4 deferred), TDD plan for `tools/verify.mjs` + shallow-safe `quality.mjs` |
 
