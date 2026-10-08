@@ -1597,6 +1597,10 @@
 .up-meta-field textarea.svg-input { min-height: 44px; resize: vertical; }
 
 .up-hint { color: var(--v2-muted-2); font-size: 8px; line-height: 1.4; }
+.up-helper { display: grid; gap: 4px; margin-top: 4px; }
+.up-helper-state { font-size: 8px; line-height: 1.4; color: var(--v2-muted-2); }
+.up-helper-state.ok { color: var(--v2-green); }
+.up-helper-state.warn { color: var(--v2-yellow); } /* a helper that is down or an Inkscape not installed: a state, not an error */
 
 .up-meta-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .up-meta-state { color: var(--v2-text); font-size: 10px; font-weight: 650; }

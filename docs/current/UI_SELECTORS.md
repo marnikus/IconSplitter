@@ -608,6 +608,20 @@ every swatch carrying `aria-pressed`, the per-field marker
 `upload-set-close`. The row's settings cell `upload-settings-{id}` names the
 background (`transparent` or the hex) and appends `· stroke #hex` when a
 stroke colour is pinned.
+The EPS converter row (2026-10-09) is `upload-set-eps-converter` (`<select>`
+whose options ARE the registry: `builtin` "Built-in (PostScript subset)",
+`inkscape` "Inkscape CLI (local helper)"; marker
+`upload-set-marker-eps-converter`; choosing one never toggles
+`upload-set-eps`). Only for `inkscape` the helper row `upload-eps-helper`
+renders: `upload-eps-helper-url` (the helper URL, saved as typed when valid),
+`upload-eps-helper-check` (re-probes) and the state line
+`upload-eps-helper-state` — `helper running · Inkscape 1.3.2` (class `ok`),
+or the reason + fix (class `warn`): `… not reachable — … run_inkscape_bridge.bat`
+/ `the Inkscape helper is running but Inkscape was not found — install
+Inkscape 1.x (inkscape.org) or set INKSCAPE_PATH`. The probe runs when the
+row appears and on Check. `upload-set-expand` (checkbox) is "Expand strokes
+to fills". The row's settings cell reads `eps off · builtin` /
+`eps on · inkscape` and appends `· strokes → fills` when expansion is on.
 The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,

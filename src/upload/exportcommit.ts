@@ -6,7 +6,7 @@
 
 import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
-import { verifyEps } from "../lib/upload/eps";
+import { verifyEpsDocument } from "../lib/upload/eps";
 import { sha256Hex } from "../lib/upload/hash";
 import { parseExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -63,7 +63,7 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
     outputs.jpg = `${input.stem}.jpg`;
   }
   if (input.epsText !== null) {
-    await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => verifyEps(decode(back)).ok);
+    await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => verifyEpsDocument(decode(back)).ok);
     outputs.eps = `${input.stem}.eps`;
   }
   const named = previousNames(input);

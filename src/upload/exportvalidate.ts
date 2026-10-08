@@ -8,7 +8,7 @@
 import { readEmbeddedMetadata } from "../lib/upload/embed";
 import { verifyExportSvg } from "../lib/upload/clean";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
-import { verifyEps } from "../lib/upload/eps";
+import { verifyEpsDocument } from "../lib/upload/eps";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { CommitValidation } from "./exportcommit";
 import type { Artifacts } from "./exportstages";
@@ -62,7 +62,7 @@ function jpegCheck(art: Artifacts, metadata: IconMetadata | null, errors: string
 
 function epsCheck(epsText: string | null, errors: string[]): boolean {
   if (epsText === null) return true;
-  const ok = verifyEps(epsText).ok;
+  const ok = verifyEpsDocument(epsText).ok; // converter-neutral (2026-10-09): Inkscape's EPS passes too
   if (!ok) errors.push("the EPS does not verify");
   return ok;
 }

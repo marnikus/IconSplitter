@@ -43,6 +43,8 @@ export interface PreparedSvg {
   strokesNormalized: number;
   /** Elements whose stroke paint was set (0 when strokeColor = artwork). */
   strokesRecolored: number;
+  /** Visible strokes turned into filled shapes (2026-10-09; 0 unless `expandStrokes` is on). */
+  strokesExpanded: number;
   /** The background the export paints: `transparent` or the normalized hex. */
   background: string;
   /** What the root defines once (`stroke`, `stroke-width`); null = per shape, or nothing strokes. */
@@ -86,6 +88,7 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
     svg: new XMLSerializer().serializeToString(doc),
     fit, bounds: vb.bounds, background, globalStroke,
     shapesBaked: baked.baked, strokesNormalized: touched.widths, strokesRecolored: touched.colors,
+    strokesExpanded: 0,
   };
 }
 

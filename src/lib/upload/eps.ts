@@ -26,7 +26,7 @@ import { rectRadii } from "./geom/shapes";
 import { fmt } from "./geom";
 import { assemble, PX_TO_PT, type EpsBoundingBox, type EpsOptions } from "./epsdoc";
 
-export { EPS10_MARKERS, verifyEps } from "./epsdoc";
+export { EPS10_MARKERS, verifyEps, verifyEpsDocument } from "./epsdoc";
 export type { EpsBoundingBox, EpsOptions, EpsVerification } from "./epsdoc";
 
 const SHAPES = ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"];

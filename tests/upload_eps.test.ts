@@ -3,7 +3,7 @@
 // and anything outside the subset fails honestly (design §2.5) — never a
 // renamed PS/PDF, never a guessed rendering.
 import { describe, expect, it } from "vitest";
-import { verifyEps, writeEps } from "../src/lib/upload/eps";
+import { verifyEps, verifyEpsDocument, writeEps } from "../src/lib/upload/eps";
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
 const PREPARED = `<svg ${NS} viewBox="0 0 92.8 92.8" width="92.8" height="92.8">`
@@ -53,6 +53,16 @@ describe("writeEps — a genuine EPS document", () => {
       .toContain("missing %%LanguageLevel: 3");
     const full = doc("%%BoundingBox: 0 0 1 1\n%%HiResBoundingBox: 0 0 1 1\n%%DocumentData: Clean7Bit\n%%LanguageLevel: 3");
     expect(verifyEps(full).ok).toBe(true);
+  });
+
+  it("verifyEpsDocument — the converter-neutral gate (2026-10-09): header, a LanguageLevel, a bounding box, %%EOF — no EPS 10 markers", () => {
+    const cairo = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: cairo 1.18.0\n%%LanguageLevel: 2\n%%BoundingBox: 0 0 70 70\n%%EndComments\n0 0 moveto fill\n%%EOF\n";
+    expect(verifyEpsDocument(cairo)).toEqual({ ok: true, errors: [], boundingBox: { llx: 0, lly: 0, urx: 70, ury: 70 } });
+    expect(verifyEps(cairo).ok).toBe(false); // the strict EPS 10 check is the built-in writer's own contract
+    expect(verifyEpsDocument("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 1 1\n%%EOF\n").errors).toEqual(["missing %%LanguageLevel"]);
+    expect(verifyEpsDocument("<html>").ok).toBe(false);
+    const own = writeEps(PREPARED, "#ffffff");
+    expect(own.ok && verifyEpsDocument(own.eps).ok).toBe(true); // the built-in passes both
   });
 
   it("emits the EPS header, an integer bounding box and %%EOF", () => {

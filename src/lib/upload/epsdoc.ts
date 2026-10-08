@@ -81,13 +81,23 @@ function dscString(value: string): string {
   return value.replace(/[\\()]/g, (ch) => `\\${ch}`).replace(/\s+/g, " ");
 }
 
-/** Verifies an EPS 10 document: header, the DSC markers, bounding box, %%EOF. */
+/** Verifies an EPS 10 document — the built-in writer's own contract: header, the DSC markers, bounding box, %%EOF. */
 export function verifyEps(eps: string): EpsVerification {
-  const errors: string[] = [];
-  if (!eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")) errors.push("missing %!PS-Adobe-3.0 EPSF-3.0 header");
-  for (const marker of EPS10_MARKERS) {
-    if (!eps.includes(marker)) errors.push(`missing ${marker.replace(/:$/, "")}`);
-  }
+  const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker)).map((marker) => `missing ${marker.replace(/:$/, "")}`);
+  return verifyDsc(eps, errors);
+}
+
+/**
+ * The converter-neutral gate every EPS passes before commit (2026-10-09):
+ * the EPSF-3.0 header, a declared LanguageLevel (any), a bounding box, %%EOF.
+ * Inkscape's cairo output has these and NOT the EPS 10 markers above.
+ */
+export function verifyEpsDocument(eps: string): EpsVerification {
+  return verifyDsc(eps, /^%%LanguageLevel:\s*\d/m.test(eps) ? [] : ["missing %%LanguageLevel"]);
+}
+
+function verifyDsc(eps: string, errors: string[]): EpsVerification {
+  if (!eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")) errors.unshift("missing %!PS-Adobe-3.0 EPSF-3.0 header");
   const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
   if (m === null) errors.push("missing or malformed %%BoundingBox");
   if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");

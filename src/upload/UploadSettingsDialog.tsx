@@ -4,7 +4,8 @@
 // scope. Every change is live (RULE 24): the global scope edits the defaults,
 // the icon scope pins the field into that icon's override — both validated by
 // lib/upload/settings. The shared row plumbing lives in settingsfield.tsx, the
-// two paint rows (background, stroke colour) in UploadPaintSettings.tsx.
+// two paint rows (background, stroke colour) in UploadPaintSettings.tsx, the
+// EPS converter list + Inkscape helper row in UploadEpsSettings.tsx.
 
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
@@ -14,6 +15,7 @@ import {
 } from "../lib/upload/settings";
 import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
+import { ConverterSetting } from "./UploadEpsSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -72,7 +74,10 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ToggleSetting p={p} effective={effective} field="optimizeSvg" label="Optimize SVG (SVGO)" testid="optimize"
         hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
-        hint="a genuine EPS for the documented subset; anything else fails that stage honestly" />
+        hint="a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly" />
+      <ConverterSetting p={p} effective={effective} />
+      <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
+        hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );

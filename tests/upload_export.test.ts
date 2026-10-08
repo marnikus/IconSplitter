@@ -58,6 +58,7 @@ function input(over: Partial<PlanInput> = {}): PlanInput {
     hasMetadata: false,
     optimize: false,
     includeEps: false,
+    epsConverter: "builtin",
     outputs: { svg: true, jpg: true, eps: true },
     ...over,
   };
@@ -95,6 +96,19 @@ describe("the export record — schema v1 round-trip", () => {
   it("serializes and parses back to an equal record", () => {
     const r = record();
     expect(parseExportRecord(JSON.parse(serializeExportRecord(r)))).toEqual(r);
+  });
+
+  it("a fresh record names its EPS converter and an expand block; a record from before the fields parses (2026-10-09)", () => {
+    const r = record();
+    expect(r.tools.eps).toEqual({ enabled: false, converter: "builtin", writer: "builtin-subset-1", fixes: [] });
+    expect(r.tools.expand).toEqual({ enabled: false, shapes: 0 });
+    const legacy = JSON.parse(serializeExportRecord(r)) as Record<string, unknown>;
+    const tools = legacy.tools as Record<string, unknown>;
+    tools.eps = { enabled: true, writer: "builtin-subset-1" };
+    delete tools.expand;
+    const parsed = parseExportRecord(legacy);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.tools.eps.converter).toBeUndefined(); // tolerant: readers default it (planStages, the row line)
   });
 
   it("a fresh record is discovered with nothing rendered or committed", () => {
@@ -199,6 +213,18 @@ describe("planStages — selective re-export (design §4.4)", () => {
       .toEqual({ svg: false, jpg: true, eps: false });
     expect(planStages(record(), input({ outputs: { svg: true, jpg: true, eps: false }, includeEps: true })).stages)
       .toEqual(["eps", "validate", "commit"]);
+  });
+
+  it("a converter change is EPS-only (2026-10-09): the geometry and the JPEG stay", () => {
+    const withEps = record({ tools: { svgo: SVGO_OFF, eps: { enabled: true, converter: "builtin", writer: "builtin-subset-1", fixes: [] } } });
+    const plan = planStages(withEps, input({ includeEps: true, epsConverter: "inkscape", outputs: { svg: true, jpg: true, eps: true } }));
+    expect(plan.stages).toEqual(["eps", "validate", "commit"]);
+    expect(plan.rebuild).toEqual({ svg: false, jpg: false, eps: true });
+    // the same converter → nothing; a record from before the field (no `converter`) counts as builtin
+    expect(planStages(withEps, input({ includeEps: true, epsConverter: "builtin", outputs: { svg: true, jpg: true, eps: true } })).stages).toEqual([]);
+    const legacy = record({ tools: { svgo: SVGO_OFF, eps: { enabled: true, writer: "builtin-subset-1" } as ExportRecord["tools"]["eps"] } });
+    expect(planStages(legacy, input({ includeEps: true, epsConverter: "builtin", outputs: { svg: true, jpg: true, eps: true } })).stages).toEqual([]);
+    expect(planStages(legacy, input({ includeEps: true, epsConverter: "inkscape", outputs: { svg: true, jpg: true, eps: true } })).rebuild.eps).toBe(true);
   });
 
   it("nothing changed → no work at all", () => {

@@ -15,6 +15,8 @@ import { normalizeHex } from "../svgbackground";
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
+import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
+import type { EpsConverterId } from "./epsconv/types";
 
 export {
   ARTBOARD_MAX, ARTBOARD_MAX_PIXELS, ARTBOARD_MIN, ARTBOARD_PRESETS, CONTENT_ARTBOARD,
@@ -42,6 +44,14 @@ export interface UploadSettings {
   optimizeSvg: boolean;
   /** Also write a genuine EPS (default off). */
   includeEps: boolean;
+  /** Which converter writes that EPS (2026-10-09): the built-in subset writer, or Inkscape through the local helper. */
+  epsConverter: EpsConverterId;
+  /**
+   * Expand every visible stroke into a filled shape (2026-10-09, what some
+   * stocks require): the SVG, JPEG and EPS all ship without strokes. Off = the
+   * strokes stay strokes.
+   */
+  expandStrokes: boolean;
   /** The artboard the export is built at: content-hugging, or an exact px size. */
   artboard: Artboard;
   /**
@@ -85,6 +95,8 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
   includeEps: false,
+  epsConverter: DEFAULT_CONVERTER,
+  expandStrokes: false,
   artboard: { ...CONTENT_ARTBOARD },
   jpegMatchArtboard: true,
 };
@@ -138,6 +150,8 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
     includeEps: raw.includeEps === true,
+    epsConverter: parseConverterId(raw.epsConverter),
+    expandStrokes: raw.expandStrokes === true,
     artboard: clampArtboard(raw.artboard),
     jpegMatchArtboard: raw.jpegMatchArtboard !== false,
   };
@@ -151,6 +165,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   readFlags(raw, out);
   readPaints(raw, out);
   readArtboard(raw, out);
+  if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
   return out;
 }
 
@@ -176,7 +191,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -213,7 +228,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
  */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
-  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
+  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
@@ -238,6 +253,10 @@ export function settingsFingerprint(s: UploadSettings): string {
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
+    // appended ONLY when set (2026-10-09), so every package exported before the
+    // field existed keeps its fingerprint; the converter is a tool choice the
+    // planner compares against the record, not geometry — never in here.
+    ...(s.expandStrokes ? ["expand"] : []),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

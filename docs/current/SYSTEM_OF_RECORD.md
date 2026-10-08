@@ -542,6 +542,37 @@ opt-in class as Generate SVG → Requesty; design
   gone). Green (`processed`) only when every requested
   output validated and committed; `stale` when fingerprints moved since the
   last commit.
+* EPS converters (2026-10-09, design
+  `docs/archive/2026-10-09-eps-converters-inkscape-expand/design.md`): the
+  EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`
+  (`src/lib/upload/epsconv/registry.ts`) is the one table the drop list, the
+  settings parser and the EPS stage read: `builtin` (the subset writer above,
+  `writer: "builtin-subset-1"`) and `inkscape` (Inkscape on this machine
+  through the local helper at `http://127.0.0.1:47391` — `GET /health` to
+  probe, `POST /convert/eps` with the prepared SVG to convert, `writer:
+  "inkscape-cli@<version>"` from the `x-inkscape-version` header). The
+  setting `epsConverter` is NOT in the settings fingerprint: switching
+  converters rebuilds the EPS only (the planner compares
+  `tools.eps.converter` with the run's converter; a record from before the
+  field is `builtin`), and choosing a converter never toggles `includeEps`.
+  Every EPS — whoever wrote it — passes the SAME converter-neutral gate
+  before commit (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`,
+  a `%%BoundingBox`, `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are
+  the built-in writer's own contract. A helper that is down / an Inkscape
+  not installed / a conversion refused → the EPS stage fails honestly with
+  the reason AND its fix (`run_inkscape_bridge.bat`; "install Inkscape 1.x
+  or set INKSCAPE_PATH") → `partial`, SVG/JPEG stay committed. The record
+  names the converter and the writer: `tools.eps.{enabled, converter,
+  writer, fixes?}`. The helper process itself (`tools/bridge/`) ships in the
+  next commit; the helper URL lives in localStorage
+  `iconSplitter.upload.bridge.v1`.
+* Expand strokes to fills (2026-10-09, same design): the setting
+  `expandStrokes` (default off; fingerprinted ONLY when on, so no existing
+  package flips to stale) asks the prepare stage to turn every stroke into a
+  filled outline — what some stocks require — so the SVG, JPEG and EPS all
+  ship without strokes. The record carries `tools.expand: { enabled, shapes
+  }` (how many shapes were expanded). The geometry lands in the third commit
+  of the design; until then `shapes` is 0.
 * Download all (2026-10-08, design
   `docs/archive/2026-10-08-upload-download-all/design.md`): the bulk bar's
   `⤓ Download all (N files)` copies the SELECTION's committed packages into ONE
@@ -978,6 +1009,7 @@ Batch:
 | IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
 | localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map) | validated/clamped on read (RULE 13): `background` is `transparent` or a hex (a missing or junk value → `transparent`; a stored white from before 2026-10-08 stays white), `strokeColor` is a hex or `artwork` (missing or junk → `#000000`, the 2026-10-08 default; a stored `artwork` stays `artwork`), `strokePx` is 0–32 px (the pre-2026-10-08 key `strokePt` is read as the same number and never written back; the fingerprint is positional, so nothing flips to stale); the undo path writes through the same store |
 | localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
+| localStorage `iconSplitter.upload.bridge.v1` | the Inkscape helper config `{ v, url }` (2026-10-09) | validated on read (RULE 13): only an `http(s)://` URL is kept, anything else → `http://127.0.0.1:47391`; device config, never per icon |
 | localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt `{ v, prompt }` | validated on read: missing/empty/junk/foreign version → the documented default (`parsePromptText`, RULE 13); written on every edit, so a restart opens with the user's own text |
 | localStorage `iconSplitter.upload.prompts.v1` | the saved prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50; corrupt → no presets |
 | localStorage `iconSplitter.upload.prefs.v1` | upload view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read; display-only — the zoom never feeds the output scale |
@@ -1452,7 +1484,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-set-bg-{transparent,white,black,gray,green,red,custom}`,
   `upload-set-bg-value`,
   `upload-set-stroke-color-{artwork,white,black,gray,green,red,custom}`,
-  `upload-set-stroke-color-value`, `upload-set-marker-*`, `upload-set-reset`,
+  `upload-set-stroke-color-value`, `upload-set-eps-converter`,
+  `upload-set-expand`, `upload-eps-helper{,-url,-check,-state}`,
+  `upload-set-marker-*`, `upload-set-reset`,
   `upload-set-close`), the metadata confirmation (`upload-meta-backdrop`,
   `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`,
   `upload-preview-strip` / `upload-preview-{id}` +

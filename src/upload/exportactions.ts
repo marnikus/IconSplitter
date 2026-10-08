@@ -16,6 +16,7 @@ import { effectiveSettings } from "../lib/upload/settings";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
+import { loadBridgeConfig } from "./configstore";
 import { cancelledSpec, exportBatchLine, exportOutcomeNote, exportedSpec, type IconRef } from "./uploadlog";
 import { noteOfRecord } from "./rowmodel";
 import type { Latest, UploadMetaState, UploadRow } from "./types";
@@ -140,6 +141,7 @@ async function exportOne(args: ExportOneArgs): Promise<number> {
     metadata: meta === null ? null : meta.metadata,
     metadataInfo: metadataInfoOf(c, meta),
     record: row.record, signal: args.signal,
+    deps: { converter: { bridgeUrl: loadBridgeConfig().url, fetch: (url: string, init?: RequestInit) => globalThis.fetch(url, init) } },
   });
   applyExportResult(args.latest, args.id, row, result);
   return result.notes.length > 0 ? 1 : 0;

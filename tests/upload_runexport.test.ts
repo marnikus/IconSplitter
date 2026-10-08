@@ -324,6 +324,40 @@ describe("runExport — the full package commits per icon", () => {
     expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("rx=");
   });
 
+  it("records the converter that wrote the EPS and the expand block (2026-10-09)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-1" });
+    expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
+  });
+
+  it("the Inkscape converter: the helper's EPS commits with its writer; an unreachable helper is a named partial (2026-10-09)", async () => {
+    const EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: cairo 1.18.0\n%%LanguageLevel: 2\n%%BoundingBox: 0 0 70 70\n%%EndComments\n0 0 moveto fill\n%%EOF\n";
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true, epsConverter: "inkscape" };
+    const up = async () => new Response(EPS, { status: 200, headers: { "x-inkscape-version": "1.3.2" } });
+    const okRoot = pairRoot();
+    const ok = await runExport(args(okRoot, {
+      settings, defaults: settings,
+      deps: { raster: fakeRaster(3886, 3886), converter: { bridgeUrl: "http://127.0.0.1:47391", fetch: up } },
+    }));
+    expect(ok.status).toBe("processed");
+    expect(fileText(okRoot, `${DIR}/export/${ART}.eps`)).toBe(EPS);
+    expect(readRecord(okRoot).tools.eps).toMatchObject({ converter: "inkscape", writer: "inkscape-cli@1.3.2" });
+
+    const downRoot = pairRoot();
+    const down = await runExport(args(downRoot, {
+      settings, defaults: settings,
+      deps: { raster: fakeRaster(3886, 3886), converter: { bridgeUrl: "http://127.0.0.1:47391", fetch: () => Promise.reject(new TypeError("Failed to fetch")) } },
+    }));
+    expect(down.status).toBe("partial");
+    expect(down.error?.detail).toContain("not reachable at http://127.0.0.1:47391");
+    expect(down.error?.detail).toContain("run_inkscape_bridge.bat");
+    expect(fileText(downRoot, `${DIR}/export/${ART}.svg`)).toContain("<svg"); // the required outputs committed
+    expect(readRecord(downRoot).outputs.eps).toBeNull();
+  });
+
   it("a plain package carries no notes and no fixes", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };

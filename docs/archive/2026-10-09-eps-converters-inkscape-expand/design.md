@@ -1,3 +1,7 @@
+> Status 2026-10-09: commit A (registry, settings, dialog UI, Inkscape
+> client, converter-neutral `verifyEpsDocument` gate) landed; B (helper
+> process) and C (stroke expansion geometry) follow in their own commits.
+
 # EPS converters drop list · Inkscape CLI helper · Expand strokes to fills
 
 Date: 2026-10-09 · Area: SVG to upload (export pipeline) · Status: DESIGN — confirmed by the user 2026-10-09, no code yet

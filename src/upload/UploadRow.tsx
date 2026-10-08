@@ -133,6 +133,12 @@ function strokeLine(s: UploadSettings): string {
   return s.strokeColor === STROKE_COLOR_ARTWORK ? width : `${width} · stroke ${s.strokeColor}`;
 }
 
+/** "eps on · inkscape", then "· strokes → fills" when the strokes are expanded (2026-10-09). */
+function epsLine(s: UploadSettings): string {
+  const eps = `eps ${s.includeEps ? "on" : "off"} · ${s.epsConverter}`;
+  return s.expandStrokes ? `${eps} · strokes → fills` : eps;
+}
+
 /** The effective settings, one line, plus how many fields this icon pins. */
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
@@ -141,7 +147,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
       <small>pad {effective.paddingPct}% · {effective.background} · {strokeLine(effective)}</small>
-      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · eps {effective.includeEps ? "on" : "off"}</small>
+      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}
       </small>
