@@ -3,7 +3,7 @@
 // planner's rebuild flags. The artifacts are built BEFORE any validation or
 // commit, so a failed stage never touches the last valid package.
 
-import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
+import { omitPreparedBackground, prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
 import { pinnedDimensions, targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
 import { optimizeSvg, recordAfterClean, type OptimizeRecord } from "../lib/upload/optimize";
@@ -57,7 +57,7 @@ export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promis
   const needSvgText = plan.rebuild.svg || plan.rebuild.eps;
   const needRender = plan.rebuild.jpg && plan.stages.includes("render");
   if (needSvgText || needRender) await buildSvgText(art, ctx);
-  if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx.metadata);
+  if (plan.rebuild.svg) art.svgOut = await buildFinalSvg(art, ctx);
   if (plan.rebuild.jpg) await buildJpegArtifact(plan, ctx, art);
   if (plan.rebuild.eps) buildEps(art, ctx);
   return art;
@@ -68,20 +68,35 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   const prepared = prepareExportSvg(ctx.sourceText, ctx.settings);
   if (!prepared.ok) throw new StageError("prepare", `${prepared.code}: ${prepared.detail}`);
   art.prepared = prepared;
-  const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg);
-  // SVGO may not smuggle anything back in: check, rebuild if it did, and fail
-  // honestly when even a rebuild cannot make the file clean (RULE 15).
+  const output = await optimizeCleanSvg(prepared.svg, ctx.settings.optimizeSvg);
+  art.optimizedSvg = output.svg;
+  art.optimizeRecord = output.record;
+}
+
+async function buildFinalSvg(art: Artifacts, ctx: StageContext): Promise<string | null> {
+  if (art.optimizedSvg === null) return null;
+  let svg = art.optimizedSvg;
+  if (ctx.settings.transparentSvgBackground) {
+    const prepared = art.prepared;
+    if (prepared === null || !prepared.ok) throw new StageError("prepare", "the prepared SVG is unavailable");
+    svg = await optimizeTransparentSvg(prepared.svg, ctx.settings.optimizeSvg, art);
+  }
+  return ctx.metadata === null ? svg : embedMetadataInSvg(svg, ctx.metadata);
+}
+
+async function optimizeTransparentSvg(prepared: string, enabled: boolean, art: Artifacts): Promise<string> {
+  const output = await optimizeCleanSvg(omitPreparedBackground(prepared), enabled);
+  art.optimizeRecord = output.record;
+  return output.svg;
+}
+
+async function optimizeCleanSvg(svgText: string, enabled: boolean): Promise<{ svg: string; record: OptimizeRecord }> {
+  const optimized = await optimizeSvg(svgText, enabled);
   const clean = enforceExportSvg(optimized.svg);
   if (clean.violations.length > 0) {
     throw new StageError("optimize", `the export SVG breaks the clean rules: ${clean.violations.join("; ")}`);
   }
-  art.optimizedSvg = clean.svg;
-  art.optimizeRecord = await recordAfterClean(optimized.record, clean.svg, clean.rebuilt);
-}
-
-function embedSvg(art: Artifacts, metadata: IconMetadata | null): string | null {
-  if (art.optimizedSvg === null) return null;
-  return metadata === null ? art.optimizedSvg : embedMetadataInSvg(art.optimizedSvg, metadata);
+  return { svg: clean.svg, record: await recordAfterClean(optimized.record, clean.svg, clean.rebuilt) };
 }
 
 async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifacts): Promise<void> {

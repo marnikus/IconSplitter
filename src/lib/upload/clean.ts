@@ -18,12 +18,14 @@
 // references are rewritten to match.
 //
 // `<metadata>` (the Dublin Core block lib/upload/embed writes) is deliberate
-// content: the namespace and placement rules exempt its subtree.
+// content, so its RDF/DC vocabulary is allowed there; namespace declarations
+// still have to live once on the root and metadata elements stay root-only.
 
 import {
   allElements, attributeNames, comments, insideMetadata, isSvgElement,
-  localName, referencedIds, SVG_NS,
+  localName, referencedIds, DC_NS, RDF_NS, SVG_NS, XLINK_NS,
 } from "./svgdom";
+import { roundStrokeWidth } from "./geom/stroke";
 import { BLOAT_ATTRS, cleanExportDom, EMBED_TAGS, unsupportedContent } from "./cleandom";
 
 export { cleanExportDom, unsupportedContent };
@@ -93,20 +95,32 @@ function rootViolations(root: Element): string[] {
   if ((root.namespaceURI ?? SVG_NS) !== SVG_NS) {
     out.push(`the root is not in the SVG namespace (${root.nodeName})`);
   }
+  if (root.getAttribute("xmlns") !== SVG_NS) out.push("the root must declare the default SVG namespace");
+  if (root.hasAttribute("width") || root.hasAttribute("height")) out.push("the root must not have fixed width or height");
   return out;
 }
 
 function elementViolations(elements: Element[]): string[] {
   const out: string[] = [];
   for (const el of elements) {
-    if (insideMetadata(el)) continue; // the embedded Dublin Core block is ours, not bloat
-    if (!isSvgElement(el)) out.push(`a foreign element <${el.nodeName}> is editor bloat`);
-    if (localName(el) === "style") out.push("a <style> block is not allowed");
-    for (const name of attributeNames(el)) out.push(...attributeViolations(name));
+    if (!insideMetadata(el)) {
+      if (!isSvgElement(el)) out.push(`a foreign element <${el.nodeName}> is editor bloat`);
+      if (localName(el) === "style") out.push("a <style> block is not allowed");
+      for (const name of attributeNames(el)) out.push(...attributeViolations(name));
+    }
+    out.push(...strokeWidthViolations(el));
   }
   out.push(...namespaceViolations(elements));
   out.push(...embedPlacementViolations(elements));
   return unique(out);
+}
+
+function strokeWidthViolations(el: Element): string[] {
+  const value = el.getAttribute("stroke-width");
+  if (value === null) return [];
+  const rounded = roundStrokeWidth(value);
+  if (rounded === null) return [`stroke-width must be numeric (got ${value})`];
+  return value.trim() === rounded ? [] : [`stroke-width must be a whole number (got ${value})`];
 }
 
 /** One attribute: foreign, naming-only, or fine. `xlink:href` is real SVG. */
@@ -119,22 +133,46 @@ function attributeViolations(name: string): string[] {
   return [];
 }
 
+const NAMESPACE_URIS: Record<string, string> = { xlink: XLINK_NS, rdf: RDF_NS, dc: DC_NS };
+
 /** Only the root may declare namespaces, and only the ones it really uses. */
 function namespaceViolations(elements: Element[]): string[] {
+  const root = elements[0];
+  if (root === undefined) return [];
   const out: string[] = [];
+  for (const prefix of Object.keys(NAMESPACE_URIS)) checkNamespaceBinding(root, elements, prefix, out);
+  checkUnknownNamespaces(elements, out);
+  return out;
+}
+
+function checkNamespaceBinding(root: Element, elements: Element[], prefix: string, out: string[]): void {
+  const attr = `xmlns:${prefix}`;
+  const used = prefixUsed(elements, prefix);
+  const declared = root.getAttribute(attr);
+  if (used && declared !== NAMESPACE_URIS[prefix]) out.push(`the namespace ${attr} must be declared once on the root`);
+  if (!used && declared !== null) out.push(`the namespace declaration ${attr} is unused`);
+  for (const el of elements.slice(1)) {
+    if (el.hasAttribute(attr)) out.push(`the namespace declaration ${attr} must be on the root only`);
+  }
+}
+
+function prefixUsed(elements: Element[], prefix: string): boolean {
+  return elements.some((el) => {
+    if (prefix !== "xlink" && !insideMetadata(el)) return false;
+    return el.nodeName.startsWith(`${prefix}:`)
+      || attributeNames(el).some((name) => name.startsWith(`${prefix}:`));
+  });
+}
+
+function checkUnknownNamespaces(elements: Element[], out: string[]): void {
+  const known = new Set(Object.keys(NAMESPACE_URIS));
   for (const el of elements) {
-    if (insideMetadata(el)) continue; // RDF/DC declare their own vocabularies
-    for (const name of attributeNames(el)) {
-      if (name === "xmlns" || !name.startsWith("xmlns:")) continue;
-      const prefix = name.slice("xmlns:".length);
-      const uri = el.getAttribute(name) ?? "";
-      if (prefix !== "xlink") out.push(`the namespace declaration ${name} (${uri}) is editor bloat`);
-      else if (!elements.some((e) => attributeNames(e).some((a) => a.startsWith("xlink:")))) {
-        out.push("the namespace declaration xmlns:xlink is unused");
+    for (const attr of attributeNames(el).filter((name) => name.startsWith("xmlns:"))) {
+      if (!known.has(attr.slice("xmlns:".length))) {
+        out.push(`the namespace declaration ${attr} (${el.getAttribute(attr) ?? ""}) is editor bloat`);
       }
     }
   }
-  return out;
 }
 
 /** `<title>`, `<desc>` and `<metadata>` belong to the root, nowhere else. */

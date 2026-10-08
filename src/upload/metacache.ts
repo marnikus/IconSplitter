@@ -8,7 +8,7 @@
 // bounded in size (the cache must not grow without limit on a 400-icon folder).
 
 import { isRecord } from "../lib/isrecord";
-import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { canonicalizeMetadata, validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { readKey, writeKey } from "../state/safestorage";
 import { EMPTY_META, type UploadMetaState } from "./types";
 
@@ -48,7 +48,7 @@ function metadataOf(value: unknown): IconMetadata | null {
   if (!isRecord(value)) return null;
   if (typeof value.title !== "string" || typeof value.description !== "string") return null;
   if (!Array.isArray(value.tags) || !value.tags.every((t) => typeof t === "string")) return null;
-  return { title: value.title, description: value.description, tags: value.tags };
+  return canonicalizeMetadata({ title: value.title, description: value.description, tags: value.tags });
 }
 
 export function loadMetaCache(): MetaCache {
@@ -94,12 +94,13 @@ export function rememberMeta(hash: string, entry: CachedMeta): MetaCache {
 /** A restored answer never skips review: `accepted` was accepted, `generated` is not. */
 export function restoredMeta(entry: CachedMeta | null): UploadMetaState {
   if (entry === null) return EMPTY_META;
-  const validation = validateMetadata(entry.meta);
+  const metadata = canonicalizeMetadata(entry.meta);
+  const validation = validateMetadata(metadata);
   const state = validation.ok ? entry.state : "invalid";
   return {
     ...EMPTY_META,
     state,
-    metadata: entry.meta,
+    metadata,
     validation,
     detail: validation.ok ? "" : "the remembered answer no longer passes the policy — fix it or generate again",
   };

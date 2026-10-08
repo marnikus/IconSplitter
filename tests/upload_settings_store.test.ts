@@ -31,6 +31,28 @@ describe("settingsstore — defaults + overrides", () => {
     expect(loadUploadSettings()).toEqual({ defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {} });
   });
 
+  it("reads old v1 settings with the new fields missing as original-color and opaque defaults", () => {
+    const parsed = parseUploadSettingsState({
+      v: 1,
+      defaults: { paddingPct: 8, background: "#ffffff", strokePt: 0 },
+      overrides: { pair_a: { strokePt: 2 } },
+    });
+    expect(parsed.defaults.strokeColor).toBeNull();
+    expect(parsed.defaults.transparentSvgBackground).toBe(false);
+    expect(parsed.overrides).toEqual({ pair_a: { strokePt: 2 } });
+  });
+
+  it("persists the selected stroke color and SVG transparency including a null icon override", () => {
+    saveUploadSettings({
+      defaults: { ...CUSTOM, strokeColor: "#123456", transparentSvgBackground: true },
+      overrides: { pair_a: { strokeColor: null, transparentSvgBackground: false } },
+    });
+    expect(loadUploadSettings()).toEqual({
+      defaults: { ...CUSTOM, strokeColor: "#123456", transparentSvgBackground: true },
+      overrides: { pair_a: { strokeColor: null, transparentSvgBackground: false } },
+    });
+  });
+
   it("rejects a corrupt payload and a wrong version instead of throwing", () => {
     localStorage.setItem("iconSplitter.upload.settings.v1", "{oops");
     expect(loadUploadSettings().defaults).toEqual(DEFAULT_UPLOAD_SETTINGS);

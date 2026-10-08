@@ -3,6 +3,7 @@
 // and read back exactly. The artwork is untouched.
 import { describe, expect, it } from "vitest";
 import { embedMetadataInSvg, readEmbeddedMetadata } from "../src/lib/upload/embed";
+import { verifyExportSvg } from "../src/lib/upload/clean";
 import { MANDATORY_TAGS, type IconMetadata } from "../src/lib/upload/meta";
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
@@ -30,6 +31,23 @@ describe("embedMetadataInSvg", () => {
     expect(root.children[1].textContent).toBe(META.description);
   });
 
+  it("declares metadata namespaces once on the SVG root, with no fixed root dimensions", () => {
+    const clean = `<svg ${NS} version="1.1" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20"/></svg>`;
+    const svg = embedMetadataInSvg(clean, META);
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    const root = doc.documentElement;
+    expect(root.getAttribute("xmlns:dc")).toBe("http://purl.org/dc/elements/1.1/");
+    expect(root.getAttribute("xmlns:rdf")).toBe("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+    expect(root.hasAttribute("width")).toBe(false);
+    expect(root.hasAttribute("height")).toBe(false);
+    for (const el of Array.from(doc.querySelectorAll("*"))) {
+      if (el === root) continue;
+      expect(el.hasAttribute("xmlns:dc")).toBe(false);
+      expect(el.hasAttribute("xmlns:rdf")).toBe(false);
+    }
+    expect(verifyExportSvg(svg)).toEqual([]);
+  });
+
   it("carries all 40 tags in the dc:subject rdf:Bag", () => {
     const doc = new DOMParser().parseFromString(embedMetadataInSvg(SOURCE, META), "image/svg+xml");
     const lis = Array.from(doc.getElementsByTagName("*")).filter((el) => el.nodeName.endsWith(":li"));
@@ -51,6 +69,12 @@ describe("embedMetadataInSvg", () => {
     const doc = new DOMParser().parseFromString(twice, "image/svg+xml");
     expect(doc.querySelectorAll("title")).toHaveLength(1);
     expect(doc.querySelectorAll("metadata")).toHaveLength(1);
+  });
+
+  it("embeds a canonical title without a terminal period", () => {
+    const embedded = embedMetadataInSvg(SOURCE, { ...META, title: "Minimal line icon of growth. Speed growth pictogram.  " });
+    expect(readEmbeddedMetadata(embedded)?.title).toBe("Minimal line icon of growth. Speed growth pictogram");
+    expect(embedded).not.toContain("pictogram.");
   });
 
   it("replaces a pre-existing root-level title/desc/metadata", () => {

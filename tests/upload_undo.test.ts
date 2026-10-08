@@ -59,6 +59,9 @@ describe("overridesEqual", () => {
     expect(overridesEqual({ jpegMatchArtboard: false }, { jpegMatchArtboard: false })).toBe(true);
     expect(overridesEqual({ jpegMatchArtboard: true }, { jpegMatchArtboard: false })).toBe(false);
     expect(overridesEqual({ jpegMatchArtboard: true }, {})).toBe(false);
+    expect(overridesEqual({ strokeColor: null }, { strokeColor: null })).toBe(true);
+    expect(overridesEqual({ strokeColor: null }, { strokeColor: "#123456" })).toBe(false);
+    expect(overridesEqual({ transparentSvgBackground: true }, { transparentSvgBackground: false })).toBe(false);
   });
 });
 

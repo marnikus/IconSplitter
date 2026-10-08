@@ -29,7 +29,7 @@ describe("defaults and clamps", () => {
       paddingPct: 8, background: "#ffffff", strokePt: 0,
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
-      jpegMatchArtboard: true,
+      jpegMatchArtboard: true, strokeColor: null, transparentSvgBackground: false,
     });
   });
 
@@ -70,6 +70,30 @@ describe("defaults and clamps", () => {
     const off: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, jpegMatchArtboard: false };
     expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, off)).toBe(false);
     expect(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS)).not.toBe(settingsFingerprint(off));
+  });
+
+  it("defaults new stock settings safely and validates custom stroke colors", () => {
+    expect(normalizeSettings({}).strokeColor).toBeNull();
+    expect(normalizeSettings({}).transparentSvgBackground).toBe(false);
+    expect(normalizeSettings({ strokeColor: "junk", transparentSvgBackground: "yes" }))
+      .toMatchObject({ strokeColor: null, transparentSvgBackground: false });
+    expect(normalizeSettings({ strokeColor: "#AbC", transparentSvgBackground: true }))
+      .toMatchObject({ strokeColor: "#aabbcc", transparentSvgBackground: true });
+    expect(parseOverrides({ strokeColor: "#123", transparentSvgBackground: true }))
+      .toEqual({ strokeColor: "#112233", transparentSvgBackground: true });
+    expect(parseOverrides({ strokeColor: null, transparentSvgBackground: false }))
+      .toEqual({ strokeColor: null, transparentSvgBackground: false });
+    expect(parseOverrides({ strokeColor: "not-color", transparentSvgBackground: "true" })).toEqual({});
+  });
+
+  it("includes stroke color and transparent SVG in equality and the export fingerprint", () => {
+    const base = DEFAULT_UPLOAD_SETTINGS;
+    const stroke = changed({ strokeColor: "#123456" });
+    const transparent = changed({ transparentSvgBackground: true });
+    expect(settingsEqual(base, stroke)).toBe(false);
+    expect(settingsEqual(base, transparent)).toBe(false);
+    expect(settingsFingerprint(base)).not.toBe(settingsFingerprint(stroke));
+    expect(settingsFingerprint(base)).not.toBe(settingsFingerprint(transparent));
   });
 
   it("rounds a custom size to whole pixels and falls back where a number is missing", () => {

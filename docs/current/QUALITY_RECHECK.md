@@ -2122,3 +2122,32 @@ The gate failed three NEW files, and the fixes are structural, not cosmetic:
 * The lane-4 flake above is environmental (act() warning volume during
   teardown), not a failing assertion: worth one `vitest`/pool note, not a code
   change, until it reproduces with a failing test named.
+
+## 2026-10-08 — stock-ready SVG cleanup + stroke settings
+
+Implemented from `docs/archive/2026-10-08-stock-svg-cleanup-stroke-color/`.
+Final pre-push run: **`npm run verify` — ALL LANES PASSED**.
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | `npx tsc --noEmit`, 11.2 s |
+| 2/6 lint | ✅ | 0 errors; 10 existing warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED`; settings equality now uses the canonical field list (no threshold override) |
+| 4/6 tests | ✅ | **128 files / 1406 tests** |
+| 5/6 tests + coverage | ✅ | **128 files / 1406 tests**; statements 95.70%, branches 89.26%, functions 96.88%, lines 97.77%; `src/lib` lines 98.03% |
+| 6/6 build | ✅ | `dist/index.html` 1,494.69 kB (gzip 429.05 kB) |
+
+`npx jscpd src --min-tokens 60` completed: 33 repository-wide clone reports
+(365 duplicated lines, largely existing CSS and paired-tab code); review found
+no clone introduced in the stock-cleanup/stroke changes. Knip's default parser
+could not allocate its 6 GiB raw-transfer buffer in this sandbox. The supported
+fallback `KNIP_DISABLE_RAW_TRANSFER=1 npx knip` completed analysis and reported
+the existing repository-wide inventory (8 unused design files, 1 unused
+`jscpd` dev dependency, 115 unused exports and 62 unused exported types); no
+new stock-cleanup/stroke symbol is reported unused. The full verification build
+also prints Vite's existing SVGO/Node-module externalization notices.
+
+The user-facing settings dialog is 297 lines; extracted
+`StrokeColorSetting.tsx` is 36 lines. Transparent SVG remains opt-in/off by
+default; only its final SVG omits the generated backplate, while prepared SVG,
+JPEG and EPS retain the configured background.

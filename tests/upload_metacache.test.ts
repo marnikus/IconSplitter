@@ -43,6 +43,13 @@ describe("the stored shape", () => {
     expect(Object.keys(parsed)).toEqual([HASH]);
   });
 
+  it("canonicalizes a legacy cached title before it is shown or accepted", () => {
+    const old = { ...META, title: `${META.title}.  ` };
+    const parsed = parseMetaCache({ v: META_CACHE_VERSION, cache: { [HASH]: { state: "accepted", meta: old } } });
+    expect(parsed[HASH].meta.title).toBe(META.title);
+    expect(restoredMeta(parsed[HASH]).metadata?.title).toBe(META.title);
+  });
+
   it("a payload from another version, or a non-object, loads as empty (RULE 13)", () => {
     expect(parseMetaCache({ v: 99, cache: { [HASH]: { state: "accepted", meta: META } } })).toEqual({});
     expect(parseMetaCache(null)).toEqual({});

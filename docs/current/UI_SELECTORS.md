@@ -571,11 +571,15 @@ and unedited).
 Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
-change), `upload-set-{optimize,eps}` (checkboxes), the background
+change), `upload-set-{optimize,eps,svg-transparent}` (checkboxes), the stroke
+color control `upload-set-stroke-color` + its value `upload-set-stroke-color-value`
+and `upload-set-stroke-original` (selects "Original artwork"), the background
 (`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
 `upload-set-bg-value`), the per-field marker `upload-set-marker-{field}`
-("inherited" / "overridden", icon scope only), `upload-set-reset` (icon scope:
-deletes the override — one undoable entry), `upload-set-close`.
+("inherited" / "overridden", icon scope only, including
+`upload-set-marker-stroke-color` and `upload-set-marker-svg-transparent`),
+`upload-set-reset` (icon scope: deletes the override — one undoable entry),
+`upload-set-close`.
 The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,

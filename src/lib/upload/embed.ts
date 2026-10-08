@@ -5,11 +5,9 @@
 // Reads are namespace-agnostic (localName matching) so the readback is
 // deterministic across parsers.
 
-import type { IconMetadata } from "./meta";
+import { canonicalizeMetadata, type IconMetadata } from "./meta";
+import { DC_NS, RDF_NS, SVG_NS, XMLNS_NS } from "./svgdom";
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-const RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-const DC_NS = "http://purl.org/dc/elements/1.1/";
 const EMBED_TAGS = ["title", "desc", "metadata"];
 
 /** The export SVG with the metadata embedded (the input string is untouched). */
@@ -17,14 +15,18 @@ export function embedMetadataInSvg(svgText: string, meta: IconMetadata): string 
   const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
   const root = doc.documentElement;
   if (root === null || name(root) !== "svg") throw new Error("not an SVG document");
+  const canonical = canonicalizeMetadata(meta);
+  root.setAttributeNS(XMLNS_NS, "xmlns", SVG_NS);
+  root.setAttributeNS(XMLNS_NS, "xmlns:dc", DC_NS);
+  root.setAttributeNS(XMLNS_NS, "xmlns:rdf", RDF_NS);
   for (const child of Array.from(root.children)) {
     if (EMBED_TAGS.includes(name(child))) root.removeChild(child);
   }
   const title = doc.createElementNS(SVG_NS, "title");
-  title.textContent = meta.title;
+  title.textContent = canonical.title;
   const desc = doc.createElementNS(SVG_NS, "desc");
-  desc.textContent = meta.description;
-  root.insertBefore(metadataElement(doc, meta), root.firstChild);
+  desc.textContent = canonical.description;
+  root.insertBefore(metadataElement(doc, canonical), root.firstChild);
   root.insertBefore(desc, root.firstChild);
   root.insertBefore(title, root.firstChild);
   return new XMLSerializer().serializeToString(doc);

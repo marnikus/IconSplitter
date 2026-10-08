@@ -42,6 +42,25 @@ export function styleMap(style: string | null): Record<string, string> {
   return out;
 }
 
+/** Whole-number lexical form for a numeric SVG stroke width, preserving its unit. */
+export function roundStrokeWidth(value: string): string | null {
+  const match = /^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*([a-z%]*)\s*$/i.exec(value);
+  if (match === null) return null;
+  const number = Number(match[1]);
+  if (!Number.isFinite(number)) return null;
+  const rounded = Math.round(number);
+  return `${Object.is(rounded, -0) ? 0 : rounded}${match[2]}`;
+}
+
+/** Canonicalizes every explicit stroke width without disturbing other SVG numbers. */
+export function roundStrokeWidthAttributes(root: Element): void {
+  for (const el of [root, ...Array.from(root.querySelectorAll("*"))]) {
+    const value = el.getAttribute("stroke-width");
+    const rounded = value === null ? null : roundStrokeWidth(value);
+    if (rounded !== null) el.setAttribute("stroke-width", rounded);
+  }
+}
+
 function parseLen(raw: string | null): number | null {
   if (raw === null) return null;
   const n = Number(raw.trim().replace(/px$/i, ""));

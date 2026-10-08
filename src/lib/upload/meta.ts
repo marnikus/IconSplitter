@@ -33,7 +33,7 @@ Description: <a sentence of at least 7 words>
 Tags: <at least 10 unique keywords, comma-separated, all lowercase>
 
 Hard rules:
-- Title: at least 5 words — a full descriptive phrase. Longer is fine.
+- Title: at least 5 words — a full descriptive phrase, with no terminal period. Longer is fine.
 - Description: at least 7 words — more is welcome; one or two sentences.
 - Tags: at least 10 unique lowercase keywords, no duplicates, and the list MUST include these seven: icon, pictogram, vector, stroke, line, editable, web. More tags are welcome.
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
@@ -43,6 +43,15 @@ export interface IconMetadata {
   title: string;
   description: string;
   tags: string[];
+}
+
+/** Stock-facing titles trim outer whitespace and terminal full stops only. */
+export function normalizeMetadataTitle(title: string): string {
+  return title.trim().replace(/\.+$/, "").trimEnd();
+}
+
+export function canonicalizeMetadata(meta: IconMetadata): IconMetadata {
+  return { ...meta, title: normalizeMetadataTitle(meta.title) };
 }
 
 export interface MetadataValidation {
@@ -63,7 +72,7 @@ export function parseMetadata(text: string): IconMetadata | null {
   const tagsRaw = labeled(text, "tags");
   if (title === null || description === null || tagsRaw === null) return null;
   const tags = dedupeTags(tagsRaw.split(",").map((t) => t.trim()).filter((t) => t !== ""));
-  return { title: title.trim(), description: description.trim(), tags };
+  return { title: normalizeMetadataTitle(title), description: description.trim(), tags };
 }
 
 function labeled(text: string, label: string): string | null {
@@ -139,6 +148,6 @@ function restrictedWarnings(meta: IconMetadata): string[] {
 
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function metadataFingerprint(meta: IconMetadata): string {
-  const canonical = JSON.stringify([meta.title.trim(), meta.description.trim(), meta.tags.map(normalizeTag).join(",")]);
+  const canonical = JSON.stringify([normalizeMetadataTitle(meta.title), meta.description.trim(), meta.tags.map(normalizeTag).join(",")]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

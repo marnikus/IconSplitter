@@ -45,7 +45,8 @@ A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
    external stock/print websites. Recursively discovers one row per pair with
    a valid approved SVG (through the pair sidecars; `export/` is never
    scanned, so export output never feeds discovery), applies
-   padding/background/stroke settings (global defaults + per-icon overrides),
+   padding/background/stroke settings (including source-default stroke color
+   and opt-in transparent SVG background; global defaults + per-icon overrides),
    generates conceptual metadata with Gemini (the exact prompt, confirmed
    before any send), optimizes the export SVG copy with SVGO, renders a 15.1
    MP JPEG from the vectors, optionally writes a genuine EPS, and commits a
@@ -336,14 +337,17 @@ opt-in class as Generate SVG → Requesty; design
   in a banner with their reasons, never listed. Export output is never a
   discovery source (no export loops).
 * Settings: global defaults (padding %, background, stroke width in pt at the
-  documented 96 DPI, JPEG target MP, JPEG quality, SVGO optimize on, optional
-  EPS, artboard) plus per-icon overrides; the effective settings are defaults under,
-  overrides on top, and the settings dialog marks every field inherited or
-  overridden. "Apply settings to selected" pins the current defaults onto the
-  selection as ONE undoable `uploadSettings` history entry; per-icon set/reset
-  pushes one entry each; global-defaults edits are persisted but NOT undoable
-  (the same class as presets). The checkbox selection is session-persisted but
-  not on the undo timeline.
+  documented 96 DPI, nullable stroke color, opt-in transparent SVG background,
+  JPEG target MP, JPEG quality, SVGO optimize on, optional EPS, artboard) plus
+  per-icon overrides; null stroke color means preserve source stroke paints and
+  transparent SVG defaults off. Old v1 settings missing either new field read
+  safely as those defaults. Effective settings are defaults under, overrides
+  on top, and the dialog marks every field inherited or overridden. "Apply
+  settings to selected" pins the current defaults onto the selection as ONE
+  undoable `uploadSettings` history entry; per-icon set/reset pushes one entry
+  each; global-defaults edits are persisted but NOT undoable (the same class
+  as presets). The checkbox selection is session-persisted but not on the undo
+  timeline.
 * The artboard (2026-10-08) is one more settings field, with three modes:
   `content` (the artboard hugs the artwork, as before), a square px preset
   (256/512/1024/2048/4096 — "512×512 and other popular") or an exact CUSTOM
@@ -371,11 +375,14 @@ opt-in class as Generate SVG → Requesty; design
   fitted proportionally into the padded artboard: in `content` mode the padding
   is a uniform % of the artwork's largest side, and on a PINNED artboard it is
   a % of the TARGET's largest side while the artwork is scaled by one uniform
-  factor and centred (letterboxed — never stretched, never cropped), the pinned
-  px are exact (`viewBox="0 0 W H"`), and the stroke width is divided by that
-  same factor so a 2.2 pt stroke is still 2.2 pt in the final file. Strokes are
-  normalized to the configured pt width (1 pt = 4/3 px), and the JPEG
-  rasterizes the VECTORS directly — at the artboard's px while
+  factor and centred (letterboxed — never stretched, never cropped), and the
+  pinned px are exact (`viewBox="0 0 W H"`). Explicit source `stroke-width`
+  values are rounded to whole-number lexical values (including 2.806→3 and
+  7.999906→8). A configured width converts pt to 96-DPI px and rounds to the
+  nearest whole px (2.2 pt→3 px); `non-scaling-stroke` keeps it fixed through
+  the artboard transform. Stroke color defaults to preserving source paint; a
+  custom hex replaces only existing visible strokes, never fills or `stroke="none"`.
+  The JPEG rasterizes the VECTORS directly — at the artboard's px while
   `jpegMatchArtboard` is on, otherwise at the integer MP target in the
   artboard's ratio (15.1 MP on a square artboard → 3886×3886; 4 MP on 512×256 →
   2828×1414) — verified by decoding the SOF back. All of it happens on an export
@@ -408,33 +415,36 @@ opt-in class as Generate SVG → Requesty; design
   removed SILENTLY before validation — case-insensitively, first spelling kept,
   order kept, blanks dropped (`dedupeTags`), and the ≥10 minimum counts the
   DEDUPED list, so a tag written twice is never a refusal or a warning. The
-  fields
-  under each row are editable and copiable, empty until generated; Accept
-  re-validates and persists through the embed commit. The confirmation dialog shows the exact
-  request (prompt, endpoint, auth rule) before any paid send; a timeout or
-  disconnect is NEVER resent automatically (no duplicate paid submission);
-  in-flight requests are journalled and reported `interrupted` after a restart.
-* Clean export SVG (2026-10-08, the user's clean-code rule): the file that
-  ships is SVG 1.1 (`version="1.1"` re-added after SVGO, which strips it), holds
-  a real four-number `viewBox`, contains no raster content anywhere (an
-  `<image>` or a `data:image/…` URI is refused outright — it cannot be cleaned
-  without changing the picture), no editor bloat (comments, foreign elements and
-  attributes, `xmlns:*` declarations except a used `xlink`), and NO naming — no
-  `id`, `class`, `data-*`, `aria-*`, `role`, `xml:space`, `enable-background`
-  and no generator comments; the only surviving id is one the artwork really
-  references, renamed `a`, `b`, … with every `url(#…)`/`href="#…"` rewritten to
-  match. A paint-only `<style>` block or `style=""` is FOLDED into the elements
-  (paint properties only — anything that could move, hide or clip geometry is
-  refused as `unsupported` with the reason, never guessed at), which is what
-  lets the class names go. The policy runs three times — at prepare, after the
-  optimizer and as the last check before commit — from ONE rule list, so the
-  check and the fix can never disagree; an unparseable or unfixable document is
-  reported with its violation instead of shipping, and the file the export
-  COMMITS is re-verified from its own text, not from the copy that was built.
-  The background rectangle the prepare pass paints is fill-ONLY
-  (`stroke="none"`, 2026-10-08): `stroke` is inherited, so an artwork that
-  strokes on the root or a group would otherwise put a border around the whole
-  artboard.
+  fields under each row are editable and copiable, empty until generated;
+  titles are canonicalized by trimming whitespace and terminal periods at parse,
+  edit, accept, export and restore, and both the prompt and field hint say no
+  terminal period. Accept re-validates and persists through the embed commit.
+  The confirmation dialog shows the exact request (prompt, endpoint, auth rule)
+  before any paid send; a timeout or disconnect is NEVER resent automatically
+  (no duplicate paid submission); in-flight requests are journalled and
+  reported `interrupted` after a restart.
+* Clean export SVG (2026-10-08 stock-ready cleanup): the committed file is
+  SVG 1.1 (`version="1.1"` re-added after SVGO), declares the SVG namespace on
+  the root, keeps a valid four-number `viewBox`, and has no fixed root
+  `width`/`height` (artwork element dimensions are preserved). It contains no
+  raster content (`<image>` or a `data:image/…` URI is refused outright), no
+  editor bloat/comments, and no naming (`id`, `class`, `data-*`, `aria-*`,
+  `role`, `xml:space`, `enable-background`) except a referenced id renamed
+  `a`, `b`, … with paint references rewritten. Used metadata prefixes
+  `xmlns:dc` and `xmlns:rdf` are declared exactly once on the root, never on
+  descendants; used `xlink` is likewise root-only, and unknown namespaces are
+  named in the violation. Paint-only stylesheets are folded; anything that
+  could move, hide or clip geometry is refused as `unsupported`, never guessed.
+  Every explicit numeric stroke width is an integer (e.g. 2.806→3 and
+  7.999906→8); nonnumeric width syntax is refused instead of shipped. The clean
+  validator checks the output after each rebuild. The policy
+  runs at prepare, after optimization and against the exact file before commit.
+  The prepared SVG carries an explicit fill-only generated backplate
+  (`stroke="none"`). With `transparentSvgBackground` off (default), the final
+  SVG keeps it; with the opt-in on, only that known first-child generated
+  rectangle is omitted from the final SVG. The prepared artifact used for
+  JPEG/EPS keeps the configured background in either mode, and source-artwork
+  rectangles are never filtered or removed.
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
   — no AI, no render; a missing output rebuilds just that output; nothing
   changed → no work). Every output validates before it commits (SVG parses +
@@ -773,6 +783,13 @@ Batch:
   folder onto an already root-relative `svgPath`, doubling the chain).
   A folder that merely resembles the layout keeps the item's own folder, as
   before; `lib/batchlayout` owns the names both rules read.
+* **I-57 (stock-ready SVG export, RULE 4/13/15):** an export copy has an SVG
+  1.1 root with a four-number `viewBox`, no fixed root dimensions, root-only
+  used metadata namespace declarations, whole-number stroke widths and a title
+  with no terminal period. Source stroke colors remain the default; a custom
+  color applies only to visible strokes. Transparent SVG is opt-in/default off:
+  only the known exporter-generated backplate may be omitted from the final SVG;
+  JPEG/EPS keep the configured background and source-artwork rectangles remain.
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
   capture; when it finds nothing the path is still recoverable without another
   dialog, and the UI says how. `Rescan` (and the Generate SVG rescan) makes one
@@ -863,7 +880,7 @@ Batch:
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
 | `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
 | IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
-| localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map) | validated/clamped on read (RULE 13); the undo path writes through the same store |
+| localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map), including nullable `strokeColor` and `transparentSvgBackground` | validated/clamped on read (RULE 13); legacy v1 payloads missing either field normalize to `null` / `false`; the undo path writes through the same store |
 | localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt `{ v, prompt }` | validated on read: missing/empty/junk/foreign version → the documented default (`parsePromptText`, RULE 13); written on every edit, so a restart opens with the user's own text |
 | localStorage `iconSplitter.upload.prompts.v1` | the saved prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50; corrupt → no presets |
@@ -906,9 +923,9 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 | The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
-| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/matrix.ts`, `src/lib/upload/seg.ts`, `src/lib/upload/arc.ts`, `src/lib/upload/path.ts`, `src/lib/upload/bounds.ts`, `src/lib/upload/stroke.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the artboard's content/preset/custom modes with their clamps), 96 DPI pt→px + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke normalization, sha256, export-SVG preparation (export copy only), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS path model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
-| Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
-| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (inherited/overridden markers, background presets + custom picker), the framed SVG preview |
+| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/matrix.ts`, `src/lib/upload/seg.ts`, `src/lib/upload/arc.ts`, `src/lib/upload/path.ts`, `src/lib/upload/bounds.ts`, `src/lib/upload/stroke.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, including source-default stroke paint and opt-in SVG transparency), 96 DPI pt→px + padded/pinned artboard fit + integer MP targets, matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM, source stroke widths rounded to integers and configured widths/color applied only to visible strokes, sha256, export-copy preparation (viewBox without root dimensions; known generated backplate), deterministic metadata parse/validate/fingerprint with title canonicalization, verified Gemini client, root-only SVG/DC/RDF metadata embed/readback, XMP JPEG embed/readback + SOF reader + verifyJpeg, SVGO wrapper, EPS path model + writer/verifier, direct vector rasterization with background flatten + decode-back verification, export record schema + stage planner, DOM helpers (`svgdom.ts`), and the single clean-SVG policy (`clean.ts` checks; `cleandom.ts` rebuilds) |
+| Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `metacache.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, settings migration/persistence/fingerprints and exact staleness, metadata cache/restoration, the in-flight journal, stores, row assembly, model + reducer, undo bridge, both pipelines and atomic commit |
+| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `StrokeColorSetting.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, editable/copiable metadata fields, stock title hint, settings dialog (inherited/overridden markers, background presets/custom picker, stroke color and transparent-SVG toggle), framed SVG preview |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
@@ -1055,24 +1072,29 @@ with hotkeys and `data-testid` handles):
   survives an edit, a tab switch and a fresh boot; a session-only key says so
   instead of asking again; an empty Save cannot destroy a stored key (Save is
   disabled; `Forget` is what clears); five operations open ONE connection
-* `upload_settings_store.test.ts`, `upload_keystore.test.ts`,
-  `upload_journal.test.ts` — the stores (defaults + overrides round-trip,
-  corrupt → defaults, clamps), the Gemini key's secret hygiene (own IndexedDB
-  slot, never localStorage, session fallback) and the in-flight journal
-  (restart → interrupted, corrupt → empty)
-* `upload_rowmodel.test.ts` — row assembly from a real export.json + source
-  hash, exact staleness (source/settings/metadata fingerprints), the metadata
-  state a record carries, filters/sort/header/counts (incl. a failed run with
-  record null counted), pruneChecked
-* `upload_undo.test.ts` — the `uploadSettings` entry: payload gate, the live
-  binding, the persist-only path, no-op refusal, undo/redo routing
+* `upload_settings.test.ts`, `upload_settings_store.test.ts`,
+  `upload_undo.test.ts` — stock setting defaults and v1 compatibility, hex and
+  boolean validation, persistence/equality/fingerprint, nullable override,
+  inherited/overridden state, reset/bulk apply and undo/redo
+* `upload_prepare.test.ts`, `upload_clean.test.ts`, `upload_cleandom.test.ts`,
+  `upload_embed.test.ts` — integer stroke widths (2.806→3, 7.999906→8, configured
+  2.2 pt→3 px), source-color default and color-only-visible-stroke behavior,
+  scalable root dimensions, root-only SVG/DC/RDF namespaces, idempotent metadata
+  embedding, clean-pass rebuilds, and preservation of source artwork geometry
+* `upload_meta.test.ts`, `upload_metacache.test.ts`, `upload_rowmodel.test.ts` —
+  terminal-period title normalization across parse/edit/fingerprint/cache/record
+  restore, row assembly from export.json + source hash, exact staleness
+  (source/settings/metadata fingerprints), metadata state, filters/sort/counts
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
-  reported), previews + zoom, filters/search, selection, the settings dialog
-  (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
-  entry; reset), the exact-request confirmation, editable/copiable metadata
-  fields, invalid-answer refusal, cancel (never resent), interrupted after a
-  restart, export → green committed package with the source untouched, stale →
-  re-export, metadata embedded + verified, honest failure commits nothing
+  reported), previews + zoom, settings persisted (stock color + transparent
+  toggle, markers, reset, bulk apply = ONE undo entry), title field removes a
+  terminal period, exact-request confirmation, editable metadata, export →
+  committed package with source untouched, stale → re-export, metadata verified,
+  honest failure commits nothing
+* `upload_runexport.test.ts` — real per-icon package and selective rebuilds;
+  JPEG/EPS retain the configured background while transparent final SVG omits
+  only its generated backplate, canonical titles agree across SVG/DC/record,
+  stock stroke colors trigger re-export, and SVG/EPS/JPEG artifacts validate
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
@@ -1186,6 +1208,11 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   pair sidecars, settings and undo, the Gemini metadata prompt and transport,
   SVGO/JPEG/EPS pipelines, the per-icon `export.json` and its atomic commit,
   no automatic uploading).
+* 2026-10-08 — stock-ready SVG cleanup and stroke controls implemented TDD-first
+  from `docs/archive/2026-10-08-stock-svg-cleanup-stroke-color/design.md` and
+  `decision.md`: root-only metadata prefixes, scalable root dimensions, whole
+  stroke widths, canonical titles, source-default/custom stroke color, and
+  opt-in final-SVG transparency while prepared/JPEG/EPS backgrounds remain.
 * 2026-10-07 — environment-setup performance (agent sandboxes):
   `docs/archive/2026-10-07-env-setup-performance/design.md` (shallow-clone-safe
   quality gate `--base/--files`, pinned toolchain, root `AGENTS.md`, the node
@@ -1296,8 +1323,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   editable/copiable fields `upload-meta-{title,description,tags}-*` +
   `upload-copy-{title,description,tags}-*` + `upload-meta-{state,usage,detail,
   validation,accept,regen,gen}-*`), the settings dialog (`upload-dialog-*`,
-  `upload-set-{padding,stroke,mp,quality,optimize,eps}`,
-  `upload-set-bg-{white,black,gray,green,red,custom}`,
+  `upload-set-{padding,stroke,mp,quality,optimize,eps,svg-transparent}`,
+  `upload-set-stroke-color`, `upload-set-stroke-original`,
+  `upload-set-stroke-color-value`, `upload-set-bg-{white,black,gray,green,red,custom}`,
   `upload-set-bg-value`, `upload-set-marker-*`, `upload-set-reset`,
   `upload-set-close`), the metadata confirmation (`upload-meta-backdrop`,
   `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`,

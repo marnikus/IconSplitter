@@ -11,6 +11,7 @@ import {
   TAGS_MIN,
   countWords,
   metadataFingerprint,
+  normalizeMetadataTitle,
   dedupeTags,
   parseMetadata,
   validateMetadata,
@@ -45,6 +46,7 @@ describe("the default prompt states every enforced constraint", () => {
   it("states the minimum title and description lengths, never a maximum", () => {
     expect(DEFAULT_METADATA_PROMPT).toContain("at least 5 words");
     expect(DEFAULT_METADATA_PROMPT).toContain("at least 7 words");
+    expect(DEFAULT_METADATA_PROMPT).toContain("terminal period");
     expect(DEFAULT_METADATA_PROMPT).not.toContain("exactly 40");
   });
 
@@ -84,6 +86,13 @@ describe("parseMetadata — deterministic labeled-text parsing", () => {
     expect(parsed?.description).toBe("Clean line icon showing growth");
     expect(parsed?.tags).toHaveLength(TAGS.length);
     expect(parsed?.tags[0]).toBe("icon");
+  });
+
+  it("removes trailing full stops and whitespace from machine-produced titles", () => {
+    const parsed = parseMetadata(`Title:  Minimal line icon of growth and change...  \nDescription: ${VALID.description}\nTags: ${TAGS.join(", ")}`);
+    expect(parsed?.title).toBe("Minimal line icon of growth and change");
+    expect(normalizeMetadataTitle("  U.S.A...  ")).toBe("U.S.A");
+    expect(normalizeMetadataTitle("A title. With inner punctuation")).toBe("A title. With inner punctuation");
   });
 
   it("is case-insensitive on labels and ignores extra lines", () => {
@@ -182,6 +191,7 @@ describe("validateMetadata — the resolved rules", () => {
 describe("metadataFingerprint", () => {
   it("is stable and changes with the content", () => {
     expect(metadataFingerprint(VALID)).toBe(metadataFingerprint(meta()));
+    expect(metadataFingerprint(meta({ title: `${VALID.title}.  ` }))).toBe(metadataFingerprint(VALID));
     expect(metadataFingerprint(meta({ title: "Another title here now ok. Speed growth pictogram" }))).not.toBe(metadataFingerprint(VALID));
     expect(metadataFingerprint(meta({ tags: [...TAGS].reverse() }))).not.toBe(metadataFingerprint(VALID));
   });

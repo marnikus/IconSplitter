@@ -10,7 +10,7 @@
 import { useCallback, useRef } from "react";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
-import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { canonicalizeMetadata, validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { previewFor, type SentPreview } from "../lib/upload/sentpreview";
 import { readSvgText } from "../svg/svgfiles";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
@@ -64,16 +64,17 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
     const c = latest.current;
     const row = rowOf(c, id);
     if (row === null || row.meta.metadata === null) return c.say("Nothing to accept — generate metadata first", true);
-    const validation = validateMetadata(row.meta.metadata);
+    const metadata = canonicalizeMetadata(row.meta.metadata);
+    const validation = validateMetadata(metadata);
     if (!validation.ok) {
-      c.dispatch({ type: "meta", id, meta: { ...row.meta, validation } });
+      c.dispatch({ type: "meta", id, meta: { ...row.meta, metadata, validation } });
       return c.say(validation.errors.join("; "), true);
     }
-    c.dispatch({ type: "meta", id, meta: { ...row.meta, state: "accepted", validation, edited: false } });
+    c.dispatch({ type: "meta", id, meta: { ...row.meta, metadata, state: "accepted", validation, edited: false } });
     // Accepted here, remembered for the fingerprint: the next session (or a
     // crash) never pays for this source again (CP-15).
-    rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: row.meta.metadata });
-    log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: row.meta.metadata.tags.length }));
+    rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: metadata });
+    log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: metadata.tags.length }));
     c.say("Metadata accepted");
     // The acceptance persists in export.json: a committed record re-embeds (no
     // AI, no render); a never-exported row keeps it until its first export.
@@ -83,7 +84,8 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
     const c = latest.current;
     const row = rowOf(c, id);
     if (row === null || row.meta.metadata === null) return;
-    c.dispatch({ type: "meta", id, meta: { ...row.meta, metadata: { ...row.meta.metadata, ...patch }, edited: true } });
+    const metadata = canonicalizeMetadata({ ...row.meta.metadata, ...patch });
+    c.dispatch({ type: "meta", id, meta: { ...row.meta, metadata, edited: true } });
   }, [latest]);
   return { acceptMetadata, editMetadata };
 }

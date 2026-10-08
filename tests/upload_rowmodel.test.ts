@@ -118,6 +118,14 @@ describe("toRow + staleOf — staleness is exact", () => {
     expect(staleOf({ record: committedRecord(changed), source: SRC, effective: changed, meta: EMPTY_META, sourceHash: SOURCE_HASH })).toBe(false);
   });
 
+  it("stock stroke-color and transparent-background changes mark a package stale", () => {
+    const record = committedRecord(DEFAULT_UPLOAD_SETTINGS);
+    const stroke = { ...DEFAULT_UPLOAD_SETTINGS, strokeColor: "#123456" };
+    const transparent = { ...DEFAULT_UPLOAD_SETTINGS, transparentSvgBackground: true };
+    expect(staleOf({ record, source: SRC, effective: stroke, meta: EMPTY_META, sourceHash: SOURCE_HASH })).toBe(true);
+    expect(staleOf({ record, source: SRC, effective: transparent, meta: EMPTY_META, sourceHash: SOURCE_HASH })).toBe(true);
+  });
+
   it("a source change (hash, path or version) marks the row stale", () => {
     const record = committedRecord(DEFAULT_UPLOAD_SETTINGS);
     expect(staleOf({ record, source: SRC, effective: DEFAULT_UPLOAD_SETTINGS, meta: EMPTY_META, sourceHash: "sha256:other" })).toBe(true);
@@ -138,6 +146,14 @@ describe("metaFromRecord + statusOf", () => {
     const meta = metaFromRecord(committedRecord(DEFAULT_UPLOAD_SETTINGS, META), false);
     expect(meta.state).toBe("accepted");
     expect(meta.metadata).toEqual(META);
+  });
+
+  it("canonicalizes a legacy accepted title and marks its old package stale", () => {
+    const record = committedRecord(DEFAULT_UPLOAD_SETTINGS, META);
+    record.metadata = { ...record.metadata!, title: `${META.title}.`, fingerprint: "legacy-period-title-fingerprint" };
+    const meta = metaFromRecord(record, false);
+    expect(meta.metadata?.title).toBe(META.title);
+    expect(staleOf({ record, source: SRC, effective: DEFAULT_UPLOAD_SETTINGS, meta, sourceHash: SOURCE_HASH })).toBe(true);
   });
 
   it("an invalid or missing block leaves the fields empty", () => {

@@ -174,6 +174,50 @@ describe("runExport — the full package commits per icon", () => {
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 3886, height: 3886 });
   });
 
+  it("keeps JPEG and EPS backplates while only the generated SVG background is transparent", async () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">`
+      + `<rect x="10" y="10" width="80" height="80" fill="#ffffff"/>`
+      + `<path d="M20 50h60" fill="none" stroke="#112233" stroke-width="2.806"/></svg>`;
+    const root = pairRoot(source);
+    const rasterInputs: { svg: string; background: string }[] = [];
+    const settings: UploadSettings = {
+      ...DEFAULT_UPLOAD_SETTINGS, background: "#123456", strokeColor: "#cc00aa",
+      transparentSvgBackground: true, optimizeSvg: false, includeEps: true,
+    };
+    const result = await runExport(args(root, {
+      settings, defaults: settings,
+      deps: { raster: {
+        render: async (svg, target) => {
+          rasterInputs.push({ svg, background: target.background });
+          return { width: target.width, height: target.height } as unknown as HTMLCanvasElement;
+        },
+        encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
+      } },
+    }));
+    expect(result.status).toBe("processed");
+    const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+    const svgRoot = doc.documentElement;
+    expect(svgRoot.getAttribute("width")).toBeNull();
+    expect(svgRoot.getAttribute("height")).toBeNull();
+    expect(svgRoot.getAttribute("viewBox")?.split(" ")).toHaveLength(4);
+    expect(Array.from(svgRoot.children).some((el) => el.localName === "rect")).toBe(false);
+    expect(svgRoot.querySelector("g > rect")?.getAttribute("fill")).toBe("#ffffff");
+    expect(svgRoot.querySelector("g > rect")?.getAttribute("width")).toBe("80");
+    const path = svgRoot.querySelector("g > path");
+    expect(path?.getAttribute("stroke")).toBe("#cc00aa");
+    expect(path?.getAttribute("stroke-width")).toBe("3");
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    expect(rasterInputs).toHaveLength(1);
+    expect(rasterInputs[0].background).toBe("#123456");
+    const rasterRoot = new DOMParser().parseFromString(rasterInputs[0].svg, "image/svg+xml").documentElement;
+    expect(Array.from(rasterRoot.children).some((el) => el.localName === "rect" && el.getAttribute("fill") === "#123456")).toBe(true);
+    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(eps).toContain("0.071 0.204 0.337 setrgbcolor fill");
+    expect(fileText(root, ROW.svgPath)).toBe(source);
+  });
+
   it("a pinned artboard decides the committed size: 512×256 means a 512×256 JPEG and SVG", async () => {
     const root = pairRoot();
     const settings: UploadSettings = {
@@ -188,10 +232,36 @@ describe("runExport — the full package commits per icon", () => {
     const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
-    expect(doc.documentElement.getAttribute("width")).toBe("512");
+    expect(doc.documentElement.getAttribute("width")).toBeNull();
+    expect(doc.documentElement.getAttribute("height")).toBeNull();
     expect(verifyExportSvg(svgText)).toEqual([]);
     const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 512, height: 256 });
+  });
+
+  it("canonicalizes a terminal title period across SVG, DC metadata and export.json", async () => {
+    const root = pairRoot();
+    const submitted: IconMetadata = { ...META, title: `${META.title}.  ` };
+    const canonical: IconMetadata = { ...submitted, title: META.title };
+    const result = await runExport(args(root, {
+      metadata: submitted,
+      metadataInfo: {
+        prompt: "the prompt", provider: "Gemini", model: "gemini-3.1-flash-lite",
+        requestId: null, usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(submitted),
+      },
+    }));
+    expect(result.status).toBe("processed");
+    const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
+    expect(readEmbeddedMetadata(svgText)).toEqual(canonical);
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    const svgRoot = new DOMParser().parseFromString(svgText, "image/svg+xml").documentElement;
+    expect(svgRoot.getAttribute("xmlns:dc")).toBe("http://purl.org/dc/elements/1.1/");
+    expect(svgRoot.getAttribute("xmlns:rdf")).toBe("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+    expect(svgRoot.getAttribute("width")).toBeNull();
+    expect(svgRoot.getAttribute("height")).toBeNull();
+    const record = readRecord(root);
+    expect(record.metadata?.title).toBe(canonical.title);
+    expect(record.metadata?.fingerprint).toBe(metadataFingerprint(canonical));
   });
 
   it("lets the user keep the artboard's RATIO at their own megapixels", async () => {
@@ -285,6 +355,28 @@ describe("runExport — selective re-export (no redundant work)", () => {
     expect(second.status).toBe("processed");
     expect(spy.renders).toBe(0);
     expect(fileText(root, `${DIR}/export/export.json`)).toBe(before);
+  });
+
+  it("rebuilds the SVG/JPEG when stroke color or transparency changes", async () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#ffffff"/>`
+      + `<path d="M20 50h60" fill="none" stroke="#112233" stroke-width="2.806"/></svg>`;
+    const root = pairRoot(source);
+    await runExport(args(root));
+    const oldFingerprint = readRecord(root).settings.fingerprint;
+    const settings: UploadSettings = {
+      ...DEFAULT_UPLOAD_SETTINGS, strokeColor: "#abcdef", transparentSvgBackground: true,
+    };
+    const spy = { renders: 0 };
+    const result = await runExport(args(root, {
+      settings, defaults: settings, record: readRecord(root),
+      deps: { raster: fakeRaster(3886, 3886, spy) },
+    }));
+    expect(result.stages).toEqual(["prepare", "render", "optimize", "validate", "commit"]);
+    expect(spy.renders).toBe(1);
+    const output = new DOMParser().parseFromString(fileText(root, `${DIR}/export/${STEM}.svg`), "image/svg+xml");
+    expect(Array.from(output.documentElement.children).some((el) => el.localName === "rect")).toBe(false);
+    expect(output.querySelector("path[stroke]")?.getAttribute("stroke")).toBe("#abcdef");
+    expect(readRecord(root).settings.fingerprint).not.toBe(oldFingerprint);
   });
 
   it("a metadata edit re-embeds only — no AI, no render", async () => {

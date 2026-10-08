@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { enforceExportSvg, verifyExportSvg } from "../src/lib/upload/clean";
 import { prepareExportSvg } from "../src/lib/upload/prepare";
 import { optimizeSvg } from "../src/lib/upload/optimize";
+import { embedMetadataInSvg } from "../src/lib/upload/embed";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
@@ -29,6 +30,40 @@ describe("verifyExportSvg — the shipped file's rules", () => {
     expect(verifyExportSvg(await exported(CLEAN_SOURCE))).toEqual([]);
   });
 
+  it("requires scalable root dimensions while preserving artwork dimensions", () => {
+    const dirty = `<svg ${NS} version="1.1" viewBox="0 0 24 24" width="24" height="24">`
+      + `<rect x="2" y="2" width="20" height="20"/></svg>`;
+    expect(verifyExportSvg(dirty)).toContainEqual(expect.stringContaining("root must not have fixed width or height"));
+    const report = enforceExportSvg(dirty);
+    expect(report.violations).toEqual([]);
+    const root = new DOMParser().parseFromString(report.svg, "image/svg+xml").documentElement;
+    expect(root.getAttribute("width")).toBeNull();
+    expect(root.getAttribute("height")).toBeNull();
+    expect(root.querySelector("rect")?.getAttribute("width")).toBe("20");
+    expect(root.querySelector("rect")?.getAttribute("height")).toBe("20");
+  });
+
+  it("keeps Dublin Core and RDF declarations once each on the root", () => {
+    const clean = `<svg ${NS} version="1.1" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20"/></svg>`;
+    const svg = embedMetadataInSvg(clean, {
+      title: "Minimal line icon of growth and change",
+      description: "A minimal growth symbol showing a clean and useful idea",
+      tags: ["icon", "pictogram", "vector", "stroke", "line", "editable", "web", "growth", "change", "design"],
+    });
+    const report = enforceExportSvg(svg);
+    expect(report.violations).toEqual([]);
+    const doc = new DOMParser().parseFromString(report.svg, "image/svg+xml");
+    const root = doc.documentElement;
+    expect(root.getAttribute("xmlns")).toBe("http://www.w3.org/2000/svg");
+    expect(root.getAttribute("xmlns:dc")).toBe("http://purl.org/dc/elements/1.1/");
+    expect(root.getAttribute("xmlns:rdf")).toBe("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+    for (const el of Array.from(doc.querySelectorAll("*"))) {
+      if (el === root) continue;
+      expect(el.hasAttribute("xmlns:dc")).toBe(false);
+      expect(el.hasAttribute("xmlns:rdf")).toBe(false);
+    }
+  });
+
   it("names every violation: version, viewBox, raster, style, comments", () => {
     expect(verifyExportSvg(`<svg ${NS} viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>`))
       .toContainEqual(expect.stringContaining("version 1.1"));
@@ -40,6 +75,25 @@ describe("verifyExportSvg — the shipped file's rules", () => {
       .toContainEqual(expect.stringContaining("<style>"));
     expect(verifyExportSvg(`<svg ${NS} version="1.1" viewBox="0 0 1 1"><!-- made by a tool --><path d="M0 0h1v1z"/></svg>`))
       .toContainEqual(expect.stringContaining("comment"));
+  });
+
+  it("flags fractional stroke widths and rebuilds only those values to integers", () => {
+    const source = `<svg ${NS} version="1.1" viewBox="0 0 24 24"><g stroke-width="2.806">`
+      + `<path d="M1 1h5" stroke="#111" stroke-width="7.999906"/></g></svg>`;
+    expect(verifyExportSvg(source)).toContainEqual(expect.stringContaining("stroke-width"));
+    const report = enforceExportSvg(source);
+    expect(report.violations).toEqual([]);
+    const doc = new DOMParser().parseFromString(report.svg, "image/svg+xml");
+    expect(doc.querySelector("g")?.getAttribute("stroke-width")).toBe("3");
+    expect(doc.querySelector("path")?.getAttribute("stroke-width")).toBe("8");
+    expect(report.svg).not.toMatch(/stroke-width="[^"]*\.\d/);
+  });
+
+  it("refuses nonnumeric stroke widths rather than shipping a non-integer value", () => {
+    const source = `<svg ${NS} version="1.1" viewBox="0 0 24 24"><path d="M1 1h5" stroke="#111" stroke-width="inherit"/></svg>`;
+    expect(verifyExportSvg(source)).toContainEqual(expect.stringContaining("stroke-width must be numeric"));
+    const report = enforceExportSvg(source);
+    expect(report.violations).toContainEqual(expect.stringContaining("stroke-width must be numeric"));
   });
 
   it("names naming: ids, classes, data-* and aria-*", () => {

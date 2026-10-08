@@ -9,7 +9,7 @@ import { probePath, tryGetFile, type DirHandleLike } from "../lib/fs";
 import { sha256HexText } from "../lib/upload/hash";
 import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
 import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
-import { metadataFingerprint } from "../lib/upload/meta";
+import { canonicalizeMetadata, metadataFingerprint } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
 import { cachedMeta, restoredMeta } from "./metacache";
 import type { UploadRowSource } from "./discovery";
@@ -112,7 +112,7 @@ export function metaFromRecord(record: ExportRecord | null, interrupted: boolean
   if (block === null || block.state !== "accepted" || block.title === "") return EMPTY_META;
   return {
     state: "accepted",
-    metadata: { title: block.title, description: block.description, tags: [...block.tags] },
+    metadata: canonicalizeMetadata({ title: block.title, description: block.description, tags: [...block.tags] }),
     validation: block.validation,
     usage: block.usage,
     detail: "",

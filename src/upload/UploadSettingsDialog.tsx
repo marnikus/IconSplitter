@@ -8,6 +8,7 @@
 import {
   BG_PRESETS, normalizeHex,
 } from "../lib/svgbackground";
+import StrokeColorSetting from "./StrokeColorSetting";
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
   clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
@@ -66,7 +67,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
   );
 }
 
-/** The seven settings, one field component each. */
+/** The settings grid: one field component per export decision. */
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
@@ -75,7 +76,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint="uniform, % of the fitted artwork's largest side" />
       <NumberSetting p={p} effective={effective} field="strokePt" label="Stroke width (pt)" testid="stroke"
         min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePt}
-        hint="0 = leave the artwork's strokes untouched · 1 pt = 4/3 px at 96 DPI" />
+        hint="0 = keep source widths, rounded to whole px · 1 pt = 4/3 px at 96 DPI" />
       <ArtboardSetting p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
@@ -84,6 +85,10 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
         hint="a genuine EPS for the documented subset; anything else fails that stage honestly" />
+      <StrokeColorSetting value={effective.strokeColor} marker={markerOf(p, "strokeColor")}
+        onChange={(value) => change(p, "strokeColor", value)} />
+      <ToggleSetting p={p} effective={effective} field="transparentSvgBackground" label="Transparent SVG background"
+        testid="svg-transparent" hint="omit only the generated SVG backplate; JPEG and EPS keep the configured background" />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
@@ -272,7 +277,7 @@ function BackgroundSetting({ p, effective }: { p: UploadSettingsDialogProps; eff
           onChange={(e) => { const hex = normalizeHex(e.target.value); if (hex !== null) change(p, field, hex); }} />
         <output className="svg-bg-value" data-testid="upload-set-bg-value">{effective.background}</output>
       </div>
-      <small className="up-hint">the JPEG flattens onto it; the artwork is never recoloured</small>
+      <small className="up-hint">JPEG flattens onto it, EPS retains it; the artwork is never recoloured</small>
     </div>
   );
 }

@@ -16,7 +16,10 @@ import { buildArtifacts, StageError, type Artifacts } from "./exportstages";
 import { validateArtifacts } from "./exportvalidate";
 import { sha256HexText } from "../lib/upload/hash";
 import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
-import { metadataFingerprint, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
+import {
+  canonicalizeMetadata, metadataFingerprint, validateMetadata,
+  type IconMetadata, type MetadataValidation,
+} from "../lib/upload/meta";
 import type { GeminiUsage } from "../lib/upload/gemini";
 import { redact } from "../lib/svgsecret";
 import {
@@ -67,7 +70,8 @@ export interface ExportRunArgs {
 
 /** One icon's export run. */
 export async function runExport(args: ExportRunArgs): Promise<ExportRunResult> {
-  const plan = await planFor(args);
+  const normalized = canonicalMetadataArgs(args);
+  const plan = await planFor(normalized);
   if (plan.error !== null) {
     return { rowId: args.row.id, status: "failed", stages: [], outputs: outputsOf(args.record), record: args.record, error: plan.error };
   }
@@ -77,7 +81,16 @@ export async function runExport(args: ExportRunArgs): Promise<ExportRunResult> {
       outputs: outputsOf(args.record), record: args.record, error: null,
     };
   }
-  return runStages(args, plan);
+  return runStages(normalized, plan);
+}
+
+function canonicalMetadataArgs(args: ExportRunArgs): ExportRunArgs {
+  if (args.metadata === null) return args;
+  const metadata = canonicalizeMetadata(args.metadata);
+  const metadataInfo = args.metadataInfo === null ? null : {
+    ...args.metadataInfo, validation: validateMetadata(metadata),
+  };
+  return { ...args, metadata, metadataInfo };
 }
 
 // --- preflight + planner --------------------------------------------------------

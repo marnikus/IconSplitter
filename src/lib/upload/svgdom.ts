@@ -8,6 +8,10 @@
 // a prefixed name is exactly what editor bloat looks like.
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
+export const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
+export const XLINK_NS = "http://www.w3.org/1999/xlink";
+export const RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+export const DC_NS = "http://purl.org/dc/elements/1.1/";
 const ID_REF = /url\(\s*#([^)\s"']+)\s*\)/g;
 
 /** The root and every descendant, in document order. */

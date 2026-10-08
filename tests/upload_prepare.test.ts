@@ -31,11 +31,11 @@ function prepared(source: string, overrides: SettingsOverrides = {}) {
 const RECT_ICON = `<svg ${NS} viewBox="0 0 100 100" width="100" height="100"><rect x="10" y="10" width="80" height="80" fill="#000000"/></svg>`;
 
 describe("prepareExportSvg — a pinned artboard (the final px size)", () => {
-  it("lands on exactly 512×512, scales the artwork and centres it", () => {
+  it("lands on exactly 512×512 in the viewBox, scales the artwork and centres it", () => {
     const { result, root } = prepared(RECT_ICON, { artboard: { mode: "preset", size: 512, width: 512, height: 512 } });
     expect(result.fit.viewBox).toBe("0 0 512 512");
-    expect(root.getAttribute("width")).toBe("512");
-    expect(root.getAttribute("height")).toBe("512");
+    expect(root.getAttribute("width")).toBeNull();
+    expect(root.getAttribute("height")).toBeNull();
     // pad 8% of 512 = 40.96; scale = (512 − 2·40.96)/80 = 5.376
     expect(result.fit.scale).toBeCloseTo(5.376);
     expect(root.querySelector("g")?.getAttribute("transform")).toBe("translate(-12.8 -12.8) scale(5.376)");
@@ -50,14 +50,12 @@ describe("prepareExportSvg — a pinned artboard (the final px size)", () => {
     expect(root.querySelector("g")?.getAttribute("transform")).toContain("scale(2.176)");
   });
 
-  it("scales the configured stroke with the artwork, so the output width really is 2.2 pt", () => {
+  it("rounds a configured stroke to the nearest whole output px", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none" stroke="#000"/></svg>`;
     const { root } = prepared(src, { strokePt: 2.2, artboard: { mode: "preset", size: 512, width: 512, height: 512 } });
     const path = root.querySelector("g path");
-    const scale = Number(/scale\(([\d.]+)\)/.exec(root.querySelector("g")?.getAttribute("transform") ?? "")?.[1]);
-    expect(scale).toBeGreaterThan(1);
-    // 2.2 pt = 2.9333 px of the FINAL 512 px file, expressed in user units
-    expect(Number(path?.getAttribute("stroke-width"))).toBeCloseTo(2.9333 / scale, 3);
+    expect(path?.getAttribute("stroke-width")).toBe("3");
+    expect(path?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
   });
 });
 
@@ -67,8 +65,8 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
     // bounds 80×80 at (10,10); pad = 6.4 → artboard 92.8; offset = 6.4 − 10 = −3.6
     expect(result.fit.viewBox).toBe("0 0 92.8 92.8");
     expect(root.getAttribute("viewBox")).toBe("0 0 92.8 92.8");
-    expect(root.getAttribute("width")).toBe("92.8");
-    expect(root.getAttribute("height")).toBe("92.8");
+    expect(root.getAttribute("width")).toBeNull();
+    expect(root.getAttribute("height")).toBeNull();
     const group = root.querySelector("g");
     expect(group?.getAttribute("transform")).toBe("translate(-3.6 -3.6)");
   });
@@ -82,6 +80,17 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
     expect(bg?.getAttribute("x")).toBe("0");
     expect(bg?.getAttribute("y")).toBe("0");
     expect(root.firstElementChild).toBe(bg);
+  });
+
+  it("keeps the prepared backplate for JPEG/EPS; final SVG transparency is a later stage", () => {
+    const source = `<svg ${NS} viewBox="0 0 24 24"><rect x="1" y="1" width="10" height="10" fill="#ffffff"/>`
+      + `<path d="M3 3h5v5H3z" fill="#000"/></svg>`;
+    const { root } = prepared(source, { transparentSvgBackground: true });
+    expect(root.querySelector(":scope > rect")?.getAttribute("fill")).toBe("#ffffff");
+    expect(root.querySelector(":scope > rect")?.getAttribute("stroke")).toBe("none");
+    expect(root.querySelectorAll("g > rect")).toHaveLength(1);
+    expect(root.querySelector("g > rect")?.getAttribute("fill")).toBe("#ffffff");
+    expect(root.querySelector("g > rect")?.getAttribute("width")).toBe("10");
   });
 
   it("leaves the artwork itself untouched apart from the wrapper", () => {
@@ -130,24 +139,26 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
 describe("prepareExportSvg — stroke normalization (pt at 96 DPI)", () => {
   const STROKED = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1"/></svg>`;
 
-  it("sets every visible stroke to w·4/3 px (2.2 pt → 2.933)", () => {
+  it("rounds configured points to integer px (2.2 pt → 3)", () => {
     const { result, root } = prepared(STROKED, { strokePt: 2.2 });
     expect(result.strokesNormalized).toBe(1);
-    expect(root.querySelector("g > rect")?.getAttribute("stroke-width")).toBe("2.933");
+    expect(root.querySelector("g > rect")?.getAttribute("stroke-width")).toBe("3");
+    expect(root.querySelector("g > rect")?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
   });
 
-  it("divides by the accumulated CTM scale so the device stroke is exact", () => {
+  it("keeps configured integer output width under nested artwork transforms", () => {
     const src = `<svg ${NS} viewBox="0 0 48 48"><g transform="scale(2)"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1"/></g></svg>`;
     const { result, root } = prepared(src, { strokePt: 2.2 });
     expect(result.strokesNormalized).toBe(1);
-    expect(root.querySelector("g rect")?.getAttribute("stroke-width")).toBe("1.467");
+    expect(root.querySelector("g g rect")?.getAttribute("stroke-width")).toBe("3");
+    expect(root.querySelector("g g rect")?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
   });
 
   it("normalizes vector-effect=non-scaling-stroke to an explicit width", () => {
     const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
     const { result, root } = prepared(src, { strokePt: 3 });
     const rect = root.querySelector("g > rect");
-    expect(rect?.getAttribute("vector-effect")).toBeNull();
+    expect(rect?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
     expect(rect?.getAttribute("stroke-width")).toBe("4"); // 3 pt = 4 px
     expect(result.strokesNormalized).toBe(1);
   });
@@ -170,13 +181,39 @@ describe("prepareExportSvg — stroke normalization (pt at 96 DPI)", () => {
     expect(root.querySelector("g circle")?.getAttribute("stroke-width")).toBe("1");
   });
 
-  it("strokePt 0 leaves strokes and vector-effect untouched", () => {
-    const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
+  it("strokePt 0 keeps vector-effect and rounds source widths to whole numbers", () => {
+    const src = `<svg ${NS} viewBox="0 0 24 24"><g stroke="#000" stroke-width="2.806" vector-effect="non-scaling-stroke">`
+      + `<rect x="2" y="2" width="20" height="20" fill="none"/></g></svg>`;
     const { result, root } = prepared(src);
     expect(result.strokesNormalized).toBe(0);
+    expect(root.querySelector("g g")?.getAttribute("stroke-width")).toBe("3");
+    expect(root.querySelector("g g")?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+  });
+
+  it("rounds source stroke widths 2.806 → 3 and 7.999906 → 8", () => {
+    const src = `<svg ${NS} viewBox="0 0 30 10"><path d="M1 1h10" fill="none" stroke="#123" stroke-width="2.806"/>`
+      + `<path d="M15 1h10" fill="none" stroke="#456" stroke-width="7.999906"/></svg>`;
+    const { root } = prepared(src);
+    const paths = Array.from(root.querySelectorAll("g > path"));
+    expect(paths.map((path) => path.getAttribute("stroke-width"))).toEqual(["3", "8"]);
+  });
+
+  it("changes only visible stroke paint, never fills or explicit stroke none", () => {
+    const src = `<svg ${NS} viewBox="0 0 24 24">`
+      + `<path d="M1 1h5" fill="#00ff00" stroke="#112233" stroke-width="2.806"/>`
+      + `<path d="M8 1h5" fill="#abcdef" stroke="none" stroke-width="2.806"/>`
+      + `<rect x="15" y="1" width="5" height="5" fill="#fedcba"/></svg>`;
+    const { result, root } = prepared(src, { strokeColor: "#abC" });
+    const paths = Array.from(root.querySelectorAll("g > path"));
     const rect = root.querySelector("g > rect");
-    expect(rect?.getAttribute("stroke-width")).toBe("1");
-    expect(rect?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+    expect(result.strokesNormalized).toBe(1);
+    expect(paths[0].getAttribute("stroke")).toBe("#aabbcc");
+    expect(paths[0].getAttribute("stroke-width")).toBe("3");
+    expect(paths[0].getAttribute("fill")).toBe("#00ff00");
+    expect(paths[1].getAttribute("stroke")).toBe("none");
+    expect(paths[1].getAttribute("fill")).toBe("#abcdef");
+    expect(rect?.getAttribute("stroke")).toBeNull();
+    expect(rect?.getAttribute("fill")).toBe("#fedcba");
   });
 });
 
@@ -246,8 +283,8 @@ describe("prepareExportSvg — honest failures", () => {
     // lives inside the transform group, and that is the one under test here.
     const rect = new DOMParser().parseFromString(result.svg, "image/svg+xml").querySelector("g rect");
     expect(rect?.getAttribute("style")).toBe("font-family:Arial");
-    expect(Number(rect?.getAttribute("stroke-width"))).toBeGreaterThan(0);
-    expect(Number(rect?.getAttribute("stroke-width"))).toBeLessThan(2.9334); // the artboard scale divides it down
+    expect(rect?.getAttribute("stroke-width")).toBe("3");
+    expect(rect?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
   });
 
   it("rejects a transform on the root svg", () => {

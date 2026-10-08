@@ -2,10 +2,10 @@
 // (RULE 1/3). The approved source is parsed, never modified; the export
 // document is a re-rooted copy: viewBox = padded artboard (fitArtboard),
 // artwork translated to centre it, an explicit background rect painted
-// first (output policy: the background IS part of the export), and — when a
-// stroke width is configured — every visible stroke normalized to that width
-// in output px at 96 DPI, `vector-effect="non-scaling-stroke"` included, so
-// the export renders the configured width at its intrinsic size. Content the
+// first in the prepared artifact (JPEG/EPS retain it; an opt-in final-SVG pass
+// may omit only this generated rect), and — when a stroke width is configured —
+// every visible stroke rounded to that width in output px at 96 DPI, with
+// `vector-effect="non-scaling-stroke"` so transforms cannot fractionalize it. Content the
 // geometry math cannot answer for (text, image, geometry-restyle CSS, a
 // transform on the root) fails the preparation honestly instead of being
 // guessed. Clean code (2026-10-08) is part of the copy: SVG 1.1, a real
@@ -15,8 +15,8 @@
 import { BACKGROUND_DEFAULT, artboardSize, type UploadSettings } from "./settings";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { normalizeHex } from "../svgbackground";
-import { scaleOf } from "./geom/matrix";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
+import { roundStrokeWidthAttributes } from "./geom/stroke";
 import { fitArtboard, fmt, ptToPx, type ArtboardFit } from "./geom";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -28,7 +28,7 @@ export interface PreparedSvg {
   svg: string;
   fit: ArtboardFit;
   bounds: Bounds;
-  /** Elements whose stroke-width was normalized (0 when strokePt = 0). */
+  /** Visible stroked elements changed by a configured width or paint override. */
   strokesNormalized: number;
   /** The background the export paints (normalized hex). */
   background: string;
@@ -38,6 +38,20 @@ export type PrepareFailure = Extract<PrepareResult, { ok: false }>;
 export type PrepareResult =
   | ({ ok: true } & PreparedSvg)
   | { ok: false; code: PrepareFailureCode; detail: string };
+
+/** Removes the known first-child backplate from a freshly prepared artifact only. */
+export function omitPreparedBackground(svgText: string): string {
+  const doc = parseSvgDocument(svgText);
+  if (doc === null) throw new Error("the prepared SVG's exporter background was not found");
+  const root = doc.documentElement;
+  const background = root.firstElementChild;
+  if (background === null || name(background) !== "rect" || background.getAttribute("x") !== "0"
+    || background.getAttribute("y") !== "0" || background.getAttribute("stroke") !== "none") {
+    throw new Error("the prepared SVG's exporter background was not found");
+  }
+  root.removeChild(background);
+  return new XMLSerializer().serializeToString(doc);
+}
 
 /** Source SVG text + effective settings → the export copy, or an honest failure. */
 export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): PrepareResult {
@@ -53,12 +67,10 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
   const fit = fitArtboard(vb.bounds, settings.paddingPct, artboardSize(settings.artboard));
-  // The stroke width is a width in the FINAL file, so it is divided by the
-  // artboard's scale as well: a 2.2 pt stroke stays 2.2 pt whatever size the
-  // artboard pinned the artwork to.
-  const strokesNormalized = settings.strokePt > 0
-    ? normalizeStrokes(root, ptToPx(settings.strokePt) / fit.scale)
-    : 0;
+  const strokeColor = settings.strokeColor === null ? null : normalizeHex(settings.strokeColor);
+  const strokeWidth = settings.strokePt > 0 ? ptToPx(settings.strokePt) : null;
+  const strokesNormalized = configureStrokes(root, strokeWidth, strokeColor);
+  roundStrokeWidthAttributes(root);
   const background = normalizeHex(settings.background) ?? BACKGROUND_DEFAULT;
   applyArtboard(root, fit, background);
   return {
@@ -98,23 +110,28 @@ function fail(code: PrepareFailureCode, detail: string): PrepareFailure {
   return { ok: false, code, detail };
 }
 
-/** Sets every visible stroke to `widthPx` output px, in local user units. */
-function normalizeStrokes(root: Element, widthPx: number): number {
-  let count = 0;
+/** Applies configured stroke paint/width only to shapes with an existing stroke. */
+function configureStrokes(root: Element, width: number | null, color: string | null): number {
+  let changed = 0;
   for (const hit of strokeHits(root)) {
-    if (hit.stroke.none || !isShape(hit.el)) continue;
-    const k = scaleOf(hit.ctm);
-    setStrokeWidth(hit.el, k > 1e-9 ? widthPx / k : widthPx);
-    count++;
+    if (hit.stroke.none || !isShape(hit.el) || (width === null && color === null)) continue;
+    if (width !== null) setStrokeWidth(hit.el, width);
+    if (color !== null) setStrokeColor(hit.el, color);
+    changed++;
   }
-  return count;
+  return changed;
 }
 
-/** An explicit width wins over inherited and inline-style values. */
+/** A configured width is fixed in output px, independent of artwork transforms. */
 function setStrokeWidth(el: Element, width: number): void {
   stripStyleKeys(el, ["stroke-width", "vector-effect"]);
-  el.setAttribute("stroke-width", fmt(width));
-  el.removeAttribute("vector-effect");
+  el.setAttribute("stroke-width", String(Math.round(width)));
+  el.setAttribute("vector-effect", "non-scaling-stroke");
+}
+
+function setStrokeColor(el: Element, color: string): void {
+  stripStyleKeys(el, ["stroke"]);
+  el.setAttribute("stroke", color);
 }
 
 function stripStyleKeys(el: Element, keys: string[]): void {
@@ -135,8 +152,8 @@ function keyOf(decl: string): string {
 /** Re-roots the document: padded artboard viewBox, background, centred artwork. */
 function applyArtboard(root: Element, fit: ArtboardFit, background: string): void {
   root.setAttribute("viewBox", fit.viewBox);
-  root.setAttribute("width", fmt(fit.artW));
-  root.setAttribute("height", fmt(fit.artH));
+  root.removeAttribute("width");
+  root.removeAttribute("height");
   const doc = root.ownerDocument;
   const group = doc.createElementNS(SVG_NS, "g");
   const scale = fit.scale === 1 ? "" : ` scale(${fmt(fit.scale)})`;

@@ -3,16 +3,18 @@
 // a simple paint-only stylesheet into the elements (which is what lets the
 // class names go), drops every naming attribute and every foreign element,
 // keeps a referenced id under a minimal generated name, and guarantees the
-// SVG 1.1 root. Geometry, paints and the viewBox are never touched: this pass
-// changes the paperwork, never the picture.
+// scalable SVG 1.1 root. Coordinates and the viewBox stay untouched; stroke
+// widths are intentionally rounded to whole numbers, while paint styles fold
+// into equivalent attributes.
 //
 // What it cannot fold is refused by `unsupportedContent` — never guessed at
 // (RULE 5): raster content, and any stylesheet outside the documented subset.
 
 import {
-  allElements, attributeNames, comments, isIdReference, isSvgElement,
-  localName, referencedIds, rewriteRefs,
+  allElements, attributeNames, comments, insideMetadata, isIdReference, isSvgElement,
+  localName, referencedIds, rewriteRefs, DC_NS, RDF_NS, SVG_NS, XLINK_NS, XMLNS_NS,
 } from "./svgdom";
+import { roundStrokeWidthAttributes } from "./geom/stroke";
 
 /** Attributes that are naming or editor bookkeeping, never rendering. */
 export const BLOAT_ATTRS = ["class", "role", "xml:space", "enable-background"];
@@ -64,11 +66,15 @@ function foldStylesheets(root: Element): string | null {
 /** The rebuilding pass. Idempotent: running it twice changes nothing the second time. */
 export function cleanExportDom(root: Element, opts: CleanOptions = {}): void {
   root.setAttribute("version", "1.1");
+  root.setAttributeNS(XMLNS_NS, "xmlns", SVG_NS);
+  root.removeAttribute("width");
+  root.removeAttribute("height");
   foldInlineStyles(root);
   // Fold what we can BEFORE removing anything: a block that is merely deleted
   // would take its paint with it and silently change the picture. A block the
   // subset cannot fold stays in the tree, so the check keeps flagging it.
   foldStylesheets(root);
+  roundStrokeWidthAttributes(root);
   for (const node of comments(root)) node.parentNode?.removeChild(node);
   for (const el of allElements(root)) removeJunkElement(el, opts);
   for (const el of allElements(root)) stripAttributes(el);
@@ -207,14 +213,33 @@ function renameReferencedIds(root: Element): void {
   for (const el of allElements(root)) rewriteRefs(el, map);
 }
 
-/** Declarations are bookkeeping: only a USED `xmlns:xlink` is allowed to stay. */
+/** Used SVG/RDF/DC namespaces are declared once on the root, never on children. */
 function dropUnusedNamespaces(root: Element): void {
-  const usesXlink = allElements(root).some((el) => attributeNames(el).some((a) => a.startsWith("xlink:")));
-  for (const el of allElements(root)) {
+  const elements = allElements(root);
+  keepNamespace(root, elements, "xlink", XLINK_NS);
+  keepNamespace(root, elements.filter(insideMetadata), "rdf", RDF_NS);
+  keepNamespace(root, elements.filter(insideMetadata), "dc", DC_NS);
+  stripUnknownNamespaces(elements);
+}
+
+function keepNamespace(root: Element, elements: Element[], prefix: string, uri: string): void {
+  const attr = `xmlns:${prefix}`;
+  const used = namespacePrefixUsed(elements, prefix);
+  for (const el of allElements(root).slice(1)) el.removeAttribute(attr);
+  if (used) root.setAttributeNS(XMLNS_NS, attr, uri);
+  else root.removeAttribute(attr);
+}
+
+function namespacePrefixUsed(elements: Element[], prefix: string): boolean {
+  return elements.some((el) => el.nodeName.startsWith(`${prefix}:`)
+    || attributeNames(el).some((name) => name.startsWith(`${prefix}:`)));
+}
+
+function stripUnknownNamespaces(elements: Element[]): void {
+  const allowed = new Set(["xmlns:xlink", "xmlns:rdf", "xmlns:dc"]);
+  for (const el of elements) {
     for (const name of attributeNames(el)) {
-      if (name.startsWith("xmlns:") && !(name === "xmlns:xlink" && usesXlink)) {
-        el.removeAttribute(name);
-      }
+      if (name.startsWith("xmlns:") && !allowed.has(name)) el.removeAttribute(name);
     }
   }
 }

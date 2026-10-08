@@ -141,6 +141,8 @@ function storedDefaults(): {
   artboard: { mode: string; size: number; width: number; height: number };
   jpegMegapixels: number;
   jpegMatchArtboard: boolean;
+  strokeColor: string | null;
+  transparentSvgBackground: boolean;
 } {
   return JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").defaults ?? {};
 }
@@ -599,6 +601,32 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await click("[data-testid=upload-set-close]");
   });
 
+  it("persists the stock stroke color and transparent SVG choice with icon markers", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    expect((q("[data-testid=upload-set-stroke-color]") as HTMLInputElement).value).toBe("#000000");
+    expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("Original artwork");
+    expect((q("[data-testid=upload-set-svg-transparent]") as HTMLInputElement).checked).toBe(false);
+    await type("[data-testid=upload-set-stroke-color]", "#123456");
+    await click("[data-testid=upload-set-svg-transparent]");
+    expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("#123456");
+    expect(storedDefaults()).toMatchObject({ strokeColor: "#123456", transparentSvgBackground: true });
+    expect((q("[data-testid=hist-undo]") as HTMLButtonElement).disabled).toBe(true);
+    await click("[data-testid=upload-set-close]");
+
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(text("[data-testid=upload-set-marker-stroke-color]")).toBe("inherited");
+    expect(text("[data-testid=upload-set-marker-svg-transparent]")).toBe("inherited");
+    await click("[data-testid=upload-set-stroke-original]");
+    expect(text("[data-testid=upload-set-marker-stroke-color]")).toBe("overridden");
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG].strokeColor).toBeNull();
+    await click("[data-testid=upload-set-reset]");
+    const reset = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(reset.overrides[FOG]).toBeUndefined();
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
+  });
+
   it("applies the defaults to the selection as ONE undoable entry", async () => {
     await mount(makeRoot());
     await check(FOG);
@@ -607,7 +635,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("9 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("11 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -718,7 +746,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
     // edit + accept (no record yet → no auto export)
-    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart");
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart.");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth. Speed and growth chart");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");

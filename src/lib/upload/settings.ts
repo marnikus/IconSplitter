@@ -11,9 +11,13 @@ import { isRecord } from "../isrecord";
 export interface UploadSettings {
   /** Uniform padding on all four sides, % of the fitted artwork's largest side. */
   paddingPct: number;
-  /** Opaque background the JPEG flattens onto and the export SVG paints. */
+  /** Background the JPEG flattens onto and the EPS retains. */
   background: string;
-  /** Stroke width in pt at 96 DPI (1 pt = 4/3 px); 0 = leave artwork strokes untouched. */
+  /** Optional stroke paint override; null preserves every source stroke color. */
+  strokeColor: string | null;
+  /** Omit only the exporter-generated SVG backplate (default off). */
+  transparentSvgBackground: boolean;
+  /** Stroke width in pt at 96 DPI (1 pt = 4/3 px); 0 = source width, rounded to px. */
   strokePt: number;
   /** JPEG target resolution in megapixels (default 15.1). */
   jpegMegapixels: number;
@@ -76,6 +80,8 @@ export const CONTENT_ARTBOARD: Artboard = { mode: "content", size: 512, width: 5
 export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   paddingPct: PADDING_DEFAULT,
   background: BACKGROUND_DEFAULT,
+  strokeColor: null,
+  transparentSvgBackground: false,
   strokePt: STROKE_DEFAULT,
   jpegMegapixels: MP_DEFAULT,
   jpegQuality: QUALITY_DEFAULT,
@@ -155,6 +161,8 @@ export function normalizeSettings(raw: unknown): UploadSettings {
   return {
     paddingPct: clampPaddingPct(raw.paddingPct),
     background: normalizeHex(str(raw.background)) ?? BACKGROUND_DEFAULT,
+    strokeColor: hexOrNull(raw.strokeColor),
+    transparentSvgBackground: raw.transparentSvgBackground === true,
     strokePt: clampStrokePt(raw.strokePt),
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
     jpegQuality: clampQuality(raw.jpegQuality),
@@ -172,6 +180,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   readNumbers(raw, out);
   readFlags(raw, out);
   readBackground(raw, out);
+  readStrokeColor(raw, out);
   readArtboard(raw, out);
   return out;
 }
@@ -192,7 +201,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "transparentSvgBackground"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -203,6 +212,19 @@ function readBackground(raw: Record<string, unknown>, out: SettingsOverrides): v
   if (typeof value !== "string") return;
   const hex = normalizeHex(value);
   if (hex !== null) out.background = hex;
+}
+
+function readStrokeColor(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  if (raw.strokeColor === null) {
+    out.strokeColor = null;
+    return;
+  }
+  const color = hexOrNull(raw.strokeColor);
+  if (color !== null) out.strokeColor = color;
+}
+
+function hexOrNull(value: unknown): string | null {
+  return typeof value === "string" ? normalizeHex(value) : null;
 }
 
 /** The artboard is stored only when it really pins something (content ≠ an override). */
@@ -222,11 +244,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 }
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
-  return a.paddingPct === b.paddingPct && a.background === b.background && a.strokePt === b.strokePt
-    && a.jpegMegapixels === b.jpegMegapixels && a.jpegQuality === b.jpegQuality
-    && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps
-    && a.jpegMatchArtboard === b.jpegMatchArtboard
-    && artboardsEqual(a.artboard, b.artboard);
+  return SETTINGS_FIELDS.every((field) => fieldValuesEqual(a[field], b[field]));
 }
 
 function artboardsEqual(a: Artboard, b: Artboard): boolean {
@@ -240,8 +258,8 @@ function artboardsEqual(a: Artboard, b: Artboard): boolean {
  * touched it compared EQUAL and could be swallowed).
  */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
-  "paddingPct", "background", "strokePt", "jpegMegapixels", "jpegQuality",
-  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
+  "paddingPct", "background", "strokeColor", "transparentSvgBackground", "strokePt",
+  "jpegMegapixels", "jpegQuality", "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
 ];
 
 /** Two partial override payloads that pin the same fields with the same values. */
@@ -258,7 +276,7 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
-    round3(s.paddingPct), s.background, round3(s.strokePt),
+    round3(s.paddingPct), s.background, s.strokeColor, s.transparentSvgBackground, round3(s.strokePt),
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
