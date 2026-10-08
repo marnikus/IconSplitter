@@ -95,6 +95,12 @@ describe("what the row opens with", () => {
     expect(validateMetadata(restored.metadata as IconMetadata).ok).toBe(false);
   });
 
+  it("an entry remembered with a trailing period comes back without it (stock review item 5)", () => {
+    const restored = restoredMeta({ state: "accepted", meta: { ...META, title: `${META.title}.` } });
+    expect(restored.metadata?.title).toBe(META.title);
+    expect(restored.state).toBe("accepted");
+  });
+
   it("no entry is the empty state", () => {
     expect(restoredMeta(null)).toEqual(EMPTY_META);
   });

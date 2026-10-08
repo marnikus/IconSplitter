@@ -1,22 +1,25 @@
 // prepare.ts — the export SVG copy of the "SVG to upload" tab
 // (RULE 1/3). The approved source is parsed, never modified; the export
-// document is a re-rooted copy: viewBox = padded artboard (fitArtboard),
-// artwork translated to centre it, an explicit background rect painted
-// first (output policy: the background IS part of the export), and — when a
-// stroke width is configured — every visible stroke normalized to that width
-// in output px at 96 DPI, `vector-effect="non-scaling-stroke"` included, so
-// the export renders the configured width at its intrinsic size. Content the
-// geometry math cannot answer for (text, image, geometry-restyle CSS, a
-// transform on the root) fails the preparation honestly instead of being
+// document is a re-rooted copy: viewBox = padded artboard (fitArtboard) — and
+// ONLY the viewBox: the root carries no px width/height (stock review, 2026-10-08),
+// the artwork translated to centre it, an explicit background rect painted
+// first when the background is a colour (none when `transparent`), and — when
+// a stroke width or a stroke colour is configured — every visible stroke
+// restyled: the width normalized to that pt width in output px at 96 DPI and
+// written tidy (lib/upload/geom/stroke), the paint set to the configured hex.
+// Content the geometry math cannot answer for (text, image, geometry-restyle
+// CSS, a transform on the root) fails the preparation honestly instead of being
 // guessed. Clean code (2026-10-08) is part of the copy: SVG 1.1, a real
 // viewBox, no raster, no `<style>`, and no ids, classes or editor bloat —
 // see lib/upload/clean.
 
-import { BACKGROUND_DEFAULT, artboardSize, type UploadSettings } from "./settings";
+import {
+  artboardSize, isTransparent, readPaint, STROKE_COLOR_ARTWORK, TRANSPARENT, type UploadSettings,
+} from "./settings";
 import { cleanExportDom, unsupportedContent } from "./clean";
-import { normalizeHex } from "../svgbackground";
 import { scaleOf } from "./geom/matrix";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
+import { tidyStrokeWidth } from "./geom/stroke";
 import { fitArtboard, fmt, ptToPx, type ArtboardFit } from "./geom";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -30,7 +33,9 @@ export interface PreparedSvg {
   bounds: Bounds;
   /** Elements whose stroke-width was normalized (0 when strokePt = 0). */
   strokesNormalized: number;
-  /** The background the export paints (normalized hex). */
+  /** Elements whose stroke paint was set (0 when strokeColor = artwork). */
+  strokesRecolored: number;
+  /** The background the export paints: `transparent` or the normalized hex. */
   background: string;
 }
 
@@ -38,6 +43,13 @@ export type PrepareFailure = Extract<PrepareResult, { ok: false }>;
 export type PrepareResult =
   | ({ ok: true } & PreparedSvg)
   | { ok: false; code: PrepareFailureCode; detail: string };
+
+/** What the restyle pass writes onto every visible stroke; null = leave that aspect alone. */
+interface StrokeStyle {
+  /** The width in output px of the FINAL file (already divided by the artboard scale). */
+  widthPx: number | null;
+  color: string | null;
+}
 
 /** Source SVG text + effective settings → the export copy, or an honest failure. */
 export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): PrepareResult {
@@ -53,18 +65,26 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
   const fit = fitArtboard(vb.bounds, settings.paddingPct, artboardSize(settings.artboard));
-  // The stroke width is a width in the FINAL file, so it is divided by the
-  // artboard's scale as well: a 2.2 pt stroke stays 2.2 pt whatever size the
-  // artboard pinned the artwork to.
-  const strokesNormalized = settings.strokePt > 0
-    ? normalizeStrokes(root, ptToPx(settings.strokePt) / fit.scale)
-    : 0;
-  const background = normalizeHex(settings.background) ?? BACKGROUND_DEFAULT;
+  const touched = restyleStrokes(root, strokeStyleOf(settings, fit));
+  const background = readPaint(settings.background, TRANSPARENT) ?? TRANSPARENT;
   applyArtboard(root, fit, background);
   return {
     ok: true,
     svg: new XMLSerializer().serializeToString(doc),
-    fit, bounds: vb.bounds, strokesNormalized, background,
+    fit, bounds: vb.bounds, background,
+    strokesNormalized: touched.widths, strokesRecolored: touched.colors,
+  };
+}
+
+/**
+ * The stroke width is a width in the FINAL file, so it is divided by the
+ * artboard's scale as well: a 2.2 pt stroke stays 2.2 pt whatever size the
+ * artboard pinned the artwork to. The colour is the configured hex, or nothing.
+ */
+function strokeStyleOf(settings: UploadSettings, fit: ArtboardFit): StrokeStyle {
+  return {
+    widthPx: settings.strokePt > 0 ? ptToPx(settings.strokePt) / fit.scale : null,
+    color: settings.strokeColor === STROKE_COLOR_ARTWORK ? null : readPaint(settings.strokeColor, STROKE_COLOR_ARTWORK),
   };
 }
 
@@ -98,23 +118,36 @@ function fail(code: PrepareFailureCode, detail: string): PrepareFailure {
   return { ok: false, code, detail };
 }
 
-/** Sets every visible stroke to `widthPx` output px, in local user units. */
-function normalizeStrokes(root: Element, widthPx: number): number {
-  let count = 0;
+/** One walk over every visible stroke on a shape: width and/or paint, as configured. */
+function restyleStrokes(root: Element, want: StrokeStyle): { widths: number; colors: number } {
+  const touched = { widths: 0, colors: 0 };
+  if (want.widthPx === null && want.color === null) return touched;
   for (const hit of strokeHits(root)) {
     if (hit.stroke.none || !isShape(hit.el)) continue;
-    const k = scaleOf(hit.ctm);
-    setStrokeWidth(hit.el, k > 1e-9 ? widthPx / k : widthPx);
-    count++;
+    if (want.widthPx !== null) {
+      const k = scaleOf(hit.ctm);
+      setStrokeWidth(hit.el, k > 1e-9 ? want.widthPx / k : want.widthPx);
+      touched.widths++;
+    }
+    if (want.color !== null) {
+      setStrokeColor(hit.el, want.color);
+      touched.colors++;
+    }
   }
-  return count;
+  return touched;
 }
 
-/** An explicit width wins over inherited and inline-style values. */
+/** An explicit width wins over inherited and inline-style values; written tidy (stock review item 2). */
 function setStrokeWidth(el: Element, width: number): void {
   stripStyleKeys(el, ["stroke-width", "vector-effect"]);
-  el.setAttribute("stroke-width", fmt(width));
+  el.setAttribute("stroke-width", fmt(tidyStrokeWidth(width)));
   el.removeAttribute("vector-effect");
+}
+
+/** An explicit paint wins over inherited and inline-style values. */
+function setStrokeColor(el: Element, color: string): void {
+  stripStyleKeys(el, ["stroke"]);
+  el.setAttribute("stroke", color);
 }
 
 function stripStyleKeys(el: Element, keys: string[]): void {
@@ -132,18 +165,18 @@ function keyOf(decl: string): string {
   return (at > 0 ? decl.slice(0, at) : decl).trim().toLowerCase();
 }
 
-/** Re-roots the document: padded artboard viewBox, background, centred artwork. */
+/** Re-roots the document: padded artboard viewBox (no px size), background, centred artwork. */
 function applyArtboard(root: Element, fit: ArtboardFit, background: string): void {
   root.setAttribute("viewBox", fit.viewBox);
-  root.setAttribute("width", fmt(fit.artW));
-  root.setAttribute("height", fmt(fit.artH));
+  root.removeAttribute("width");
+  root.removeAttribute("height");
   const doc = root.ownerDocument;
   const group = doc.createElementNS(SVG_NS, "g");
   const scale = fit.scale === 1 ? "" : ` scale(${fmt(fit.scale)})`;
   group.setAttribute("transform", `translate(${fmt(fit.offsetX)} ${fmt(fit.offsetY)})${scale}`);
   for (const child of Array.from(root.children)) group.appendChild(child);
   root.appendChild(group);
-  root.insertBefore(backgroundRect(doc, fit, background), group);
+  if (!isTransparent(background)) root.insertBefore(backgroundRect(doc, fit, background), group);
 }
 
 function backgroundRect(doc: Document, fit: ArtboardFit, background: string): Element {

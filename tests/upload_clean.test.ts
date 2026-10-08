@@ -60,8 +60,9 @@ describe("verifyExportSvg — the shipped file's rules", () => {
       + `<i:pgf/></svg>`;
     const violations = verifyExportSvg(bloat);
     expect(violations).toContainEqual(expect.stringContaining("raster"));
-    expect(violations).toContainEqual(expect.stringContaining("AdobeIllustrator"));
     expect(violations).toContainEqual(expect.stringContaining("i:pgf"));
+    // The declaration itself is judged by use: once <i:pgf/> is gone it is unused — and named with its URI.
+    expect(verifyExportSvg(bloat.replace("<i:pgf/>", ""))).toContainEqual(expect.stringContaining("AdobeIllustrator"));
     expect(violations).toContainEqual(expect.stringContaining("<title>"));
   });
 });
@@ -123,7 +124,7 @@ describe("prepareExportSvg — the export copy the user inspects", () => {
     // painted a border around the artboard
     const stroked = `<svg ${NS} viewBox="0 0 24 24" stroke="#000" stroke-width="2" fill="none">`
       + `<path d="M4 4h16v16H4z"/></svg>`;
-    const result = prepareExportSvg(stroked, DEFAULT_UPLOAD_SETTINGS);
+    const result = prepareExportSvg(stroked, { ...DEFAULT_UPLOAD_SETTINGS, background: "#ffffff" });
     if (!result.ok) throw new Error(result.detail);
     const bg = new DOMParser().parseFromString(result.svg, "image/svg+xml").documentElement.querySelector("rect");
     expect(bg?.getAttribute("fill")).toBe("#ffffff");

@@ -5,6 +5,9 @@
 // no alpha), and the result is verified by DECODING it back: the SOF
 // segment must report exactly the target dimensions (RULE 15). The canvas
 // transport is injectable so tests exercise the real pipeline with a fake.
+// The shipped SVG carries no px size (stock review, 2026-10-08), so the
+// renderer stamps the target px onto ITS OWN copy: the JPEG never depends on
+// a browser's intrinsic-size rules for a size-less `<img>`.
 
 import { readJpegDimensions } from "./jpeg";
 import { sha256Hex } from "./hash";
@@ -45,7 +48,7 @@ export interface RasterDeps {
 export async function rasterizeJpeg(svgText: string, target: RasterTarget, deps: RasterDeps = {}): Promise<RasterResult> {
   let jpeg: Uint8Array;
   try {
-    const canvas = await (deps.render ?? renderSvg)(svgText, target);
+    const canvas = await (deps.render ?? renderSvg)(withIntrinsicSize(svgText, target.width, target.height), target);
     jpeg = await (deps.encode ?? encodeJpeg)(canvas, target.quality);
   } catch (error) {
     return { ok: false, reason: `render failed: ${error instanceof Error ? error.message : "unknown error"}` };
@@ -68,6 +71,20 @@ async function recordOf(jpeg: Uint8Array, target: RasterTarget): Promise<RasterR
     hash: await sha256Hex(jpeg),
     profile: "baseline",
   };
+}
+
+/**
+ * The renderer's copy: the root gets `width`/`height` = the target px (the
+ * shipped file has none). Text that does not parse is handed back unchanged —
+ * the renderer refuses it with its own honest reason.
+ */
+export function withIntrinsicSize(svgText: string, width: number, height: number): string {
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  const root = doc.documentElement;
+  if (root === null || root.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror") !== null) return svgText;
+  root.setAttribute("width", String(width));
+  root.setAttribute("height", String(height));
+  return new XMLSerializer().serializeToString(doc);
 }
 
 /** Renders the SVG at exactly the target size onto a background-filled canvas. */

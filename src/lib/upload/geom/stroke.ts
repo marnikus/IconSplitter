@@ -53,3 +53,23 @@ function numOr(raw: string | null, fallback: number): number {
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 }
+
+/** The relative drift a tidy width may have from the exact one (stock review, 2026-10-08). */
+export const STROKE_TIDY_TOLERANCE = 0.1;
+
+/**
+ * The FEWEST decimals (0…3) that keep a width within `tolerance` of the exact
+ * value: `2.806 → 3`, `2.667 → 2.7`, `0.2 → 0.2`. Widths live in local units
+ * under the artboard scale, so a blunt integer round could turn a correct
+ * `0.2` into a stroke five times too fat; this rule never drifts past the
+ * tolerance and never yields 0 for a positive width.
+ */
+export function tidyStrokeWidth(exact: number, tolerance = STROKE_TIDY_TOLERANCE): number {
+  if (!(exact > 0)) return exact;
+  for (const decimals of [0, 1, 2]) {
+    const k = 10 ** decimals;
+    const rounded = Math.round(exact * k) / k;
+    if (rounded > 0 && Math.abs(rounded - exact) / exact <= tolerance) return rounded;
+  }
+  return Math.round(exact * 1000) / 1000;
+}

@@ -10,8 +10,8 @@
 // (RULE 5): raster content, and any stylesheet outside the documented subset.
 
 import {
-  allElements, attributeNames, comments, isIdReference, isSvgElement,
-  localName, referencedIds, rewriteRefs,
+  allElements, attributeNames, comments, insideMetadata, isIdReference, isNamespaceDecl,
+  isSvgElement, localName, referencedIds, rewriteRefs, usedPrefixes, XMLNS_NS,
 } from "./svgdom";
 
 /** Attributes that are naming or editor bookkeeping, never rendering. */
@@ -64,6 +64,8 @@ function foldStylesheets(root: Element): string | null {
 /** The rebuilding pass. Idempotent: running it twice changes nothing the second time. */
 export function cleanExportDom(root: Element, opts: CleanOptions = {}): void {
   root.setAttribute("version", "1.1");
+  root.removeAttribute("width"); // the viewBox is the size (stock review item 4)
+  root.removeAttribute("height");
   foldInlineStyles(root);
   // Fold what we can BEFORE removing anything: a block that is merely deleted
   // would take its paint with it and silently change the picture. A block the
@@ -73,7 +75,7 @@ export function cleanExportDom(root: Element, opts: CleanOptions = {}): void {
   for (const el of allElements(root)) removeJunkElement(el, opts);
   for (const el of allElements(root)) stripAttributes(el);
   renameReferencedIds(root);
-  dropUnusedNamespaces(root);
+  hoistNamespaces(root);
 }
 
 /** `style="fill:#000"` → `fill="#000"`, for the properties we are allowed to inline. */
@@ -171,6 +173,7 @@ function matches(el: Element, selector: CssRule["selector"]): boolean {
 }
 
 function stripAttributes(el: Element): void {
+  if (insideMetadata(el)) return; // RDF/DC attributes are the block's own vocabulary
   for (const name of attributeNames(el)) {
     if (name.startsWith("xmlns:") || name.startsWith("xlink:")) continue;
     const drop = name.includes(":") || BLOAT_ATTRS.includes(name)
@@ -180,6 +183,7 @@ function stripAttributes(el: Element): void {
 }
 
 function removeJunkElement(el: Element, opts: CleanOptions): void {
+  if (insideMetadata(el) && localName(el) !== "metadata") return; // the check exempts the subtree too
   const embed = EMBED_TAGS.includes(localName(el));
   const nested = el.parentElement?.parentElement !== null;
   const junk = !isSvgElement(el) || (embed && (nested || opts.keepRootEmbeds !== true));
@@ -207,15 +211,24 @@ function renameReferencedIds(root: Element): void {
   for (const el of allElements(root)) rewriteRefs(el, map);
 }
 
-/** Declarations are bookkeeping: only a USED `xmlns:xlink` is allowed to stay. */
-function dropUnusedNamespaces(root: Element): void {
-  const usesXlink = allElements(root).some((el) => attributeNames(el).some((a) => a.startsWith("xlink:")));
-  for (const el of allElements(root)) {
-    for (const name of attributeNames(el)) {
-      if (name.startsWith("xmlns:") && !(name === "xmlns:xlink" && usesXlink)) {
-        el.removeAttribute(name);
-      }
+/**
+ * Every namespace declaration moves to the root, once; the root then keeps
+ * only the prefixes the document really uses (2026-10-08). The first URI seen
+ * for a prefix wins — a document that binds one prefix to two URIs is beyond
+ * what a clean export may contain anyway, and the check reports what is left.
+ */
+function hoistNamespaces(root: Element): void {
+  const elements = allElements(root);
+  const declared = new Map<string, string>();
+  for (const el of elements) {
+    for (const name of attributeNames(el).filter(isNamespaceDecl)) {
+      if (!declared.has(name)) declared.set(name, el.getAttribute(name) ?? "");
+      el.removeAttribute(name);
     }
+  }
+  const used = usedPrefixes(elements);
+  for (const [name, uri] of declared) {
+    if (used.has(name.slice("xmlns:".length))) root.setAttributeNS(XMLNS_NS, name, uri);
   }
 }
 

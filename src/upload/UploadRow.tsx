@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from "react";
 import type { IconMetadata } from "../lib/upload/meta";
-import { effectiveSettings, overrideKeys, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import { effectiveSettings, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -126,6 +126,12 @@ function MetaCell({ row }: { row: UploadRow }) {
   );
 }
 
+/** "artwork strokes" | "2 pt", then "· stroke #hex" when a colour is pinned. */
+function strokeLine(s: UploadSettings): string {
+  const width = s.strokePt === 0 ? "artwork strokes" : `${s.strokePt} pt`;
+  return s.strokeColor === STROKE_COLOR_ARTWORK ? width : `${width} · stroke ${s.strokeColor}`;
+}
+
 /** The effective settings, one line, plus how many fields this icon pins. */
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
@@ -133,7 +139,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const pinned = overrideKeys(a.overrides[id] ?? {}).length;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
-      <small>pad {effective.paddingPct}% · {effective.background} · {effective.strokePt === 0 ? "artwork strokes" : `${effective.strokePt} pt`}</small>
+      <small>pad {effective.paddingPct}% · {effective.background} · {strokeLine(effective)}</small>
       <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · eps {effective.includeEps ? "on" : "off"}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}

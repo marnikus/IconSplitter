@@ -188,7 +188,7 @@ describe("runExport — the full package commits per icon", () => {
     const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
-    expect(doc.documentElement.getAttribute("width")).toBe("512");
+    expect(doc.documentElement.getAttribute("width")).toBeNull(); // the viewBox IS the size (2026-10-08)
     expect(verifyExportSvg(svgText)).toEqual([]);
     const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 512, height: 256 });
@@ -407,6 +407,44 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
+  });
+
+  it("a transparent background (the default) ships no background rect in the SVG, no background shape in the EPS, and flattens the JPEG onto white (2026-10-08)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, background: "transparent", includeEps: true };
+    const seen: string[] = [];
+    const raster: RasterDeps = {
+      render: async (_svg, target) => { seen.push(target.background); return { width: 3886, height: 3886 } as unknown as HTMLCanvasElement; },
+      encode: async () => minimalJpeg(3886, 3886),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
+    expect(result.status).toBe("processed");
+    expect(seen).toEqual(["#ffffff"]); // JPEG has no alpha: flattened onto white, never "transparent"
+    const svg = fileText(root, `${DIR}/export/${STEM}.svg`);
+    expect(verifyExportSvg(svg)).toEqual([]);
+    expect(svg).not.toMatch(/<svg[^>]*\swidth=/); // no px size on the root either
+    const shapes = Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("rect, path, circle"));
+    expect(shapes.filter((el) => el.getAttribute("stroke") === "none" && el.getAttribute("x") === "0")).toHaveLength(0);
+    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — no background shape before it
+    expect(readRecord(root).settings.effective.background).toBe("transparent");
+  });
+
+  it("a colour background still paints the rect and flattens onto that colour", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, background: "#102030", includeEps: true };
+    const seen: string[] = [];
+    const raster: RasterDeps = {
+      render: async (_svg, target) => { seen.push(target.background); return { width: 3886, height: 3886 } as unknown as HTMLCanvasElement; },
+      encode: async () => minimalJpeg(3886, 3886),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
+    expect(result.status).toBe("processed");
+    expect(seen).toEqual(["#102030"]);
+    const svg = fileText(root, `${DIR}/export/${STEM}.svg`);
+    expect(svg).toContain(`fill="#102030"`);
+    expect(verifyEps(fileText(root, `${DIR}/export/${STEM}.eps`)).ok).toBe(true);
   });
 
   it("a leftover tmp file is harmless and overwritten", async () => {

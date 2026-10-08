@@ -9,7 +9,7 @@ import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
 import { optimizeSvg, recordAfterClean, type OptimizeRecord } from "../lib/upload/optimize";
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { writeEps } from "../lib/upload/eps";
-import { artboardSize, type UploadSettings } from "../lib/upload/settings";
+import { artboardSize, flattenColor, type UploadSettings } from "../lib/upload/settings";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { DirHandleLike } from "../lib/fs";
 import type { StagePlan } from "../lib/upload/export";
@@ -91,10 +91,12 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
 
 /**
  * SVG → EPS 10, from the text the optimize/clean stages produced (never the
- * source): that is the "convert after the SVG was optimized" order.
+ * source): that is the "convert after the SVG was optimized" order. PostScript
+ * has no alpha, so opacity mixes onto the flatten colour (white when the
+ * background is transparent) — no background shape is painted either way.
  */
 function buildEps(art: Artifacts, ctx: StageContext): void {
-  const eps = writeEps(art.optimizedSvg as string, ctx.settings.background, {
+  const eps = writeEps(art.optimizedSvg as string, flattenColor(ctx.settings.background), {
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   });
   if (eps.ok) art.epsText = eps.eps;
@@ -115,7 +117,8 @@ async function buildJpeg(plan: StagePlan, ctx: StageContext, art: Artifacts): Pr
       : pinnedDimensions(pinned);
     const raster = await rasterizeJpeg((art.prepared as PrepareResult & { ok: true }).svg, {
       width: target.width, height: target.height,
-      quality: ctx.settings.jpegQuality, background: ctx.settings.background,
+      // JPEG has no alpha: a transparent background flattens onto white.
+      quality: ctx.settings.jpegQuality, background: flattenColor(ctx.settings.background),
     }, ctx.raster);
     if (!raster.ok) throw new StageError("render", raster.reason);
     art.jpegRecord = raster.record;

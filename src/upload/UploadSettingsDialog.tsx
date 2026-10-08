@@ -1,33 +1,21 @@
 // UploadSettingsDialog.tsx — the export settings dialog (design §4.1): global
 // defaults (from the toolbar) or one icon's overrides (from its row), with the
-// inherited/overridden marker per field, the background presets plus a custom
-// picker, and Reset-to-defaults for the icon scope. Every change is live
-// (RULE 24): the global scope edits the defaults, the icon scope pins the
-// field into that icon's override — both validated by lib/upload/settings.
+// inherited/overridden marker per field, and Reset-to-defaults for the icon
+// scope. Every change is live (RULE 24): the global scope edits the defaults,
+// the icon scope pins the field into that icon's override — both validated by
+// lib/upload/settings. The shared row plumbing lives in settingsfield.tsx, the
+// two paint rows (background, stroke colour) in UploadPaintSettings.tsx.
 
-import {
-  BG_PRESETS, normalizeHex,
-} from "../lib/svgbackground";
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
   clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
-  type Artboard, type SettingsOverrides, type UploadSettings,
+  type Artboard, type UploadSettings,
 } from "../lib/upload/settings";
+import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
+import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 
-export interface UploadSettingsDialogProps {
-  /** null = the global defaults; else the icon's file name. */
-  scope: string | null;
-  /** null = the global scope; else the pair id whose override is edited. */
-  id: string | null;
-  defaults: UploadSettings;
-  /** The icon's current override ({} in the global scope). */
-  overrides: SettingsOverrides;
-  onDefaults: (patch: Partial<UploadSettings>) => void;
-  onOverride: (id: string, patch: SettingsOverrides) => void;
-  onResetOverride: (id: string) => void;
-  onClose: () => void;
-}
+export type { UploadSettingsDialogProps } from "./settingsfield";
 
 export default function UploadSettingsDialog(p: UploadSettingsDialogProps) {
   const effective = { ...p.defaults, ...p.overrides };
@@ -66,7 +54,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
   );
 }
 
-/** The seven settings, one field component each. */
+/** The settings, one field component each; the paint rows come from UploadPaintSettings. */
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
@@ -75,7 +63,8 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint="uniform, % of the fitted artwork's largest side" />
       <NumberSetting p={p} effective={effective} field="strokePt" label="Stroke width (pt)" testid="stroke"
         min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePt}
-        hint="0 = leave the artwork's strokes untouched · 1 pt = 4/3 px at 96 DPI" />
+        hint="0 = leave the artwork's strokes untouched · 1 pt = 4/3 px at 96 DPI · written tidy (within 10 %)" />
+      <StrokeColorSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
@@ -87,18 +76,6 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
-}
-
-/** The marker a field carries in the icon scope: pinned, or inherited. */
-function markerOf(p: UploadSettingsDialogProps, field: keyof UploadSettings): string | null {
-  if (p.id === null) return null;
-  return p.overrides[field] !== undefined ? "overridden" : "inherited";
-}
-
-function Marker({ p, field, testid }: { p: UploadSettingsDialogProps; field: keyof UploadSettings; testid: string }) {
-  const marker = markerOf(p, field);
-  if (marker === null) return null;
-  return <em className={`up-marker ${marker}`} data-testid={`upload-set-marker-${testid}`}>{marker}</em>;
 }
 
 /** One numeric setting: live, clamped at the moment of change (RULE 13). */
@@ -251,42 +228,4 @@ function mpNote(pinned: { width: number; height: number }, match = true): string
   return match
     ? `the JPEG is the artboard itself: ${pinned.width}×${pinned.height} px — untick for a bigger file`
     : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
-}
-
-/** The background: the five presets plus one custom picker (I-17/I-21). */
-function BackgroundSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const field = "background" as const;
-  return (
-    <div className="svg-field up-set-field">
-      <span className="svg-label">Background<Marker p={p} field={field} testid="bg" /></span>
-      <div className="up-bg-row">
-        {BG_PRESETS.map((preset) => (
-          <button key={preset.id} type="button"
-            className={`svg-swatch${effective.background === preset.color ? " on" : ""}`}
-            data-testid={`upload-set-bg-${preset.id}`} title={preset.label} aria-label={`Background ${preset.label}`}
-            aria-pressed={effective.background === preset.color} style={{ background: preset.color }}
-            onClick={() => change(p, field, preset.color)} />
-        ))}
-        <input type="color" data-testid="upload-set-bg-custom" aria-label="Custom background"
-          value={effective.background}
-          onChange={(e) => { const hex = normalizeHex(e.target.value); if (hex !== null) change(p, field, hex); }} />
-        <output className="svg-bg-value" data-testid="upload-set-bg-value">{effective.background}</output>
-      </div>
-      <small className="up-hint">the JPEG flattens onto it; the artwork is never recoloured</small>
-    </div>
-  );
-}
-
-/** One field change → the global defaults or the icon's override (live). */
-function change<K extends keyof UploadSettings>(p: UploadSettingsDialogProps, field: K, value: UploadSettings[K]): void {
-  changeMany(p, { [field]: value });
-}
-
-/** Several fields at once — one gesture, one undoable override entry. */
-function changeMany(p: UploadSettingsDialogProps, patch: Partial<UploadSettings>): void {
-  if (p.id === null) {
-    p.onDefaults(patch);
-    return;
-  }
-  p.onOverride(p.id, { ...p.overrides, ...patch });
 }

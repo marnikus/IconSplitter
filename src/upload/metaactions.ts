@@ -10,7 +10,7 @@
 import { useCallback, useRef } from "react";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
-import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { cleanTitle, validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { previewFor, type SentPreview } from "../lib/upload/sentpreview";
 import { readSvgText } from "../svg/svgfiles";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
@@ -60,25 +60,7 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
 // --- accept + edit ----------------------------------------------------------------
 
 function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | "editMetadata"> {
-  const acceptMetadata = useCallback((id: string) => {
-    const c = latest.current;
-    const row = rowOf(c, id);
-    if (row === null || row.meta.metadata === null) return c.say("Nothing to accept — generate metadata first", true);
-    const validation = validateMetadata(row.meta.metadata);
-    if (!validation.ok) {
-      c.dispatch({ type: "meta", id, meta: { ...row.meta, validation } });
-      return c.say(validation.errors.join("; "), true);
-    }
-    c.dispatch({ type: "meta", id, meta: { ...row.meta, state: "accepted", validation, edited: false } });
-    // Accepted here, remembered for the fingerprint: the next session (or a
-    // crash) never pays for this source again (CP-15).
-    rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: row.meta.metadata });
-    log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: row.meta.metadata.tags.length }));
-    c.say("Metadata accepted");
-    // The acceptance persists in export.json: a committed record re-embeds (no
-    // AI, no render); a never-exported row keeps it until its first export.
-    if (row.record !== null) void runExportBatch(latest, [id]);
-  }, [latest]);
+  const acceptMetadata = useCallback((id: string) => acceptOne(latest, id), [latest]);
   const editMetadata = useCallback((id: string, patch: Partial<IconMetadata>) => {
     const c = latest.current;
     const row = rowOf(c, id);
@@ -86,6 +68,31 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
     c.dispatch({ type: "meta", id, meta: { ...row.meta, metadata: { ...row.meta.metadata, ...patch }, edited: true } });
   }, [latest]);
   return { acceptMetadata, editMetadata };
+}
+
+/** The accept gate: the title loses its trailing period (stock review item 5), then validate, remember, re-embed. */
+// ideal-size: 22 lines reason=one gate in its documented order (clean → validate → dispatch → remember → re-export); splitting would hide the order
+function acceptOne(latest: Latest, id: string): void {
+  const c = latest.current;
+  const row = rowOf(c, id);
+  if (row === null || row.meta.metadata === null) return c.say("Nothing to accept — generate metadata first", true);
+  const metadata = { ...row.meta.metadata, title: cleanTitle(row.meta.metadata.title) };
+  const validation = validateMetadata(metadata);
+  if (!validation.ok) {
+    c.dispatch({ type: "meta", id, meta: { ...row.meta, validation } });
+    return c.say(validation.errors.join("; "), true);
+  }
+  const accepted: UploadMetaState = { ...row.meta, metadata, state: "accepted", validation, edited: false };
+  c.dispatch({ type: "meta", id, meta: accepted });
+  // Accepted here, remembered for the fingerprint: the next session (or a
+  // crash) never pays for this source again (CP-15).
+  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: metadata });
+  log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: metadata.tags.length }));
+  c.say("Metadata accepted");
+  // The acceptance persists in export.json: a committed record re-embeds (no
+  // AI, no render); a never-exported row keeps it until its first export. The
+  // accepted state travels with the call — React has not re-rendered yet.
+  if (row.record !== null) void runExportBatch(latest, [id], new Map([[id, accepted]]));
 }
 
 // --- the batch ---------------------------------------------------------------------

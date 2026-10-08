@@ -4,7 +4,7 @@
 // must equal the target). A full pipeline test ties prepare → raster → XMP
 // embed → verifyJpeg together.
 import { describe, expect, it } from "vitest";
-import { rasterizeJpeg, type RasterDeps, type RasterTarget } from "../src/lib/upload/raster";
+import { rasterizeJpeg, withIntrinsicSize, type RasterDeps, type RasterTarget } from "../src/lib/upload/raster";
 import { embedXmpMetadata, verifyJpeg } from "../src/lib/upload/jpeg";
 import { prepareExportSvg } from "../src/lib/upload/prepare";
 import { targetDimensions, visibleBounds } from "../src/lib/upload/geom";
@@ -58,6 +58,27 @@ describe("rasterizeJpeg — vectors at the integer target, verified by decoding"
     expect(result.record.megapixels).toBeCloseTo(15.1, 2);
     expect(result.record.bytes).toBe(result.jpeg.length);
     expect(result.record.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("loads its OWN copy with the target px as intrinsic size — the shipped file carries none (2026-10-08)", async () => {
+    const sizeless = `<svg ${NS} viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#000"/></svg>`;
+    const stamped = withIntrinsicSize(sizeless, 3886, 2000);
+    const root = new DOMParser().parseFromString(stamped, "image/svg+xml").documentElement;
+    expect(root.getAttribute("width")).toBe("3886");
+    expect(root.getAttribute("height")).toBe("2000");
+    expect(root.getAttribute("viewBox")).toBe("0 0 100 100");
+    expect(root.querySelector("rect")?.getAttribute("width")).toBe("80"); // geometry untouched
+    expect(withIntrinsicSize(stamped, 10, 10)).toContain(`width="10"`); // an existing size is replaced, not doubled
+    expect(withIntrinsicSize("<svg><rect", 1, 1)).toBe("<svg><rect"); // unparseable text passes through for the renderer to refuse
+    // the render transport receives the stamped text, never the size-less one
+    let seen = "";
+    const spy: RasterDeps = {
+      render: async (svgText) => { seen = svgText; return { width: 3886, height: 2000 } as unknown as HTMLCanvasElement; },
+      encode: async () => minimalJpeg(3886, 2000),
+    };
+    await rasterizeJpeg(sizeless, target(3886, 2000), spy);
+    expect(seen).toContain(`width="3886"`);
+    expect(seen).toContain(`height="2000"`);
   });
 
   it("fails honestly when the decoded dimensions do not match the target", async () => {

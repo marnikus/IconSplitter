@@ -6,6 +6,7 @@
 // always accepted, and nothing is refused for being too wordy.
 import { describe, expect, it } from "vitest";
 import {
+  cleanTitle,
   DEFAULT_METADATA_PROMPT,
   MANDATORY_TAGS,
   TAGS_MIN,
@@ -52,6 +53,27 @@ describe("the default prompt states every enforced constraint", () => {
     expect(DEFAULT_METADATA_PROMPT).toContain("brand");
     expect(DEFAULT_METADATA_PROMPT).toContain("in the style of");
     expect(DEFAULT_METADATA_PROMPT).toContain("artist");
+  });
+});
+
+describe("cleanTitle — no trailing sentence punctuation (stock review item 5)", () => {
+  it.each([
+    ["Unity and Compassionate Human Connection.", "Unity and Compassionate Human Connection"],
+    ["A B C D E!", "A B C D E"],
+    ["x.. ", "x"],
+    ["Trailing comma, ", "Trailing comma"],
+    ["Ellipsis…", "Ellipsis"],
+    ["Is this a question?", "Is this a question?"],
+    ["Clean already", "Clean already"],
+    ["", ""],
+  ])("%j → %j", (raw, clean) => {
+    expect(cleanTitle(raw)).toBe(clean);
+  });
+
+  it("parseMetadata applies it, and the default prompt asks for it", () => {
+    const parsed = parseMetadata(`Title: ${VALID.title}.\nDescription: ${VALID.description}\nTags: ${VALID.tags.join(", ")}`);
+    expect(parsed?.title).toBe(VALID.title);
+    expect(DEFAULT_METADATA_PROMPT).toContain("no trailing period");
   });
 });
 

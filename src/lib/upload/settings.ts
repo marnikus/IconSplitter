@@ -1,20 +1,35 @@
 // settings.ts — the "SVG to upload" settings domain (RULE 3/13).
 // Owns: one UploadSettings shape with its documented defaults and ranges, the
 // global-defaults + per-icon-override merge, override validation on read, and
-// the fingerprint selective re-export keys on. Thumbnail zoom is NOT here —
-// it is display-only (design §2.12) and lives in lib/zoom.
+// the fingerprint selective re-export keys on. The artboard lives in
+// lib/upload/artboard (re-exported here). Thumbnail zoom is NOT here — it is
+// display-only (design §2.12) and lives in lib/zoom.
+//
+// Paints (2026-10-08, stock review): the background is `transparent` or a hex
+// — transparent means no background in the SVG/EPS, and the JPEG (no alpha)
+// flattens onto white; the stroke colour is the artwork's own or one hex that
+// every visible stroke gets. Both are plain strings so they store, compare and
+// fingerprint like every other field.
 
 import { normalizeHex } from "../svgbackground";
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
+import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
+
+export {
+  ARTBOARD_MAX, ARTBOARD_MAX_PIXELS, ARTBOARD_MIN, ARTBOARD_PRESETS, CONTENT_ARTBOARD,
+  artboardSize, clampArtboard, type Artboard,
+} from "./artboard";
 
 export interface UploadSettings {
   /** Uniform padding on all four sides, % of the fitted artwork's largest side. */
   paddingPct: number;
-  /** Opaque background the JPEG flattens onto and the export SVG paints. */
+  /** `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
   background: string;
   /** Stroke width in pt at 96 DPI (1 pt = 4/3 px); 0 = leave artwork strokes untouched. */
   strokePt: number;
+  /** `artwork` (the strokes keep their own paint), or the hex every visible stroke gets. */
+  strokeColor: string;
   /** JPEG target resolution in megapixels (default 15.1). */
   jpegMegapixels: number;
   /** JPEG quality 0..1. */
@@ -47,36 +62,19 @@ export const MP_DEFAULT = 15.1;
 export const QUALITY_MIN = 0.5;
 export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
-export const BACKGROUND_DEFAULT = "#ffffff";
-
-/**
- * The export artboard's size. `content` hugs the artwork (the padded fit, the
- * original behaviour); `preset`/`custom` pin an EXACT size in px, so the
- * artwork is scaled into it — `custom` is also how a non-square aspect ratio is
- * chosen (width : height).
- */
-export interface Artboard {
-  mode: "content" | "preset" | "custom";
-  /** Square edge in px for `preset` mode — always one of ARTBOARD_PRESETS. */
-  size: number;
-  /** Exact px for `custom` mode; their ratio is the aspect ratio. */
-  width: number;
-  height: number;
-}
-
-/** The popular square icon sizes a stock site asks for. */
-export const ARTBOARD_PRESETS = [256, 512, 1024, 2048, 4096];
-export const ARTBOARD_MIN = 16;
-export const ARTBOARD_MAX = 8192;
-/** The canvas/JPEG ceiling shared with MP_MAX: a pinned artboard may not exceed it. */
-export const ARTBOARD_MAX_PIXELS = MP_MAX * 1e6;
-export const CONTENT_ARTBOARD: Artboard = { mode: "content", size: 512, width: 512, height: 512 };
-
+/** The background value that paints nothing in the SVG/EPS. */
+export const TRANSPARENT = "transparent";
+export const BACKGROUND_DEFAULT = TRANSPARENT;
+/** What a format without alpha (JPEG, EPS opacity mixing) paints a transparent background as. */
+export const FLATTEN_DEFAULT = "#ffffff";
+/** The stroke-colour value that leaves every stroke's own paint alone. */
+export const STROKE_COLOR_ARTWORK = "artwork";
 
 export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   paddingPct: PADDING_DEFAULT,
   background: BACKGROUND_DEFAULT,
   strokePt: STROKE_DEFAULT,
+  strokeColor: STROKE_COLOR_ARTWORK,
   jpegMegapixels: MP_DEFAULT,
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
@@ -97,48 +95,6 @@ export function clampMegapixels(value: unknown): number {
   return clampNum(value, MP_MIN, MP_MAX, MP_DEFAULT);
 }
 
-/** A stored/patch artboard → a valid one; anything unreadable becomes `content`. */
-export function clampArtboard(value: unknown): Artboard {
-  if (!isRecord(value)) return { ...CONTENT_ARTBOARD };
-  const mode = value.mode;
-  if (mode !== "content" && mode !== "preset" && mode !== "custom") return { ...CONTENT_ARTBOARD };
-  if (mode === "content") return { ...CONTENT_ARTBOARD, mode: "content" };
-  if (mode === "preset") return { mode, size: nearestPreset(value.size), width: 512, height: 512 };
-  const fitted = fitIntoCeiling(clampEdge(value.width), clampEdge(value.height));
-  return { mode, size: 512, width: fitted.width, height: fitted.height };
-}
-
-/** The exact px size an artboard pins, or null when it hugs the content. */
-export function artboardSize(a: Artboard): { width: number; height: number } | null {
-  if (a.mode === "preset") return { width: a.size, height: a.size };
-  if (a.mode === "custom") return { width: a.width, height: a.height };
-  return null;
-}
-
-function nearestPreset(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return CONTENT_ARTBOARD.size;
-  let best = ARTBOARD_PRESETS[0];
-  for (const preset of ARTBOARD_PRESETS) {
-    if (Math.abs(preset - n) < Math.abs(best - n)) best = preset;
-  }
-  return best;
-}
-
-function clampEdge(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return CONTENT_ARTBOARD.width;
-  return Math.round(Math.min(ARTBOARD_MAX, Math.max(ARTBOARD_MIN, n)));
-}
-
-/** Over the pixel ceiling both edges shrink together — the aspect ratio survives. */
-function fitIntoCeiling(width: number, height: number): { width: number; height: number } {
-  const area = width * height;
-  if (area <= ARTBOARD_MAX_PIXELS) return { width, height };
-  const k = Math.sqrt(ARTBOARD_MAX_PIXELS / area);
-  return { width: Math.max(ARTBOARD_MIN, Math.round(width * k)), height: Math.max(ARTBOARD_MIN, Math.round(height * k)) };
-}
-
 export function clampQuality(value: unknown): number {
   return clampNum(value, QUALITY_MIN, QUALITY_MAX, QUALITY_DEFAULT);
 }
@@ -149,13 +105,29 @@ function clampNum(value: unknown, min: number, max: number, fallback: number): n
   return Math.min(max, Math.max(min, n));
 }
 
+/** A paint field: its sentinel word (`transparent` / `artwork`) or a normalized hex; null = unreadable. */
+export function readPaint(value: unknown, sentinel: string): string | null {
+  if (typeof value !== "string") return null;
+  return value === sentinel ? sentinel : normalizeHex(value);
+}
+
+export function isTransparent(background: string): boolean {
+  return background === TRANSPARENT;
+}
+
+/** The hex a format without alpha paints for this background. */
+export function flattenColor(background: string): string {
+  return isTransparent(background) ? FLATTEN_DEFAULT : normalizeHex(background) ?? FLATTEN_DEFAULT;
+}
+
 /** A stored defaults payload → validated settings; one bad field costs one default (RULE 13). */
 export function normalizeSettings(raw: unknown): UploadSettings {
   if (!isRecord(raw)) return { ...DEFAULT_UPLOAD_SETTINGS };
   return {
     paddingPct: clampPaddingPct(raw.paddingPct),
-    background: normalizeHex(str(raw.background)) ?? BACKGROUND_DEFAULT,
+    background: readPaint(raw.background, TRANSPARENT) ?? BACKGROUND_DEFAULT,
     strokePt: clampStrokePt(raw.strokePt),
+    strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_ARTWORK,
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
@@ -171,7 +143,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   const out: SettingsOverrides = {};
   readNumbers(raw, out);
   readFlags(raw, out);
-  readBackground(raw, out);
+  readPaints(raw, out);
   readArtboard(raw, out);
   return out;
 }
@@ -182,6 +154,12 @@ const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["strokePt", clampStrokePt],
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
+];
+
+/** The paint fields and the word that means "none of ours". */
+const PAINT_FIELDS: ["background" | "strokeColor", string][] = [
+  ["background", TRANSPARENT],
+  ["strokeColor", STROKE_COLOR_ARTWORK],
 ];
 
 function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void {
@@ -198,11 +176,11 @@ function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
   }
 }
 
-function readBackground(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  const value = raw.background;
-  if (typeof value !== "string") return;
-  const hex = normalizeHex(value);
-  if (hex !== null) out.background = hex;
+function readPaints(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  for (const [key, sentinel] of PAINT_FIELDS) {
+    const paint = readPaint(raw[key], sentinel);
+    if (paint !== null) out[key] = paint;
+  }
 }
 
 /** The artboard is stored only when it really pins something (content ≠ an override). */
@@ -221,28 +199,20 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
   return (Object.keys(overrides) as (keyof UploadSettings)[]).filter((k) => overrides[k] !== undefined);
 }
 
-export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
-  return a.paddingPct === b.paddingPct && a.background === b.background && a.strokePt === b.strokePt
-    && a.jpegMegapixels === b.jpegMegapixels && a.jpegQuality === b.jpegQuality
-    && a.optimizeSvg === b.optimizeSvg && a.includeEps === b.includeEps
-    && a.jpegMatchArtboard === b.jpegMatchArtboard
-    && artboardsEqual(a.artboard, b.artboard);
-}
-
-function artboardsEqual(a: Artboard, b: Artboard): boolean {
-  return a.mode === b.mode && a.size === b.size && a.width === b.width && a.height === b.height;
-}
-
 /**
  * Every overrideable field, in canonical order — the ONE list the undo
- * equality and the store readers derive from (2026-10-08: the hand-kept copy
- * in `uploadundo.ts` had already missed the artboard, so a change that only
- * touched it compared EQUAL and could be swallowed).
+ * equality, the store readers and `settingsEqual` derive from (2026-10-08: the
+ * hand-kept copy in `uploadundo.ts` had already missed the artboard, so a
+ * change that only touched it compared EQUAL and could be swallowed).
  */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
-  "paddingPct", "background", "strokePt", "jpegMegapixels", "jpegQuality",
+  "paddingPct", "background", "strokePt", "strokeColor", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
 ];
+
+export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
+  return overridesEqual(a, b);
+}
 
 /** Two partial override payloads that pin the same fields with the same values. */
 export function overridesEqual(a: SettingsOverrides, b: SettingsOverrides): boolean {
@@ -258,7 +228,7 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
-    round3(s.paddingPct), s.background, round3(s.strokePt),
+    round3(s.paddingPct), s.background, round3(s.strokePt), s.strokeColor,
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
@@ -268,8 +238,4 @@ export function settingsFingerprint(s: UploadSettings): string {
 
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
-}
-
-function str(value: unknown): string {
-  return typeof value === "string" ? value : "";
 }

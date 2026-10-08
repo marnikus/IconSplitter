@@ -16,6 +16,11 @@ import {
   normalizeSettings,
   overrideKeys,
   parseOverrides,
+  SETTINGS_FIELDS,
+  STROKE_COLOR_ARTWORK,
+  TRANSPARENT,
+  flattenColor,
+  isTransparent,
   settingsEqual,
   settingsFingerprint,
   type UploadSettings,
@@ -24,13 +29,42 @@ import {
 const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAULT_UPLOAD_SETTINGS, ...patch });
 
 describe("defaults and clamps", () => {
-  it("ships the documented defaults (8% padding, white, no stroke override, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
+  it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
-      paddingPct: 8, background: "#ffffff", strokePt: 0,
+      paddingPct: 8, background: "transparent", strokePt: 0, strokeColor: "artwork",
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
     });
+  });
+
+  it("background: transparent or a colour; a format without alpha flattens transparent onto white (2026-10-08)", () => {
+    expect(TRANSPARENT).toBe("transparent");
+    expect(isTransparent("transparent")).toBe(true);
+    expect(isTransparent("#ffffff")).toBe(false);
+    expect(flattenColor("transparent")).toBe("#ffffff");
+    expect(flattenColor("#102030")).toBe("#102030");
+    expect(normalizeSettings({ background: "transparent" }).background).toBe("transparent");
+    expect(normalizeSettings({ background: "#ABC" }).background).toBe("#aabbcc");
+    expect(normalizeSettings({ background: "none" }).background).toBe("transparent"); // junk → the default
+    expect(parseOverrides({ background: "transparent" })).toEqual({ background: "transparent" });
+    expect(parseOverrides({ background: "garbage" })).toEqual({});
+    // a user who stored white before this change keeps white
+    expect(normalizeSettings({ background: "#ffffff" }).background).toBe("#ffffff");
+  });
+
+  it("stroke colour: the artwork's own, or one hex every visible stroke gets (2026-10-08)", () => {
+    expect(STROKE_COLOR_ARTWORK).toBe("artwork");
+    expect(normalizeSettings({ strokeColor: "#000" }).strokeColor).toBe("#000000");
+    expect(normalizeSettings({ strokeColor: "artwork" }).strokeColor).toBe("artwork");
+    expect(normalizeSettings({ strokeColor: 42 }).strokeColor).toBe("artwork");
+    expect(parseOverrides({ strokeColor: "#111111" })).toEqual({ strokeColor: "#111111" });
+    expect(parseOverrides({ strokeColor: "artwork" })).toEqual({ strokeColor: "artwork" });
+    expect(parseOverrides({ strokeColor: "red" })).toEqual({});
+    expect(SETTINGS_FIELDS).toContain("strokeColor");
+    expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, changed({ strokeColor: "#000000" }))).toBe(false);
+    expect(settingsFingerprint(changed({ strokeColor: "#000000" }))).not.toBe(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS));
+    expect(settingsFingerprint(changed({ background: "#ffffff" }))).not.toBe(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS));
   });
 
   it("offers the popular square artboards plus an exact custom size", () => {
@@ -112,7 +146,7 @@ describe("defaults and clamps", () => {
 
   it("normalizeSettings repairs a corrupt stored payload field by field", () => {
     const fixed = normalizeSettings({
-      paddingPct: 500, background: "not-a-color", strokePt: -1,
+      paddingPct: 500, background: "not-a-color", strokePt: -1, strokeColor: ["#000"],
       jpegMegapixels: "lots", jpegQuality: 9, optimizeSvg: "yes", includeEps: 1,
     });
     // booleans: only an explicit true/false counts — a nonsensical value falls

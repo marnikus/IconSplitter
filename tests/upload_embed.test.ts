@@ -44,6 +44,18 @@ describe("embedMetadataInSvg", () => {
     expect(rect?.getAttribute("fill")).toBe("#000");
   });
 
+  it("declares xmlns:rdf and xmlns:dc exactly once, on the root (stock review item 1)", () => {
+    const out = embedMetadataInSvg(SOURCE, META);
+    expect(out.match(/xmlns:dc=/g)).toHaveLength(1);
+    expect(out.match(/xmlns:rdf=/g)).toHaveLength(1);
+    const rootTag = out.slice(0, out.indexOf(">") + 1);
+    expect(rootTag).toContain(`xmlns:dc="http://purl.org/dc/elements/1.1/"`);
+    expect(rootTag).toContain(`xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"`);
+    expect(readEmbeddedMetadata(out)).toEqual(META);
+    // Re-embedding declares nothing twice either.
+    expect(embedMetadataInSvg(out, META).match(/xmlns:dc=/g)).toHaveLength(1);
+  });
+
   it("is idempotent: re-embedding replaces, never duplicates", () => {
     const once = embedMetadataInSvg(SOURCE, META);
     const twice = embedMetadataInSvg(once, META);

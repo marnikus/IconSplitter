@@ -16,6 +16,7 @@ import {
   type IconMetadata, type MetadataValidation,
 } from "../lib/upload/meta";
 import { rasterizeJpeg } from "../lib/upload/raster";
+import { FLATTEN_DEFAULT } from "../lib/upload/settings";
 import { PREVIEW_PX, type PreviewRender } from "../lib/upload/sentpreview";
 import { redact } from "../lib/svgsecret";
 import { createMemoryJournal, type MetadataJournal } from "./journal";
@@ -210,11 +211,12 @@ function failed(rowId: string, message: string, failure: GeminiFailure | null, a
 /**
  * The browser preview: the export SVG rasterized small, as a data URL. ONE
  * primitive: the dialog's preview and a runner-side re-render produce the same
- * bytes (RULE 10).
+ * bytes (RULE 10). The SVG carries its own background rect when a colour is
+ * set; a transparent one flattens onto the same colour the JPEG does.
  */
 export async function renderPreviewDataUrl(svgText: string, size: number): Promise<string> {
   const result = await rasterizeJpeg(svgText, {
-    width: size, height: size, quality: 0.8, background: "#ffffff",
+    width: size, height: size, quality: 0.8, background: FLATTEN_DEFAULT,
   });
   if (!result.ok) throw new Error(result.reason);
   return blobUrl(result.jpeg);

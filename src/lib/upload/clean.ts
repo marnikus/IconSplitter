@@ -9,8 +9,9 @@
 // disagree: `cleandom.ts` rebuilds against THIS file, and `enforceExportSvg`
 // re-runs the check to prove the rebuild worked.
 //
-// The rules are the user's, verbatim: SVG 1.1 on the root, a real `viewBox`,
-// zero raster elements anywhere (including inside `<defs>`), no `<style>`
+// The rules are the user's, verbatim: SVG 1.1 on the root, a real `viewBox`
+// and no px width/height beside it (2026-10-08, stock review: the fixed size
+// is redundant and confuses validators), zero raster elements anywhere (including inside `<defs>`), no `<style>`
 // blocks, no editor bloat (foreign namespaces, comments), and no naming at all
 // — no `id`, `class`, `data-*` or `aria-*`. The ONE exception is an id the
 // artwork really references (`fill="url(#…)"`): dropping it would change the
@@ -21,8 +22,8 @@
 // content: the namespace and placement rules exempt its subtree.
 
 import {
-  allElements, attributeNames, comments, insideMetadata, isSvgElement,
-  localName, referencedIds, SVG_NS,
+  allElements, attributeNames, comments, insideMetadata, isNamespaceDecl, isSvgElement,
+  localName, referencedIds, SVG_NS, usedPrefixes,
 } from "./svgdom";
 import { BLOAT_ATTRS, cleanExportDom, EMBED_TAGS, unsupportedContent } from "./cleandom";
 
@@ -93,6 +94,9 @@ function rootViolations(root: Element): string[] {
   if ((root.namespaceURI ?? SVG_NS) !== SVG_NS) {
     out.push(`the root is not in the SVG namespace (${root.nodeName})`);
   }
+  if (root.hasAttribute("width") || root.hasAttribute("height")) {
+    out.push("the root must not fix a pixel size (width/height) — the viewBox is the size");
+  }
   return out;
 }
 
@@ -119,18 +123,20 @@ function attributeViolations(name: string): string[] {
   return [];
 }
 
-/** Only the root may declare namespaces, and only the ones it really uses. */
+/**
+ * A namespace is declared ONCE, on the root, and only when the document uses
+ * the prefix (2026-10-08, stock review: a prefix re-declared on every element
+ * that uses it is the "export garbage" a reviewer flags). The metadata subtree
+ * is NOT exempt here — that is exactly where the repeats were.
+ */
 function namespaceViolations(elements: Element[]): string[] {
+  const used = usedPrefixes(elements);
   const out: string[] = [];
   for (const el of elements) {
-    if (insideMetadata(el)) continue; // RDF/DC declare their own vocabularies
-    for (const name of attributeNames(el)) {
-      if (name === "xmlns" || !name.startsWith("xmlns:")) continue;
-      const prefix = name.slice("xmlns:".length);
-      const uri = el.getAttribute(name) ?? "";
-      if (prefix !== "xlink") out.push(`the namespace declaration ${name} (${uri}) is editor bloat`);
-      else if (!elements.some((e) => attributeNames(e).some((a) => a.startsWith("xlink:")))) {
-        out.push("the namespace declaration xmlns:xlink is unused");
+    for (const name of attributeNames(el).filter(isNamespaceDecl)) {
+      if (el.parentElement !== null) out.push(`the namespace declaration ${name} must be on the root, not on <${el.nodeName}>`);
+      else if (!used.has(name.slice("xmlns:".length))) {
+        out.push(`the namespace declaration ${name} (${el.getAttribute(name) ?? ""}) is unused`);
       }
     }
   }

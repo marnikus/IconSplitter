@@ -32,14 +32,14 @@ const RECT_ICON = `<svg ${NS} viewBox="0 0 100 100" width="100" height="100"><re
 
 describe("prepareExportSvg — a pinned artboard (the final px size)", () => {
   it("lands on exactly 512×512, scales the artwork and centres it", () => {
-    const { result, root } = prepared(RECT_ICON, { artboard: { mode: "preset", size: 512, width: 512, height: 512 } });
+    const { result, root } = prepared(RECT_ICON, { background: "#ffffff", artboard: { mode: "preset", size: 512, width: 512, height: 512 } });
     expect(result.fit.viewBox).toBe("0 0 512 512");
-    expect(root.getAttribute("width")).toBe("512");
-    expect(root.getAttribute("height")).toBe("512");
+    expect(root.getAttribute("width")).toBeNull(); // the viewBox is the size (stock review item 4)
+    expect(root.getAttribute("height")).toBeNull();
     // pad 8% of 512 = 40.96; scale = (512 − 2·40.96)/80 = 5.376
     expect(result.fit.scale).toBeCloseTo(5.376);
     expect(root.querySelector("g")?.getAttribute("transform")).toBe("translate(-12.8 -12.8) scale(5.376)");
-    expect(root.querySelector("rect")?.getAttribute("width")).toBe("512");
+    expect(root.querySelector("rect")?.getAttribute("width")).toBe("512"); // a coloured background rect
   });
 
   it("keeps a non-square artboard's aspect ratio: custom 512×256 letterboxes", () => {
@@ -56,8 +56,12 @@ describe("prepareExportSvg — a pinned artboard (the final px size)", () => {
     const path = root.querySelector("g path");
     const scale = Number(/scale\(([\d.]+)\)/.exec(root.querySelector("g")?.getAttribute("transform") ?? "")?.[1]);
     expect(scale).toBeGreaterThan(1);
-    // 2.2 pt = 2.9333 px of the FINAL 512 px file, expressed in user units
-    expect(Number(path?.getAttribute("stroke-width"))).toBeCloseTo(2.9333 / scale, 3);
+    // 2.2 pt = 2.9333 px of the FINAL 512 px file, expressed in user units —
+    // written tidy (fewest decimals within 10 %), so never more than 10 % off.
+    const exact = 2.9333 / scale;
+    const written = Number(path?.getAttribute("stroke-width"));
+    expect(Math.abs(written - exact) / exact).toBeLessThanOrEqual(0.1);
+    expect(path?.getAttribute("stroke-width")).toMatch(/^\d+(\.\d{1,2})?$/);
   });
 });
 
@@ -67,8 +71,8 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
     // bounds 80×80 at (10,10); pad = 6.4 → artboard 92.8; offset = 6.4 − 10 = −3.6
     expect(result.fit.viewBox).toBe("0 0 92.8 92.8");
     expect(root.getAttribute("viewBox")).toBe("0 0 92.8 92.8");
-    expect(root.getAttribute("width")).toBe("92.8");
-    expect(root.getAttribute("height")).toBe("92.8");
+    expect(root.getAttribute("width")).toBeNull();
+    expect(root.getAttribute("height")).toBeNull();
     const group = root.querySelector("g");
     expect(group?.getAttribute("transform")).toBe("translate(-3.6 -3.6)");
   });
@@ -82,6 +86,21 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
     expect(bg?.getAttribute("x")).toBe("0");
     expect(bg?.getAttribute("y")).toBe("0");
     expect(root.firstElementChild).toBe(bg);
+  });
+
+  it("paints NO background rect when the background is transparent — the default (stock review quick fix)", () => {
+    const { result, root } = prepared(RECT_ICON);
+    expect(result.background).toBe("transparent");
+    expect(root.firstElementChild?.nodeName).toBe("g");
+    expect(root.querySelectorAll("rect")).toHaveLength(1); // the artwork's own
+    expect(root.querySelector("g > rect")?.getAttribute("fill")).toBe("#000000");
+  });
+
+  it("drops the source's own width/height from the root — the artboard is the viewBox", () => {
+    const { result } = prepared(`<svg ${NS} viewBox="0 0 100 100" width="1400" height="800"><rect x="10" y="10" width="80" height="80" fill="#000"/></svg>`);
+    expect(result.svg).not.toMatch(/<svg[^>]*\swidth=/);
+    expect(result.svg).not.toMatch(/<svg[^>]*\sheight=/);
+    expect(result.svg).toContain(`viewBox="0 0 92.8 92.8"`);
   });
 
   it("leaves the artwork itself untouched apart from the wrapper", () => {
@@ -115,8 +134,8 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
     expect(source).toBe(RECT_ICON);
   });
 
-  it("the prepared document's own visible bounds are exactly the artboard", () => {
-    const { root, result } = prepared(RECT_ICON);
+  it("with a painted background, the prepared document's own visible bounds are exactly the artboard", () => {
+    const { root, result } = prepared(RECT_ICON, { background: "#ffffff" });
     const vb = visibleBounds(root);
     expect(vb).not.toBeNull();
     expect(vb?.bounds.minX).toBeCloseTo(0, 6);
@@ -127,20 +146,68 @@ describe("prepareExportSvg — the re-rooted export copy", () => {
   });
 });
 
+describe("prepareExportSvg — stroke colour (2026-10-08, the user's setting)", () => {
+  const TWO = `<svg ${NS} viewBox="0 0 24 24" stroke="#111"><g style="stroke:#222;fill:none"><rect x="2" y="2" width="8" height="8"/></g>`
+    + `<circle cx="18" cy="18" r="4" fill="#0f0" stroke="currentColor" style="stroke:#333; stroke-width:2"/>`
+    + `<path d="M1 1h2" stroke="none" fill="#f00"/></svg>`;
+
+  it("gives every visible stroke the configured hex and leaves fills alone — with the width untouched", () => {
+    const { result, root } = prepared(TWO, { strokeColor: "#000000", strokePt: 0 });
+    expect(result.strokesRecolored).toBe(2);
+    expect(result.strokesNormalized).toBe(0);
+    const rect = root.querySelector("g rect");
+    const circle = root.querySelector("circle");
+    expect(rect?.getAttribute("stroke")).toBe("#000000");
+    expect(circle?.getAttribute("stroke")).toBe("#000000");
+    expect(circle?.getAttribute("style")).toBeNull(); // the clean pass folded the style; the paint is ours now
+    expect(circle?.getAttribute("stroke-width")).toBe("2"); // the inline width survived
+    expect(circle?.getAttribute("fill")).toBe("#0f0");
+    expect(root.querySelector("path")?.getAttribute("stroke")).toBe("none"); // not a visible stroke
+    expect(root.querySelector("path")?.getAttribute("fill")).toBe("#f00");
+  });
+
+  it("`artwork` (the default) recolours nothing", () => {
+    const { result, root } = prepared(TWO);
+    expect(result.strokesRecolored).toBe(0);
+    expect(root.querySelector("circle")?.getAttribute("stroke")).toBe("#333"); // its own inline paint, folded
+  });
+
+  it("colour and width are independent decisions applied in one pass", () => {
+    const { result, root } = prepared(TWO, { strokeColor: "#ff0000", strokePt: 3 });
+    expect(result.strokesRecolored).toBe(2);
+    expect(result.strokesNormalized).toBe(2);
+    const circle = root.querySelector("circle");
+    expect(circle?.getAttribute("stroke")).toBe("#ff0000");
+    expect(circle?.getAttribute("stroke-width")).toBe("4"); // 3 pt = 4 px
+  });
+});
+
 describe("prepareExportSvg — stroke normalization (pt at 96 DPI)", () => {
   const STROKED = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1"/></svg>`;
 
-  it("sets every visible stroke to w·4/3 px (2.2 pt → 2.933)", () => {
+  it("sets every visible stroke to w·4/3 px, written tidy (2.2 pt → 2.933 → 3)", () => {
     const { result, root } = prepared(STROKED, { strokePt: 2.2 });
     expect(result.strokesNormalized).toBe(1);
-    expect(root.querySelector("g > rect")?.getAttribute("stroke-width")).toBe("2.933");
+    expect(root.querySelector("g > rect")?.getAttribute("stroke-width")).toBe("3");
+  });
+
+  it("writes 2 pt as 2.7, not 2.667: one decimal is the fewest within 10 %", () => {
+    const { root } = prepared(STROKED, { strokePt: 2 });
+    expect(root.querySelector("g > rect")?.getAttribute("stroke-width")).toBe("2.7");
+  });
+
+  it("leaves a source width like 7.999906 alone when the stroke width is 0 (untouched means untouched)", () => {
+    const src = `<svg ${NS} viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="7.999906"/></svg>`;
+    const { result, root } = prepared(src, { strokePt: 0 });
+    expect(result.strokesNormalized).toBe(0);
+    expect(root.querySelector("g > rect")?.getAttribute("stroke-width")).toBe("7.999906");
   });
 
   it("divides by the accumulated CTM scale so the device stroke is exact", () => {
     const src = `<svg ${NS} viewBox="0 0 48 48"><g transform="scale(2)"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#000" stroke-width="1"/></g></svg>`;
     const { result, root } = prepared(src, { strokePt: 2.2 });
     expect(result.strokesNormalized).toBe(1);
-    expect(root.querySelector("g rect")?.getAttribute("stroke-width")).toBe("1.467");
+    expect(root.querySelector("g rect")?.getAttribute("stroke-width")).toBe("1.5"); // 1.467 tidy
   });
 
   it("normalizes vector-effect=non-scaling-stroke to an explicit width", () => {
@@ -247,7 +314,7 @@ describe("prepareExportSvg — honest failures", () => {
     const rect = new DOMParser().parseFromString(result.svg, "image/svg+xml").querySelector("g rect");
     expect(rect?.getAttribute("style")).toBe("font-family:Arial");
     expect(Number(rect?.getAttribute("stroke-width"))).toBeGreaterThan(0);
-    expect(Number(rect?.getAttribute("stroke-width"))).toBeLessThan(2.9334); // the artboard scale divides it down
+    expect(Number(rect?.getAttribute("stroke-width"))).toBeLessThanOrEqual(3); // the artboard scale divides it down, then tidy
   });
 
   it("rejects a transform on the root svg", () => {

@@ -28,12 +28,12 @@ export const DEFAULT_METADATA_PROMPT = `You write search metadata for a minimali
 
 Answer with EXACTLY three lines and nothing else:
 
-Title: <a descriptive sentence of at least 5 words naming the abstract idea>
+Title: <a descriptive phrase of at least 5 words naming the abstract idea, no trailing period>
 Description: <a sentence of at least 7 words>
 Tags: <at least 10 unique keywords, comma-separated, all lowercase>
 
 Hard rules:
-- Title: at least 5 words — a full descriptive phrase. Longer is fine.
+- Title: at least 5 words — a full descriptive phrase, with no trailing period or other end punctuation. Longer is fine.
 - Description: at least 7 words — more is welcome; one or two sentences.
 - Tags: at least 10 unique lowercase keywords, no duplicates, and the list MUST include these seven: icon, pictogram, vector, stroke, line, editable, web. More tags are welcome.
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
@@ -63,7 +63,20 @@ export function parseMetadata(text: string): IconMetadata | null {
   const tagsRaw = labeled(text, "tags");
   if (title === null || description === null || tagsRaw === null) return null;
   const tags = dedupeTags(tagsRaw.split(",").map((t) => t.trim()).filter((t) => t !== ""));
-  return { title: title.trim(), description: description.trim(), tags };
+  return { title: cleanTitle(title), description: description.trim(), tags };
+}
+
+/** Trailing sentence punctuation stock sites flag (`.`, `!`, `,`, `;`, `:`, `…`) and whitespace, gone; a `?` stays. */
+const TITLE_TAIL = /[\s.!,;:…]+$/u;
+
+/**
+ * The title as it is stored, shown and embedded (stock review item 5,
+ * 2026-10-08): no trailing period. Applied wherever a title enters — the
+ * model's answer, the user's edit at Accept, and a cache entry written before
+ * this rule — so the file, the XMP, export.json and the field always agree.
+ */
+export function cleanTitle(title: string): string {
+  return title.trim().replace(TITLE_TAIL, "");
 }
 
 function labeled(text: string, label: string): string | null {

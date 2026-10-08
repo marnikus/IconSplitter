@@ -2122,3 +2122,52 @@ The gate failed three NEW files, and the fixes are structural, not cosmetic:
 * The lane-4 flake above is environmental (act() warning volume during
   teardown), not a failing assertion: worth one `vitest`/pool note, not a code
   change, until it reproduces with a failing test named.
+
+## 2026-10-08 — stock-clean export SVG: namespaces once, tidy strokes, no root px, transparent background, stroke colour, titles without a period
+
+Landed together from one stock-submission review of a shipped SVG
+(design: `docs/archive/2026-10-08-stock-clean-svg/design.md`): `xmlns:rdf` /
+`xmlns:dc` declared ONCE on the root by the embed step (the clean policy now
+reads "declarations on the root only, used prefixes only", and the rebuild
+pass hoists/drops the rest — the `<metadata>` subtree is exempt from the
+rebuild exactly as it is from the check); stroke widths written as the
+fewest-decimals value within 10 % (`tidyStrokeWidth`; only when a width is
+normalized); the root carries no `width`/`height` (the viewBox is the size —
+the browser rasterizer pins px on an in-memory copy, `withIntrinsicSize`); the
+background is a setting, `transparent` (the new default) or a hex, honoured by
+the SVG, the EPS and the JPEG flatten; a stroke-colour setting (`artwork` or a
+hex) recolours every visible stroke on the export copy; and a title loses its
+trailing sentence punctuation at every gate (`cleanTitle`: parse, cache read,
+Accept).
+
+One race avoided rather than found: the Accept button re-exports a committed
+row, and the accepted metadata can now DIFFER from the row's (the cleaned
+title), so it travels in the `freshMeta` map — the lesson of the previous entry
+applied before it bit.
+
+### Structure work forced by the gate (RULE 18/19)
+
+| File | Was | Now |
+| --- | --- | --- |
+| `src/lib/upload/settings.ts` | 300-line ceiling in sight with two paints | 242 lines — the artboard modes/clamps/presets moved to **`src/lib/upload/artboard.ts`** (77 lines); one `readPaint(value, sentinel)` serves both paints |
+| `src/upload/UploadSettingsDialog.tsx` | 292 lines, a second picker would cross 300 | 232 lines — the per-row plumbing (props, marker, the one write path) is **`src/upload/settingsfield.tsx`** (55), the two paint pickers are **`src/upload/UploadPaintSettings.tsx`** (76, one `PaintPicker` for both rows) |
+| `src/upload/metaactions.ts` | `useMetaEditActions` 32 loc after the title gate | the accept gate is its own `acceptOne(latest, id)` |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 9.5 s |
+| 2/6 lint | ✅ | 0 errors, 10 warnings — all pre-existing (same 10 on the stashed baseline: `App`, `detect.ts`, `runStages`, `requestMetadata`) |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` over 18 changed files after the three splits above |
+| 4/6 tests | ✅ | **129 files / 1422 tests** (was 1385); new `tests/upload_stroke.test.ts` |
+| 5/6 tests + coverage | ✅ | statements **95.78 %**, branches **89.30 %**, functions 96.84 %, lines 97.79 % |
+| 6/6 build | ✅ | `dist/index.html` 1,492.79 kB (gzip 428.80 kB) |
+
+### Known debt carried
+
+* Unchanged from the previous entry (T17/T19/T25/T27/T28, P5–P7, the lane-4
+  teardown flake — not seen this run).
+* `tests/upload_runexport.test.ts` prints an SVGO stderr line (`removeTitle …
+  not part of preset-default`) that predates this batch (verified on the
+  stashed baseline); the optimizer config deserves one look, not this commit.

@@ -3,13 +3,16 @@
 // the FIRST children of the root. Idempotent (re-embedding replaces, never
 // duplicates), XML-escaped by the DOM, and read back for verification.
 // Reads are namespace-agnostic (localName matching) so the readback is
-// deterministic across parsers.
+// deterministic across parsers. The RDF and DC prefixes are declared ONCE, on
+// the root (2026-10-08, stock review): a serializer re-declares an undeclared
+// prefix on every element that uses it, which is what the reviewer flagged.
 
 import type { IconMetadata } from "./meta";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const DC_NS = "http://purl.org/dc/elements/1.1/";
+const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
 const EMBED_TAGS = ["title", "desc", "metadata"];
 
 /** The export SVG with the metadata embedded (the input string is untouched). */
@@ -24,6 +27,7 @@ export function embedMetadataInSvg(svgText: string, meta: IconMetadata): string 
   title.textContent = meta.title;
   const desc = doc.createElementNS(SVG_NS, "desc");
   desc.textContent = meta.description;
+  declareOnRoot(root);
   root.insertBefore(metadataElement(doc, meta), root.firstChild);
   root.insertBefore(desc, root.firstChild);
   root.insertBefore(title, root.firstChild);
@@ -44,6 +48,12 @@ export function readEmbeddedMetadata(svgText: string): IconMetadata | null {
     .filter((t) => t !== "");
   if (tags.length === 0) return null;
   return { title, description, tags };
+}
+
+/** The two vocabularies the block uses, declared once where every serializer finds them in scope. */
+function declareOnRoot(root: Element): void {
+  root.setAttributeNS(XMLNS_NS, "xmlns:rdf", RDF_NS);
+  root.setAttributeNS(XMLNS_NS, "xmlns:dc", DC_NS);
 }
 
 /** The Dublin Core RDF block: dc:title, dc:description, dc:subject (rdf:Bag). */

@@ -44,7 +44,7 @@ describe("enforceExportSvg — the folds that make a dirty file legal", () => {
       `<sketch:type/><path d="M4 4h16v16H4z"/></g></svg>`;
     const violations = verifyExportSvg(source);
     expect(violations).toContainEqual(expect.stringContaining("i:extraneous"));
-    expect(violations).toContainEqual(expect.stringContaining("xmlns:i"));
+    expect(violations).toContainEqual(expect.stringContaining("sketch:type"));
     expect(violations).toContainEqual(expect.stringContaining("data-name"));
     const out = rebuilt(source);
     for (const gone of ["i:extraneous", "xmlns:i", "sketch:", "data-name", "aria-label", "xml:space"]) {
@@ -55,7 +55,7 @@ describe("enforceExportSvg — the folds that make a dirty file legal", () => {
 
   it("drops an unused xlink declaration and keeps a used one", () => {
     const unused = SVG(`<path d="M4 4h16v16H4z"/>`, XLINK);
-    expect(verifyExportSvg(unused)).toContain("the namespace declaration xmlns:xlink is unused");
+    expect(verifyExportSvg(unused)).toContainEqual(expect.stringContaining("xmlns:xlink (http://www.w3.org/1999/xlink) is unused"));
     expect(rebuilt(unused)).not.toContain("xmlns:xlink");
 
     const used = SVG(
@@ -66,6 +66,42 @@ describe("enforceExportSvg — the folds that make a dirty file legal", () => {
     expect(out).toContain("xmlns:xlink");
     expect(out).toContain(`xlink:href="#a"`);
     expect(out).not.toContain(`id="shape"`);
+  });
+
+  it("refuses a px size on the root and removes it — the viewBox is the size (stock review item 4)", () => {
+    const sized = SVG(`<path d="M4 4h16v16H4z"/>`, `width="1400" height="800"`);
+    expect(verifyExportSvg(sized)).toContain("the root must not fix a pixel size (width/height) — the viewBox is the size");
+    const out = rebuilt(sized);
+    expect(out).not.toMatch(/<svg[^>]*\swidth=/);
+    expect(out).not.toMatch(/<svg[^>]*\sheight=/);
+    expect(out).toContain(`viewBox="0 0 24 24"`);
+    // a shape's own width/height are geometry, never touched
+    expect(rebuilt(SVG(`<rect x="1" y="1" width="4" height="4"/>`))).toContain(`width="4"`);
+  });
+
+  it("declares a namespace only on the root: inline repeats are hoisted to ONE declaration (stock review item 1)", () => {
+    const DC = `xmlns:dc="http://purl.org/dc/elements/1.1/"`;
+    const RDF = `xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"`;
+    // Exactly what the old embed serialized: the prefix re-declared on every dc:* element.
+    const repeated = SVG(
+      `<metadata><rdf:RDF ${RDF}><rdf:Description><dc:title ${DC}>T</dc:title>` +
+      `<dc:description ${DC}>D</dc:description></rdf:Description></rdf:RDF></metadata><path d="M4 4h16v16H4z"/>`,
+    );
+    expect(verifyExportSvg(repeated))
+      .toContainEqual(expect.stringContaining("the namespace declaration xmlns:dc must be on the root"));
+    const out = rebuilt(repeated);
+    expect(out.match(/xmlns:dc=/g)).toHaveLength(1);
+    expect(out.match(/xmlns:rdf=/g)).toHaveLength(1);
+    expect(out.slice(0, out.indexOf(">"))).toContain(DC);
+    expect(out).toContain("<dc:title>T</dc:title>");
+    expect(enforceExportSvg(out).rebuilt).toBe(false); // idempotent: the hoisted file is clean
+    // Declared once on the root and used: no violation at all.
+    const once = SVG(`<metadata><rdf:RDF><rdf:Description><dc:title>T</dc:title></rdf:Description></rdf:RDF></metadata>`, `${RDF} ${DC}`);
+    expect(verifyExportSvg(once)).toEqual([]);
+    // Declared on the root but used nowhere: unused, and the rebuild drops it.
+    const unused = SVG(`<path d="M4 4h16v16H4z"/>`, DC);
+    expect(verifyExportSvg(unused)).toContainEqual(expect.stringContaining("xmlns:dc (http://purl.org/dc/elements/1.1/) is unused"));
+    expect(rebuilt(unused)).not.toContain("xmlns:dc");
   });
 
   it("keeps a referenced id under a minimal name, and reports a plain `href` reference", () => {

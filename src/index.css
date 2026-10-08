@@ -1069,6 +1069,13 @@
 }
 
 .svg-swatch.on { outline: 2px solid var(--v2-purple-2); outline-offset: 1px; }
+/* "no paint of ours": transparent = checkerboard, artwork = a diagonal cut (2026-10-08) */
+.svg-swatch.transparent {
+  background: repeating-conic-gradient(#9aa3b8 0 25%, #e6e9f2 0 50%) 0 0 / 8px 8px;
+}
+.svg-swatch.artwork {
+  background: linear-gradient(135deg, #e6e9f2 0 46%, #d33 46% 54%, #35405e 54% 100%);
+}
 .svg-bg input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
 .svg-bg-value { color: var(--v2-muted); font-size: 9px; white-space: nowrap; }
 

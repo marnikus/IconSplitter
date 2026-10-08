@@ -42,7 +42,7 @@ describe("settingsstore — defaults + overrides", () => {
     const parsed = parseUploadSettingsState({ v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 999, strokePt: -4, background: "red", optimizeSvg: "yes" } });
     expect(parsed.defaults.paddingPct).toBe(50);
     expect(parsed.defaults.strokePt).toBe(0);
-    expect(parsed.defaults.background).toBe("#ffffff");
+    expect(parsed.defaults.background).toBe("transparent"); // junk → the documented default (2026-10-08)
     expect(parsed.defaults.optimizeSvg).toBe(true);
   });
 

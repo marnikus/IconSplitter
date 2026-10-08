@@ -8,7 +8,7 @@
 // bounded in size (the cache must not grow without limit on a 400-icon folder).
 
 import { isRecord } from "../lib/isrecord";
-import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { cleanTitle, validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { readKey, writeKey } from "../state/safestorage";
 import { EMPTY_META, type UploadMetaState } from "./types";
 
@@ -94,12 +94,13 @@ export function rememberMeta(hash: string, entry: CachedMeta): MetaCache {
 /** A restored answer never skips review: `accepted` was accepted, `generated` is not. */
 export function restoredMeta(entry: CachedMeta | null): UploadMetaState {
   if (entry === null) return EMPTY_META;
-  const validation = validateMetadata(entry.meta);
+  const meta = { ...entry.meta, title: cleanTitle(entry.meta.title) }; // entries older than the no-period rule
+  const validation = validateMetadata(meta);
   const state = validation.ok ? entry.state : "invalid";
   return {
     ...EMPTY_META,
     state,
-    metadata: entry.meta,
+    metadata: meta,
     validation,
     detail: validation.ok ? "" : "the remembered answer no longer passes the policy — fix it or generate again",
   };

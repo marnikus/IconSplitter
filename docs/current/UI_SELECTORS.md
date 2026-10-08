@@ -572,10 +572,19 @@ Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
 change), `upload-set-{optimize,eps}` (checkboxes), the background
-(`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
-`upload-set-bg-value`), the per-field marker `upload-set-marker-{field}`
-("inherited" / "overridden", icon scope only), `upload-set-reset` (icon scope:
-deletes the override — one undoable entry), `upload-set-close`.
+(`upload-set-bg-transparent` — the default, a checkerboard swatch —
+`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
+`upload-set-bg-value`, which reads `transparent` or the hex), the stroke
+colour (2026-10-08: `upload-set-stroke-color-artwork` — the default, a
+diagonal-cut swatch — `upload-set-stroke-color-{white,black,gray,green,red}` +
+`upload-set-stroke-color-custom` + `upload-set-stroke-color-value`, which
+reads `artwork` or the hex; its marker is `upload-set-marker-stroke-color`),
+every swatch carrying `aria-pressed`, the per-field marker
+`upload-set-marker-{field}` ("inherited" / "overridden", icon scope only),
+`upload-set-reset` (icon scope: deletes the override — one undoable entry),
+`upload-set-close`. The row's settings cell `upload-settings-{id}` names the
+background (`transparent` or the hex) and appends `· stroke #hex` when a
+stroke colour is pinned.
 The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,

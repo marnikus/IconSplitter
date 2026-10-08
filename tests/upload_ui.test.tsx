@@ -13,6 +13,7 @@ import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { AUTH_HEADER } from "../src/lib/upload/gemini";
 import { MANDATORY_TAGS } from "../src/lib/upload/meta";
+import { withIntrinsicSize } from "../src/lib/upload/raster";
 import { JOURNAL_KEY } from "../src/upload/journal";
 import { UPLOAD_JOBS_KEY, forgetRestoreNote } from "../src/upload/jobstore";
 import { getLogState, resetLogStore } from "../src/log/logstore";
@@ -141,6 +142,8 @@ function storedDefaults(): {
   artboard: { mode: string; size: number; width: number; height: number };
   jpegMegapixels: number;
   jpegMatchArtboard: boolean;
+  background: string;
+  strokeColor: string;
 } {
   return JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").defaults ?? {};
 }
@@ -607,7 +610,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("9 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("10 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -672,6 +675,47 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await click("[data-testid=upload-set-close]");
   });
 
+  it("background: transparent (the default) or a colour; stroke colour: the artwork's own or one hex (2026-10-08)", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    // transparent is the shipped default, shown as such
+    expect(storedDefaults().background ?? "transparent").toBe("transparent");
+    expect(q("[data-testid=upload-set-bg-transparent]")?.getAttribute("aria-pressed")).toBe("true");
+    expect(text("[data-testid=upload-set-bg-value]")).toBe("transparent");
+    // a colour swatch, then back to transparent — both live in the stored defaults
+    await click("[data-testid=upload-set-bg-black]");
+    expect(storedDefaults().background).toBe("#000000");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("#000000");
+    await click("[data-testid=upload-set-bg-transparent]");
+    expect(storedDefaults().background).toBe("transparent");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("transparent");
+    // the stroke colour: artwork by default, one hex when picked, artwork again on reset
+    expect(q("[data-testid=upload-set-stroke-color-artwork]")?.getAttribute("aria-pressed")).toBe("true");
+    expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("artwork");
+    await type("[data-testid=upload-set-stroke-color-custom]", "#112233");
+    expect(storedDefaults().strokeColor).toBe("#112233");
+    expect(text("[data-testid=upload-set-stroke-color-value]")).toBe("#112233");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("stroke #112233");
+    await click("[data-testid=upload-set-stroke-color-white]");
+    expect(storedDefaults().strokeColor).toBe("#ffffff");
+    await click("[data-testid=upload-set-stroke-color-artwork]");
+    expect(storedDefaults().strokeColor).toBe("artwork");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).not.toContain("stroke #");
+    await click("[data-testid=upload-set-close]");
+
+    // the icon scope: a stroke-colour-only pin is a real override, marked and undoable
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(text("[data-testid=upload-set-marker-stroke-color]")).toBe("inherited");
+    await click("[data-testid=upload-set-stroke-color-black]");
+    expect(text("[data-testid=upload-set-marker-stroke-color]")).toBe("overridden");
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG]).toEqual({ strokeColor: "#000000" });
+    await act(async () => { (q("[data-testid=hist-undo]") as HTMLButtonElement).click(); });
+    await settle();
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
+    await click("[data-testid=upload-set-close]");
+  });
+
   it("resets one icon to the defaults (undoable)", async () => {
     await mount(makeRoot());
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
@@ -717,11 +761,13 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(40);
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
-    // edit + accept (no record yet → no auto export)
-    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart");
+    // edit + accept (no record yet → no auto export); the trailing period the
+    // user typed is gone at the accept gate and the field shows it at once (RULE 24)
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart.");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth. Speed and growth chart");
   });
 
   itSlow("generates metadata for ALL selected icons that need it, and says what it skipped", async () => {
@@ -844,7 +890,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click(`[data-testid=upload-meta-${ARCH}]`);
     await waitFor(() => q(`[data-testid=upload-preview-${ARCH}]`) !== null, "the preview to render");
     expect(q(`[data-testid=upload-preview-${FOG}]`)).toBeNull();
-    expect(canvas.drawn).toEqual([distinctSvg("ARCH")]); // only that icon's own document
+    // only that icon's own document — with its render size pinned for the browser (no root px in the file)
+    expect(canvas.drawn).toEqual([withIntrinsicSize(distinctSvg("ARCH"), 512, 512)]);
     const img = input(`[data-testid=upload-preview-${ARCH}]`);
     expect(img.src.startsWith("data:image/jpeg;base64,")).toBe(true);
     expect(text(`[data-testid=upload-preview-caption-${ARCH}]`)).toContain("arch_AI.svg");

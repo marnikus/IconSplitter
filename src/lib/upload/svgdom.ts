@@ -85,3 +85,22 @@ export function isIdReference(value: string): boolean {
   ID_REF.lastIndex = 0;
   return plain;
 }
+
+export const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
+
+/** Is this attribute name a namespace declaration (`xmlns:p`)? */
+export function isNamespaceDecl(name: string): boolean {
+  return name.startsWith("xmlns:");
+}
+
+/** Every prefix the document USES — in element names and in attribute names (declarations excluded). */
+export function usedPrefixes(elements: Element[]): Set<string> {
+  const out = new Set<string>();
+  for (const el of elements) {
+    for (const name of [el.nodeName, ...attributeNames(el)]) {
+      const at = name.indexOf(":");
+      if (at > 0 && !isNamespaceDecl(name)) out.add(name.slice(0, at));
+    }
+  }
+  return out;
+}
