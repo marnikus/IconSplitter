@@ -8,6 +8,11 @@
 // of at least 7 words. Nothing is refused for being too long or too rich —
 // a longer title, a fuller description and more tags always pass — because the
 // only failure the field reported was a good answer being thrown away.
+//
+// The title has ONE shape rule that is normalized, never refused (stock
+// review, 2026-10-08): it is ONE clean descriptive phrase — `cleanTitle`
+// strips the trailing sentence punctuation AND cuts a second sentence, so
+// "X. Icon of Y and Z" ships as "X" (the tags already carry Y and Z).
 
 import { fnv1a32 } from "../pairing";
 
@@ -28,12 +33,12 @@ export const DEFAULT_METADATA_PROMPT = `You write search metadata for a minimali
 
 Answer with EXACTLY three lines and nothing else:
 
-Title: <a descriptive phrase of at least 5 words naming the abstract idea, no trailing period>
+Title: <ONE phrase of at least 5 words naming the abstract idea — a single sentence, no second sentence, no trailing period>
 Description: <a sentence of at least 7 words>
 Tags: <at least 10 unique keywords, comma-separated, all lowercase>
 
 Hard rules:
-- Title: at least 5 words — a full descriptive phrase, with no trailing period or other end punctuation. Longer is fine.
+- Title: at least 5 words in ONE phrase — a single sentence, never two: a "." "!" "?" or "…" never ends it and never starts a second sentence after it, and there is no "Icon of X and Y" restatement of the tags (they already carry those words). Longer is fine.
 - Description: at least 7 words — more is welcome; one or two sentences.
 - Tags: at least 10 unique lowercase keywords, no duplicates, and the list MUST include these seven: icon, pictogram, vector, stroke, line, editable, web. More tags are welcome.
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
@@ -69,14 +74,29 @@ export function parseMetadata(text: string): IconMetadata | null {
 /** Trailing sentence punctuation stock sites flag (`.`, `!`, `,`, `;`, `:`, `…`) and whitespace, gone; a `?` stays. */
 const TITLE_TAIL = /[\s.!,;:…]+$/u;
 
+/** An end mark followed by more text — where a SECOND sentence starts inside a title. */
+const SENTENCE_BREAK = /[.!?…]+(?=\s+\S)/u;
+
 /**
- * The title as it is stored, shown and embedded (stock review item 5,
- * 2026-10-08): no trailing period. Applied wherever a title enters — the
- * model's answer, the user's edit at Accept, and a cache entry written before
- * this rule — so the file, the XMP, export.json and the field always agree.
+ * The title as it is stored, shown and embedded (stock review, 2026-10-08):
+ * ONE clean descriptive phrase. The trailing sentence punctuation goes, and so
+ * does a second sentence — the reviewer's
+ * "Collaborative Unity Promoting Collective Social Empathy. Icon of charity and
+ * community." ships as "Collaborative Unity Promoting Collective Social
+ * Empathy" (the second sentence only restated the tags). Applied wherever a
+ * title enters — the model's answer, the user's edit at Accept, the
+ * accepted-metadata cache on read and the record a reload reads back — so the
+ * file, the XMP, export.json and the field always agree (RULE 24).
  */
 export function cleanTitle(title: string): string {
-  return title.trim().replace(TITLE_TAIL, "");
+  const flat = title.trim().replace(/\s+/gu, " ");
+  const at = flat.search(SENTENCE_BREAK);
+  return stripTail(at < 0 ? flat : flat.slice(0, at));
+}
+
+/** The one phrase's own trailing punctuation is never part of the title. */
+function stripTail(text: string): string {
+  return text.replace(TITLE_TAIL, "");
 }
 
 function labeled(text: string, label: string): string | null {

@@ -40,7 +40,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 const META: IconMetadata = {
-  title: "Minimal line icon of growth. Speed and growth pictogram",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -319,7 +319,7 @@ describe("runExport — selective re-export (no redundant work)", () => {
       requestId: null, usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(META),
     };
     await runExport(args(root, { metadata: META, metadataInfo: info }));
-    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress. Speed and growth pictogram" };
+    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress and speed" };
     const spy = { renders: 0 };
     const result = await runExport(args(root, {
       record: readRecord(root),
@@ -545,12 +545,12 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
     expect(result.status).toBe("processed");
     expect(seen).toEqual(["#ffffff"]); // JPEG has no alpha: flattened onto white, never "transparent"
-    const svg = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svg = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(verifyExportSvg(svg)).toEqual([]);
     expect(svg).not.toMatch(/<svg[^>]*\swidth=/); // no px size on the root either
     const shapes = Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("rect, path, circle"));
     expect(shapes.filter((el) => el.getAttribute("stroke") === "none" && el.getAttribute("x") === "0")).toHaveLength(0);
-    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
     expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — no background shape before it
     expect(readRecord(root).settings.effective.background).toBe("transparent");
@@ -567,9 +567,9 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
     expect(result.status).toBe("processed");
     expect(seen).toEqual(["#102030"]);
-    const svg = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svg = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(svg).toContain(`fill="#102030"`);
-    expect(verifyEps(fileText(root, `${DIR}/export/${STEM}.eps`)).ok).toBe(true);
+    expect(verifyEps(fileText(root, `${DIR}/export/${ART}.eps`)).ok).toBe(true);
   });
 
   it("a leftover tmp file is harmless and overwritten", async () => {

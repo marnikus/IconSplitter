@@ -9,7 +9,7 @@ import { probePath, tryGetFile, type DirHandleLike } from "../lib/fs";
 import { sha256HexText } from "../lib/upload/hash";
 import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
 import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
-import { metadataFingerprint } from "../lib/upload/meta";
+import { cleanTitle, metadataFingerprint } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
 import { cachedMeta, restoredMeta } from "./metacache";
 import type { UploadRowSource } from "./discovery";
@@ -105,14 +105,22 @@ function metadataMoved(record: ExportRecord, meta: UploadMetaState): boolean {
   return (record.metadata?.fingerprint ?? "") !== acceptedFp;
 }
 
-/** The metadata state a committed record carries (empty until generated). */
+/**
+ * The metadata state a committed record carries (empty until generated). The
+ * title passes `cleanTitle` on the way in — the fourth gate (stock review,
+ * 2026-10-08): a package exported before the one-phrase rule reads back the
+ * clean title, and because that no longer matches the record's stored
+ * fingerprint the row reports `stale`, so the next export rewrites the file
+ * without a model call.
+ */
 export function metaFromRecord(record: ExportRecord | null, interrupted: boolean): UploadMetaState {
   if (interrupted) return { ...EMPTY_META, state: "interrupted", detail: "a metadata request was in flight when the app closed — its outcome is unknown; generate again to retry" };
   const block = record?.metadata ?? null;
-  if (block === null || block.state !== "accepted" || block.title === "") return EMPTY_META;
+  const title = block === null ? "" : cleanTitle(block.title);
+  if (block === null || block.state !== "accepted" || title === "") return EMPTY_META;
   return {
     state: "accepted",
-    metadata: { title: block.title, description: block.description, tags: [...block.tags] },
+    metadata: { title, description: block.description, tags: [...block.tags] },
     validation: block.validation,
     usage: block.usage,
     detail: "",

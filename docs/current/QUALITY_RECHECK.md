@@ -2342,3 +2342,46 @@ three). `CODE_VERIFICATION.md` §5 explains the setting and how to debug with
 
 * Unchanged: T17/T19/T25/T27/T28, P5–P7, the version-stem sweep note above, and
   a `fog_AI_v2.*` leftover that only an export of that version removes.
+
+## 2026-10-08 (sixth) — one-phrase titles
+
+The stock review's title item — *"Collaborative Unity Promoting Collective
+Social Empathy. Icon of charity and community."* — is fixed at the source and
+at every gate: `cleanTitle` now cuts a second sentence and strips the trailing
+punctuation (`src/lib/upload/meta.ts`), the default prompt asks for ONE phrase
+and tells the model not to restate the tags, the Title field's hint
+(`src/upload/UploadMetaFields.tsx`, still teaching the retired "two sentences"
+rule) states the enforced rule, and `metaFromRecord` (`src/upload/rowmodel.ts`)
+cleans the committed `export.json` block a reload reads back — the fourth gate,
+and the reason a pre-fix package now reports `stale` and re-embeds the clean
+title with no model call. Design: `docs/archive/2026-10-08-title-one-phrase/design.md`.
+
+Drive-by fix in the same change: `tests/upload_runexport.test.ts`'s two
+background tests still read the pre-rename artifact names (`export/fog_AI.svg`
+
+- `.eps` while the 2026-10-08 naming writes `export/fog.*`) — they failed at
+HEAD before this change (2 failures) and pass now.
+
+### Tests
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_meta` | the reviewer's exact title → its first sentence; three sentences → the first; a question cut; a decimal (`3.5 MP`) and an inner ellipsis NOT split; idempotence; the prompt's `ONE phrase` / `single sentence, never two` / `Icon of X and Y` wording |
+| `upload_rowmodel` | a committed record with a two-sentence title reads back one phrase and is `stale` against its own record |
+| `upload_metacache` | a remembered two-sentence answer comes back as its first sentence |
+| `upload_ui` | typing a two-sentence title and accepting shows the cleaned title in the field at once; the shipped SVG's `<title>` is the one-phrase title |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 10 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **130 files / 1447 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.79 %**, branches **89.31 %**, functions 96.85 %, lines 97.79 % |
+| 6/6 build | ✅ | single-file bundle `dist/index.html` 1,413.15 kB (gzip 416.09 kB) |
+
+### Known debt carried
+
+* Unchanged: the version-stem sweep note, T17/T19/T25/T27/T28 and P5–P7.

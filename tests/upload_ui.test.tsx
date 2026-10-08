@@ -60,7 +60,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
-const GOOD_ANSWER = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
+const GOOD_ANSWER = `Title: Minimal line icon of growth and speed\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
 const BAD_ANSWER = `Title: Tiny\nDescription: way too short\nTags: icon, pictogram`;
 
 let host: HTMLDivElement;
@@ -761,13 +761,14 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(40);
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
-    // edit + accept (no record yet → no auto export); the trailing period the
-    // user typed is gone at the accept gate and the field shows it at once (RULE 24)
-    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart.");
+    // edit + accept (no record yet → no auto export); BOTH the second sentence
+    // and the trailing period the user typed are gone at the accept gate, and the
+    // field shows the cleaned title at once (RULE 24, one-phrase rule)
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of steady growth. Speed and growth chart.");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
-    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth. Speed and growth chart");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of steady growth");
   });
 
   itSlow("generates metadata for ALL selected icons that need it, and says what it skipped", async () => {
@@ -1200,7 +1201,7 @@ describe("export — green means a complete committed package", () => {
 
     // a metadata EDIT is re-embedded, and still spends nothing
     await activate(FOG);
-    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart");
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of steady progress");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(t.calls).toHaveLength(1);
 
@@ -1241,7 +1242,7 @@ describe("export — green means a complete committed package", () => {
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     const svg = fileText(root, `${DIR}/export/fog.svg`);
-    expect(svg).toContain("<title>Minimal line icon of growth. Speed and growth pictogram</title>");
+    expect(svg).toContain("<title>Minimal line icon of growth and speed</title>");
     const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
     expect(record.metadata.state).toBe("accepted");
     expect(record.metadata.tags).toHaveLength(40);
