@@ -27,6 +27,7 @@ import { useMetaActions } from "./metaactions";
 import { usePromptActions, type PromptActions } from "./promptactions";
 import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
+import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
@@ -91,6 +92,8 @@ export interface UploadActions extends PromptActions {
   acceptMetadata: (id: string) => void;
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
+  /** Bulk: the selection's committed SVG/JPG/EPS copied into one folder the user picks (2026-10-08). */
+  downloadSelected: (ids: string[]) => void;
   exportRows: (ids: string[]) => void;
   exportRow: (id: string) => void;
   cancelExport: () => void;
@@ -114,6 +117,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useUiActions(ctx),
     ...useMetaActions(ctx),
     ...useExportActions(ctx),
+    ...useDownloadActions(ctx),
     ...usePromptActions(ctx),
   };
 }

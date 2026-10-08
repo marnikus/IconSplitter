@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, exportedSpec, modelCheckedSpec,
+  UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, downloadedSpec, exportedSpec, modelCheckedSpec,
   nameRefusedSpec, namedSpec, restoredSpec,
 } from "../src/upload/uploadlog";
 
@@ -22,10 +22,11 @@ const ALL = [
   cancelledSpec(3),
   restoredSpec(2),
   modelCheckedSpec({ model: "gemini-3.1-flash-lite", ok: true, reason: "" }),
+  downloadedSpec({ line: "Saved 9 files (3 icons) to stock-drop", failed: 0 }),
 ];
 
 describe("the vocabulary is closed", () => {
-  it("every builder emits one of the six actions (T13)", () => {
+  it("every builder emits one of the seven actions (T13)", () => {
     for (const spec of ALL) {
       expect(UPLOAD_LOG_ACTIONS).toContain(spec.action);
     }

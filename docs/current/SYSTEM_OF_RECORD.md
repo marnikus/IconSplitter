@@ -523,6 +523,23 @@ opt-in class as Generate SVG → Requesty; design
   (SVG/JPEG stay committed). Green (`processed`) only when every requested
   output validated and committed; `stale` when fingerprints moved since the
   last commit.
+* Download all (2026-10-08, design
+  `docs/archive/2026-10-08-upload-download-all/design.md`): the bulk bar's
+  `⤓ Download all (N files)` copies the SELECTION's committed packages into ONE
+  folder the user picks in the browser's folder dialog (`pickDirectory`, a
+  destination — no path capture, nothing remembered, no scan). What is copied
+  is what each row's `export.json` names and the disk has (`outputs.svg/jpg/
+  eps`, never `export.json` itself), byte for byte under the artifact's own
+  name; the pure planner (`lib/upload/download.ts`) keeps two icons with one
+  stem apart (`fog (2).*`, all three files of the package together) and is
+  what the button's count reads, so the count and the write agree. RULE 23
+  holds in the destination: `writeFileNew`, a name already there is KEPT and
+  counted, every write is read back and compared (a mismatch is removed and
+  counted `failed`), and one file's failure never stops the next (RULE 5). A
+  selected row with no record is "not exported yet", counted, never guessed
+  at. One line says it all — toast and the log's `downloaded` entry (counts in
+  text, no data): `Saved 9 files (3 icons) to stock-drop · 2 kept (already
+  there) · 1 icon not exported yet`.
 * Restart precedence (P2.6 — the two interruption models reconciled): there are
   TWO independent memories of work that did not finish, and they never silently
   disagree. **Disk wins on scan**: `export.json` beside the outputs is the

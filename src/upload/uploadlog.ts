@@ -15,7 +15,7 @@ export const UPLOAD_FEATURE = "upload";
 
 /** The CLOSED set of actions the tab may emit, in one place for the lock test. */
 export const UPLOAD_LOG_ACTIONS = [
-  "named", "name-refused", "exported", "cancelled", "restored", "model-checked",
+  "named", "name-refused", "exported", "cancelled", "restored", "model-checked", "downloaded",
 ] as const;
 
 export type UploadLogAction = (typeof UPLOAD_LOG_ACTIONS)[number];
@@ -108,4 +108,14 @@ function levelOfStatus(status: string): UploadLogSpec["level"] {
   if (status === "processed") return "info";
   if (status === "partial" || status === "cancelled") return "warn";
   return "error";
+}
+
+/** "Download all" (2026-10-08): the selection's packages copied to one folder — the result line, counts only. */
+export function downloadedSpec(ref: { line: string; failed: number }): UploadLogSpec {
+  return {
+    level: ref.failed > 0 ? "warn" : "info",
+    feature: UPLOAD_FEATURE,
+    action: "downloaded",
+    detail: ref.line,
+  };
 }

@@ -2526,3 +2526,37 @@ largest touched files `runbatch.ts` 298, `SvgPanel.tsx` 286, `actions.ts` 285.
   into `run/`, `list/`, `ui/` is due but is its own change.
 * The popup does not yet survive a page reload (the queue is session-only by
   I-53, so there is nothing to count after one).
+
+## 2026-10-08 — SVG to upload: Download all (`feat(upload)`)
+
+The user wanted the selection's prepared files in ONE folder instead of N
+`export/` folders. The button reads `⤓ Download all (N files)` — the count
+comes from the same pure planner (`lib/upload/download.ts`) that decides the
+names, so what the button promises is what the copy writes. The destination
+is the browser's folder dialog; the copy is `writeFileNew` (a name already
+there is kept and said), read back and compared, one file isolated from the
+next; the result is one line in the toast and in the log (`downloaded`, the
+seventh closed-set action). Lesson: **a fixture must obey the record's own
+assumptions** — the first UI fixture put two pairs in one folder, so both rows
+read one `export.json` (the SOR's "one icon per export folder" note); the
+fixture was wrong, not the feature.
+
+### Structure work (RULE 3/18/19)
+
+* New files, one responsibility each: `lib/upload/download.ts` (planner +
+  line, 103 lines, pure), `upload/downloadactions.ts` (I/O, 96 lines).
+* `UploadBulkBar.BulkRight` hit 34 lines with the fifth button → `BulkActions`
+  extracted by concept (the ratchet caught it on `quality:changed`).
+* No new fs primitive: `pickDirectory`, `nameExists`, `writeFileNew`,
+  `readBytesAt` were enough.
+
+### Gates (full run)
+
+`npm run verify`: types, lint (0 errors), quality (changed) GATE PASSED, 135
+files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
+≤ 30 lines, ≤ 4 params; RULE 18: largest touched file `UploadPanel.tsx` 254.
+
+### Known debt carried
+
+* Unchanged from the previous entry.
+* The destination is flat; a per-icon subfolder option was not asked for.
