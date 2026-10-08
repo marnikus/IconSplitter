@@ -69,15 +69,25 @@ describe("where a package lands (the Location action's pure half)", () => {
     expect(exportDirOf("")).toBe("export");
   });
 
-  it("strips exactly the .svg extension, whatever its case", () => {
-    expect(stemOf("fog_AI.svg")).toBe("fog_AI");
-    expect(stemOf("fog_AI.SVG")).toBe("fog_AI");
-    expect(stemOf("fog_AI.v2.svg")).toBe("fog_AI.v2");
+  it("removes ONLY the `_AI` marker — every number behind it stays (2026-10-08)", () => {
+    expect(stemOf("fog_AI.svg")).toBe("fog");
+    expect(stemOf("fog_AI.SVG")).toBe("fog");
+    expect(stemOf("fog_AI_03.svg")).toBe("fog_03");            // the user's own example
+    expect(stemOf("icon-bunny-face_AI_7_04.svg")).toBe("icon-bunny-face_7_04"); // batch + split tails
+    expect(stemOf("icon-airplane-landing_AI_9_01.svg")).toBe("icon-airplane-landing_9_01");
+    expect(stemOf("fog_AI_v2.svg")).toBe("fog_v2");            // the approved version stays visible
+    expect(stemOf("fog_AI_7_v2.svg")).toBe("fog_7_v2");
+    // a base that already ends in a digit keeps it too: only the marker is bookkeeping
+    expect(stemOf("chat_bot_2_AI.svg")).toBe("chat_bot_2");
+    expect(stemOf("chat_bot_2_AI_7.svg")).toBe("chat_bot_2_7");
+    // no trailing `_AI` marker: unchanged, never invented
+    expect(stemOf("plain_name.svg")).toBe("plain_name");
+    expect(stemOf("fog_AI_x.svg")).toBe("fog_AI_x"); // a non-numeric tail is not our marker
   });
 
   it("points at the committed JPEG whether or not it exists yet", () => {
-    expect(publishedJpegPath("cat/split_01", "fog_AI.svg")).toBe("cat/split_01/export/fog_AI.jpg");
-    expect(publishedJpegPath("", "fog_AI.svg")).toBe("export/fog_AI.jpg");
+    expect(publishedJpegPath("cat/split_01", "fog_AI.svg")).toBe("cat/split_01/export/fog.jpg");
+    expect(publishedJpegPath("", "fog_AI_7.svg")).toBe("export/fog_7.jpg");
   });
 });
 

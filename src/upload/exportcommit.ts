@@ -8,9 +8,10 @@ import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEps } from "../lib/upload/eps";
 import { sha256Hex } from "../lib/upload/hash";
-import { parseExportRecord, serializeExportRecord, type ExportRecord } from "../lib/upload/export";
+import { parseExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
 import { readBytesAt } from "./runexport";
+import { sweepSuperseded } from "./exportsweep";
 
 export interface CommitValidation {
   svg: boolean; jpeg: boolean; eps: boolean; json: boolean; readback: boolean;
@@ -19,6 +20,12 @@ export interface CommitValidation {
 export interface CommitExportInput {
   root: DirHandleLike;
   exportDir: string;
+  /**
+   * The artifact name this commit writes (the icon's own name, see `stemOf`).
+   * The folder's superseded artifacts — whatever the previous `export.json`
+   * named, and any orphan the app lost track of — are swept after the write,
+   * by `exportsweep.ts`.
+   */
   stem: string;
   svgOut: string | null;
   jpeg: Uint8Array | null;
@@ -37,12 +44,16 @@ export interface CommitExportInput {
 export interface CommitExportOutput {
   outputs: { svg: string | null; jpg: string | null; eps: string | null };
   record: ExportRecord;
+  /** The superseded files that were removed — reported, never silent. */
+  replaced: string[];
 }
 
 /** Commits every rebuilt output, then export.json. Throws on any verify failure. */
 export async function commitExport(input: CommitExportInput): Promise<CommitExportOutput> {
   const dir = await ensureDirPath(input.root, input.exportDir);
   const outputs: CommitExportOutput["outputs"] = { svg: null, jpg: null, eps: null };
+  // The new files are written and verified FIRST; only then may anything go
+  // (RULE 23: the sweep can never cost the user their only copy).
   if (input.svgOut !== null) {
     await commitFile(dir, `${input.stem}.svg`, encode(input.svgOut), (back) => svgParses(decode(back)));
     outputs.svg = `${input.stem}.svg`;
@@ -55,15 +66,28 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
     await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => verifyEps(decode(back)).ok);
     outputs.eps = `${input.stem}.eps`;
   }
-  return { outputs, record: await writeRecord(input, dir, outputs) };
+  const named = previousNames(input);
+  const removed = await sweepSuperseded(dir, input.stem, named);
+  const replaced = removed.map((n) => `${input.exportDir}/${n}`);
+  return { outputs, record: await writeRecord(input, dir, outputs, replaced), replaced };
+}
+
+/** The file names the previous record claims, rebased onto this export folder. */
+function previousNames(input: CommitExportInput): Set<string> {
+  const prefix = `${input.exportDir}/`;
+  const outs = [input.record.outputs.svg, input.record.outputs.jpg, input.record.outputs.eps];
+  return new Set(outs.flatMap((o) => (o === null || !o.path.startsWith(prefix) ? [] : [o.path.slice(prefix.length)])));
 }
 
 /** Fills outputs/status/timestamps from what was written, then writes export.json. */
-async function writeRecord(input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"]): Promise<ExportRecord> {
+async function writeRecord(
+  input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"], replaced: readonly string[],
+): Promise<ExportRecord> {
+  const kept = pruneRemoved(input.record.outputs, replaced, outputs);
   input.record.outputs = {
-    svg: outputs.svg === null ? input.record.outputs.svg : await outputRecord(input, outputs.svg),
-    jpg: outputs.jpg === null ? input.record.outputs.jpg : await outputRecord(input, outputs.jpg),
-    eps: outputs.eps === null ? input.record.outputs.eps : await outputRecord(input, outputs.eps),
+    svg: outputs.svg === null ? kept.svg : await outputRecord(input, outputs.svg),
+    jpg: outputs.jpg === null ? kept.jpg : await outputRecord(input, outputs.jpg),
+    eps: outputs.eps === null ? kept.eps : await outputRecord(input, outputs.eps),
   };
   input.record.stage = "committed";
   input.record.status = input.partial ? "partial" : "processed";
@@ -80,6 +104,27 @@ async function writeRecord(input: CommitExportInput, dir: DirHandleLike, outputs
     }
   });
   return input.record;
+}
+
+/**
+ * The previous outputs, minus any file this commit removed and did not rewrite.
+ * A record that keeps naming a file the commit just deleted is a lie the UI
+ * would repeat (T28: nothing is silently overwritten — or silently claimed).
+ */
+function pruneRemoved(
+  prev: ExportRecord["outputs"], replaced: readonly string[], written: CommitExportOutput["outputs"],
+): ExportRecord["outputs"] {
+  const gone = new Set(replaced);
+  return {
+    svg: keepOrNull(prev.svg, gone, written.svg),
+    jpg: keepOrNull(prev.jpg, gone, written.jpg),
+    eps: keepOrNull(prev.eps, gone, written.eps),
+  };
+}
+
+/** One entry: null when it was removed and nothing took its place. */
+function keepOrNull(out: OutputRecord | null, gone: ReadonlySet<string>, written: string | null): OutputRecord | null {
+  return out !== null && gone.has(out.path) && written === null ? null : out;
 }
 
 /** The tmp → verify → overwrite → cleanup protocol (RULE 23, atomic delivery). */

@@ -2123,51 +2123,222 @@ The gate failed three NEW files, and the fixes are structural, not cosmetic:
   teardown), not a failing assertion: worth one `vitest`/pool note, not a code
   change, until it reproduces with a failing test named.
 
-## 2026-10-08 — stock-clean export SVG: namespaces once, tidy strokes, no root px, transparent background, stroke colour, titles without a period
+## 2026-10-08 — export naming: the artifact is named after the ICON
 
-Landed together from one stock-submission review of a shipped SVG
-(design: `docs/archive/2026-10-08-stock-clean-svg/design.md`): `xmlns:rdf` /
-`xmlns:dc` declared ONCE on the root by the embed step (the clean policy now
-reads "declarations on the root only, used prefixes only", and the rebuild
-pass hoists/drops the rest — the `<metadata>` subtree is exempt from the
-rebuild exactly as it is from the check); stroke widths written as the
-fewest-decimals value within 10 % (`tidyStrokeWidth`; only when a width is
-normalized); the root carries no `width`/`height` (the viewBox is the size —
-the browser rasterizer pins px on an in-memory copy, `withIntrinsicSize`); the
-background is a setting, `transparent` (the new default) or a hex, honoured by
-the SVG, the EPS and the JPEG flatten; a stroke-colour setting (`artwork` or a
-hex) recolours every visible stroke on the export copy; and a title loses its
-trailing sentence punctuation at every gate (`cleanTitle`: parse, cache read,
-Accept).
+One rule change, one place: `lib/upload/export.ts` `stemOf` now trims the app's
+bookkeeping from the artifact name — the extension, this app's own `_v2`
+version artifact, the `_AI` marker and every numeric tail behind it
+(`fog_AI_7_04_v2.svg` → `fog.svg` / `fog.jpg` / `fog.eps`). A base that really
+ends in a digit keeps it (`chat_bot_2_AI.svg` → `chat_bot_2.*`), and a name with
+no `_AI` marker is returned unchanged — never invented, only trimmed.
+`runexport.ts` lost its second private `stemOf`, so the commit, the
+published-JPEG path and the UI cell all derive from the same function.
 
-One race avoided rather than found: the Accept button re-exports a committed
-row, and the accepted metadata can now DIFFER from the row's (the cleaned
-title), so it travels in the `freshMeta` map — the lesson of the previous entry
-applied before it bit.
+Because a rename would otherwise leave the pre-2026-10-08 package beside the new
+one, the commit now removes the files **the previous record itself named** whose
+name is no longer in use, after the new files are written and verified — nothing
+the record does not name is touched, and a selective re-export (say, one JPEG
+that had to be re-rendered) never removes a file it did not rewrite. That last
+point was a real bug in the first cut of this change, caught by the existing
+"a missing JPEG rebuilds only the JPEG" test: the first version compared against
+the files written in THAT run, so a JPEG-only rebuild deleted the SVG.
 
-### Structure work forced by the gate (RULE 18/19)
+### Tests
 
-| File | Was | Now |
-| --- | --- | --- |
-| `src/lib/upload/settings.ts` | 300-line ceiling in sight with two paints | 242 lines — the artboard modes/clamps/presets moved to **`src/lib/upload/artboard.ts`** (77 lines); one `readPaint(value, sentinel)` serves both paints |
-| `src/upload/UploadSettingsDialog.tsx` | 292 lines, a second picker would cross 300 | 232 lines — the per-row plumbing (props, marker, the one write path) is **`src/upload/settingsfield.tsx`** (55), the two paint pickers are **`src/upload/UploadPaintSettings.tsx`** (76, one `PaintPicker` for both rows) |
-| `src/upload/metaactions.ts` | `useMetaEditActions` 32 loc after the title gate | the accept gate is its own `acceptOne(latest, id)` |
+| Suite | What it pins |
+| --- | --- |
+| `upload_export` | the rule itself: `fog_AI` → `fog`, `icon-bunny-face_AI_7_04` → `icon-bunny-face`, `fog_AI_v2` → `fog`, `chat_bot_2_AI` → `chat_bot_2`, `plain_name` unchanged, `publishedJpegPath` = `…/export/fog.jpg` |
+| `upload_runexport` | the committed folder holds exactly `[export.json, fog.svg, fog.jpg]`, `%%Title: fog.eps`, `record.source.svgPath` still names `…/fog_AI.svg` (the provenance moved into the record), and a hand-built OLD package (`fog_AI.*` + a record naming them) is replaced — the folder ends with only the new names |
+| `upload_ui` | the export-selected chain and the single-row export read `export/fog.svg` / `fog.jpg`; the foreign `fog_AI.svg` junk in the fixture folder still survives a failed export |
 
 ### Gates (full run)
 
 | Lane | Result | Numbers |
 | --- | --- | --- |
-| 1/6 types | ✅ | 9.5 s |
-| 2/6 lint | ✅ | 0 errors, 10 warnings — all pre-existing (same 10 on the stashed baseline: `App`, `detect.ts`, `runStages`, `requestMetadata`) |
-| 3/6 quality gate (changed) | ✅ | `GATE PASSED` over 18 changed files after the three splits above |
-| 4/6 tests | ✅ | **129 files / 1422 tests** (was 1385); new `tests/upload_stroke.test.ts` |
-| 5/6 tests + coverage | ✅ | statements **95.78 %**, branches **89.30 %**, functions 96.84 %, lines 97.79 % |
-| 6/6 build | ✅ | `dist/index.html` 1,492.79 kB (gzip 428.80 kB) |
+| 1/6 types | ✅ | 8.9 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **128 files / 1386 tests** (was 1385) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
 
 ### Known debt carried
 
-* Unchanged from the previous entry (T17/T19/T25/T27/T28, P5–P7, the lane-4
-  teardown flake — not seen this run).
-* `tests/upload_runexport.test.ts` prints an SVGO stderr line (`removeTitle …
-  not part of preset-default`) that predates this batch (verified on the
-  stashed baseline); the optimizer config deserves one look, not this commit.
+* One icon per export folder is now an **assumed** invariant (the user's tree:
+  the batch layout puts one piece in each `split_NN` folder). Two paired sources
+  in one folder whose bases trim to the same name would share a package — not in
+  the corpus, and T28's guard is still the place where it gets refused.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake recorded
+  in the previous entry.
+
+## 2026-10-08 (later) — the rename migration may never lose a package
+
+Two properties pinned after the export-naming change, both found by asking what
+a real folder would look like after a rename:
+
+1. **A superseded file is removed only when its replacement is present.** The
+   first cut removed every old-named file the previous record named. It was safe
+   under today's planner (a skipped rebuild implies the canonical file exists),
+   but that invariant is invisible in the code and one `planStages` change away
+   from deleting the only copy of an output. `dropSuperseded` now checks the
+   export folder itself (`listChildNames`) and removes an old-named artifact only
+   when `${stem}.${ext}` is really there.
+2. **The record stops naming a file the commit removed.** `writeRecord` prunes
+   the previous outputs through `pruneRemoved`, so `outputs.eps` becomes null
+   when the superseded EPS was removed and no new one was written (the honest
+   half of a failed EPS stage) instead of pointing at a deleted path.
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_runexport` | "keeps an old-named file when this run wrote nothing to take its place" (the only EPS in the folder stays, `replaced` is empty, the record still names it) and "stops naming a file it just removed" (the superseded EPS goes because `fog.eps` is on disk, and `outputs.eps` comes back null) |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **128 files / 1388 tests** (was 1386) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* An **orphaned** superseded artifact — one that no `export.json` names — is
+  deliberately left in place: the app never deletes a file it cannot prove it
+  wrote. A folder carrying one needs the user's word before any sweep lands.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (third) — the export folder sweeps to ONE name; the record stops lying
+
+The user's follow-up: after the rename an export folder still held the old-named
+EPS, and the package must "be the same name as the svg". The record-based
+removal from the previous entry could not see an **orphan** — a superseded file
+the current `export.json` no longer names, which is exactly what a real folder
+has — so it was replaced by a folder sweep (`src/upload/exportsweep.ts`, five
+unit tests + two pipeline tests):
+
+* candidates: the three artifact extensions whose bare name trims to THIS icon's
+  stem under the export rule (`trimArtifactStem`), and which are not the current
+  `${stem}.${ext}` — another icon, a foreign file, `fogv2.eps` and
+  `fog_AI_x.eps` are never candidates;
+* a candidate the previous record still names goes only when its replacement is
+  on disk (a failed EPS stage must not delete the previous EPS); an orphan goes —
+  it passed the naming proof and no package claims it;
+* written and verified first, swept second, reported in `replaced`.
+
+**And the sweep exposed a pre-existing bug worth the record**: `assembleRecord`
+built a fresh record for every run, so a selective re-export (one JPEG, one SVG)
+blanked the record's `outputs` and JPEG block for everything it did not rewrite —
+the record stopped naming files that were sitting right there. `assembleRecord`
+now seeds `outputs` and the JPEG block from the previous record; the commit then
+fills, replaces and prunes them (`writeRecord` + `pruneRemoved`).
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_exportsweep` (new) | our superseded forms (`_AI`, `_AI_v2`, `_AI_7_04`, `_AI_9_01`) go; another icon / foreign file / `export.json` / near-miss bases stay; a claimed old-named file with no replacement stays; an orphan goes; a clean folder is a no-op |
+| `upload_runexport` | the orphan EPS from a real folder is swept and the folder ends `[export.json, fog.svg, fog.jpg]`; the record keeps naming the SVG a JPEG-only rebuild did not rewrite; the old-name package is still replaced |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1395 tests** (was 128 / 1388) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* A superseded file whose base does not trim to this icon's stem (e.g.
+  `fog_AI_x.eps`) is left alone: the naming rule cannot prove this app wrote it.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (fourth) — corrected: only `_AI` goes, every number stays
+
+The user corrected the naming rule the same day: *"sorry it was incorrect task.
+only remove `_AI` but keep number `_03` etc."* The rule in
+`lib/upload/export.ts` is now literal — strip the extension, remove the `_AI`
+marker, change nothing else:
+
+| source | before (wrong) | now |
+| --- | --- | --- |
+| `fog_AI.svg` | `fog.*` | `fog.*` (unchanged) |
+| `fog_AI_03.svg` | `fog.*` | **`fog_03.*`** |
+| `icon-bunny-face_AI_7_04.svg` | `icon-bunny-face.*` | **`icon-bunny-face_7_04.*`** |
+| `fog_AI_v2.svg` | `fog.*` | **`fog_v2.*`** |
+| `chat_bot_2_AI.svg` | `chat_bot_2.*` | `chat_bot_2.*` (unchanged) |
+| `fog_AI_x.svg` | `fog_AI_x.*` | `fog_AI_x.*` (a non-numeric tail is not our marker) |
+
+Keeping the digits also removes the collision the previous rule created:
+`fog_AI.svg` and `fog_AI_7.svg` are different pairs and now export as `fog.*`
+and `fog_7.*` instead of collapsing onto one name.
+
+The sweep follows the same, single rule (`trimArtifactStem`): for icon `fog`,
+`fog_AI.eps` is ours and goes when `fog.eps` is on disk, while `fog_AI_7.eps` /
+`fog_AI_9_01.jpg` belong to OTHER icons and are never candidates. A versioned
+source is swept under its own stem: exporting `fog_AI_v2.svg` (stem `fog_v2`)
+replaces `fog_AI_v2.*` with `fog_v2.*`.
+
+### Tests
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_export` | every row of the table above, plus `publishedJpegPath("", "fog_AI_7.svg")` = `export/fog_7.jpg` |
+| `upload_exportsweep` | our own `fog_AI.*` goes; `fog_AI_03.eps`, `fog_AI_7_04.svg`, `fog_AI_9_01.jpg` are LEFT ALONE (another icon's); the versioned old name goes when `fog_v2.*` is the stem being exported |
+| `upload_runexport` | a real export of the `fog_AI_7.svg` pair commits `fog_7.svg` + `fog_7.jpg` |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1398 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.76 %**, branches **89.3 %**, functions 96.83 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* A pre-rename artifact of a DIFFERENT version (`fog_AI_v2.eps` while v1 is the
+  approved source) is left alone: it belongs to the `fog_v2` stem, and only an
+  export of that version sweeps it.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (fifth) — the teardown flake is fixed, not retried
+
+The lane-4/lane-5 `EnvironmentTeardownError: [vitest-worker]: Closing rpc while
+"onUserConsoleLog" was pending` that had been recorded as a "harness flake"
+(previous entries) finally blocked a push, so it was diagnosed instead of
+retried: the DOM suites stream thousands of React `act()` warnings, and while
+one of those `onUserConsoleLog` messages is in flight a worker teardown makes
+vitest exit non-zero on an otherwise green run.
+
+**Fix:** `vitest.config.ts` sets `silent: "passed-only"` — a passing test's
+console output is not streamed, a failing one still prints everything. Measured
+on this tree: the coverage run's log fell from **42,618 lines to 744**, `act()`
+warnings streamed went to **zero**, coverage numbers are unchanged
+(95.76|89.3|96.83|97.76), and three consecutive `npx vitest run --coverage` runs
+all exited **0** (the failure had been intermittent — roughly one heavy run in
+three). `CODE_VERIFICATION.md` §5 explains the setting and how to debug with
+`console.log` anyway.
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1398 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.76 %**, branches **89.3 %**, functions 96.83 %, lines 97.76 %; log 744 lines |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, the version-stem sweep note above, and
+  a `fog_AI_v2.*` leftover that only an export of that version removes.

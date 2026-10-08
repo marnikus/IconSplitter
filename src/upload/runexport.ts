@@ -20,7 +20,7 @@ import { metadataFingerprint, type IconMetadata, type MetadataValidation } from 
 import type { GeminiUsage } from "../lib/upload/gemini";
 import { redact } from "../lib/svgsecret";
 import {
-  exportDirOf, metadataBlock, newExportRecord, planStages,
+  exportDirOf, metadataBlock, newExportRecord, planStages, stemOf,
   type ExportRecord, type Stage, type StagePlan,
 } from "../lib/upload/export";
 
@@ -149,7 +149,13 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
 }
 
 
-/** The record for this run (outputs/status/timestamps are filled at commit). */
+/**
+ * The record for this run (outputs/status/timestamps are filled at commit).
+ * It starts from the PREVIOUS record's artifact facts — the outputs and the
+ * JPEG block name files this run may not have rewritten, and a selective
+ * re-export (one JPEG, one SVG) must never blank what the package already
+ * holds. The commit fills, replaces and prunes them from what it writes.
+ */
 async function assembleRecord(args: ExportRunArgs, plan: PlanFor, art: Artifacts): Promise<ExportRecord> {
   const record = newExportRecord({
     pair: { id: args.row.id, base: args.row.base, suffix: args.row.suffix, dir: args.row.dirPath },
@@ -162,17 +168,21 @@ async function assembleRecord(args: ExportRunArgs, plan: PlanFor, art: Artifacts
     epsEnabled: args.settings.includeEps,
     now: args.deps?.now?.() ?? new Date().toISOString(),
   });
-  record.jpeg = jpegBlock(art, args.settings.jpegQuality);
+  record.outputs = args.record?.outputs ?? record.outputs;
+  record.jpeg = jpegBlock(art, args.settings.jpegQuality, args.record?.jpeg);
   record.metadata = metadataBlockOf(args);
   return record;
 }
 
-function jpegBlock(art: Artifacts, quality: number): ExportRecord["jpeg"] {
+function jpegBlock(
+  art: Artifacts, quality: number, prev?: ExportRecord["jpeg"],
+): ExportRecord["jpeg"] {
   const dims = art.jpegRecord ?? (art.jpeg === null ? null : readJpegDimensions(art.jpeg));
+  if (dims === null) return prev ?? { width: 0, height: 0, megapixels: 0, quality, profile: "baseline" };
   return {
-    width: dims?.width ?? 0,
-    height: dims?.height ?? 0,
-    megapixels: dims === null ? 0 : (dims.width * dims.height) / 1e6,
+    width: dims.width,
+    height: dims.height,
+    megapixels: (dims.width * dims.height) / 1e6,
     quality,
     profile: "baseline",
   };
@@ -249,10 +259,6 @@ function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {
 
 function passthroughOptimize(): OptimizeRecord {
   return { enabled: false, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" };
-}
-
-function stemOf(svgName: string): string {
-  return svgName.replace(/\.svg$/i, "");
 }
 
 async function readTextAt(root: DirHandleLike, relPath: string): Promise<string | null> {

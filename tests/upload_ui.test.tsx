@@ -827,9 +827,10 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "fog to export");
     await waitFor(() => text(`[data-testid=upload-status-${ARCH}]`).includes("Processed"), "arch to export");
     expect(t.calls).toHaveLength(2);
-    for (const [id, stem] of [[FOG, "fog_AI"], [ARCH, "arch_AI"]] as const) {
+    // the artifact carries the ICON's name: `_AI` is bookkeeping, not the icon
+    for (const [id, art] of [[FOG, "fog"], [ARCH, "arch"]] as const) {
       expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
-      const svg = fileText(root, `${DIR}/export/${stem}.svg`);
+      const svg = fileText(root, `${DIR}/export/${art}.svg`);
       expect(svg).toContain("<metadata>");        // the metadata really is in the package
       expect(svg).toContain("Minimal line icon of growth");
     }
@@ -1135,14 +1136,14 @@ describe("export — green means a complete committed package", () => {
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     expect(t.calls).toHaveLength(1); // exactly one paid call, and the package carries it
-    expect(fileText(root, `${DIR}/export/fog_AI.svg`)).toContain("Minimal line icon of growth");
+    expect(fileText(root, `${DIR}/export/fog.svg`)).toContain("Minimal line icon of growth");
 
     const exp = `${DIR}/export`;
-    expect(fileText(root, `${exp}/fog_AI.svg`)).toContain("<svg");
-    expect(fileText(root, `${exp}/fog_AI.svg`)).not.toBe(before); // a prepared copy, not the source
+    expect(fileText(root, `${exp}/fog.svg`)).toContain("<svg");
+    expect(fileText(root, `${exp}/fog.svg`)).not.toBe(before); // a prepared copy, not the source
     expect(fileText(root, `${exp}/export.json`)).toContain("\"status\": \"processed\"");
     const jpeg = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
-    const jpg = jpeg.children.get("fog_AI.jpg") as BinFile;
+    const jpg = jpeg.children.get("fog.jpg") as BinFile;
     expect(jpg.bytes[0]).toBe(0xff); // a real JPEG frame (SOI)
     expect(fileText(root, `${DIR}/fog_AI.svg`)).toBe(before); // the approved source untouched
     expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Processed");
@@ -1239,7 +1240,7 @@ describe("export — green means a complete committed package", () => {
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
-    const svg = fileText(root, `${DIR}/export/fog_AI.svg`);
+    const svg = fileText(root, `${DIR}/export/fog.svg`);
     expect(svg).toContain("<title>Minimal line icon of growth. Speed and growth pictogram</title>");
     const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
     expect(record.metadata.state).toBe("accepted");
