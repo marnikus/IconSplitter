@@ -1,8 +1,8 @@
 // raster.ts — rasterizing the export SVG to JPEG for the "SVG to
 // upload" tab (design §2.9): the vectors render DIRECTLY at the integer
-// target dimensions (never an upscaled thumbnail), the background is
-// flattened (canvas pre-fill + the export's own background rect — JPEG has
-// no alpha), and the result is verified by DECODING it back: the SOF
+// target dimensions (never an upscaled thumbnail), the canvas is pre-filled
+// independently of the optional fill-only SVG background rect, and the JPEG
+// is verified by DECODING it back: the SOF
 // segment must report exactly the target dimensions (RULE 15). The canvas
 // transport is injectable so tests exercise the real pipeline with a fake.
 

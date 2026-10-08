@@ -129,6 +129,7 @@ describe("fitArtboard — padded, centred, never stretched", () => {
   it("pads uniformly by % of the artwork's largest side and centres the content", () => {
     const fit = fitArtboard({ minX: 1, minY: 1, width: 22, height: 22 }, 8);
     expect(fit.pad).toBeCloseTo(1.76);
+    expect(fit.scale).toBe(1);
     expect(fit.artW).toBeCloseTo(25.52);
     expect(fit.artH).toBeCloseTo(25.52);
     expect(fit.offsetX).toBeCloseTo(0.76); // pad - minX
@@ -140,9 +141,21 @@ describe("fitArtboard — padded, centred, never stretched", () => {
     const fit = fitArtboard({ minX: 5, minY: 5, width: 40, height: 10 }, 0);
     expect(fit.artW).toBe(40);
     expect(fit.artH).toBe(10);
+    expect(fit.scale).toBe(1);
     expect(fit.offsetX).toBe(-5); // translate the artwork's origin (5,5) to (0,0)
     expect(fit.offsetY).toBe(-5);
     expect(fit.viewBox).toBe("0 0 40 10");
+  });
+
+  it("fits content proportionally and centers it on a fixed-pixel artboard", () => {
+    const fit = fitArtboard({ minX: 0, minY: 0, width: 200, height: 100 }, 8, { width: 1200, height: 800 });
+    expect(fit.artW).toBe(1200);
+    expect(fit.artH).toBe(800);
+    expect(fit.pad).toBe(96);
+    expect(fit.scale).toBeCloseTo(5.04);
+    expect(fit.offsetX).toBeCloseTo(96);
+    expect(fit.offsetY).toBeCloseTo(148);
+    expect(fit.viewBox).toBe("0 0 1200 800");
   });
 });
 

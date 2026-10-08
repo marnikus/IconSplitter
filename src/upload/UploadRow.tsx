@@ -8,11 +8,11 @@
 
 import { useEffect, useRef } from "react";
 import type { IconMetadata } from "../lib/upload/meta";
-import { effectiveSettings, overrideKeys, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import { artboardDimensions, effectiveSettings, overrideKeys, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
-import { statusOf, type UploadCounts } from "./rowmodel";
+import { statusOf } from "./rowmodel";
 import UploadPreview from "./UploadPreview";
 import UploadMetaFields from "./UploadMetaFields";
 import type { UploadJobStatus, UploadRow } from "./types";
@@ -48,6 +48,17 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
       aria-current={active ? "true" : undefined}
       className={`up-row ${status}${active ? " active" : ""}${checked ? " selected" : ""}`}
       onClick={() => a.setActive(id)}>
+      <RowContents id={id} row={row} a={a} active={active} checked={checked} status={status} />
+    </div>
+  );
+}
+
+/** The content cells and controls inside the row's semantic list item. */
+function RowContents({ id, row, a, active, checked, status }: {
+  id: string; row: UploadRow; a: UploadRowActions; active: boolean; checked: boolean; status: UploadJobStatus;
+}) {
+  return (
+    <>
       <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`} checked={checked}
         aria-label={`Select ${row.source.svgName}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
@@ -60,7 +71,7 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
       <SettingsCell row={row} a={a} />
       <ActionCell row={row} a={a} />
       {active && <RowDetail id={id} row={row} a={a} />}
-    </div>
+    </>
   );
 }
 
@@ -131,9 +142,11 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
   const effective = effectiveSettings(a.defaults, a.overrides[id] ?? {});
   const pinned = overrideKeys(a.overrides[id] ?? {}).length;
+  const board = artboardDimensions(effective.artboard);
+  const boardLabel = board === null ? "Fit board" : `${board.width}×${board.height} px`;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
-      <small>pad {effective.paddingPct}% · {effective.background} · {effective.strokePt === 0 ? "artwork strokes" : `${effective.strokePt} pt`}</small>
+      <small>{boardLabel} · pad {effective.paddingPct}% · {effective.background} · {effective.strokePt === 0 ? "artwork strokes" : `${effective.strokePt} pt`}</small>
       <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · eps {effective.includeEps ? "on" : "off"}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}
@@ -176,5 +189,3 @@ function badgeClass(status: UploadJobStatus): string {
   if (status === "discovered") return "pending";
   return "generating";
 }
-
-export type { UploadCounts };

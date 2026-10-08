@@ -7,6 +7,7 @@ import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
 import { targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
 import { optimizeSvg, type OptimizeRecord } from "../lib/upload/optimize";
+import { cleanExportSvg, SvgCleanError } from "../lib/upload/svgclean";
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { writeEps } from "../lib/upload/eps";
 import type { UploadSettings } from "../lib/upload/settings";
@@ -65,14 +66,34 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   const prepared = prepareExportSvg(ctx.sourceText, ctx.settings);
   if (!prepared.ok) throw new StageError("prepare", `${prepared.code}: ${prepared.detail}`);
   art.prepared = prepared;
-  const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg);
+  const optimized = await optimizePrepared(prepared.svg, ctx.settings.optimizeSvg);
   art.optimizedSvg = optimized.svg;
   art.optimizeRecord = optimized.record;
 }
 
+async function optimizePrepared(svg: string, enabled: boolean): Promise<Awaited<ReturnType<typeof optimizeSvg>>> {
+  try {
+    return await optimizeSvg(svg, enabled);
+  } catch (error) {
+    const klass = error instanceof SvgCleanError ? "clean" : "optimize";
+    const detail = error instanceof Error ? error.message : "SVG optimization failed";
+    throw new StageError(klass, detail);
+  }
+}
+
 function embedSvg(art: Artifacts, metadata: IconMetadata | null): string | null {
   if (art.optimizedSvg === null) return null;
-  return metadata === null ? art.optimizedSvg : embedMetadataInSvg(art.optimizedSvg, metadata);
+  const cleanSvg = cleanForFinalOutput(art.optimizedSvg);
+  return metadata === null ? cleanSvg : embedMetadataInSvg(cleanSvg, metadata);
+}
+
+function cleanForFinalOutput(svg: string): string {
+  try {
+    return cleanExportSvg(svg);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "invalid SVG output";
+    throw new StageError("clean", detail);
+  }
 }
 
 async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifacts): Promise<void> {

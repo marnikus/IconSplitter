@@ -54,11 +54,8 @@ const COURT = pairId(DIR, "court", "");
 /** The one approved SVG document the fixtures hold — the preview never alters it. */
 const SAVED_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>`;
 
-const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
-  "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
-  "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
-  "profit", "success", "target", "goal", "idea", "creative", "design"];
-const GOOD_ANSWER = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
+const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart"];
+const GOOD_ANSWER = `Title: Minimal line icon of steady upward business growth in progress\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
 const BAD_ANSWER = `Title: Too short. No tags named\nDescription: way too short\nTags: icon, pictogram`;
 
 let host: HTMLDivElement;
@@ -416,7 +413,7 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     const editor = q("[data-testid=upload-prompt]") as HTMLTextAreaElement;
     expect(editor).not.toBeNull();
     expect(editor.readOnly).toBe(false);
-    expect(editor.value).toContain("exactly 40 unique keywords");
+    expect(editor.value).toContain("at least 10 unique keywords");
     // the panel is its own section, and the Gemini card does not contain it
     expect(q("[data-testid=upload-prompt-panel]")).not.toBeNull();
     expect(q("[data-testid=upload-provider-card] [data-testid=upload-prompt]")).toBeNull();
@@ -441,7 +438,7 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     expect(text("[data-testid=upload-prompt-copy]")).toContain("custom");
 
     await click("[data-testid=upload-prompt-reset]");
-    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("exactly 40 unique keywords");
+    expect((q("[data-testid=upload-prompt]") as HTMLTextAreaElement).value).toContain("at least 10 unique keywords");
     expect(text("[data-testid=upload-prompt-copy]")).toContain("default");
   });
 
@@ -586,7 +583,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("7 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("8 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -598,6 +595,32 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const undone = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(undone.overrides).toEqual({});
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
+  });
+
+  itSlow("exports to the selected custom artboard ratio in exact SVG pixels", async () => {
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-settings-open]");
+    const boards = q("[data-testid=upload-set-artboard]") as HTMLSelectElement;
+    expect([...boards.options].map((option) => option.value)).toContain("1920x1080");
+    await pick("[data-testid=upload-set-artboard]", "1920x1080");
+    expect(text("[data-testid=upload-set-artboard-size]")).toContain("1920×1080 px");
+    await pick("[data-testid=upload-set-artboard]", "custom");
+    await type("[data-testid=upload-set-artboard-width]", "1200");
+    await type("[data-testid=upload-set-artboard-height]", "800");
+    expect(text("[data-testid=upload-set-artboard-size]")).toContain("1200×800 px");
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.defaults.artboard).toEqual({ preset: "custom", width: 1200, height: 800 });
+    await click("[data-testid=upload-set-close]");
+    await click(`[data-testid=upload-export-${FOG}]`);
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the custom-board package");
+    const svg = fileText(root, `${DIR}/export/fog_AI.svg`);
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(doc.documentElement.getAttribute("width")).toBe("1200");
+    expect(doc.documentElement.getAttribute("height")).toBe("800");
+    expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 1200 800");
+    const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
+    expect(record.settings.effective.artboard).toEqual({ preset: "custom", width: 1200, height: 800 });
   });
 
   it("resets one icon to the defaults (undoable)", async () => {
@@ -626,7 +649,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     // the exact request preview: prompt, endpoint, provider, auth rule
-    expect(text("[data-testid=upload-meta-prompt]")).toContain("exactly 40 unique keywords");
+    expect(text("[data-testid=upload-meta-prompt]")).toContain("at least 10 unique keywords");
     expect(text("[data-testid=upload-meta-endpoint]")).toContain("generativelanguage.googleapis.com");
     expect(text("[data-testid=upload-meta-provider]")).toContain("Gemini");
     expect(text("[data-testid=upload-meta-backdrop]")).toContain("never resent on its own");
@@ -637,12 +660,12 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(t.calls[0].key).toBe(fakeKey("AIza", "ui_test_key_1")); // the header, never the URL
     expect(t.calls[0].url).not.toContain("key=");
     const body = JSON.parse(t.calls[0].body);
-    expect(body.contents[0].parts[0].text).toContain("exactly 40 unique keywords");
+    expect(body.contents[0].parts[0].text).toContain("at least 10 unique keywords");
     expect(body.contents[0].parts[1].inlineData.mimeType).toBe("image/jpeg");
 
     // the fields are editable and show the generated text
-    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toContain("Minimal line icon of growth");
-    expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(40);
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toContain("Minimal line icon of steady upward business growth in progress");
+    expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(10);
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
     // edit + accept (no record yet → no auto export)
@@ -755,8 +778,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
     await click(`[data-testid=upload-copy-title-${FOG}]`);
     await click(`[data-testid=upload-copy-tags-${FOG}]`);
-    expect(clip.written[0]).toContain("Minimal line icon of growth");
-    expect(clip.written[1].split(",")).toHaveLength(40);
+    expect(clip.written[0]).toContain("Minimal line icon of steady upward business growth in progress");
+    expect(clip.written[1].split(",")).toHaveLength(10);
   });
 
   itSlow("shows the validation errors for an invalid answer and refuses to accept it", async () => {
@@ -769,9 +792,9 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("invalid"), "the invalid state");
-    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("tags must be exactly 40");
+    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("tags must be at least 10");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
-    expect(text("[data-testid=upload-toast]")).toContain("tags must be exactly 40");
+    expect(text("[data-testid=upload-toast]")).toContain("tags must be at least 10");
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("invalid"); // refused, not accepted
   });
 
@@ -899,8 +922,13 @@ describe("export — green means a complete committed package", () => {
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
 
     const exp = `${DIR}/export`;
-    expect(fileText(root, `${exp}/fog_AI.svg`)).toContain("<svg");
-    expect(fileText(root, `${exp}/fog_AI.svg`)).not.toBe(before); // a prepared copy, not the source
+    const exportedSvg = fileText(root, `${exp}/fog_AI.svg`);
+    expect(exportedSvg).toContain("<svg");
+    expect(exportedSvg).not.toBe(before); // a prepared copy, not the source
+    const exportedDoc = new DOMParser().parseFromString(exportedSvg, "image/svg+xml");
+    expect(exportedDoc.documentElement.getAttribute("version")).toBe("1.1");
+    expect(exportedDoc.documentElement.getAttribute("viewBox")).toBe("0 0 512 512");
+    expect(exportedDoc.querySelectorAll("image, [id]")).toHaveLength(0);
     expect(fileText(root, `${exp}/export.json`)).toContain("\"status\": \"processed\"");
     const jpeg = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
     const jpg = jpeg.children.get("fog_AI.jpg") as BinFile;
@@ -1001,10 +1029,10 @@ describe("export — green means a complete committed package", () => {
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     const svg = fileText(root, `${DIR}/export/fog_AI.svg`);
-    expect(svg).toContain("<title>Minimal line icon of growth. Speed and growth pictogram</title>");
+    expect(svg).toContain("<title>Minimal line icon of steady upward business growth in progress</title>");
     const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
     expect(record.metadata.state).toBe("accepted");
-    expect(record.metadata.tags).toHaveLength(40);
+    expect(record.metadata.tags).toHaveLength(10);
     expect(record.metadata.cost).toBeNull(); // Gemini reports no cost — never invented
   });
 

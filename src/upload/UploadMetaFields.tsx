@@ -1,5 +1,5 @@
 // UploadMetaFields.tsx — the editable, copiable metadata fields below an
-// active row (design §2.13): Title, Description and the 40 Tags, EMPTY until
+// active row (design §2.13): Title, Description and Tags, EMPTY until
 // generated, each with its own copy button. Accept re-validates the edited
 // text and refuses with the exact rule violations; the last validation's
 // errors and warnings show under the fields. Nothing here writes files: the
@@ -8,7 +8,7 @@
 import { countWords, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
 import type { UploadMetaState } from "./types";
 
-export interface UploadMetaFieldsProps {
+interface UploadMetaFieldsProps {
   id: string;
   meta: UploadMetaState;
   onEdit: (patch: Partial<IconMetadata>) => void;
@@ -18,28 +18,31 @@ export interface UploadMetaFieldsProps {
 }
 
 export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, onRegenerate }: UploadMetaFieldsProps) {
-  if (meta.metadata === null) {
-    return (
-      <div className="up-meta" data-testid={`upload-meta-empty-${id}`}>
-        <p className="up-meta-hint">
-          No metadata yet — generate it with Gemini (the icon's image is sent only inside that
-          one request), or export without metadata.
-        </p>
-        {meta.detail !== "" && <p className="up-meta-detail" data-testid={`upload-meta-detail-${id}`}>{meta.detail}</p>}
-        <div className="up-meta-actions">
-          <button type="button" className="svg-btn tiny primary" data-testid={`upload-meta-gen-${id}`} onClick={onRegenerate}>
-            ✦ Generate metadata
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (meta.metadata === null) return <EmptyMetaState id={id} detail={meta.detail} onRegenerate={onRegenerate} />;
   const m = meta.metadata;
   return (
     <div className="up-meta" data-testid={`upload-meta-fields-${id}`}>
       <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} />
       <ValidationLine id={id} validation={meta.validation} />
       <MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />
+    </div>
+  );
+}
+
+/** The empty state: explain the no-metadata option and the one generate action. */
+function EmptyMetaState({ id, detail, onRegenerate }: { id: string; detail: string; onRegenerate: () => void }) {
+  return (
+    <div className="up-meta" data-testid={`upload-meta-empty-${id}`}>
+      <p className="up-meta-hint">
+        No metadata yet — generate it with Gemini (the icon's image is sent only inside that
+        one request), or export without metadata.
+      </p>
+      {detail !== "" && <p className="up-meta-detail" data-testid={`upload-meta-detail-${id}`}>{detail}</p>}
+      <div className="up-meta-actions">
+        <button type="button" className="svg-btn tiny primary" data-testid={`upload-meta-gen-${id}`} onClick={onRegenerate}>
+          ✦ Generate metadata
+        </button>
+      </div>
     </div>
   );
 }
@@ -52,13 +55,13 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
   return (
     <>
       <Field id={id} label="Title" testid="title" value={m.title} count={countWords(m.title)}
-        hint="two sentences: 5–7 words, then 3–5 words naming two of the tags"
+        hint="at least 5 words total; no sentence or maximum-length rule"
         onEdit={(v) => onEdit({ title: v })} onCopy={() => onCopy("title")} />
       <Field id={id} label="Description" testid="description" value={m.description} count={countWords(m.description)}
-        hint="7–15 words" multiline
+        hint="at least 7 words; no maximum length" multiline
         onEdit={(v) => onEdit({ description: v })} onCopy={() => onCopy("description")} />
       <Field id={id} label="Tags" testid="tags" value={m.tags.join(", ")} count={m.tags.length}
-        hint="exactly 40 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
+        hint="at least 10 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
         multiline onEdit={(v) => onEdit({ tags: v.split(",").map((t) => t.trim()).filter((t) => t !== "") })}
         onCopy={() => onCopy("tags")} />
     </>

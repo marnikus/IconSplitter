@@ -21,10 +21,14 @@ const CUSTOM: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 20, bac
 
 describe("settingsstore — defaults + overrides", () => {
   it("round-trips the defaults and the overrides map", () => {
-    saveUploadSettings({ defaults: CUSTOM, overrides: { pair_a: { paddingPct: 30 }, pair_b: { includeEps: true } } });
+    const overrides = {
+      pair_a: { paddingPct: 30, artboard: { preset: "custom" as const, width: 1200, height: 800 } },
+      pair_b: { includeEps: true },
+    };
+    saveUploadSettings({ defaults: CUSTOM, overrides });
     const loaded = loadUploadSettings();
     expect(loaded.defaults).toEqual(CUSTOM);
-    expect(loaded.overrides).toEqual({ pair_a: { paddingPct: 30 }, pair_b: { includeEps: true } });
+    expect(loaded.overrides).toEqual(overrides);
   });
 
   it("defaults when nothing was saved", () => {

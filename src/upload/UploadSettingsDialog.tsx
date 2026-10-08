@@ -9,12 +9,13 @@ import {
   BG_PRESETS, normalizeHex,
 } from "../lib/svgbackground";
 import {
-  clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt,
+  ARTBOARD_MAX_PX, ARTBOARD_MIN_PX, ARTBOARD_OPTIONS, artboardDimensions,
+  clampArtboardPx, clampMegapixels, clampPaddingPct, clampQuality, clampStrokePt, parseArtboardSetting,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
-  type SettingsOverrides, type UploadSettings,
+  type ArtboardSetting, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 
-export interface UploadSettingsDialogProps {
+interface UploadSettingsDialogProps {
   /** null = the global defaults; else the icon's file name. */
   scope: string | null;
   /** null = the global scope; else the pair id whose override is edited. */
@@ -65,13 +66,14 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
   );
 }
 
-/** The seven settings, one field component each. */
+/** All eight export settings, one field component each. */
+// ideal-size: 23 lines reason=one declarative grid keeps every setting in reading order
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
       <NumberSetting p={p} effective={effective} field="paddingPct" label="Padding %" testid="padding"
         min={PADDING_MIN} max={PADDING_MAX} step={1} clamp={clampPaddingPct}
-        hint="uniform, % of the fitted artwork's largest side" />
+        hint="uniform output margin, % of the fitted content or board's largest side" />
       <NumberSetting p={p} effective={effective} field="strokePt" label="Stroke width (pt)" testid="stroke"
         min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePt}
         hint="0 = leave the artwork's strokes untouched · 1 pt = 4/3 px at 96 DPI" />
@@ -84,9 +86,70 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
         hint="a genuine EPS for the documented subset; anything else fails that stage honestly" />
+      <ArtboardField p={p} effective={effective} />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
+}
+
+/** Pixel board selection, live dimensions, and the one artboard override marker. */
+function ArtboardField({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  const dimensions = artboardDimensions(effective.artboard);
+  return (
+    <div className="svg-field up-set-field up-artboard-field">
+      <span className="svg-label">Pixel artboard<Marker p={p} field="artboard" testid="artboard" /></span>
+      <ArtboardSelector p={p} current={effective.artboard} />
+      {effective.artboard.preset === "custom" && <CustomArtboardFields p={p} current={effective.artboard} />}
+      <output data-testid="upload-set-artboard-size">{dimensions ? `${dimensions.width}×${dimensions.height} px` : "Fit artwork · content-sized"}</output>
+      <small className="up-hint">preserves ratio, centers artwork, and never crops or stretches</small>
+    </div>
+  );
+}
+
+function ArtboardSelector({ p, current }: { p: UploadSettingsDialogProps; current: ArtboardSetting }) {
+  return (
+    <select data-testid="upload-set-artboard" aria-label="Pixel artboard" value={current.preset}
+      onChange={(e) => selectArtboard(p, current, e.target.value)}>
+      {ARTBOARD_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+    </select>
+  );
+}
+
+function selectArtboard(p: UploadSettingsDialogProps, current: ArtboardSetting, preset: string): void {
+  const next = parseArtboardSetting({ preset, width: current.width, height: current.height });
+  if (next !== null) change(p, "artboard", next);
+}
+
+function CustomArtboardFields({ p, current }: { p: UploadSettingsDialogProps; current: ArtboardSetting }) {
+  return (
+    <div className="up-artboard-custom">
+      <DimensionInput axis="width" value={current.width} onChange={(n) => setArtboardDimension(p, current, "width", n)} />
+      <DimensionInput axis="height" value={current.height} onChange={(n) => setArtboardDimension(p, current, "height", n)} />
+    </div>
+  );
+}
+
+function DimensionInput({ axis, value, onChange }: { axis: "width" | "height"; value: number; onChange: (value: number) => void }) {
+  const title = axis === "width" ? "Width" : "Height";
+  return (
+    <label>{title} · px
+      <input data-testid={`upload-set-artboard-${axis}`} type="number" aria-label={`Artboard ${title.toLowerCase()} in px`}
+        min={ARTBOARD_MIN_PX} max={ARTBOARD_MAX_PX} step={1} value={value}
+        onChange={(e) => onChange(Number(e.target.value))} />
+    </label>
+  );
+}
+
+function setArtboardDimension(p: UploadSettingsDialogProps, current: ArtboardSetting, axis: "width" | "height", value: number): void {
+  change(p, "artboard", updateArtboardDimension(current, axis, value));
+}
+
+function updateArtboardDimension(current: ArtboardSetting, axis: "width" | "height", value: number): ArtboardSetting {
+  const px = clampArtboardPx(value);
+  return {
+    preset: "custom", width: axis === "width" ? px : current.width,
+    height: axis === "height" ? px : current.height,
+  };
 }
 
 /** The marker a field carries in the icon scope: pinned, or inherited. */
@@ -136,6 +199,7 @@ function ToggleSetting({ p, effective, field, label, testid, hint }: {
 }
 
 /** The background: the five presets plus one custom picker (I-17/I-21). */
+// ideal-size: 22 lines reason=one selector pairs the preset swatches with its custom picker
 function BackgroundSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   const field = "background" as const;
   return (

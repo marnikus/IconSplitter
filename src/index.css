@@ -1591,6 +1591,11 @@
 
 .up-set-field .svg-input[type="number"] { height: 28px; font-size: 10px; }
 .up-set-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--v2-purple); }
+.up-artboard-field select { width: 100%; min-height: 28px; padding: 4px 7px; color: var(--v2-text); border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface); font-size: 10px; }
+.up-artboard-field output { color: var(--v2-text); font-size: 10px; font-weight: 650; }
+.up-artboard-custom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.up-artboard-custom label { display: grid; gap: 4px; color: var(--v2-muted); font-size: 9px; }
+.up-artboard-custom input { min-width: 0; height: 28px; padding: 4px 7px; color: var(--v2-text); border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface); font-size: 10px; }
 
 .up-marker {
   margin-left: 7px;

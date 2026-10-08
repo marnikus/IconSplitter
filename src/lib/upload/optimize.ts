@@ -1,12 +1,11 @@
 // optimize.ts — the SVGO wrapper for the export SVG copy (design §3.1):
-// preset-default with the removals that would eat content DISABLED
-// (removeMetadata/removeTitle/removeDesc/removeViewBox: false — the artwork's
-// own metadata, title, desc and viewBox survive), floatPrecision 3. The
-// record captures version, config, before/after size and hash. Only the
-// export copy is optimized; the approved source is never touched.
+// every path passes through the mandatory clean boundary; preset-default then
+// compacts the already-clean copy when enabled. The record captures version,
+// config, before/after size and hash. The approved source is never touched.
 
-import { optimize, VERSION, type Config } from "svgo";
+import { optimize, VERSION, type Config } from "svgo/browser";
 import { sha256HexText } from "./hash";
+import { cleanExportSvg } from "./svgclean";
 
 export interface OptimizeRecord {
   enabled: boolean;
@@ -24,45 +23,42 @@ export interface OptimizeResult {
   record: OptimizeRecord;
 }
 
-/** The recorded SVGO config: preset-default, content-preserving overrides. */
-export const OPTIMIZE_CONFIG: Config = {
+/** SVGO's recorded compaction config; cleanExportSvg owns output safety. */
+const OPTIMIZE_CONFIG: Config = {
   floatPrecision: 3,
-  plugins: [
-    {
-      name: "preset-default",
-      params: {
-        overrides: {
-          removeMetadata: false,
-          removeTitle: false,
-          removeDesc: false,
-          removeViewBox: false,
-        },
+  plugins: [{
+    name: "preset-default",
+    params: {
+      overrides: {
+        convertShapeToPath: false,
+        removeUnknownsAndDefaults: { defaultAttrs: false },
+        removeUselessStrokeAndFill: false,
       },
     },
-  ],
+  }],
 };
 
-/** Optimizes the export copy (or passes it through when disabled). */
+/** Cleans every export and compacts it only when enabled. */
 export async function optimizeSvg(svgText: string, enabled: boolean): Promise<OptimizeResult> {
-  const beforeBytes = new TextEncoder().encode(svgText).length;
-  const beforeHash = await sha256HexText(svgText);
-  if (!enabled) {
-    return {
-      svg: svgText,
-      record: {
-        enabled: false, version: VERSION, config: configJson(),
-        beforeBytes, afterBytes: beforeBytes, beforeHash, afterHash: beforeHash,
-      },
-    };
-  }
-  const out = optimize(svgText, OPTIMIZE_CONFIG);
-  const afterBytes = new TextEncoder().encode(out.data).length;
+  const before = await svgStats(svgText);
+  const cleanInput = cleanExportSvg(svgText);
+  const compacted = enabled ? optimize(cleanInput, OPTIMIZE_CONFIG).data : cleanInput;
+  const svg = enabled ? cleanExportSvg(compacted) : cleanInput;
+  const after = await svgStats(svg);
+  return { svg, record: optimizeRecord(enabled, before, after) };
+}
+
+interface SvgStats { bytes: number; hash: string }
+
+async function svgStats(svg: string): Promise<SvgStats> {
+  return { bytes: new TextEncoder().encode(svg).length, hash: await sha256HexText(svg) };
+}
+
+function optimizeRecord(enabled: boolean, before: SvgStats, after: SvgStats): OptimizeRecord {
   return {
-    svg: out.data,
-    record: {
-      enabled: true, version: VERSION, config: configJson(),
-      beforeBytes, afterBytes, beforeHash, afterHash: await sha256HexText(out.data),
-    },
+    enabled, version: VERSION, config: configJson(),
+    beforeBytes: before.bytes, afterBytes: after.bytes,
+    beforeHash: before.hash, afterHash: after.hash,
   };
 }
 

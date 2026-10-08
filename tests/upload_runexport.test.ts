@@ -252,10 +252,9 @@ describe("runExport — selective re-export (no redundant work)", () => {
 
 describe("runExport — honest failures", () => {
   it("an EPS subset failure is `partial`: SVG/JPEG stay committed, no EPS", async () => {
-    const gradient = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
-      + `<defs><linearGradient id="g"><stop offset="0" stop-color="#000"/></linearGradient></defs>`
-      + `<rect x="10" y="10" width="80" height="80" fill="url(#g)"/></svg>`;
-    const root = pairRoot(gradient);
+    const opacityGroup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
+      + `<g opacity="0.5"><rect x="10" y="10" width="80" height="80" fill="#000"/></g></svg>`;
+    const root = pairRoot(opacityGroup);
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings }));
     expect(result.status).toBe("partial");
@@ -267,9 +266,21 @@ describe("runExport — honest failures", () => {
     expect(exportDir.children.has(`${STEM}.eps`)).toBe(false);
     const record = readRecord(root);
     expect(record.status).toBe("partial");
-    expect(record.error).toContain("paint");
+    expect(record.error).toContain("opacity");
     expect(record.validation.svg).toBe(true);
     expect(record.validation.jpeg).toBe(true);
+  });
+
+  it("rejects local ID references before cleanup could break exported appearance", async () => {
+    const referenced = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
+      + `<defs><linearGradient id="paint"><stop offset="0" stop-color="#000"/></linearGradient></defs>`
+      + `<rect x="10" y="10" width="80" height="80" fill="url(#paint)"/></svg>`;
+    const root = pairRoot(referenced);
+    const result = await runExport(args(root));
+    expect(result.status).toBe("failed");
+    expect(result.error?.klass).toBe("clean");
+    expect(result.error?.detail).toContain("local ID reference");
+    expect(dirAt(root, DIR).children.has("export")).toBe(false);
   });
 
   it("a prepare failure commits nothing and reports the stage", async () => {

@@ -66,6 +66,26 @@ describe("rasterizeJpeg — vectors at the integer target, verified by decoding"
     if (!result.ok) expect(result.reason).toContain("1000x1000");
   });
 
+  it("keeps JPEG background flattening when stroked artwork has no SVG background rect", async () => {
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, background: "#102030" };
+    const source = `<svg ${NS} viewBox="0 0 24 24"><path d="M2 2h20v20H2z" fill="none" stroke="#000"/></svg>`;
+    const prepared = prepareExportSvg(source, settings);
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    const preparedRoot = new DOMParser().parseFromString(prepared.svg, "image/svg+xml").documentElement;
+    expect(preparedRoot.querySelector(":scope > rect")).toBeNull();
+    let flattenedBackground = "";
+    const result = await rasterizeJpeg(prepared.svg, { ...target(64, 64), background: "#102030" }, {
+      render: async (_svg, t) => {
+        flattenedBackground = t.background;
+        return { width: 64, height: 64 } as unknown as HTMLCanvasElement;
+      },
+      encode: async () => minimalJpeg(64, 64),
+    });
+    expect(result.ok).toBe(true);
+    expect(flattenedBackground).toBe("#102030");
+  });
+
   it("fails honestly when the render or the encode throws", async () => {
     const badRender: RasterDeps = { render: async () => { throw new Error("no canvas"); } };
     const r1 = await rasterizeJpeg(SOURCE, target(10, 10), badRender);
@@ -90,7 +110,7 @@ describe("the 15.1 MP pipeline — prepare → target → raster → embed → v
     const doc = new DOMParser().parseFromString(prepared.svg, "image/svg+xml");
     const vb = visibleBounds(doc.documentElement);
     expect(vb).not.toBeNull();
-    const size = targetDimensions(vb!.bounds.width + 2 * prepared.fit.pad, vb!.bounds.height + 2 * prepared.fit.pad, settings.jpegMegapixels);
+    const size = targetDimensions(prepared.fit.artW, prepared.fit.artH, settings.jpegMegapixels);
     expect(size).toMatchObject({ width: 3886, height: 3886 }); // 15 100 996 px
     expect(size.megapixels).toBeCloseTo(15.1, 2);
     const raster = await rasterizeJpeg(prepared.svg, target(size.width, size.height), fakeDeps(size.width, size.height));

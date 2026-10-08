@@ -6,10 +6,9 @@
 // 1 pt = 96/72 px = 4/3 px. A configured "2.2 pt" stroke is therefore 2.93 px
 // in the export's user units — never a silent "2.2 px" (design §2.10).
 //
-// Fit: padding is a percent of the fitted artwork's LARGEST side, uniform on
-// all four sides; the artwork is centred by translation only — never
-// stretched, never cropped (design §2.11). The JPEG renders the artboard
-// viewBox at the target resolution, so 1 user unit maps to width/artW px.
+// Fit: padding is uniform on all four sides; fixed boards scale uniformly and
+// center the art, never stretch or crop (design §2.11). The JPEG renders the
+// final viewBox at its target resolution, preserving that board's ratio.
 
 import type { Bounds } from "./geom/bounds";
 
@@ -47,30 +46,59 @@ export function parseSvgLength(value: string | null | undefined): number | null 
   return Number.isFinite(n) ? n * factor : null;
 }
 
+export interface ArtboardDimensions {
+  width: number;
+  height: number;
+}
+
 export interface ArtboardFit {
   /** The export viewBox: `0 0 artW artH` in user units (px at 96 DPI). */
   viewBox: string;
   artW: number;
   artH: number;
-  /** Translation applied to the artwork group: pad − bounds origin. */
+  /** Uniform scale applied to source artwork (1 for content-sized Fit). */
+  scale: number;
+  /** Translation applied to the artwork group after scaling. */
   offsetX: number;
   offsetY: number;
-  /** Uniform padding actually applied (user units). */
+  /** Uniform padding actually applied (output-board user units). */
   pad: number;
 }
 
-/** Padded artboard around the visible bounds; content centred, scale 1. */
-export function fitArtboard(bounds: Bounds, paddingPct: number): ArtboardFit {
+interface FitPlacement {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  pad: number;
+}
+
+/** Content-sized Fit or proportional fit to an exact pixel board. */
+export function fitArtboard(bounds: Bounds, paddingPct: number, target?: ArtboardDimensions): ArtboardFit {
+  return target === undefined ? fitContent(bounds, paddingPct) : fitFixed(bounds, paddingPct, target);
+}
+
+function fitContent(bounds: Bounds, paddingPct: number): ArtboardFit {
   const pad = (Math.max(bounds.width, bounds.height) * Math.max(0, paddingPct)) / 100;
   const artW = bounds.width + 2 * pad;
   const artH = bounds.height + 2 * pad;
-  return {
-    viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`,
-    artW, artH,
-    offsetX: pad - bounds.minX,
-    offsetY: pad - bounds.minY,
-    pad,
-  };
+  return makeFit(artW, artH, { scale: 1, offsetX: pad - bounds.minX, offsetY: pad - bounds.minY, pad });
+}
+
+function fitFixed(bounds: Bounds, paddingPct: number, target: ArtboardDimensions): ArtboardFit {
+  const artW = Math.max(1, target.width);
+  const artH = Math.max(1, target.height);
+  const rawPad = (Math.max(artW, artH) * Math.max(0, paddingPct)) / 100;
+  const pad = Math.min(rawPad, (Math.min(artW, artH) - 1) / 2);
+  const innerW = artW - 2 * pad;
+  const innerH = artH - 2 * pad;
+  const scale = Math.min(innerW / bounds.width, innerH / bounds.height);
+  const offsetX = pad + (innerW - bounds.width * scale) / 2 - bounds.minX * scale;
+  const offsetY = pad + (innerH - bounds.height * scale) / 2 - bounds.minY * scale;
+  return makeFit(artW, artH, { scale, offsetX, offsetY, pad });
+}
+
+function makeFit(artW: number, artH: number, placement: FitPlacement): ArtboardFit {
+  return { viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH, ...placement };
 }
 
 export interface TargetSize {

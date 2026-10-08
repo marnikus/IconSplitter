@@ -62,12 +62,17 @@ function applyOne(map: OverridesMap, id: string, value: SettingsOverrides | null
   return true;
 }
 
-/** Shallow field-by-field equality over the seven overrideable settings. */
+/** Field equality over the eight overrideable settings, including board dimensions. */
 export function overridesEqual(a: SettingsOverrides, b: SettingsOverrides): boolean {
   const keys: (keyof SettingsOverrides)[] = [
     "paddingPct", "background", "strokePt", "jpegMegapixels", "jpegQuality", "optimizeSvg", "includeEps",
   ];
-  return keys.every((k) => (a[k] ?? undefined) === (b[k] ?? undefined));
+  return keys.every((k) => (a[k] ?? undefined) === (b[k] ?? undefined)) && sameArtboard(a.artboard, b.artboard);
+}
+
+function sameArtboard(a: SettingsOverrides["artboard"], b: SettingsOverrides["artboard"]): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return a.preset === b.preset && a.width === b.width && a.height === b.height;
 }
 
 /** A history payload → the patch, or null when it carries nothing usable. */

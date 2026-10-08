@@ -46,6 +46,14 @@ describe("overridesEqual", () => {
   it("compares field by field, ignoring key order", () => {
     expect(overridesEqual({ paddingPct: 8, includeEps: true }, { includeEps: true, paddingPct: 8 })).toBe(true);
     expect(overridesEqual({ paddingPct: 8 }, { paddingPct: 9 })).toBe(false);
+    expect(overridesEqual(
+      { artboard: { preset: "custom", width: 1200, height: 800 } },
+      { artboard: { preset: "custom", width: 1200, height: 800 } },
+    )).toBe(true);
+    expect(overridesEqual(
+      { artboard: { preset: "custom", width: 1200, height: 800 } },
+      { artboard: { preset: "custom", width: 800, height: 1200 } },
+    )).toBe(false);
     expect(overridesEqual({}, {})).toBe(true);
   });
 });
