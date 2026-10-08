@@ -90,6 +90,15 @@ Tests execute the real `analyze` / `detect` / `renderIcon` logic against
 synthetic pixels and recording canvas shims. If a test passes with the feature
 deleted, it is not a test.
 
+`vitest.config.ts` sets `silent: "passed-only"` (2026-10-08): a PASSING test's
+console output is not streamed to the reporter, a FAILING one still prints
+everything it logged. The DOM suites emit thousands of React `act()` warnings,
+and streaming them all left an `onUserConsoleLog` message in flight when a
+worker was torn down — vitest then reported `EnvironmentTeardownError: Closing
+rpc while "onUserConsoleLog" was pending` and exited non-zero on a fully green
+run. Debug with `console.log` as usual: the output appears whenever the test
+fails, and always with `--reporter=verbose` for a single file you are chasing.
+
 ### 6. Coverage (RULE 16.3)
 
 ```bash

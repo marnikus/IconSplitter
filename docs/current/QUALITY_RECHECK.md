@@ -2308,3 +2308,37 @@ replaces `fog_AI_v2.*` with `fog_v2.*`.
   approved source) is left alone: it belongs to the `fog_v2` stem, and only an
   export of that version sweeps it.
 * Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (fifth) — the teardown flake is fixed, not retried
+
+The lane-4/lane-5 `EnvironmentTeardownError: [vitest-worker]: Closing rpc while
+"onUserConsoleLog" was pending` that had been recorded as a "harness flake"
+(previous entries) finally blocked a push, so it was diagnosed instead of
+retried: the DOM suites stream thousands of React `act()` warnings, and while
+one of those `onUserConsoleLog` messages is in flight a worker teardown makes
+vitest exit non-zero on an otherwise green run.
+
+**Fix:** `vitest.config.ts` sets `silent: "passed-only"` — a passing test's
+console output is not streamed, a failing one still prints everything. Measured
+on this tree: the coverage run's log fell from **42,618 lines to 744**, `act()`
+warnings streamed went to **zero**, coverage numbers are unchanged
+(95.76|89.3|96.83|97.76), and three consecutive `npx vitest run --coverage` runs
+all exited **0** (the failure had been intermittent — roughly one heavy run in
+three). `CODE_VERIFICATION.md` §5 explains the setting and how to debug with
+`console.log` anyway.
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1398 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.76 %**, branches **89.3 %**, functions 96.83 %, lines 97.76 %; log 744 lines |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, the version-stem sweep note above, and
+  a `fog_AI_v2.*` leftover that only an export of that version removes.
