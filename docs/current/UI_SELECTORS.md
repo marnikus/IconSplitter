@@ -551,7 +551,7 @@ Row (`upload-row-{id}`):
 | `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
 | `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
 | `upload-target-{id}` | text | the row's source path (the approved SVG) |
-| `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" |
+| `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
 | `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |

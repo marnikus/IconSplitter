@@ -20,7 +20,7 @@ import { metadataFingerprint, type IconMetadata, type MetadataValidation } from 
 import type { GeminiUsage } from "../lib/upload/gemini";
 import { redact } from "../lib/svgsecret";
 import {
-  exportDirOf, metadataBlock, newExportRecord, planStages,
+  exportDirOf, metadataBlock, newExportRecord, planStages, stemOf,
   type ExportRecord, type Stage, type StagePlan,
 } from "../lib/upload/export";
 
@@ -212,6 +212,7 @@ function commitInput(args: ExportRunArgs, plan: PlanFor, payload: CommitPayload)
     root: args.root,
     exportDir: plan.exportDir,
     stem: plan.stem,
+    previous: previousOutputs(args.record),
     svgOut: payload.art.svgOut,
     jpeg: payload.art.jpeg,
     epsText: payload.art.epsText,
@@ -239,6 +240,13 @@ function failedResult(fail: { rowId: string; stages: Stage[]; record: ExportReco
   return { rowId: fail.rowId, status: "failed", stages: fail.stages, outputs: outputsOf(fail.record), record: fail.record, error: { klass: fail.klass, detail: fail.detail } };
 }
 
+/** The paths the previous record named as this icon's package (empty = no record). */
+function previousOutputs(record: ExportRecord | null): string[] {
+  if (record === null) return [];
+  return [record.outputs.svg, record.outputs.jpg, record.outputs.eps]
+    .flatMap((o) => (o === null ? [] : [o.path]));
+}
+
 function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {
   return {
     svg: record?.outputs.svg?.path ?? null,
@@ -249,10 +257,6 @@ function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {
 
 function passthroughOptimize(): OptimizeRecord {
   return { enabled: false, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" };
-}
-
-function stemOf(svgName: string): string {
-  return svgName.replace(/\.svg$/i, "");
 }
 
 async function readTextAt(root: DirHandleLike, relPath: string): Promise<string | null> {

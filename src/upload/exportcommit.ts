@@ -19,7 +19,16 @@ export interface CommitValidation {
 export interface CommitExportInput {
   root: DirHandleLike;
   exportDir: string;
+  /** The artifact name this commit writes (the icon's own name, see `stemOf`). */
   stem: string;
+  /**
+   * The files the PREVIOUS record named as this icon's package. Their names are
+   * superseded whenever the naming rule changes (`fog_AI.*` -> `fog.*`), and a
+   * package whose files were renamed in place would otherwise leave a second,
+   * stale copy of the same icon in `export/` (2026-10-08). Only paths inside
+   * this icon's own export folder are ever considered.
+   */
+  previous?: readonly string[];
   svgOut: string | null;
   jpeg: Uint8Array | null;
   epsText: string | null;
@@ -37,6 +46,8 @@ export interface CommitExportInput {
 export interface CommitExportOutput {
   outputs: { svg: string | null; jpg: string | null; eps: string | null };
   record: ExportRecord;
+  /** The superseded files that were removed — reported, never silent. */
+  replaced: string[];
 }
 
 /** Commits every rebuilt output, then export.json. Throws on any verify failure. */
@@ -55,7 +66,44 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
     await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => verifyEps(decode(back)).ok);
     outputs.eps = `${input.stem}.eps`;
   }
-  return { outputs, record: await writeRecord(input, dir, outputs) };
+  const replaced = await dropSuperseded(input, dir);
+  return { outputs, record: await writeRecord(input, dir, outputs), replaced };
+}
+
+/**
+ * Removes the previous record's own package files once the new ones are
+ * committed and verified — and only the ones whose NAME the current rule no
+ * longer uses, so a selective re-export (a JPEG that had to be re-rendered,
+ * say) never touches the files it did not rewrite. What counts as "in use" is
+ * the current artifact name itself, never the subset rebuilt in this run.
+ *
+ * This is the app's own bookkeeping inside the icon's own export folder: no
+ * file the record does not name is ever touched (T28's rule), and the new
+ * package is already on disk before anything is removed, so a crash cannot
+ * cost the user their export.
+ */
+async function dropSuperseded(input: CommitExportInput, dir: DirHandleLike): Promise<string[]> {
+  const inUse = new Set(["svg", "jpg", "eps"].map((ext) => `${input.stem}.${ext}`));
+  const removed: string[] = [];
+  for (const path of input.previous ?? []) {
+    const name = supersededName(path, input.exportDir, inUse);
+    if (name === null) continue;
+    try {
+      await dir.removeEntry?.(name);
+      removed.push(path);
+    } catch {
+      // a file the browser refuses to remove is left in place, never hidden
+    }
+  }
+  return removed;
+}
+
+/** The name to remove, or null when nothing should be (outside the folder, still in use). */
+function supersededName(path: string, exportDir: string, inUse: ReadonlySet<string>): string | null {
+  if (!path.startsWith(`${exportDir}/`)) return null;
+  const name = path.slice(exportDir.length + 1);
+  if (name === "" || name.includes("/") || inUse.has(name)) return null;
+  return name;
 }
 
 /** Fills outputs/status/timestamps from what was written, then writes export.json. */

@@ -69,15 +69,23 @@ describe("where a package lands (the Location action's pure half)", () => {
     expect(exportDirOf("")).toBe("export");
   });
 
-  it("strips exactly the .svg extension, whatever its case", () => {
-    expect(stemOf("fog_AI.svg")).toBe("fog_AI");
-    expect(stemOf("fog_AI.SVG")).toBe("fog_AI");
-    expect(stemOf("fog_AI.v2.svg")).toBe("fog_AI.v2");
+  it("names the artifact after the ICON — `_AI` and the numeric tails go (2026-10-08)", () => {
+    expect(stemOf("fog_AI.svg")).toBe("fog");
+    expect(stemOf("fog_AI.SVG")).toBe("fog");
+    expect(stemOf("icon-bunny-face_AI_7_04.svg")).toBe("icon-bunny-face"); // batch + split tails
+    expect(stemOf("icon-airplane-landing_AI_9_01.svg")).toBe("icon-airplane-landing");
+    expect(stemOf("fog_AI_v2.svg")).toBe("fog");                            // the approved version
+    expect(stemOf("fog_AI_7_v2.svg")).toBe("fog");
+    // a base that really ends in a digit keeps it: only the AI tail is bookkeeping
+    expect(stemOf("chat_bot_2_AI.svg")).toBe("chat_bot_2");
+    expect(stemOf("chat_bot_2_AI_7.svg")).toBe("chat_bot_2");
+    // no `_AI` at all: unchanged, never invented
+    expect(stemOf("plain_name.svg")).toBe("plain_name");
   });
 
   it("points at the committed JPEG whether or not it exists yet", () => {
-    expect(publishedJpegPath("cat/split_01", "fog_AI.svg")).toBe("cat/split_01/export/fog_AI.jpg");
-    expect(publishedJpegPath("", "fog_AI.svg")).toBe("export/fog_AI.jpg");
+    expect(publishedJpegPath("cat/split_01", "fog_AI.svg")).toBe("cat/split_01/export/fog.jpg");
+    expect(publishedJpegPath("", "fog_AI.svg")).toBe("export/fog.jpg");
   });
 });
 

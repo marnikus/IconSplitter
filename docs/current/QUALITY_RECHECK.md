@@ -2122,3 +2122,51 @@ The gate failed three NEW files, and the fixes are structural, not cosmetic:
 * The lane-4 flake above is environmental (act() warning volume during
   teardown), not a failing assertion: worth one `vitest`/pool note, not a code
   change, until it reproduces with a failing test named.
+
+## 2026-10-08 — export naming: the artifact is named after the ICON
+
+One rule change, one place: `lib/upload/export.ts` `stemOf` now trims the app's
+bookkeeping from the artifact name — the extension, this app's own `_v2`
+version artifact, the `_AI` marker and every numeric tail behind it
+(`fog_AI_7_04_v2.svg` → `fog.svg` / `fog.jpg` / `fog.eps`). A base that really
+ends in a digit keeps it (`chat_bot_2_AI.svg` → `chat_bot_2.*`), and a name with
+no `_AI` marker is returned unchanged — never invented, only trimmed.
+`runexport.ts` lost its second private `stemOf`, so the commit, the
+published-JPEG path and the UI cell all derive from the same function.
+
+Because a rename would otherwise leave the pre-2026-10-08 package beside the new
+one, the commit now removes the files **the previous record itself named** whose
+name is no longer in use, after the new files are written and verified — nothing
+the record does not name is touched, and a selective re-export (say, one JPEG
+that had to be re-rendered) never removes a file it did not rewrite. That last
+point was a real bug in the first cut of this change, caught by the existing
+"a missing JPEG rebuilds only the JPEG" test: the first version compared against
+the files written in THAT run, so a JPEG-only rebuild deleted the SVG.
+
+### Tests
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_export` | the rule itself: `fog_AI` → `fog`, `icon-bunny-face_AI_7_04` → `icon-bunny-face`, `fog_AI_v2` → `fog`, `chat_bot_2_AI` → `chat_bot_2`, `plain_name` unchanged, `publishedJpegPath` = `…/export/fog.jpg` |
+| `upload_runexport` | the committed folder holds exactly `[export.json, fog.svg, fog.jpg]`, `%%Title: fog.eps`, `record.source.svgPath` still names `…/fog_AI.svg` (the provenance moved into the record), and a hand-built OLD package (`fog_AI.*` + a record naming them) is replaced — the folder ends with only the new names |
+| `upload_ui` | the export-selected chain and the single-row export read `export/fog.svg` / `fog.jpg`; the foreign `fog_AI.svg` junk in the fixture folder still survives a failed export |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 8.9 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **128 files / 1386 tests** (was 1385) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* One icon per export folder is now an **assumed** invariant (the user's tree:
+  the batch layout puts one piece in each `split_NN` folder). Two paired sources
+  in one folder whose bases trim to the same name would share a package — not in
+  the corpus, and T28's guard is still the place where it gets refused.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake recorded
+  in the previous entry.

@@ -6,8 +6,8 @@
 // failure commits nothing.
 import { describe, expect, it } from "vitest";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "../src/upload/runexport";
-import { parseExportRecord, type ExportRecord } from "../src/lib/upload/export";
-import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
+import { newExportRecord, parseExportRecord, serializeExportRecord, type ExportRecord } from "../src/lib/upload/export";
+import { DEFAULT_UPLOAD_SETTINGS, settingsFingerprint, type UploadSettings } from "../src/lib/upload/settings";
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
 import type { RasterDeps } from "../src/lib/upload/raster";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
@@ -28,6 +28,8 @@ const OUT = "_split_output/2026-10/2026-10-01_10-24-31";
 const DIR = `${OUT}/fog_AI/split_01`;
 const AI = "fog_AI.png";
 const STEM = "fog_AI";
+/** The artifact name in `export/`: the icon's own name, not the app's bookkeeping. */
+const ART = "fog";
 const SOURCE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#000000"/></svg>`;
 
 const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
@@ -126,6 +128,26 @@ function readRecord(root: FakeDir): ExportRecord {
   return parseExportRecord(JSON.parse(file.text)) as ExportRecord;
 }
 
+/** The record an earlier app version wrote: outputs under the `_AI` name. */
+function oldNameRecord(): ExportRecord {
+  const r = newExportRecord({
+    pair: { id: ROW.id, base: "fog", suffix: "", dir: DIR },
+    source: { svgPath: `${DIR}/${STEM}.svg`, version: 1, approval: "approved", fingerprint: `sha256:${""}` },
+    settings: {
+      defaults: { ...DEFAULT_UPLOAD_SETTINGS }, overrides: {},
+      effective: { ...DEFAULT_UPLOAD_SETTINGS }, fingerprint: settingsFingerprint({ ...DEFAULT_UPLOAD_SETTINGS }),
+    },
+    svgo: { enabled: true, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" },
+    epsEnabled: false,
+  });
+  const out = (name: string) => ({ path: `${DIR}/export/${name}`, bytes: 1, hash: "sha256:x" });
+  r.outputs = { svg: out(`${STEM}.svg`), jpg: out(`${STEM}.jpg`), eps: null };
+  r.stage = "committed";
+  r.status = "processed";
+  r.timestamps.committedAt = "2026-10-07T00:00:00.000Z";
+  return r;
+}
+
 async function bytesOf(file: FakeFile): Promise<Uint8Array> {
   return new Uint8Array(await (await file.getFile()).arrayBuffer());
 }
@@ -144,8 +166,8 @@ describe("runExport — the full package commits per icon", () => {
     expect(result.error).toBeNull();
     expect(result.stages).toEqual(["prepare", "render", "optimize", "validate", "commit"]);
     const exportDir = dirAt(root, `${DIR}/export`);
-    expect([...exportDir.children.keys()].sort()).toEqual(["export.json", `${STEM}.jpg`, `${STEM}.svg`]);
-    expect(result.outputs).toEqual({ svg: `${STEM}.svg`, jpg: `${STEM}.jpg`, eps: null });
+    expect([...exportDir.children.keys()].sort()).toEqual(["export.json", `${ART}.jpg`, `${ART}.svg`]);
+    expect(result.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: null });
   });
 
   it("records the real package: hashes, dims, real megapixels, stage, status", async () => {
@@ -163,14 +185,14 @@ describe("runExport — the full package commits per icon", () => {
     expect(record.outputs.eps).toBeNull();
     expect(record.timestamps.committedAt).not.toBeNull();
     // the committed outputs verify
-    const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     expect(doc.querySelector("parsererror")).toBeNull();
     // ...including the clean-code policy: SVG 1.1, no raster, no naming, no bloat
     expect(verifyExportSvg(svgText)).toEqual([]);
     expect(doc.documentElement.getAttribute("version")).toBe("1.1");
     expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 92.8 92.8");
-    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
+    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile);
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 3886, height: 3886 });
   });
 
@@ -185,12 +207,12 @@ describe("runExport — the full package commits per icon", () => {
     const record = readRecord(root);
     expect(record.jpeg).toMatchObject({ width: 512, height: 256 });
     expect(record.jpeg.megapixels).toBeCloseTo(0.131, 3);
-    const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
     expect(doc.documentElement.getAttribute("width")).toBe("512");
     expect(verifyExportSvg(svgText)).toEqual([]);
-    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
+    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile);
     expect(readJpegDimensions(jpegBytes)).toEqual({ width: 512, height: 256 });
   });
 
@@ -210,7 +232,7 @@ describe("runExport — the full package commits per icon", () => {
     // what the pipeline ASKED the canvas to render, and what it committed
     expect(raster.asked).toEqual([{ width: 2828, height: 1414 }]);
     expect(readRecord(root).jpeg).toMatchObject({ width: 2828, height: 1414 });
-    const doc = new DOMParser().parseFromString(fileText(root, `${DIR}/export/${STEM}.svg`), "image/svg+xml");
+    const doc = new DOMParser().parseFromString(fileText(root, `${DIR}/export/${ART}.svg`), "image/svg+xml");
     expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
   });
 
@@ -229,10 +251,10 @@ describe("runExport — the full package commits per icon", () => {
       deps: { raster: fakeRaster(3886, 3886), now: () => "2026-10-08T12:00:00.000Z" },
     }));
     expect(result.status).toBe("processed");
-    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     // a real EPS 10 document, carrying the icon's own file name and the run's clock
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(eps).toContain(`%%Title: ${STEM}.eps`);
+    expect(eps).toContain(`%%Title: ${ART}.eps`);
     expect(eps).toContain("%%CreationDate: 2026-10-08T12:00:00.000Z");
     expect(eps).toContain("%%LanguageLevel: 3");
     // the stylesheet's paint arrived as a folded attribute, and no <style> text did
@@ -260,9 +282,9 @@ describe("runExport — the full package commits per icon", () => {
     }));
     expect(result.status).toBe("processed");
     expect(result.stages).toContain("embed");
-    const svgText = fileText(root, `${DIR}/export/${STEM}.svg`);
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(readEmbeddedMetadata(svgText)).toEqual(META);
-    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
+    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile);
     expect(verifyJpeg(jpegBytes, { width: 3886, height: 3886, metadata: META }).ok).toBe(true);
     const record = readRecord(root);
     expect(record.metadata?.state).toBe("accepted");
@@ -304,16 +326,16 @@ describe("runExport — selective re-export (no redundant work)", () => {
     }));
     expect(result.stages).toEqual(["embed", "validate", "commit"]);
     expect(spy.renders).toBe(0); // the JPEG is re-embedded, never re-rendered
-    expect(readEmbeddedMetadata(fileText(root, `${DIR}/export/${STEM}.svg`))?.title).toBe(edited.title);
-    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${STEM}.jpg`) as FakeFile);
+    expect(readEmbeddedMetadata(fileText(root, `${DIR}/export/${ART}.svg`))?.title).toBe(edited.title);
+    const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile);
     expect(verifyJpeg(jpegBytes, { width: 3886, height: 3886, metadata: edited }).ok).toBe(true);
   });
 
   it("a missing JPEG rebuilds only the JPEG", async () => {
     const root = pairRoot();
     await runExport(args(root));
-    dirAt(root, `${DIR}/export`).children.delete(`${STEM}.jpg`);
-    const svgBefore = fileText(root, `${DIR}/export/${STEM}.svg`);
+    dirAt(root, `${DIR}/export`).children.delete(`${ART}.jpg`);
+    const svgBefore = fileText(root, `${DIR}/export/${ART}.svg`);
     const spy = { renders: 0 };
     const result = await runExport(args(root, {
       record: readRecord(root),
@@ -321,8 +343,24 @@ describe("runExport — selective re-export (no redundant work)", () => {
     }));
     expect(result.stages).toEqual(["render", "validate", "commit"]);
     expect(spy.renders).toBe(1);
-    expect(fileText(root, `${DIR}/export/${STEM}.svg`)).toBe(svgBefore); // SVG untouched
-    expect(dirAt(root, `${DIR}/export`).children.has(`${STEM}.jpg`)).toBe(true);
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toBe(svgBefore); // SVG untouched
+    expect(dirAt(root, `${DIR}/export`).children.has(`${ART}.jpg`)).toBe(true);
+  });
+
+  it("replaces the package an earlier version left under the bookkeeping name", async () => {
+    const root = pairRoot();
+    // The pre-2026-10-08 package: `fog_AI.*` beside its record naming those files.
+    const dir = new BinDir("export");
+    (dirAt(root, DIR) as BinDir).children.set("export", dir);
+    dir.children.set(`${STEM}.svg`, new BinFile(`${STEM}.svg`, SOURCE_SVG, 3400));
+    dir.children.set(`${STEM}.jpg`, new BinFile(`${STEM}.jpg`, minimalJpeg(3886, 3886), 3500));
+    dir.children.set("export.json", new BinFile("export.json", serializeExportRecord(oldNameRecord()), 3300));
+    const result = await runExport(args(root, { record: oldNameRecord() }));
+    expect(result.status).toBe("processed");
+    // The record's own files went with the rename; nothing else was touched.
+    expect([...dir.children.keys()].sort()).toEqual(["export.json", `${ART}.jpg`, `${ART}.svg`]);
+    expect(result.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: null });
+    expect(readRecord(root).source.svgPath).toBe(`${DIR}/${STEM}.svg`); // the provenance stays
   });
 
   it("a corrupt export.json rebuilds the whole package", async () => {
@@ -346,11 +384,11 @@ describe("runExport — honest failures", () => {
     const result = await runExport(args(root, { settings, defaults: settings }));
     expect(result.status).toBe("partial");
     expect(result.error?.klass).toBe("eps");
-    expect(result.outputs).toEqual({ svg: `${STEM}.svg`, jpg: `${STEM}.jpg`, eps: null });
+    expect(result.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: null });
     const exportDir = dirAt(root, `${DIR}/export`);
-    expect(exportDir.children.has(`${STEM}.svg`)).toBe(true);
-    expect(exportDir.children.has(`${STEM}.jpg`)).toBe(true);
-    expect(exportDir.children.has(`${STEM}.eps`)).toBe(false);
+    expect(exportDir.children.has(`${ART}.svg`)).toBe(true);
+    expect(exportDir.children.has(`${ART}.jpg`)).toBe(true);
+    expect(exportDir.children.has(`${ART}.eps`)).toBe(false);
     const record = readRecord(root);
     expect(record.status).toBe("partial");
     expect(record.error).toContain("paint");
@@ -403,8 +441,8 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings }));
     expect(result.status).toBe("processed");
-    expect(result.outputs.eps).toBe(`${STEM}.eps`);
-    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    expect(result.outputs.eps).toBe(`${ART}.eps`);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
   });
@@ -413,9 +451,9 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const root = pairRoot();
     await runExport(args(root));
     const exportDir = dirAt(root, `${DIR}/export`);
-    exportDir.children.set(`${STEM}.svg.tmp`, new BinFile(`${STEM}.svg.tmp`, "junk", 1));
+    exportDir.children.set(`${ART}.svg.tmp`, new BinFile(`${ART}.svg.tmp`, "junk", 1));
     const result = await runExport(args(root, { record: readRecord(root) }));
     expect(result.stages).toEqual([]); // nothing to do — the tmp is not an output
-    expect((exportDir.children.get(`${STEM}.svg.tmp`) as FakeFile)?.text).toBe("junk"); // untouched, harmless
+    expect((exportDir.children.get(`${ART}.svg.tmp`) as FakeFile)?.text).toBe("junk"); // untouched, harmless
   });
 });

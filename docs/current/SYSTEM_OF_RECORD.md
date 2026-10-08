@@ -872,7 +872,7 @@ Batch:
 | localStorage `iconSplitter.upload.meta.v1` | the **accepted-metadata cache** (CP-15), keyed by the sha256 of the SOURCE SVG: `{ v, cache: { [sha256]: { state: generated \| accepted, meta } } }` | validated entry-by-entry on read (junk dropped, foreign version = empty); bounded at 512 entries, oldest evicted first; an entry whose text no longer passes `upload-meta-v1` comes back `invalid`, never exportable: edited artwork misses the cache by construction |
 | localStorage `iconSplitter.upload.jobs.v1` | the **per-icon job store** (CP-2): `{ v, states: { [pairId]: queued \| running \| processed \| partial \| failed \| cancelled \| interrupted } }` | validated on read (unknown states dropped), bounded at 1024; a `queued`/`running` entry left by a previous session becomes `interrupted` **once per page load**; the store never re-sends, retries or re-bills anything |
 | IndexedDB `iconSplitter/secrets["gemini-api-key"]` | the Gemini API key | its own slot beside the Requesty key; never in localStorage, logs or exports (RULE 20); a refused write falls back to a session-only key the UI names as such |
-| `<pair-folder>/export/<base>.svg|.jpg|.eps` | the export package (prepared SVG copy, 15.1 MP JPEG, optional genuine EPS) | written only by the validated export commit; the approved source and its sidecar are never touched |
+| `<pair-folder>/export/<base>.svg|.jpg|.eps` | the export package (prepared SVG copy, 15.1 MP JPEG, optional genuine EPS). `<base>` is the **ICON's** name, never the app's bookkeeping: `_AI` and every numeric tail behind it are trimmed (`lib/upload/export.ts` `stemOf`, the ONE rule the commit and the published-JPEG path share) — `fog_AI.svg` → `fog.svg`, `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face.svg`, `fog_AI_v2.svg` → `fog.svg`; a base that really ends in a digit (`chat_bot_2_AI.svg`) keeps it, and a name without the `_AI` marker is returned unchanged, never invented | written only by the validated export commit; the approved source and its sidecar are never touched. The approved version lives in `export.json` (`source.version`), not in the file name |
 | `<pair-folder>/export/export.json` | the per-icon export record (schema v1: source/settings fingerprints, svgo + eps tool records, metadata block, outputs with hashes, stage, status, validation, timestamps) | one per icon, no global multi-icon file; written LAST as the commit marker; corrupt/missing → rebuilt, never destroys outputs |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
@@ -1923,3 +1923,38 @@ answers `400` from the provider.
   rows until React re-renders, so reading them back exported the first icon
   WITHOUT its metadata. Never re-read `latest.current` for state the current
   task just dispatched.
+
+## Export naming (2026-10-08, `export-naming`)
+
+The user's rule: *"remove `_AI` and any numeric tail in naming as it is
+exported in the export folder."* A destination site must see the icon, not our
+bookkeeping, so the artifact name is `stemOf(row.svgName)` from
+`lib/upload/export.ts`:
+
+* strip the extension, then this app's own version artifact (`_v2`), then the
+  `_AI` marker **and every numeric tail behind it** (`_7`, `_04`, `_9_01`);
+* `fog_AI_7_04_v2.svg` → `fog.svg` / `fog.jpg` / `fog.eps`;
+* `chat_bot_2_AI.svg` → `chat_bot_2.*` — the tail is bookkeeping only when it
+  follows `_AI`;
+* a name with no `_AI` marker comes back unchanged.
+
+One rule, one home: `runexport.ts` no longer keeps a second private `stemOf`
+(RULE 3/16.4), and `publishedJpegPath` (the Location action's path and the
+export-path cell) derives from the same function, so the record, the file and
+the UI cannot disagree.
+
+**The superseded package is removed, never left behind.** An export folder that
+still carries a pre-2026-10-08 package (`fog_AI.svg|.jpg|.eps`, named by that
+icon's own previous `export.json`) would otherwise hold two copies of the same
+icon. After the new files are written and verified — and only then — the commit
+removes the files **the previous record itself named** whose name is no longer
+in use (`dropSuperseded`). Nothing the record does not name is ever touched
+(a foreign file in `export/` survives, T28), the removal is reported in the
+run's result (`replaced`), and a selective re-export (a JPEG that had to be
+re-rendered) never removes a file it did not rewrite, because "in use" means
+the current artifact name, not the subset rebuilt in that run.
+
+Assumption recorded: one icon per export folder (the user's own tree — the
+batch layout puts one piece per `split_NN` folder). Two paired sources whose
+bases trim to the same name in the SAME folder would share one package; that
+case is not in the corpus and would be caught by T28 when it lands.

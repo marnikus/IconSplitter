@@ -17,9 +17,24 @@ export function exportDirOf(dirPath: string): string {
   return dirPath === "" ? "export" : `${dirPath}/export`;
 }
 
-/** One pair's file stem: the SVG's name without its extension. */
+/**
+ * One pair's artifact stem — the name the files in `export/` carry. It is the
+ * ICON's name, never the app's bookkeeping (2026-10-08, the user's rule): the
+ * `_AI` marker and every numeric tail behind it go, so a destination site sees
+ * `fog.svg` / `fog.jpg` / `fog.eps` instead of `fog_AI_7_04_v2.*`.
+ *
+ * * `fog_AI.svg` -> `fog`; `fog_AI_v2.svg` -> `fog` (the approved version is
+ *   recorded in `export.json`, not in the file name)
+ * * `icon-bunny-face_AI_7_04.svg` -> `icon-bunny-face` (batch + split tails)
+ * * `chat_bot_2_AI.svg` -> `chat_bot_2` — a base that really ends in a digit
+ *   keeps it, because only what FOLLOWS `_AI` is bookkeeping
+ * * anything without the `_AI` marker is returned unchanged: the name is never
+ *   invented, only trimmed
+ */
 export function stemOf(svgName: string): string {
-  return svgName.replace(/\.svg$/i, "");
+  const stem = svgName.replace(/\.svg$/i, "").replace(/_v\d+$/i, "");
+  const marked = /^(.*)_AI((?:_v?\d+)*)$/i.exec(stem);
+  return marked === null ? stem : marked[1];
 }
 
 /** Where one pair's committed JPEG lives, whether or not it exists (CP-5). */
