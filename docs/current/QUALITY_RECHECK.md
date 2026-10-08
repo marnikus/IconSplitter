@@ -2560,3 +2560,9 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 * Unchanged from the previous entry.
 * The destination is flat; a per-icon subfolder option was not asked for.
+
+## 2026-10-08 — fix(eps): rounded `<rect>` as an exact outline
+
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings, none in touched files); `npm run quality:changed` GATE PASSED — `roundedRectOutline` first failed params 6/4 → takes a `box` object; `outline.ts` first hit 303 lines → split into `geom/ops.ts` (primitives, 27 lines) + `geom/shapes.ts` (basic-shape builders, 87 lines), `outline.ts` now 211 (ideal-size tag dropped: it is well under the 300 default).
+* RULE 18: no new directory debt (`src/lib/upload/geom/` 10 files). `src/svg/` 53-file debt unchanged.
+* Tests: 5 red → green at the geometry/EPS layer, 7 red → green at the pipeline/row/log/UI layer; `tests/helpers/uploadpackage.ts` extracted from `upload_download_ui` so the new `upload_epsnote_ui` shares the package fixture (one pair per folder).

@@ -39,6 +39,8 @@ export interface ExportRunResult {
   outputs: { svg: string | null; jpg: string | null; eps: string | null };
   record: ExportRecord | null;
   error: ExportRunError | null;
+  /** What the run adjusted on its own and wants said (the EPS writer's fixes) — never a question. */
+  notes: string[];
 }
 
 export interface ExportRunDeps {
@@ -69,12 +71,12 @@ export interface ExportRunArgs {
 export async function runExport(args: ExportRunArgs): Promise<ExportRunResult> {
   const plan = await planFor(args);
   if (plan.error !== null) {
-    return { rowId: args.row.id, status: "failed", stages: [], outputs: outputsOf(args.record), record: args.record, error: plan.error };
+    return { rowId: args.row.id, status: "failed", stages: [], outputs: outputsOf(args.record), record: args.record, error: plan.error, notes: [] };
   }
   if (plan.plan.stages.length === 0) {
     return {
       rowId: args.row.id, status: args.record?.status === "partial" ? "partial" : "processed", stages: [],
-      outputs: outputsOf(args.record), record: args.record, error: null,
+      outputs: outputsOf(args.record), record: args.record, error: null, notes: [],
     };
   }
   return runStages(args, plan);
@@ -140,7 +142,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
     });
   } catch (error) {
     if (isCancel(error)) {
-      return { rowId: row.id, status: "cancelled", stages: plan.plan.stages, outputs: outputsOf(args.record), record: args.record, error: { klass: "cancel", detail: "cancelled" } };
+      return { rowId: row.id, status: "cancelled", stages: plan.plan.stages, outputs: outputsOf(args.record), record: args.record, error: { klass: "cancel", detail: "cancelled" }, notes: [] };
     }
     const klass = error instanceof StageError ? error.klass : "pipeline";
     const detail = error instanceof Error ? redact(error.message) : "unknown error";
@@ -169,6 +171,7 @@ async function assembleRecord(args: ExportRunArgs, plan: PlanFor, art: Artifacts
     now: args.deps?.now?.() ?? new Date().toISOString(),
   });
   record.outputs = args.record?.outputs ?? record.outputs;
+  record.tools.eps.fixes = art.epsFixes;
   record.jpeg = jpegBlock(art, args.settings.jpegQuality, args.record?.jpeg);
   record.metadata = metadataBlockOf(args);
   return record;
@@ -213,6 +216,7 @@ async function commitAll(args: ExportRunArgs, plan: PlanFor, payload: CommitPayl
     outputs: committed.outputs,
     record: committed.record,
     error: partial ? { klass: "eps", detail: art.epsFailure ?? "the EPS stage failed" } : null,
+    notes: art.epsFixes,
   };
 }
 
@@ -246,7 +250,7 @@ function checkCancel(signal?: AbortSignal): void {
 }
 
 function failedResult(fail: { rowId: string; stages: Stage[]; record: ExportRecord | null; klass: string; detail: string }): ExportRunResult {
-  return { rowId: fail.rowId, status: "failed", stages: fail.stages, outputs: outputsOf(fail.record), record: fail.record, error: { klass: fail.klass, detail: fail.detail } };
+  return { rowId: fail.rowId, status: "failed", stages: fail.stages, outputs: outputsOf(fail.record), record: fail.record, error: { klass: fail.klass, detail: fail.detail }, notes: [] };
 }
 
 function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {

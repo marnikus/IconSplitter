@@ -51,8 +51,15 @@ export function toRow(source: UploadRowSource, inputs: RowInputs): UploadRow {
     running: null,
     meta: inputs.meta,
     error: inputs.record?.error ?? "",
+    note: noteOfRecord(inputs.record),
     stale,
   };
+}
+
+/** The EPS writer's automatic fixes, as the one line the row shows (2026-10-08). */
+export function noteOfRecord(record: ExportRecord | null): string {
+  const fixes = record?.tools.eps.fixes ?? [];
+  return fixes.length === 0 ? "" : `EPS auto-fixed: ${fixes.join("; ")}`;
 }
 
 /**

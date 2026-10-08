@@ -1,27 +1,23 @@
 // outline.ts — the ONE outline model every shape compiles to (RULE 3,
-// 2026-10-08): rect, circle, ellipse, line, polyline, polygon and the full path
+// 2026-10-08): rect (rounded too), circle, ellipse, line, polyline, polygon and the full path
 // grammar (M/L/H/V/C/S/Q/T/A/Z, absolute and relative) as ABSOLUTE
 // move/line/cubic/close ops. Arcs replay as cubic Béziers (≤90° each,
 // k = 4/3·tan(Δθ/4)); quadratics lift to cubics (controls at 2/3 along the
 // legs); circles/ellipses are the four-cubic KAPPA split. An affine map over
 // the ops is exact (a Bézier's control points transform with it), which is
 // what lets prepare bake every transform into the geometry and the EPS writer
-// replay the same shape. Two writers: `outlineToPathData` here (SVG `d`),
-// `epspath.ts` (PostScript).
-// ideal-size: 270 lines reason=one grammar table with its handlers and the shape builders; splitting them from the model would hide the grammar
+// replay the same shape. The op primitives live in `ops.ts`, the basic-shape
+// builders (rect — rounded too — circle, ellipse, line, poly*) in `shapes.ts`;
+// this file owns the dispatch, the affine map, the SVG `d` writer and the
+// path grammar. The PostScript writer is `epspath.ts`.
 
 import { arcCenter, type ArcCenter } from "./arc";
 import { applyM, type Matrix } from "./matrix";
 import { tokenizePath, type PathCmd } from "./path";
+import { cv, ln, mv, num, type Outline, type OutlineOp } from "./ops";
+import { ellipseOutline, lineOutline, pointsOutline, rectOutline } from "./shapes";
 
-export type OutlineOp =
-  | { op: "M" | "L"; x: number; y: number }
-  | { op: "C"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
-  | { op: "Z" };
-
-export interface Outline { ops: OutlineOp[] }
-
-const KAPPA = 0.5522847498; // the circle-approximation constant
+export type { Outline, OutlineOp } from "./ops";
 
 /** The shape element's outline; null when it is not a shape of the subset or has no geometry. */
 export function shapeOutline(el: Element): Outline | null {
@@ -62,51 +58,6 @@ export function outlineToPathData(o: Outline): string {
 
 function f(n: number): string {
   return String(Math.round(n * 1000) / 1000);
-}
-
-function rectOutline(el: Element): Outline | null {
-  if (el.getAttribute("rx") !== null || el.getAttribute("ry") !== null) return null; // rounded: outside the subset
-  const w = num(el.getAttribute("width"));
-  const h = num(el.getAttribute("height"));
-  if (!(w > 0) || !(h > 0)) return null;
-  const x = num(el.getAttribute("x"));
-  const y = num(el.getAttribute("y"));
-  return { ops: [mv(x, y), ln(x + w, y), ln(x + w, y + h), ln(x, y + h), { op: "Z" }] };
-}
-
-/** Four cubics from (cx+rx, cy) clockwise; the circle is the rx = ry case. */
-function ellipseOutline(el: Element, rx: number, ry: number): Outline | null {
-  if (!(rx > 0) || !(ry > 0)) return null;
-  const cx = num(el.getAttribute("cx"));
-  const cy = num(el.getAttribute("cy"));
-  const kx = KAPPA * rx;
-  const ky = KAPPA * ry;
-  return { ops: [
-    mv(cx + rx, cy),
-    cv([cx + rx, cy + ky], [cx + kx, cy + ry], [cx, cy + ry]),
-    cv([cx - kx, cy + ry], [cx - rx, cy + ky], [cx - rx, cy]),
-    cv([cx - rx, cy - ky], [cx - kx, cy - ry], [cx, cy - ry]),
-    cv([cx + kx, cy - ry], [cx + rx, cy - ky], [cx + rx, cy]),
-    { op: "Z" },
-  ] };
-}
-
-function lineOutline(el: Element): Outline {
-  return { ops: [
-    mv(num(el.getAttribute("x1")), num(el.getAttribute("y1"))),
-    ln(num(el.getAttribute("x2")), num(el.getAttribute("y2"))),
-  ] };
-}
-
-function pointsOutline(el: Element, closed: boolean): Outline | null {
-  const raw = el.getAttribute("points");
-  if (raw === null) return null;
-  const nums = raw.trim().split(/[\s,]+/).map(Number).filter((n) => Number.isFinite(n));
-  if (nums.length < 4 || nums.length % 2 !== 0) return null;
-  const ops: OutlineOp[] = [];
-  for (let i = 0; i + 1 < nums.length; i += 2) ops.push(i === 0 ? mv(nums[i], nums[i + 1]) : ln(nums[i], nums[i + 1]));
-  if (closed) ops.push({ op: "Z" });
-  return { ops };
 }
 
 // --- path data ----------------------------------------------------------------
@@ -256,14 +207,4 @@ function arcTangent(c: ArcCenter, t: number): [number, number] {
     -c.rx * c.scale * cos * st - c.ry * c.scale * sin * ct,
     -c.rx * c.scale * sin * st + c.ry * c.scale * cos * ct,
   ];
-}
-
-const mv = (x: number, y: number): OutlineOp => ({ op: "M", x, y });
-const ln = (x: number, y: number): OutlineOp => ({ op: "L", x, y });
-const cv = (c1: number[], c2: number[], end: number[]): OutlineOp =>
-  ({ op: "C", x1: c1[0], y1: c1[1], x2: c2[0], y2: c2[1], x: end[0], y: end[1] });
-
-function num(raw: string | null): number {
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : 0;
 }

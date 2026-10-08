@@ -153,6 +153,25 @@ describe("writeEps — the shape subset", () => {
   });
 });
 
+describe("writeEps — a rounded <rect> is written, exactly, and the fix is reported (2026-10-08)", () => {
+  it("draws the corners as curveto arcs and names the automatic fix on the ok result", () => {
+    const result = writeEps(art(`<rect x="1" y="1" width="8" height="4" rx="1" fill="#000"/>`), "#ffffff");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.eps.match(/curveto/g)).toHaveLength(4);
+    expect(result.eps.match(/lineto/g)).toHaveLength(4);
+    expect(result.shapes).toBe(1);
+    expect(result.fixes).toEqual(["1 rounded <rect> written as an exact path outline"]);
+    const two = writeEps(art(`<rect x="1" y="1" width="4" height="4" rx="1" fill="#000"/><rect x="5" y="5" width="2" height="2" ry="0.5" fill="#000"/>`), "#ffffff");
+    if (two.ok) expect(two.fixes).toEqual(["2 rounded <rect>s written as exact path outlines"]);
+  });
+
+  it("a plain package reports no fix", () => {
+    const result = writeEps(PREPARED, "#ffffff");
+    if (result.ok) expect(result.fixes).toEqual([]);
+  });
+});
+
 describe("writeEps — honest subset failures (never guessed)", () => {
   const failures: [string, string][] = [
     ["gradient fill", `<rect x="1" y="1" width="4" height="4" fill="url(#g)"/>`],
@@ -161,7 +180,6 @@ describe("writeEps — honest subset failures (never guessed)", () => {
     ["use", `<use href="#x"/>`],
     ["CSS style", `<style>.a{fill:red}</style><rect class="a" x="1" y="1" width="4" height="4"/>`],
     ["group opacity", `<g opacity="0.5"><rect x="1" y="1" width="4" height="4" fill="#000"/></g>`],
-    ["rounded rect", `<rect x="1" y="1" width="4" height="4" rx="2" fill="#000"/>`],
     ["currentColor", `<rect x="1" y="1" width="4" height="4" fill="currentColor"/>`],
     ["clip path", `<rect x="1" y="1" width="4" height="4" fill="#000" clip-path="url(#c)"/>`],
   ];

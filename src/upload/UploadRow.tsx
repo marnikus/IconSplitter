@@ -101,7 +101,7 @@ function FileCell({ row }: { row: UploadRow }) {
   );
 }
 
-/** The package status badge, the stage while a run is in flight, the error. */
+/** The package status badge, the stage while a run is in flight, the error, the auto-fix note. */
 function StatusCell({ row, status }: { row: UploadRow; status: UploadJobStatus }) {
   const id = row.source.id;
   return (
@@ -109,6 +109,7 @@ function StatusCell({ row, status }: { row: UploadRow; status: UploadJobStatus }
       <span className={`svg-badge ${badgeClass(status)}`}>{label(status)}</span>
       {row.running !== null && <span className="svg-progress-mini" aria-hidden="true"><span /></span>}
       {row.error !== "" && <small className="svg-error" title={row.error}>{row.error}</small>}
+      {row.note !== "" && <small className="svg-note" title={row.note} data-testid={`upload-note-${id}`}>{row.note}</small>}
     </div>
   );
 }

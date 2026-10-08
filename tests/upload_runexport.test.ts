@@ -307,6 +307,32 @@ describe("runExport — the full package commits per icon", () => {
     expect(verifyEps(eps).ok).toBe(true);
   });
 
+  it("a rounded <rect> is written to EPS exactly and the automatic fix is recorded, not asked (2026-10-08)", async () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
+      `<rect x="4" y="4" width="16" height="16" rx="3" fill="#000"/></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed"); // not partial — the EPS stage succeeded
+    expect(result.error).toBeNull();
+    expect(result.notes).toEqual(["1 rounded <rect> written as an exact path outline"]);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(eps.match(/curveto/g)).toHaveLength(4);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, fixes: ["1 rounded <rect> written as an exact path outline"] });
+    // the SVG output keeps its <rect rx> — nothing about the artwork changed
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("rx=");
+  });
+
+  it("a plain package carries no notes and no fixes", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    expect(result.notes).toEqual([]);
+    expect(readRecord(root).tools.eps.fixes).toEqual([]);
+  });
+
   it("never touches the approved source", async () => {
     const root = pairRoot();
     await runExport(args(root));

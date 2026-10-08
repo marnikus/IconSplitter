@@ -16,7 +16,8 @@ import { effectiveSettings } from "../lib/upload/settings";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
-import { cancelledSpec, exportedSpec, type IconRef } from "./uploadlog";
+import { cancelledSpec, exportBatchLine, exportOutcomeNote, exportedSpec, type IconRef } from "./uploadlog";
+import { noteOfRecord } from "./rowmodel";
 import type { Latest, UploadMetaState, UploadRow } from "./types";
 import type { UploadRunUpdate } from "./statemodel";
 import type { UploadActions, UploadCtx } from "./actions";
@@ -96,12 +97,13 @@ export async function runExportBatch(
   c.refs.abortExport.current = abort;
   c.dispatch({ type: "running", kind: "export", n: ids.length });
   const tally = { done: 0, total: ids.length };
+  let fixed = 0;
   c.dispatch({ type: "progress", progress: { ...tally } });
   for (const id of ids) rememberJob(id, "queued");
   for (const id of ids) {
     if (abort.signal.aborted) break;
     rememberJob(id, "running");
-    await exportOne({ latest, root, id, signal: abort.signal, freshMeta });
+    fixed += await exportOne({ latest, root, id, signal: abort.signal, freshMeta });
     tally.done += 1;
     c.dispatch({ type: "progress", progress: { ...tally } });
   }
@@ -110,9 +112,7 @@ export async function runExportBatch(
   c.dispatch({ type: "progress", progress: null });
   const done = tally.done;
   if (abort.signal.aborted) log(cancelledSpec(ids.length - done));
-  c.say(abort.signal.aborted
-    ? `Export stopped after ${done} of ${ids.length} — finished packages are kept`
-    : `Exported ${done} icon${done === 1 ? "" : "s"} — each pair's export folder holds the package`);
+  c.say(exportBatchLine({ done, total: ids.length, aborted: abort.signal.aborted, fixed }));
 }
 
 /** Everything one export run needs — one domain object (RULE 16). */
@@ -125,11 +125,12 @@ interface ExportOneArgs {
   freshMeta: ReadonlyMap<string, UploadMetaState>;
 }
 
-async function exportOne(args: ExportOneArgs): Promise<void> {
+/** Runs one export; resolves 1 when its EPS was auto-fixed (the batch toast counts them), else 0. */
+async function exportOne(args: ExportOneArgs): Promise<number> {
   const c = args.latest.current;
   const row = rowOf(c, args.id);
-  if (row === null) return;
-  c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "" } });
+  if (row === null) return 0;
+  c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "", note: "" } });
   const overrides = c.m.overrides[args.id] ?? {};
   const meta = acceptedOf(args.freshMeta.get(args.id) ?? row.meta);
   const result = await runExport({
@@ -141,6 +142,7 @@ async function exportOne(args: ExportOneArgs): Promise<void> {
     record: row.record, signal: args.signal,
   });
   applyExportResult(args.latest, args.id, row, result);
+  return result.notes.length > 0 ? 1 : 0;
 }
 
 /** The accepted state an export may carry, or null when there is nothing to embed. */
@@ -164,20 +166,13 @@ function applyExportResult(latest: Latest, id: string, row: UploadRow, result: E
     running: null, stage: null,
     status: result.status, record: result.record,
     error: result.error?.detail ?? "",
+    note: noteOfRecord(result.record),
     stale: committed ? false : row.stale,
   };
   c.dispatch({ type: "run", id, run });
   rememberJob(id, result.status);
   const ref: IconRef = { id: row.source.id, base: row.source.base };
-  log(exportedSpec({ ...ref, status: result.status, note: run.error || noteForStatus(result.status) }));
-}
-
-/** The one-line note an entry carries when the run reported no failure detail. */
-function noteForStatus(status: ExportRunResult["status"]): string {
-  if (status === "processed") return "export.json was written last; the approved source is untouched";
-  if (status === "partial") return "the required outputs committed; the optional EPS stage failed";
-  if (status === "cancelled") return "stopped before commit; the previous package is intact";
-  return "nothing was committed";
+  log(exportedSpec({ ...ref, status: result.status, note: exportOutcomeNote({ status: result.status, error: run.error ?? "", notes: result.notes }) }));
 }
 
 /** The live row a run is about — read fresh, never a stale snapshot. */

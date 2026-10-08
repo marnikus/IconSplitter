@@ -76,7 +76,8 @@ export interface ExportRecord {
   jpeg: { width: number; height: number; megapixels: number; quality: number; profile: string };
   tools: {
     svgo: OptimizeRecord;
-    eps: { enabled: boolean; writer: string };
+    /** `fixes`: what the EPS writer adjusted on its own (2026-10-08) — absent on pre-fix packages. */
+    eps: { enabled: boolean; writer: string; fixes?: string[] };
   };
   metadata: {
     state: "pending" | "generated" | "invalid" | "accepted";
@@ -119,7 +120,7 @@ export function newExportRecord(args: NewRecordArgs): ExportRecord {
     source: args.source,
     settings: args.settings,
     jpeg: { width: 0, height: 0, megapixels: 0, quality: args.settings.effective.jpegQuality, profile: "baseline" },
-    tools: { svgo: args.svgo, eps: { enabled: args.epsEnabled, writer: "builtin-subset-1" } },
+    tools: { svgo: args.svgo, eps: { enabled: args.epsEnabled, writer: "builtin-subset-1", fixes: [] } },
     metadata: null,
     outputs: { svg: null, jpg: null, eps: null },
     stage: "discovered",

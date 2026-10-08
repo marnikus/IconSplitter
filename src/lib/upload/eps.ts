@@ -11,15 +11,18 @@
 // Subset: path/rect/circle/ellipse/line/polyline/polygon; solid fill/stroke
 // (hex, rgb(), the 16 basic names); dash; linecap/linejoin/miterlimit;
 // transforms replayed through the CTM; fill/stroke-opacity flattened onto
-// the export background; `display:none` subtrees skipped. ANYTHING else —
-// gradients, text, images, filters, clips, CSS `<style>`, group opacity,
-// rounded rects, unknown paints — fails the EPS stage honestly (the row goes
-// `partial`; the SVG/JPEG outputs stay committed). Coordinates: SVG user
+// the export background; `display:none` subtrees skipped. A rounded rect is
+// drawn exactly (four lines, four arcs — 2026-10-08) and REPORTED as an
+// automatic fix (`fixes`), never asked about. ANYTHING else — gradients, text,
+// images, filters, clips, CSS `<style>`, group opacity, unknown paints — fails
+// the EPS stage honestly (the row goes `partial`; the SVG/JPEG outputs stay
+// committed). Coordinates: SVG user
 // units (px at 96 DPI) → PostScript points (0.75), y flipped once up front.
 
 import { identity, multiply, parseTransform, type Matrix } from "./geom/matrix";
 import { inheritStroke, styleMap, type Stroke } from "./geom/stroke";
 import { shapePathPs } from "./epspath";
+import { rectRadii } from "./geom/shapes";
 import { fmt } from "./geom";
 import { assemble, PX_TO_PT, type EpsBoundingBox, type EpsOptions } from "./epsdoc";
 
@@ -35,7 +38,8 @@ const SKIP = [
 ];
 
 export type EpsResult =
-  | { ok: true; eps: string; boundingBox: EpsBoundingBox; shapes: number }
+  /** `fixes`: what the writer adjusted on its own, said in one line each (2026-10-08) — never a confirmation to ask. */
+  | { ok: true; eps: string; boundingBox: EpsBoundingBox; shapes: number; fixes: string[] }
   | { ok: false; reason: string };
 
 /** The export SVG → a genuine EPS 10 document, or an honest subset failure. */
@@ -73,7 +77,7 @@ function writeEpsUnsafe(svgText: string, background: string, opts: EpsOptions): 
   if (vb === null) throw new Unsupported("no viewBox on the root <svg>");
   const bg = paintOf(background);
   if (bg === null) throw new Unsupported(`unsupported background paint: ${background}`);
-  const ctx: WalkCtx = { ctm: identity(), paint: basePaint(), bg, body: [], count: { shapes: 0 } };
+  const ctx: WalkCtx = { ctm: identity(), paint: basePaint(), bg, body: [], count: { shapes: 0, roundedRects: 0 } };
   walk(root, ctx);
   // Two boxes, as DSC wants: the integer one a Level-1 reader uses, and the
   // exact one (`%%HiResBoundingBox`) a modern consumer places the art by.
@@ -82,7 +86,14 @@ function writeEpsUnsafe(svgText: string, background: string, opts: EpsOptions): 
   const hires = { llx: 0, lly: 0, urx: ptW, ury: ptH };
   const box = { llx: 0, lly: 0, urx: Math.ceil(ptW), ury: Math.ceil(ptH) };
   const eps = assemble({ viewBox: vb, box, hires, body: ctx.body, opts });
-  return { ok: true, eps, boundingBox: box, shapes: ctx.count.shapes };
+  return { ok: true, eps, boundingBox: box, shapes: ctx.count.shapes, fixes: fixLines(ctx.count) };
+}
+
+/** The automatic adjustments, spelled out for the row, the log and the toast. */
+function fixLines(count: WalkCtx["count"]): string[] {
+  const n = count.roundedRects;
+  if (n === 0) return [];
+  return [n === 1 ? "1 rounded <rect> written as an exact path outline" : `${n} rounded <rect>s written as exact path outlines`];
 }
 
 /** The walk state: CTM + paint cascade in, emitted PS and shape count out. */
@@ -91,7 +102,7 @@ interface WalkCtx {
   paint: Paint;
   bg: Rgb;
   body: string[];
-  count: { shapes: number };
+  count: { shapes: number; roundedRects: number };
 }
 
 function walk(el: Element, ctx: WalkCtx): void {
@@ -131,6 +142,14 @@ function emitShape(el: Element, ctx: WalkCtx, out: WalkCtx): void {
   const stroke = ctx.paint.stroke === null ? "" : strokePs(ctx.paint, ctx.bg);
   out.body.push(`gsave\n[${m}] concat\n${path}${fill}${stroke}\ngrestore`);
   out.count.shapes++;
+  if (isRoundedRect(el)) out.count.roundedRects++;
+}
+
+/** A <rect> whose corners the outline model drew as arcs — reported as an automatic fix. */
+function isRoundedRect(el: Element): boolean {
+  if (el.nodeName.toLowerCase() !== "rect") return false;
+  const [rx, ry] = rectRadii(el, Number(el.getAttribute("width")), Number(el.getAttribute("height")));
+  return rx > 0 && ry > 0;
 }
 
 function strokePs(paint: Paint, bg: Rgb): string {

@@ -66,7 +66,7 @@ export interface UploadModel {
 
 /** The fields one run updates on a row (status/stage/record/error/running/stale). */
 export type UploadRunUpdate = Partial<Pick<UploadRow,
-  "status" | "stage" | "error" | "record" | "running" | "stale">>;
+  "status" | "stage" | "error" | "note" | "record" | "running" | "stale">>;
 
 export type UploadAction =
   | { type: "root"; name: string }

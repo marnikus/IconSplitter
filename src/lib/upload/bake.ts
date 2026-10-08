@@ -9,7 +9,7 @@
 // would distort is refused by name BEFORE the tree is touched (RULE 15).
 
 import { isShape, strokeHits, type StrokeHit } from "./geom/bounds";
-import { bakeShapeAttrs, isAxisAligned, isUniform } from "./geom/bakeshape";
+import { bakeShapeAttrs, isUniform } from "./geom/bakeshape";
 import { fmt } from "./geom";
 import { multiply, scaleOf, type Matrix } from "./geom/matrix";
 import { outlineToPathData, shapeOutline, transformOutline } from "./geom/outline";
@@ -56,7 +56,11 @@ function bakeVetoes(root: Element): string[] {
   return [...new Set(out)];
 }
 
-/** A stroke under a non-uniform matrix is anisotropic; a rounded rect cannot turn. */
+/**
+ * A stroke under a non-uniform matrix is anisotropic — refused. (A rounded
+ * rect under a rotation used to be refused too; since 2026-10-08 the outline
+ * model draws its corners, so it becomes a <path> like any turned shape.)
+ */
 function shapeVetoes(hits: StrokeHit[], artboard: Matrix): string[] {
   const out: string[] = [];
   for (const hit of hits) {
@@ -64,13 +68,8 @@ function shapeVetoes(hits: StrokeHit[], artboard: Matrix): string[] {
     const m = multiply(artboard, hit.ctm);
     const tag = hit.el.nodeName.toLowerCase();
     if (!hit.stroke.none && !isUniform(m)) out.push(`a stroked <${tag}> under a non-uniform transform`);
-    if (tag === "rect" && isRounded(hit.el) && !isAxisAligned(m)) out.push("a rounded <rect> under a rotation or skew");
   }
   return [...new Set(out)];
-}
-
-function isRounded(el: Element): boolean {
-  return el.getAttribute("rx") !== null || el.getAttribute("ry") !== null;
 }
 
 /** One shape: coordinates, then the lengths that scale with them. */

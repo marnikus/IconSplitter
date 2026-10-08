@@ -569,7 +569,8 @@ Row (`upload-row-{id}`):
 | `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
 | `upload-target-{id}` | text | the row's source path (the approved SVG) |
 | `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
-| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
+| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |
+| `upload-note-{id}` | small | (2026-10-08) the amber `.svg-note` "EPS auto-fixed: …" line from `record.tools.eps.fixes` — present only when the EPS writer adjusted something on its own (a rounded `<rect>` drawn as an exact outline); the row stays Processed, nothing is asked |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
 | `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
 | `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |

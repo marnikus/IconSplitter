@@ -34,6 +34,8 @@ export interface Artifacts {
   jpegRecord: RasterRecord | null;
   epsText: string | null;
   epsFailure: string | null;
+  /** What the EPS writer adjusted on its own — reported, never asked (2026-10-08). */
+  epsFixes: string[];
 }
 
 export interface StageContext {
@@ -52,7 +54,7 @@ export interface StageContext {
 export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promise<Artifacts> {
   const art: Artifacts = {
     prepared: null, optimizedSvg: null, optimizeRecord: null,
-    svgOut: null, jpeg: null, jpegRecord: null, epsText: null, epsFailure: null,
+    svgOut: null, jpeg: null, jpegRecord: null, epsText: null, epsFailure: null, epsFixes: [],
   };
   const needSvgText = plan.rebuild.svg || plan.rebuild.eps;
   const needRender = plan.rebuild.jpg && plan.stages.includes("render");
@@ -99,8 +101,10 @@ function buildEps(art: Artifacts, ctx: StageContext): void {
   const eps = writeEps(art.optimizedSvg as string, flattenColor(ctx.settings.background), {
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   });
-  if (eps.ok) art.epsText = eps.eps;
-  else art.epsFailure = eps.reason; // honest: the EPS stage failed → partial
+  if (eps.ok) {
+    art.epsText = eps.eps;
+    art.epsFixes = eps.fixes;
+  } else art.epsFailure = eps.reason; // honest: the EPS stage failed → partial
 }
 
 /** A fresh render, or the committed JPEG re-embedded (metadata edit only). */

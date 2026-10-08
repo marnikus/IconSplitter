@@ -9,8 +9,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
-import { exportDirOf, newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
-import { DEFAULT_UPLOAD_SETTINGS, settingsFingerprint } from "../src/lib/upload/settings";
 import { getLogState, resetLogStore } from "../src/log/logstore";
 import { forgetRestoreNote } from "../src/upload/jobstore";
 import UploadPanel from "../src/upload/UploadPanel";
@@ -19,6 +17,7 @@ import { HistoryProvider } from "../src/state/HistoryProvider";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
+import { commitPackage, PACKAGE_EPS as EPS, PACKAGE_JPG as JPG, PACKAGE_SVG as SVG, type PackageKind } from "./helpers/uploadpackage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -36,9 +35,6 @@ const DIR = "architecture";
 const FOG = pairId(`${DIR}/fog`, "fog", "");
 const ARCH = pairId(`${DIR}/arch`, "arch", "");
 const COURT = pairId(`${DIR}/court`, "court", "");
-const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>`;
-const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
-const EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 24 24\n";
 
 let host: HTMLDivElement;
 let ui: Root;
@@ -65,31 +61,11 @@ async function check(id: string): Promise<void> {
   await settle();
 }
 
-/** A committed package on disk for `name` in its own pair folder: the artifacts + the record naming them. */
-function commitPackage(dir: BinDir, dirPath: string, name: string, kinds: ("svg" | "jpg" | "eps")[]): void {
-  const exp = new BinDir("export");
-  dir.children.set("export", exp);
-  const content = { svg: SVG, jpg: JPG, eps: EPS } as const;
-  for (const k of kinds) exp.children.set(`${name}.${k}`, new BinFile(`${name}.${k}`, content[k], 5000));
-  const record = newExportRecord({
-    pair: { id: pairId(dirPath, name, ""), base: name, suffix: "", dir: dirPath },
-    source: { svgPath: `${dirPath}/${name}_AI.svg`, version: 1, approval: "approved", fingerprint: "sha256:src" },
-    settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: settingsFingerprint(DEFAULT_UPLOAD_SETTINGS) },
-    svgo: { enabled: false, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" },
-    epsEnabled: kinds.includes("eps"),
-  });
-  const out = (k: string) => ({ path: `${exportDirOf(dirPath)}/${name}.${k}`, bytes: 1, hash: "sha256:x" });
-  record.outputs = { svg: kinds.includes("svg") ? out("svg") : null, jpg: kinds.includes("jpg") ? out("jpg") : null, eps: kinds.includes("eps") ? out("eps") : null };
-  record.stage = "committed";
-  record.status = "processed";
-  exp.children.set("export.json", new BinFile("export.json", serializeExportRecord(record), 5001));
-}
-
 /** One pair per folder (the batch layout): fog (svg+jpg+eps) and arch (svg+jpg) committed; court approved, never exported. */
 function makeRoot(): BinDir {
   const root = new BinDir("split_root");
   const arch = new BinDir(DIR);
-  const packages: Record<string, ("svg" | "jpg" | "eps")[] | null> = { fog: ["svg", "jpg", "eps"], arch: ["svg", "jpg"], court: null };
+  const packages: Record<string, PackageKind[] | null> = { fog: ["svg", "jpg", "eps"], arch: ["svg", "jpg"], court: null };
   for (const [id, name] of [[FOG, "fog"], [ARCH, "arch"], [COURT, "court"]] as const) {
     const dirPath = `${DIR}/${name}`;
     const dir = new BinDir(name);
@@ -98,7 +74,7 @@ function makeRoot(): BinDir {
     const meta = pairFile(dirPath, `${name}_AI.png`, { id, versions: [svgVersion(`${dirPath}/${name}_AI.svg`, { version: 1, review: "approved" })] });
     dir.children.set(`${name}_AI.svg.json`, new BinFile(`${name}_AI.svg.json`, serializePairMeta(meta), 3300));
     const kinds = packages[name];
-    if (kinds !== null) commitPackage(dir, dirPath, name, kinds);
+    if (kinds !== null) commitPackage({ dir, dirPath, name, kinds });
     arch.children.set(name, dir);
   }
   root.children.set(DIR, arch);

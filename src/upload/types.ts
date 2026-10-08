@@ -69,6 +69,8 @@ export interface UploadRow {
   meta: UploadMetaState;
   /** The safe, redacted cause of the last export failure ("" when none). */
   error: string;
+  /** What the last export adjusted on its own, e.g. the EPS writer's fixes ("" when nothing). */
+  note: string;
   /** Fingerprints moved since the last commit — shown until re-export. */
   stale: boolean;
 }

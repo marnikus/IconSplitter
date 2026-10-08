@@ -65,6 +65,24 @@ export function exportedSpec(ref: IconRef & { status: string; note: string }): U
   };
 }
 
+/** What one export run has to say: the failure first, else its automatic fixes, else the plain outcome. */
+export function exportOutcomeNote(r: { status: string; error: string; notes: string[] }): string {
+  if (r.error !== "") return r.error;
+  if (r.notes.length > 0) return `EPS auto-fixed: ${r.notes.join("; ")}`;
+  if (r.status === "processed") return "export.json was written last; the approved source is untouched";
+  if (r.status === "partial") return "the required outputs committed; the optional EPS stage failed";
+  if (r.status === "cancelled") return "stopped before commit; the previous package is intact";
+  return "nothing was committed";
+}
+
+/** The batch toast: the count, then how many EPS files were auto-fixed (only when any were). */
+export function exportBatchLine(b: { done: number; total: number; aborted: boolean; fixed: number }): string {
+  const head = b.aborted
+    ? `Export stopped after ${b.done} of ${b.total} — finished packages are kept`
+    : `Exported ${b.done} icon${b.done === 1 ? "" : "s"} — each pair's export folder holds the package`;
+  return b.fixed === 0 ? head : `${head} · ${b.fixed} EPS auto-fixed`;
+}
+
 /** A cancel: how many unsent jobs it stopped (finished packages were kept). */
 export function cancelledSpec(stopped: number): UploadLogSpec {
   return {

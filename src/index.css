@@ -1207,6 +1207,7 @@
 .svg-cell { color: #aab4cb; font-size: 9px; }
 .svg-cell small { display: block; margin-top: 4px; color: var(--v2-muted-2); font-size: 8px; }
 .svg-cell .svg-error { color: var(--v2-red); overflow: hidden; text-overflow: ellipsis; }
+.svg-cell .svg-note { color: var(--v2-yellow); overflow: hidden; text-overflow: ellipsis; } /* the EPS auto-fix: a warning, not a failure */
 .svg-usage strong { color: var(--v2-purple-2); font-size: 11px; }
 
 .svg-badge {
