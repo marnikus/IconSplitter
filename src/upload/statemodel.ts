@@ -61,6 +61,8 @@ export interface UploadModel {
   runningMeta: number;
   /** Export runs in flight. */
   runningExport: number;
+  /** "Download all" runs in flight (0 or 1: one folder run at a time). */
+  runningDownload: number;
   progress: { done: number; total: number } | null;
 }
 
@@ -94,7 +96,7 @@ export type UploadAction =
   | { type: "meta"; id: string; meta: UploadMetaState }
   | { type: "run"; id: string; run: UploadRunUpdate }
   | { type: "progress"; progress: { done: number; total: number } | null }
-  | { type: "running"; kind: "metadata" | "export"; n: number };
+  | { type: "running"; kind: "metadata" | "export" | "download"; n: number };
 
 /** The previews land on the meta dialog they belong to — never on a new one. */
 function previewsOf(m: UploadModel, a: { previews: SentPreview[]; preparing: boolean }): UploadModel {
@@ -148,8 +150,10 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   },
   progress: (m, a) => ({ ...m, progress: (a as { progress: { done: number; total: number } | null }).progress }),
   running: (m, a) => {
-    const act = a as { kind: "metadata" | "export"; n: number };
-    return act.kind === "metadata" ? { ...m, runningMeta: act.n } : { ...m, runningExport: act.n };
+    const act = a as { kind: "metadata" | "export" | "download"; n: number };
+    if (act.kind === "metadata") return { ...m, runningMeta: act.n };
+    if (act.kind === "export") return { ...m, runningExport: act.n };
+    return { ...m, runningDownload: act.n };
   },
 };
 
@@ -219,7 +223,7 @@ export function initialModel(boot: Boot): UploadModel {
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
-    runningMeta: 0, runningExport: 0, progress: null,
+    runningMeta: 0, runningExport: 0, runningDownload: 0, progress: null,
   };
 }
 

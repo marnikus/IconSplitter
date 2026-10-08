@@ -35,8 +35,9 @@ It has six modes (tabs across the top):
   builds its upload-ready package beside the sources: fitted artboard with the
   chosen background and stroke width, conceptual metadata from the model,
   SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
-  `export.json`. Nothing is uploaded to any website by the app. Also
-  Chrome/Edge only.
+  `export.json`. Nothing is uploaded to any website by the app. **⤓ Download all**
+  copies the finished packages of the checked icons (SVG, JPG and, where exported,
+  EPS) into one folder you choose. Also Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

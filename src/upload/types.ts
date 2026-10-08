@@ -121,6 +121,8 @@ export interface UploadRefs {
   key: { current: string | null };
   abortMeta: { current: AbortController | null };
   abortExport: { current: AbortController | null };
+  /** The one folder download in flight (cancelled between icons). */
+  abortDownload: { current: AbortController | null };
   journal: { current: MetadataJournal };
   /** The key of the committed snapshot: an unchanged scan commits nothing. */
   scanKey: { current: string | null };

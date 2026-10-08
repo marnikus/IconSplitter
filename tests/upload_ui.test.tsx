@@ -11,6 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
+import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { AUTH_HEADER } from "../src/lib/upload/gemini";
 import { MANDATORY_TAGS } from "../src/lib/upload/meta";
 import { withIntrinsicSize } from "../src/lib/upload/raster";
@@ -1265,5 +1266,191 @@ describe("export — green means a complete committed package", () => {
     const exp = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
     expect([...exp.children.keys()]).toEqual(["fog_AI.svg"]);
     expect((exp.children.get("fog_AI.svg") as BinFile).text).toBe("export junk");
+  });
+});
+
+describe("Download all — the finished packages of the selection, saved to a folder the user picks", () => {
+  const DEFAULT_PICKER = (window as unknown as { showDirectoryPicker?: () => Promise<unknown> }).showDirectoryPicker;
+  const EXPORT_DIR = (root: BinDir): BinDir => (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
+
+  afterEach(() => {
+    (window as unknown as { showDirectoryPicker?: () => Promise<unknown> }).showDirectoryPicker = DEFAULT_PICKER;
+  });
+
+  /** The native folder dialog, stubbed: it hands back `dir`, or closes like a cancel. `opened` counts it. */
+  function stubPicker(dir: BinDir | null): { opened: number } {
+    const picker = { opened: 0 };
+    (window as unknown as { showDirectoryPicker?: () => Promise<unknown> }).showDirectoryPicker = () => {
+      picker.opened += 1;
+      return dir === null ? Promise.reject(new DOMException("closed", "AbortError")) : Promise.resolve(dir);
+    };
+    return picker;
+  }
+
+  /** The row's own Export: no metadata, no key, no paid call — waited to a committed package. */
+  async function exportPackage(id: string): Promise<void> {
+    await click(`[data-testid=upload-export-${id}]`);
+    await waitFor(() => text(`[data-testid=upload-status-${id}]`).includes("Processed"), `${id} to be processed`);
+  }
+
+  const toast = (): string => text("[data-testid=upload-toast]");
+  const namesIn = (dir: BinDir): string[] => [...dir.children.keys()].sort();
+  const bytesIn = (dir: BinDir, name: string): number[] => Array.from((dir.children.get(name) as BinFile).bytes);
+
+  it("is disabled with nothing selected, and counts only the finished packages", async () => {
+    await mount(makeRoot());
+    expect((q("[data-testid=upload-download-all]") as HTMLButtonElement).disabled).toBe(true);
+    await check(FOG);
+    expect(text("[data-testid=upload-download-all]")).toBe("⤓ Download all (0)");
+  });
+
+  itSlow("opens no folder dialog when no selected icon has a finished package, and says why", async () => {
+    const picker = stubPicker(new BinDir("Stock"));
+    await mount(makeRoot());
+    await check(FOG);
+    await click("[data-testid=upload-download-all]");
+    expect(toast()).toContain("None of the 1 selected icon has a finished package");
+    expect(toast()).toContain("1 not exported");
+    expect(picker.opened).toBe(0);
+  });
+
+  itSlow("saves each selected package's SVG and JPG into the folder the user picks, byte for byte", async () => {
+    const provider = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", provider.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await exportPackage(FOG);
+    await exportPackage(ARCH);
+    await check(FOG);
+    await check(ARCH);
+    expect(text("[data-testid=upload-download-all]")).toBe("⤓ Download all (2)");
+    const dest = new BinDir("Stock");
+    const picker = stubPicker(dest);
+    await click("[data-testid=upload-download-all]");
+    await waitFor(() => toast().includes("Saved 4 files from 2 icons"), "the download summary");
+    expect(picker.opened).toBe(1);
+    expect(namesIn(dest)).toEqual(["arch.jpg", "arch.svg", "fog.jpg", "fog.svg"]);
+    expect((dest.children.get("fog.svg") as BinFile).text).toBe(fileText(root, `${DIR}/export/fog.svg`));
+    expect(bytesIn(dest, "fog.jpg")).toEqual(bytesIn(EXPORT_DIR(root), "fog.jpg"));
+    expect(toast()).toContain("2 without EPS");
+    expect(provider.calls).toHaveLength(0); // copied, not exported again and not sent anywhere
+    const entries = getLogState().entries.filter((e) => e.action === "downloaded");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].detail).toContain("Saved 4 files from 2 icons");
+  });
+
+  itSlow("with EPS on in Export settings, each package's EPS lands with its SVG and JPG", async () => {
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
+      v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true }, overrides: {},
+    }));
+    await mount(makeRoot());
+    await exportPackage(FOG);
+    await check(FOG);
+    const dest = new BinDir("Stock");
+    stubPicker(dest);
+    await click("[data-testid=upload-download-all]");
+    await waitFor(() => toast().includes("Saved 3 files from 1 icon"), "the download summary");
+    expect(namesIn(dest)).toEqual(["fog.eps", "fog.jpg", "fog.svg"]);
+    expect(toast()).not.toContain("without EPS");
+  });
+
+  itSlow("a cancelled folder dialog saves nothing and says so", async () => {
+    await mount(makeRoot());
+    await exportPackage(FOG);
+    await check(FOG);
+    const picker = stubPicker(null);
+    await click("[data-testid=upload-download-all]");
+    await waitFor(() => toast().includes("Download cancelled"), "the cancel notice");
+    expect(toast()).toBe("Download cancelled — no folder was chosen, nothing was saved");
+    expect(picker.opened).toBe(1);
+    expect(getLogState().entries.some((e) => e.action === "downloaded")).toBe(false);
+  });
+
+  /**
+   * A second folder with one approved icon. Each folder keeps its own export.json, so this icon's
+   * package never shares a record with FOG's (two icons in one folder share one export.json today).
+   */
+  function addLogoFolder(root: BinDir): string {
+    const id = pairId("logos", "logo", "");
+    const dir = new BinDir("logos");
+    dir.children.set("logo_AI.png", new BinFile("logo_AI.png", "ai", 3100));
+    dir.children.set("logo_AI.svg", new BinFile("logo_AI.svg", SAVED_SVG, 3400));
+    const meta = pairFile("logos", "logo_AI.png", { id, versions: [svgVersion("logos/logo_AI.svg", { version: 1, review: "approved" })] });
+    dir.children.set("logo_AI.svg.json", new BinFile("logo_AI.svg.json", serializePairMeta(meta), 3300));
+    root.children.set("logos", dir);
+    return id;
+  }
+
+  /** Stored settings written by hand while the panel is unmounted, as a user's earlier session would leave them. */
+  function storeSettings(defaults: typeof DEFAULT_UPLOAD_SETTINGS, overrides: Record<string, object>): void {
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({ v: 1, defaults, overrides }));
+  }
+
+  itSlow("a package whose settings changed since its export is skipped and named, not delivered", async () => {
+    const root = makeRoot();
+    const LOGO = addLogoFolder(root);
+    await mount(root);
+    await exportPackage(FOG);
+    await exportPackage(LOGO);
+    act(() => ui.unmount());
+    // only the logo is pinned to other settings after its export: its package is now stale, FOG's still matches
+    storeSettings(DEFAULT_UPLOAD_SETTINGS, { [LOGO]: { paddingPct: DEFAULT_UPLOAD_SETTINGS.paddingPct + 5 } });
+    await mount(root);
+    await check(FOG);
+    await check(LOGO);
+    expect(text("[data-testid=upload-download-all]")).toBe("⤓ Download all (1)");
+    const dest = new BinDir("Stock");
+    stubPicker(dest);
+    await click("[data-testid=upload-download-all]");
+    await waitFor(() => toast().includes("skipped"), "the download summary");
+    expect(toast()).toContain("1 skipped (1 changed since export)");
+    expect(namesIn(dest)).toEqual(["fog.jpg", "fog.svg"]);
+  });
+
+  itSlow("when every selected package is stale, no folder dialog opens and the notice names the change", async () => {
+    const root = makeRoot();
+    await mount(root);
+    await exportPackage(FOG);
+    act(() => ui.unmount());
+    storeSettings({ ...DEFAULT_UPLOAD_SETTINGS, paddingPct: DEFAULT_UPLOAD_SETTINGS.paddingPct + 5 }, {});
+    await mount(root);
+    await check(FOG);
+    expect(text("[data-testid=upload-download-all]")).toBe("⤓ Download all (0)");
+    const picker = stubPicker(new BinDir("Stock"));
+    await click("[data-testid=upload-download-all]");
+    expect(toast()).toContain("None of the 1 selected icon has a finished package (1 changed since export)");
+    expect(picker.opened).toBe(0);
+  });
+
+  itSlow("Cancel run stops a download between icons: the icon in progress is kept, the next one never starts", async () => {
+    class SlowFile extends BinFile {
+      override async createWritable() {
+        const real = await super.createWritable();
+        return {
+          write: real.write,
+          close: async () => { await new Promise((r) => setTimeout(r, 60)); await real.close(); },
+        };
+      }
+    }
+    class SlowDir extends BinDir {
+      override async getFileHandle(n: string, opts?: { create?: boolean }) {
+        if (!opts?.create || this.children.has(n)) return super.getFileHandle(n, opts);
+        const made = new SlowFile(n);
+        this.children.set(n, made);
+        return made;
+      }
+    }
+    await mount(makeRoot());
+    await exportPackage(FOG);
+    await exportPackage(ARCH);
+    await check(FOG);
+    await check(ARCH);
+    const dest = new SlowDir("Stock");
+    stubPicker(dest);
+    await click("[data-testid=upload-download-all]");
+    await waitFor(() => namesIn(dest).length >= 1, "the first file to land");
+    await click("[data-testid=upload-cancel-run]");
+    await waitFor(() => toast().includes("stopped after 1 of 2"), "the stopped summary");
+    expect(namesIn(dest)).toHaveLength(2); // one whole icon (SVG + JPG), never half of the next
   });
 });

@@ -574,6 +574,36 @@ opt-in class as Generate SVG → Requesty; design
   | null } }` before/after) on the shared global timeline; the apply path lives
   in `src/upload/uploadundo.ts` (a mounted panel applies live; unmounted
   writes the store directly).
+* **Download all** (2026-10-08; `lib/upload/download` pure, `upload/downloadrun`
+  I/O, `upload/downloadactions` hook; design
+  `docs/archive/2026-10-08-svg-download-all/design.md`). The bulk bar's
+  `⤓ Download all (N)` (`upload-download-all`) copies the FINISHED packages of the
+  CHECKED icons (`app.upload.checked`, not the filtered list) into one flat folder
+  the user picks in the native dialog. N counts the checked icons whose row is
+  processed or partial, has a record, is not stale and is not in a run. Each icon
+  delivers `<stemOf(svgName)>.svg` and `.jpg`, and `.eps` only when the record's
+  `tools.eps.enabled` is true, so a leftover EPS is never delivered. A partial
+  package delivers its SVG and JPG and reports the EPS as missing; a package
+  exported with EPS off reports "without EPS" as a note, not an error. The button
+  never exports and never calls the provider. Each file is read from the package
+  and must match the record's `bytes` and `sha256:` hash before it is copied; the
+  copy is created only under a name that is free (`createNew`), read back, and
+  removed if the read-back differs. A clash moves the WHOLE trio to `_v02`
+  (`withVariation`); clashes are compared case-insensitively against the folder and
+  the names already reserved in the run. Nothing is overwritten. Skips are named:
+  "not exported", "changed since export", "last export did not finish", "in
+  progress". The dialog opens only after the guards pass and the plan has something
+  to save; a cancelled dialog saves nothing and says so. The folder is not
+  remembered. Cancel run stops the copy between icons, keeps the icon in progress
+  and the files already saved. One log entry (`downloaded`; `error` when nothing
+  was saved or a file failed, `warn` for missing files or a stop, otherwise `info`).
+  No app state changes, so it is not on the undo timeline.
+  **Known limit, pre-existing and not changed here:** the export record is
+  `<folder>/export/export.json`, ONE per source folder (§6 says one per icon). Two
+  icons exported from one folder share that file, so after a reload or a rescan only the icon
+  exported last there keeps a record; the others show Stale and are skipped as
+  "changed since export". Until the folder is rescanned or the app reloads, each package
+  keeps its own record and downloads correctly.
 
 ## 3. State model
 
@@ -916,6 +946,15 @@ Batch:
   output (`…_AI.svg`) and its versioned artifacts (`…_v1.svg`) are never sources
   and are never counted as AI sources in the audit — otherwise a second run
   would feed an artifact back into generation, and the counts would not add up.
+* **I-59 (a download is a copy of proven packages, RULE 2/4/9/15/22/23):** Download
+  all copies only what is already on disk and proves itself against its own
+  export record (size and `sha256:` hash), and it never exports, never sends and
+  never overwrites. A file that is missing, changed or not produced is named, not
+  shipped; its siblings still land. A skipped icon is success with a note. Every
+  outcome reaches the toast and one log entry. The trio shares one stem, and a
+  clash moves the whole trio to `_v02`. The folder dialog is not opened for a click
+  that cannot save anything. (I-57 and I-58 are reserved by the design-only
+  keep-alive plan in `docs/archive/2026-10-08-svg-queue-keepalive/`.)
 
 ## 6. Storage map
 
@@ -985,6 +1024,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
 | Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: bake, viewBox-only root, optional background rect, stroke width written verbatim + colour restyle, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
 | Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
+| Upload download (2026-10-08) | `src/lib/upload/download.ts` (pure: the plan, the verdicts, `allocateStem`, `matchesCommitted`, the summary sentence), `src/upload/downloadrun.ts` (I/O: list, prove, `createNew`, read back, cancel), `src/upload/downloadactions.ts` (the hook: guards, folder dialog, toast, log) | copies the proven packages of the checked icons into a folder the user picks |
 | Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset), the framed SVG preview |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
@@ -1150,6 +1190,27 @@ with hotkeys and `data-testid` handles):
   fields, invalid-answer refusal, cancel (never resent), interrupted after a
   restart, export → green committed package with the source untouched, stale →
   re-export, metadata embedded + verified, honest failure commits nothing
+* `upload_download_plan.test.ts` — the download rules, pure: each skip reason as
+  the row shows it, the EPS states (on; a partial package's missing EPS; off; a
+  leftover EPS never delivered), `allocateStem` (the trio, case folding, the next
+  free variation), `matchesCommitted` (size, hash, empty), the summary sentence
+  and the guard answers.
+* `upload_download_run.test.ts` — the copy over `BinDir` fakes with real export
+  bytes: byte-identical copies under the stem; never overwrites (the trio moves to
+  `_v02`); a changed or missing file is not delivered and its siblings are; a
+  refused write is isolated per icon; an unexpected error costs one icon and is
+  named; a short write is removed and reported; a
+  cancel between icons keeps what was saved; progress once per icon, before its
+  write; no partial file is left; an unlistable folder is named as such; the
+  package folder and its records never change.
+* `upload_uploadlog.test.ts` — the closed action set includes `downloaded`, with
+  its level rule.
+* `upload_ui.test.tsx`, describe "Download all" — the count and disabled state;
+  no dialog when nothing is ready, and the reason is said; a byte-for-byte copy of
+  two packages with no provider call; EPS on lands the EPS too; a cancelled
+  dialog; a settings change leaves one package stale and skipped while its
+  sibling lands; every selected package stale opens no dialog; Cancel run stops
+  between icons.
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
@@ -1364,7 +1425,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-bg-{white,black,gray,green,red}`, `upload-bg-custom`,
   `upload-bg-value`), `upload-estimate` / `upload-progress`,
   `upload-apply-settings`, `upload-meta-selected`,
-  `upload-export-selected`, `upload-cancel-run`), list (`upload-list`,
+  `upload-export-selected`, `upload-download-all`, `upload-cancel-run`), list (`upload-list`,
   `upload-rows`, `upload-row-*`, `upload-check-*`, `upload-prev-*` +
   `upload-prev-*-frame`, `upload-target-*`, `upload-export-path-*`,
   `upload-status-*`, `upload-meta-cell-*`, `upload-settings-*` +

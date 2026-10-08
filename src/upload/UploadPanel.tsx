@@ -67,19 +67,33 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
   };
   return (
     <>
-      <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
-        thumb={g.thumb} bg={g.bg} progress={g.progress}
-        runningMeta={g.runningMeta} runningExport={g.runningExport}
-        metaNeeded={idsNeedingMetadata(g.rows, g.checked).length}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
-        onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
-        onSettings={() => g.openSettings(null)}
-        onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
-        onMetadata={() => g.generateMetadataSelected(g.checked)} onExport={() => g.exportSelected(g.checked)}
-        onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
+      <BulkBar g={g} />
       <UploadList g={g} actions={actions} />
     </>
   );
+}
+
+/** The bulk bar, wired to the tab's one state: every bulk action applies to the selection. */
+function BulkBar({ g }: { g: UploadApi }) {
+  return (
+    <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
+      thumb={g.thumb} bg={g.bg} progress={g.progress}
+      runningMeta={g.runningMeta} runningExport={g.runningExport} runningDownload={g.runningDownload}
+      metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} downloadReady={g.downloadReady}
+      onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
+      onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
+      onSettings={() => g.openSettings(null)}
+      onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
+      onMetadata={() => g.generateMetadataSelected(g.checked)} onExport={() => g.exportSelected(g.checked)}
+      onDownload={() => g.downloadSelected(g.checked)} onCancel={() => cancelRunOf(g)} />
+  );
+}
+
+/** The one Cancel button stops whichever run is in flight: metadata, then a folder download, else the export. */
+function cancelRunOf(g: UploadApi): void {
+  if (g.runningMeta > 0) return g.cancelMetadata();
+  if (g.runningDownload > 0) return g.cancelDownload();
+  g.cancelExport();
 }
 
 /** What the scan could not use — said out loud, and never by removing a row. */
@@ -171,6 +185,7 @@ function StatusBar({ g }: { g: UploadApi }) {
         <span>{keyLine(g.keySet, g.keySource)}</span>
         {g.runningMeta > 0 && <span className="running" data-testid="upload-status-meta">metadata in flight</span>}
         {g.runningExport > 0 && <span className="running" data-testid="upload-status-export">export in flight</span>}
+        {g.runningDownload > 0 && <span className="running" data-testid="upload-status-download">download in flight</span>}
       </div>
     </footer>
   );

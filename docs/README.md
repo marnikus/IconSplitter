@@ -51,6 +51,7 @@ doc itself, never in this map.
 | `archive/2026-10-08-one-clean-phrase/design.md` | Metadata title and description: ONE clean phrase each — first sentence only, sentence case, no end punctuation — at parse, cache read and Accept; prompt and hints ask for it |
 | `archive/2026-10-08-svg-queue-keepalive/design.md` | DESIGN ONLY (no code yet): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
 | `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
+| `archive/2026-10-08-svg-download-all/design.md` | Download all (SVG to upload): the finished packages of the checked icons copied into one folder the user picks; the rules (ready, EPS, partial), names and `_v02` clashes, the proof before copy, the skip reasons, the cancel, D1–D14, the test plan and the known limit (one `export.json` per folder). |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

@@ -15,7 +15,7 @@ export const UPLOAD_FEATURE = "upload";
 
 /** The CLOSED set of actions the tab may emit, in one place for the lock test. */
 export const UPLOAD_LOG_ACTIONS = [
-  "named", "name-refused", "exported", "cancelled", "restored", "model-checked",
+  "named", "name-refused", "exported", "cancelled", "restored", "model-checked", "downloaded",
 ] as const;
 
 export type UploadLogAction = (typeof UPLOAD_LOG_ACTIONS)[number];
@@ -87,6 +87,30 @@ export function restoredSpec(count: number): UploadLogSpec {
   };
 }
 
+/** The counts of one "Download all" run, and the same sentence the toast shows. */
+export interface DownloadOutcomeSpec {
+  saved: number;
+  icons: number;
+  skipped: number;
+  failed: number;
+  missing: number;
+  stopped: boolean;
+  detail: string;
+}
+
+/** One run: the folder's outcome in counts; the file names are in the sentence, never in data. */
+export function downloadedSpec(input: DownloadOutcomeSpec): UploadLogSpec {
+  return {
+    level: levelOfDownload(input),
+    feature: UPLOAD_FEATURE,
+    action: "downloaded",
+    ids: {
+      saved: input.saved, icons: input.icons, skipped: input.skipped, failed: input.failed, missing: input.missing,
+    },
+    detail: input.detail,
+  };
+}
+
 /** The provider check: the verdict, with the model id but never the key. */
 export function modelCheckedSpec(input: { model: string; ok: boolean; reason: string }): UploadLogSpec {
   return {
@@ -101,6 +125,12 @@ export function modelCheckedSpec(input: { model: string; ok: boolean; reason: st
 /** "2 unsent exports were" — one helper, so the count and its grammar agree. */
 function countLabel(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
+}
+
+/** Nothing saved or a file failed is an error; missing files or a stop is a warning; skipped icons are news, not trouble. */
+function levelOfDownload(o: DownloadOutcomeSpec): UploadLogSpec["level"] {
+  if (o.saved === 0 || o.failed > 0) return "error";
+  return o.missing > 0 || o.stopped ? "warn" : "info";
 }
 
 /** The outcomes mapped once, so the log level and the row cannot disagree. */

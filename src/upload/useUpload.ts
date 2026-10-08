@@ -25,6 +25,7 @@ import { assembleRows, countsOf, pruneChecked, type UploadCounts } from "./rowmo
 import { headerState, visibleRows } from "./rowlist";
 import { loadUploadSettings, saveUploadSettings } from "./settingsstore";
 import { useUploadActions, type UploadActions, type UploadCtx } from "./actions";
+import { downloadReadyCount } from "./downloadactions";
 import { loadPresets, loadPrompt, savePrompt } from "./promptstore";
 import { bindUploadSettingsApplier } from "./uploadundo";
 import { useUploadModel, type Boot, type UploadAction, type UploadModel } from "./statemodel";
@@ -39,6 +40,8 @@ export type UploadApi = UploadModel & UploadActions & {
   header: "none" | "some" | "all";
   visible: UploadRow[];
   counts: UploadCounts;
+  /** Checked icons with a finished package: the count on "Download all". */
+  downloadReady: number;
   refs: UploadRefs;
   dispatch: Dispatch<UploadAction>;
 };
@@ -69,7 +72,7 @@ export function useUpload(): UploadApi {
     ...model, ...actions, supported: fsSupported(),
     checked: app.upload.checked, activeId: app.upload.activeId,
     header: derived.header, visible: derived.visible, counts: derived.counts,
-    refs, dispatch,
+    downloadReady: derived.downloadReady, refs, dispatch,
   };
 }
 
@@ -179,12 +182,13 @@ function useUndoBinding(dispatch: Dispatch<UploadAction>): void {
 
 /** The filtered/sorted view, its header state and the counts, derived only. */
 function useDerived(model: UploadModel, checked: string[]): {
-  visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts;
+  visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts; downloadReady: number;
 } {
   const visible = useMemo(() => visibleRows(model.rows, model.filter, model.sort), [model.rows, model.filter, model.sort]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const counts = useMemo(() => countsOf(model.rows), [model.rows]);
-  return { visible, header, counts };
+  const downloadReady = useMemo(() => downloadReadyCount(model.rows, checked), [model.rows, checked]);
+  return { visible, header, counts, downloadReady };
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */
@@ -198,7 +202,7 @@ function loadBoot(): Boot {
 function newRefs(): UploadRefs {
   return {
     root: { current: null }, key: { current: null },
-    abortMeta: { current: null }, abortExport: { current: null },
+    abortMeta: { current: null }, abortExport: { current: null }, abortDownload: { current: null },
     journal: { current: createStoredJournal() },
     scanKey: { current: null }, seq: SCAN_IDLE,
   };

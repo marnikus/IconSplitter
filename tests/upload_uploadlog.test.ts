@@ -1,5 +1,5 @@
 // upload_uploadlog.test.ts — CP-1 (merge-report §9, T13): the tab's CLOSED log
-// vocabulary. Every entry the tab can emit is one of six outcomes, every entry
+// vocabulary. Every entry the tab can emit is one of seven outcomes, every entry
 // names the icon or the run it belongs to, and NONE has a `data` field — the
 // metadata text, the prompt, the response body and the API key have no field to
 // ride in. The last test reads the tab's own sources: a future `log({...})`
@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, exportedSpec, modelCheckedSpec,
+  UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, downloadedSpec, exportedSpec, modelCheckedSpec,
   nameRefusedSpec, namedSpec, restoredSpec,
 } from "../src/upload/uploadlog";
 
@@ -22,10 +22,11 @@ const ALL = [
   cancelledSpec(3),
   restoredSpec(2),
   modelCheckedSpec({ model: "gemini-3.1-flash-lite", ok: true, reason: "" }),
+  downloadedSpec({ saved: 6, icons: 2, skipped: 1, failed: 0, missing: 0, stopped: false, detail: "Saved 6 files from 2 icons" }),
 ];
 
 describe("the vocabulary is closed", () => {
-  it("every builder emits one of the six actions (T13)", () => {
+  it("every builder emits one of the seven actions (T13)", () => {
     for (const spec of ALL) {
       expect(UPLOAD_LOG_ACTIONS).toContain(spec.action);
     }
@@ -49,6 +50,18 @@ describe("the vocabulary is closed", () => {
     expect(exportedSpec({ ...REF, status: "processed", note: "n" }).ids).toEqual({ pair: REF.id, base: REF.base });
     expect(restoredSpec(2).ids).toEqual({ interrupted: 2 });
     expect(cancelledSpec(3).ids).toEqual({ stopped: 3 });
+    expect(downloadedSpec({ saved: 6, icons: 2, skipped: 1, failed: 0, missing: 0, stopped: false, detail: "d" }).ids)
+      .toEqual({ saved: 6, icons: 2, skipped: 1, failed: 0, missing: 0 });
+  });
+
+  it("a download's level follows its outcome: failed or nothing saved is error, missing or stopped is warn", () => {
+    const run = { saved: 6, icons: 2, skipped: 0, failed: 0, missing: 0, stopped: false, detail: "d" };
+    expect(downloadedSpec(run).level).toBe("info");
+    expect(downloadedSpec({ ...run, skipped: 2 }).level).toBe("info"); // skipped icons are reported, not a failure
+    expect(downloadedSpec({ ...run, missing: 1 }).level).toBe("warn");
+    expect(downloadedSpec({ ...run, stopped: true }).level).toBe("warn");
+    expect(downloadedSpec({ ...run, failed: 1 }).level).toBe("error");
+    expect(downloadedSpec({ ...run, saved: 0 }).level).toBe("error");
   });
 
   it("every entry has the feature, a detail line and a level the outcome justifies", () => {

@@ -2475,3 +2475,26 @@ lines, 1 param; RULE 18: `meta.ts` 175 lines.
 * The sentence-break heuristic needs a word of 2+ letters before the
   punctuation, so "plan B. Next" would not be cut — the prompt forbids a
   second sentence anyway; revisit only if the field shows it.
+
+## 2026-10-08 — Download all: the packages of the checked icons, saved to a folder the user picks (`feat(upload)`)
+
+The bulk bar gets `⤓ Download all (N)` (`upload-download-all`). It copies the finished packages of the checked icons into one flat folder that the user picks in the native dialog: SVG and JPG, and EPS only where the package was exported with EPS on. It exports nothing and calls no provider. Each file is read from its package and must match the record's size and `sha256` before it is copied. Names are the package's own stem; a clash moves the whole trio to `_v02`, compared case-insensitively. Nothing is overwritten. The design is `docs/archive/2026-10-08-svg-download-all/design.md` (D1–D14).
+
+### Found while testing (pre-existing, not changed here)
+
+The export record is written to `<folder>/export/export.json`: one file per source folder. SoR §6 says one per icon. Two icons exported from one folder share that file. Within a session the rows keep their own records, so downloads are correct. After a reload or a rescan, only the icon exported last in that folder keeps a record; the others show Stale and are skipped as "changed since export". The fix is a per-icon record name with a migration. It changes the export commit, the scan and the sweep, so it is a separate change. Recorded as a known limit in the design doc §6 and in SoR §2.
+
+### Gates (full run)
+
+`npm run verify`: ALL LANES PASSED (types, lint, quality (changed), tests with coverage, build). 134 files / 1533 tests passed; before this change 132 / 1482. `download.ts`: 100 % statements, branches, functions and lines. `lib/upload` aggregate: 96.59 / 91.15 / 99.68 / 98.79 (statements / branches / functions / lines). Quality gate (changed): `download.ts` 14 fns / 190 lines; `downloadrun.ts` 14 fns / 151 lines; `downloadactions.ts` 10 fns / 102 lines; `actions.ts` 285 lines, the closest file to the 300-line warning line. Lint: 0 errors, 10 warnings, all in files this change does not touch (`App.tsx`, `detect.ts`, `runexport.ts`, `runmetadata.ts`).
+
+### Lessons
+
+* **A stale test has to stale one package, not all.** A global settings change stales every package exported under the old settings. The per-icon override (`overrides[id]`) and a second folder isolate the case. The first version expected one stale icon and got two.
+* **A callback named `…Step`, `…Part` or `…Chunk` trips the gate's anti-gaming name rule.** `onStep` became `onProgress`, which says the same thing.
+* **A download loop must never leave the UI "in flight".** Each icon now runs inside its own guard, and each saved file is counted as it lands. A test injects a hash failure into one icon, and the next icon still lands.
+
+### Known debt carried
+
+* The shared `export.json` (above). The invariant is I-59. I-57 and I-58 are reserved by the design-only keep-alive plan.
+* Sandbox log noise: `ECONNRESET` lines to `router.requesty.ai` come from existing SVG and model-store tests. They are unrelated, and every test passes.

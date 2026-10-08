@@ -3,10 +3,11 @@
 // the two PREVIEW settings (thumbnail zoom and the frame background — one
 // control per decision, RULE 10) with the global Export settings button beside
 // them (the reference puts the tools here, not in the provider card), the live
-// progress line, and the four bulk actions: Apply settings to selected (ONE
-// undoable entry), Metadata selected (confirmed against the exact request
-// first), Export selected, and Cancel while a run is in flight. Every bulk
-// action applies to the SELECTION only.
+// progress line, and the bulk actions: Apply settings to selected (ONE undoable
+// entry), Metadata selected (confirmed against the exact request first), Export
+// selected, Download all (the finished packages into a folder the user picks),
+// and Cancel while a run is in flight. Every bulk action applies to the
+// SELECTION only.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
@@ -20,8 +21,12 @@ export interface UploadBulkBarProps {
   progress: { done: number; total: number } | null;
   runningMeta: number;
   runningExport: number;
+  /** "Download all" runs in flight (Cancel run stops it too). */
+  runningDownload: number;
   /** How many of the checked icons still have no metadata (the paid-call count). */
   metaNeeded: number;
+  /** How many checked icons have a finished package to save (the count on Download all). */
+  downloadReady: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
   onDeselectAll: () => void;
@@ -31,6 +36,7 @@ export interface UploadBulkBarProps {
   onApplySettings: () => void;
   onMetadata: () => void;
   onExport: () => void;
+  onDownload: () => void;
   onCancel: () => void;
 }
 
@@ -61,7 +67,7 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
 
 /** The action half: preview settings, progress, cancel, the four bulk actions. */
 function BulkRight({ p }: { p: UploadBulkBarProps }) {
-  const running = p.runningMeta + p.runningExport;
+  const running = p.runningMeta + p.runningExport + p.runningDownload;
   return (
     <div className="svg-bulk-right" data-testid="upload-bulk-right">
       <PreviewBg bg={p.bg} onBg={p.onBg} />
@@ -85,8 +91,24 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
         ✦ Generate metadata ({p.metaNeeded})</button>
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
+      <DownloadButton p={p} />
     </div>
   );
+}
+
+/** Saves the finished packages of the selection into a folder the user picks. Nothing is exported or sent. */
+function DownloadButton({ p }: { p: UploadBulkBarProps }) {
+  return (
+    <button type="button" className="svg-btn" data-testid="upload-download-all"
+      disabled={p.checkedCount === 0 || p.runningDownload > 0} onClick={p.onDownload}
+      title={downloadTitle(p)}>⤓ Download all ({p.downloadReady})</button>
+  );
+}
+
+function downloadTitle(p: UploadBulkBarProps): string {
+  if (p.checkedCount === 0) return "Select icons first";
+  if (p.downloadReady === 0) return "None of the selected icons has a finished package yet — export them first";
+  return `Save the SVG, JPG and EPS (where exported) of ${p.downloadReady} finished icon(s) to a folder you choose`;
 }
 
 /** The ONE zoom value (display-only — never the output scale, design §2.12). */
@@ -117,13 +139,19 @@ function Progress({ p, running }: { p: UploadBulkBarProps; running: number }) {
       </div>
     );
   }
-  const kind = p.runningMeta > 0 ? "metadata" : "export";
+  const kind = runKindOf(p);
   return (
     <div className="svg-estimate" data-testid="upload-estimate">
       <strong>{kind} {p.progress.done}/{p.progress.total}</strong>
       <span data-testid="upload-progress">{kind} run in flight — finished results are kept</span>
     </div>
   );
+}
+
+/** Which run the progress line describes: metadata first, then a folder download, else the export. */
+function runKindOf(p: UploadBulkBarProps): "metadata" | "download" | "export" {
+  if (p.runningMeta > 0) return "metadata";
+  return p.runningDownload > 0 ? "download" : "export";
 }
 
 /** Presets + one custom colour = ONE decision: the preview frame background. */

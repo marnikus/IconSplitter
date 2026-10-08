@@ -541,6 +541,7 @@ Bulk bar (`upload-bulk`):
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = the selected icons with NO metadata text yet; opens the exact-request confirmation for those (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
 | `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
 | `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
+| `upload-download-all` | button | "⤓ Download all (N)" — N = the checked icons with a finished package (processed or partial, has a record, not stale, not in a run). Copies each one's SVG and JPG, and its EPS only when the package was exported with EPS on, into a folder the user picks; the folder dialog opens only after the guards pass. Never exports, never sends. Disabled at 0 checked or while a download runs; with checked icons but N = 0 it stays enabled and the toast says why, with no dialog |
 
 List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),
 `upload-attention-count` ("N need attention"), `upload-rows` (role `listbox`),
@@ -622,7 +623,7 @@ flight at restart — never resent automatically).
 Status bar (`upload-statusbar`): `upload-status-counts`
 ("N processed · N partial · N failed · N stale"), `upload-status-provider`
 ("Gemini · {model}"), the key state, `upload-status-meta` /
-`upload-status-export` ("… in flight").
+`upload-status-export` / `upload-status-download` ("… in flight").
 
 Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
 settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
