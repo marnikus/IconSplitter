@@ -35,6 +35,41 @@ export function enqueue(queue: readonly QueueItem[], item: QueueItem): QueueItem
   return [...queue, item];
 }
 
+/** The NEXT attempt (2026-10-08): a Regenerate goes first; what waited still waits, in order. */
+export function enqueueFront(queue: readonly QueueItem[], item: QueueItem): QueueItem[] {
+  return [item, ...queue];
+}
+
+/** What a shrunk batch is re-planned to: the caller's request arithmetic and its label. */
+export type Replan = (ids: readonly string[]) => { requests: number; label: string };
+
+/**
+ * One queue never generates the same image twice: the source leaves every
+ * batch that still waits for it (a batch left empty goes), and the survivors
+ * are re-planned — requests AND label — through the caller.
+ */
+export function dropIdFrom(
+  queue: readonly QueueItem[], id: string, replan: Replan,
+): { queue: QueueItem[]; removedFrom: number } {
+  const touched = queue.filter((item) => item.ids.includes(id));
+  const next = queue
+    .map((item) => (item.ids.includes(id) ? shrink(item, id, replan) : item))
+    .filter((item) => item.count > 0);
+  return { queue: next, removedFrom: touched.length };
+}
+
+function shrink(item: QueueItem, id: string, replan: Replan): QueueItem {
+  const ids = item.ids.filter((x) => x !== id);
+  if (ids.length === 0) return { ...item, ids, count: 0 };
+  const planned = replan(ids);
+  return { ...item, ids, count: ids.length, requests: Math.max(1, planned.requests), label: planned.label };
+}
+
+/** Every source that waits in some batch — the rows' "next attempt" flag reads it. */
+export function queuedIds(queue: readonly QueueItem[]): Set<string> {
+  return new Set(queue.flatMap((item) => item.ids));
+}
+
 /** The head (the batch that may start) and the rest, in one step. */
 export function shiftQueue(queue: readonly QueueItem[]): { head: QueueItem | null; rest: QueueItem[] } {
   return { head: queue[0] ?? null, rest: queue.slice(1) };

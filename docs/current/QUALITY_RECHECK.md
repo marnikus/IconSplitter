@@ -2475,3 +2475,54 @@ lines, 1 param; RULE 18: `meta.ts` 175 lines.
 * The sentence-break heuristic needs a word of 2+ letters before the
   punctuation, so "plan B. Next" would not be cut — the prompt forbids a
   second sentence anyway; revisit only if the field shows it.
+
+## 2026-10-08 — Generate SVG: the run outlives the tab, the next attempt, the pinned list (`feat(svg)`)
+
+Four findings on one screen, one cause each (measured, not guessed): a tab
+switch UNMOUNTED `SvgPanel` (the run and its queue died with it); Regenerate
+APPENDED a batch (the bad image came last); a landing SVG re-sorted the list
+(`date` sort on `item-saved`) while the strip and the queue were inserted
+ABOVE it (the header walked away); a waiting source looked like nothing was
+planned for it. Now: the Workbench parks the panel `hidden` and never unmounts
+it (I-57); `SvgRunPopup` on every tab says "N done · M left" from the ONE
+arithmetic in `runtotals.ts`, one count across the whole queue chain; a row's
+Regenerate while busy is the NEXT attempt — first in the queue, no dialog, the
+image removed from every later batch (I-53); the visible order is pinned and
+refreshed only by a scan, a sort or a return to the tab, and the run record
+sits below the list (I-58). Lesson: **a queue the user cannot see is not a
+queue** — the grey "Next attempt" badge is derived from the queue every render,
+so dropping a batch restores nothing because nothing was written.
+
+### Structure work (RULE 3/18/19)
+
+* New files, each one responsibility: `runtotals.ts` (76 lines: totals, line,
+  chain), `RunRecord.tsx` (29), `SvgRunPopup.tsx` (39). `SvgPanel.tsx` gave the
+  strip + queue to `RunRecord` and took `useActivation` (286 lines);
+  `Workbench.tsx` extracted `Panels` when `Shell` hit 31 lines (RULE 16 caught
+  it: `quality_base` went red on the working tree).
+* `enqueueBatch` returns `{ waiting, removedFrom }`; `dropIdFrom` takes one
+  `Replan` callback (requests AND label — the first cut re-planned the count
+  and kept the stale label, the UI test found it). Helpers stay ≤ 4 params.
+* The render-observed tally was abandoned: React batches the hand-over from
+  one run to the next, so the popup never saw run 1's final render. The chain
+  is now a model fact (`model.chain`) written by `drainQueue` from the run
+  summary's outcomes — data, not timing.
+* `batch-start.runId` added because batch ids (`batch_1_1`) repeat per run; a
+  reader keyed on them confused two runs.
+
+### Gates (full run)
+
+`npm run verify`: types, lint (0 errors), quality (changed) GATE PASSED, 133
+files / 1505 tests, coverage (lines 98 %), build — PASS. One full run showed a
+pre-existing teardown flake in `selectionv2_ui` ("window is not defined" from a
+late scheduler tick; that file mounts no Workbench, is green 3× alone and in
+the two other full runs). RULE 16: every new fn ≤ 30 lines, ≤ 4 params; RULE 18:
+largest touched files `runbatch.ts` 298, `SvgPanel.tsx` 286, `actions.ts` 285.
+
+### Known debt carried
+
+* Unchanged from the previous entry.
+* `src/svg/` has 53 files (RULE 18 ideal 5–15 per directory): a grouping
+  into `run/`, `list/`, `ui/` is due but is its own change.
+* The popup does not yet survive a page reload (the queue is session-only by
+  I-53, so there is nothing to count after one).

@@ -1,19 +1,19 @@
 // SvgPanel.tsx — the Generate SVG tab (prompt §1/§2/§17): controls, the honest
-// discovery banners, the live batch strip, the bulk bar, the source list, the
-// status footer, the three dialogs and the toast. The panel owns no rule of
+// discovery banners, the bulk bar, the source list, the run record (strip and
+// queue, below the list), the status footer, the three dialogs and the toast. The panel owns no rule of
 // its own — discovery, pair files, validation, versioning, the run, the lists
 // and the review decision all live in tested modules; this file is the wiring
 // that makes them one screen.
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
-import SvgBatchStrip from "./SvgBatchStrip";
-import SvgQueue from "./SvgQueue";
+import RunRecord from "./RunRecord";
+import SvgRunPopup from "./SvgRunPopup";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
@@ -23,7 +23,13 @@ import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
 import { exclusionSummary } from "./sourcelist";
 
-export default function SvgPanel() {
+/**
+ * `active` (2026-10-08): the Workbench keeps this panel mounted on every tab
+ * and parks it hidden, so a run in flight is never unmounted. Coming back to
+ * the tab refreshes the pinned list order (and rescans when nothing runs) —
+ * the one moment a reorder is deliberate, not a jump under the user's eyes.
+ */
+export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   useSvgHotkeys({
@@ -31,9 +37,11 @@ export default function SvgPanel() {
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,
     decide: g.decide, showCode: g.showCode, dismissDialog: g.dismissDialog,
   });
+  useActivation(active, g);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
+      <SvgRunPopup progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} />
       <Controls g={g} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
@@ -45,6 +53,21 @@ export default function SvgPanel() {
       <Overlay g={g} />
     </div>
   );
+}
+
+/** On every return to the tab (not the first mount, which scans anyway): repin, and rescan when idle. */
+function useActivation(active: boolean, g: SvgGenApi): void {
+  const was = useRef(active);
+  const latest = useRef(g);
+  latest.current = g;
+  useEffect(() => {
+    const back = active && !was.current;
+    was.current = active;
+    if (!back) return;
+    const api = latest.current;
+    api.dispatch({ type: "repin" });
+    if (!api.running && api.rootName !== "") api.rescan();
+  }, [active]);
 }
 
 /** The control block, wired straight from the api — one place to read it. */
@@ -74,8 +97,6 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
   };
   return (
     <>
-      {g.progress !== null && <SvgBatchStrip progress={g.progress} running={g.running} onCancel={g.cancelRun} />}
-      <SvgQueue queue={g.queue} onDrop={g.dropQueued} />
       <SvgBulkBar header={g.header} checkedCount={g.checked.length} requestCount={g.requests} visibleCount={g.visible.length}
         decidableCount={decidableCount(g)} thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
         progress={g.progress} running={g.running}
@@ -83,6 +104,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       <SvgList g={g} actions={actions} />
+      <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
     </>
   );
 }

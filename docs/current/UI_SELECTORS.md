@@ -415,8 +415,14 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-problem-{sourceId}` | text | the row's scan status when a file of a **listed** source needs attention: "Reference missing" / "Unreadable file" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). An unreadable file or a missing reference is a status on the row, never a removal — but a missing **AI image** means there is no row at all (I-31): that source appears in `svg-warn-excluded` instead |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
+`svg-queued-count` ("N next attempt" — rows waiting in a queued batch, I-53),
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved
 source matches these filters."), `svg-footer-summary` (`shownLabel`).
+
+Status badge while a row waits in the queue: `svg-status-{sourceId} .svg-badge`
+reads "Next attempt" with class `queued` (grey); the row's own status is back the
+moment the batch is dropped (I-53). `svg-generate-{sourceId}` while a run is in
+flight queues that source FIRST, with no dialog (idle: the dialog as before).
 
 Queue (waiting batches, I-53): `svg-queue` is absent when nothing waits; otherwise
 `svg-queue-count` ("N queued — they start as soon as the run in flight ends.
@@ -424,6 +430,16 @@ Adding more never interrupts it."), `svg-queue-line-{n}` (1-based, "#n · <first
 file> + N more · N images · N requests") and `svg-queue-drop-{n}` ("× Drop", drops
 exactly that batch — the run in flight is untouched). `svg-confirm-generate` reads
 "Add to queue" while a run is in flight and `svg-confirm-queue-note` explains why.
+
+Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
+BELOW the list; absent when nothing ran and nothing waits.
+
+Run popup (I-57, on EVERY tab, portalled to `<body>`): `svg-run-popup` (class
+`running` while a request is in flight), `svg-run-popup-line` ("Generating · 7
+done · 13 left · 1 failed · request 2 of 5" / "Done · 20 done · 0 left" — one count
+for the whole queue chain), `svg-run-popup-dismiss` (×; the final line stays until
+it is pressed, a new run brings the popup back). Shell: `svg-shell` is the
+Generate SVG tab's parked wrapper (`hidden` on other tabs, never unmounted).
 
 Batch strip (`svg-batch`, the request in flight and every finished request;
 it stays after the run ends so the record is readable): `svg-batch-composite`

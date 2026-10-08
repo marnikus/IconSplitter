@@ -53,8 +53,8 @@ function isItemEvent(event: RunEvent): event is ItemEvent {
 function stageSpecs(event: StageEvent): LogSpec[] {
   switch (event.kind) {
     case "run-start":
-      return [stage("run-start", `starting ${event.batches} request(s), up to ${event.perRequest} icon(s) each`,
-        { batches: event.batches, perRequest: event.perRequest })];
+      return [stage("run-start", `starting ${event.batches} request(s), up to ${event.perRequest} icon(s) each — ${event.images} image(s)`,
+        { batches: event.batches, perRequest: event.perRequest, images: event.images })];
     case "batch-start":
       return [stage("request-start", `request ${event.index} of ${event.batches} — ${event.count} image(s) in a ${event.cols}×${event.rows} grid`,
         { request: event.index, batches: event.batches, images: event.count, grid: `${event.cols}×${event.rows}`, composite: event.hash },
@@ -70,6 +70,7 @@ function stageSpecs(event: StageEvent): LogSpec[] {
 function requestDone(event: Extract<RunEvent, { kind: "batch-done" }>): LogSpec {
   const r = event.report;
   const detail = `request ${r.index} — ${r.saved} saved · ${r.failed} failed · ${r.missing} missing`
+    + ` · ${event.done} of ${event.images} image(s) done`
     + (r.error === null ? "" : ` — ${r.error}`)
     + (r.status === "unknown" ? " · outcome not confirmed; never retried" : "")
     + ` · ${fmtTokens(r.usage.total)} tokens · ${costLabel(r.cost)}`;
@@ -81,7 +82,7 @@ function requestDone(event: Extract<RunEvent, { kind: "batch-done" }>): LogSpec 
     data: {
       request: r.index, images: r.count, saved: r.saved, failed: r.failed, missing: r.missing,
       status: r.status, tokens: r.usage.total, cost: r.usage.cost,
-      elapsedMs: r.elapsedMs, requestId: r.requestId,
+      elapsedMs: r.elapsedMs, requestId: r.requestId, done: event.done, total: event.images,
     },
   };
 }

@@ -59,15 +59,30 @@ function Shell() {
         </div>
       </nav>
       <main className="app-main" data-testid="app-main">
-        {tab === "sheets" && <App />}
-        {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
-        {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
-        {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
-        {tab === "generateSvg" && <div className="svg-shell px-4 py-3"><SvgPanel /></div>}
-        {tab === "upload" && <div className="up-shell px-4 py-3"><UploadPanel /></div>}
+        <Panels tab={tab} />
       </main>
       <LogDock />
     </div>
+  );
+}
+
+/**
+ * The tab area. Every panel mounts when its tab opens — except Generate SVG,
+ * which is kept alive (2026-10-08): a run in flight must survive a tab switch,
+ * so that panel is parked `hidden`, never unmounted.
+ */
+function Panels({ tab }: { tab: AppState["tab"] }) {
+  return (
+    <>
+      {tab === "sheets" && <App />}
+      {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
+      {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
+      {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
+      <div className="svg-shell px-4 py-3" data-testid="svg-shell" hidden={tab !== "generateSvg"}>
+        <SvgPanel active={tab === "generateSvg"} />
+      </div>
+      {tab === "upload" && <div className="up-shell px-4 py-3"><UploadPanel /></div>}
+    </>
   );
 }
 

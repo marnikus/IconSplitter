@@ -12,15 +12,18 @@ import type { PairMeta } from "../lib/pairmeta";
 import type { SvgSource } from "./sources";
 
 export type RunEvent =
-  | { kind: "run-start"; batches: number; perRequest: number }
-  | { kind: "batch-start"; batchId: string; index: number; count: number; batches: number; perRequest: number; cols: number; rows: number; composite: string; hash: string; startedAt: number }
+  /** `images` = the run's image total, so every reader can say "N of M done". */
+  | { kind: "run-start"; batches: number; perRequest: number; images: number }
+  /** `runId` tells one run from the next: batch ids (`batch_1_…`) repeat per run. */
+  | { kind: "batch-start"; runId: string; batchId: string; index: number; count: number; batches: number; perRequest: number; cols: number; rows: number; composite: string; hash: string; startedAt: number; images: number }
   | { kind: "item-start"; batchId: string; position: number; sourceId: string }
   | { kind: "item-saved"; batchId: string; position: number; sourceId: string; version: number; icons: number; warnings: string[]; usage: Usage; meta: PairMeta | null }
   | { kind: "item-failed"; batchId: string; position: number; sourceId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
   /** A retryable failure is about to be retried; the wait happens after this. */
   | { kind: "request-retry"; batchId: string; attempt: number; retries: number; failure: Failure["kind"]; status: number | null; delayMs: number }
   | { kind: "request-failed"; batchId: string; error: string; failure: Failure["kind"]; retryAfterMs: number | null; count: number; requestId: string | null }
-  | { kind: "batch-done"; report: BatchOutcome }
+  /** `done` = images of the run with a confirmed outcome once this request is counted. */
+  | { kind: "batch-done"; report: BatchOutcome; done: number; images: number }
   | { kind: "cancelled" };
 
 export interface RunArgs {
@@ -66,6 +69,8 @@ export interface RunState {
   args: RunArgs;
   /** How many requests this run has, for the progress line. */
   total: number;
+  /** How many images this run carries. */
+  images: number;
   perRequest: number;
   /** The wait really used: the configured stall window raised to the tier floor. */
   stallMs: number;

@@ -30,10 +30,21 @@ export interface SvgRow {
   status: RowStatus;
   error: string | null;
   running: boolean;
+  /**
+   * Waiting in a queued batch (2026-10-08): the badge says "Next attempt" in
+   * grey. Derived from the queue, never stored, so dropping the batch needs no
+   * restore — the row's own `status` is untouched underneath.
+   */
+  queued: boolean;
 }
+
+/** Where a confirmed batch goes: behind what waits (bulk) or first (a row's Regenerate). */
+export type Placement = "front" | "back";
 
 /** Live state of the run: the batch in flight plus every finished request. */
 export interface RunProgress {
+  /** The run this request belongs to — batch ids repeat per run, this does not. */
+  runId: string;
   batchId: string;
   /** 1-based index of the request in flight. */
   index: number;
@@ -51,6 +62,8 @@ export interface RunProgress {
   startedAt: number;
   /** Icons one request was allowed to carry in this run. */
   perRequest: number;
+  /** Images the whole run carries — what "N of M done" counts against. */
+  images: number;
   /** One outcome per finished request, in request order. */
   outcomes: BatchOutcome[];
 }

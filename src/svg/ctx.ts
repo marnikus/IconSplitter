@@ -18,7 +18,7 @@ import { resetNote, resolveModelParams } from "./modelparams";
 import { saveConfig, savePrompt } from "./promptstore";
 import { saveSvgPrefs } from "./prefsstore";
 import { bootSources, scanSources, type ScanSetters } from "./scan";
-import { headerState, toListRow, visibleRows } from "./rowmodel";
+import { headerState, toListRow, visibleRows, withQueued } from "./rowmodel";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { SvgCtx, SvgSetters } from "./actions";
 import type { Discovery } from "./sources";
@@ -164,7 +164,10 @@ function useSvgPersist(model: SvgModel): void {
 
 /** The filtered/sorted view, its totals and the request count, derived only. */
 function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected" | "requests"> {
-  const visible = useMemo(() => visibleRows(model.rows, model.filter, model.sort), [model.rows, model.filter, model.sort]);
+  const visible = useMemo(
+    () => withQueued(visibleRows(model.rows, model.filter, model.sort, model.order), model.queue),
+    [model.rows, model.filter, model.sort, model.order, model.queue],
+  );
   const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const affected = useMemo(() => visible.filter((r) => checked.includes(r.source.id)).map((r) => r.source.id), [visible, checked]);

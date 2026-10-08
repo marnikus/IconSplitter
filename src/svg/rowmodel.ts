@@ -6,10 +6,11 @@
 import { approvedVersion, chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
-import { applySvgFilters, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
+import { ALL_SVG_FILTER, applySvgFilters, pinOrder, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
+import { queuedIds, type QueueItem } from "./runqueue";
 
 /** The newest valid version: what the row previews AND what Copy reads. */
 export interface SvgTarget {
@@ -21,7 +22,7 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
   const versions = meta?.versions ?? [];
   const failed = versions.some((v) => v.status !== "generated");
   const row = withMeta({
-    source, meta, corrupt, running: false, status: "not-generated", error: null,
+    source, meta, corrupt, running: false, status: "not-generated", error: null, queued: false,
     newest: null, preferred: null, approved: null,
   }, meta);
   return {
@@ -103,14 +104,29 @@ function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "
   };
 }
 
-/** Filter + sort a copy of the rows; the caller's array is never reordered. */
-export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort): SvgRow[] {
+/**
+ * Filter + sort a copy of the rows; the caller's array is never reordered. With
+ * an `order` (the pin, lib/svglist `pinOrder`) the sorted result is arranged by
+ * it, so a landing SVG cannot move a row while the user looks at the list.
+ */
+export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, order: readonly string[] = []): SvgRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  return sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort)
-    .flatMap((l) => {
-      const row = byId.get(l.id);
-      return row ? [row] : [];
-    });
+  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort).map((l) => l.id);
+  return pinOrder(order, sorted).flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
+}
+
+/** The rows with their "next attempt" flag: whoever waits in some batch, and is not the one in flight. */
+export function withQueued(rows: SvgRow[], queue: readonly QueueItem[]): SvgRow[] {
+  const waiting = queuedIds(queue);
+  return rows.map((r) => (r.queued === waiting.has(r.source.id) ? r : { ...r, queued: waiting.has(r.source.id) }));
+}
+
+/** Every row's id in the sort's order — what the pin is refreshed from. */
+export function sortedIds(rows: SvgRow[], sort: SvgSort): string[] {
+  return visibleRows(rows, ALL_SVG_FILTER, sort).map((r) => r.source.id);
 }
 
 /** Header checkbox state for the visible rows (indeterminate = some). */

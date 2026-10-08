@@ -79,3 +79,34 @@ describe("the shell", () => {
     expect(q("[data-testid='upload-panel']")).toBeNull();
   });
 });
+
+describe("the Generate SVG tab is kept alive (2026-10-08)", () => {
+  it("mounts the SVG panel once and parks it hidden on other tabs, so a run in flight is never unmounted", async () => {
+    mountWorkbench();
+    await click("[data-testid='tab-generate-svg']");
+    await settle();
+    const parked = q("[data-testid='svg-shell']") as HTMLElement;
+    expect(parked).not.toBeNull();
+    expect(parked.hidden).toBe(false);
+    expect(q("[data-testid='svg-unsupported']")).not.toBeNull(); // this DOM has no File System Access API
+
+    await click("[data-testid='tab-batch']");
+    await settle();
+    expect(getAppState().tab).toBe("batch");
+    expect(q("[data-testid='svg-shell']")).toBe(parked); // the same node: kept, not re-created
+    expect(parked.hidden).toBe(true);
+    expect(q("[data-testid='svg-unsupported']")).not.toBeNull();
+
+    await click("[data-testid='tab-generate-svg']");
+    await settle();
+    expect(q("[data-testid='svg-shell']")).toBe(parked);
+    expect(parked.hidden).toBe(false);
+  });
+
+  it("the other tabs still mount only when open", async () => {
+    mountWorkbench();
+    expect(q("[data-testid='svg-shell']")).not.toBeNull(); // parked from the start
+    expect((q("[data-testid='svg-shell']") as HTMLElement).hidden).toBe(true);
+    expect(q("[data-testid='upload-unsupported']")).toBeNull();
+  });
+});

@@ -15,6 +15,7 @@ export interface SvgListProps {
 
 export default function SvgList({ g, actions }: SvgListProps) {
   const running = g.rows.filter((r) => r.running).length;
+  const queued = g.visible.filter((r) => r.queued && !r.running).length;
   const attention = g.rows.filter((r) => r.status === "failed" || r.corrupt).length;
   return (
     <div className="svg-panel" data-testid="svg-list">
@@ -26,6 +27,7 @@ export default function SvgList({ g, actions }: SvgListProps) {
         </div>
         <div className="svg-attention">
           <span className="running" data-testid="svg-running-count">{running} generating</span>
+          <span className="queued" data-testid="svg-queued-count">{queued} next attempt</span>
           <span className="needs" data-testid="svg-attention-count">{attention} need attention</span>
         </div>
       </header>

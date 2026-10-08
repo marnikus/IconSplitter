@@ -8,7 +8,7 @@
 // fails the test that names the behaviour.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { pairId } from "../src/lib/pairing";
 import { saveApiKey } from "../src/svg/keystore";
@@ -129,6 +129,12 @@ async function pick(id: string): Promise<void> {
 
 /** The requests the provider really received, as the items each one carried. */
 const callsOf = (t: Transport) => t.calls.map((c) => c.items.map((i) => i.split("/").pop()));
+
+afterEach(async () => {
+  // the popup portals into <body>: unmount, or the next test sees this one's
+  if (ui !== undefined) await act(async () => { ui.unmount(); });
+  host?.remove();
+});
 
 beforeEach(async () => {
   await dropDb();
@@ -298,5 +304,168 @@ describe("the generation queue (I-53)", () => {
     expect(txt("[data-testid=svg-queue-line-1]")).toContain("fog_AI.png"); // court was the one dropped
     expect(txt("[data-testid=svg-toast]")).toContain("1 still waiting");
     expect(t.calls).toHaveLength(1);
+  });
+});
+
+describe("the NEXT attempt (2026-10-08): a waiting row says so, and Regenerate jumps the queue", () => {
+  it("a row that waits shows the grey 'Next attempt' badge, the head counts it, and a drop restores the old badge", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    expect(txt(`[data-testid=svg-status-${COURT}]`)).toContain("Not Generated");
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+
+    // the waiting row: badge "Next attempt", class `queued` (grey), nothing on disk changed
+    const badge = q(`[data-testid=svg-status-${COURT}] .svg-badge`) as HTMLElement;
+    expect(badge.textContent).toBe("Next attempt");
+    expect(badge.classList.contains("queued")).toBe(true);
+    expect(txt(`[data-testid=svg-status-${FOG}] .svg-badge`)).toBe("Generating"); // the one in flight is not "next"
+    expect(txt("[data-testid=svg-queued-count]")).toBe("1 next attempt");
+
+    // dropping the batch: the row's own truth is back, nothing had to be restored
+    await click("[data-testid=svg-queue-drop-1]");
+    expect(txt(`[data-testid=svg-status-${COURT}] .svg-badge`)).toBe("Not Generated");
+    expect(txt("[data-testid=svg-queued-count]")).toBe("0 next attempt");
+  });
+
+  it("Regenerate on a row while a run is in flight: no dialog, first in the queue, the run untouched, a later copy removed", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    // two batches wait: court, then fog+court (fog is still in flight)
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await click("[data-testid=svg-generate-selected]");
+    await click("[data-testid=svg-confirm-generate]");
+    expect(txt("[data-testid=svg-queue-count]")).toContain("2 queued");
+    expect(txt("[data-testid=svg-queue-line-2]")).toContain("2 images");
+
+    // the row's own button: straight to the FRONT, no confirmation to click
+    await click(`[data-testid=svg-generate-${COURT}]`);
+    expect(q("[data-testid=svg-confirm]")).toBeNull();
+    expect(txt("[data-testid=svg-queue-line-1]")).toContain("court_AI.png");
+    expect(txt("[data-testid=svg-queue-line-1]")).toContain("1 image");
+    // ...and court left the batches behind it: #2 was court alone → gone; #3 (fog + court) → fog alone
+    expect(txt("[data-testid=svg-queue-line-2]")).toContain("fog_AI.png");
+    expect(txt("[data-testid=svg-queue-line-2]")).toContain("1 image");
+    expect(q("[data-testid=svg-queue-line-3]")).toBeNull();
+    expect(txt("[data-testid=svg-queue-count]")).toContain("2 queued");
+    expect(txt("[data-testid=svg-toast]")).toContain("next attempt");
+    expect(txt("[data-testid=svg-toast]")).toContain("removed from 2 waiting batches");
+    expect(t.calls).toHaveLength(1); // the run in flight was never touched
+    expect(q("[data-testid=svg-cancel-run]")).not.toBeNull();
+
+    // the first answer lands: the FRONT job (court) is what starts next
+    await act(async () => { t.streams[0].push(streamFrames(["architecture/fog_AI.png"])); t.streams[0].close(); });
+    await waitFor(() => t.calls.length === 2, "the next attempt to start");
+    expect(callsOf(t)).toEqual([["fog_AI.png"], ["court_AI.png"]]);
+  });
+
+  it("Regenerate on a row while nothing runs still confirms first (the cost gate is unchanged when idle)", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await click(`[data-testid=svg-generate-${COURT}]`);
+    expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    expect(t.calls).toHaveLength(0);
+  });
+});
+
+describe("the run record (2026-10-08): the strip and the queue sit BELOW the list, so a landing SVG never pushes it down", () => {
+  it("renders the batch strip and the queue after the list, under one 'Run' record", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+
+    const list = q("[data-testid=svg-list]") as HTMLElement;
+    const record = q("[data-testid=svg-run-record]") as HTMLElement;
+    expect(record).not.toBeNull();
+    expect(record.contains(q("[data-testid=svg-batch]"))).toBe(true);
+    expect(record.contains(q("[data-testid=svg-queue]"))).toBe(true);
+    // DOCUMENT_POSITION_FOLLOWING: the record comes after the list in the DOM, and nothing of it is above
+    expect(list.compareDocumentPosition(record) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((q("[data-testid=svg-bulk]") as HTMLElement).compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("the run popup and the kept-alive panel (2026-10-08): the run outlives the tab, the numbers follow the user", () => {
+  const rowIds = () => Array.from(host.querySelectorAll("[data-testid^=svg-row-pair_]")).map((el) => el.getAttribute("data-testid")!.replace("svg-row-", ""));
+  const popup = () => document.querySelector("[data-testid=svg-run-popup]") as HTMLElement | null;
+
+  it("shows the popup from the first request on, keeps the final line until dismissed, and comes back for a new run", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    expect(popup()).toBeNull();
+
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+    expect(popup()?.textContent).toContain("Generating · 0 done · 2 left · request 1 of 1");
+
+    await act(async () => { t.streams[0].push(streamFrames(["architecture/fog_AI.png"])); t.streams[0].close(); });
+    await waitFor(() => t.calls.length === 2, "the queued batch to start");
+    expect(popup()?.textContent).toContain("1 done · 1 left");
+    await act(async () => { t.streams[1].push(streamFrames(["architecture/court_AI.png"])); t.streams[1].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the run to end");
+    expect(popup()?.textContent).toContain("Done · 2 done · 0 left"); // one count for the whole chain; the final line stays…
+
+    await act(async () => { (popup()!.querySelector("[data-testid=svg-run-popup-dismiss]") as HTMLButtonElement).click(); });
+    expect(popup()).toBeNull(); // …until dismissed
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 3, "the new run to leave");
+    expect(popup()?.textContent).toContain("Generating"); // a new run brings it back
+  });
+
+  it("an inactive panel keeps the pinned order while a result lands; activating it refreshes the sort", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await act(async () => {
+      const sel = q("[data-testid=svg-sort]") as HTMLSelectElement;
+      sel.value = "date";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const before = rowIds();
+    expect(before).toHaveLength(2);
+    const last = before[1];
+
+    await pick(last);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the request to leave");
+    // the user went to another tab: the panel stays mounted, only parked
+    await act(async () => { ui.render(<HistoryProvider><Host><SvgPanel active={false} /></Host></HistoryProvider>); });
+    const file = last === COURT ? "architecture/court_AI.png" : "architecture/fog_AI.png";
+    await act(async () => { t.streams[0].push(streamFrames([file])); t.streams[0].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the run to end");
+    expect(rowIds()).toEqual(before); // the newest SVG did NOT jump to the top
+    expect(txt(`[data-testid=svg-status-${last}] .svg-badge`)).toBe("Generated");
+
+    // back on the tab: the date sort is applied once, deliberately, at activation
+    await act(async () => { ui.render(<HistoryProvider><Host><SvgPanel active /></Host></HistoryProvider>); });
+    await settle();
+    expect(rowIds()).toEqual([last, before[0]]);
   });
 });

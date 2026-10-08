@@ -302,7 +302,7 @@ describe("previewTargetOf — one version for the preview and for Copy", () => {
 
   function rowWith(versions: SvgVersion[]): SvgRow {
     const meta: PairMeta = versions.reduce((acc, v) => withVersion(acc, v), pairMetaFor(source, []));
-    return { source, meta, corrupt: false, newest: versions.at(-1) ?? null, preferred: null, approved: null, status: "generated", error: null, running: false };
+    return { source, meta, corrupt: false, newest: versions.at(-1) ?? null, preferred: null, approved: null, status: "generated", error: null, running: false, queued: false };
   }
 
   it("points at the newest valid version's file and number", () => {

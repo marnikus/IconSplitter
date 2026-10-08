@@ -24,9 +24,9 @@ export function onRunEvent(event: RunEvent, s: RunSetters): void {
     // A new request is in flight: its own counters at zero, the finished
     // requests' outcomes kept so the whole run stays visible (RULE 24).
     s.setProgressFn((prev) => ({
-      batchId: event.batchId, index: event.index, batches: event.batches, count: event.count, cols: event.cols,
+      runId: event.runId, batchId: event.batchId, index: event.index, batches: event.batches, count: event.count, cols: event.cols,
       rows: event.rows, composite: event.composite, hash: event.hash, saved: 0, failed: 0, missing: 0,
-      perRequest: event.perRequest, startedAt: event.startedAt, outcomes: prev?.outcomes ?? [],
+      perRequest: event.perRequest, startedAt: event.startedAt, images: event.images, outcomes: prev?.outcomes ?? [],
     }));
   } else if (event.kind === "batch-done") {
     s.setProgressFn((prev) => (prev

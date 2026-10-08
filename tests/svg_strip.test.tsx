@@ -28,7 +28,7 @@ function progress(over: Partial<RunProgress> = {}): RunProgress {
   return {
     batchId: "batch_1_2", index: 1, batches: 1, count: 2, cols: 2, rows: 1,
     composite: "data:,", hash: "h1", saved: 0, failed: 0, missing: 0,
-    perRequest: 2, startedAt: Date.now(), outcomes: [], ...over,
+    runId: "run_1", perRequest: 2, startedAt: Date.now(), images: 2, outcomes: [], ...over,
   };
 }
 

@@ -16,7 +16,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { previewTargetOf, shownVersion, targetPathOf } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
 import { PROBLEM_LABEL, type SvgSource } from "./sources";
-import type { SvgRow } from "./types";
+import type { Placement, SvgRow } from "./types";
 
 export interface SvgRowActions {
   activeId: string | null;
@@ -28,7 +28,7 @@ export interface SvgRowActions {
   rootRef: { current: DirHandleLike | null };
   toggleCheck: (id: string) => void;
   setActive: (id: string) => void;
-  generate: (ids: string[]) => void;
+  generate: (ids: string[], placement?: Placement) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   copyCode: (id: string, version: number) => void;
   showCode: (id: string, version: number) => void;
@@ -91,7 +91,7 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
   return (
     <div className="svg-decision-actions">
       <button type="button" className="svg-btn tiny primary" data-testid={`svg-generate-${id}`}
-        onClick={click(() => a.generate([id]))}>{row.newest ? "Regenerate" : "Generate"}</button>
+        onClick={click(() => a.generate([id], "front"))}>{row.newest ? "Regenerate" : "Generate"}</button>
       <button type="button" className="svg-btn tiny success" data-testid={`svg-approve-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
@@ -145,10 +145,12 @@ function pairFilePathOf(source: SvgSource): string {
 }
 
 /** "." for the root, so a row never shows a stray leading slash. */
+/** The badge: "Next attempt" (grey) while the row waits in the queue, else its own status. */
 function StatusCell({ row }: { row: SvgRow }) {
+  const badge = row.queued && !row.running ? "queued" : row.status;
   return (
     <div className="svg-cell" data-testid={`svg-status-${row.source.id}`}>
-      <span className={`svg-badge ${row.status}`}>{label(row.status)}</span>
+      <span className={`svg-badge ${badge}`}>{badge === "queued" ? "Next attempt" : label(badge)}</span>
       {row.running && <span className="svg-progress-mini" aria-hidden="true"><span /></span>}
       {row.error !== null && <small className="svg-error" title={row.error}>{row.error}</small>}
     </div>

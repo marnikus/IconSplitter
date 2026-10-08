@@ -51,6 +51,19 @@ function inSearch(row: SvgListRow, needle: string): boolean {
   return `${row.name} ${row.relPath} v${row.version} ${row.generation} ${row.review}`.toLowerCase().includes(needle);
 }
 
+/**
+ * The pinned order (2026-10-08): ids that were on screen keep their places,
+ * newcomers follow in their sorted order, ids that are gone go. A result that
+ * lands under "newest first" therefore never moves a row under the cursor; the
+ * caller refreshes the pin on a sort change, a scan or a tab re-activation.
+ */
+export function pinOrder(previous: readonly string[], sorted: readonly string[]): string[] {
+  const present = new Set(sorted);
+  const kept = previous.filter((id) => present.has(id));
+  const seen = new Set(kept);
+  return [...kept, ...sorted.filter((id) => !seen.has(id))];
+}
+
 /** Sorts a copy — the caller's array is never reordered in place. */
 export function sortSvgRows(rows: readonly SvgListRow[], sort: SvgSort): SvgListRow[] {
   const out = [...rows];
