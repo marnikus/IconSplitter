@@ -2073,3 +2073,62 @@ meaning of the settings changed (the artboard no longer implies the JPEG size).
 * Unchanged from the previous entry: §2 field ranges (padding 0–40, stroke
   0.2–8 pt, MP 1–30, quality 0.98), T17/T19/T25/T27/T28, P5–P7, and the
   `docs/README.md` §10 design pointers.
+
+## 2026-10-08 — two plans of record: stock-submission hygiene + environment-setup follow-ups (docs only)
+
+Asked for: "DO NOT CODE HERE ONLY DOC FIRST AND IMPLEMENTATION STEPS PLANNING.
+then push." So this change adds two design docs, their `docs/README.md` rows and
+this entry. **No `src/`, `tools/` or config file changed.**
+
+What the plans decide:
+
+* `archive/2026-10-08-stock-hygiene/design.md` — the user's five stock-reviewer
+  findings reproduced against the REAL pipeline (`prepareExportSvg` →
+  `optimizeSvg` → `enforceExportSvg` → `embedMetadataInSvg`), plus feature 7
+  (a user-chosen stroke colour). Three findings changed shape under test:
+  hoisting `xmlns:dc` to the root with `setAttribute` does NOT stop
+  `XMLSerializer` from re-declaring it inline (so the block must be built as
+  text), a root-declared pair is currently REFUSED by `verifyExportSvg` — which
+  `exportvalidate.svgCheck` runs on the file that ships — and SVGO with the
+  recorded config DELETES the contents of a root-declared DC block, so the
+  embed-after-optimize order becomes invariant I-58. The `2.806`-class numbers
+  have two causes: `normalizeStrokes` dividing by the artboard scale, and SVGO
+  4.1.0 emitting `2.6376399999999998` when it folds a group transform into a
+  live stroke (`floatPrecision: 3` is not applied to that product). Decisions
+  D-1…D-7, invariants I-57…I-62, the TDD list and a nine-step order are in the
+  doc; the only change that alters the artwork (whole-px stroke rounding) is
+  opt-in and lands last.
+* `archive/2026-10-08-env-setup-followups/design.md` — the 2026-10-07 O1–O11
+  items re-verified: O1/O2/O3/O5/O7/O8/O9/O11 and the devcontainer are in place
+  (`npm ci` = `added 280 packages in 6s`), while **O10's CI workflow is still
+  only staged** (`.github/` does not exist) and **O4 is undone and the docs
+  grew** (SOR 137,187 B / 1,886 ln, QUALITY_RECHECK 126,947 B / 2,075 ln).
+  New and measured: `pool: "vmThreads"` takes the suite 82.21 s → 33.37 s with
+  the same 1376 passing tests, `--no-isolate` is rejected (86 failures / 25
+  files), and the coverage lane is unaffected (88.20 s → 85.78 s) — so the win
+  is the TDD loop and `verify --full`'s standalone lane, not `verify:fast`.
+  `knip`'s long-standing sandbox failure now has a root cause: oxc-parser
+  allocates a 2 GiB raw-transfer buffer per core (`BLOCK_SIZE = 2147483632`) on
+  a 3,940 MB sandbox.
+
+### Gates (run for this docs-only change)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| types | ✅ | `npx tsc --noEmit` clean |
+| lint | ✅ | 0 errors, 9 legacy warnings (incl. `src/upload/runmetadata.ts:84` complexity 11) |
+| quality gate | ✅ | `GATE PASSED` — no `src/` file changed, so the size gate honestly reports `(none)`; the shallow-clone hint printed as designed |
+| tests | ✅ | **128 files / 1376 tests** passed, 82.21 s (unchanged — no code) |
+| coverage | ✅ | statements 95.74 %, branches 89.27 %, functions 96.82 %, lines 97.75 % |
+| build | ✅ | `dist/index.html` 1,485.05 kB (gzip 426.35 kB), 5.35 s |
+
+RULE 16/18 note: RULE 18's 60–200-line ideal governs `docs/current` CONTEXT
+files; archive design docs are not context files (`AGENTS.md` §2 forbids
+reading `docs/archive/**` as context), and these two sit at the length of the
+2026-10-07 plan they continue. `docs/current` grew by this entry only — the
+E4 split that would shrink it is planned, not done.
+
+Known debt carried: O4 (SOR split + ledger archive), O10 CI install (owner,
+needs `workflows: write`), knip, the jscpd baseline (33 clones / 365 lines
+today vs 12 recorded last entry), `AGENTS.md` §1's stale 124/1320/75 s, SOR §2's
+stale settings ranges, and `design/Arena setup analyze/` (33 MB tracked).

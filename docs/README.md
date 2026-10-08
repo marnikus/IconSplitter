@@ -45,6 +45,8 @@ doc itself, never in this map.
 | `archive/2026-10-07-svg-to-upload/design.md` | SVG to upload (design of record): discovery through the pair sidecars, settings, the Gemini metadata prompt, SVG/JPEG/EPS pipelines, per-icon `export.json`, job model, no automatic uploading |
 | `archive/2026-10-07-svg-to-upload-merge/ADR.md` | The three-branch "SVG to upload" merge: P0 adjudications before any donor file moved, the phase plan and its exit gates |
 | `archive/2026-10-07-env-setup-performance/design.md` | Environment-setup performance: re-verified findings, the O1–O11 decisions (O4 deferred), TDD plan for `tools/verify.mjs` + shallow-safe `quality.mjs` |
+| `archive/2026-10-08-stock-hygiene/design.md` | Plan only: stock-reviewer findings on the export SVG reproduced against the real pipeline (namespace hoisting, stroke-width noise, root px size, title punctuation, background rect) + the user-chosen stroke colour; decisions D-1…D-7, invariants I-57…I-62, TDD and step order |
+| `archive/2026-10-08-env-setup-followups/design.md` | Plan only: the 2026-10-07 env-setup items re-verified (O10 CI still staged, O4 undone), the measured `vmThreads` win (82.2 s → 33.4 s, `--no-isolate` rejected), knip's 2 GiB buffer root cause, doc drift |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 
