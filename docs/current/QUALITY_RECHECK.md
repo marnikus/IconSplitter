@@ -2572,3 +2572,10 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * User correction: the clean pass must not cut a second sentence. `cleanPhrase` now keeps the whole text; `sentenceCase` extracted (per-sentence first letter up) so the function stays ≤ 30 lines; `SENTENCE_BREAK` narrowed to `.`/`!`/`?` (a `;`/ellipsis no longer starts a "sentence" and so no longer capitalises the next word); `CAPITALISED` allows trailing punctuation so `Empathy.` lowers like `Empathy`.
 * RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED; `npm run verify` ALL LANES PASSED. RULE 18: no size change of note (`meta.ts` +6 lines).
 * Also in this commit: `tests/quality_base.test.ts` "shallow-clone honesty" expected the fetch hint whenever the repo is shallow; after a `git fetch` a shallow sandbox DOES have a merge-base with `origin/main`, so the gate (correctly) prints none. The test now expects the hint only when shallow AND no merge-base — the tool is unchanged.
+
+## 2026-10-08 — feat(upload): EPS converter drop list + Inkscape CLI (I-59…I-61)
+
+* RULE 16: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings); `npm run quality:changed` GATE PASSED. New `src/lib/upload/epsconvert/` 7 files (9–72 lines). `takeConvertedEps` first failed params 5/4 → domain object. `runexport.ts` 297, `export.ts` 294, `settings.ts` 260, `UploadSettingsDialog.tsx` 273 — all under 300.
+* RULE 18: converter module 7 cohesive files; functions 4–20 except dialog rows already in that file. No dummy splits.
+* Tests: catalog/id, settings fingerprint, Inkscape argv, dispatcher + fake host, generic verify, abort, export.json writer, runexport inkscape/partial, loopback host, helper contract, drop-list UI. `npm run verify:fast` ALL LANES PASSED (141 files / 1546 tests + 1 skipped).
+* Known: Inkscape in the browser needs `node tools/inkscape-host.mjs` on 127.0.0.1:7788; without it the converter is unavailable (I-60), never a silent builtin fallback.

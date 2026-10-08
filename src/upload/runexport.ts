@@ -11,6 +11,7 @@
 import { probePath, tryGetFile, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions } from "../lib/upload/jpeg";
 import type { RasterDeps } from "../lib/upload/raster";
+import type { CliHost } from "../lib/upload/epsconvert/types";
 import type { OptimizeRecord } from "../lib/upload/optimize";
 import { buildArtifacts, StageError, type Artifacts } from "./exportstages";
 import { validateArtifacts } from "./exportvalidate";
@@ -46,6 +47,7 @@ export interface ExportRunResult {
 export interface ExportRunDeps {
   raster?: RasterDeps;
   now?: () => string;
+  cli?: CliHost;
 }
 
 export interface ExportRunArgs {
@@ -127,7 +129,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
     const art = await buildArtifacts(plan.plan, {
       root: args.root, sourceText: plan.sourceText, exportDir: plan.exportDir, stem: plan.stem,
       settings: args.settings, metadata: args.metadata, raster: args.deps?.raster,
-      now: args.deps?.now?.() ?? new Date().toISOString(),
+      cli: args.deps?.cli, signal: args.signal, now: args.deps?.now?.() ?? new Date().toISOString(),
     });
     checkCancel(args.signal);
     const validation = validateArtifacts(art, metadata);
@@ -172,6 +174,8 @@ async function assembleRecord(args: ExportRunArgs, plan: PlanFor, art: Artifacts
   });
   record.outputs = args.record?.outputs ?? record.outputs;
   record.tools.eps.fixes = art.epsFixes;
+  if (art.epsWriter !== "") record.tools.eps.writer = art.epsWriter;
+  if (art.epsEngine !== undefined) record.tools.eps.engine = art.epsEngine;
   record.jpeg = jpegBlock(art, args.settings.jpegQuality, args.record?.jpeg);
   record.metadata = metadataBlockOf(args);
   return record;
@@ -236,6 +240,7 @@ function commitInput(args: ExportRunArgs, plan: PlanFor, payload: CommitPayload)
     epsFailure: payload.art.epsFailure,
     validation: payload.validation,
     now: args.deps?.now?.() ?? new Date().toISOString(),
+    epsProfile: payload.art.epsProfile,
   };
 }
 

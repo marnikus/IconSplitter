@@ -81,16 +81,48 @@ function dscString(value: string): string {
   return value.replace(/[\\()]/g, (ch) => `\\${ch}`).replace(/\s+/g, " ");
 }
 
+export type EpsProfile = "eps10" | "generic";
+
 /** Verifies an EPS 10 document: header, the DSC markers, bounding box, %%EOF. */
 export function verifyEps(eps: string): EpsVerification {
+  return verifyEpsDocument(eps, "eps10");
+}
+
+/** Profile-aware verify (D6): builtin is EPS 10; Inkscape/Cairo is generic. */
+export function verifyEpsDocument(eps: string, profile: EpsProfile): EpsVerification {
   const errors: string[] = [];
+  const box = collectVerifyErrors(eps, profile, errors);
+  return { ok: errors.length === 0, errors, boundingBox: box };
+}
+
+function collectVerifyErrors(eps: string, profile: EpsProfile, errors: string[]): EpsBoundingBox | null {
+  checkProfileHeader(eps, profile, errors);
+  const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
+  if (m === null) errors.push("missing or malformed %%BoundingBox");
+  if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");
+  if (profile === "generic") checkGenericBody(eps, errors);
+  return m === null ? null : { llx: +m[1], lly: +m[2], urx: +m[3], ury: +m[4] };
+}
+
+function checkProfileHeader(eps: string, profile: EpsProfile, errors: string[]): void {
+  if (profile === "generic") checkGenericHeader(eps, errors);
+  else checkEps10(eps, errors);
+}
+
+function checkEps10(eps: string, errors: string[]): void {
   if (!eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")) errors.push("missing %!PS-Adobe-3.0 EPSF-3.0 header");
   for (const marker of EPS10_MARKERS) {
     if (!eps.includes(marker)) errors.push(`missing ${marker.replace(/:$/, "")}`);
   }
-  const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
-  if (m === null) errors.push("missing or malformed %%BoundingBox");
-  if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");
-  const box = m === null ? null : { llx: +m[1], lly: +m[2], urx: +m[3], ury: +m[4] };
-  return { ok: errors.length === 0, errors, boundingBox: box };
+}
+
+function checkGenericHeader(eps: string, errors: string[]): void {
+  const line = eps.split("\n")[0] ?? "";
+  if (!line.startsWith("%!PS-Adobe-") || !line.includes("EPSF")) errors.push("missing EPSF header");
+}
+
+/** Generic EPS must have a non-comment body (Cairo's operators), not just DSC. */
+function checkGenericBody(eps: string, errors: string[]): void {
+  const body = eps.split("\n").filter((line) => line !== "" && !line.startsWith("%"));
+  if (body.length === 0) errors.push("empty EPS body");
 }

@@ -610,7 +610,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("10 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("11 fields overridden");
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");

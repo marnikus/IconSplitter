@@ -341,7 +341,9 @@ opt-in class as Generate SVG → Requesty; design
   under `strokePx`), stroke
   colour — one hex, `#000000` by default (2026-10-08), or the artwork's own,
   JPEG target MP, JPEG quality, SVGO
-  optimize on, optional EPS, artboard) plus per-icon overrides; the effective
+  optimize on, optional EPS (and which converter writes it — `epsConverter`:
+  `builtin` / `inkscape`, drop list `upload-set-eps-converter`, default
+  builtin), artboard) plus per-icon overrides; the effective
   settings are defaults under,
   overrides on top, and the settings dialog marks every field inherited or
   overridden. "Apply settings to selected" pins the current defaults onto the
@@ -936,6 +938,16 @@ Batch:
   fails this is excluded **with its reason** and reported (banner + audit + log);
   it is never silently dropped and never offered for generation. The judgement
   lives in one pure module (`svg/sourcelist.ts`), not inside the scan.
+* **I-59 (EPS converter, RULE 10/22):** the committed EPS was produced by the
+  catalog id on the effective settings (`epsConverter`); `tools.eps.writer`
+  equals that id's writer (`builtin-subset-1` / `inkscape-cli`). A builtin file
+  never claims `inkscape-cli`.
+* **I-60 (Inkscape host optional, RULE 4/9):** no helper / no binary → Inkscape
+  is *unavailable*, never *broken*. SVG/JPEG still commit. An Inkscape-selected
+  EPS stage that cannot run fails closed with that reason → `partial`.
+* **I-61 (loopback only, RULE 20):** the browser host talks only to `127.0.0.1`
+  (or an injected test double). SVG bytes are never POSTed to any other origin
+  by this feature.
 * **I-32 (identity, RULE 6/24):** one normalized AI path is one row, whatever
   the row index, the split folder or how many decision records name it; rows are
   ordered by normalized path, so a reload or a repeated rescan yields
@@ -1019,7 +1031,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 | The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
-| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: bake, viewBox-only root, optional background rect, stroke width written verbatim + colour restyle, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
+| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/epsdoc.ts`, `src/lib/upload/epsconvert/` (`catalog`, `id`, `convert`, `inkscape`, `inkscapeargv`, `host`, `types`), `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: bake, viewBox-only root, optional background rect, stroke width written verbatim + colour restyle, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
 | Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
 | Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset), the framed SVG preview |
 
@@ -1448,7 +1460,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   editable/copiable fields `upload-meta-{title,description,tags}-*` +
   `upload-copy-{title,description,tags}-*` + `upload-meta-{state,usage,detail,
   validation,accept,regen,gen}-*`), the settings dialog (`upload-dialog-*`,
-  `upload-set-{padding,stroke,mp,quality,optimize,eps}`,
+  `upload-set-{padding,stroke,mp,quality,optimize,eps,eps-converter,eps-converter-state}`,
   `upload-set-bg-{transparent,white,black,gray,green,red,custom}`,
   `upload-set-bg-value`,
   `upload-set-stroke-color-{artwork,white,black,gray,green,red,custom}`,
@@ -2049,15 +2061,19 @@ answers `400` from the provider.
   `dedupeTags` in `lib/upload/meta.ts` feeds BOTH `parseMetadata` and the tags
   edit path, so a pasted list with repeats becomes one clean list before the
   policy ever looks at it.
-* **EPS 10 after the SVG is optimized** (point 2): the EPS stage runs on the
-  CLEANED/optimized export SVG and writes an **EPS 10 /
-  Illustrator-10-compatible** document — `%!PS-Adobe-3.0 EPSF-3.0`, the DSC
-  order `%%Creator` → `%%Title` (the `${stem}.eps` name, DSC-escaped) →
-  `%%CreationDate` (the run's clock) → `%%BoundingBox` (integer) →
-  `%%HiResBoundingBox` (exact points) → `%%DocumentData: Clean7Bit` →
-  `%%LanguageLevel: 3`, then EndComments/Prolog/Setup sections, the uprighting
-  CTM and `%%EOF`. `verifyEps` requires those three markers, so a file that
-  lost them is `partial`, never shipped as EPS 10.
+* **EPS after the SVG is optimized** (point 2): the EPS stage runs on the
+  CLEANED/optimized export SVG. **Which converter** is `epsConverter` (I-59):
+  `builtin` (default) writes an **EPS 10 / Illustrator-10-compatible** document
+  — `%!PS-Adobe-3.0 EPSF-3.0`, the DSC order `%%Creator` → `%%Title` (the
+  `${stem}.eps` name, DSC-escaped) → `%%CreationDate` (the run's clock) →
+  `%%BoundingBox` (integer) → `%%HiResBoundingBox` (exact points) →
+  `%%DocumentData: Clean7Bit` → `%%LanguageLevel: 3`, then EndComments/Prolog/Setup
+  sections, the uprighting CTM and `%%EOF`. `verifyEps` / `verifyEpsDocument(…,
+  "eps10")` requires those three markers, so a file that lost them is `partial`,
+  never shipped as EPS 10. **`inkscape`** sends the same SVG to a loopback
+  helper (`tools/inkscape-host.mjs`, `127.0.0.1:7788`, I-61) and verifies
+  **generic** EPS (EPSF header + BoundingBox + EOF + non-empty body). Helper
+  down → unavailable (I-60), never a silent builtin fallback.
 * **Two global buttons** (points 3 + 4), both acting on the checked rows:
   * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts the selected
     icons that have NO metadata text yet (a draft is not re-requested); rows

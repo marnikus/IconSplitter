@@ -53,7 +53,7 @@ doc itself, never in this map.
 | `archive/2026-10-08-upload-download-all/design.md` | SVG to upload — "Download all": the selection's committed SVG/JPG/EPS copied into one user-picked folder (planner, never-overwrite, verified copy, one result line) |
 | `archive/2026-10-08-svg-queue-keepalive/design.md` | Design (implemented the same day — I-53 rewrite, I-57, I-58): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
 | `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
-| `archive/2026-10-08-eps-converters/design.md` | SVG to upload — EPS converter drop list (`builtin` / `inkscape`) and the Inkscape CLI framework (argv, CliHost, loopback helper); TDD plan, I-59…I-61 proposed. Doc-only until the steps land |
+| `archive/2026-10-08-eps-converters/design.md` | SVG to upload — EPS converter drop list (`builtin` / `inkscape`) and the Inkscape CLI framework (argv, CliHost, loopback helper); I-59…I-61 |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

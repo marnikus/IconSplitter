@@ -6,14 +6,19 @@
 // lib/upload/settings. The shared row plumbing lives in settingsfield.tsx, the
 // two paint rows (background, stroke colour) in UploadPaintSettings.tsx.
 
+import { useEffect, useState } from "react";
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
   clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
   type Artboard, type UploadSettings,
 } from "../lib/upload/settings";
-import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
+import { Marker, change, changeMany, type SettingsFieldProps, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
+import { EPS_CONVERTERS, converterOf } from "../lib/upload/epsconvert/catalog";
+import { readConverter } from "../lib/upload/epsconvert/id";
+import { loopbackHost } from "../lib/upload/epsconvert/host";
+import type { CliHost, ConverterId, ProbeResult } from "../lib/upload/epsconvert/types";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -73,6 +78,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
         hint="a genuine EPS for the documented subset; anything else fails that stage honestly" />
+      <ConverterSetting p={p} effective={effective} />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
@@ -94,6 +100,41 @@ function NumberSetting({ p, effective, field, label, testid, min, max, step, cla
       <small className="up-hint">{hint}</small>
     </label>
   );
+}
+
+function ConverterSetting({ p, effective }: SettingsFieldProps) {
+  const probe = useConverterProbe(effective.includeEps, p.cli);
+  const on = effective.includeEps;
+  return (
+    <label className="svg-field up-set-field">
+      <span className="svg-label">EPS converter<Marker p={p} field="epsConverter" testid="eps-converter" /></span>
+      <select className="svg-input" data-testid="upload-set-eps-converter" aria-label="EPS converter"
+        disabled={!on} value={effective.epsConverter}
+        onChange={(e) => change(p, "epsConverter", readConverter(e.target.value))}>
+        {EPS_CONVERTERS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+      </select>
+      <small className="up-hint" data-testid="upload-set-eps-converter-state">{converterState(on, effective.epsConverter, probe)}</small>
+    </label>
+  );
+}
+
+function useConverterProbe(includeEps: boolean, cli?: CliHost): ProbeResult | null {
+  const [probe, setProbe] = useState<ProbeResult | null>(null);
+  useEffect(() => {
+    if (!includeEps) { setProbe(null); return; }
+    let live = true;
+    void (cli ?? loopbackHost()).probe("inkscape").then((result) => { if (live) setProbe(result); });
+    return () => { live = false; };
+  }, [includeEps, cli]);
+  return probe;
+}
+
+function converterState(on: boolean, id: ConverterId, probe: ProbeResult | null): string {
+  if (!on) return "idle";
+  const info = converterOf(id);
+  if (!info.needsHost) return `ready · ${info.label}`;
+  if (probe === null) return info.hint;
+  return probe.ok ? `ready · ${probe.version ?? "Inkscape"}` : `unavailable · ${probe.reason}`;
 }
 
 /** One boolean setting: one checkbox, one decision (RULE 10). */

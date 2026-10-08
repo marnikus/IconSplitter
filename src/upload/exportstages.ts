@@ -8,7 +8,11 @@ import { pinnedDimensions, targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
 import { optimizeSvg, recordAfterClean, type OptimizeRecord } from "../lib/upload/optimize";
 import { embedMetadataInSvg } from "../lib/upload/embed";
-import { writeEps } from "../lib/upload/eps";
+import { convertSvgToEps } from "../lib/upload/epsconvert/convert";
+import { converterOf } from "../lib/upload/epsconvert/catalog";
+import { unavailableHost } from "../lib/upload/epsconvert/host";
+import type { CliHost } from "../lib/upload/epsconvert/types";
+import { verifyEpsDocument, type EpsProfile } from "../lib/upload/epsdoc";
 import { artboardSize, flattenColor, type UploadSettings } from "../lib/upload/settings";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { DirHandleLike } from "../lib/fs";
@@ -36,6 +40,9 @@ export interface Artifacts {
   epsFailure: string | null;
   /** What the EPS writer adjusted on its own — reported, never asked (2026-10-08). */
   epsFixes: string[];
+  epsWriter: string;
+  epsEngine?: string;
+  epsProfile: EpsProfile;
 }
 
 export interface StageContext {
@@ -48,6 +55,8 @@ export interface StageContext {
   raster?: RasterDeps;
   /** The run's clock, written into the EPS 10 `%%CreationDate` (never invented). */
   now?: string;
+  cli?: CliHost;
+  signal?: AbortSignal;
 }
 
 /** prepare → optimize → embed → render → eps, per the plan's rebuild flags. */
@@ -55,13 +64,14 @@ export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promis
   const art: Artifacts = {
     prepared: null, optimizedSvg: null, optimizeRecord: null,
     svgOut: null, jpeg: null, jpegRecord: null, epsText: null, epsFailure: null, epsFixes: [],
+    epsWriter: "", epsProfile: "eps10",
   };
   const needSvgText = plan.rebuild.svg || plan.rebuild.eps;
   const needRender = plan.rebuild.jpg && plan.stages.includes("render");
   if (needSvgText || needRender) await buildSvgText(art, ctx);
   if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx.metadata);
   if (plan.rebuild.jpg) await buildJpegArtifact(plan, ctx, art);
-  if (plan.rebuild.eps) buildEps(art, ctx);
+  if (plan.rebuild.eps) await buildEps(art, ctx);
   return art;
 }
 
@@ -97,14 +107,30 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
  * has no alpha, so opacity mixes onto the flatten colour (white when the
  * background is transparent) — no background shape is painted either way.
  */
-function buildEps(art: Artifacts, ctx: StageContext): void {
-  const eps = writeEps(art.optimizedSvg as string, flattenColor(ctx.settings.background), {
-    title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
-  });
-  if (eps.ok) {
-    art.epsText = eps.eps;
-    art.epsFixes = eps.fixes;
-  } else art.epsFailure = eps.reason; // honest: the EPS stage failed → partial
+async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
+  const id = ctx.settings.epsConverter ?? "builtin";
+  const info = converterOf(id);
+  art.epsWriter = info.writer;
+  art.epsProfile = info.verifyProfile;
+  const result = await convertSvgToEps(id, {
+    svgText: art.optimizedSvg as string,
+    background: flattenColor(ctx.settings.background),
+    opts: { title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }) },
+    signal: ctx.signal,
+  }, ctx.cli ?? unavailableHost);
+  art.epsWriter = result.writer;
+  if (!result.ok) { art.epsFailure = result.reason; return; }
+  takeConvertedEps(art, { eps: result.eps, fixes: result.fixes, engine: result.engine, profile: info.verifyProfile });
+}
+
+interface ConvertedEps { eps: string; fixes: string[]; engine?: string; profile: EpsProfile }
+
+function takeConvertedEps(art: Artifacts, converted: ConvertedEps): void {
+  const verified = verifyEpsDocument(converted.eps, converted.profile);
+  if (!verified.ok) { art.epsFailure = verified.errors.join("; "); return; }
+  art.epsText = converted.eps;
+  art.epsFixes = converted.fixes;
+  if (converted.engine !== undefined) art.epsEngine = converted.engine;
 }
 
 /** A fresh render, or the committed JPEG re-embedded (metadata edit only). */

@@ -97,6 +97,23 @@ describe("the export record — schema v1 round-trip", () => {
     expect(parseExportRecord(JSON.parse(serializeExportRecord(r)))).toEqual(r);
   });
 
+  it("the EPS writer follows the settings converter (I-59)", () => {
+    expect(record().tools.eps.writer).toBe("builtin-subset-1");
+    const built = newExportRecord({
+      pair: { id: "pair_abc", base: "fog", suffix: "", dir: "cat/split_01" },
+      source: { svgPath: "cat/split_01/fog_AI.svg", version: 2, approval: "approved", fingerprint: "sha256:aaa" },
+      settings: {
+        defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {},
+        effective: { ...DEFAULT_UPLOAD_SETTINGS, epsConverter: "inkscape" },
+        fingerprint: settingsFingerprint({ ...DEFAULT_UPLOAD_SETTINGS, epsConverter: "inkscape" }),
+      },
+      svgo: SVGO_OFF,
+      epsEnabled: true,
+    });
+    expect(built.tools.eps.writer).toBe("inkscape-cli");
+    expect(parseExportRecord(JSON.parse(serializeExportRecord(built)))).toEqual(built);
+  });
+
   it("a fresh record is discovered with nothing rendered or committed", () => {
     const r = record();
     expect(r.v).toBe(1);

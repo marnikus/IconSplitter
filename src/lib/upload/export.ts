@@ -9,6 +9,7 @@ import type { UploadSettings, SettingsOverrides } from "./settings";
 import type { IconMetadata, MetadataValidation } from "./meta";
 import type { GeminiUsage } from "./gemini";
 import type { OptimizeRecord } from "./optimize";
+import { writerOf } from "./epsconvert/catalog";
 
 export const EXPORT_RECORD_VERSION = 1;
 
@@ -76,8 +77,8 @@ export interface ExportRecord {
   jpeg: { width: number; height: number; megapixels: number; quality: number; profile: string };
   tools: {
     svgo: OptimizeRecord;
-    /** `fixes`: what the EPS writer adjusted on its own (2026-10-08) — absent on pre-fix packages. */
-    eps: { enabled: boolean; writer: string; fixes?: string[] };
+    /** `fixes`: what the EPS writer adjusted on its own (2026-10-08) — absent on pre-fix packages. `engine`: Inkscape version when writer is inkscape-cli. */
+    eps: { enabled: boolean; writer: string; fixes?: string[]; engine?: string };
   };
   metadata: {
     state: "pending" | "generated" | "invalid" | "accepted";
@@ -120,7 +121,7 @@ export function newExportRecord(args: NewRecordArgs): ExportRecord {
     source: args.source,
     settings: args.settings,
     jpeg: { width: 0, height: 0, megapixels: 0, quality: args.settings.effective.jpegQuality, profile: "baseline" },
-    tools: { svgo: args.svgo, eps: { enabled: args.epsEnabled, writer: "builtin-subset-1", fixes: [] } },
+    tools: { svgo: args.svgo, eps: { enabled: args.epsEnabled, writer: writerOf(args.settings.effective.epsConverter ?? "builtin"), fixes: [] } },
     metadata: null,
     outputs: { svg: null, jpg: null, eps: null },
     stage: "discovered",

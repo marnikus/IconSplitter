@@ -8,7 +8,7 @@
 import { readEmbeddedMetadata } from "../lib/upload/embed";
 import { verifyExportSvg } from "../lib/upload/clean";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
-import { verifyEps } from "../lib/upload/eps";
+import { verifyEpsDocument, type EpsProfile } from "../lib/upload/epsdoc";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { CommitValidation } from "./exportcommit";
 import type { Artifacts } from "./exportstages";
@@ -24,7 +24,7 @@ export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null)
     svg: svgCheck(art.svgOut, errors),
     readback: readbackCheck(art.svgOut, metadata, errors),
     jpeg: jpegCheck(art, metadata, errors),
-    eps: epsCheck(art.epsText, errors),
+    eps: epsCheck(art.epsText, art.epsProfile, errors),
     json: true,
     errors,
   };
@@ -60,9 +60,9 @@ function jpegCheck(art: Artifacts, metadata: IconMetadata | null, errors: string
   return jpegErrors.length === 0;
 }
 
-function epsCheck(epsText: string | null, errors: string[]): boolean {
+function epsCheck(epsText: string | null, profile: EpsProfile, errors: string[]): boolean {
   if (epsText === null) return true;
-  const ok = verifyEps(epsText).ok;
+  const ok = verifyEpsDocument(epsText, profile).ok;
   if (!ok) errors.push("the EPS does not verify");
   return ok;
 }

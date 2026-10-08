@@ -15,6 +15,8 @@ import { normalizeHex } from "../svgbackground";
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
+import { readConverter } from "./epsconvert/id";
+import type { ConverterId } from "./epsconvert/types";
 
 export {
   ARTBOARD_MAX, ARTBOARD_MAX_PIXELS, ARTBOARD_MIN, ARTBOARD_PRESETS, CONTENT_ARTBOARD,
@@ -42,6 +44,8 @@ export interface UploadSettings {
   optimizeSvg: boolean;
   /** Also write a genuine EPS (default off). */
   includeEps: boolean;
+  /** Which converter writes the EPS when includeEps is on (I-59). */
+  epsConverter: ConverterId;
   /** The artboard the export is built at: content-hugging, or an exact px size. */
   artboard: Artboard;
   /**
@@ -85,6 +89,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
   includeEps: false,
+  epsConverter: "builtin",
   artboard: { ...CONTENT_ARTBOARD },
   jpegMatchArtboard: true,
 };
@@ -138,6 +143,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
     includeEps: raw.includeEps === true,
+    epsConverter: readConverter(raw.epsConverter),
     artboard: clampArtboard(raw.artboard),
     jpegMatchArtboard: raw.jpegMatchArtboard !== false,
   };
@@ -151,6 +157,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   readFlags(raw, out);
   readPaints(raw, out);
   readArtboard(raw, out);
+  readConverterField(raw, out);
   return out;
 }
 
@@ -190,6 +197,11 @@ function readPaints(raw: Record<string, unknown>, out: SettingsOverrides): void 
 }
 
 /** The artboard is stored only when it really pins something (content ≠ an override). */
+function readConverterField(raw: Record<string, unknown>, out: SettingsOverrides): void {
+  const value = raw.epsConverter;
+  if (value === "builtin" || value === "inkscape") out.epsConverter = value;
+}
+
 function readArtboard(raw: Record<string, unknown>, out: SettingsOverrides): void {
   const value = raw.artboard;
   if (isRecord(value) && value.mode !== "content") out.artboard = clampArtboard(value);
@@ -213,7 +225,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
  */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
-  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
+  "optimizeSvg", "includeEps", "epsConverter", "artboard", "jpegMatchArtboard",
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
@@ -235,7 +247,7 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
     round3(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
-    round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
+    round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps, s.epsConverter,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
   ]);

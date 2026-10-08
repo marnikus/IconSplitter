@@ -593,7 +593,10 @@ Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
 change; `upload-set-stroke` is "Stroke width (px)" since 2026-10-08 — the
 number typed is the number written in the file, and the row cell reads
-`2 px`), `upload-set-{optimize,eps}` (checkboxes), the background
+`2 px`), `upload-set-{optimize,eps}` (checkboxes), `upload-set-eps-converter`
+(`<select>` of catalog ids, disabled while EPS is off),
+`upload-set-eps-converter-state` (`idle` / `ready · …` / `unavailable · …`),
+`upload-set-marker-eps-converter`, the background
 (`upload-set-bg-transparent` — the default, a checkerboard swatch —
 `upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
 `upload-set-bg-value`, which reads `transparent` or the hex), the stroke

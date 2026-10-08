@@ -35,6 +35,7 @@ describe("defaults and clamps", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
       paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000",
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
+      epsConverter: "builtin",
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
     });
@@ -209,6 +210,16 @@ describe("fingerprint and equality", () => {
     expect(settingsFingerprint({ ...DEFAULT_UPLOAD_SETTINGS })).toBe(a);
     expect(settingsFingerprint(changed({ paddingPct: 9 }))).not.toBe(a);
     expect(settingsFingerprint(changed({ includeEps: true }))).not.toBe(a);
+    expect(settingsFingerprint(changed({ epsConverter: "inkscape" }))).not.toBe(a);
+  });
+
+  it("epsConverter defaults to builtin; junk normalizes; overrides pin a valid id", () => {
+    expect(DEFAULT_UPLOAD_SETTINGS.epsConverter).toBe("builtin");
+    expect(SETTINGS_FIELDS).toContain("epsConverter");
+    expect(normalizeSettings({ epsConverter: "inkscape" }).epsConverter).toBe("inkscape");
+    expect(normalizeSettings({ epsConverter: "ghostscript" }).epsConverter).toBe("builtin");
+    expect(parseOverrides({ epsConverter: "inkscape" })).toEqual({ epsConverter: "inkscape" });
+    expect(parseOverrides({ epsConverter: "ghostscript" })).toEqual({});
   });
 
   it("settingsEqual compares by value, not identity", () => {

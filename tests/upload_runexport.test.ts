@@ -652,4 +652,32 @@ describe("runExport — EPS success and atomic leftovers", () => {
     expect(result.stages).toEqual([]); // nothing to do — the tmp is not an output
     expect((exportDir.children.get(`${ART}.svg.tmp`) as FakeFile)?.text).toBe("junk"); // untouched, harmless
   });
+
+  it("Inkscape CLI commits the host body as inkscape-cli (I-59)", async () => {
+    const cairo = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n0 0 0 setrgbcolor fill\n%%EOF\n";
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true, epsConverter: "inkscape" };
+    const cli = {
+      probe: async () => ({ ok: true, reason: "ready", version: "Inkscape 1.3.2" }),
+      runInkscape: async () => ({ ok: true as const, eps: cairo, version: "Inkscape 1.3.2", argv: [] }),
+    };
+    const root = pairRoot();
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886), cli } }));
+    expect(result.status).toBe("processed");
+    expect(fileText(root, `${DIR}/export/${ART}.eps`)).toBe(cairo);
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, writer: "inkscape-cli", engine: "Inkscape 1.3.2" });
+    expect(readRecord(root).outputs.svg).not.toBeNull();
+    expect(readRecord(root).outputs.jpg).not.toBeNull();
+  });
+
+  it("Inkscape unavailable fails the EPS stage only → partial (I-60)", async () => {
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true, epsConverter: "inkscape" };
+    const root = pairRoot();
+    const result = await runExport(args(root, { settings, defaults: settings }));
+    expect(result.status).toBe("partial");
+    expect(result.error?.detail).toMatch(/Inkscape/i);
+    expect(dirAt(root, `${DIR}/export`).children.get(`${ART}.eps`)).toBeUndefined();
+    expect(readRecord(root).outputs.svg).not.toBeNull();
+    expect(readRecord(root).outputs.jpg).not.toBeNull();
+    expect(readRecord(root).tools.eps.writer).toBe("inkscape-cli");
+  });
 });

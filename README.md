@@ -34,8 +34,9 @@ It has six modes (tabs across the top):
 * **SVG to upload** — takes the chosen, approved SVG version of each icon and
   builds its upload-ready package beside the sources: fitted artboard with the
   chosen background and stroke width, conceptual metadata from the model,
-  SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
-  `export.json`. Nothing is uploaded to any website by the app. Also
+  SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS (built-in EPS 10 writer,
+  or local Inkscape via `node tools/inkscape-host.mjs` on 127.0.0.1:7788) and a
+  per-icon `export.json`. Nothing is uploaded to any website by the app. Also
   Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles

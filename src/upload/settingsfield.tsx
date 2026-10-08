@@ -6,6 +6,7 @@
 // rows (UploadPaintSettings) cannot drift apart.
 
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
+import type { CliHost } from "../lib/upload/epsconvert/types";
 
 export interface UploadSettingsDialogProps {
   /** null = the global defaults; else the icon's file name. */
@@ -19,6 +20,8 @@ export interface UploadSettingsDialogProps {
   onOverride: (id: string, patch: SettingsOverrides) => void;
   onResetOverride: (id: string) => void;
   onClose: () => void;
+  /** Optional Inkscape probe (defaults to the loopback helper). */
+  cli?: CliHost;
 }
 
 /** What one field row needs: the dialog props and the effective settings. */
