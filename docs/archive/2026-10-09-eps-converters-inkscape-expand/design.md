@@ -1,6 +1,10 @@
 # EPS converters drop list · Inkscape CLI helper · Expand strokes to fills
 
-Date: 2026-10-09 · Area: SVG to upload (export pipeline) · Status: DESIGN — no code yet
+Date: 2026-10-09 · Area: SVG to upload (export pipeline) · Status: DESIGN — confirmed by the user 2026-10-09, no code yet
+
+**Confirmed answers (2026-10-09):** Q1 local helper = **yes**; Q3 expansion engine v1 = **built-in geometry**
+(Inkscape-side union stays a phase-2 option); Q4 dashed strokes = **must expand in v1** (arc-length dash splitting is in scope);
+Q5 Inkscape = **not installed yet** (the "not found" path is a first-class state in the UI and README, and tests run on a fake binary).
 
 ## 1. What the user asked for
 
@@ -143,9 +147,15 @@ For every `strokeHits` entry that is a shape, visibly stroked (`!none`, width > 
    `unifyStrokes` then finds nothing stroked → the root carries no stroke properties (the existing clean rules already accept fill-only files).
 8. **Numbers**: 3 decimals via the model's writer (`outlineToPathData`).
 
-Honest refusals (RULE 4 — named, never guessed), reported as a `prepare` failure `unsupported: …`:
-`stroke-dasharray` on an expanded stroke (**phase 1**; phase 2 splits dashes by arc length), a stroke paint that is a
-`url(#…)` reference (the fill would reference a gradient the EPS subset refuses anyway — refused up front so the SVG and EPS agree).
+**Dashes (v1, confirmed)** — `stroke-dasharray` / `stroke-dashoffset` on an expanded stroke: the subpath is cut by arc length into
+dash pieces BEFORE step 3, each piece an open subpath that gets the pen's caps (SVG semantics: caps on every dash). Arc length of a
+cubic comes from adaptive subdivision to `TOL` (the same splitter as the offset), so a dash boundary inside a curve is a real split
+point of that cubic (de Casteljau at the found `t`), never a chord. Odd-length arrays repeat (SVG), all-zero arrays = solid, a negative
+value is a refusal by name. A closed dashed subpath opens at its dash phase like the browser renders it.
+
+Honest refusals (RULE 4 — named, never guessed), reported as a `prepare` failure `unsupported: …`: a stroke paint that is a
+`url(#…)` reference (the fill would reference a gradient the EPS subset refuses anyway — refused up front so the SVG and EPS agree),
+a negative dash value, a dashed stroke whose pattern period is < `TOL` (would explode into thousands of pieces).
 
 Known, documented property: at sharp inner corners the pivot leaves small self-overlapping regions inside the fill — they render
 identically under nonzero and are what every non-boolean expander produces; a true union needs a boolean engine
@@ -176,6 +186,8 @@ Pre-batch probe: when ANY row in the batch resolves to `inkscape` and the probe 
 | `src/lib/upload/geom/expand/pen.ts` | new | `Pen`, `Side`, vector helpers (`normal`, `tangentAt`, `cross`), cap/join enums | ~110 |
 | `src/lib/upload/geom/expand/offset.ts` | new | line + cubic offsetting (Tiller–Hanson, error check, recursive split) | ~150 |
 | `src/lib/upload/geom/expand/joins.ts` | new | outer joins (miter/bevel/round arcs), inner pivot, caps | ~150 |
+| `src/lib/upload/geom/expand/arclen.ts` | new | cubic arc length + `splitAt(length)` by adaptive subdivision (de Casteljau) | ~110 |
+| `src/lib/upload/geom/expand/dash.ts` | new | dash pattern normalisation (repeat, offset, all-zero), subpath → dash pieces | ~120 |
 | `src/lib/upload/geom/expand/assemble.ts` | new | subpath split, open/closed assembly, dot case → `Outline` | ~130 |
 | `src/lib/upload/expand.ts` | new | the DOM pass: hits → outline → pen → path element; vetoes; counts | ~120 |
 | `src/lib/upload/prepare.ts` | edit | call `expandStrokes(root)` between restyle and unify; `PrepareResult.strokesExpanded` | +12 |
@@ -194,7 +206,7 @@ Pre-batch probe: when ANY row in the batch resolves to `inkscape` and the probe 
 | `run_inkscape_bridge.bat`, `run_app_inkscape.bat` | new | start helper / start helper + open app through it | — |
 | `src/index.css` | edit | `.up-helper-state` ok/warn colours | +4 |
 
-Directory cohesion (RULE 18): `geom/expand/` is a new 4-file module (changes together); `epsconv/` a 5-file module;
+Directory cohesion (RULE 18): `geom/expand/` is a new 6-file module (changes together); `epsconv/` a 5-file module;
 `src/lib/upload/geom/` stays at 11 files; `src/lib/upload/` grows by 1 (`expand.ts`).
 
 ## 5. TDD steps (each step: red tests → code → `npx tsc --noEmit` · `npm run lint` · `npm run quality:changed`)
@@ -241,6 +253,10 @@ Commits are per feature so each lands green on its own: **A** (registry + settin
     with `stroke-miterlimit:1` → bevel; round join → one ≤ 90° arc; a closed square stroke → TWO subpaths, shoelace area = outer − inner exactly;
     a circle (four cubics) stroked width 2 → area within 0.1 % of π((r+1)²−(r−1)²) and every sampled boundary point at distance 1 ± 0.01 from the centre line;
     an S-curve offset → sampled offset error ≤ 0.01; a zero-length subpath → dot / square / nothing by cap.
+13b. `tests/upload_expand_dash.test.ts` — arc length of a line and of a quarter circle (≈ πr/2 within 1e-4); `splitAt` returns two cubics
+    whose end/start meet and whose lengths add up; pattern `[4 2]` on a 10-long line → pieces `[0,4]`,`[6,10]`; odd `[3]` → `[3 3]`;
+    `dashoffset` shifts the phase; all-zero → solid; negative → refused by name; a closed dashed square opens at its phase and every piece
+    is capped (round cap → two cubics on each piece); a dashed stroke's expanded area = Σ piece lengths × width (butt caps) within 0.1 %.
 14. `tests/upload_expand.test.ts` (the DOM pass, real `prepareExportSvg`) — `expandStrokes:true` → no `stroke`, `stroke-width`, `stroke-linecap/-linejoin` anywhere;
     the new `<path>` has `fill` = the former stroke paint and sits right after its original; `fill="none"` originals are gone; a filled+stroked rect keeps its fill shape;
     `stroke-opacity` → `fill-opacity`; dash → `unsupported: a dashed stroke under Expand strokes`; `url(#g)` stroke → refused by name;
@@ -277,3 +293,13 @@ Commits are per feature so each lands green on its own: **A** (registry + settin
 * **Q4 — Dashed strokes under expansion**: refuse by name in v1 (phase 2 splits dashes), or must dashes expand in v1?
 * **Q5 — Inkscape version on your machine** (`inkscape --version`), and is it on `PATH` or in `C:\Program Files\Inkscape\bin\`?
   The discovery order covers both; knowing the version pins the fake used in tests.
+
+### Answers (2026-10-09)
+
+| Q | Answer | Effect on the plan |
+|---|---|---|
+| Q1 | local helper: yes | D2 as written; `run_inkscape_bridge.bat` + `run_app_inkscape.bat` |
+| Q2 | (not asked separately) two entries in v1 | registry takes more; no third converter now |
+| Q3 | built-in geometry in v1 | `/expand/svg` stays phase 2; D4 unchanged |
+| Q4 | dashes MUST expand in v1 | `arclen.ts` + `dash.ts` added to C; step 13b added; the dash refusal is gone (only negative values / sub-TOL periods refuse) |
+| Q5 | Inkscape not installed yet | the drop list's `inkscape` entry must read "helper running, Inkscape not found — install Inkscape 1.x (inkscape.org) or set INKSCAPE_PATH" as a normal state (RULE 4: empty ≠ broken); README gets an install paragraph; the test fake pins **1.3.2** (current stable) |
