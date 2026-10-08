@@ -13,14 +13,14 @@ export function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
   const saveKey = useCallback((value: string) => {
     void (async () => {
       const c = latest.current;
+      // An empty field is a slip, not a deletion: it never touches the stored
+      // key, and the toast says how to really clear one. Never throws.
+      const outcome = await saveApiKey(value);
+      if (outcome === "empty") return c.say("Type the key first — an empty field does not erase the stored one", true);
       const trimmed = value.trim();
-      // Never throws, and reports whether the write really persisted — a
-      // silent failure here is what made the Save button look broken.
-      const stored = await saveApiKey(trimmed);
-      c.refs.key.current = trimmed === "" ? null : trimmed;
-      c.dispatch({ type: "key", key: c.refs.key.current });
-      if (trimmed === "") c.say("API key cleared from this device");
-      else if (stored) c.say("API key stored on this device only");
+      c.refs.key.current = trimmed;
+      c.dispatch({ type: "key", key: trimmed, source: outcome });
+      if (outcome === "device") c.say("API key stored on this device only");
       else c.say("API key kept for this session only — browser storage refused it", true);
     })();
   }, []);
@@ -29,7 +29,7 @@ export function useKeyActions(ctx: SvgCtx): Slice<"saveKey" | "forgetKey"> {
       const c = latest.current;
       await clearApiKey();
       c.refs.key.current = null;
-      c.dispatch({ type: "key", key: null });
+      c.dispatch({ type: "key", key: null, source: "none" });
       c.say("API key cleared from this device");
     })();
   }, []);

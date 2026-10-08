@@ -3,6 +3,7 @@
 // that change it, and a table-driven reducer. Pure data + a pure reducer keeps
 // the rules testable without a DOM and keeps the hook itself tiny.
 
+import type { KeySource } from "../lib/keyvault";
 import { useReducer, type Dispatch } from "react";
 import type { SvgConfig } from "../lib/svgconfig";
 import {
@@ -43,6 +44,8 @@ export interface SvgModel {
   /** Masked key for display; the key itself lives in svg/keystore. */
   keyMask: string;
   keySet: boolean;
+  /** Where the key in hand came from: the device, this session, or nowhere. */
+  keySource: KeySource;
   /** Bumped by every pick and scan so a preview cannot outlive its folder. */
   rootToken: number;
   thumb: number;
@@ -72,7 +75,7 @@ export type SvgAction =
   | { type: "catalog"; catalog: CatalogModel[] | null }
   | { type: "param-note"; note: string | null }
   | { type: "prompt"; prompt: string }
-  | { type: "key"; key: string | null }
+  | { type: "key"; key: string | null; source?: KeySource }
   | { type: "root-token" }
   | { type: "thumb"; px: number }
   | { type: "provider-open"; open: boolean }
@@ -99,7 +102,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   catalog: (m, a) => ({ ...m, catalog: (a as { catalog: CatalogModel[] | null }).catalog }),
   "param-note": (m, a) => ({ ...m, paramNote: (a as { note: string | null }).note }),
   prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
-  key: (m, a) => keyModel(m, (a as { key: string | null }).key),
+  key: (m, a) => keyModel(m, (a as { key: string | null }).key, (a as { source?: KeySource }).source),
   "root-token": (m) => ({ ...m, rootToken: m.rootToken + 1 }),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
@@ -117,8 +120,15 @@ export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
   return HANDLERS[action.type](model, action);
 }
 
-function keyModel(model: SvgModel, key: string | null): SvgModel {
-  return { ...model, keySet: key !== null, keyMask: key ? mask(key) : "not set" };
+/**
+ * The key's display state. `keySource` travels WITH the key: a key that came
+ * from the session (storage refused the write) or a store that could not be
+ * read must never look like the ordinary "secured locally" case, and a failed
+ * read must never look like "no key yet".
+ */
+function keyModel(model: SvgModel, key: string | null, source?: KeySource): SvgModel {
+  const from = source ?? (key === null ? "none" : "device");
+  return { ...model, keySet: key !== null, keyMask: key ? mask(key) : "not set", keySource: from };
 }
 
 /** Masks the middle of a key; the key itself never enters the model. */
@@ -139,7 +149,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, keyMask: "not set", keySet: false, rootToken: 0,
+    prompt, keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
     filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false, queue: [],
   };

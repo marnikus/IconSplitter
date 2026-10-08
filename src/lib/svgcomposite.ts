@@ -23,6 +23,26 @@ export interface CompositeLayout {
   empty: number[];
 }
 
+/** What one sheet cell is made of: the source's identity and its revision. */
+export interface SheetSource {
+  id: string;
+  /** `size:mtime` of the source file when the sheet was drawn. */
+  fingerprint: string;
+}
+
+/**
+ * The identity of a contact sheet: the page label PLUS every source it draws,
+ * in the order it draws them, with each source's fingerprint. A page label
+ * alone repeats between selections (both single-icon plans are `batch_1_1`),
+ * so a cache keyed by it would serve one selection's sheet for another's — the
+ * preview would show the first icon the dialog ever built, not the one the
+ * request will carry.
+ */
+export function compositeSheetKey(planId: string, sources: readonly SheetSource[]): string {
+  const parts = sources.map((s) => `${s.id}:${s.fingerprint}`);
+  return `${planId}|${parts.join("|")}`;
+}
+
 export interface CompositeOpts {
   /** Cell side in px before padding; the canvas is cell * max(cols, rows). */
   cell?: number;

@@ -11,7 +11,7 @@ import { clampImagesPerRequest } from "../lib/svgconfig";
 import { usageTotals } from "../lib/svglist";
 import { useAppState } from "../state/useAppState";
 import { useHistory } from "../state/HistoryProvider";
-import { loadApiKey } from "./keystore";
+import { readApiKey } from "./keystore";
 import { isStale, loadCatalog, refreshCatalog } from "./catalog";
 import { loadParamMap, paramsFor, saveParamMap, withParams } from "./paramstore";
 import { resetNote, resolveModelParams } from "./modelparams";
@@ -57,20 +57,28 @@ function useSay(dispatch: Dispatch<SvgAction>): (msg: string, err?: boolean) => 
 }
 
 /** The setters a scan writes through, plus the two bridges the boot needs. */
+/**
+ * The key's ORIGIN travels with it: "the store could not be read" must not be
+ * shown as "no API key yet", or the user re-pastes a key the app already has.
+ */
+function useKeyRefresh(refs: SvgRefs, dispatch: Dispatch<SvgAction>): () => void {
+  return useCallback(() => {
+    void readApiKey()
+      .then((read) => {
+        refs.key.current = read.key;
+        dispatch({ type: "key", key: read.key, source: read.source });
+      })
+      .catch(() => dispatch({ type: "key", key: null, source: "unreadable" }));
+  }, [dispatch, refs]);
+}
+
 function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx["say"]): SvgSetters {
   const setters = useRef<ScanSetters | null>(null);
   const loadAll = useCallback(() => {
     const target = setters.current;
     if (target !== null) void scanSources(refs, target);
   }, [refs]);
-  const refreshKey = useCallback(() => {
-    void loadApiKey()
-      .then((key) => {
-        refs.key.current = key;
-        dispatch({ type: "key", key });
-      })
-      .catch(() => dispatch({ type: "key", key: null }));
-  }, [dispatch, refs]);
+  const refreshKey = useKeyRefresh(refs, dispatch);
   // Every writer is memoised on [dispatch]: an unstable one would re-run the
   // boot effect on every render (RULE 24).
   const setRootName = useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]);

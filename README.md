@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has five modes (tabs across the top):
+It has six modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -31,10 +31,19 @@ It has five modes (tabs across the top):
   pair's approval: no separate global metadata file exists). Nothing is
   uploaded anywhere else and the key never leaves the browser. Also Chrome/Edge
   only.
+* **SVG to upload** — takes the chosen, approved SVG version of each icon and
+  builds its upload-ready package beside the sources: fitted artboard with the
+  chosen background and stroke width, conceptual metadata from the model,
+  SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
+  `export.json`. Nothing is uploaded to any website by the app. Also
+  Chrome/Edge only.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
 modern browser — no server, no Python, no installation required.
+
+> **AI agents** working in this repository: read [`AGENTS.md`](AGENTS.md) first —
+> pinned environment, exact commands, what to read per task, hard limits.
 
 ---
 
@@ -42,8 +51,8 @@ modern browser — no server, no Python, no installation required.
 
 | Tool | Version | Where to get it |
 |------|---------|-----------------|
-| [Node.js](https://nodejs.org/) (LTS) | 20.19+ or 22.12+ | https://nodejs.org/ |
-| npm | comes bundled with Node.js | — |
+| [Node.js](https://nodejs.org/) (LTS) | **22.12.0** pinned in `.nvmrc` (20.19+ or 22.12+ supported, enforced by `.npmrc`) | https://nodejs.org/ |
+| npm | 10+ (`packageManager` in `package.json`) | comes bundled with Node.js |
 | A modern browser | Chrome / Edge / Firefox | batch mode needs Chrome or Edge |
 | [PyCharm](https://www.jetbrains.com/pycharm/) (optional) | any recent version | only needed if you want to edit the code |
 
@@ -58,7 +67,7 @@ Double-click these files in the project folder, in order:
 
 | File | What it does |
 |------|--------------|
-| `install_dependencies.bat` | Checks that Node.js is present and runs `npm install` |
+| `install_dependencies.bat` | Checks that Node.js is present and runs `npm ci` (clean install from `package-lock.json`) |
 | `run_app.bat` | Builds the app and **opens it in your default browser** as a standalone browser app (no server needed) |
 | `run_dev_server.bat` | Starts the live-reload dev server at http://localhost:5173/ and opens the browser (use this while editing code; press `Ctrl+C` in the window to stop) |
 
@@ -79,8 +88,9 @@ that one file anywhere and open it directly in a browser.
 From the project root:
 
 ```bash
-# 1. Install dependencies (creates node_modules/)
-npm install
+# 1. Install dependencies from the lockfile (creates node_modules/)
+npm ci
+# (or `npm run setup` = npm ci --prefer-offline --no-audit --no-fund)
 
 # 2a. Run as a browser app (production build, no server)
 npm run build
@@ -102,7 +112,7 @@ npm run dev
 2. **Install dependencies** — open PyCharm's built-in terminal
    (*View → Tool Windows → Terminal*) and run:
    ```bash
-   npm install
+   npm ci
    ```
    (Or simply run `install_dependencies.bat` from Explorer once.)
 3. **Run the app** — pick one of these:
@@ -220,9 +230,12 @@ complexity, testing, docs and behaviour gates, adopted from the sister project
 `Process-Images-in-Areana`). Before every push run the verification lanes:
 
 ```bash
-npm run verify        # types + lint + quality gate + tests + coverage + build
-npm run hooks:install # optional: enforce it automatically via a pre-push hook
+npm run verify:fast   # every commit: types + lint + gate + one suite run + build
+npm run verify        # before push: adds the standalone test lane (what the hook runs)
+npm run hooks:install # optional: enforce the full gate automatically via a pre-push hook
 ```
+
+Both run through `tools/verify.mjs` (node — no bash needed on Windows).
 
 Current behaviour and invariants are documented in
 [`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md); the
@@ -248,9 +261,11 @@ IconSplitter/
 │   │                        # statefile, presets, output plan, batchsplit
 │   └── lib/render.ts        # Cropping / resizing / export logic
 ├── tests/                   # Vitest — real detect/render/batch logic (RULE 8)
-├── tools/                   # RULE 16 quality gate + pre-push check
+├── tools/                   # RULE 16 quality gate + cross-platform verify runner
 ├── docs/                    # Rules + verification docs (see docs/README.md)
-├── install_dependencies.bat # Windows: npm install
+├── design/                  # UI handoff templates (SPEC.md contract: design/README.md)
+├── AGENTS.md                # AI-agent bootstrap: pins, commands, reading protocol
+├── install_dependencies.bat # Windows: npm ci
 ├── run_app.bat              # Windows: build + open in browser
 └── run_dev_server.bat       # Windows: live-reload dev server
 ```

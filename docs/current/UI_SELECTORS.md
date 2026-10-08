@@ -107,6 +107,8 @@ doc in the same change (RULE 17).
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
 | `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
 | `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` (template design, §N) |
+| `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` (§P) |
+| `tab-upload` | `SVG to upload` | mounts `UploadPanel` (§R), after Generate SVG |
 
 Semantic fallback: button role + visible text.
 
@@ -352,9 +354,10 @@ Prompt + provider card:
 | `svg-timeout` | `input[type=number]` | the **stall window** in **seconds**, 5–900, default 120: the longest silence between bytes; there is no total-duration limit. Clamped at the moment of change; the tier floor can raise the effective window, which `svg-limits` and `svg-confirm-timeout` then show |
 | `svg-retries` | `input[type=number]` | retries per request, 0–5, default 2, for failures the provider **confirmed**; a stall is never retried — its outcome is unknown |
 | `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
-| `svg-key-state` | button | masked key ("Key saved" / "No key yet"); opens the editor |
-| `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap |
-| `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"` |
+| `svg-key-state` | button | masked key, with the honest state AND its origin: "API key secured locally" / "API key kept for this session only" / "Storage could not be read" / "No API key yet"; opens the editor |
+| `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap. The note states what a reload does: a device key says "local only · excluded from Git · logs · exports"; a key storage refused says "browser storage refused it — paste again after a reload"; an unreadable store says "this device's storage is unreadable here (private mode?)" |
+| `svg-key-forget` | button | shown only while a key is in hand; deletes the stored key from this device (the one deliberate way to clear it) |
+| `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"`; `svg-key-save` is `disabled` while the field is empty (an empty Save never erases the stored key) |
 
 The provider card (`svg-provider-card`) is **minimizable**: `svg-provider-toggle`
 is a link in the header with `aria-expanded` and `aria-label`
@@ -401,7 +404,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>` in the same `svg-thumb` square box, `object-fit: contain`); missing → placeholder of the same size |
 | `svg-prev-{sourceId}` | inline preview | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
-| `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | reveal the AI image, copy the SVG path |
+| `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
 | `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
@@ -472,3 +475,155 @@ save failure),
 `svg-status-totals` (visible tokens + cost, "—" when unknown),
 `svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
 through the global bar handles `hist-undo` / `hist-redo` (§O).
+
+## R. SVG to upload — `src/upload/*` (verified 2026-10-07)
+
+Source: `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`,
+`UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`,
+`UploadPreview.tsx`, `UploadPanel.tsx`. The panel root carries both `svg` and
+`up` classes, so the whole Generate SVG look applies; `.up-*` CSS adds the row
+grammar with the expandable metadata detail, the package-status badge colours
+and the settings dialog's inherited/overridden markers.
+
+Source bar (always rendered — `upload-open-folder` is the one way in;
+`upload-root-empty` / `upload-unsupported` are the two empty states):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `upload-open-folder` | green `Open folder` button | the shared control (I-44), offered whether or not a root is loaded; `upload-root-empty`'s button is `upload-open-folder-empty` |
+| `upload-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar (I-46) |
+| `upload-rescan` | `↻ Rescan` | re-walks the root (busy label while scanning) |
+| `upload-scope-copy` | text | "Approved SVGs only · recursive · N icons" |
+| `upload-audit` | text | the scan's one audit line: rows · SVG files · pairs not listed · corrupt pair files |
+| `upload-count-{icons,processed,partial,failed,stale}` | counter chips | live counts; a failed run counts even with record null |
+
+Metadata prompt panel (`upload-prompt-panel`, its own section beside the Gemini
+card — never inside it) and the provider card:
+
+| `upload-prompt-copy` | text | "Metadata prompt · saved locally · default/custom" |
+| `upload-prompt-reset` | link | restores the documented default prompt |
+| `upload-prompt` | `textarea` | the EDITABLE prompt the one confirmed request carries and the export record names |
+| `upload-prompt-note` | note | stored locally · the validator still enforces the default prompt's rules |
+| `upload-preset-list` | `select` | saved prompt presets ("Pick a saved prompt (N saved)") |
+| `upload-preset-quick-load` / `upload-preset-delete` | buttons | act on the picked preset; disabled until one is picked |
+| `upload-preset-name` / `upload-preset-save` | input + button | Save as: a named snapshot of exactly the editor's text |
+| `upload-settings-open` | button | opens the global-defaults settings dialog — it lives in the bulk bar BESIDE THE ZOOM controls (`upload-bulk-right`) |
+| `upload-bulk-right` | container | the bulk bar's action half: preview background, zoom, export settings, progress, the bulk actions |
+| `upload-provider-card` | card | minimizable via `upload-provider-toggle` (`aria-expanded`) |
+| `upload-provider` / `upload-limits` | text | "Gemini · metadata generation" / "{timeout}s timeout · N retries · N parallel" |
+| `upload-provider-grid` | grid | Model, Endpoint (full-width row), Timeout, Retries, Parallel — one contained grid |
+| `upload-model` / `upload-endpoint` | `input` | the model id (verified default `gemini-3.1-flash-lite`) and the base URL |
+| `upload-provider-check` | row | the model check: `upload-model-check` + `upload-model-state` |
+| `upload-model-check` | `button` | asks the provider's own model list; never substitutes the configured id |
+| `upload-model-state` | `p[data-state]` | the check's one line: `idle` / `checking` / `found` / `missing` / `failed` |
+| `upload-timeout` / `upload-retries` / `upload-concurrency` | `input[type=number]` | clamped at the moment of change (5–900 s, 0–5, 1–8) |
+| `upload-key-state` | button | masked key, with the honest state AND its origin: "Gemini API key secured locally" / "Gemini key kept for this session only" / "Storage could not be read" / "No Gemini API key yet"; opens the editor |
+| `upload-key-mask` / `upload-key-note` | rows of `upload-key-state` | the masked key above "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports"; a session-only key says "browser storage refused it — paste again after a reload", an unreadable store says "this device's storage is unreadable here (private mode?)" |
+| `upload-key-forget` | button | shown only while a key is in hand; deletes the stored key from this device (the one deliberate way to clear it) |
+| `upload-key-input` / `upload-key-save` / `upload-key-cancel` | editor | `input[type=password]`, `aria-label="Gemini API key"`; `upload-key-save` is `disabled` while the field is empty (an empty Save never erases the stored key) |
+| `upload-provider-note` | note | endpoint · the key travels in the `x-goog-api-key` header only · each icon's image is sent only inside the one request you confirm · nothing is ever uploaded automatically |
+
+Filters: `upload-filter-status` (all / processed / partial / failed / cancelled /
+stale / not exported), `upload-filter-metadata` (all / empty / generating /
+generated / invalid / accepted / interrupted), `upload-sort` (name / package
+status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
+`upload-clear-filters`.
+
+Bulk bar (`upload-bulk`):
+
+| `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
+| `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
+| `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |
+| `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
+| `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
+| `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
+| `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
+| `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = the selected icons with NO metadata text yet; opens the exact-request confirmation for those (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
+| `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
+| `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
+
+List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),
+`upload-attention-count` ("N need attention"), `upload-rows` (role `listbox`),
+`upload-row-{pairId}`, `upload-empty`, `upload-footer-summary`.
+
+Row (`upload-row-{id}`):
+
+| `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
+| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
+| `upload-target-{id}` | text | the row's source path (the approved SVG) |
+| `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
+| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
+| `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
+| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
+| `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
+| `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
+
+Metadata fields (`upload-detail-{id}`, empty until generated):
+`upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
+`upload-meta-title-{id}` / `upload-meta-description-{id}` (2026-10-08: both
+hints read "ONE phrase … sentence case, no period"; Accept rewrites the
+field to that phrase at once) /
+`upload-meta-tags-{id}` (each with its live count), the per-field copy buttons
+`upload-copy-{title,description,tags}-{id}`, the validation line
+`upload-meta-validation-{id}`, and the actions row `upload-meta-state-{id}`
+/ `upload-meta-usage-{id}` / `upload-meta-detail-{id}` /
+`upload-meta-regen-{id}` / `upload-meta-accept-{id}` (disabled when accepted
+and unedited).
+
+Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
+`upload-dialog-scope` (the global-defaults vs per-icon wording),
+`upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
+change; `upload-set-stroke` is "Stroke width (px)" since 2026-10-08 — the
+number typed is the number written in the file, and the row cell reads
+`2 px`), `upload-set-{optimize,eps}` (checkboxes), the background
+(`upload-set-bg-transparent` — the default, a checkerboard swatch —
+`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
+`upload-set-bg-value`, which reads `transparent` or the hex), the stroke
+colour (2026-10-08: `upload-set-stroke-color-artwork` — a diagonal-cut
+swatch — `upload-set-stroke-color-{white,black,gray,green,red}` (`black` is
+the default: ONE global `stroke="#000"` in the file) +
+`upload-set-stroke-color-custom` + `upload-set-stroke-color-value`, which
+reads the hex or `artwork`; its marker is `upload-set-marker-stroke-color`),
+every swatch carrying `aria-pressed`, the per-field marker
+`upload-set-marker-{field}` ("inherited" / "overridden", icon scope only),
+`upload-set-reset` (icon scope: deletes the override — one undoable entry),
+`upload-set-close`. The row's settings cell `upload-settings-{id}` names the
+background (`transparent` or the hex) and appends `· stroke #hex` when a
+stroke colour is pinned.
+The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
+the square presets / Custom), its hint `upload-set-artboard-note`, and — only
+for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
+clamped on change) with the reduced-gcd ratio `upload-set-artboard-ratio` and
+the megapixel readout `upload-set-artboard-mp`. `upload-set-mp` is NEVER disabled (2026-10-08): with a pinned
+artboard the checkbox `upload-set-mp-match` ("same size as the artboard",
+default checked) offers the choice, typing a megapixel value unticks it in the
+same gesture, and `upload-set-mp-note` says what the JPEG will really be
+(`the JPEG is the artboard itself: 1024×576 px — untick for a bigger file` vs
+`rendered from the vectors at this resolution, at the artboard's aspect
+ratio`). With a `content` artboard the checkbox is not rendered at all.
+
+Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
+request — `upload-meta-provider`, `upload-meta-endpoint`,
+`upload-meta-prompt` (the exact prompt that WILL be sent, read-only, wrapping),
+the auth/retries facts, the images the request will carry
+(`upload-preview-strip`, one `upload-preview-{id}` with its own
+`upload-preview-caption-{id}`, `upload-preview-count`,
+`upload-preview-busy` while they render, `upload-preview-none` when none could
+be), `upload-meta-confirm` (sends; disabled until the previews are ready) /
+`upload-meta-dismiss` / `upload-meta-cancel`. The title `#upload-meta-title`
+reads "Generate metadata for N icons" and, when the dialog was opened by
+"⇪ Export selected", "…, then export N"; the extra note `upload-meta-then-export`
+states the accept-as-it-lands rule before anything is paid for.
+
+Banners: `upload-warn-excluded`, `upload-warn-corrupt`,
+`upload-warn-unreadable`, `upload-warn-interrupted` (a metadata request in
+flight at restart — never resent automatically).
+
+Status bar (`upload-statusbar`): `upload-status-counts`
+("N processed · N partial · N failed · N stale"), `upload-status-provider`
+("Gemini · {model}"), the key state, `upload-status-meta` /
+`upload-status-export` ("… in flight").
+
+Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
+settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
+(§O).

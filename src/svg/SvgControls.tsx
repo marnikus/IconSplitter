@@ -5,7 +5,9 @@
 // lives only on this device), then the filter/sort/search row. No rule lives
 // here — every value comes from the hook and every change goes back to it.
 
-import { useState } from "react";
+import type { KeySource } from "../lib/keyvault";
+import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
+
 import {
   IMAGES_PER_REQUEST_MAX, IMAGES_PER_REQUEST_MIN, RETRIES_MAX, RETRIES_MIN, TIMEOUT_MAX_MS, TIMEOUT_MIN_MS,
   clampImagesPerRequest, clampRetries, clampTimeoutMs, modelLabel, type SvgConfig,
@@ -33,6 +35,7 @@ export interface SvgControlsProps {
   paramNote: string | null;
   keySet: boolean;
   keyMask: string;
+  keySource: KeySource;
   /** false while the provider card is minimized to its header (RULE 6 pref). */
   providerOpen: boolean;
   filter: SvgListFilter;
@@ -48,6 +51,7 @@ export interface SvgControlsProps {
   onRefreshModels: () => void;
   onDismissNote: () => void;
   onSaveKey: (key: string) => void;
+  onForgetKey: () => void;
   onProviderOpen: (open: boolean) => void;
   onFilter: (patch: Partial<SvgListFilter>) => void;
   onSort: (sort: SvgSort) => void;
@@ -62,9 +66,9 @@ export default function SvgControls(p: SvgControlsProps) {
       <div className="svg-toolbar">
         <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />
         <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params}
-          paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask} open={p.providerOpen}
+          paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} open={p.providerOpen}
           onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
-          onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} onToggleOpen={p.onProviderOpen} />
+          onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} onForgetKey={p.onForgetKey} onToggleOpen={p.onProviderOpen} />
       </div>
       <FilterLine filter={p.filter} sort={p.sort} shown={p.shown} total={p.total}
         onFilter={p.onFilter} onSort={p.onSort} onClear={p.onClearFilters} />
@@ -85,11 +89,11 @@ function PromptZone({ prompt, onPrompt, onReset }: { prompt: string; onPrompt: (
   );
 }
 
-function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, open, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey, onToggleOpen }: {
+function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, keySource, open, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey, onForgetKey, onToggleOpen }: {
   provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams; paramNote: string | null;
-  keySet: boolean; keyMask: string; open: boolean;
+  keySet: boolean; keyMask: string; keySource: KeySource; open: boolean;
   onConfig: (patch: Partial<SvgConfig>) => void; onParams: (patch: Partial<SamplingParams>) => void;
-  onRefreshModels: () => void; onDismissNote: () => void; onSaveKey: (key: string) => void;
+  onRefreshModels: () => void; onDismissNote: () => void; onSaveKey: (key: string) => void; onForgetKey: () => void;
   onToggleOpen: (open: boolean) => void;
 }) {
   return (
@@ -100,7 +104,7 @@ function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMa
           <ProviderFields config={config} onConfig={onConfig} />
           <SvgSampling caps={caps} params={params} note={paramNote} onParams={onParams}
             onRefresh={onRefreshModels} onDismissNote={onDismissNote} />
-          <ProviderFoot keySet={keySet} keyMask={keyMask} model={modelLabel(config.model)}
+          <ProviderFoot keySet={keySet} keyMask={keyMask} keySource={keySource} model={modelLabel(config.model)} onForgetKey={onForgetKey}
             onSaveKey={onSaveKey} onRefreshModels={onRefreshModels} />
         </>
       )}
@@ -158,12 +162,13 @@ function ProviderHead({ provider, config, caps, params, open, onToggleOpen }: {
 }
 
 /** The key state beside the one action that can change a model's limits. */
-function ProviderFoot({ keySet, keyMask, model, onSaveKey, onRefreshModels }: {
-  keySet: boolean; keyMask: string; model: string; onSaveKey: (k: string) => void; onRefreshModels: () => void;
+function ProviderFoot({ keySet, keyMask, keySource, model, onSaveKey, onForgetKey, onRefreshModels }: {
+  keySet: boolean; keyMask: string; keySource: KeySource; model: string;
+  onSaveKey: (k: string) => void; onForgetKey: () => void; onRefreshModels: () => void;
 }) {
   return (
     <div className="svg-provider-foot">
-      <KeyRow keySet={keySet} keyMask={keyMask} model={model} onSave={onSaveKey} />
+      <KeyRow keySet={keySet} keyMask={keyMask} keySource={keySource} model={model} onSave={onSaveKey} onForget={onForgetKey} />
       <button type="button" className="svg-link" data-testid="svg-refresh-models" onClick={onRefreshModels}>
         Refresh model list
       </button>
@@ -171,32 +176,31 @@ function ProviderFoot({ keySet, keyMask, model, onSaveKey, onRefreshModels }: {
   );
 }
 
-function KeyRow({ keySet, keyMask, model, onSave }: { keySet: boolean; keyMask: string; model: string; onSave: (k: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  if (!editing) {
-    return (
-      <button type="button" className="svg-key-state" data-testid="svg-key-state" onClick={() => setEditing(true)}>
-        <span className="svg-key-line">
-          <span aria-hidden="true">🛡</span>
-          <strong>{keySet ? "API key secured locally" : "No API key yet"}</strong>
-          <span className="svg-masked" data-testid="svg-key-mask">{keyMask}</span>
-        </span>
-        <span className="svg-key-note" data-testid="svg-key-note">{model} · excluded from Git · logs · exports</span>
-      </button>
-    );
-  }
-  return (
-    <div className="svg-key-edit">
-      <input className="svg-input" data-testid="svg-key-input" type="password" autoComplete="off" spellCheck={false}
-        aria-label="Requesty API key" placeholder="rq_live_…" value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { onSave(draft); setDraft(""); setEditing(false); } }} />
-      <button type="button" className="svg-btn tiny primary" data-testid="svg-key-save"
-        onClick={() => { onSave(draft); setDraft(""); setEditing(false); }}>Save</button>
-      <button type="button" className="svg-btn tiny" data-testid="svg-key-cancel" onClick={() => setEditing(false)}>Cancel</button>
-    </div>
-  );
+/** The one text shell for the key slot: copy here, behaviour in `KeySlot`. */
+const KEY_TEXT: KeySlotText = { testid: "svg", placeholder: "rq_live_…", ariaLabel: "Requesty API key" };
+
+function KeyRow({keySet, keyMask, keySource, model, onSave, onForget}: {
+  keySet: boolean; keyMask: string; keySource: KeySource; model: string;
+  onSave: (k: string) => void; onForget: () => void;
+}) {
+  const slot = useKeyDraft();
+  if (slot.editing) return <KeyEditor {...KEY_TEXT} draft={slot.draft} setDraft={slot.setDraft}
+    onSave={onSave} onClose={slot.close} />;
+  return <KeySlot {...KEY_TEXT} keySet={keySet} title={keyTitle(keySet, keySource)} mask={keyMask}
+    note={keyNote(keySource) + " · " + model} onEdit={slot.open} onForget={onForget} />;
+}
+
+/** The one honest headline for the key's state. */
+function keyTitle(keySet: boolean, source: KeySource): string {
+  if (!keySet) return source === "unreadable" ? "Storage could not be read" : "No API key yet";
+  return source === "session" ? "API key kept for this session only" : "API key secured locally";
+}
+
+/** ...and the one line that says what will happen after a reload. */
+function keyNote(source: KeySource): string {
+  if (source === "session") return "browser storage refused it — paste again after a reload";
+  if (source === "unreadable") return "this device's storage is unreadable here (private mode?)";
+  return "local only · excluded from Git · logs · exports";
 }
 
 function FilterLine({ filter, sort, shown, total, onFilter, onSort, onClear }: {

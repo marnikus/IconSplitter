@@ -1,0 +1,10 @@
+{
+  "name": "IconSplitter",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm ci --prefer-offline --no-audit --no-fund",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "vitest.explorer"]
+    }
+  }
+}

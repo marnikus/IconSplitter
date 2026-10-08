@@ -1,5 +1,10 @@
 # Quality re-check — process and dated records
 
+> **Agents: do not read this file into context.** It is an append-only ledger —
+> append one dated entry at the end (format: the newest entries below), read
+> none of it. The rules live in `AGENT_RULES.md`, the workflow in
+> `CODE_VERIFICATION.md` (`AGENTS.md` §2).
+
 Adapted from `Process-Images-in-Areana/docs/current/QUALITY_RECHECK.md`, which
 is the dated log of full quality re-checks after substantial changes. The
 numbers there belong to that app; this file carries Icon Splitter's own.
@@ -1413,7 +1418,7 @@ the refusal the existing warn tone.
 | an approved sheet outside the scope | 1 row (the piece); banner *"⚠ 1 approved source(s) are not listed — 1 outside the split output (unsplit sheets). icon-sheet_AI.png is outside the split output — the main folder's unsplit files are not listed."* |
 | pick with SVG markup on the clipboard | nothing stored (`{}`); field empty; pill still `test_processing`; status "not set — …" |
 | typing the same markup into the field | note *"That is not a folder path — paste the folder's path, e.g. F:\work\icons"*; nothing stored |
-| a row's copy action on a split tree | clipboard `F:\Stocks 2026\icons testing\single\test_processing\_split_output\2026-10\2026-10-01_10-24-31` — the batch folder, never a file |
+| a row's copy action on a split tree | clipboard `F:\Stocks 2026\icons testing\single\test_processing\_split_output\2026-10\2026-10-01_10-24-31` — the batch folder **(superseded 2026-10-06: since I-56 the copy names the file's own folder, `…\<piece>\split_NN`)** |
 
 ## 2026-10-05 — one JSON per pair: the approval and the SVG history live beside the images
 
@@ -1559,7 +1564,8 @@ now returns `ScopeRule { split, hideOutside }` (hide only while the output folde
 is strictly *below* the root), `lib/batchlayout.ts` owns the layout's names
 (`_split_output` / `<YYYY-MM>` / `<YYYY-MM-DD_HH-mm-ss>`), and
 `lib/rootpath.folderCopyText` finds the batch folder from either side of the
-root — inside the relative path, at its head, or the root itself.
+root — inside the relative path, at its head, or the root itself. **(I-48 was
+replaced by I-56 on 2026-10-06: the copy now names the folder of the file.)**
 
 ### Lanes run (`npm run verify`)
 
@@ -1773,3 +1779,699 @@ choice and its validation, 308 → ~300 lines), `actions.ts` → `useQueueAction
 object each (≤ 4 params), `SvgList` → `Footer`, `VersionsDialog` → `VersionList`
 + `VersionFacts`. `src/svg/runcontrol.ts` (139) holds the queue's async half so
 `runqueue.ts` (59) stays pure rules only; `actions.ts` is back to 283 lines.
+
+---
+
+## 2026-10-06 — I-56: "Location" names the folder of the file
+
+The report: a deep file's location copied the run folder one level up.
+
+```
+copied   F:\…\test_processing_2\_split_output\2026-10\2026-10-05_18-45-20
+wanted   F:\…\test_processing_2\_split_output\2026-10\2026-10-05_18-45-20\icon-bunny-face_AI_7\split_04
+file     …\icon-bunny-face_AI_7\split_04\icon-bunny-face_AI_7_04_v2.svg
+```
+
+### What was verified (TDD — every test red before the fix)
+
+* `tests/rootpath.test.ts` — the user's exact tree: the `_AI_04.png` piece, its
+  `.svg.json` sidecar, the plain and the `_v2` SVG all resolve to
+  `…\icon-bunny-face_AI_7\split_04`, and the run folder is asserted NOT to be the
+  answer; the same file copied from three different picked roots (the output
+  folder, the month folder, the run folder) gives the same folder, because the
+  root no longer decides anything (I-56).
+* `tests/copypath.test.ts` — the clipboard text and the toast carry that folder.
+* `tests/svg_location.test.tsx` (new, the real panel on the user's own tree) —
+  the shown version (preferred v2) decides the FILE the row names, the copied
+  folder is `…\split_04` and never the run folder, choosing v1 keeps the same
+  folder, and a pair with no version yet still copies its own folder (never a
+  file name). This is also the regression test for the doubled chain: before the
+  fix `openLocation` handed over `…\split_04\…\split_04`-style input, which only
+  looked right while the truncation collapsed it.
+* `tests/selectionv2_ui.test.tsx` — the shared copy now hands over
+  `…\2026-10-01_10-24-31\icon-sheet_AI\split_01` for the split-tree fixture (one
+  rule for every tab; the old batch-folder expectation is gone).
+
+### Gates (full run)
+
+`tools/pre_push_check.sh`: types ✅ · lint 0 errors (8 pre-existing warnings) ·
+`quality.mjs --changed --allow-legacy` **PASSED** · `vitest run` **92 files /
+941 tests** ✅ · coverage ✅ · production build ✅.
+
+RULE 18 recheck — the change SHRANK the touched files rather than growing them:
+`lib/rootpath.ts` 370 → 230 lines (the batch/run segment search is deleted, and
+with it the `batchlayout` dependency), `svg/SvgRow.tsx` 203 → 187 (its local
+`targetPath` and `joinPath` moved to `svg/rowmodel.ts` as the one exported
+`targetPathOf`), `svg/codeactions.ts` 120 → 118, `svg/rowmodel.ts` 114 → 129.
+Every function stays inside the limits; no baseline was touched.
+
+---
+
+## 2026-10-07 — environment-setup performance: pinned toolchain, AGENTS.md, node verify runner, shallow-safe quality gate
+
+Research + plan of record: `docs/archive/2026-10-07-env-setup-performance/design.md`
+(ported from `arena/12f110d4-iconsplitter` and re-verified in-sandbox against
+this lineage, base `286304a`). No `src/` production code changed; the change is
+tooling, pins, docs and tests.
+
+* **O1 verified**: HEAD tracks 0 files under `node_modules/` and `dist/`;
+  `origin/main` still tracks 11,486 + 1 (tree diff = 11,757 files) — merging
+  this lineage removes them from main. History purge stays an owner step.
+* **O2**: root `AGENTS.md` (96 lines) — pinned environment, exact commands with
+  measured times, per-task reading protocol with a never-read list, the REAL
+  handles of THIS lineage (`upload-*` for SVG to upload, `src/upload/`; the
+  sibling branch's `up-`/`svgupload/` names do not exist here),
+  definition of done + commit format.
+* **O3**: `.nvmrc` 22.12.0 · `engines` `^20.19.0 || >=22.12.0` + npm ≥ 10 ·
+  `packageManager` npm@10.9.2 · `.npmrc` (engine-strict, quiet, prefer-offline)
+  · `npm run setup` = `npm ci`; README + `install_dependencies.bat` switched to
+  `npm ci` (CRLF preserved). `npm ci` measured at 6 s warm.
+* **O5+O9**: `tools/verify.mjs` (62 lines, node, no bash) replaces
+  `tools/pre_push_check.sh` (deleted; hook + every doc reference updated in the
+  same change). Fast mode runs the suite exactly ONCE — via the coverage lane;
+  `--full` adds the standalone lane for pre-push parity; `--plan [--json]`
+  prints the lane plan without running it (the test seam); `--base` forwards to
+  the quality lane.
+* **O6**: browser probes declared OPTIONAL (`CODE_VERIFICATION.md` §9) — the
+  happy-dom suite is the acceptance gate; no playwright/puppeteer dependency.
+* **O7**: `design temp/` → `design/` (121 files, `git mv`, own commit) +
+  `design/README.md` (35 lines): the SPEC.md handoff contract. Live references
+  updated in the same commit (SOR §1 mode 4 + the two `src/index.css`
+  comments); archived docs keep their historical paths (RULE 17).
+* **O8**: `quality.mjs` gains `--base <ref>` (tree-vs-tree diff, no merge-base
+  needed), `--files <list>` (no git involved; missing file fails loudly, non-src
+  is an honest empty set) and a shallow-clone hint. Pre-fix behaviour
+  demonstrated in this depth-1 sandbox: merge-base exits 1, `HEAD~1` exits 128,
+  the gate printed `Changed files vs merge-base: (none)` → GATE PASSED without
+  measuring anything.
+* **O10**: `.devcontainer/devcontainer.json` added. The CI workflow could NOT
+  be pushed to `.github/workflows/` — the GitHub App token lacks the
+  `workflows` permission (remote rejected the push, exactly as on the plan's
+  source branch); it is staged ready-to-paste at
+  `docs/archive/2026-10-07-env-setup-performance/verify.yml` (fetch-depth 0,
+  node from `.nvmrc`, npm cache, `npm ci`, `verify:fast`) and the
+  "CI equivalent" section of CODE_VERIFICATION.md says so.
+* **O11**: `docs/README.md` — archive rows collapsed to one-line pointers, the
+  missing rows added (`history-session` + the three 2026-10-07 folders),
+  `AGENTS.md` + `design/README.md` listed under "Outside docs/".
+* **O4 deferred** (owner ticket, reasons in the plan): the SOR domain split.
+  Mitigation shipped: reading index at the top of SOR, the stale
+  `ideal-size: 357 lines` comment corrected to the honest 1800, and an
+  append-only "do not read this file" header on QUALITY_RECHECK.md.
+* **RULE 17 drift repaired**: SOR §1 + README "five modes" → six, SOR §8
+  counts 114/1212 → 126/1334 + the two tooling-test rows, §10 pointers for the
+  2026-10-07 svg-to-upload and env-setup-performance designs.
+
+### What was verified (TDD — both files red before the tools existed)
+
+* `tests/verify_runner.test.ts` (7 tests) — spawns the real runner: the fast
+  plan contains exactly one vitest lane (coverage), `--full` exactly two, lane
+  order types→lint→quality→(tests)→coverage→build, the quality lane carries
+  `--changed --allow-legacy`, `--base origin/main` reaches its args, `--plan`
+  runs nothing. Red before: the module did not exist (all 7 failed).
+* `tests/quality_base.test.ts` (7 tests) — spawns the real gate: `--files`
+  measures exactly the named src files, non-src → `(none in src)` + GATE PASSED
+  (RULE 4), a missing named file exits 1 with "not found", `--base HEAD` names
+  the ref with no merge-base, an unknown ref exits 1 naming it, the shallow
+  hint prints iff merge-base is unavailable in a shallow repo, flag-less
+  `--changed` stays green (characterization). Red before: 6 of 7 failed.
+
+### Gates (fast run — through `node tools/verify.mjs` itself, dogfood)
+
+types ✅ 9.4 s · lint ✅ 7.3 s (0 errors, 9 pre-existing warnings, none in the new files) · quality
+gate `--changed` ✅ 0.4 s (honest "(none)" — no `src/*.ts(x)` file in this
+change; the shallow hint printed) · tests + coverage ✅ **126 files /
+1334 tests** (91.5 s) · coverage ✅ src/lib lines **97.52 %**, branches
+88.96 % (threshold 80) · build ✅ `dist/index.html` 1,472.50 kB
+(gzip 422.55 kB) in 6.4 s. Total **1 m 55 s**; the full lane
+(`npm run verify`, dogfooded on this commit) ✅ **3 m 06 s** — the ≈ 2×-suite
+saving of the old `pre_push_check.sh` is what `verify:fast` buys back for the
+commit loop.
+
+RULE 18 recheck: `AGENTS.md` 96 lines (≤ 120 target) · `tools/verify.mjs`
+62 lines, every function ≤ 10 · `tools/quality.mjs` +69/−12, every touched
+function ≤ 15 · `design/README.md` 35 · `docs/README.md` 57 · no src change, so
+the size gate legitimately reports "(none)"; baseline untouched.
+
+### Known debt carried
+
+* O4: SOR is 1800 lines against RULE 18's 60–200 context-file ideal — owner
+  ticket, planned in the archive doc.
+* §10 still lacks pointers for the 2026-10-06 `location-folder-of-file` and
+  2026-10-07 `svg-to-upload-merge` designs (recorded, not silently added here).
+* `design/Arena setup analyze/` (34 MB saved web page, most of the 121 tracked
+  design files) — owner decision on removal/external storage.
+* The 2026-10-07 API-key change (`286304a`, the tip this change was built on)
+  carried no QUALITY_RECHECK entry of its own; the ledger's last entry before
+  this one is therefore dated 2026-10-06, and this entry is the first measured
+  record of the tree that includes it — src/lib lines 97.52 % (floor 80).
+
+## 2026-10-08 — the seven-point SVG-to-upload batch: metadata minima, clean export SVG, pinned artboard
+
+The user's seven points, as implemented in one change: (1) tags are a MINIMUM
+now — `tags must be at least 10 (got N)`, no maxima anywhere; (2) `title must
+be at least 5 words (got N)`; (3) `description must be at least 7 words (got
+N)`; (4) the background rectangle is fill-only (`stroke="none"`) so an artwork
+that strokes on the root no longer gets a border painted around the artboard;
+(5) the artboard is a settings field with a `content` mode, the square px
+presets 256/512/1024/2048/4096 and an exact CUSTOM W×H (the aspect-ratio
+control), clamped to 16–8192 px per edge and a 64 MP ceiling that shrinks both
+edges together; (6) the shipped SVG declares `version="1.1"` (SVGO strips it, so
+the clean pass re-adds it and the export re-verifies the committed text); (7)
+the clean policy — no raster content, no editor bloat, no names: no `id`,
+`class`, `data-*`, `aria-*`, `role`, `xml:space`, `enable-background`, no
+foreign elements/attributes/namespaces, and a referenced id survives only as
+`a`/`b`/`c`… with its references rewritten.
+
+Design of the clean pass: ONE rule list (`src/lib/upload/clean.ts`, 17 fns /
+173 lines) plus ONE rebuilding pass it re-checks against (`cleandom.ts`, 25 fns
+/ 231 lines) over shared DOM readers (`svgdom.ts`, 13 fns / 88 lines) — three
+call sites (prepare → after the optimizer → before commit) can no longer
+disagree about what "clean" means. A paint-only `<style>`/`style=""` is folded
+into the elements (that is what lets the class names go); anything that could
+move, hide or clip geometry is refused as `unsupported` with the reason, never
+guessed.
+
+### Gates (full run — `npm run verify`, the pre-push hook's own check)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types `tsc --noEmit` | ✅ | 9.8 s |
+| 2/6 lint | ✅ | 0 errors, **9 warnings** (unchanged legacy) |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED`; `--allow-legacy` still holds the 3 RULE 16.5 hotspots (`App.tsx`, `lib/detect.ts`, `lib/render.ts`) |
+| 4/6 tests | ✅ | **128 files / 1374 tests** (96.4 s; was 126 / 1334) |
+| 5/6 tests + coverage | ✅ | statements **95.73 %** (floor 95.2 by the merge report §12 — was 94.81 before this entry's tests), branches **89.21 %** (floor 88.0 — was 87.93), functions 96.81 %, lines 97.74 % |
+| 6/6 build | ✅ | `dist/index.html` 1,484.03 kB (gzip 425.99 kB) in 6.9 s |
+
+Total ≈ 4 m 0 s; `ALL LANES PASSED`.
+
+### What the new tests proved (and the two defects they caught)
+
+`tests/upload_cleandom.test.ts` (11) drives the rebuilding pass fold by fold:
+non-document input, unusable viewBox, a foreign editor vocabulary (Illustrator
+`xmlns:i` + `i:extraneous`, `data-name`, `aria-label`, `xml:space`, a foreign
+element), used vs unused `xmlns:xlink`, a referenced id renamed to `a` with
+`href="#a"` rewritten, an unreferenced id removed, a DUPLICATE id collapsed,
+27 referenced ids renamed `a…z` then `aa`, class and tag rules folded, the
+inline paint fold, and eight stylesheet shapes refused (no value, compound
+selector, `#id` selector, external `url(`, `var(`, trailing garbage, `@import`,
+`transform`).
+
+Two real defects surfaced while writing those tests, both fixed in this change:
+the rebuild used to DELETE a foldable `<style>` block instead of folding it
+(which silently changed the picture — now the block is folded first, and a
+block it cannot fold is left in place so the violation survives and the file
+ships unchanged), and it never dropped foreign `xmlns:*` declarations, so a
+rebuilt Illustrator file stayed dirty (now only a USED `xmlns:xlink` survives).
+The suite also closed a gate gap: the merge report §12 floors (≥95.2 % stmts,
+≥88.0 % branches) are NOT what `vitest.config.ts` enforces (`lines: 80`), so the
+batch's new code had quietly dropped the aggregate to 94.81 / 87.93 while
+`verify` stayed green. 15 added tests (11 + 4 for the artboard/geom/prepare
+edges) brought it to 95.73 / 89.21.
+
+### RULE 18 recheck
+
+`clean.ts` 172 lines / 17 fns · `cleandom.ts` 230 / 25 · `svgdom.ts` 87 / 13 ·
+`tests/upload_cleandom.test.ts` 157 · `prepare.ts` 165 / 13 · `settings.ts` 244
+/ 24 · `UploadSettingsDialog.tsx` 255 / 30 — every one under the 300-line file
+target, and no function over 30 lines. The RULE 19 order was obeyed for the
+three functions the gate flagged mid-work: `prepareExportSvg` lost its guard
+clause to a `sourceVeto` helper, `parseOverrides` became a field table
+(`readNumbers`/`readFlags`/`readBackground`/`readArtboard`), and the 437-line
+`clean.ts` was split by responsibility into check / rebuild / DOM readers.
+
+### Known debt carried
+
+* The §2 field ranges (padding 0–40 %, stroke 0.2–8 pt, JPEG 1–30 MP, quality
+  0.5–0.98) are still the pre-merge values in `settings.ts` (0–50 / 0–24 /
+  1–64 / 0.5–1). Changing the stroke default to 2.2 pt would alter every
+  prepared/committed SVG, so it is scoped as its own change, not smuggled into
+  this batch.
+* The report's named test obligations still open: T17 (tag-count refusal at the
+  new minimum), T19 (65,502-byte APP1 limit), T25 (12-row mockup walkthrough,
+  belongs to P5), T27 (cost receipt), T28 (duplicate-name dance).
+* Point 4 was fixed at the mechanism the user named (fill-only background);
+  deeper research into stroked-artwork edge cases is not done.
+* `docs/README.md` §10 still lacks pointers for the 2026-10-06
+  `location-folder-of-file`, 2026-10-07 `svg-to-upload-merge` and 2026-10-08
+  `env-setup-performance` designs.
+* `design/Arena setup analyze/` (the 21 MB saved web page) — owner decision on
+  removal, scheduled with P5's `design/SVG to upload/` landing.
+
+## 2026-10-08 — the artboard must not cap the JPEG resolution (user correction)
+
+Reported: "if artboard selected it block to setup the MP custom resolution in MP
+but it should not. User can have big resolution of icon even the icon artboard
+is small so it should let user decide it resolution same as artboard or not."
+
+What was wrong: pinning the artboard `disabled` the MP field and silently used
+the pinned px for the JPEG, so a 512×512 artboard made a bigger file
+impossible. Now `upload-set-mp` is never disabled; with a pinned artboard a
+checkbox (`upload-set-mp-match`, "same size as the artboard", default on) makes
+the choice explicit, and typing a megapixel value unticks it in the SAME
+gesture (one `changeMany` → one override patch, one undo entry). The note says
+what the JPEG will really be either way. With a `content` artboard the question
+does not exist (the artboard follows the MP), so the checkbox is not rendered.
+
+Implementation: `jpegMatchArtboard` is a first-class setting (default true) —
+`UploadSettings`, `readFlags` (so it survives corrupt storage as the default),
+`settingsEqual`, `settingsFingerprint` (it changes the output, so a toggle must
+re-export) — and `buildJpeg` picks `pinnedDimensions` only while it is on,
+otherwise `targetDimensions(fit.artW, fit.artH, jpegMegapixels)`, which keeps
+the artboard's ratio. A latent bug found on the way: `overridesEqual` in
+`uploadundo.ts` kept its OWN list of seven overrideable fields and had already
+missed the artboard, so a change touching only the artboard (or the new flag)
+compared EQUAL and could be swallowed while the panel was unmounted. The list
+is now `SETTINGS_FIELDS` in `lib/upload/settings.ts` — one source of truth —
+and `overridesEqual` derives from it.
+
+Tests: 4 new/updated — `upload_settings` (the flag is a real setting: parse,
+normalize, equality, fingerprint; the defaults object), `upload_runexport` (4 MP
++ 512×256 + match OFF ⇒ the pipeline really asks for and commits a 2828×1414
+JPEG while the SVG stays `0 0 512 256`), `upload_ui` (MP never disabled, the
+checkbox appears only when pinned, typing 4 MP stores both values, the box hands
+the decision back, and `upload-set-mp-match` is absent in content mode), and
+`upload_undo` (artboard-only and flag-only changes are NOT equal).
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 8.9 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` (RULE 19 order used again: `MegapixelSetting` hit 32/30 lines, so the checkbox moved into its own `MatchArtboard` component) |
+| 4/6 tests | ✅ | **128 files / 1376 tests** (was 1374) |
+| 5/6 tests + coverage | ✅ | statements **95.74 %**, branches **89.27 %**, functions 96.82 %, lines 97.75 % |
+| 6/6 build | ✅ | `dist/index.html` 1,485.05 kB (gzip 426.35 kB) |
+
+Note on fingerprints: adding a field to the canonical settings fingerprint makes
+packages committed before this change read `stale` once — by design, since the
+meaning of the settings changed (the artboard no longer implies the JPEG size).
+
+### Known debt carried
+
+* Unchanged from the previous entry: §2 field ranges (padding 0–40, stroke
+  0.2–8 pt, MP 1–30, quality 0.98), T17/T19/T25/T27/T28, P5–P7, and the
+  `docs/README.md` §10 design pointers.
+
+## 2026-10-08 — four-point batch: silent tags dedupe, EPS 10, the two global buttons
+
+Landed together (the user's four points, one batch): silent tag dedupe
+(`dedupeTags` in `lib/upload/meta.ts` feeds both `parseMetadata` and the tags
+edit path, and the ≥10 minimum counts the deduped list), the **EPS 10** document
+layer (DSC comment block with `%%HiResBoundingBox` / `%%DocumentData: Clean7Bit`
+/ `%%LanguageLevel: 3`, `verifyEps` requiring all three, `%%Title` from the
+`${stem}.eps` name and `%%CreationDate` from the run's clock) built from the
+CLEANED/optimized export SVG, and the two global buttons plus the export chain
+(`✦ Generate metadata (N)` = only the selected icons with no metadata text;
+`⇪ Export selected` = generate the missing metadata, accept every valid answer
+as it lands, then export the WHOLE selection).
+
+The batch's real bug was a React-timing race, and it is worth the record: the
+accepts were dispatched, but `runExportBatch` read the rows back through
+`latest.current` BEFORE React re-rendered, so the first icon exported with no
+metadata at all (it was the `freshMeta` map that fixed it). Never re-read
+`latest.current` for state the current task just dispatched.
+
+### Structure work forced by the gate (RULE 18/19)
+
+The gate failed three NEW files, and the fixes are structural, not cosmetic:
+
+| File | Was | Now |
+| --- | --- | --- |
+| `src/lib/upload/eps.ts` | 342 lines, `assemble` 5 params | 271 lines — the DSC document layer moved to **`src/lib/upload/epsdoc.ts`** (96 lines: `assemble({…})` takes ONE document object, `verifyEps`, the markers, the boxes), and `eps.ts` re-exports the public surface so its importers do not move |
+| `src/upload/metaactions.ts` | 365 lines, `useMetaRequestActions` 57 loc, `runMetadataBatch` 31 loc | 262 lines — the selection-level buttons, the confirmation they open and their guards moved to **`src/upload/metaselect.ts`** (155 lines); the batch's tail became `exportAfterMetadata` |
+| `src/upload/UploadMetaDialog.tsx` | `UploadMetaDialog` 42 loc | the header / note / prompt blocks are their own components (`MetaDialogHead`, `SentNote`, `ThenExportNote`, `MetaPrompt`) |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 10.8 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` after the three splits above |
+| 4/6 tests | ✅/⚠️ | **128 files / 1385 tests** (was 1376). One run reported the suite green (`128 passed`, `1385 passed`) yet exited non-zero on a **harness flake**: `EnvironmentTeardownError: [vitest-worker]: Closing rpc while "onUserConsoleLog" was pending`, attributed to `tests/selectionv2_ui.test.tsx` — the same code then passed this lane in the re-run, and lane 5 (same suite + coverage) passed in both |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.29 %**, functions 96.82 %, lines 97.75 % |
+| 6/6 build | ✅ | `dist/index.html` 1,489.75 kB (gzip 427.77 kB) |
+
+### Known debt carried
+
+* Unchanged: the `duplicate tags: …` refusal is gone by design (the tags are
+  deduped silently), T17 now reads as "a list of fewer than 10 UNIQUE tags is
+  refused" and stays open with T19/T25/T27/T28 and P5–P7.
+* The lane-4 flake above is environmental (act() warning volume during
+  teardown), not a failing assertion: worth one `vitest`/pool note, not a code
+  change, until it reproduces with a failing test named.
+
+## 2026-10-08 — export naming: the artifact is named after the ICON
+
+One rule change, one place: `lib/upload/export.ts` `stemOf` now trims the app's
+bookkeeping from the artifact name — the extension, this app's own `_v2`
+version artifact, the `_AI` marker and every numeric tail behind it
+(`fog_AI_7_04_v2.svg` → `fog.svg` / `fog.jpg` / `fog.eps`). A base that really
+ends in a digit keeps it (`chat_bot_2_AI.svg` → `chat_bot_2.*`), and a name with
+no `_AI` marker is returned unchanged — never invented, only trimmed.
+`runexport.ts` lost its second private `stemOf`, so the commit, the
+published-JPEG path and the UI cell all derive from the same function.
+
+Because a rename would otherwise leave the pre-2026-10-08 package beside the new
+one, the commit now removes the files **the previous record itself named** whose
+name is no longer in use, after the new files are written and verified — nothing
+the record does not name is touched, and a selective re-export (say, one JPEG
+that had to be re-rendered) never removes a file it did not rewrite. That last
+point was a real bug in the first cut of this change, caught by the existing
+"a missing JPEG rebuilds only the JPEG" test: the first version compared against
+the files written in THAT run, so a JPEG-only rebuild deleted the SVG.
+
+### Tests
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_export` | the rule itself: `fog_AI` → `fog`, `icon-bunny-face_AI_7_04` → `icon-bunny-face`, `fog_AI_v2` → `fog`, `chat_bot_2_AI` → `chat_bot_2`, `plain_name` unchanged, `publishedJpegPath` = `…/export/fog.jpg` |
+| `upload_runexport` | the committed folder holds exactly `[export.json, fog.svg, fog.jpg]`, `%%Title: fog.eps`, `record.source.svgPath` still names `…/fog_AI.svg` (the provenance moved into the record), and a hand-built OLD package (`fog_AI.*` + a record naming them) is replaced — the folder ends with only the new names |
+| `upload_ui` | the export-selected chain and the single-row export read `export/fog.svg` / `fog.jpg`; the foreign `fog_AI.svg` junk in the fixture folder still survives a failed export |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 8.9 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **128 files / 1386 tests** (was 1385) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* One icon per export folder is now an **assumed** invariant (the user's tree:
+  the batch layout puts one piece in each `split_NN` folder). Two paired sources
+  in one folder whose bases trim to the same name would share a package — not in
+  the corpus, and T28's guard is still the place where it gets refused.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake recorded
+  in the previous entry.
+
+## 2026-10-08 (later) — the rename migration may never lose a package
+
+Two properties pinned after the export-naming change, both found by asking what
+a real folder would look like after a rename:
+
+1. **A superseded file is removed only when its replacement is present.** The
+   first cut removed every old-named file the previous record named. It was safe
+   under today's planner (a skipped rebuild implies the canonical file exists),
+   but that invariant is invisible in the code and one `planStages` change away
+   from deleting the only copy of an output. `dropSuperseded` now checks the
+   export folder itself (`listChildNames`) and removes an old-named artifact only
+   when `${stem}.${ext}` is really there.
+2. **The record stops naming a file the commit removed.** `writeRecord` prunes
+   the previous outputs through `pruneRemoved`, so `outputs.eps` becomes null
+   when the superseded EPS was removed and no new one was written (the honest
+   half of a failed EPS stage) instead of pointing at a deleted path.
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_runexport` | "keeps an old-named file when this run wrote nothing to take its place" (the only EPS in the folder stays, `replaced` is empty, the record still names it) and "stops naming a file it just removed" (the superseded EPS goes because `fog.eps` is on disk, and `outputs.eps` comes back null) |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **128 files / 1388 tests** (was 1386) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* An **orphaned** superseded artifact — one that no `export.json` names — is
+  deliberately left in place: the app never deletes a file it cannot prove it
+  wrote. A folder carrying one needs the user's word before any sweep lands.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (third) — the export folder sweeps to ONE name; the record stops lying
+
+The user's follow-up: after the rename an export folder still held the old-named
+EPS, and the package must "be the same name as the svg". The record-based
+removal from the previous entry could not see an **orphan** — a superseded file
+the current `export.json` no longer names, which is exactly what a real folder
+has — so it was replaced by a folder sweep (`src/upload/exportsweep.ts`, five
+unit tests + two pipeline tests):
+
+* candidates: the three artifact extensions whose bare name trims to THIS icon's
+  stem under the export rule (`trimArtifactStem`), and which are not the current
+  `${stem}.${ext}` — another icon, a foreign file, `fogv2.eps` and
+  `fog_AI_x.eps` are never candidates;
+* a candidate the previous record still names goes only when its replacement is
+  on disk (a failed EPS stage must not delete the previous EPS); an orphan goes —
+  it passed the naming proof and no package claims it;
+* written and verified first, swept second, reported in `replaced`.
+
+**And the sweep exposed a pre-existing bug worth the record**: `assembleRecord`
+built a fresh record for every run, so a selective re-export (one JPEG, one SVG)
+blanked the record's `outputs` and JPEG block for everything it did not rewrite —
+the record stopped naming files that were sitting right there. `assembleRecord`
+now seeds `outputs` and the JPEG block from the previous record; the commit then
+fills, replaces and prunes them (`writeRecord` + `pruneRemoved`).
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_exportsweep` (new) | our superseded forms (`_AI`, `_AI_v2`, `_AI_7_04`, `_AI_9_01`) go; another icon / foreign file / `export.json` / near-miss bases stay; a claimed old-named file with no replacement stays; an orphan goes; a clean folder is a no-op |
+| `upload_runexport` | the orphan EPS from a real folder is swept and the folder ends `[export.json, fog.svg, fog.jpg]`; the record keeps naming the SVG a JPEG-only rebuild did not rewrite; the old-name package is still replaced |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1395 tests** (was 128 / 1388) |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.3 %**, functions 96.82 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* A superseded file whose base does not trim to this icon's stem (e.g.
+  `fog_AI_x.eps`) is left alone: the naming rule cannot prove this app wrote it.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (fourth) — corrected: only `_AI` goes, every number stays
+
+The user corrected the naming rule the same day: *"sorry it was incorrect task.
+only remove `_AI` but keep number `_03` etc."* The rule in
+`lib/upload/export.ts` is now literal — strip the extension, remove the `_AI`
+marker, change nothing else:
+
+| source | before (wrong) | now |
+| --- | --- | --- |
+| `fog_AI.svg` | `fog.*` | `fog.*` (unchanged) |
+| `fog_AI_03.svg` | `fog.*` | **`fog_03.*`** |
+| `icon-bunny-face_AI_7_04.svg` | `icon-bunny-face.*` | **`icon-bunny-face_7_04.*`** |
+| `fog_AI_v2.svg` | `fog.*` | **`fog_v2.*`** |
+| `chat_bot_2_AI.svg` | `chat_bot_2.*` | `chat_bot_2.*` (unchanged) |
+| `fog_AI_x.svg` | `fog_AI_x.*` | `fog_AI_x.*` (a non-numeric tail is not our marker) |
+
+Keeping the digits also removes the collision the previous rule created:
+`fog_AI.svg` and `fog_AI_7.svg` are different pairs and now export as `fog.*`
+and `fog_7.*` instead of collapsing onto one name.
+
+The sweep follows the same, single rule (`trimArtifactStem`): for icon `fog`,
+`fog_AI.eps` is ours and goes when `fog.eps` is on disk, while `fog_AI_7.eps` /
+`fog_AI_9_01.jpg` belong to OTHER icons and are never candidates. A versioned
+source is swept under its own stem: exporting `fog_AI_v2.svg` (stem `fog_v2`)
+replaces `fog_AI_v2.*` with `fog_v2.*`.
+
+### Tests
+
+| Suite | What it pins |
+| --- | --- |
+| `upload_export` | every row of the table above, plus `publishedJpegPath("", "fog_AI_7.svg")` = `export/fog_7.jpg` |
+| `upload_exportsweep` | our own `fog_AI.*` goes; `fog_AI_03.eps`, `fog_AI_7_04.svg`, `fog_AI_9_01.jpg` are LEFT ALONE (another icon's); the versioned old name goes when `fog_v2.*` is the stem being exported |
+| `upload_runexport` | a real export of the `fog_AI_7.svg` pair commits `fog_7.svg` + `fog_7.jpg` |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1398 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.76 %**, branches **89.3 %**, functions 96.83 %, lines 97.76 % |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* A pre-rename artifact of a DIFFERENT version (`fog_AI_v2.eps` while v1 is the
+  approved source) is left alone: it belongs to the `fog_v2` stem, and only an
+  export of that version sweeps it.
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, and the lane-4 teardown flake.
+
+## 2026-10-08 (fifth) — the teardown flake is fixed, not retried
+
+The lane-4/lane-5 `EnvironmentTeardownError: [vitest-worker]: Closing rpc while
+"onUserConsoleLog" was pending` that had been recorded as a "harness flake"
+(previous entries) finally blocked a push, so it was diagnosed instead of
+retried: the DOM suites stream thousands of React `act()` warnings, and while
+one of those `onUserConsoleLog` messages is in flight a worker teardown makes
+vitest exit non-zero on an otherwise green run.
+
+**Fix:** `vitest.config.ts` sets `silent: "passed-only"` — a passing test's
+console output is not streamed, a failing one still prints everything. Measured
+on this tree: the coverage run's log fell from **42,618 lines to 744**, `act()`
+warnings streamed went to **zero**, coverage numbers are unchanged
+(95.76|89.3|96.83|97.76), and three consecutive `npx vitest run --coverage` runs
+all exited **0** (the failure had been intermittent — roughly one heavy run in
+three). `CODE_VERIFICATION.md` §5 explains the setting and how to debug with
+`console.log` anyway.
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | clean |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **129 files / 1398 tests** |
+| 5/6 tests + coverage | ✅ | statements **95.76 %**, branches **89.3 %**, functions 96.83 %, lines 97.76 %; log 744 lines |
+| 6/6 build | ✅ | single-file bundle, no size regression |
+
+### Known debt carried
+
+* Unchanged: T17/T19/T25/T27/T28, P5–P7, the version-stem sweep note above, and
+  a `fog_AI_v2.*` leftover that only an export of that version removes.
+
+## 2026-10-08 — exact stroke width: every transform baked into the geometry, the px setting written verbatim
+
+The user set a stroke width of 2 and the shipped file read
+`stroke-width="2.6224000000000003"`. Two faults, both real (design:
+`docs/archive/2026-10-08-stroke-width-exact/design.md`): the width was
+finalised in LOCAL units under the artwork's and the artboard's transforms,
+and SVGO's `applyTransforms` re-multiplied it with raw float arithmetic when it
+baked those transforms into the path (`2.384 × 1.1`); and the setting was in
+pt while the user — rightly, for a stock file — thinks in the file's px.
+
+The fix is structural, not a rounding pass: prepare now bakes `artboard × CTM`
+into every shape's coordinates (`lib/upload/bake.ts`), so the file has no
+`transform` and SVGO has nothing to re-multiply, and the stroke width is
+written AFTER that, verbatim (`strokePx: 2` → `stroke-width="2"`). The
+previous entry's "fewest decimals within 10 %" rule is deleted with its tests
+— superseded, no caller. The one lesson worth the record: **a number written
+under a transform is never the number the reader sees** — finish the geometry
+first, then write the numbers.
+
+### Structure work (RULE 3/18/19)
+
+| File | Was | Now |
+| --- | --- | --- |
+| `src/lib/upload/epspath.ts` | 243 lines, the full path grammar welded to PostScript text | 33 lines — only the PostScript writer; the grammar is **`src/lib/upload/geom/outline.ts`** (269 lines, reason comment: one grammar table with its handlers), the ONE outline model the bake and the EPS share (a circle is now the same four-cubic split as an ellipse — one pinned EPS expectation changed, with the reason) |
+| `src/lib/upload/geom/bakeshape.ts` | — | 94 lines — which element survives which matrix (`isAxisAligned`, `isUniform`, the per-shape attribute bakers as a table) |
+| `src/lib/upload/bake.ts` | — | 110 lines — the walk, the named refusals before the tree is touched, widths/dashes following their geometry |
+| `src/lib/upload/prepare.ts` | wrapper `<g transform>` + width ÷ CTM scale | 202 lines — bake → restyle (verbatim) → viewBox + background; no wrapper group |
+| `src/lib/upload/geom.ts` | `ptToPx`/`pxToPt` | gone — no caller; a SOURCE length in pt is still read at 96 DPI |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 9.8 s |
+| 2/6 lint | ✅ | 0 errors, 10 pre-existing warnings (unchanged set) |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` |
+| 4/6 tests | ✅ | **131 files / 1452 tests** (was 1422): `upload_outline` (10), `upload_bake` (15), the prepare suite rewritten for the new contract, one export test through SVGO pinning the SHIPPED text (`stroke-width="2"`, no `transform=`) |
+| 5/6 tests + coverage | ✅ | statements **96.08 %**, branches **89.54 %** |
+| 6/6 build | ✅ | `dist/index.html` 1,416 kB |
+
+### Known debt carried
+
+* Deliberate narrowing (design D6): a stroked shape under a non-uniform or
+  skewed transform, a rotated rounded rect, `userSpaceOnUse` paint servers and
+  clipPath/mask/filter/pattern now refuse by name where they exported before.
+  Composing `gradientTransform` is the follow-up if a real icon hits it.
+* Two of the previous entry's export tests referenced the pre-merge package
+  name (`STEM`) and failed on the merged baseline; fixed in passing (`ART`).
+* The SVGO `removeTitle`/`removeViewBox` stderr line in `upload_runexport`
+  and `upload_eps` predates both entries; the optimizer config still deserves
+  one look, not this commit.
+
+## 2026-10-08 — one global stroke definition (`fix(upload)`)
+
+The stock reviewer's second file: `<svg stroke="#111"><g stroke="#000"
+stroke-width=".8">` with every `<path>` carrying its own `stroke-width`. The
+previous entry wrote the width verbatim onto every visible stroke and left
+the colour where the artwork had it; SVGO then hoisted the identical widths
+onto the group and kept the source root's `#111`. The rule now: each stroke
+property is defined ONCE — `lib/upload/strokeglobal.ts` (49 lines) hoists
+`stroke`/`stroke-width` onto the root when every visibly stroked shape
+agrees, strips it from everything else (attributes and inline styles), and
+gives the shapes that do not stroke `stroke="none"` so the root's paint
+cannot reach them; disagreement means explicit per stroked shape and bare
+containers; nothing stroked means nothing written. The default stroke
+colour becomes `#000000` (the fingerprint moves once; `artwork` stays
+selectable). Lesson: **a property the reader sees once is a property the
+file states once** — SVGO can only tidy what it is given.
+
+### Structure work (RULE 3/18/19)
+
+* `Stroke.paint` joined the resolved stroke (`geom/stroke.ts`, 75 lines);
+  `stripStyleKeys`/`keyOf` moved there from `prepare.ts` (193 lines) so the
+  restyle and the unify passes share one inline-style eraser.
+* `tests/upload_strokeglobal.test.ts` (9), the two stroke describes in
+  `upload_prepare` rewritten around a `where(root, attr)` → `tag=value`
+  helper, one new SHIPPED-text test in `upload_runexport`.
+
+### Gates (full run)
+
+`npm run verify`: types, lint, quality (changed) GATE PASSED, 132 files /
+1465 tests, coverage (`strokeglobal.ts` 100 %), build 1,417 kB — ALL LANES
+PASSED. RULE 16: every new function ≤ 30 lines / ≤ 4 params; RULE 18: no
+file grew past its band.
+
+### Known debt carried
+
+* Unchanged from the previous entry (bake refusals, the SVGO
+  `removeTitle`/`removeViewBox` stderr line).
+* `artwork` colour over a mixed-paint source cannot ship one global colour
+  by definition — it ships one per stroked shape; the stock rule is met by
+  the default, not by that mode.
+
+## 2026-10-08 — one clean phrase: metadata title and description (`fix(upload)`)
+
+The stock reviewer's file still read `<title>Collaborative Unity Promoting
+Collective Social Empathy. Icon of charity and community.</title>`. The item-5
+rule (`cleanTitle`) only stripped a TRAILING period; the model's second
+sentence, its Title Case and — in a file exported before that rule — the
+period itself all survived. The field hint even asked for "two sentences".
+Now `cleanPhrase` (`lib/upload/meta.ts`, 175 lines, 100 % covered) makes
+the title and the description ONE phrase each: cut at the first sentence
+break, end punctuation gone, sentence case; `cleanMetadata` applies it to
+both fields at the three gates (parse, cache read, Accept), the prompt and
+the hints ask for it, and the shipped `<title>`/`<dc:title>`/`<desc>` are
+pinned in `upload_runexport`. Lesson: **a rule about the shape of a text
+must describe the whole shape** — "no trailing period" said nothing about
+the sentence in front of it.
+
+### Structure work (RULE 3/18/19)
+
+* Merged with the parallel `title-one-phrase` commit (`92513f1`): its fourth
+  gate (`metaFromRecord`, now `cleanMetadata`) and prompt line kept, its
+  title-only cleaner replaced.
+* `cleanTitle` deleted — one name, one rule, both fields; the test fixture
+  title that was itself two sentences ("… of growth. Speed and growth
+  pictogram") became one phrase in every upload test.
+* Field hints no longer state a policy the validator never had
+  ("two sentences: 5–7 words, then 3–5 words", "7–15 words").
+
+### Gates (full run)
+
+`npm run verify`: types, lint, quality (changed) GATE PASSED, 132 files /
+1475 tests, coverage, build — ALL LANES PASSED. RULE 16: `cleanPhrase` 5
+lines, 1 param; RULE 18: `meta.ts` 175 lines.
+
+### Known debt carried
+
+* Unchanged from the previous entry.
+* The sentence-break heuristic needs a word of 2+ letters before the
+  punctuation, so "plan B. Next" would not be cut — the prompt forbids a
+  second sentence anyway; revisit only if the field shows it.

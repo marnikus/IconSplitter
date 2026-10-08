@@ -24,7 +24,7 @@
   }
 }
 
-/* ══ Selection V2 — ported from `design temp/selection tab V2/v2 selection tab.html`.
+/* ══ Selection V2 — ported from `design/selection tab V2/v2 selection tab.html`.
    Tokens live on :root so the Workbench wrapper and the panel share them; every
    component class below is used by src/selectionv2/*. The list panel is a grid
    (head / columns / scrolling rows / footer) and rows take their height from
@@ -560,7 +560,7 @@
   .v2-filters { grid-template-columns: auto 130px 130px 120px 128px 138px 110px 1fr auto; }
 }
 
-/* ══ Generate SVG — ported from `design temp/SVG tab generation/SVG generation Tab.html`.
+/* ══ Generate SVG — ported from `design/SVG tab generation/SVG generation Tab.html`.
    Same tokens, buttons, badges and row grammar as Selection V2 above (RULE 10):
    the only additions are the dual preview cell, the usage cell, the batch
    strip, the dialogs and the toast. Rows take their height from --svg-thumb,
@@ -760,6 +760,58 @@
 .svg-provider-fields .svg-field { flex: 1 1 0; }
 .svg-provider-fields .svg-field:first-child { flex: 0 0 118px; }
 
+/* ── the "SVG to upload" tab's own furniture ───────────────────────────────
+   The metadata prompt has its OWN large panel beside the Gemini card (never
+   inside it), and the card is ONE contained grid: short fields share even
+   columns, the endpoint owns a full-width row, and every control keeps its
+   label — so nothing has to overlap or escape its box (RULE 14). */
+
+.svg-toolbar.panels { align-items: stretch; }
+
+.up-prompt-panel {
+  display: grid;
+  gap: 7px;
+  flex: 1 1 520px;
+  min-width: 320px;
+  align-content: start;
+  padding: 9px 11px 11px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: var(--v2-surface);
+}
+
+/* The editor is the point of the panel: tall enough to read the whole prompt
+   at once, and resizable when the user wants more. */
+.up-prompt-editor { min-height: 170px; max-height: 340px; resize: vertical; }
+
+.up-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 9px;
+  align-items: end;
+}
+.up-preset-row.save { grid-template-columns: minmax(0, 1fr) auto; }
+.up-preset-hint { color: var(--v2-muted); font-size: 9px; }
+
+.up-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 9px;
+}
+.up-provider-grid > * { min-width: 0; }
+.up-provider-grid .up-field-wide { grid-column: 1 / -1; }
+
+/* The check is its own row of the card: one button, one line that can use the
+   whole width instead of wrapping into a narrow flex column. */
+.up-provider-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding-top: 2px;
+}
+.up-provider-check .svg-note { margin: 0; }
+
 .svg-field { min-width: 0; display: block; }
 
 .svg-label {
@@ -801,6 +853,11 @@
 }
 
 .svg-key-state strong { color: var(--v2-green); }
+
+/* The key slot: the state button plus, when a key is set, the one deliberate
+   way to delete it — so pressing Save can never double as "erase my key". */
+.svg-key-slot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.svg-key-slot .svg-key-state { flex: 1 1 auto; }
 
 /* One line for the state, one for the note: a long masked key can never run
    into the note beside it — it ellipsises instead. */
@@ -1012,6 +1069,13 @@
 }
 
 .svg-swatch.on { outline: 2px solid var(--v2-purple-2); outline-offset: 1px; }
+/* "no paint of ours": transparent = checkerboard, artwork = a diagonal cut (2026-10-08) */
+.svg-swatch.transparent {
+  background: repeating-conic-gradient(#9aa3b8 0 25%, #e6e9f2 0 50%) 0 0 / 8px 8px;
+}
+.svg-swatch.artwork {
+  background: linear-gradient(135deg, #e6e9f2 0 46%, #d33 46% 54%, #35405e 54% 100%);
+}
 .svg-bg input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
 .svg-bg-value { color: var(--v2-muted); font-size: 9px; white-space: nowrap; }
 
@@ -1437,3 +1501,152 @@
   font-size: 11px;
   line-height: 1.4;
 }
+
+/* ══ SVG to upload — the panel root carries BOTH `svg` and `up`, so the whole
+   Generate SVG look (buttons, inputs, badges, modal, toast) applies unchanged;
+   this section adds only what the upload tab adds: the row grammar with the
+   expandable metadata detail, the package-status badge colours, the settings
+   dialog's inherited/overridden markers. Same tokens as Selection V2 and
+   Generate SVG above (RULE 10). ══ */
+
+.up-shell {
+  height: 100%;
+  background: var(--v2-bg);
+  color: var(--v2-text);
+}
+
+/* Package-status badge colours (the shared .svg-badge carries the shape). */
+.svg-badge.processed, .svg-badge.accepted { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
+.svg-badge.partial { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.svg-badge.invalid { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
+.svg-badge.empty { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
+
+.up-columns,
+.up-row {
+  display: grid;
+  /* The preview column is max-content: the box comes from the shared zoom
+     rule at the document's own ratio, so a wider artwork can never overlap
+     the next column (I-16, I-55). */
+  grid-template-columns: 34px max-content minmax(240px, 1fr) 122px 118px 190px 170px;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.up-columns {
+  padding: 0 12px;
+  border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-muted-2);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.up-row {
+  position: relative;
+  min-height: calc(var(--svg-thumb) + 22px);
+  padding: 9px 12px;
+  border-bottom: 1px solid #192138;
+  transition: background 0.15s, min-height 0.15s;
+}
+
+.up-row:hover { background: #10182b; }
+.up-row.selected:not(.active) { background: #111a31; }
+.up-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
+/* A stale package is flagged, never hidden: fingerprints moved since commit. */
+.up-row.stale { box-shadow: inset 3px 0 0 var(--v2-yellow); }
+
+.up-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
+
+/* The expandable detail: the editable metadata fields below the active row. */
+.up-detail {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #192138;
+}
+
+.up-meta { display: grid; gap: 8px; }
+
+.up-meta-hint { margin: 0; color: var(--v2-muted); font-size: 10px; line-height: 1.5; }
+
+.up-meta-field { display: grid; grid-template-columns: 1fr auto; gap: 5px 9px; align-items: center; }
+.up-meta-field .svg-label { grid-column: 1 / -1; }
+.up-meta-field .svg-input { min-height: 30px; font-size: 11px; }
+.up-meta-field textarea.svg-input { min-height: 44px; resize: vertical; }
+
+.up-hint { color: var(--v2-muted-2); font-size: 8px; line-height: 1.4; }
+
+.up-meta-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.up-meta-state { color: var(--v2-text); font-size: 10px; font-weight: 650; }
+.up-meta-usage { color: var(--v2-muted); font-size: 9px; }
+.up-meta-detail { color: var(--v2-yellow); font-size: 9px; }
+
+.up-meta-validation { display: grid; gap: 2px; }
+.up-meta-validation p { margin: 0; font-size: 9px; line-height: 1.5; }
+.up-meta-validation p.error { color: var(--v2-red); }
+.up-meta-validation p.warn { color: var(--v2-yellow); }
+
+/* settings dialog ────────────────────────────────────────────────────────── */
+
+.up-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px 14px;
+  margin: 12px 0;
+}
+
+.up-set-field .svg-input[type="number"] { height: 28px; font-size: 10px; }
+.up-set-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--v2-purple); }
+
+.up-marker {
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 7px;
+  font-weight: 800;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.up-marker.overridden { color: var(--v2-purple-2); background: #261e52; border: 1px solid #514399; }
+.up-marker.inherited { color: var(--v2-muted); background: var(--v2-surface); border: 1px solid var(--v2-line); }
+
+.up-bg-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.up-bg-row input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
+
+.up-set-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+
+.up-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* The confirmation's prose fields WRAP: a 20-line prompt must never become one
+   horizontally scrolled line (the .svg-code default is pre, for code). */
+.up-meta-prompt { min-height: 190px; max-height: 340px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The images the request will carry: one card per selected icon, 96 px each,
+   the file named underneath so a mismatched picture is impossible to miss. */
+.up-preview-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 8px;
+  background: var(--v2-surface);
+}
+.up-preview-strip > * { min-width: 0; }
+.up-preview-strip .svg-note { grid-column: 1 / -1; margin: 0; }
+.up-preview-card { display: grid; gap: 5px; margin: 0; justify-items: center; }
+.up-preview-img {
+  width: 96px;
+  height: 96px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 7px;
+  background: #fff;
+  object-fit: contain;
+}
+.up-preview-card figcaption { color: var(--v2-muted); font-size: 9px; line-height: 1.45; text-align: center; word-break: break-word; }
+
+.up-overridden { color: var(--v2-purple-2); }

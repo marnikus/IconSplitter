@@ -9,6 +9,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
+import { compositeSheetKey } from "../lib/svgcomposite";
+import { inIdOrder } from "../lib/selectionorder";
 import { stallLabel, stallNote } from "../lib/effortlimits";
 import { clampImagesPerRequest } from "../lib/svgconfig";
 import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelcaps";
@@ -70,7 +72,10 @@ interface ConfirmPlan {
 
 /** The whole split, computed once per dialog — the runner uses the same maths. */
 function useConfirmPlan(p: SvgConfirmProps): ConfirmPlan {
-  const picked = useMemo(() => p.rows.filter((r) => p.ids.includes(r.source.id)), [p.rows, p.ids]);
+  // The pick order, never the row order: the sheet below is drawn in it, and the
+  // runner plans from the same order (lib/selectionorder) — so the picture the
+  // user approves is the picture the request carries.
+  const picked = useMemo(() => inIdOrder(p.rows, p.ids, (r) => r.source.id), [p.rows, p.ids]);
   const perRequest = clampImagesPerRequest(p.config.imagesPerRequest);
   const plans = useMemo(() => planBatches(picked.map((r) => toBatchSource(r.source)), perRequest), [picked, perRequest]);
   const problems = validateBatchPlan(plans, perRequest);
@@ -139,9 +144,8 @@ interface PagerProps {
 
 /** One page = one request: its grid, its ordered filenames, its composite. */
 function BatchPager({ plan, page, pages, picked, rootRef, cache, onPage }: PagerProps) {
-  const sources = useMemo(() => plan.items
-    .map((i) => picked.find((r) => r.source.id === i.sourceId)?.source)
-    .filter((s): s is SvgSource => s !== undefined), [plan, picked]);
+  const sources = useMemo(() => inIdOrder(picked, plan.items.map((i) => i.sourceId), (r) => r.source.id)
+    .map((r) => r.source), [plan, picked]);
   const composite = usePageComposite(rootRef, plan.id, sources, cache);
   return (
     <div className="svg-batch-pager" data-testid="svg-composite">
@@ -171,27 +175,32 @@ interface CompositeState {
   error: string | null;
 }
 
-/** Builds the page's contact sheet once, in memory, and remembers it. */
+/**
+ * Builds the page's contact sheet once, in memory, and remembers it — under the
+ * sheet's OWN identity (page label + every source with its fingerprint), so a
+ * dialog re-planned for another selection can never show the earlier sheet.
+ */
 function usePageComposite(
   rootRef: { current: DirHandleLike | null },
   planId: string,
   sources: readonly SvgSource[],
   cache: Map<string, BuiltComposite>,
 ): CompositeState {
-  const [state, setState] = useState<CompositeState>(() => ({ built: cache.get(planId) ?? null, error: null }));
+  const key = compositeSheetKey(planId, sources.map((s) => ({ id: s.id, fingerprint: s.fingerprint })));
+  const [state, setState] = useState<CompositeState>(() => ({ built: cache.get(key) ?? null, error: null }));
   useEffect(() => {
-    const hit = cache.get(planId);
+    const hit = cache.get(key);
     if (hit) return setState({ built: hit, error: null });
     const root = rootRef.current;
     if (root === null) return setState({ built: null, error: "Pick the source folder first" });
     let live = true;
     setState({ built: null, error: null });
     void buildComposite(root, sources).then(
-      (built) => { if (live) { cache.set(planId, built); setState({ built, error: null }); } },
+      (built) => { if (live) { cache.set(key, built); setState({ built, error: null }); } },
       (error: unknown) => { if (live) setState({ built: null, error: reason(error) }); },
     );
     return () => { live = false; };
-  }, [rootRef, planId, sources, cache]);
+  }, [rootRef, key, sources, cache]);
   return state;
 }
 

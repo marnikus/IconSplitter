@@ -184,6 +184,51 @@ describe("SvgConfirm — the whole plan before any request", () => {
     expect(compositeCalls).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the pick order: the manifest and the sheet follow the order icons were checked", async () => {
+    const all = rows(5);
+    // the user checked icon-3, then icon-1, then icon-2 — the row order is not it
+    const ids = ["pair_3", "pair_1", "pair_2"];
+    const shown = ids.map((id) => all.find((r) => r.source.id === id)!);
+    await act(async () => {
+      ui = createRoot(host);
+      ui.render(
+        <SvgConfirm ids={ids} rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+          caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
+          rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />,
+      );
+    });
+    await settle();
+    expect(items()).toEqual(["1 — icon-3_AI", "2 — icon-1_AI", "3 — icon-2_AI"]);
+    // the sheet is drawn in that same order: the image the preview shows is the
+    // one the runner will send, cell for cell
+    expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src)
+      .toContain(shown.map((r) => r.source.relPath).join("|"));
+  });
+
+  it("never shows a previous selection's sheet just because the page label repeats", async () => {
+    const all = rows(4);
+    const render = (ids: string[]) => (
+      <SvgConfirm ids={ids} rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+        caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
+        rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />
+    );
+    // selection A: one icon → its page is batch_1_1
+    await act(async () => { ui = createRoot(host); ui.render(render(["pair_1"])); });
+    await settle();
+    expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src).toContain(all[0].source.relPath);
+    expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("batch_1_1");
+
+    // the SAME dialog instance is re-planned for selection B (the hotkeys can do
+    // exactly this while the dialog is open): its page label is again batch_1_1,
+    // and the sheet must be B's, never the first selection's
+    await act(async () => { ui.render(render(["pair_2"])); });
+    await settle();
+    const img = (q("[data-testid=svg-composite-img]") as HTMLImageElement).src;
+    expect(img).toContain(all[1].source.relPath);
+    expect(img).not.toContain(all[0].source.relPath);
+    expect(items()).toEqual(["1 — icon-2_AI"]);
+  });
+
   it("says honestly when a page's composite cannot be built", async () => {
     compositeCalls.mockRejectedValueOnce(new Error("source image gone"));
     await mount({ count: 1 });

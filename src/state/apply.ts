@@ -15,10 +15,11 @@ import type { HistoryEntry } from "../lib/history";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
+import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { patchV2, patchView, setAppState } from "./appstore";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgReview"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
@@ -29,6 +30,10 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
     case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
+    case "uploadSettings": {
+      const patch = toUploadSettingsPatch(value);
+      return patch === null ? false : applyUploadSettingsPatch(patch);
+    }
     default: return false; // an entry from a future schema: refuse, do not guess
   }
 }

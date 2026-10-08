@@ -4,13 +4,20 @@ Current behaviour, invariants and flows. If code and this doc disagree, one of
 them is wrong — fix the wrong one in the same change (AGENT_RULES RULE 17).
 Adapted structure from `Process-Images-in-Areana/docs/current/SYSTEM_OF_RECORD.md`.
 
-<!-- ideal-size: 357 lines reason=RULE 17 forbids a second current doc, so all four
-     modes' authoritative behaviour lives in this one file; per-mode design detail
-     stays in docs/archive/ instead of growing here. -->
+<!-- ideal-size: 1800 lines reason=RULE 17 keeps all six modes' authoritative behaviour in one
+     current file; the domain split (index here + docs/current/sor/*) is an owner-approved
+     follow-up planned in docs/archive/2026-10-07-env-setup-performance/design.md (O4). -->
+
+**How to read this file (context budget — `AGENTS.md` §2):** do not read it end
+to end. Jump to the section your task touches: §2 behaviour per mode · §3 state
+model · §5 invariants (`I-<n>`, the unit every rule and commit quotes) · §6
+storage map · §7 modules · §8 test inventory · §11 UI inventory. §12–§20 are
+dated deep-dives of behaviour that is still current — read one only when your
+task names it. Appending a mode/flow? Update §2 + §5 + the matching inventory.
 
 ## 1. What this is
 
-A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -24,7 +31,7 @@ A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
    approve/decline decision per pair in the pair's own `<stem>.svg.json` (I-41).
 4. **Selection V2** (Chrome/Edge only) — the same discovery, decisions and
    decision file as mode 3, presented as the template-driven
-   `design temp/selection tab V2/v2 selection tab.html` design: a full-width
+   `design/selection tab V2/v2 selection tab.html` design: a full-width
    **list review** with paired thumbnails, a thumbnail zoom slider, real
    multi-selection and bulk approve, plus a switchable **comparison** layout.
 5. **Generate SVG** (Chrome/Edge only) — recursively scans the same root and
@@ -34,6 +41,18 @@ A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
    beside that source's AI image, versioned (`_v2`, `_v3`…) with a per-file
    `<stem>.svg.json` sidecar. Nothing is uploaded anywhere; the API key lives
    only in this browser.
+6. **SVG to upload** (Chrome/Edge only) — prepares the APPROVED SVG icons for
+   external stock/print websites. Recursively discovers one row per pair with
+   a valid approved SVG (through the pair sidecars; `export/` is never
+   scanned, so export output never feeds discovery), applies
+   padding/background/stroke settings (global defaults + per-icon overrides),
+   generates conceptual metadata with Gemini (the exact prompt, confirmed
+   before any send), optimizes the export SVG copy with SVGO, renders a 15.1
+   MP JPEG from the vectors, optionally writes a genuine EPS, and commits a
+   validated per-icon package (`<pair-folder>/export/<base>.svg|.jpg|.eps` +
+   one `export.json`) atomically. The approved source and its sidecar are
+   never touched. There is NO automatic website uploading — the package is the
+   deliverable.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`
@@ -189,6 +208,19 @@ that makes a network call, only when the user asks it to):
   `position — name` manifest, its grid size and the empty cells of a partial
   last request. Pages are built in memory as they are first shown and cached
   for the dialog's lifetime; the last partial page keeps its square cells.
+* The selection is an ORDER, and the sheet is that order (2026-10-07): the icon
+  order is the order the user picked, decided in ONE place
+  (`lib/selectionorder.inIdOrder`) and read from it by the confirmation's plan
+  (`runplan.planOf`), the dialog's own pick list, the queue's label and the
+  runner's sources (`runcontrol.startRun`) — so the contact sheet the dialog
+  draws is the sheet the request carries, cell for cell, whatever order the list
+  happens to be sorted in. A cached page is identified by the sheet's own
+  content (`lib/svgcomposite.compositeSheetKey`: page label + every source with
+  its fingerprint), never by the page label alone: both single-icon plans are
+  called `batch_1_1`, and a label-only cache showed the first icon the dialog
+  ever built while the request carried the second. The dialog is also modal in
+  the keyboard layer: while one is open only Escape acts, so no list shortcut
+  (`g` especially) can silently re-plan what it is about to send.
 * Per-request outcome: every request records its own status, saved/failed/
   missing counts, tokens, cost and (on failure) its redacted reason, folded
   into one run summary and shown in the run strip — the request in flight
@@ -291,6 +323,257 @@ that makes a network call, only when the user asks it to):
 * The API key is user-provided, stored in the browser's IndexedDB secret
   store (memory-only fallback), masked in the UI, redacted in every error and
   excluded from presets/reports/exports (RULE 20).
+
+SVG to upload (adds to, never replaces, the rules above — and is the second
+mode that makes a network call, only when the user confirms it, the same
+opt-in class as Generate SVG → Requesty; design
+`docs/archive/2026-10-06-svg-to-upload/design.md`):
+
+* Discovery walks the root ignoring `export`, reads every `.svg.json` sidecar
+  and lists ONE row per pair with ≥1 valid approved SVG version; the export
+  source is the NEWEST approved valid version. Pairs without an approved valid
+  SVG, without a sidecar, outside the split scope and duplicates are reported
+  in a banner with their reasons, never listed. Export output is never a
+  discovery source (no export loops).
+* Settings: global defaults (padding %, background — `transparent` (the
+  default) or one hex, stroke width in px — the file's own units, written as
+  typed (2026-10-08; a stored `strokePt` from before reads as the same number
+  under `strokePx`), stroke
+  colour — one hex, `#000000` by default (2026-10-08), or the artwork's own,
+  JPEG target MP, JPEG quality, SVGO
+  optimize on, optional EPS, artboard) plus per-icon overrides; the effective
+  settings are defaults under,
+  overrides on top, and the settings dialog marks every field inherited or
+  overridden. "Apply settings to selected" pins the current defaults onto the
+  selection as ONE undoable `uploadSettings` history entry; per-icon set/reset
+  pushes one entry each; global-defaults edits are persisted but NOT undoable
+  (the same class as presets). The checkbox selection is session-persisted but
+  not on the undo timeline.
+* The artboard (2026-10-08) is one more settings field, with three modes:
+  `content` (the artboard hugs the artwork, as before), a square px preset
+  (256/512/1024/2048/4096 — "512×512 and other popular") or an exact CUSTOM
+  W×H, which is what lets the user set the output aspect ratio. Read back
+  through `clampArtboard`: 16–8192 px per edge, a 64 MP total area ceiling that
+  shrinks BOTH edges together so the ratio survives, and a preset that snaps to
+  the nearest offered size; a corrupt value becomes `content`. Only a
+  non-`content` artboard is written into the stored overrides.
+* The JPEG resolution is NEVER blocked by the artboard (2026-10-08, the user's
+  correction: "a small artboard must not cap the resolution"). `jpegMatchArtboard`
+  (default true) says whether the JPEG follows a PINNED artboard's exact px;
+  unticking it — which typing a megapixel value does in the same gesture —
+  renders `jpegMegapixels` instead while keeping the artboard's aspect ratio, so
+  a 512×512 artboard can still ship an 8000×8000 JPEG. With a `content`
+  artboard the question does not exist (the artboard follows the MP), so the
+  checkbox is not shown. Both the flag and the megapixels are ordinary settings
+  (defaults + per-icon overrides), the flag is in the fingerprint because it
+  changes the output, and the ONE canonical `SETTINGS_FIELDS` list (which
+  `overridesEqual` in the undo path derives from) names every overrideable
+  field, so a change confined to the artboard or the flag can never be
+  swallowed as "nothing changed".
+* Geometry: the visible bounds include strokes (width/caps/joins), transforms
+  and non-scaling-stroke; unsupported elements (text, image, use,
+  foreignObject, risky `<style>`) are named, never guessed. The artwork is
+  fitted proportionally into the padded artboard: in `content` mode the padding
+  is a uniform % of the artwork's largest side, and on a PINNED artboard it is
+  a % of the TARGET's largest side while the artwork is scaled by one uniform
+  factor and centred (letterboxed — never stretched, never cropped), the pinned
+  px are exact (`viewBox="0 0 W H"`). **Every transform is baked into the
+  geometry** (2026-10-08, `lib/upload/bake`): the artwork's own `transform`s
+  and the artboard's translate+scale become the shapes' coordinates (3
+  decimals, in artboard px), so the shipped file carries NO `transform` and no
+  wrapper group — a rect/ellipse/line/polyline/polygon keeps its element under
+  an axis-aligned matrix, a circle under a uniform one, anything rotated or
+  skewed becomes a `<path>` from the one outline model (`geom/outline.ts`,
+  shared with the EPS writer). The stroke width is written AFTER that bake,
+  **verbatim: the number in the setting is the number in the file**
+  (`strokePx: 2` → `stroke-width="2"` on every visible stroke, whatever the
+  artwork's transform or the artboard's scale — the reviewer's
+  `2.6224000000000003` was a width finalised in local units that SVGO
+  re-multiplied when it baked the transforms; with nothing left to bake the
+  optimizer cannot touch a width, and the export test pins the SHIPPED text).
+  A stroke width of 0 keeps the artwork's own strokes: each width follows its
+  geometry (× the baked scale, ≤ 3 decimals; a `non-scaling-stroke` keeps its
+  number and loses the attribute), dash arrays/offsets scale the same way, and
+  containers lose their `stroke-width` because every shape now carries its
+  own. What a bake would distort is refused by name before the tree is touched
+  (`unsupported: a stroked <path> under a non-uniform transform`, `a rounded
+  <rect> under a rotation or skew`, `a userSpaceOnUse <linearGradient>`, `a
+  <clipPath>` / `<mask>` / `<filter>` / `<pattern>`) — a deliberate narrowing
+  recorded in the 2026-10-08 stroke-width design; a stroke COLOUR
+  other than "artwork" is written onto every element that strokes visibly
+  (fills, `stroke="none"` and gradient/pattern strokes are never touched, and
+  a `currentColor` stroke becomes the chosen hex). **Each stroke property is
+  then defined ONCE** (`lib/upload/strokeglobal.ts`, 2026-10-08 — the stock
+  reviewer's `<svg stroke="#111"><g stroke="#000" stroke-width=".8">` with a
+  width on every path): when every visibly stroked shape agrees on `stroke`
+  (or `stroke-width`) the root carries it and no other element or inline
+  style does — the group's `.8`, the per-path widths, the source root's own
+  colour all go — and a shape that does not stroke (the background rect, a
+  filled shape) says `stroke="none"` so the root's paint cannot reach it;
+  when the shapes disagree (`artwork` colour over a mixed source, width 0
+  over mixed widths) each stroked shape states its own and no container or
+  root states any; when nothing strokes, nothing is written. With the
+  defaults a line icon therefore ships `<svg stroke="#000" stroke-width="2">`
+  and no other definition of either (the export test pins the SHIPPED text
+  through SVGO; `PreparedSvg.globalStroke` records what the root defines).
+  The root carries NO
+  `width`/`height` — the `viewBox` is the size (every consumer that needs px
+  — the rasterizer, the EPS — derives them; the browser rasterizer pins the
+  render size on an in-memory copy only). A `transparent` background (the
+  default) paints no rectangle in the SVG or the EPS; a colour paints one
+  fill-only rectangle in both; the JPEG, which cannot be transparent, flattens
+  onto the colour or onto white. The JPEG
+  rasterizes the VECTORS directly — at the artboard's px while
+  `jpegMatchArtboard` is on, otherwise at the integer MP target in the
+  artboard's ratio (15.1 MP on a square artboard → 3886×3886; 4 MP on 512×256 →
+  2828×1414) — verified by decoding the SOF back. All of it happens on an export
+  COPY — the approved source is never written.
+* The metadata prompt (2026-10-07 UI fix): it lives in its OWN large panel
+  beside the Gemini card — never inside it — and it is EDITABLE and persisted
+  (`iconSplitter.upload.prompt.v1`): the text the editor shows is the text the
+  one confirmed request carries, the text the confirmation dialog previews, and
+  the text the export record names (honesty: one prompt, one owner). Presets are
+  named snapshots under `iconSplitter.upload.prompts.v1` with their own row —
+  the saved list, Quick load, Delete, and Save as with a name field (a new name
+  goes first, an existing one is replaced in place; max 50, names 1–60 chars,
+  text ≤ 8000 chars, all validated on read). Editing the prompt never relaxes
+  the POLICY: the validator keeps enforcing the rules the default prompt states,
+  and the panel says so out loud.
+* Metadata: Gemini (`gemini-3.1-flash-lite`, `x-goog-api-key` header, key in
+  IndexedDB under `gemini-api-key`, masked/redacted everywhere) answers the
+  prompt above (the documented default until the user edits it); the answer is
+  parsed deterministically (three labeled
+  lines) and validated against a MINIMUM policy (2026-10-07, "no need be
+  strict"): at least 10 unique tags — case-insensitively unique, and the list
+  must still contain the 7 mandatory terms — a title of at least 5 words and a
+  description of at least 7 words, where a hyphenated compound counts as ONE
+  word; nothing is refused for being longer, and duplicates or a missing
+  mandatory term are errors. IP-claim phrases and restricted-content hits are
+  warnings only — they never block the accept (the prompt forbids them).
+  Errors are verbatim and actionable (`tags must be at least 10 (got N)`,
+  `title must be at least 5 words (got N)`, `description must be at least 7
+  words (got N)`, `missing mandatory tags: …`). 2026-10-08: duplicates are
+  removed SILENTLY before validation — case-insensitively, first spelling kept,
+  order kept, blanks dropped (`dedupeTags`), and the ≥10 minimum counts the
+  DEDUPED list, so a tag written twice is never a refusal or a warning. The
+  fields
+  under each row are editable and copiable, empty until generated; Accept
+  re-validates and persists through the embed commit. The confirmation dialog shows the exact
+  request (prompt, endpoint, auth rule) before any paid send; a timeout or
+  disconnect is NEVER resent automatically (no duplicate paid submission);
+  in-flight requests are journalled and reported `interrupted` after a restart.
+* Clean export SVG (2026-10-08, the user's clean-code rule): the file that
+  ships is SVG 1.1 (`version="1.1"` re-added after SVGO, which strips it), holds
+  a real four-number `viewBox`, contains no raster content anywhere (an
+  `<image>` or a `data:image/…` URI is refused outright — it cannot be cleaned
+  without changing the picture), no root `width`/`height` (the viewBox is the
+  size), no editor bloat (comments, foreign elements and attributes; namespace
+  declarations live ONCE on the root and only for prefixes the document uses —
+  `xlink` when referenced, `rdf`/`dc` for the embedded metadata, which the embed
+  step declares on the root instead of on every `dc:*` element (2026-10-08,
+  stock review); an `xmlns:*` below the root or an unused one is a violation
+  the rebuild pass hoists or drops), and NO naming — no
+  `id`, `class`, `data-*`, `aria-*`, `role`, `xml:space`, `enable-background`
+  and no generator comments; the only surviving id is one the artwork really
+  references, renamed `a`, `b`, … with every `url(#…)`/`href="#…"` rewritten to
+  match. A paint-only `<style>` block or `style=""` is FOLDED into the elements
+  (paint properties only — anything that could move, hide or clip geometry is
+  refused as `unsupported` with the reason, never guessed at), which is what
+  lets the class names go. The policy runs three times — at prepare, after the
+  optimizer and as the last check before commit — from ONE rule list, so the
+  check and the fix can never disagree; an unparseable or unfixable document is
+  reported with its violation instead of shipping, and the file the export
+  COMMITS is re-verified from its own text, not from the copy that was built.
+  The background rectangle the prepare pass paints (only for a colour
+  background) is fill-ONLY (`stroke="none"`, 2026-10-08): `stroke` is
+  inherited, so an artwork that strokes on the root or a group would otherwise
+  put a border around the whole artboard. The `<metadata>` subtree is the one
+  place the clean pass leaves alone for both the check and the rebuild — it is
+  the embed step's output (RDF/DC vocabulary by design), verified by its own
+  readback, and the namespace rule still covers it (a declaration inside it is
+  a violation, hoisted to the root).
+* Metadata title AND description (2026-10-08, stock review): each is ONE
+  clean phrase — `cleanPhrase` keeps the text up to the first sentence break
+  (end punctuation after a word of 2+ letters, then a space, then more text —
+  `2.5` and `e.g.` are not breaks), strips a trailing `.`, `!`, `;`, `:`,
+  `,`, `…` (a `?` stays: a question is a phrase) and writes sentence case
+  (first letter up, every later Capitalised word down; `SEO`, `iOS` and a
+  lone `A` untouched). The reviewer's "Collaborative Unity Promoting
+  Collective Social Empathy. Icon of charity and community." ships as
+  `<title>Collaborative unity promoting collective social empathy</title>`
+  (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
+  fields at every gate the text passes: the model's answer
+  (`parseMetadata`), the accepted-metadata cache on read, the Accept button
+  (an edit) and the committed `export.json` block a reload reads back
+  (`metaFromRecord`); the fingerprint is over the cleaned text, so a
+  remembered or exported answer the rule changes no longer matches its stored
+  fingerprint — the row shows stale and the next export re-embeds the file
+  without a model call. It is a SHAPE rule, never a refusal: a phrase
+  cut below the minimum fails validation like any short answer (nothing is
+  padded). The prompt asks for exactly this ("ONE phrase … sentence case, no
+  period") for both lines; the field hints say the same.
+* Export: the stage planner re-runs only what changed (a metadata edit re-embeds
+  — no AI, no render; a missing output rebuilds just that output; nothing
+  changed → no work). Every output validates before it commits (SVG parses +
+  metadata readback; JPEG decodes at the recorded dims + XMP readback; EPS
+  header + bounding box) and commits atomically (tmp → verify → overwrite →
+  cleanup, `export.json` LAST as the commit marker), so a crash mid-commit
+  leaves the last valid package in place. EPS is a genuine writer for a
+  documented subset; anything outside fails that stage honestly → `partial`
+  (SVG/JPEG stay committed). Green (`processed`) only when every requested
+  output validated and committed; `stale` when fingerprints moved since the
+  last commit.
+* Restart precedence (P2.6 — the two interruption models reconciled): there are
+  TWO independent memories of work that did not finish, and they never silently
+  disagree. **Disk wins on scan**: `export.json` beside the outputs is the
+  authority — a record that says `processed` is shown as processed even when a
+  stale in-memory state says otherwise, because the package really is on disk.
+  **Memory wins within a session** and only for what disk cannot know: the
+  in-flight journal (`…upload.journal.v1`, a metadata request whose outcome is
+  unknown) and the job store (`…upload.jobs.v1`, a run that was `queued`/`running`
+  at close / crash). Both are read at assembly; a row with no committed record
+  shows `interrupted`, never a quiet `discovered`, and the restore note is
+  emitted exactly ONCE per page load (StrictMode's double-invoke included), so
+  a remount cannot re-report or re-send. A run marks itself `queued` → `running`
+  before it starts and writes its terminal state after the commit, which is why
+  a crash mid-run can be reported honestly instead of guessed.
+* Row layout (2026-10-07 UI fix): the row detail is TEXT ONLY — the committed
+  artifact is not rendered inline (a 3886 px JPEG in the detail was the "huge
+  icon below"; that preview is deferred). What replaced it is the LOCATION
+  action: it copies the pair's export folder path with the same shared code the
+  Generate SVG tab's Location uses (`lib/copypath` → `folderCopyText`), naming
+  the committed artifact when there is one and the planned package path before
+  the first export. The reference's tool block is honoured too: the global
+  Export settings button sits in the bulk bar beside the zoom controls, and the
+  Gemini card is one contained grid (Model, Endpoint on its own full-width row,
+  Timeout, Retries, Parallel, then the check row) so no control can overlap or
+  leave its box.
+* The confirmation shows the image it sends (2026-10-07): the metadata dialog
+  renders, BEFORE anything is paid for, the very bytes the request will carry —
+  one 512 px JPEG per selected icon, each read from that icon's OWN approved SVG
+  and captioned with its file name (`upload-preview-{id}` +
+  `upload-preview-caption-{id}`). The prepared data URL is bound to the pair id
+  AND the SVG's `size:mtime` fingerprint (`lib/upload/sentpreview.previewFor`);
+  the runner sends it unchanged when both still match and re-renders that icon's
+  own document when they do not, so a stale or neighbouring icon's picture can
+  never travel. `upload-meta-confirm` stays disabled until the previews are
+  ready, the strip is bounded (24, `PREVIEW_LIMIT`) and says how many it left
+  out, one unrenderable icon never costs the others their preview, and the
+  caption reads "… · image/jpeg · 512×512 · N.N KB · sent unchanged". Both row
+  previews (this tab and Generate SVG) now read their document through ONE hook
+  (`svg/usesvgtext`), which returns a text only for the folder generation +
+  path it was read for — a row can never paint another row's artwork.
+* Model check (CP-8): the provider card can ask the provider's own model list
+  (`GET {base}/models`, same `x-goog-api-key` header, same bounded request
+  window) and reports found / missing / failed. The configured id is NEVER
+  substituted from the answer; the outcome is logged once as `model-checked`.
+  A truncated answer (`finishReason` `MAX_TOKENS`/`LENGTH`) is `invalid` with the
+  provider's own reason and is never accepted, even when the half-written tags
+  happen to parse.
+* Undo: one new entry type `uploadSettings` (`{ overrides: { [pairId]: Overrides
+  | null } }` before/after) on the shared global timeline; the apply path lives
+  in `src/upload/uploadundo.ts` (a mounted panel applies live; unmounted
+  writes the store directly).
 
 ## 3. State model
 
@@ -456,10 +739,10 @@ Batch:
   scroll position, and the app's floating toasts are lifted above the dock's
   published height (`--app-dock-h`).
 * **I-28 (copies, RULE 2/9):** a "copy path" action yields a **folder** path,
-  never a file name: the batch folder for anything inside
-  `_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>`, the item's own folder
-  anywhere else. The text uses backslashes throughout, and a blocked clipboard
-  is reported as an error instead of being swallowed.
+  never a file name: the folder that holds the file the action was made from
+  (I-56 — reversed 2026-10-06 from the older "stop at the batch folder" rule).
+  The text uses backslashes throughout, and a blocked clipboard is reported as
+  an error instead of being swallowed.
 * **I-29 (full path, RULE 13/20):** the full path of a picked root is
   remembered per **folder name** in `iconSplitter.rootpaths.v1`, normalised on
   write (Explorer's surrounding quotes, forward slashes, trailing and doubled
@@ -555,11 +838,16 @@ Batch:
   (`lib/splitscope.ScopeRule { split, hideOutside }`). The scope line names such
   a root (`Scope: split output only`) and never says "in the main folder", which
   is not inside the picked root at all.
-* **I-48 (the batch folder is where a human looks, RULE 4):** a copy stops at the
-  run folder whenever the item belongs to a batch — whether the output chain is
-  inside the relative path (`_split_output/<month>/<stamp>/…`), starts at the
-  root's own level (`<month>/<stamp>/…`), or **is** the root
-  (`<stamp>` as the picked folder, where the copy hands over the root itself).
+* **I-56 (the folder of the file, RULE 4 — 2026-10-06):** a copy names the folder
+  that CONTAINS the file the action was made from, at every depth: for
+  `…/<stamp>/<piece>/split_04/<file>` that is `…\<piece>\split_04`, whoever's
+  root was picked (`_split_output`, the month folder, the run folder or any
+  ancestor). **Reverses I-48** (2026-10-05), whose "stop at the run folder" made
+  a deep file's location point one level too high; the run folder is reached by
+  copying an item that really sits in it. `svg/codeactions.openLocation` hands
+  over `targetPathOf(row)` — the same path `svg-target-{id}` shows — so the row's
+  text and the copied folder can never disagree (the older code joined the row's
+  folder onto an already root-relative `svgPath`, doubling the chain).
   A folder that merely resembles the layout keeps the item's own folder, as
   before; `lib/batchlayout` owns the names both rules read.
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
@@ -651,6 +939,18 @@ Batch:
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
 | `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
+| IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
+| localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map) | validated/clamped on read (RULE 13): `background` is `transparent` or a hex (a missing or junk value → `transparent`; a stored white from before 2026-10-08 stays white), `strokeColor` is a hex or `artwork` (missing or junk → `#000000`, the 2026-10-08 default; a stored `artwork` stays `artwork`), `strokePx` is 0–32 px (the pre-2026-10-08 key `strokePt` is read as the same number and never written back; the fingerprint is positional, so nothing flips to stale); the undo path writes through the same store |
+| localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
+| localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt `{ v, prompt }` | validated on read: missing/empty/junk/foreign version → the documented default (`parsePromptText`, RULE 13); written on every edit, so a restart opens with the user's own text |
+| localStorage `iconSplitter.upload.prompts.v1` | the saved prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50; corrupt → no presets |
+| localStorage `iconSplitter.upload.prefs.v1` | upload view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read; display-only — the zoom never feeds the output scale |
+| localStorage `iconSplitter.upload.journal.v1` | the in-flight metadata-request journal (row id, start time, request id — no key, no prompt, no answer) | validated on read; corrupt = empty; an open entry after a restart is `interrupted`, never resent |
+| localStorage `iconSplitter.upload.meta.v1` | the **accepted-metadata cache** (CP-15), keyed by the sha256 of the SOURCE SVG: `{ v, cache: { [sha256]: { state: generated \| accepted, meta } } }` | validated entry-by-entry on read (junk dropped, foreign version = empty); bounded at 512 entries, oldest evicted first; an entry whose text no longer passes `upload-meta-v1` comes back `invalid`, never exportable: edited artwork misses the cache by construction |
+| localStorage `iconSplitter.upload.jobs.v1` | the **per-icon job store** (CP-2): `{ v, states: { [pairId]: queued \| running \| processed \| partial \| failed \| cancelled \| interrupted } }` | validated on read (unknown states dropped), bounded at 1024; a `queued`/`running` entry left by a previous session becomes `interrupted` **once per page load**; the store never re-sends, retries or re-bills anything |
+| IndexedDB `iconSplitter/secrets["gemini-api-key"]` | the Gemini API key | its own slot beside the Requesty key; never in localStorage, logs or exports (RULE 20); a refused write falls back to a session-only key the UI names as such |
+| `<pair-folder>/export/<base>.svg|.jpg|.eps` | the export package (prepared SVG copy, 15.1 MP JPEG, optional genuine EPS). `<base>` keeps the icon's own name and drops ONLY the app's `_AI` marker (`lib/upload/export.ts` `stemOf`, the ONE rule the commit and the published-JPEG path share) — `fog_AI.svg` → `fog.svg`, `fog_AI_03.svg` → `fog_03.svg`, `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face_7_04.svg`, `fog_AI_v2.svg` → `fog_v2.svg`; every numeric tail STAYS (the digits are what tell one icon from another — `fog_AI.svg` and `fog_AI_7.svg` are different pairs and stay `fog.*` and `fog_7.*`), and a name without a trailing `_AI` marker (or with a non-numeric tail, `fog_AI_x.svg`) comes back unchanged, never invented | written only by the validated export commit; the approved source and its sidecar are never touched. The approved version also stays in `export.json` (`source.version`) as before |
+| `<pair-folder>/export/export.json` | the per-icon export record (schema v1: source/settings fingerprints, svgo + eps tool records, metadata block, outputs with hashes, stage, status, validation, timestamps) | one per icon, no global multi-icon file; written LAST as the commit marker; corrupt/missing → rebuilt, never destroys outputs |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
 
@@ -682,15 +982,19 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
+| The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
+| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: bake, viewBox-only root, optional background rect, stroke width written verbatim + colour restyle, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
+| Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
+| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset), the framed SVG preview |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 75 files / 704 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 126 files / 1334 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
-Selection, Selection V2 and Generate SVG panels and drives them with hotkeys
-and `data-testid` handles):
+Selection, Selection V2, Generate SVG and SVG to upload panels and drives them
+with hotkeys and `data-testid` handles):
 
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
@@ -820,6 +1124,32 @@ and `data-testid` handles):
   whole queue, saying how many batches that was. A waiting batch is a scheduling
   fact, never a row status: nothing about the files changes until its request
   really starts, and the run that finished it says so in its final line.
+* `keyvault.test.ts` — the key rules on their own: a save that storage refused
+  is reported `session` (and the key still loads), `save("")` is `empty` and
+  erases nothing, an unreadable store answers `unreadable` — never `none` — and
+  a corrupt envelope is absent, not a crash
+* `upload_keypersist.test.tsx` — the reported bug, end to end: a key saved once
+  survives an edit, a tab switch and a fresh boot; a session-only key says so
+  instead of asking again; an empty Save cannot destroy a stored key (Save is
+  disabled; `Forget` is what clears); five operations open ONE connection
+* `upload_settings_store.test.ts`, `upload_keystore.test.ts`,
+  `upload_journal.test.ts` — the stores (defaults + overrides round-trip,
+  corrupt → defaults, clamps), the Gemini key's secret hygiene (own IndexedDB
+  slot, never localStorage, session fallback) and the in-flight journal
+  (restart → interrupted, corrupt → empty)
+* `upload_rowmodel.test.ts` — row assembly from a real export.json + source
+  hash, exact staleness (source/settings/metadata fingerprints), the metadata
+  state a record carries, filters/sort/header/counts (incl. a failed run with
+  record null counted), pruneChecked
+* `upload_undo.test.ts` — the `uploadSettings` entry: payload gate, the live
+  binding, the persist-only path, no-op refusal, undo/redo routing
+* `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
+  reported), previews + zoom, filters/search, selection, the settings dialog
+  (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
+  entry; reset), the exact-request confirmation, editable/copiable metadata
+  fields, invalid-answer refusal, cancel (never resent), interrupted after a
+  restart, export → green committed package with the source untouched, stale →
+  re-export, metadata embedded + verified, honest failure commits nothing
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
@@ -862,6 +1192,12 @@ and `data-testid` handles):
   data URL travelling on the same event never reaches the entry
 * `secret_hygiene.test.ts` (extended) — a key written through the real log store
   appears neither in the entry, the stored payload, nor the copied text
+* `verify_runner.test.ts` — the lane plan of `tools/verify.mjs`, spawned for
+  real: fast mode runs the suite exactly once (the coverage lane), `--full`
+  adds the standalone lane, lane order, quality-lane args, `--base` passthrough
+* `quality_base.test.ts` — `tools/quality.mjs --base/--files`, spawned for
+  real: explicit ref/list, loud failure on an unknown ref or a missing file,
+  honest empty set for non-src, the shallow-clone fetch hint
 
 Must exist before the matching change ships:
 
@@ -922,6 +1258,16 @@ Workflow and ratchet: `CODE_VERIFICATION.md`. Dated re-checks: `QUALITY_RECHECK.
   window replacing every total timeout, four distinct outcomes with a stall
   reported as *outcome unknown*, kept request ids, the in-flight journal and
   its explicit restart recovery, ticking elapsed + Cancel).
+* 2026-10-07 — SVG to upload built TDD-first from the prepared template:
+  `docs/archive/2026-10-07-svg-to-upload/design.md` (discovery through the
+  pair sidecars, settings and undo, the Gemini metadata prompt and transport,
+  SVGO/JPEG/EPS pipelines, the per-icon `export.json` and its atomic commit,
+  no automatic uploading).
+* 2026-10-07 — environment-setup performance (agent sandboxes):
+  `docs/archive/2026-10-07-env-setup-performance/design.md` (shallow-clone-safe
+  quality gate `--base/--files`, pinned toolchain, root `AGENTS.md`, the node
+  verify runner replacing `pre_push_check.sh`, devcontainer + CI, doc-map
+  hygiene; the O4 doc split is deferred there with reasons).
 
 ## 11. Current UI — control inventory
 
@@ -1002,6 +1348,44 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-inflight-retry`, `svg-inflight-dismiss`), status bar
   (`svg-statusbar`), toast + busy (`svg-toast`, `svg-busy`); review undo goes
   through the shared `hist-*` handles. Full table: `UI_SELECTORS.md` §P.
+* SVG to upload mode: source bar (`upload-open-folder`, `upload-folder-path`,
+  `upload-rescan`, `upload-scope-copy`, `upload-audit`,
+  `upload-count-{icons,processed,partial,failed,stale}`), settings button +
+  provider card (`upload-settings-open`, `upload-provider-card`,
+  `upload-provider`, `upload-limits`, `upload-model`, `upload-endpoint`,
+  `upload-timeout`, `upload-retries`, `upload-concurrency`, `upload-prompt`
+  (read-only — the exact prompt), `upload-key-state` / `upload-key-mask` /
+  `upload-key-note` / `upload-key-input` / `upload-key-save`), filters
+  (`upload-filter-status`, `upload-filter-metadata`, `upload-sort`,
+  `upload-search`, `upload-shown`, `upload-clear-filters`), bulk bar
+  (`upload-check-all`, `upload-selected-count`, `upload-scope`,
+  `upload-select-visible`, `upload-deselect`, `upload-thumb` +
+  `upload-thumb-value`, preview background (`upload-bg`,
+  `upload-bg-{white,black,gray,green,red}`, `upload-bg-custom`,
+  `upload-bg-value`), `upload-estimate` / `upload-progress`,
+  `upload-apply-settings`, `upload-meta-selected`,
+  `upload-export-selected`, `upload-cancel-run`), list (`upload-list`,
+  `upload-rows`, `upload-row-*`, `upload-check-*`, `upload-prev-*` +
+  `upload-prev-*-frame`, `upload-target-*`, `upload-export-path-*`,
+  `upload-status-*`, `upload-meta-cell-*`, `upload-settings-*` +
+  `upload-settings-pinned-*`, `upload-meta-*` / `upload-settings-btn-*` /
+  `upload-export-*`, the active row's detail `upload-detail-*` with the
+  editable/copiable fields `upload-meta-{title,description,tags}-*` +
+  `upload-copy-{title,description,tags}-*` + `upload-meta-{state,usage,detail,
+  validation,accept,regen,gen}-*`), the settings dialog (`upload-dialog-*`,
+  `upload-set-{padding,stroke,mp,quality,optimize,eps}`,
+  `upload-set-bg-{transparent,white,black,gray,green,red,custom}`,
+  `upload-set-bg-value`,
+  `upload-set-stroke-color-{artwork,white,black,gray,green,red,custom}`,
+  `upload-set-stroke-color-value`, `upload-set-marker-*`, `upload-set-reset`,
+  `upload-set-close`), the metadata confirmation (`upload-meta-backdrop`,
+  `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`,
+  `upload-preview-strip` / `upload-preview-{id}` +
+  `upload-preview-caption-{id}`, `upload-preview-{count,busy,none}`),
+  banners (`upload-warn-{excluded,corrupt,unreadable,interrupted}`), status
+  bar (`upload-statusbar`, `upload-status-{counts,provider,meta,export}`),
+  toast + busy (`upload-toast`, `upload-busy`); settings undo goes through
+  the shared `hist-*` handles. Full table: `UI_SELECTORS.md` §Q.
 
 ## 12. Session restore, reset to pending & the global undo timeline (2026-10-01)
 
@@ -1214,11 +1598,13 @@ work and say so (`full path not captured`).
 
 `lib/rootpath.folderCopyText(rootName, relPath)` and its one caller
 `lib/copypath.copyFolderText` replace the three hand-written copies (the Batch
-one had its own, with forward slashes). The rule (I-28): inside a run's output
-tree (`_split_output/<YYYY-MM>/<YYYY-MM-DD_HH-mm-ss>/…`) the copy stops at the
-**batch folder** — the folder a human browses — and anywhere else it keeps the
-item's own folder; the file name is dropped in both cases. Since 2026-10-05
-(I-48) the batch chain is found from either side of the picked root: inside the
+one had its own, with forward slashes). The rule (I-28, revised 2026-10-06 by
+I-56): the copy names the **folder that contains the file** — the file name is
+dropped, and no ancestor is skipped for looking like a month, a run stamp or a
+`split_NN`. Until 2026-10-06 the tree rule stopped at the **batch folder**
+instead; that reversal is what the user asked for, and the batch folder is
+reached by copying an item that sits in it. (Historical note: the batch chain
+used to be found from either side of the picked root — inside the
 relative path, at its head (the output folder or a month folder picked as the
 root), or the root itself being one run folder — see §17. Four surfaces use it:
 the Batch scan table's row action, Selection V1's and V2's "original / AI
@@ -1409,8 +1795,8 @@ on the clipboard):
 After the fix the same probe reads, for **both** picks: 2 rows in Selection V2,
 2 rows in Generate SVG (`Audit — 6 files · 2 AI sources · 2 references excluded ·
 0 missing files · 0 duplicates removed → 2 rows`, no `outside-split`), scope
-`Scope: split output only`, and a copy that hands over
-`…\2026-10\2026-10-05_18-45-20` — the batch folder. Design:
+`Scope: split output only`, and a copy that hands over the file's own folder —
+since I-56 that is `…\<piece>\split_NN`, not the run folder. Design:
 `archive/2026-10-05-picked-output-root/design.md`.
 
 Two rules carry it. **Scope (I-47)** is now a decision about the set the picked
@@ -1419,10 +1805,11 @@ folder defines, not a segment of every relative path:
 folder is an output folder, a run stamp, or holds one; `hideOutside` **only**
 when the output folder lies strictly below the root (the `test_processing_2`
 case, which keeps hiding and counting the unsplit sheets, I-38/I-40).
-**Copy (I-48)** finds the batch folder from either side of the root: the chain
-inside the relative path (unchanged), the chain at the head of it
-(`<month>/<stamp>` when `_split_output` or a month is the root), or the root
-being one run folder — where the copy hands over the root itself. A near-miss
+**Copy (I-48, replaced by I-56 on 2026-10-06)** used to find the batch folder from
+either side of the root: the chain inside the relative path, the chain at the
+head of it (`<month>/<stamp>` when `_split_output` or a month is the root), or
+the root being one run folder. Since I-56 the root plays no part in the answer:
+the copy names the containing folder of the file it was given. A near-miss
 (`split_01`, `_split_output/latest`, a `2026-10` folder that holds no run) keeps
 the item's own folder, exactly as before.
 
@@ -1520,3 +1907,166 @@ read happens without the user's own gesture (a boot-time scan is silently
 refused), and no new control appears — the bar is still one green button, one
 `Rescan` and one read-only row. Design:
 `archive/2026-10-05-path-capture-recovery/design.md`.
+
+## 20. The API key that was saved and then gone (2026-10-07)
+
+Report: the key "shows API saved" and is "stored locally", yet the app asks for
+it again as soon as anything changes — an edit, a tab switch — and only a
+freshly pasted key works; requests come back `400 API key not valid. Please pass
+a valid API key.`
+
+Measured cause, three faults in one path, all in how the key was kept:
+
+* **A leaked IndexedDB connection per operation.** The store opened a new
+  connection for every read and every write and closed none. The handles piled
+  up, and a handle left open blocks any later version upgrade of the same
+  database: the second tab's (or a new build's) `open` waits on `onblocked`,
+  which the code answered with "no storage". So the key was written into a page
+  that then had no working storage, and the next boot read nothing.
+* **An empty Save that really wiped.** Saving with an empty field wrote
+  `{key: null}` — clicking Save on a card whose draft had already been spent
+  destroyed the key that was there.
+* **A failed read that looked like an empty one.** Every failure path answered
+  "no key", so a store that merely could not be read sent the user to paste a
+  key the app was still holding.
+* **The folder scan overwrote the key in memory.** The upload tab's scan takes
+  its refs bag from the panel, and its `key` field was the *snapshot* key — so
+  every scan wrote the folder's fingerprint (`6bcab92d`) into the ref that holds
+  the API key. The card went on saying "secured locally" (its state comes from
+  the boot read, which is correct) while the request carried the fingerprint as
+  its key, and the provider answered exactly what the field reported:
+  `400 API key not valid. Please pass a valid API key.` — appearing only after a
+  tab switch, because returning to the tab is what runs the scan. The field is
+  now named `scanKey` in both tabs (`SvgRefs.scanKey`, `UploadRefs.scanKey`,
+  `UploadScanRefs.scanKey`): `key` means the provider key, and nothing else may
+  be called that.
+
+Now (RULE 10/20, `lib/keyvault`):
+
+* the page keeps **one** connection, closes it the moment another tab needs the
+  database (`versionchange`) and reopens on demand; a connection that errored,
+  closed, was blocked or was taken away is never reused;
+* `save("")` is `empty` — it changes nothing, and clearing is the separate,
+  deliberate `Forget`; the editor's Save is disabled while the field is empty
+  and the draft is dropped when the editor closes;
+* `read()` reports **where the key came from**, and the UI says it: `device`
+  ("secured locally"), `session` ("kept for this session only — paste again
+  after a reload"), `unreadable` ("storage could not be read" / "this device's
+  storage is unreadable here (private mode?)") and `none` ("no key yet"). A
+  write the browser refused keeps the key usable for the session and says so;
+* the key itself never changes place: still one IndexedDB slot per provider,
+  masked in the UI, redacted from logs, never in a URL, a preset or an export.
+
+Measured, not guessed: the regression test drives the real panel through the
+real metadata request and asserts the header the provider receives — a tab
+switch, then the send. Before the fix the header read `6bcab92d` (the scan's
+snapshot hash); after it, the saved key. The same invariant is pinned at the
+scan's own seam (`upload_scan.test.ts`: a scan writes `scanKey` and leaves the
+`key` ref beside it untouched).
+
+Honesty note: a key that the provider itself rejects is a different case — this
+fix is about a key the app already holds, and a wrong or revoked key still
+answers `400` from the provider.
+
+## The four-point batch (2026-10-08, `four-point`)
+
+* **Tags dedupe silently** (point 1): see the metadata policy above — one
+  `dedupeTags` in `lib/upload/meta.ts` feeds BOTH `parseMetadata` and the tags
+  edit path, so a pasted list with repeats becomes one clean list before the
+  policy ever looks at it.
+* **EPS 10 after the SVG is optimized** (point 2): the EPS stage runs on the
+  CLEANED/optimized export SVG and writes an **EPS 10 /
+  Illustrator-10-compatible** document — `%!PS-Adobe-3.0 EPSF-3.0`, the DSC
+  order `%%Creator` → `%%Title` (the `${stem}.eps` name, DSC-escaped) →
+  `%%CreationDate` (the run's clock) → `%%BoundingBox` (integer) →
+  `%%HiResBoundingBox` (exact points) → `%%DocumentData: Clean7Bit` →
+  `%%LanguageLevel: 3`, then EndComments/Prolog/Setup sections, the uprighting
+  CTM and `%%EOF`. `verifyEps` requires those three markers, so a file that
+  lost them is `partial`, never shipped as EPS 10.
+* **Two global buttons** (points 3 + 4), both acting on the checked rows:
+  * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts the selected
+    icons that have NO metadata text yet (a draft is not re-requested); rows
+    that already have text are named in the status line instead of being paid
+    for again, and at N = 0 the line says why nothing was sent.
+  * `upload-export-selected` ("⇪ Export selected") — metadata first, then the
+    WHOLE selection: the confirmation (`#upload-meta-title` "…, then export N",
+    the note `upload-meta-then-export`) opens, each answer that passes the
+    policy is accepted as it lands, and after the batch every selected icon is
+    exported. An icon that already had metadata is exported, never re-charged;
+    a policy-breaking answer stays a draft and that icon exports without it.
+    With nothing to generate the export starts immediately. Needing metadata
+    with no key is refused up front, naming the missing API key.
+* **The batch → export handoff** (RULE 24): `acceptNow` records the accepted
+  state in the run's own `MetaRunCtx.accepted` map, and `runExportBatch` prefers
+  that map over re-reading `latest.current` — a `dispatch` is not visible in the
+  rows until React re-renders, so reading them back exported the first icon
+  WITHOUT its metadata. Never re-read `latest.current` for state the current
+  task just dispatched.
+
+## Export naming (2026-10-08, `export-naming`)
+
+The user's rule (corrected the same day): *"only remove `_AI` but keep numbers,
+`_03` etc."* A destination site must see the icon, not the app's marker, so the
+artifact name is `stemOf(row.svgName)` from `lib/upload/export.ts`:
+
+* strip the extension, then the `_AI` marker **and nothing else**;
+* `fog_AI.svg` → `fog.svg` / `fog.jpg` / `fog.eps`; `fog_AI_03.svg` → `fog_03.*`;
+* `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face_7_04.*` (batch + split tails);
+* `fog_AI_v2.svg` → `fog_v2.*` — the approved version stays visible in the name;
+* `chat_bot_2_AI.svg` → `chat_bot_2.*`;
+* no trailing `_AI` marker, or a non-numeric tail (`fog_AI_x.svg`), comes back
+  unchanged — the name is never invented, only trimmed.
+
+Keeping the digits is also what keeps two icons apart: `fog_AI.svg` and
+`fog_AI_7.svg` are different pairs and export as `fog.*` and `fog_7.*`.
+
+One rule, one home: `runexport.ts` no longer keeps a second private `stemOf`
+(RULE 3/16.4), and `publishedJpegPath` (the Location action's path and the
+export-path cell) derives from the same function, so the record, the file and
+the UI cannot disagree.
+
+**The folder's superseded artifacts are swept once the write is verified**
+(`src/upload/exportsweep.ts`, own test suite). A folder exported before the
+2026-10-08 naming change still carries the OLD artifacts — typically the EPS
+(`fog.svg` + `fog.jpg` + `fog_AI.eps`) — and the user asked for the package to
+end up under ONE name. After the new files are written and verified, and only
+then, the sweep removes **what this app provably wrote and no longer writes**:
+
+* candidates are only the icon's three artifact extensions whose bare name trims
+  to **this icon's stem** under the very rule that produces the current names
+  (`trimArtifactStem`), and which are not already `${stem}.${ext}` — so
+  `export.json`, a readme, another icon's `arch_AI.svg` and every number-tailed
+  name that belongs to a DIFFERENT icon (`fog_AI_7.eps`, `fog_AI_9_01.jpg`) are
+  never candidates; near-misses (`fogv2.eps`, `fog_AI_x.eps`) are not either;
+* a candidate the previous `export.json` still **names** goes only when the
+  current artifact of that kind is on disk — an EPS stage that failed leaves the
+  previous EPS alone rather than deleting the only copy of it;
+* a candidate **no record names** is an orphan (the app lost track of it, no
+  package claims it) — that is what a failed-then-recommitted EPS looks like, and
+  it goes;
+* `*.tmp` leftovers are left to the commit that owns them: the sweep does not
+  guess.
+
+The removals are reported in the run's result (`replaced`) and the record is
+kept honest on both sides: it stops naming a file that was just removed, and it
+KEEPS naming the files this run did not rewrite (`assembleRecord` seeds
+`outputs` and the JPEG block from the previous record) — a selective re-export
+used to blank the record's entries for everything it skipped.
+
+Assumption recorded: one icon per export folder (the user's own tree — the
+batch layout puts one piece per `split_NN` folder). Two paired sources whose
+bases trim to the same name in the SAME folder would share one package; that
+case is not in the corpus and would be caught by T28 when it lands.
+
+### One stem for all three artifacts (why the EPS can never be named differently)
+
+`commitExport` writes exactly four names into `export/` — `${stem}.svg`,
+`${stem}.jpg`, `${stem}.eps` and `export.json` — and all three artifacts take
+`stem` from the same `plan.stem` (`stemOf(row.svgName)`), so within one run the
+EPS can never carry a different name than its siblings; the EPS's own
+`%%Title` is `${stem}.eps` for the same reason. A differently-named `.eps` in a
+folder can therefore only be a file no export of the current naming wrote: a
+leftover from before the rename. The sweep removes such a leftover in both
+shapes: named by the icon's own previous `export.json` (when the current EPS is
+on disk), or an orphan no record names — an orphan still has to pass the naming
+rule that proves the app wrote it, so a foreign file is never a candidate.

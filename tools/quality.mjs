@@ -6,6 +6,9 @@
 //
 //   node tools/quality.mjs                          # full gate
 //   node tools/quality.mjs --changed --allow-legacy # changed files only
+//   node tools/quality.mjs --changed --base <ref>   # explicit compare ref (shallow clones:
+//                                                   #   no merge-base needed, tree-vs-tree diff)
+//   node tools/quality.mjs --files a.ts,b.ts        # explicit list, no git involved
 //   node tools/quality.mjs --write-baseline         # integrator only
 //   node tools/quality.mjs --json
 
@@ -24,7 +27,22 @@ const args = process.argv.slice(2);
 const jsonOut = args.includes("--json");
 const writeBaseline = args.includes("--write-baseline");
 const allowLegacy = args.includes("--allow-legacy");
-const changedOnly = args.includes("--changed");
+
+/** The value following `flag`, or undefined when the flag is absent. */
+function argValue(flag) {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+const baseArg = argValue("--base");
+const filesArg = argValue("--files");
+const changedOnly = args.includes("--changed") || Boolean(baseArg);
+
+// A ref travels into `git diff` — accept only ref-shaped text.
+const REF_SHAPED = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+if (baseArg && !REF_SHAPED.test(baseArg)) {
+  console.error(`quality: --base "${baseArg}" is not a git ref (letters, digits, . _ / - only).`);
+  process.exit(1);
+}
 
 const say = (...a) => !jsonOut && console.log(...a);
 
@@ -33,32 +51,72 @@ function srcFiles() {
   return out.trim().split("\n").filter(Boolean).sort();
 }
 
-/** The commit the working tree is compared against. */
-function baseRef() {
+/** The commit the working tree is compared against, and how it was chosen. */
+function resolveBase() {
+  if (baseArg) return { base: baseArg, via: "--base" };
   try {
     const base = execSync("git merge-base origin/main HEAD", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
       .toString().trim();
-    if (base) return base;
-  } catch { /* no origin/main, or unrelated histories */ }
+    if (base) return { base, via: "merge-base" };
+  } catch { /* no origin/main, unrelated histories, or a shallow clone */ }
   try {
     // A branch with history: compare against its parent.
     execSync("git rev-parse --verify HEAD~1", { cwd: ROOT, stdio: ["ignore", "ignore", "ignore"] });
-    return "HEAD~1";
+    return { base: "HEAD~1", via: "parent" };
   } catch {
     // A single-commit snapshot: everything uncommitted since HEAD is the change.
-    return "HEAD";
+    return { base: "HEAD", via: "HEAD" };
   }
 }
 
+function isShallow() {
+  try {
+    return execSync("git rev-parse --is-shallow-repository", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
+      .toString().trim() === "true";
+  } catch { return false; }
+}
+
+/** A fallback base in a shallow clone can miss files — say so instead of passing silently. */
+function warnIfShallowFallback(via, base) {
+  if (via === "--base" || via === "merge-base" || !isShallow()) return;
+  say(`note: shallow clone — no merge-base with origin/main; comparing vs ${base} only, which can miss files.
+      fix: git fetch --depth=100 origin main  (or pass --base <ref> / --files <list>)`);
+}
+
 function changedFiles() {
-  const base = baseRef();
-  const diff = execSync(`git diff --name-only ${base}`, { cwd: ROOT }).toString().trim();
+  const { base, via } = resolveBase();
+  warnIfShallowFallback(via, base);
+  let diff;
+  try {
+    diff = execSync(`git diff --name-only ${base}`, { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] }).toString().trim();
+  } catch (e) {
+    const firstLine = String(e.stderr ?? e.message).split("\n")[0];
+    console.error(`quality: cannot diff vs "${base}" — unknown ref? (${firstLine})`);
+    process.exit(1);
+  }
   const unstaged = execSync("git diff --name-only HEAD", { cwd: ROOT }).toString().trim();
   // Untracked files never appear in git diff — detect them explicitly,
   // so a brand-new over-line file cannot slip past --changed.
   const untracked = execSync("git ls-files --others --exclude-standard", { cwd: ROOT }).toString().trim();
   const set = new Set([...diff.split("\n"), ...unstaged.split("\n"), ...untracked.split("\n")].filter(Boolean));
-  return srcFiles().filter((f) => set.has(f));
+  const files = srcFiles().filter((f) => set.has(f));
+  say(`Changed files vs ${base}: ${files.length ? files.join(", ") : "(none)"}`);
+  return files;
+}
+
+/** --files: gate exactly the named files; no git involved. */
+function listedFiles() {
+  const named = filesArg.split(",").map((s) => s.trim()).filter(Boolean);
+  const missing = named.filter((f) => !existsSync(ROOT + f));
+  if (missing.length) {
+    console.error(`quality: --files not found: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  const gated = named.filter((f) => f.startsWith("src/") && /\.tsx?$/.test(f)).sort();
+  const skipped = named.filter((f) => !gated.includes(f));
+  if (skipped.length) say(`--files outside src/**/*.ts(x), not gate-able: ${skipped.join(", ")}`);
+  say(`Explicit files: ${gated.length ? gated.join(", ") : "(none in src)"}`);
+  return gated;
 }
 
 function forEachFn(node, visit) {
@@ -146,8 +204,7 @@ function gateOne(m, baseline) {
 }
 
 const baseline = existsSync(BASELINE_PATH) ? JSON.parse(readFileSync(BASELINE_PATH, "utf8")) : {};
-const files = changedOnly ? changedFiles() : srcFiles();
-if (changedOnly) say(`Changed files vs merge-base: ${files.length ? files.join(", ") : "(none)"}`);
+const files = filesArg ? listedFiles() : changedOnly ? changedFiles() : srcFiles();
 
 const results = files.map((f) => gateOne(measureFile(f), baseline));
 const failed = results.filter((r) => r.failures.length);

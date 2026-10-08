@@ -3,9 +3,11 @@ import type { DirHandleLike, FileHandleLike, WritableLike } from "../../src/lib/
 
 export class FakeFile implements FileHandleLike {
   kind = "file" as const;
+  /** The exact bytes written, once anything has been written (JPEG-safe). */
+  data: Blob | null = null;
   constructor(public name: string, public size = 10, public mtime = 1000, public text = "data") {}
   async getFile(): Promise<File> {
-    const f = new File([this.text], this.name);
+    const f = new File([this.data ?? (this.text as unknown as BlobPart)], this.name);
     Object.defineProperty(f, "lastModified", { value: this.mtime });
     return f;
   }
@@ -16,8 +18,9 @@ export class FakeFile implements FileHandleLike {
       // commit on close, like the real writable (RULE 23 atomic delivery)
       close: async () => {
         const merged = new Blob(chunks);
-        this.text = await merged.text();
+        this.data = merged; // byte-exact: a written JPEG must read back as a JPEG
         this.size = merged.size;
+        this.text = await merged.text();
       },
     };
   }
@@ -46,7 +49,12 @@ export class FakeDir implements DirHandleLike {
   async *entries(): AsyncIterableIterator<[string, FakeDir | FakeFile]> {
     for (const [k, v] of this.children) yield [k, v] as [string, FakeDir | FakeFile];
   }
-  async removeEntry(n: string): Promise<void> {
+  async removeEntry(n: string, opts?: { recursive?: boolean }): Promise<void> {
+    const child = this.children.get(n);
+    if (child instanceof FakeDir && opts?.recursive === true) {
+      this.children.delete(n);
+      return;
+    }
     if (!this.children.delete(n)) throw new DOMException("Not found", "NotFoundError");
   }
   /**

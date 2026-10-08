@@ -1,0 +1,1438 @@
+================================================================================
+ICON SPLITTER - "SVG TO UPLOAD" TAB
+THREE-BRANCH ADJUDICATION: CONCLUSION + FULL INTEGRATION PLAN
+================================================================================
+Repo        : marnikus/IconSplitter
+Feature     : the sixth tab, "SVG to upload" (approved SVG -> upload package)
+Branch A    : arena/140ece1a-iconsplitter   tip 25ff58a   2026-10-07 07:00Z
+Branch B    : arena/01a0f966-iconsplitter   tip 18ed0e9   2026-10-07 07:21Z
+Branch C    : arena/d658a5b8-iconsplitter   tip a3d608a   2026-10-07 06:16Z
+Base        : main = 5e635ce (I-53/54/55 merged; NO upload tab yet)
+Common base : e94ade3 / 14e396c lineage - all three carry the I-56 fix
+Evidence    : 10 feature commits, 2 in-repo design docs, 3 raw git trees,
+              the GitHub compare API, and the user's own UI mockup
+Authorship  : A = Mistral Vibe + arena-agent; B and C = arena-agent
+Status      : NOTHING merged for this feature. The choice is still open.
+
+
+================================================================================
+0. TL;DR - THE ANSWER IN TEN LINES
+================================================================================
+1. Take branch A (arena/140ece1a) as the base. It is the only branch complete
+   at both layers: a deep export foundation AND a full UI/state/session/undo/
+   docs pass, with the strongest test evidence (1212 tests, 95.2% statements,
+   17 DOM tests on the real panel).
+2. Do not take C or B as the base. C has the better pipeline but the thinnest
+   review surface. B has the best instincts but never writes EPS and has no
+   geometry engine.
+3. The three branches were NOT given the same information. The user's UI
+   mockup (design temp/SVG to upload/) exists only on B; A and C each wrote
+   that the folder "does not exist in this checkout" and guessed the layout.
+4. A guessed well: built blind, it matches 10 of the 12 affordances the
+   mockup specifies. That is the strongest evidence for A as base.
+5. Cherry-pick 17 items afterwards (CP-1..CP-17) across eight phases P0-P7,
+   each ending with all six verification lanes green plus its own exit gate.
+   Total effort ~8 dev-days, of which ~7.25d is the picks themselves.
+6. Highest-value pick: CP-15 from C - the accepted-metadata cache keyed by
+   source fingerprint, so a crash can never re-bill a paid model call.
+7. Second highest: CP-1/CP-2 from B - the closed log vocabulary (no data
+   field for a secret to ride in) and restart-is-not-a-retry.
+8. Third: CP-3/CP-4 from C - compare-before-commit and the five-class
+   fingerprint plan that makes re-export cheap.
+9. Never merge branch B as a branch. Its history contains design temp/Arena
+   setup analyze/ - a 21,089,968-byte saved HTML page plus hundreds of
+   .js.download assets. Cherry-pick files out of it instead.
+10. Weighted scores after the second pass: A 8.93, C 8.39, B 8.21.
+
+
+================================================================================
+1. THE WEIGHTED SCORECARD
+================================================================================
+Weights reflect what a stock-upload workflow actually needs, not lines of code.
+
+  CRITERION                  WT     A        B        C      BEST
+  ------------------------------------------------------------------------
+  Spec completeness          20%    9.5      8.5      8.0    A
+  Output verification depth  15%    9.0      8.0      9.5    C
+  Metadata & format coverage 12%    8.5      6.0      9.5    C
+  Re-export economics        10%    8.0      7.5      9.5    C
+  UI & state completeness    13%    9.5      8.5      6.5    A
+  Test evidence & gates      12%    9.5      8.5      7.5    A
+  Architecture fit & reuse   10%    8.0      9.5      8.5    B
+  Runtime honesty & privacy   8%    8.5      9.5      8.5    B
+  ------------------------------------------------------------------------
+  WEIGHTED TOTAL                    8.93     8.21     8.39   -> A WINS
+
+  Self-reported gates at tip:
+    A   1212 tests / 114 files   coverage 95.2% stmts   17 panel DOM tests
+    B   1212 tests / 114 files   coverage gate green (not quantified)
+    C   1166 tests / 110 files   93.95 / 87.93 / 95.08 / 96.39   10 DOM tests
+
+  Read: A wins the three heaviest criteria (spec, UI, tests). C wins the
+  pipeline block (verification, formats, economics). B wins fit and honesty.
+  Nobody sweeps - which is exactly why the answer is "base + donors".
+
+
+================================================================================
+2. WHAT THE TAB MUST DO (the intersection of all three design docs)
+================================================================================
+2.1  A sixth tab after Generate SVG, opening on the SAME remembered root
+     folder handle both SVG tabs share. Chrome/Edge only (File System Access
+     API); other browsers get an honest unsupported note.
+2.2  One row per approved icon, showing the chosen APPROVED SVG version -
+     never the AI image beside it. Directories named export/ are ignored
+     during the walk so this feature's own output can never be discovered as
+     a source (no loops, no duplicate rows).
+2.3  A pair with no approved SVG version is REPORTED with a reason
+     (no-approved-svg), never silently dropped. A missing file on a listed
+     row is a row warning, never a substitution.
+2.4  Settings: global defaults + per-icon overrides that store ONLY the
+     fields the user set. paddingPct 0-40 default 8; background preset or
+     custom (default white); strokePt 0.2-8 default 2.2 at a declared DPI 96;
+     jpegMpx 1-30 default 15.1; jpegQuality 0.5-0.98 default 0.92;
+     optimizeSvg default true; includeEps default false. Editing a global
+     default never erases an override. Ranges clamp on read; a corrupt stored
+     payload loads as defaults.
+2.5  "Apply settings to selected" is ONE undoable history entry (new type
+     uploadSettings). Defaults changes are NOT undoable (they are store
+     writes, the same class as presets).
+2.6  Metadata policy upload-meta-v1, validated fail-closed:
+       - title: two period-separated segments, 5-7 words then 3-5 words, the
+         second naming at least two of the tags
+       - description: 7-15 words
+       - tags: exactly 40, comma-separated, non-empty, unique
+         (case-insensitive), containing all 7 mandatory terms
+         (icon, pictogram, vector, stroke, line, editable, web)
+       - hyphenated compounds count as ONE word
+       - style-reference phrases ("in the style of", artist-name patterns)
+         produce a warning; the UI states the output is NOT legal/IP clearance
+     An edited answer is re-validated by the SAME rule: a draft can be saved,
+     never exported.
+2.7  One export folder per icon, beside the pair, sharing one base name:
+       <pair>/<base>.svg   optimized, metadata embedded
+       <pair>/<base>.jpg   15.1 MP, XMP (+IPTC on C) embedded
+       <pair>/<base>.eps   optional, genuine EPSF-3.0
+       <pair>/export.json  the record, written LAST = the commit marker
+2.8  Stages: discovered -> preflight -> prepare -> metadata -> render ->
+     embed -> eps -> validate -> commit -> processed. Terminal states:
+     failed, partial, cancelled, stale, interrupted.
+2.9  The approved source SVGs and the pair sidecar files are NEVER modified.
+     Everything writes only into export/.
+2.10 A paid model call happens at most once per icon. Nothing re-asks the
+     model for an edit, a settings change or a missing output. Restart is not
+     a retry. The key is masked in the UI, redacted in logs, and travels in a
+     header - never in a URL.
+
+
+================================================================================
+3. BRANCH A - arena/140ece1a - "THE COMPLETE ONE" - RECOMMENDED BASE
+================================================================================
+Commits:
+  341e31e  SVG-to-upload export foundation
+           settings, geometry, metadata, providers, discovery, pipelines.
+           14 new suites, 1138 tests total.
+  25ff58a  The "SVG to upload" tab: UI, state and docs
+           panel, state layer, 4 stores, undo binding, docs.
+           114 files / 1212 tests, coverage 95.2% stmts, verify ALL LANES PASSED.
+
+Namespace: tab id "upload"; handles tab-upload / upload-*; src/upload/;
+           src/lib/upload* + src/lib/svg*; iconSplitter.upload.*.v1
+
+STRENGTHS
+  A1  The only branch complete at both layers. Foundation and full
+      UI/state/session/undo/docs landed as two coherent commits. Filters,
+      sort, search, view prefs, zoom, provider config, per-icon overrides and
+      the expandable row detail all exist and are tested.
+  A2  Exact staleness from three fingerprints: source SVG hash, settings
+      fingerprint, accepted-metadata fingerprint. The reducer re-projects
+      every row when a fingerprint moves; a row mid-run keeps its run status.
+  A3  Verify-after-write everywhere. JPEG: XMP APP1 embed + readback + SOF
+      dimension reader + verifyJpeg. SVG: Dublin Core embed + readback. EPS:
+      verifyEps. Raster: decodes the SOF back to prove the dimensions it
+      claims. SVGO: records version, config, sizes and hashes.
+  A4  Genuine in-browser EPS writer (uploadeps + epspath) for a documented
+      subset, with honest failures outside it. The subset is explicit:
+      path/rect/circle/ellipse/line/polyline/polygon, solid fill/stroke,
+      dash, transforms, opacity flattened onto the export background,
+      %!PS-Adobe-3.0 EPSF-3.0 header + %%BoundingBox. Gradients, text,
+      filters, clips and images fail the stage honestly -> row status
+      partial, while SVG/JPEG stay committed. Never a renamed PS/PDF.
+  A5  Strongest test evidence: 1212 tests, 95.2% statements, 17 DOM tests on
+      the real panel (only the provider transport and canvas/image APIs are
+      stubbed), plus purpose-built helpers binfakefs (binary-safe FS fakes)
+      and minijpeg (a minimal REAL JPEG frame so the canvas stand-in decodes
+      real bytes).
+  A6  Real geometry: svgmatrix / svgseg / svgarc / svgpath / svgbounds /
+      svgstroke compute visible bounds including stroke width, caps, joins and
+      CTM transforms; unsupported elements are NAMED, never guessed; risky CSS
+      is detected and reported.
+  A7  Secrets and undo by the book. Key in the shared IndexedDB secrets store
+      under its own id gemini-api-key, masked in the UI, redacted in logs,
+      with a session-only fallback when storage refuses the write. The
+      uploadSettings undo entry has a payload gate, a live-applier binding
+      when a panel is mounted, a persist-only path when it is not, and a
+      no-op refusal so the history cursor never moves on a change that did
+      not happen.
+  A8  It reuses far more than its diff suggests (second-pass finding). The
+      design doc's reuse table lists ~15 existing owners taken verbatim or as
+      a pattern: ui/pickroot + FolderBar (I-35/I-44/I-46 behaviour included),
+      lib/fs.readDirTree + scan.walkTree + scanseq ticket, pairing +
+      splitscope, selection/pairstore sidecars READ-ONLY, lib/svgfile
+      approved/chosen version, lib/zoom (the ONE zoom control, I-55),
+      lib/svgbackground presets, lib/svgvalidate preflight, lib/fs writes,
+      svg/journal pattern, and the tmp -> verify -> overwrite -> cleanup
+      atomic write protocol lifted from pairstore.saveMetaAt.
+  A9  It does write the shell's log (second-pass correction). Logging is
+      reused from log/logstore.log() with feature "upload", sanitised by
+      lib/log; secret hygiene is reused from lib/svgsecret (maskKey, redact,
+      authHeader). That is RULE 20 and I-24 by reuse, not re-implementation.
+  A10 The only branch that resolved RULE 20 versus sending images to a model.
+      RULE 20 says images never leave the browser. A names the conflict,
+      identifies the single existing opt-in exception (Generate SVG ->
+      Requesty), and classifies Gemini metadata as the same class with
+      explicit bounds: user-configured provider, user-initiated per item or
+      bulk, key stored locally, image bytes sent only inside that one
+      request, never logged, no automatic uploading, no background sync -
+      stated plainly on the provider card. Neither B nor C performs this
+      governance analysis.
+  A11 Nine contradictions resolved BEFORE code (40 tags not 50; the title's
+      second-sentence rule with the explicit note that the prompt's own
+      literal example would FAIL the validator; word counting defined once;
+      the RULE 20 analysis; EPS after confirming no maintained pure-JS
+      converter exists; XMP over legacy IPTC; the missing UI template; the
+      Gemini model id verified with full wire details; 15.1 MP resolved to
+      3886 x 3886 = 15,100,996 px).
+
+GAPS / COSTS
+  A-g1  A second provider wire format (MEDIUM). geminiclient sits beside the
+        Requesty/OpenAI-compatible transport Generate SVG uses. The design doc
+        justifies it - Gemini's generateContent body and x-goog-api-key header
+        genuinely differ - and the failure-classification / no-auto-retry
+        pattern IS reused. Still two cancel paths and two places a stall must
+        be fixed. See CP-12.
+  A-g2  src/lib namespace sprawl (MEDIUM). ~25 new modules land flat in
+        src/lib with upload*/svg* prefixes, against the house habit of feature
+        folders. B and C both foldered theirs. See CP-14.
+  A-g3  No accepted-metadata cache (MEDIUM). Metadata is journalled in flight
+        but nothing is cached, so a crash between an accepted answer and a
+        commit can cost the paid call again. C solves exactly this. See CP-15.
+  A-g4  Restart recovery stops at the journal (MEDIUM). An in-flight request
+        is reported interrupted after a restart, but per-icon job state is not
+        persisted and there is no once-per-load guard against StrictMode
+        double-invoking the restore. C additionally detects a non-committed
+        export.json ON DISK at scan; A does neither. See CP-2.
+  A-g5  IPTC IIM deliberately declined (LOW). Not an oversight: the design
+        doc rules IPTC-IIM "a legacy binary form" and chooses XMP APP1 as the
+        modern carrier, with the full record always also in export.json and
+        the limitation documented. Reverse only if your target site reads
+        APP13. See CP-9.
+  A-g6  Built without the UI template (LOW). A documented the template as
+        absent and reused the Generate SVG layout. The template did exist - it
+        was pushed to branch B two hours later. A converged on it anyway, but
+        the fit was luck, not verification. See CP-16.
+  A-g7  Biggest merge surface (MEDIUM). The largest diff of the three, and its
+        history contains 07e828e "upd" - pushed from an older local copy, it
+        silently reverted the shipped I-56 fix until e94ade3 re-applied it.
+
+
+================================================================================
+4. BRANCH C - arena/d658a5b8 - "THE RIGOROUS ONE" - PIPELINE ORGAN DONOR
+================================================================================
+Commits:
+  a480873  Phases 1-2  design doc, settings/metadata rules, geometry engine
+           (own design doc with verified external research; 77 new tests)
+  334c644  Phases 3+4  render/embed, real SVGO, genuine EPS writer
+           (1073 tests; coverage 93.7/87.5)
+  5a845d7  Phase 7     fingerprints, staged commit IO, per-icon job runner
+           (25 new tests; 1156 total)
+  a3d608a  Phases 8-9  the tab, the wiring, the docs
+           (110 files / 1166 tests; coverage 93.95/87.93/95.08/96.39)
+
+Namespace: tab id "svg-upload"; handles tab-svg-upload / upload-*;
+           src/upload/; src/lib/up*; iconSplitter.upload.*
+
+STRENGTHS
+  C1  The best re-export economics in the comparison. upfinger splits
+      staleness into FIVE classes with distinct consequences: source change ->
+      everything including metadata reconfirmation; visual settings change ->
+      SVG/JPEG/EPS rebuild with metadata kept but flagged; metadata-only
+      change -> segments re-embedded into the EXISTING JPEG bytes (no AI call,
+      no raster); quality-only change -> JPEG re-encode only; optimize/eps
+      flag or missing/corrupt output -> only the affected stages. Nothing
+      stale is ever silently reused.
+  C2  Prove it before you commit it. Both formats are re-read and compared
+      FIELD-BY-FIELD to the accepted values before commit; produceJpeg is
+      verified by SOF frame, exact dimensions, decode and sha256; metadata
+      embedding is read back; SVGO output is re-validated (well-formed, one
+      root, viewBox intact, title/desc/metadata present) and render-compared
+      against the pre-optimization copy at a small preview size with a
+      documented tolerance; RULE 9 keeps the unoptimized copy when that
+      compare fails.
+  C3  Deepest geometry and format coverage. uppath (full path parser incl.
+      S/T reflection), uparc (spec F.6.5 arc->cubic), upmatrix (transforms),
+      upcolor, upcss (minimal cascade - CSS over presentation attributes per
+      spec), upgeom (scene + unsupported tracking), upbounds (stroke-aware
+      CONSERVATIVE bounds: every bezier control point, expanded by
+      strokeWidth/2 x (miter join ? miterlimit : 1); a superset, nothing is
+      ever clipped), upfit (1000-unit square artboard by default, uniform
+      padding, proportional centring, integer ~15.1 MP dims, the ONE pt->unit
+      stroke rule shared by SVG/JPEG/EPS). Metadata: XMP packet + IPTC IIM
+      record + SVG RDF, with idempotent APP1/APP13 surgery and a 65,502-byte
+      per-segment payload-limit refusal.
+  C4  Real SVGO with a pixel budget: svgo/browser v4, preset-default with
+      explicit content-preserving overrides (removeViewBox/removeMetadata/
+      removeTitle/removeDesc/removeUselessStrokeAndFill all false,
+      convertShapeToPath allowed, cleanupIds scoped), verification gate,
+      version + config + before/after size and hash recorded in export.json.
+  C5  Genuine EPSF-3.0: pt-exact setlinewidth, y-flip, quadratic elevation,
+      gsave/fill/grestore paint model, and an honest preflight that names
+      unsupported features (text, raster images, gradients, filters, masks,
+      patterns, clip paths) rather than emitting a broken file. The EPS page
+      is emitted at the JPEG's 96-DPI physical size so setlinewidth is exactly
+      strokePt.
+  C6  The best test seam in the repo: browserdeps.makeRunnerDeps plus
+      injectable CanvasDeps let tests drive the REAL pipeline over fakes, and
+      fakefs writes are binary-safe (the exact Blob is kept). That seam is
+      what caught a genuine defect: readSvgMetadata was counting title and
+      description Alt lists as tags - tags now come only from the rdf:Bag.
+  C7  Wired the way this codebase is wired: useUpload split per the
+      useSelection/useBatch pattern (Core/Scan/Boot/Wiring/ChooseRoot sub-hooks
+      + buildUploadApi, everything unstable reaching closures through refs),
+      gesture bodies over one UploadCtx bundle, uploadSettings entries that
+      live-bind when a panel is mounted and write through durable localStorage
+      when not (RULE 12), panel split into small sub-components to hold RULE 16
+      limits, key masked (RULE 20).
+  C8  A confirm dialog that prices the run: the redacted-request confirmation
+      carries a cache-aware AI count, so the user sees how many icons will
+      actually cost a model call before agreeing. Plus a live-validating
+      MetaEditor in which an invalid edit cannot be accepted at all.
+  C9  A crash never repeats paid AI work (second-pass finding). Accepted
+      metadata is cached per source fingerprint in iconSplitter.upload.meta.v1
+      so an interrupted run resumes without re-asking the model; a source
+      change invalidates that icon's entry by fingerprint mismatch and the
+      metadata must be regenerated or reconfirmed. Neither A nor B has this.
+      -> CP-15, promoted to CRITICAL.
+  C10 Restart recovery that survives cleared storage (second-pass correction).
+      interrupted is derived from the FILESYSTEM: a non-committed export.json
+      found during the scan marks the row needs-review and is never
+      auto-resumed. Because the evidence is on disk beside the artwork, it
+      still works after browser storage is wiped or the folder is opened on
+      another machine. This is the COMPLEMENT to B's in-browser jobs store,
+      not a competitor to it.
+  C11 The canvas ceiling was researched, not assumed: Chrome allows 32,767 px
+      per edge and 268,435,456 px of area, so a 15.1 MP raster at 3886 x 3886
+      sits comfortably inside; rasterization runs one icon at a time under
+      bounded concurrency to keep memory sane. The stroke rule is equally
+      explicit: R = jpegWidthPx / 1000; strokeArtboardUnits = strokePt x
+      (96/72) / R; strokeUserUnits = strokeArtboardUnits / fitScale /
+      elemTransformScale.
+  C12 Honest, versioned cost estimates: Google publishes $0.25/$1M input and
+      $1.50/$1M output for this tier, but the API returns no cost - so every
+      figure is labelled Estimated and carries a pricing version string, while
+      provider-reported tokens are shown as reported. A takes the opposite
+      view and prints "-" rather than calculate. Both defensible; C's is more
+      useful for budgeting a 400-icon run IF the label is kept. -> CP-17.
+
+GAPS / COSTS
+  C-g1  Thinnest review surface (HIGH). Folder bar, defaults bar, bulk bar,
+        list, provider card, confirm dialog, toast. No filter/sort/search row,
+        no view-prefs store, no zoom or preview-background control, no audit
+        action, no count chips, no expandable row detail. Against the user's
+        own mockup it matches only 3 of 12 affordances.
+  C-g2  Restart recovery has no in-browser half (MEDIUM, corrected down from
+        HIGH). Disk detection exists; there is no persisted per-icon jobs
+        store, so between a crash and the next scan the UI has no memory of
+        what was running, and no toast counts the icons needing review.
+  C-g3  Fewest tests, lowest coverage (MEDIUM). 1166/110 files, 93.95% stmts /
+        87.93% branches, 10 DOM tests. The real pipeline is well covered; the
+        surface is not.
+  C-g4  Identifier divergence (MEDIUM). Tab id svg-upload and testid
+        tab-svg-upload against upload / tab-upload elsewhere; lib prefix up*
+        against upload* and svgupload/. Every cherry-pick from C needs a
+        rename pass.
+  C-g5  Phase numbering drift (LOW). Commits run phases 1-2, 3+4, then 7, then
+        8-9 - phases 5-6 never appear as commits, so the design doc's phase
+        table and the history disagree.
+
+
+================================================================================
+5. BRANCH B - arena/01a0f966 - "THE HONEST ONE" - CONSCIENCE + MOCKUP DONOR
+================================================================================
+Commits:
+  14e396c  Task M phase B  approved sources, settings, list
+           (99 files / 1009 tests)
+  7aed650  Phases C-G      prepare, raster, metadata, EPS gate, package,
+           job control (223 svgup assertions / 1167 tests)
+  14c7512  Phases 1-9      naming runs, export pipeline, panel wiring
+           (112 files / 1190 tests)
+  18ed0e9  Restart recovery, log vocabulary, JPEG preview
+           (114 files / 1212 tests)
+  Plus:    37ca5bb (merge) and aedc612 ("Arena setup temp to study")
+
+Namespace: tab id "upload"; handles up-*; src/svgupload/;
+           src/lib/svgupload/; iconSplitter.upload.jobs.v1
+
+STRENGTHS
+  B1  One log, and no channel to leak through. The tab writes into the shell's
+      existing activity log with a CLOSED vocabulary - named / name-refused /
+      exported / cancelled / restored / model-checked. Every entry names the
+      ICON and the OUTCOME, and none has a data field, so the title, the
+      description, the tags, the response body and the API key have nowhere to
+      travel. Privacy by construction, not by discipline. -> CP-1.
+  B2  Restart is not a retry. iconSplitter.upload.jobs.v1 remembers the last
+      state of every icon; on the next load restoreInterrupted maps
+      running/queued to "interrupted - needs review", the toast and the
+      upload.restored log entry say how many icons need a look, and NOTHING is
+      sent again - Retry stays a click. The restore runs once per page load,
+      so StrictMode's double-invoke cannot log it twice. -> CP-2.
+  B3  The preview shows the artifact, not a re-render. readPublishedJpeg reads
+      the JPEG out of the icon's own export/ folder and the dialog shows that
+      file via an object URL; "Not exported yet" appears only when the file
+      really is absent. -> CP-5.
+  B4  Reuse-first, and it shows. Discovery and the pair JSON give one row per
+      approved preferred-version icon; the panel keeps the Generate SVG
+      furniture; the transport, key store, renderer and history bar are the
+      existing ones. PROBLEM_LABEL moved to lib/pairing so both SVG tabs share
+      one wording, and no Generate SVG behaviour was rewritten.
+  B5  The metadata policy lives in exactly one place: metatags / metaconst /
+      metapolicy / metaprompt hold policy upload-meta-v1 so the parser, the
+      editor and the UI counter agree BY CONSTRUCTION rather than by review.
+      -> CP-11.
+  B6  Truncation is detected, not guessed: svgstream / svgrequest were
+      extended to surface finish_reason, so a truncated model answer is
+      caught; the model is verified against the provider's own list and never
+      silently substituted; one streamed request per icon with a journalable
+      id, a stall watchdog and cancel. -> CP-8.
+  B7  Atomic publication with a corrupt-record escape hatch: package.ts
+      publishes one icon's export folder atomically - same base name for every
+      format, record written last, staging removed - and a corrupt record is
+      reported while the outputs beside it stay untouched. jobctl cancels
+      unsent/uncommitted items while keeping completed packages.
+  B8  The only branch that saw the real UI mockup, and it matched it
+      (second-pass finding). At 06:20Z the user pushed design temp/SVG to
+      upload/ - a 393 KB mockup PNG and a 37 KB HTML template - to THIS
+      branch. Its last two commits then aligned to it: Metadata primary,
+      Export success, Retry danger, the row's settings cell rendered
+      "stroke 2.2 pt . pad 10 pt . JPEG 15.1 MP" from the same effective
+      values the export reads, and "Copy all fields". -> CP-16.
+
+GAPS / COSTS
+  B-g1  EPS is gated, not produced (HIGH). No in-browser EPS writer: the
+        settings dialog "says EPS is Partial when no converter is configured".
+        For a stock-upload workflow that expects three formats, one of the
+        three is missing at the tip.
+  B-g2  No geometry engine (HIGH). prepare.boundsOfDocument deliberately uses
+        "the document's own canvas, never an inferred ink box". Admirably
+        honest, but there is no stroke-aware visible-bounds computation, so
+        padding and centring are coarser than A's or C's.
+  B-g3  Two generations in one branch (MEDIUM). Phase B built the tab, phases
+        1-9 re-wired it under a new namespace (src/svgupload, up-* handles).
+        The history also carries a merge commit and a stray placeholder.
+  B-g4  A 21 MB junk folder in the repo root (HIGH, second-pass finding).
+        Commit aedc612 added design temp/Arena setup analyze/ - a
+        21,089,968-byte saved HTML page plus hundreds of .js.download and .css
+        assets of an UNRELATED web page. It must never reach main. The sibling
+        design temp/SVG to upload/ (430 KB) is the opposite: it is the
+        feature's own template and SHOULD be kept. -> R7.
+  B-g5  Coverage not quantified (LOW). The tip asserts the coverage gate
+        passed but publishes no percentage, unlike A (95.2%) and C.
+  B-g6  Handle churn (LOW). up-* testids diverge from the upload-* inventory
+        the other two branches and UI_SELECTORS section R use - a rename tax
+        on any merge.
+
+
+================================================================================
+6. HEAD-TO-HEAD SUBSYSTEM MATRIX (20 rows, from the second pass)
+================================================================================
+  Legend:  *** strong (real, tested)   ** adequate (present, documented limit)
+           * thin (gated / session-only / absent)
+
+  SUBSYSTEM              A                    B                    C
+  ----------------------------------------------------------------------------
+  Discovery & rows       *** sidecars,        *** reuses svg/        ** rows ok,
+                          export/ excluded,   sources, carries the   less scan-
+                          exclusions w/reason scanned file index     reason machinery
+  SVG geometry           *** stroke/caps/     *  document canvas     *** full path
+                          joins/CTM, named    only, no ink box       parser, spec
+                          unsupported, risky                         arcs, CSS
+                          CSS detected                               cascade, miter
+  JPEG raster 15.1 MP    *** integer dims,    *** drawn once,        *** bg-first,
+                          alpha flattened,    flattened, decoded     verified SOF +
+                          SOF decoded back    and measured           decode + sha256
+  Metadata embedding     ** XMP APP1 +        ** injected, verified  *** XMP + IPTC
+                          Dublin Core,        by read-back           IIM (APP13) +
+                          both read back                             RDF, idempotent
+  EPS output             *** genuine subset   *  GATED to Partial    *** EPSF-3.0,
+                          writer + verifyEps                         honest preflight
+  Optimization           ** SVGO preset w/    ** optimize before     *** svgo/browser
+                          content-preserving embed, no pixel budget  v4 + verification
+                          overrides, hashes                          gate + render-compare
+  Selective re-export    ** stage planner +   ** planRegeneration,   *** FIVE
+                          per-output rebuild  three rules            fingerprint classes
+                          flags, 3 fingerprints
+  Commit integrity       *** staged, export   *** atomic per icon,   *** outputs first,
+                          .json last, last    staging removed,       export.json LAST,
+                          valid package kept  corrupt record         field-by-field
+                                              reported safely        compare first
+  Provider transport     *  NEW geminiclient  *** existing shared    ** runner deps,
+                          (different wire     streaming transport,   injectable model
+                          format, justified)  finish_reason, watchdog deps, AI last resort
+  Job control & cancel   *** bounded,         *** jobctl bounded,    *** bounded pool,
+                          per-item isolated,  keeps completed        cancel, per-icon
+                          journalled          packages               isolation
+  Restart recovery       ** in-flight         *** jobs.v1 +          ** disk-derived
+                          journal only        restoreInterrupted,    interrupted from a
+                                              once-per-load guard    non-committed
+                                                                     export.json
+  Activity log & privacy *** CORRECTED:       *** same log + a       *** CORRECTED:
+                          reuses logstore +   CLOSED vocabulary, no  reuses logstore,
+                          svgsecret redact +  data field at all      safe cause only,
+                          the RULE 20 analysis                       no key/payload/bytes
+  Review surface         *** filters, sort,   ** Generate SVG        *  bars + list +
+                          search, count       furniture, metadata    provider card only
+                          chips, audit, zoom, strip, per-field copy,
+                          preview bg, bulk    40/40 counter, cancel
+                          bar, expandable row
+  Preview                *** framed zoomable  *** shows the          ** row preview +
+                          inline SVG in a     COMMITTED JPEG via     dialog; artifact vs
+                          shadow root         object URL             render not split
+  Undo & session         *** payload gate,    ** entry type + ONE    *** live-bind when
+                          live binding,       undoable bulk apply;   mounted, durable
+                          persist-only path,  defaults out of        writeThrough when
+                          no-op refusal       history                not; mergeOverrides
+  UI template fidelity   ** built blind,      *** the only branch    *  built blind and
+                          matched 10/12       with the mockup;       furthest from it:
+                          anyway              aligned in 18ed0e9     3/12
+  Paid-work protection   ** journal +         ** one request/icon,   *** metadata cached
+                          never resent on     never re-asks for an   per source
+                          its own; no cache   edit                   fingerprint
+  Cost reporting         ** Gemini gives no   ** tokens recorded,    *** Estimated label
+                          cost -> "-", never  cost null when the     + versioned pricing
+                          invented            provider gives none    rate card
+  Requirements eng.      *** NINE contradic-  *  no design doc of    *** own design doc,
+                          tions resolved +    its own; phase-wise,   six contradictions +
+                          RULE 20 analysis +  then template-led      four user decisions +
+                          web research                               verified research
+  Docs (RULE 17)         *** SYSTEM_OF_RECORD *** UI_SELECTORS +     *** own design doc +
+                          (mode, rules,       log actions + the      SYSTEM_OF_RECORD
+                          storage map, module restart rule           sections 1/2/6/7/8 +
+                          map, test list,                            UI_SELECTORS R +
+                          UI inventory) +                            QUALITY_RECHECK
+                          UI_SELECTORS K+R
+
+
+================================================================================
+7. SECOND-PASS CORRECTIONS - THREE OF MY OWN CLAIMS WERE WRONG
+================================================================================
+The first pass judged these branches by their commit messages. The second pass
+read what they actually shipped: both in-repo design documents and the raw git
+trees. Results below. Where a claim was overturned it is shown as it was, not
+quietly deleted.
+
+X1  NEW - THE DECISIVE FINDING
+    Assumed: all three branches worked from the same information.
+    Truth:   they did not. design temp/SVG to upload/ (a 393 KB mockup PNG and
+             a 37 KB HTML template) exists only on B, pushed at 06:20Z. A and C
+             had each already written that the folder "does not exist in this
+             checkout" and fallen back to the Generate SVG layout.
+    Source:  tree 92f00e33 on B; A design.md 2.7; C design.md 2.4; aedc612.
+    Effect:  B's UI score rises to 8.5 for template fidelity; A's convergence
+             on the same design turns out to be INDEPENDENT, which is strong
+             evidence its UI instincts were right; C's thin surface is now
+             measured against the user's own drawing (3 of 12).
+
+X2  WRONG - "A has no shell-log integration; redaction by discipline only."
+    Truth:   A's design doc reuses log/logstore.log() with feature "upload"
+             entries sanitised by lib/log, and reuses lib/svgsecret (maskKey,
+             redact, authHeader) with the key in the shared IndexedDB secrets
+             store. That is RULE 20 and I-24 by reuse.
+    Effect:  A's log cell goes adequate -> strong, privacy 8.0 -> 8.5. B's
+             remaining edge is narrower but real: a closed vocabulary whose
+             entries have no data field at all.
+
+X3  WRONG - "C's log is not unified with the shell's."
+    Truth:   C reuses log/logstore.log() too, and its design doc requires every
+             stage to log time, item id, stage, duration and a safe cause -
+             explicitly no key, no payload, no image bytes (I-23/I-24).
+    Effect:  All three branches share one log. The differentiator is the SHAPE
+             of the entry, not whether it exists.
+
+X4  WRONG - "C has no restart-recovery story; session-only."
+    Truth:   materially understated. C derives interrupted from the FILESYSTEM:
+             a non-committed export.json found at scan marks the row
+             needs-review, never auto-resumed. It survives cleared storage and
+             a different machine.
+    Effect:  C rises thin -> adequate. B's jobs store stops being a replacement
+             and becomes the COMPLEMENT: B remembers in the browser, C detects
+             on disk. Take both.
+
+X5  OVERSTATED - "A reinvented instead of reusing; architecture fit 6.5."
+    Truth:   too harsh. A's reuse table lists ~15 owners taken verbatim or as a
+             pattern (see A8). Only the Gemini wire format is genuinely new,
+             and the doc explains why.
+    Effect:  fit 6.5 -> 8.0; CP-12 softens from "retire the duplicate client"
+             to "unify the transport shell, keep the wire adapter".
+
+X6  OVERSTATED - "A is missing legacy IPTC IIM."
+    Truth:   not an omission. A ruled IPTC-IIM out as a legacy binary form and
+             chose XMP APP1, with the full record always also in export.json
+             and the limitation documented.
+    Effect:  CP-9 reframed from a gap to a REVERSIBLE DECISION - take C's
+             APP13 surgery only if your destination actually reads it.
+
+X7  NEW - C protects paid work across a crash.
+    Truth:   accepted metadata is cached per source fingerprint in
+             iconSplitter.upload.meta.v1 so a crash never repeats a paid call,
+             and invalidates on fingerprint mismatch.
+    Effect:  became CP-15, promoted to CRITICAL.
+
+X8  NEW - Cost reporting was never settled.
+    Truth:   A prints "-" and reserves Estimated for genuinely calculated
+             numbers; C calculates from a published rate card and stamps a
+             pricing version string.
+    Effect:  became CP-17 - adopt C's labelled estimate as an ADDITION to A's
+             "-", never a silent replacement.
+
+X9  NEW - The 15.1 MP canvas risk was already quantified.
+    Truth:   C researched the ceiling: Chrome allows 32,767 px per edge and
+             268,435,456 px of area, so 3886 x 3886 = 15,100,996 px is
+             comfortably inside; raster runs one icon at a time.
+    Effect:  risk R5 downgraded MEDIUM -> LOW.
+
+X10 NEW - B's placeholder commit is not harmless.
+    Truth:   aedc612 added design temp/Arena setup analyze/ - a 21,089,968-byte
+             saved HTML page plus hundreds of .js.download and .css assets of
+             an unrelated page - into the repo root.
+    Effect:  risk R7 upgraded MEDIUM -> HIGH: cherry-pick files out of B, never
+             merge the branch.
+
+DOES THE WINNER CHANGE? No - but the margin narrows and the reasoning improves.
+A gains on architecture fit (6.5 -> 8.0) and privacy (8.0 -> 8.5) once its
+reuse table and RULE 20 analysis are read, so the corrections STRENGTHEN the
+recommendation. B gains on UI but also gains a high-severity hygiene risk. C
+gains two real strengths which become cherry-picks, not reasons to change base.
+Honest summary: the first pass reached the right answer for partly wrong
+reasons.
+
+
+================================================================================
+8. THE UI MOCKUP - WHAT THE USER ACTUALLY DREW
+================================================================================
+Source: design temp/SVG to upload/SVG to upload UI temp.html (37 KB) and
+        SVG to upload UI image.png (393 KB), present on branch B only.
+
+  AFFORDANCE              SPEC                                          A  B  C
+  --------------------------------------------------------------------------------
+  Count chips             eligible / metadata / exported / failed       Y  Y  N
+  Audit line              "133 files . 20 approved SVGs . 20 references
+                          excluded . 0 missing . 0 duplicates -> 20 rows" Y  N  N
+  Full-path row           read-only path + "press Ctrl+Shift+C in
+                          Explorer, then Rescan (or Ctrl+V here)"       Y  Y  Y
+  Date filter             FROM / TO range                               Y  N  N
+  Status filter + sort    sort by DATE / STATUS / NAME / PATH + order   Y  N  N
+  Preview background      PREVIEW BG selector                           Y  N  N
+  Zoom slider             thumbnail height 48-440 px, default 128       Y  Y  N
+  Two separate badges     metadata (Ready/Missing/Review) and export
+                          (Processed / Not exported / Stale)            Y  Y  Y
+  Row settings cell       "2.2 pt . 10% pad" + "JPEG . 15.1 MP" from
+                          the effective values                          Y  Y  N
+  Version label           "version v2" - which approved SVG is exported Y  Y  Y
+  Button semantics        Metadata primary, Export success, Retry danger N  Y  N
+  Copy all fields         one action for title + description + tags      N  Y  N
+  --------------------------------------------------------------------------------
+  MATCHED                 A = 10/12   B = 8/12   C = 3/12
+
+  Note: A inherits the shared svg-thumb zoom control (48-800 px per I-55)
+  where the mockup says 48-440 with a 128 default. Decide deliberately:
+  either keep the ONE zoom control (I-55's invariant) or fork the range for
+  this tab and say so in SYSTEM_OF_RECORD. Do not leave it accidental.
+
+
+================================================================================
+9. CHERRY-PICK REGISTER - 17 ITEMS, ~8 DEV-DAYS
+================================================================================
+Effort: S = 0.25d, M = 0.75d, L = 2d. Every pick names its donor, files, the
+reason it beats what the base already has, and the test that proves it landed.
+
+CP-1   FROM B   CRITICAL  S  low
+  The closed log vocabulary (no data field)
+  Files: src/svgupload/uploadlog.ts -> src/upload/uploadlog.ts + call sites in
+         metaactions / exportactions
+  Why:   A redacts by discipline; B makes leakage structurally impossible -
+         six named outcomes (named / name-refused / exported / cancelled /
+         restored / model-checked), each naming the ICON and the OUTCOME, with
+         no field a title, tag list, response body or API key could ride in.
+         Cheapest correctness win available from any branch.
+  Cmd:   git checkout arena/01a0f966-iconsplitter -- src/svgupload/uploadlog.ts
+  Test:  assert every entry type is in the closed set and that no serialised
+         entry contains a data key.
+
+CP-2   FROM B   CRITICAL  S  low
+  Restart is not a retry (jobs store + restoreInterrupted)
+  Files: src/svgupload/useUploadJobs.ts (restore path) -> src/upload/useUpload.ts boot
+  Why:   A's journal marks an in-flight request interrupted, but per-icon job
+         state is not persisted. B restores running/queued -> "interrupted -
+         needs review", counts them in a toast and an upload.restored log
+         entry, sends nothing, and guards the restore so StrictMode's
+         double-invoke cannot log it twice.
+  Cmd:   git checkout arena/01a0f966-iconsplitter -- src/svgupload/useUploadJobs.ts
+  Test:  seed iconSplitter.upload.jobs.v1 with a running job, mount twice
+         (StrictMode), assert ONE restore entry and ZERO fetch calls.
+
+CP-3   FROM C   CRITICAL  S  low
+  Compare-before-commit for both formats
+  Files: src/upload/runner.ts + jobartifacts.ts -> src/upload/exportvalidate.ts
+         / exportcommit.ts
+  Why:   C re-reads the SVG and the JPEG and compares them field-by-field
+         before committing, and keeps the unoptimized copy when the
+         render-compare fails (RULE 9). A validates and reads back, but the
+         commit is not gated on a two-format field comparison. Turns "we wrote
+         it" into "we proved it".
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/upload/runner.ts src/upload/jobartifacts.ts
+  Test:  corrupt the embedded tag count between write and validate; assert the
+         commit is REFUSED and the previous package is intact.
+
+CP-15  FROM C   CRITICAL  S  low
+  Accepted-metadata cache keyed by source fingerprint
+  Files: iconSplitter.upload.meta.v1 cache -> src/upload/metaactions.ts +
+         rowmodel staleness
+  Why:   found on the second pass and arguably the highest-value item here. A
+         journals a request in flight but caches nothing, so a crash between an
+         accepted answer and a commit can bill the model again. C caches the
+         accepted record per source fingerprint so a crash never repeats paid
+         AI work - and invalidates by fingerprint mismatch when the source
+         changes, so the cache can never serve a stale answer for changed
+         artwork. Pairs naturally with CP-4, which already computes the
+         fingerprints.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/upload/stores.ts
+  Test:  accept metadata, kill the page mid-export, reload and re-export:
+         assert ZERO model calls. Then edit the source SVG and assert the
+         cache entry is invalidated and reconfirmation is demanded.
+
+CP-4   FROM C   HIGH  M  medium
+  Five-class fingerprint plan (upfinger)
+  Files: src/lib/upfinger.ts -> replaces the rebuild flags in
+         src/lib/uploadexport.ts, reconciled with upload/rowmodel staleness
+  Why:   the most granular re-export economics of the three. Source change ->
+         reconfirm metadata; visual change -> rebuild outputs; metadata-only ->
+         re-embed WITHOUT raster; quality-only -> re-encode; flag/missing
+         output -> touch only that stage. Directly reduces paid model calls and
+         re-raster time on a 400-icon folder.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/lib/upfinger.ts tests/svgup_job.test.ts
+  Test:  one test per class asserting exactly which stages re-run; migrate an
+         existing export.json v1 fixture.
+
+CP-5   FROM B   HIGH  S  low
+  Artifact preview (readPublishedJpeg)
+  Files: readPublishedJpeg -> src/upload/UploadPreview.tsx
+  Why:   A's shadow-root SVG preview is excellent for the SOURCE; B
+         additionally shows the JPEG that was actually committed, read out of
+         the icon's own export/ folder, with "Not exported yet" only when the
+         file really is absent. Keep both: SVG for the source, committed JPEG
+         for the package.
+  Cmd:   git checkout arena/01a0f966-iconsplitter -- src/svgupload/
+  Test:  export one icon, delete the JPEG, assert the dialog flips to "Not
+         exported yet"; revoke every object URL on unmount.
+
+CP-6   FROM C   HIGH  M  medium
+  svgo/browser v4 with a render-compare budget
+  Files: src/lib/upsvgo.ts -> src/lib/uploadoptimize.ts
+  Why:   A records SVGO version/config/sizes/hashes; C adds a
+         metadata-preserving preset plus a tolerance/budget render-compare
+         gate, so optimization may shrink the file but may not change the
+         picture or strip the packet. That gate is what makes
+         SVGO-on-by-default safe.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/lib/upsvgo.ts tests/svgup_optimize.test.ts
+  Test:  feed an SVG whose optimization would drop the XMP packet; assert the
+         gate refuses and the unoptimized copy is kept.
+
+CP-7   FROM C   HIGH  S  low
+  Injectable CanvasDeps / makeRunnerDeps
+  Files: src/upload/browserdeps.ts -> src/upload/ (generalises A's binfakefs +
+         minijpeg helpers)
+  Why:   lets tests drive the REAL pipeline over fakes instead of stubbing the
+         pipeline out. This seam is what caught a genuine defect in C
+         (readSvgMetadata counting title/description Alt lists as tags). It
+         raises the floor for every future pipeline change.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/upload/browserdeps.ts
+  Test:  run the full stage machine over fakes; assert the produced JPEG
+         decodes to the planned integer dimensions.
+
+CP-8   FROM B   HIGH  S  low
+  finish_reason + provider-verified model
+  Files: src/svg/svgstream.ts, svgrequest.ts (finish_reason) -> shared by
+         src/lib/geminiclient.ts
+  Why:   a truncated answer is detected from the provider's own finish_reason
+         instead of being guessed from the parsed text, and the model is
+         verified against the provider's list and never silently substituted.
+         Cheap, and it closes the worst metadata failure mode: a half-written
+         40-tag list that parses.
+  Cmd:   git checkout arena/01a0f966-iconsplitter -- src/svg/svgstream.ts src/svg/svgrequest.ts
+  Test:  stream a truncated answer; assert state = invalid with a truncation
+         reason, NEVER accepted.
+
+CP-16  FROM B   HIGH  M  low
+  Bring the real UI template into the repo and reconcile against it
+  Files: design temp/SVG to upload/{SVG to upload UI temp.html,
+         SVG to upload UI image.png} -> repo; then diff A's panel against it
+  Why:   A and C both wrote that this folder "does not exist in this checkout"
+         and fell back to the Generate SVG layout; it was pushed to B two hours
+         later. A converged on nearly all of it by luck, but three template
+         details are only in B: Metadata primary / Export success / Retry
+         danger; the row settings cell rendered from the effective values; and
+         "Copy all fields". The template also pins the zoom slider at 48-440 px
+         with a 128 default where A inherits the shared 48-800 svg-thumb value.
+         Land the template so the next change can be VERIFIED rather than
+         guessed - and strip the 21 MB "Arena setup analyze" sibling.
+  Cmd:   git checkout arena/01a0f966-iconsplitter -- "design temp/SVG to upload"
+  Test:  walk the mockup element by element against the rendered panel: count
+         chips, audit line, date from/to, sort keys, both badges, settings
+         cell, version label.
+
+CP-9   FROM C   MEDIUM  M  medium
+  IPTC IIM (APP13) beside XMP APP1
+  Files: src/lib/upmetaxml.ts + upjpegmeta.ts -> src/lib/uploadjpeg.ts /
+         uploadembed.ts
+  Why:   reframed after reading A's design doc - A did not forget IPTC, it
+         ruled it out as a legacy binary form in favour of XMP APP1, with full
+         metadata always also in export.json. So this is a DELIBERATE DEVIATION
+         to reverse only if your destination actually reads APP13. If it does,
+         C's surgery is the one to take - idempotent (re-embedding never grows
+         the file) and it refuses payloads over the 65,502-byte segment limit
+         rather than writing a broken marker. Keep A's SOF verification and
+         decode-back on top.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/lib/upmetaxml.ts src/lib/upjpegmeta.ts
+  Test:  embed twice; assert byte-identical APP1/APP13 segments and an
+         unchanged SOF.
+
+CP-10  FROM C   MEDIUM  S  low
+  Cache-aware AI count in the confirm dialog
+  Files: src/upload/UploadPanel.tsx (redacted-request confirm)
+  Why:   A shows the exact request before sending; C also PRICES it - how many
+         icons will actually hit the model versus reuse an accepted answer.
+         Pairs with CP-4: the plan says what will re-run, the dialog tells the
+         user what it will cost.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/upload/UploadPanel.tsx
+  Test:  seed accepted metadata for 3 of 5 icons; assert the dialog reads
+         "2 of 5 will call the model".
+
+CP-11  FROM B   MEDIUM  S  low
+  Policy in one place (metatags / metaconst / metapolicy / metaprompt)
+  Files: src/lib/svgupload/meta*.ts -> split src/lib/uploadmeta.ts
+  Why:   so the parser, the editor and the UI counter agree BY CONSTRUCTION
+         rather than by review. A keeps the whole policy in one module, which
+         is fine until the "40/40 keywords" chip and the validator drift. Also
+         adopt B's move of PROBLEM_LABEL into lib/pairing so both SVG tabs
+         share one wording.
+  Cmd:   git checkout arena/01a0f966-iconsplitter -- src/lib/svgupload/metapolicy.ts src/lib/svgupload/metatags.ts
+  Test:  property test - any string the counter accepts, the validator accepts,
+         and vice versa.
+
+CP-12  FROM B   MEDIUM  M  medium
+  Unify the transport shell, keep the Gemini wire adapter
+  Files: src/lib/geminiclient.ts -> one transport shell (svgstream /
+         svgrequest) with a Gemini body/header adapter
+  Why:   softened after reading A's design doc - A reused svgrequest's pattern
+         deliberately because Gemini's generateContent body and x-goog-api-key
+         header genuinely differ from the OpenAI-compatible path. This is not
+         duplication by accident. The fix is narrower than "delete one": share
+         the stall watchdog, cancel semantics, journalable request id and
+         finish_reason handling in ONE shell, and let the wire format be a
+         pluggable adapter. Keeps A's failure classification (timeouts and
+         disconnects never auto-retryable) intact.
+  Cmd:   refactor, not a checkout - port A's classification onto the shared shell
+  Test:  the existing runmetadata suite must pass UNCHANGED against the shared
+         transport.
+
+CP-14  FROM A   MEDIUM  M  medium
+  Normalise identifiers, then move lib into a folder
+  Files: tab id, testids, module dir, lib prefix, storage keys;
+         src/lib/upload* -> src/lib/upload/
+  Why:   three branches, three vocabularies: upload vs svg-upload, upload-* vs
+         up-*, src/upload vs src/svgupload, upload*/up*/svg* prefixes.
+         Standardise on A's (tab upload, tab-upload, src/upload/,
+         iconSplitter.upload.*) and rewrite every donor file on import - then
+         give the ~25 flat lib modules a folder, as B and C already do.
+         UI_SELECTORS section R must change in the SAME commit (RULE 17).
+  Cmd:   git mv src/lib/uploadmeta.ts src/lib/upload/meta.ts   (x25, plus testid rename)
+  Test:  workbench_ui tab-order test + the full DOM suite must stay green after
+         the rename.
+
+CP-13  FROM C   LOW  S  low
+  Live-validating MetaEditor
+  Files: src/upload/UploadRow.tsx (MetaEditor) -> src/upload/UploadMetaFields.tsx
+  Why:   A re-validates when you press accept; C validates AS YOU TYPE so an
+         invalid edit cannot be accepted at all. Small, visible, and it removes
+         the "why did accept do nothing" moment.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/upload/UploadRow.tsx
+  Test:  type a 39-tag list; assert accept stays disabled and the counter reads
+         39/40.
+
+CP-17  FROM C   LOW  S  low
+  Versioned "Estimated" cost card
+  Files: lib/gemconfig pricing table -> the provider card and export.json
+  Why:   A and C resolved the same question in opposite directions: Gemini
+         returns token counts but no cost, so A prints "-" and reserves
+         Estimated for genuinely calculated numbers, while C calculates from a
+         published rate card ($0.25/$1M in, $1.50/$1M out) and stamps the
+         figure with a pricing version string. C's is more useful for budgeting
+         a 400-icon run and stays honest because the label and the rate-card
+         version travel with the number. Adopt as an explicitly-labelled
+         ADDITION to A's "-", never a silent replacement.
+  Cmd:   git checkout arena/d658a5b8-iconsplitter -- src/lib/gemconfig.ts
+  Test:  assert the UI never shows a bare currency figure - every cost carries
+         BOTH the Estimated label and the pricing version.
+
+  EFFORT TOTAL: CP-1..CP-17 = 11 x S (2.75d) + 6 x M (4.50d) + 0 x L = 7.25d,
+                plus ~0.75d of integration slack = ~8 dev-days. That is exactly
+                what the phase plan in section 11 adds up to:
+                P0 0.5 + P1 0.5 + P2 1.5 + P3 1.5 + P4 1 + P5 1 + P6 1.5 + P7 0.5 = 8.0d.
+
+
+================================================================================
+10. RISK REGISTER
+================================================================================
+R1  HIGH    Three undo implementations for one entry type
+    A has upload/uploadundo (payload gate, live binding, persist-only path,
+    no-op refusal), C has state/undoable (live-bind + durable writeThrough), B
+    registers the uploadSettings entry type. Cherry-picking two of them
+    DOUBLE-APPLIES a bulk settings change.
+    Mitigation: keep A's applier as the single path, adopt C's durable
+    writeThrough for the unmounted case INSIDE it, delete the third. One test:
+    bulk apply -> undo -> redo with no panel mounted.
+
+R2  HIGH    Two fingerprint taxonomies
+    A's row model computes source hash + settings fingerprint +
+    accepted-metadata fingerprint; C's upfinger computes source/visual/raster/
+    metadata/flags. Both are right, and both would write to the same staleness
+    state.
+    Mitigation: land CP-4 as a REPLACEMENT, not an addition - upfinger becomes
+    the planner, A's fingerprints feed it. Migration test over an existing
+    export.json v1 fixture.
+
+R8  HIGH    Cost blow-up on bulk runs
+    Metadata is a paid call per icon. Without C's fingerprint plan, its cache
+    and the cache-aware count, a settings tweak on 400 icons can re-ask the
+    model 400 times.
+    Mitigation: land CP-15, CP-4 and CP-10 BEFORE any bulk run, and keep B's
+    rule that an edit never re-asks the model.
+
+R7  HIGH    Branch hygiene - upgraded on the second pass
+    B's "Arena setup temp to study" commit added design temp/Arena setup
+    analyze/ - a single 21,089,968-byte saved HTML page plus hundreds of
+    .js.download and .css assets of an unrelated page - into the repo root.
+    Merging B naively drags ~21 MB of junk into history PERMANENTLY. A's
+    history separately contains 07e828e "upd", pushed from an older local copy,
+    which silently reverted the shipped I-56 fix until e94ade3 re-applied it.
+    Mitigation: cherry-pick FILES from B, never merge the branch. Keep design
+    temp/SVG to upload/ (430 KB, the feature's own mockup - CP-16) and drop its
+    sibling. Squash-merge feature commits, re-run all gates on the merge
+    commit, and never push from a stale working copy - the pre-push hook
+    (npm run hooks:install) exists for exactly this.
+
+R3  MEDIUM  EPS honesty vs EPS reality
+    A and C write real EPS for a documented subset; B gates the format to
+    Partial. If the destination site rejects hand-written PostScript, a subset
+    writer is worse than an honest gap.
+    Mitigation: keep verifyEps and C's preflight, surface the subset limit in
+    the row badge, and confirm with ONE real upload before enabling EPS by
+    default.
+
+R4  MEDIUM  Provider coupling
+    A's geminiclient hardwires Gemini while the app already ships a
+    Requesty/OpenAI-compatible path for Generate SVG. Two stacks means two
+    places to fix a stall, a cancel or a key rotation.
+    Mitigation: CP-12. Until then keep the Gemini config in A's configstore
+    (endpoint/model/timeout/retries/concurrency) so a second provider is a
+    config change.
+
+R5  LOW     15.1 MP versus canvas ceilings - downgraded on the second pass
+    All three target 3886 x 3886 = 15,100,996 px. C already researched the
+    ceiling (Chrome: 32,767 px per edge, 268,435,456 px area) and rasterizes
+    one icon at a time under bounded concurrency. Memory pressure still varies
+    by device, and a silently clamped canvas would produce a JPEG that does not
+    match the plan.
+    Mitigation: keep the decode-back verification A and C both perform, and
+    fail with the MEASURED dimensions rather than the planned ones.
+
+R6  MEDIUM  Testid churn breaks shared suites
+    workbench_ui asserts the exact tab list; paired_thumbs asserts row
+    templates. Renaming tab-svg-upload -> tab-upload or up-* -> upload-*
+    invalidates them and UI_SELECTORS section R.
+    Mitigation: do CP-14 as ONE atomic commit - source rename + tests +
+    UI_SELECTORS + SYSTEM_OF_RECORD - then run npm run verify.
+
+
+================================================================================
+11. FULL INTEGRATION PLAN - EIGHT PHASES (P0-P7), EACH ONE ENDS GREEN
+================================================================================
+Ground rules for every phase:
+  * One phase = one PR = one squash commit on main. Never batch two phases.
+  * Every phase ends with npm run verify green (6/6 lanes) AND the phase's
+    exit gate below.
+  * TDD: write the failing test for the donor behaviour FIRST, then bring the
+    file over. A cherry-pick that lands without a new red-then-green test is
+    not landed.
+  * Docs move in the same commit (RULE 17): SYSTEM_OF_RECORD, UI_SELECTORS,
+    QUALITY_RECHECK, and the design doc when behaviour changes.
+  * Never push from a stale working copy (R7 / A-g7). Install the pre-push
+    hook once: npm run hooks:install.
+  * Before phase 1: create an integration branch off main and a throwaway test
+    folder tree (see 12.0) that is never your real artwork.
+
+PHASE P0 - PREPARATION  (~0.5d)  no behaviour change
+  P0.1  git switch -c integrate/svg-to-upload main
+  P0.2  Create the test corpus (section 12.0). Commit NOTHING from it.
+  P0.3  Read A's docs/archive/2026-10-06-svg-to-upload/design.md and C's
+        docs/archive/2026-10-07-svg-to-upload/design.md end to end. They
+        disagree on IPTC, on cost, on bounds and on restart - decide each one
+        NOW and write the decisions into a short ADR at
+        docs/current/ADR-svg-to-upload.md so the merge is not re-litigated
+        file by file.
+  P0.4  Freeze the vocabulary (this is CP-14's decision, taken early so every
+        later step lands in the right namespace):
+          tab id        : upload          (NOT svg-upload)
+          test id       : tab-upload, upload-*   (NOT up-*)
+          feature dir   : src/upload/     (NOT src/svgupload/)
+          pure rules    : src/lib/upload/ (a FOLDER, not 25 flat files)
+          storage keys  : iconSplitter.upload.*.v1
+          log feature   : "upload"
+  P0.5  Baseline: npm run verify on main, record the numbers. Every later
+        phase must not go below them.
+  EXIT GATE: verify 6/6 on main; ADR written; vocabulary frozen in the ADR;
+             baseline numbers recorded in QUALITY_RECHECK.
+
+PHASE P1 - LAND THE BASE  (~0.5d)
+  P1.1  Bring branch A's two feature commits over as FILES, not as a merge:
+          git checkout arena/140ece1a-iconsplitter -- src/ tests/ docs/ index.css
+        (This carries e94ade3's I-56 fix with it, which main does not have.)
+  P1.2  Rename src/lib/upload*.ts into src/lib/upload/ per P0.4 in the SAME
+        commit; fix imports; update UI_SELECTORS section R and SYSTEM_OF_RECORD.
+  P1.3  npm install (svgo is a new runtime dependency - verify the single-file
+        build still inlines it and stays offline-capable).
+  P1.4  Squash into one commit: "feat(upload): the SVG to upload tab (base =
+        arena/140ece1a, I-56 included)".
+  P1.5  Re-run all gates on the merge commit itself, not on the branch.
+  EXIT GATE: verify 6/6; >= 1212 tests; coverage >= 95.2% stmts; tab order in
+             workbench_ui is exactly sheets, batch, selection, selection-v2,
+             generate-svg, upload; dist/index.html opens from file:// with no
+             server; real-Chromium pass on the P0.2 corpus - pick the root,
+             export ONE icon, confirm export.json exists, and sha256 the source
+             SVG before and after to prove it is untouched.
+
+PHASE P2 - HONESTY PASS  (~1.5d)   picks CP-1, CP-2, CP-15, CP-5, CP-8
+  Order matters: CP-15 and CP-2 both touch restore, so land the cache first.
+  P2.1  CP-15 metadata cache keyed by source fingerprint (from C). Test first:
+        crash-then-resume makes ZERO model calls; editing the source SVG
+        invalidates the entry and demands reconfirmation.
+  P2.2  CP-2 jobs store + restoreInterrupted (from B). Test first: seeded
+        running job + StrictMode double-mount -> ONE upload.restored entry,
+        ZERO fetch calls.
+  P2.3  CP-1 closed log vocabulary (from B). Then assert the union: no
+        serialised log entry anywhere in the app contains a data key, and the
+        entry-type set is closed.
+  P2.4  CP-8 finish_reason surfacing (from B). Test: a truncated stream is
+        invalid, never accepted.
+  P2.5  CP-5 artifact preview (from B). Test: delete the committed JPEG, the
+        dialog says "Not exported yet"; every object URL is revoked on
+        unmount (assert no leak across 50 open/close cycles).
+  P2.6  Reconcile the two interruption models explicitly in SYSTEM_OF_RECORD:
+        B's in-browser jobs store AND C's disk-derived non-committed
+        export.json are BOTH sources of truth; define precedence (disk wins on
+        scan, memory wins within a session) so they can never disagree.
+  EXIT GATE: verify 6/6; the four crash/cancel/privacy tests in section 12
+             (T2, T3, T5, T12) all green; restart with a seeded running job
+             makes zero network calls.
+
+PHASE P3 - PIPELINE HARDENING  (~1.5d)   picks CP-3, CP-7, CP-6
+  P3.1  CP-7 injectable CanvasDeps / makeRunnerDeps (from C) FIRST - it is the
+        seam the other two tests need. Generalise A's binfakefs + minijpeg
+        helpers onto it rather than keeping two fake stacks.
+  P3.2  CP-3 compare-before-commit (from C). Test: corrupt the embedded tag
+        count between write and validate -> commit refused, previous package
+        intact, row shows partial + Retry.
+  P3.3  CP-6 svgo/browser v4 + render-compare budget (from C). Test: an SVG
+        whose optimization would strip the XMP packet -> gate refuses, the
+        unoptimized copy is kept, the reason is recorded (RULE 9).
+  P3.4  Confirm A's verifyJpeg / verifyEps / SOF decode-back still run AFTER
+        C's compare step; they are complementary, not duplicates.
+  EXIT GATE: verify 6/6; the full stage machine runs green over fakes with no
+             browser APIs; T19 (idempotent embed) and T20 (SVGO saboteur) pass;
+             coverage has not dropped below the P1 floor.
+
+PHASE P4 - ECONOMICS  (~1d)   picks CP-4, CP-10, CP-17
+  P4.1  CP-4 five-class fingerprint plan (from C) as a REPLACEMENT for A's
+        per-output rebuild flags - see R2. A's three row-model fingerprints
+        become INPUTS to upfinger, not a parallel system. Write the migration
+        test over an existing export.json v1 fixture before touching code.
+  P4.2  One test per fingerprint class asserting exactly which stages re-run
+        (T15 in section 12).
+  P4.3  CP-10 cache-aware AI count in the confirm dialog. Test: accepted
+        metadata for 3 of 5 icons -> dialog reads "2 of 5 will call the model".
+  P4.4  CP-17 versioned Estimated cost card. Test: no cost figure renders
+        without BOTH the Estimated label and the pricing version string; A's
+        "-" behaviour stays for providers that report no cost.
+  EXIT GATE: verify 6/6; a 400-icon folder with one quality-only change
+             re-encodes and makes ZERO model calls (T4 + T5); the dialog's
+             paid count is correct on a mixed folder.
+
+PHASE P5 - TEMPLATE RECONCILIATION  (~1d)   pick CP-16
+  P5.1  Land design temp/SVG to upload/ (the 430 KB mockup + HTML) and delete
+        design temp/Arena setup analyze/ in the same commit. Add a .gitignore
+        rule or a size guard so a 21 MB page can never be committed again
+        (R7).
+  P5.2  Walk the 12-row mockup table in section 8 against the rendered panel.
+        A already matches 10; fix the two it does not (button semantics:
+        Metadata primary / Export success / Retry danger; Copy all fields) and
+        decide the zoom range deliberately (I-55's shared 48-800 vs the
+        mockup's 48-440 / default 128) - then record the decision in
+        SYSTEM_OF_RECORD either way.
+  P5.3  Add the mockup's audit line format verbatim as a test fixture so the
+        wording cannot drift: "133 files . 20 approved SVGs . 20 references
+        excluded . 0 missing files . 0 duplicates removed -> 20 rows".
+  P5.4  CP-13 live-validating MetaEditor (from C). Test: a 39-tag list leaves
+        accept disabled and the counter at 39/40.
+  EXIT GATE: verify 6/6; T25 (mockup walkthrough) green on all 12 rows; no
+             file larger than ~1 MB anywhere under design temp/.
+
+PHASE P6 - CONSOLIDATION  (~1.5d)   picks CP-11, CP-12, CP-9 (optional)
+  P6.1  CP-11 split the metadata policy into metatags / metaconst / metapolicy
+        / metaprompt so parser, editor and counter agree by construction. Add
+        the property test both ways. Also move PROBLEM_LABEL into lib/pairing
+        so both SVG tabs share one wording.
+  P6.2  CP-12 unify the transport shell: one stall watchdog, one cancel path,
+        one journalable request id, one finish_reason handler; the Gemini
+        generateContent body and x-goog-api-key header become a pluggable wire
+        adapter. The existing runmetadata suite must pass UNCHANGED.
+  P6.3  CP-9 IPTC IIM (APP13) - OPTIONAL, gated on one question: does your
+        destination read APP13? If no, skip it and record the decision in the
+        ADR (A's original reasoning stands). If yes, take C's idempotent
+        surgery with its 65,502-byte segment refusal, and keep A's SOF
+        verification on top.
+  P6.4  Final identifier sweep (CP-14 completion): no up-*, no svg-upload, no
+        src/svgupload/, no flat src/lib/upload*.ts left. UI_SELECTORS and
+        SYSTEM_OF_RECORD regenerated in the same commit.
+  P6.5  Full-suite timing check: the suite must still run in CI-acceptable
+        time. If DOM tests have grown past ~40, split into a slow lane as the
+        repo already does with itSlow.
+  EXIT GATE: verify 6/6; grep finds zero occurrences of "up-", "svg-upload" and
+             "src/svgupload" outside docs/archive; the runmetadata suite is
+             byte-identical to P1's version; all 12 mockup rows still green.
+
+PHASE P7 - ACCEPTANCE & RELEASE  (~0.5d)
+  P7.1  Run the full manual playbook in section 12 on a real Chromium with a
+        real folder (OPFS/FSA, not fakes).
+  P7.2  Build the single file, copy dist/index.html to a clean machine with no
+        repo checkout, open it from file://, and repeat one export.
+  P7.3  One REAL upload to the destination site with EPS enabled, to settle R3
+        once and for all. Record the outcome in the ADR.
+  P7.4  Write the QUALITY_RECHECK entry with the final numbers, update the
+        README's five-modes list to six, and tag the release.
+  P7.5  Only now: delete branches arena/140ece1a, arena/01a0f966 and
+        arena/d658a5b8.
+  EXIT GATE: the section 13 checklist fully ticked; a real upload succeeded;
+             README says six modes; donor branches deleted.
+
+ROLLBACK POLICY (all phases)
+  * Each phase is one squash commit, so rollback is git revert of that commit
+    and nothing else.
+  * Nothing in this plan ever writes outside export/, and no phase touches an
+    approved source SVG or a pair sidecar - so a bad phase cannot corrupt
+    artwork. That invariant is asserted by T22 in every phase, not just at the
+    end.
+  * If a phase's exit gate fails and cannot be fixed within the phase, revert
+    the phase and re-plan; do not push a red trunk.
+
+
+================================================================================
+12. TESTING PLAYBOOK - 28 TESTS, INCLUDING THE FUN ONES
+================================================================================
+Kinds:  UNIT  pure rule, no DOM
+        DOM   real panel in jsdom, browser APIs faked
+        CHAOS deliberate failure injection
+        PERF  time/memory/cost under load
+        HUMAN needs a real browser, a real folder, or a real destination site
+
+12.0  THE TEST CORPUS (build this once, in P0.2, never commit it)
+  corpus/
+    01-simple/          icon-a.png + icon-a_AI.png          (baseline pair)
+    02-approved/        + icon-b_AI.svg v1,v2,v3 and .svg.json with v2 preferred
+    03-no-approved-svg/ approved pair, no approved SVG version -> must be REPORTED
+    04-missing-file/    sidecar names an SVG that is not on disk -> row warning
+    05-export-loop/     an export/ folder INSIDE the pair folder -> must be ignored
+    06-text-element/    SVG containing <text> -> EPS preflight must fail honestly
+    07-gradient/        SVG with a gradient -> EPS subset failure -> partial
+    08-stroke-heavy/    thick strokes + miter joins -> bounds must not clip
+    09-transformed/     nested CTM transforms + non-scaling-stroke
+    10-huge/            a very complex path -> perf and canvas ceiling
+    11-corrupt-json/    export.json present but unparseable -> report, never delete
+    12-non-committed/   export/ with outputs but NO export.json -> interrupted
+    13-unicode/         title/description with diacritics and CJK -> XML escaping
+    14-duplicate-name/  a pre-existing <base>.jpg in export/ -> _v02 suffix
+  Every CHAOS and PERF test below runs against this corpus, so results are
+  reproducible and no real artwork is ever at risk.
+
+T1   UNIT   The Golden Fixture Run
+     Export corpus/01-simple with default settings, then hash every output.
+     Freeze those hashes in a fixture. Any later change that moves a byte
+     fails loudly and must be justified in the commit message. This is the
+     regression net for the whole pipeline.
+     PASS: sha256 of <base>.svg / .jpg / export.json match the frozen fixture.
+
+T2   CHAOS  The Crash Party
+     Kill the run at each of the nine stages in turn (preflight, prepare,
+     metadata, render, embed, eps, validate, commit, processed) by throwing
+     from the injected dep. For each: assert the source is untouched, the
+     previous package (if any) is intact, export.json is either absent or
+     still describes the LAST VALID state, and the row reports the honest
+     terminal state (failed / partial / interrupted) - never "processed".
+     PASS: 9 crashes, 9 honest states, zero corrupted packages.
+
+T3   DOM    The StrictMode Double-Dip
+     Mount the panel twice under StrictMode with a seeded running job in
+     iconSplitter.upload.jobs.v1.
+     PASS: exactly ONE upload.restored log entry, exactly ONE toast, ZERO
+     fetch calls. (This is the bug B's once-per-load guard exists to prevent.)
+
+T4   PERF   The 400-Icon Marathon
+     Generate 400 synthetic rows in the corpus shape. Run a full export at
+     concurrency 2 with all browser APIs faked. Record wall time, peak heap
+     and the number of model calls.
+     PASS: no unbounded memory growth (heap returns to baseline between
+     icons), zero dropped icons, exactly 400 model calls on a cold run and
+     ZERO on an immediate re-run (proves T5's cache).
+
+T5   UNIT   The Paid-Work Ledger
+     Wrap the transport in a counting spy. Assert the call count for each of
+     these sequences: first export (1), re-export after a settings change (0),
+     re-export after a quality-only change (0), re-export after a metadata edit
+     (0), re-export after a SOURCE change (1, reconfirmation), crash-then-
+     resume (0). This is the single most important economic test in the plan.
+     PASS: the ledger matches exactly; no sequence silently re-bills.
+
+T6   CHAOS  The Stale-Working-Copy Rehearsal
+     Re-enact A's real incident (07e828e "upd" reverting the shipped I-56
+     fix): check out an older copy of one file over a newer fix, run verify,
+     and confirm the pre-push hook blocks it.
+     PASS: npm run hooks:install installs a hook that fails the push; the
+     I-56 assertion in tests/rootpath.test.ts is red before the push is
+     rejected.
+
+T7   CHAOS  The Wipe-and-Walk
+     Export one icon, then clear localStorage AND IndexedDB (simulating a
+     browser reset or a different profile), reopen the folder.
+     PASS: the row still shows the committed package from disk, and - if
+     export.json is missing while outputs exist - the row shows interrupted
+     from C's disk-derived rule with nothing auto-resumed. Proves recovery
+     does not depend on browser storage alone.
+
+T8   HUMAN  The Cross-Machine Handoff
+     Copy the corpus folder to a second machine (or a second OS user), open it
+     in the built single-file app.
+     PASS: every decision, version preference and committed package travels
+     with the folder; nothing was stored only in the first machine's browser.
+     This is the promise the per-pair sidecar design makes - test it.
+
+T9   CHAOS  The Disk-Pull
+     Revoke the folder handle mid-run (or physically unplug / lock the drive).
+     PASS: in-flight items cancel, completed packages are KEPT (B's jobctl
+     rule), the failed pairs are named in a warning, and Retry write saves
+     exactly those pairs once the folder is writable again - no other file is
+     touched.
+
+T10  HUMAN  The Round-Trip Proof
+     Open a committed JPEG in an independent metadata reader (exiftool, or a
+     stock site's own ingestion preview).
+     PASS: title, description and all 40 keywords are visible to a tool that
+     knows nothing about this app. This is the only test that proves the
+     embedding is real rather than self-consistent.
+
+T11  HUMAN  The EPS Litmus
+     Open a committed .eps in a real PostScript consumer (Ghostscript
+     render, Inkscape import, or the destination's uploader).
+     PASS: it renders at the correct physical size with setlinewidth exactly
+     strokePt at 96 DPI, and a corpus/06-text-element or 07-gradient source
+     was refused at preflight rather than producing a broken file. Settles R3.
+
+T12  UNIT   The Secret Sniffer
+     Serialise EVERY sink after a full run: every log entry, export.json, the
+     settings stores, the session slice, the DOM (innerHTML of the panel) and
+     every URL passed to fetch.
+     PASS: the API key appears in none of them; no URL contains key=; auth is
+     always the x-goog-api-key header; the UI shows only the masked form.
+
+T13  UNIT   The Vocabulary Lock
+     Enumerate every log entry the tab can emit.
+     PASS: each is one of the six closed outcomes (named / name-refused /
+     exported / cancelled / restored / model-checked), each names the ICON and
+     the OUTCOME, and NONE has a data field. Then assert the type has no
+     index signature so a future field cannot be added by accident.
+
+T14  DOM    The Undo Gymnastics
+     Bulk-apply settings to 3 icons, then: undo with the panel mounted; redo;
+     navigate away (unmount) and undo; redo; corrupt the stored payload and
+     undo.
+     PASS: ONE history entry for the whole bulk gesture; unmounted undo writes
+     through durable storage (C's RULE 12 path); a corrupt or no-op payload
+     returns false so the cursor NEVER moves on a change that did not happen;
+     defaults changes never create an entry at all.
+
+T15  UNIT   The Fingerprint Matrix
+     For each of C's five classes (source / visual / metadata-only /
+     quality-only / flags-or-missing-output), assert the exact set of stages
+     that re-run.
+     PASS: metadata-only re-embeds WITHOUT raster; quality-only re-encodes
+     ONLY; a missing single output rebuilds only that file; nothing stale is
+     silently reused. Cross-check against T5's ledger.
+
+T16  CHAOS  The Truncation Trap
+     Stream an answer that stops at 39 tags with finish_reason MAX_TOKENS, and
+     a second that is structurally valid JSON but truncated mid-array.
+     PASS: both are invalid with a truncation reason, never accepted, never
+     parsed into metadata, and the row offers a retry that the USER must click.
+
+T17  DOM    The 39-Tag Refusal
+     Type 39 tags into the editor; then 40 with a duplicate; then a title whose
+     second sentence is 2 words; then a description of 16 words.
+     PASS: the counter reads 39/40, accept stays disabled (C's live
+     validation), and the specific rule that failed is named in the row's
+     validation line. An invalid answer can be SAVED as a draft but never
+     EXPORTED.
+
+T18  PERF   The Canvas Ceiling
+     Set jpegMpx to the maximum (30 MP) and export corpus/10-huge.
+     PASS: the integer dimensions are computed, not clamped silently; the
+     written JPEG is DECODED BACK and its measured dimensions equal the plan;
+     if the canvas refuses, the failure names the measured dimensions rather
+     than pretending. Confirms C's researched limits (32,767 px / 268,435,456
+     px area) hold on the target browser.
+
+T19  UNIT   The Idempotent Embed
+     Embed metadata, read the bytes, embed again, read again.
+     PASS: APP1 (and APP13 if CP-9 landed) segments are byte-identical, the
+     SOF is unchanged, the file does not grow, and a payload over the
+     65,502-byte segment limit is REFUSED rather than written broken.
+
+T20  CHAOS  The SVGO Saboteur
+     Configure SVGO so that optimization would strip the XMP packet, drop the
+     viewBox, or convert a stroke-bearing shape in a way that changes the
+     render beyond tolerance.
+     PASS: the verification gate refuses, the UNOPTIMIZED copy is kept (RULE
+     9), the reason is recorded in export.json, and the pipeline continues -
+     a failed OPTIONAL stage never stalls the run.
+
+T21  UNIT   The Loop Guard
+     Point the scanner at corpus/05-export-loop, where an export/ folder sits
+     inside the pair folder and contains a .svg that looks exactly like a
+     source.
+     PASS: zero rows are created from anything inside export/; no duplicates;
+     the feature can never discover its own output as input, at any depth.
+
+T22  UNIT   The Untouched Source  (run in EVERY phase)
+     sha256 every approved source SVG and every pair sidecar before and after
+     a full run of all 14 corpus folders.
+     PASS: byte-identical. This is the plan's core safety invariant and the
+     reason a bad phase can never corrupt artwork.
+
+T23  HUMAN  The Single-File Smoke
+     Build, copy dist/index.html alone to a clean machine with no repo and no
+     node_modules, open it from file://.
+     PASS: the app boots, svgo is inlined, the tab works offline, and one
+     export completes with no network access except the single model call.
+
+T24  DOM    The Firefox Fallback
+     Mount in an environment with no File System Access API.
+     PASS: upload-unsupported renders, upload-panel does not, no hook throws,
+     and the rest of the app is unaffected. (Firefox/Safari users keep Single
+     sheets mode, as the README already promises.)
+
+T25  HUMAN  The Mockup Walkthrough
+     With design temp/SVG to upload/ landed (P5.1), open the mockup HTML and
+     the real panel side by side and tick all 12 affordances from section 8.
+     PASS: 12/12, with the zoom-range deviation either matched or explicitly
+     recorded as a deliberate decision in SYSTEM_OF_RECORD.
+
+T26  DOM    The Rename Gauntlet
+     After CP-14: assert the tab list is exactly [tab-sheets, tab-batch,
+     tab-selection, tab-selection-v2, tab-generate-svg, tab-upload]; assert
+     paired_thumbs still finds its row templates; grep the source for "up-",
+     "svg-upload" and "src/svgupload".
+     PASS: all suites green, zero grep hits outside docs/archive, UI_SELECTORS
+     section R regenerated in the same commit.
+
+T27  UNIT   The Cost Receipt
+     Render the provider card and a committed export.json with cost data.
+     PASS: every currency figure carries BOTH the Estimated label and a
+     pricing version string; provider-reported tokens are shown as reported
+     and never restated as cost; where the provider reports no cost at all,
+     A's "-" behaviour is preserved rather than a number being invented.
+
+T28  CHAOS  The Duplicate-Name Dance
+     Pre-create <base>.jpg and <base>.svg in export/ (corpus/14), then export.
+     PASS: nothing is silently overwritten - either the _v02/_v03 suffix rule
+     applies as it does in Batch mode, or the staged commit refuses and says
+     so. Decide which in the ADR; either way the user is told, and the
+     pre-existing files are byte-identical afterwards.
+
+COVERAGE FLOOR (all phases)
+  Statements  >= 95.2%   (A's tip - hold it, never regress to C's 93.95%)
+  Branches    >= 88.0%   (C's floor was 87.93%; round up and hold)
+  DOM suites  >= 17      (A's count; every cherry-pick adds at least one)
+  New rule:   no cherry-pick lands without its own red-then-green test.
+
+
+================================================================================
+13. FINAL VERIFICATION CHECKLIST (tick every line before release)
+================================================================================
+[ ] types (tsc) clean
+[ ] eslint - 0 errors (A reports 8 pre-existing warnings; do not add to them)
+[ ] RULE 18 quality gate - PASSED
+[ ] vitest full suite - >= 1212 tests green
+[ ] coverage - >= 95.2% statements, >= 88% branches
+[ ] vite single-file build - dist/index.html opens with no server
+[ ] real Chromium, real OPFS, your own tree: export one icon end to end
+[ ] source SVG and pair sidecar byte-identical after export (T22)
+[ ] restart mid-run -> interrupted, nothing re-sent, Retry still a click (T2/T7)
+[ ] bulk settings apply -> ONE undo entry; undo with no panel mounted restores (T14)
+[ ] crash mid-run, reload, re-export -> ZERO model calls (T5/T15)
+[ ] the rendered panel walked against the mockup, 12/12 (T25)
+[ ] no file over ~1 MB entered history from branch B (T6/R7)
+[ ] a real EPS opened in a real PostScript consumer (T11)
+[ ] the key appears in no log, no export.json, no DOM node and no URL (T12)
+[ ] README says SIX modes; SYSTEM_OF_RECORD, UI_SELECTORS and QUALITY_RECHECK
+    updated in the same commits as the code (RULE 17)
+[ ] donor branches deleted only after P7
+
+
+================================================================================
+14. SOURCES
+================================================================================
+main (no upload tab)      github.com/marnikus/IconSplitter                       5e635ce
+branch A                  .../tree/arena%2F140ece1a-iconsplitter                  25ff58a
+  foundation commit       .../commit/341e31e9183f0f0b9789e8e9e11f6e755b622445
+  tab commit              .../commit/25ff58aac92ae7088d0a90eeafa00e0e9dd7499e
+  design doc              docs/archive/2026-10-06-svg-to-upload/design.md
+branch B                  .../tree/arena%2F01a0f966-iconsplitter                  18ed0e9
+  phase B commit          .../commit/14e396c6103095fe61d4e43cb97a62d627ad90c2
+  phases C-G              .../commit/7aed65056144e00ff2572766911adb625197cc03
+  phases 1-9              .../commit/14c7512b6c836c89a783e5c7c22a555f1d2be69b
+  honesty commit          .../commit/18ed0e96f4a0633521f26be6b5dd20e69b2558c1
+  the UI mockup           design temp/SVG to upload/  (tree 0d4865f6)
+  the 21 MB junk          design temp/Arena setup analyze/  (tree c0b45931)
+branch C                  .../tree/arena%2Fd658a5b8-iconsplitter                  a3d608a
+  phases 1-2              .../commit/a480873ff2c4713898e91c55c037931050db0da6
+  phases 3+4              .../commit/334c644531dadaad8dc8f0f05fb5336f77c5659d
+  phase 7                 .../commit/5a845d7ff03d86f08c68c91d2ec42a87a96b34d8
+  phases 8-9              .../commit/a3d608a4211c9c09aeff3bb83e4d00788ebe4204
+  design doc              docs/archive/2026-10-07-svg-to-upload/design.md
+shared fix carried by all three: I-56, .../commit/e94ade3664b54a53c97684fe82f9984e23891739
+
+Method: two passes. Pass one read commit messages and the compare API. Pass two
+read both design documents and the raw git trees, and overturned three of pass
+one's claims (section 7). Test counts and coverage figures are SELF-REPORTED by
+each branch at its tip - re-run npm run verify on any tip before trusting them.
+Scores are judgement calls against the shared brief, with weights published so
+they can be disagreed with explicitly.
+================================================================================
+END OF DOCUMENT
+================================================================================

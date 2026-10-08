@@ -41,8 +41,13 @@ export async function sendChatStreaming(call: StreamCall): Promise<SendOut> {
   try {
     // The wait starts before the first byte: a connection that never answers
     // must be caught by the same window as one that goes quiet mid-stream.
-    const response = await raceStall(requestStream(call, controller.signal), call.stallMs, controller);
-    if (response === null) return { ok: false, failure: stalledFailure(call.stallMs) };
+    const outcome = await raceStall(requestStream(call, controller.signal), call.stallMs, controller);
+    // The three outcomes are NOT the same thing: a rejected fetch is either the
+    // user's cancel or a connection that never established, and only the watchdog
+    // firing means the connection went quiet (see raceStall below).
+    if (outcome.kind === "stalled") return { ok: false, failure: stalledFailure(call.stallMs) };
+    if (outcome.kind === "error") throw outcome.error;
+    const response = outcome.response;
     if (!response.ok) return { ok: false, failure: await httpFailure(response) };
     if (!isSse(response)) return await readJsonResponse(response);
     return await pump(response, call, controller);
@@ -64,15 +69,31 @@ function requestStream(call: StreamCall, signal: AbortSignal): Promise<Response>
 }
 
 /** The initial wait for response headers, raced against the stall window. */
-function raceStall(work: Promise<Response>, stallMs: number, controller: AbortController): Promise<Response | null> {
-  return new Promise<Response | null>((resolve) => {
+type StallOutcome = { kind: "response"; response: Response } | { kind: "stalled" } | { kind: "error"; error: unknown };
+
+/**
+ * Waits for the response, the watchdog or the request's own failure — and says
+ * WHICH one happened. Collapsing a rejection into "null" used to make every
+ * failed connection look like silence, so a user's cancel read as "the connection
+ * looks dead" and a reset that happened before any byte was called unrepeatable.
+ */
+function raceStall(work: Promise<Response>, stallMs: number, controller: AbortController): Promise<StallOutcome> {
+  return new Promise<StallOutcome>((resolve) => {
+    let settled = false;
     const timer = setTimeout(() => {
+      settled = true;
       controller.abort(new Error("stalled"));
-      resolve(null);
+      resolve({ kind: "stalled" });
     }, stallMs);
+    const done = (outcome: StallOutcome) => {
+      if (settled) return; // the watchdog already spoke; its verdict stands
+      settled = true;
+      clearTimeout(timer);
+      resolve(outcome);
+    };
     work.then(
-      (response) => { clearTimeout(timer); resolve(response); },
-      () => { clearTimeout(timer); resolve(null); },
+      (response) => done({ kind: "response", response }),
+      (error: unknown) => done({ kind: "error", error }),
     );
   });
 }
@@ -178,5 +199,5 @@ function finish(state: StreamState, headerId: string | null): SendOut {
     const detail = state.badFrames > 0 ? `the provider sent ${state.badFrames} unreadable frame(s)` : "the provider completed without an answer";
     return { ok: false, failure: { kind: "malformed", message: detail, retryAfterMs: null, retryable: false, status: 200 } };
   }
-  return { ok: true, text: state.text, usage: state.usage, requestId: headerId ?? state.requestId, status: 200, frames: state.frames };
+  return { ok: true, text: state.text, usage: state.usage, requestId: headerId ?? state.requestId, status: 200, frames: state.frames, finishReason: state.finishReason };
 }

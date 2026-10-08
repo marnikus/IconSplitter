@@ -4,6 +4,7 @@
 // must precede any send, and the undoable review decision. Everything here is
 // a store/DOM change, so a regression in the wiring fails loudly.
 import { act } from "react";
+import * as fakeIndexedDb from "fake-indexeddb";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
@@ -19,6 +20,16 @@ import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
 import HistoryBar from "../src/ui/HistoryBar";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+
+/**
+ * A working device store for the tests about the DEVICE case. Without it
+ * happy-dom has no IndexedDB, the write is refused, and the honest UI says
+ * "session only" — which is the other test's subject.
+ */
+function useDeviceStorage(): void {
+  vi.stubGlobal("indexedDB", fakeIndexedDb.indexedDB);
+  vi.stubGlobal("IDBKeyRange", fakeIndexedDb.IDBKeyRange);
+}
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -552,6 +563,7 @@ describe("Generate SVG panel", () => {
   });
 
   it("stores the API key from the provider card and unblocks the run", async () => {
+    useDeviceStorage();
     await mount(await makeRoot());
     expect(q("[data-testid=svg-key-state]")?.textContent).toContain("No API key yet");
     await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
@@ -587,12 +599,16 @@ describe("Generate SVG panel", () => {
     await type("[data-testid=svg-key-input]", fakeKey("rq", "live", "session_ui_1234"));
     await act(async () => { (q("[data-testid=svg-key-save]") as HTMLButtonElement).click(); });
     await settle();
-    expect(q("[data-testid=svg-key-state]")?.textContent).toContain("API key secured locally");
+    // The headline must say WHICH case this is: with storage refused, the key
+    // lives only for this session, and claiming "secured locally" would be a lie.
+    expect(q("[data-testid=svg-key-state]")?.textContent).toContain("API key kept for this session only");
+    expect(q("[data-testid=svg-key-note]")?.textContent).toContain("paste again after a reload");
     expect(q("[data-testid=svg-toast]")?.textContent).toContain("this session only");
     vi.unstubAllGlobals();
   });
 
   it("keeps the masked key and its note on separate lines", async () => {
+    useDeviceStorage();
     await mount(await makeRoot());
     await act(async () => { (q("[data-testid=svg-key-state]") as HTMLButtonElement).click(); });
     await settle();
