@@ -45,6 +45,7 @@ doc itself, never in this map.
 | `archive/2026-10-07-svg-to-upload/design.md` | SVG to upload (design of record): discovery through the pair sidecars, settings, the Gemini metadata prompt, SVG/JPEG/EPS pipelines, per-icon `export.json`, job model, no automatic uploading |
 | `archive/2026-10-07-svg-to-upload-merge/ADR.md` | The three-branch "SVG to upload" merge: P0 adjudications before any donor file moved, the phase plan and its exit gates |
 | `archive/2026-10-07-env-setup-performance/design.md` | Environment-setup performance: re-verified findings, the O1–O11 decisions (O4 deferred), TDD plan for `tools/verify.mjs` + shallow-safe `quality.mjs` |
+| `archive/2026-10-08-env-setup-performance-phase2/design.md` | Env-setup phase 2 (plan only): what phase 1 already fixed, measured baseline (clone 246 MB→46 MB, gate 2 m 16.7 s), the shallow-clone gate that reports PASS while gating 0 files, and the S1–S13 step list |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

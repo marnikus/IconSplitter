@@ -2017,3 +2017,77 @@ clause to a `sourceVeto` helper, `parseOverrides` became a field table
   `env-setup-performance` designs.
 * `design/Arena setup analyze/` (the 21 MB saved web page) — owner decision on
   removal, scheduled with P5's `design/SVG to upload/` landing.
+
+## 2026-10-08 — environment-setup performance, phase 2: plan of record (docs only)
+
+Plan: `docs/archive/2026-10-08-env-setup-performance-phase2/design.md` (+ its
+one-line row in `docs/README.md`). **No code in this change** — RULE 16.6
+step 2, design in a doc first. Everything below was measured in-sandbox on
+`arena/0e47c2f0-iconsplitter` @ `a986951` (depth-1 shallow single-branch clone,
+2 CPU, 3.9 GB RAM, warm npm cache).
+
+* **Phase 1 is already on this lineage, and it is stranded.** Verified: HEAD
+  tracks 0 files under `node_modules/`/`dist/` (559 tracked files), `AGENTS.md`
+  is 96 lines / 5,978 B, `.nvmrc` + `.npmrc` + `engines` + `packageManager` are
+  in place, `tools/verify.mjs --plan` shows 5 lanes with ONE vitest lane. But
+  `gh api contents?ref=main` still lists `node_modules`, `dist`, `design temp`
+  and `contents/AGENTS.md?ref=main` is **404**; main's tip is `5e635ce`
+  (2026-10-06). 35 `arena/*` branches, 1 open PR.
+* **New defect found (F-B, the reason S1 is first): the default fast gate
+  reports PASS while gating nothing.** `git rev-parse --is-shallow-repository`
+  → `true`, `git merge-base origin/main HEAD` → exit 1, so
+  `npm run quality:changed` prints `Changed files vs HEAD: (none)` +
+  `GATE PASSED`, exit 0 — and `verify:fast` prints `ALL LANES PASSED`. With
+  `--base origin/main` the same gate lists **97 files, all `[OK]`**, exit 0.
+  Tree-vs-tree works in a shallow clone; it is simply not the default.
+* **Clone cost, measured both ways** (`git clone --depth=1`): `main` = 3.56 s /
+  **246 MB** working tree / 43 MB `.git` / **11,835 files** (`node_modules`
+  200 MB); `arena/b4d96c50-iconsplitter` = 1.14 s / **46 MB** / 8.0 MB /
+  **584 files**. Blob accounting (`git cat-file --batch-all-objects`): of 47.5
+  MiB, `node_modules`+`dist` = **39.7 MiB (83.5 %)**, `design/Arena setup
+  analyze/` = **6.1 MiB (12.8 %)**, everything else **1.7 MiB (3.7 %)**.
+* **Doc budget grew, not shrank**: `docs/current` = **336,370 B / 5,065 lines**
+  (SOR 1,873 ln, of which §12–§20 are **580 dated-narrative lines** that each
+  have a matching archive folder; QUALITY_RECHECK 2,019 ln; UI_SELECTORS 608 ln)
+  against RULE 18's 60–200-line ideal for a context file.
+* **`AGENTS.md` counts already drifted** (F-F): it says 124 files / 1320 tests /
+  ~75 s / verify:fast ~1.9 min; measured **128 files / 1374 tests / 86.76 s**
+  and **2 m 16.7 s**. S2 stops publishing counts that must drift.
+* **Pins unfinished** (F-C): `run_app.bat:21-24` and `run_dev_server.bat:21-24`
+  still call `npm install`. **Review lanes have no script** (F-G): `knip` +
+  `jscpd` are devDeps, `CODE_VERIFICATION.md` §7 gives bare `npx`, and neither
+  is in `package.json` scripts. **CI absent** (F-D): no `.github/` here or on
+  main; this token reports `permissions: {admin: true}` but an **empty
+  `X-Oauth-Scopes`** header, so *Workflows: write* is **unchecked** — S11 is
+  written probe-first for that reason.
+
+### Gates (docs-only change, run on this tree)
+
+`npm run verify:fast` on the changed tree → **ALL LANES PASSED in 2 m 10.5 s**
+(pre-change baseline on the same sandbox: 2 m 16.7 s; Types 10.6 s · Lint 7.2 s
+· Quality 0.6 s · Tests+coverage 110.5 s · Build 6.8 s, `dist/index.html`
+1,484.03 kB / gzip 425.99 kB).
+`node tools/quality.mjs --changed --allow-legacy --base origin/main` → **97
+files gated, all `[OK]`, exit 0** — the pre-existing set; this change adds no
+`src/` file, so the RULE 16 size gate has nothing new to fail.
+
+### RULE 18 recheck
+
+The new plan doc lives in `docs/archive/` (not `docs/current/`), so the
+60–200-line context-file ideal does not bind it; it is **350 lines** of tables
+and step lists — longer than the 145-line 2026-10-07 plan it continues, because
+it carries the measured baseline, eight findings and a 13-step list. Read by
+section; the step list (§4) is the part an implementer needs.
+No `src/`, `tests/` or `tools/` file changed → no function/file/param/CC/nesting
+delta to recheck.
+
+### Known debt carried
+
+* S1 (shallow-clone gate truth) is now a recorded defect, not yet a fix —
+  until it lands, `verify:fast` in any shallow sandbox still greens a lane that
+  gated 0 files.
+* O4 (the SOR split) is still deferred; this plan scopes it as S7/S8 with a
+  promote-then-pointer order and an "anchor count unchanged or higher" gate.
+* Owner steps S10–S13 (merge to main, install CI, drop the 33 MB saved page,
+  optional `git filter-repo`) are handed over with evidence; none is
+  agent-completable, and S11's token capability is explicitly unchecked.
