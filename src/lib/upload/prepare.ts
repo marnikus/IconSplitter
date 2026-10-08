@@ -25,6 +25,7 @@ import { bakeGeometry } from "./bake";
 import { isShape, strokeHits, visibleBounds, type Bounds } from "./geom/bounds";
 import { stripStyleKeys } from "./geom/stroke";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
+import { expandStrokes } from "./expand";
 import { fitArtboard, fmt, type ArtboardFit } from "./geom";
 import type { Matrix } from "./geom/matrix";
 
@@ -80,6 +81,8 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   const baked = bakeGeometry(root, artboardMatrix(fit));
   if (baked.unsupported.length > 0) return fail("unsupported", `unsupported content: ${baked.unsupported.join(", ")}`);
   const touched = restyleStrokes(root, strokeStyleOf(settings));
+  const expanded = settings.expandStrokes ? expandStrokes(root) : { shapes: 0, refused: null };
+  if (expanded.refused !== null) return fail("unsupported", `unsupported: ${expanded.refused}`);
   const globalStroke = unifyStrokes(root);
   const background = readPaint(settings.background, TRANSPARENT) ?? TRANSPARENT;
   applyArtboard(root, fit, background);
@@ -88,7 +91,7 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
     svg: new XMLSerializer().serializeToString(doc),
     fit, bounds: vb.bounds, background, globalStroke,
     shapesBaked: baked.baked, strokesNormalized: touched.widths, strokesRecolored: touched.colors,
-    strokesExpanded: 0,
+    strokesExpanded: expanded.shapes,
   };
 }
 

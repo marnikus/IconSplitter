@@ -333,6 +333,26 @@ describe("runExport — the full package commits per icon", () => {
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 
+  it("Expand strokes to fills: the shipped SVG has no stroke, the EPS no stroke operator, the record counts the shapes (2026-10-09)", async () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="scale(1.1)">`
+      + `<path d="M4 4h16v16H4z" fill="none" stroke="#333"/><circle cx="12" cy="12" r="3" fill="none" stroke="#333" stroke-dasharray="2 1"/></g></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2, expandStrokes: true, optimizeSvg: true, includeEps: true, artboard: { mode: "preset", size: 512, width: 512, height: 512 } };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(512, 512) } }));
+    expect(result.status).toBe("processed");
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
+    expect(svgText).not.toMatch(/stroke/);
+    expect(svgText.match(/<path/g)?.length).toBe(2);
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(eps).not.toMatch(/setlinewidth|\bstroke\b/);
+    expect(eps).toMatch(/\bfill\b/);
+    const record = readRecord(root);
+    expect(record.tools.expand).toEqual({ enabled: true, shapes: 2 });
+    expect(record.settings.effective.expandStrokes).toBe(true);
+  });
+
   it("the Inkscape converter: the helper's EPS commits with its writer; an unreachable helper is a named partial (2026-10-09)", async () => {
     const EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: cairo 1.18.0\n%%LanguageLevel: 2\n%%BoundingBox: 0 0 70 70\n%%EndComments\n0 0 moveto fill\n%%EOF\n";
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true, epsConverter: "inkscape" };

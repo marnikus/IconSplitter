@@ -1,7 +1,13 @@
-> Status 2026-10-09: commit A (registry, settings, dialog UI, Inkscape
-> client, converter-neutral `verifyEpsDocument` gate) and B (the helper
-> `tools/bridge/`, the `.bat` launchers, the pre-batch probe) landed; C
-> (stroke expansion geometry) follows in its own commit.
+> Status 2026-10-09: SHIPPED in three commits — A (registry, settings,
+> dialog UI, Inkscape client, converter-neutral `verifyEpsDocument` gate),
+> B (the helper `tools/bridge/`, the `.bat` launchers, the pre-batch probe),
+> C (the built-in stroke expander, dashes included). Deviations from the
+> text below: step 14's "dash → unsupported" line was superseded by the
+> confirmed answer (dashes expand in v1, D4); the `url(#…)` refusal names
+> the element, not the id (the clean pass may have renamed it); the commit
+> gate is `verifyEpsDocument` (header, LanguageLevel, BoundingBox, EOF) so
+> Inkscape's cairo EPS passes, while `verifyEps` stays the built-in's strict
+> EPS 10 contract.
 
 # EPS converters drop list · Inkscape CLI helper · Expand strokes to fills
 

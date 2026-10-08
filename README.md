@@ -287,7 +287,8 @@ IconSplitter/
 │   ├── selectionv2/         # Selection V2 (list review, bulk bar, zoom)
 │   ├── lib/                 # Pure logic: detect, render, naming, scan, fs,
 │   │                        # statefile, presets, output plan, batchsplit
-│   └── lib/render.ts        # Cropping / resizing / export logic
+│   ├── lib/render.ts        # Cropping / resizing / export logic
+│   └── lib/upload/          # SVG to upload: prepare, bake, stroke expand, EPS converters (epsconv/), export record
 ├── tests/                   # Vitest — real detect/render/batch logic (RULE 8)
 ├── tools/                   # RULE 16 quality gate + verify runner + bridge/ (the Inkscape helper)
 ├── docs/                    # Rules + verification docs (see docs/README.md)

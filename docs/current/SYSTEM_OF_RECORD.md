@@ -593,13 +593,41 @@ opt-in class as Generate SVG → Requesty; design
   helper's own origin; without a build it says `run "npm run build"` (404,
   honest). Tested by spawning the REAL server against a fake Inkscape
   (`tests/helpers/fakeinkscape.mjs`, `tests/bridge_inkscape.test.ts`).
-* Expand strokes to fills (2026-10-09, same design): the setting
+* Expand strokes to fills (2026-10-09, same design, D4): the setting
   `expandStrokes` (default off; fingerprinted ONLY when on, so no existing
-  package flips to stale) asks the prepare stage to turn every stroke into a
-  filled outline — what some stocks require — so the SVG, JPEG and EPS all
-  ship without strokes. The record carries `tools.expand: { enabled, shapes
-  }` (how many shapes were expanded). The geometry lands in the third commit
-  of the design; until then `shapes` is 0.
+  package flips to stale) makes the prepare stage turn every visibly stroked
+  shape into a filled outline — what some stocks require — so the SVG, JPEG
+  and EPS all ship without strokes. It runs AFTER the stroke restyle (the
+  setting's px IS the expanded width) and BEFORE the global stroke pass
+  (which then finds nothing to hoist): `src/lib/upload/expand.ts` (the DOM
+  pass) over `src/lib/upload/geom/expand/` (`pen` vocabulary, `offset` —
+  lines exactly, cubics by Tiller–Hanson checked at t = ¼ ½ ¾ against the
+  true offset and split at ½ until the error ≤ TOL 0.01 px, depth ≤ 8, so
+  curves stay curves; `joins` — the outer side gets miter-within-limit /
+  round (≤ 90° KAPPA-family cubics) / bevel, the inner side pivots through
+  the original vertex so every loop's winding fills under nonzero; caps butt
+  / square (+ w/2) / round; a zero-length subpath is a dot / square /
+  nothing; `arclen` + `dash` — `stroke-dasharray`/`-dashoffset` cut the
+  subpath by arc length into open pieces BEFORE offsetting, each capped like
+  a browser caps a dash, a boundary inside a curve is a de Casteljau split
+  of that cubic, a closed dashed subpath opens at its phase and the dash
+  that wraps the start is one piece; `assemble` — open: left side, end cap,
+  right side back, start cap, Z; closed: left loop + right loop reversed =
+  the ring in ONE `<path>`). The new `<path d fill=<the stroke paint>
+  fill-rule="nonzero" [fill-opacity=<stroke-opacity>]>` sits right AFTER its
+  original (paint order kept); the original loses every `stroke-*`
+  attribute/style key, a `fill="none"` original is removed, containers lose
+  their stroke properties too. Refused by name BEFORE the tree is touched
+  (`prepare` fails `unsupported: … under Expand strokes on <tag>`, nothing
+  commits): a `url(#…)` stroke paint, a negative dash value, a dash period
+  under 0.01 px. Known, documented property: at sharp inner corners the
+  pivot leaves small regions covered twice (winding 2) — identical under
+  nonzero, what every non-boolean expander produces; the tests measure
+  coverage, filled area and offset distance (`tests/helpers/outlinemath.ts`),
+  never anchor counts. The record carries `tools.expand: { enabled, shapes
+  }`; `PrepareResult.strokesExpanded` is the count; the row line appends
+  `· strokes → fills`. `expandStrokes:false` is byte-identical to before
+  (equivalence gate in `tests/upload_expand.test.ts`).
 * Download all (2026-10-08, design
   `docs/archive/2026-10-08-upload-download-all/design.md`): the bulk bar's
   `⤓ Download all (N files)` copies the SELECTION's committed packages into ONE
