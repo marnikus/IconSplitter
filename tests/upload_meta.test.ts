@@ -29,7 +29,7 @@ const TAGS: string[] = [
 ];
 
 const VALID: IconMetadata = {
-  title: "Minimal line icon of growth and rising momentum",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -48,6 +48,12 @@ describe("the default prompt states every enforced constraint", () => {
     expect(DEFAULT_METADATA_PROMPT).toContain("at least 5 words");
     expect(DEFAULT_METADATA_PROMPT).toContain("at least 7 words");
     expect(DEFAULT_METADATA_PROMPT).not.toContain("exactly 40");
+  });
+
+  it("asks for ONE phrase and forbids a second sentence (stock review, 2026-10-08)", () => {
+    expect(DEFAULT_METADATA_PROMPT).toContain("ONE phrase");
+    expect(DEFAULT_METADATA_PROMPT).toContain("never a second sentence");
+    expect(DEFAULT_METADATA_PROMPT).toContain("Icon of X and Y");
   });
 
   it("states the IP rules", () => {
@@ -71,6 +77,9 @@ describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (s
     ["Is this a question?", "Is this a question?"],
     ["Is this a question? Yes it is.", "Is this a question?"],
     ["Growth; and more", "Growth"],
+    ["One. Two. Three words of a phrase", "One"],
+    ["A question? Yes, a second sentence starts here.", "A question?"],
+    ["Icon of speed…and growth", "Icon of speed…and growth"], // an ellipsis inside a phrase is not a break
     // sentence case keeps acronyms and mixed case, lowers only Capitalised words
     ["Modern SEO Growth Chart For iOS Apps", "Modern SEO growth chart for iOS apps"],
     ["lowercase start stays otherwise", "Lowercase start stays otherwise"],
@@ -82,6 +91,11 @@ describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (s
     ["", ""],
   ])("%j → %j", (raw, clean) => {
     expect(cleanPhrase(raw)).toBe(clean);
+  });
+
+  it("is idempotent — cleaning the cleaned phrase changes nothing", () => {
+    const once = cleanPhrase("Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.");
+    expect(cleanPhrase(once)).toBe(once);
   });
 
   it("cleanMetadata cleans the title AND the description, never the tags", () => {
@@ -96,6 +110,11 @@ describe("cleanPhrase — ONE clean phrase, sentence case, no end punctuation (s
     expect(DEFAULT_METADATA_PROMPT).toContain("ONE phrase");
     expect(DEFAULT_METADATA_PROMPT).toContain("sentence case");
     expect(DEFAULT_METADATA_PROMPT).not.toContain("one or two sentences");
+  });
+
+  it("parseMetadata turns the reviewer's model answer into the reviewer's phrase end to end", () => {
+    const parsed = parseMetadata(`Title: Collaborative Unity Promoting Collective Social Empathy. Icon of charity and community.\nDescription: ${VALID.description}\nTags: ${TAGS.join(", ")}`);
+    expect(parsed?.title).toBe("Collaborative unity promoting collective social empathy");
   });
 });
 
@@ -121,7 +140,7 @@ describe("parseMetadata — deterministic labeled-text parsing", () => {
   });
 
   it("parses the three labeled lines", () => {
-    const text = `Title: Minimal line icon of growth and rising momentum\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
+    const text = `Title: Minimal line icon of growth and speed\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
     const parsed = parseMetadata(text);
     expect(parsed).not.toBeNull();
     expect(parsed?.title).toBe(VALID.title);

@@ -503,9 +503,12 @@ opt-in class as Generate SVG → Requesty; design
   `<title>Collaborative unity promoting collective social empathy</title>`
   (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
   fields at every gate the text passes: the model's answer
-  (`parseMetadata`), the accepted-metadata cache on read, and the Accept
-  button (an edit); the fingerprint is over the cleaned text, so a remembered
-  answer the rule changes shows stale and the next export re-embeds. A phrase
+  (`parseMetadata`), the accepted-metadata cache on read, the Accept button
+  (an edit) and the committed `export.json` block a reload reads back
+  (`metaFromRecord`); the fingerprint is over the cleaned text, so a
+  remembered or exported answer the rule changes no longer matches its stored
+  fingerprint — the row shows stale and the next export re-embeds the file
+  without a model call. It is a SHAPE rule, never a refusal: a phrase
   cut below the minimum fails validation like any short answer (nothing is
   padded). The prompt asks for exactly this ("ONE phrase … sentence case, no
   period") for both lines; the field hints say the same.

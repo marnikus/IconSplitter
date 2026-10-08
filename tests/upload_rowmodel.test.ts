@@ -34,7 +34,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 const META: IconMetadata = {
-  title: "Minimal line icon of growth and rising momentum",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -138,6 +138,14 @@ describe("metaFromRecord + statusOf", () => {
     const meta = metaFromRecord(committedRecord(DEFAULT_UPLOAD_SETTINGS, META), false);
     expect(meta.state).toBe("accepted");
     expect(meta.metadata).toEqual(META);
+  });
+
+  it("cleans the record's title — a pre-fix package reads back one phrase and reports stale", () => {
+    const old = committedRecord(DEFAULT_UPLOAD_SETTINGS, { ...META, title: "Minimal line icon of growth. Speed and growth pictogram" });
+    const meta = metaFromRecord(old, false);
+    expect(meta.metadata?.title).toBe("Minimal line icon of growth");
+    // the block still carries the two-sentence fingerprint → the FILE must move
+    expect(staleOf({ record: old, source: SRC, effective: DEFAULT_UPLOAD_SETTINGS, meta, sourceHash: SOURCE_HASH })).toBe(true);
   });
 
   it("an invalid or missing block leaves the fields empty", () => {

@@ -39,7 +39,9 @@ same rule now applies to it: one phrase, no end punctuation.
   mixed case) is left alone. The model is also told, so the cleaner is a
   guard, not the author.
 * **D3 — the same gates as before, now for both fields:** `parseMetadata`,
-  the accepted-metadata cache on read, and the Accept button (an edit). A
+  the accepted-metadata cache on read, the Accept button (an edit) and — from
+  the parallel `title-one-phrase` session merged here — the committed
+  `export.json` block a reload reads back (`metaFromRecord`). A
   `cleanMetadata(meta)` helper applies it to both so no gate can clean one
   field and forget the other. `cleanTitle` is deleted — one name, one rule.
 * **D4 — the minimums stand.** A title cut to fewer than 5 words, or a
@@ -70,6 +72,11 @@ same rule now applies to it: one phrase, no end punctuation.
 | 3 | gates, docs, commit | — |
 
 ## 5. As built (2026-10-08)
+
+Merged with the parallel session's `title-one-phrase` commit (`92513f1`):
+its fourth gate (`metaFromRecord`) and its "no 'Icon of X and Y'
+restatement" prompt line stay; its title-only `cleanTitle` (no sentence
+case, no description) is replaced by `cleanPhrase`/`cleanMetadata`.
 
 As designed, plus two things the research turned up: the title field's hint
 literally asked for "two sentences: 5–7 words, then 3–5 words naming two of

@@ -2454,6 +2454,9 @@ the sentence in front of it.
 
 ### Structure work (RULE 3/18/19)
 
+* Merged with the parallel `title-one-phrase` commit (`92513f1`): its fourth
+  gate (`metaFromRecord`, now `cleanMetadata`) and prompt line kept, its
+  title-only cleaner replaced.
 * `cleanTitle` deleted — one name, one rule, both fields; the test fixture
   title that was itself two sentences ("… of growth. Speed and growth
   pictogram") became one phrase in every upload test.

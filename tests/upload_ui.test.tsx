@@ -60,7 +60,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
-const GOOD_ANSWER = `Title: Minimal line icon of growth and rising momentum\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
+const GOOD_ANSWER = `Title: Minimal line icon of growth and speed\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
 const BAD_ANSWER = `Title: Tiny\nDescription: way too short\nTags: icon, pictogram`;
 
 let host: HTMLDivElement;
@@ -1205,7 +1205,7 @@ describe("export — green means a complete committed package", () => {
 
     // a metadata EDIT is re-embedded, and still spends nothing
     await activate(FOG);
-    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of growth. Speed and growth chart");
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal line icon of steady progress");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(t.calls).toHaveLength(1);
 
@@ -1246,7 +1246,7 @@ describe("export — green means a complete committed package", () => {
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     const svg = fileText(root, `${DIR}/export/fog.svg`);
-    expect(svg).toContain("<title>Minimal line icon of growth and rising momentum</title>");
+    expect(svg).toContain("<title>Minimal line icon of growth and speed</title>");
     const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
     expect(record.metadata.state).toBe("accepted");
     expect(record.metadata.tags).toHaveLength(40);

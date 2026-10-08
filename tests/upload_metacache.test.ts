@@ -18,7 +18,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 
 const META: IconMetadata = {
-  title: "Minimal line icon of growth and rising momentum",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };

@@ -40,7 +40,7 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
 const META: IconMetadata = {
-  title: "Minimal line icon of growth and rising momentum",
+  title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
 };
@@ -329,8 +329,8 @@ describe("runExport — the full package commits per icon", () => {
     const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(readEmbeddedMetadata(svgText)).toEqual(META);
     // the SHIPPED text: <title> and <dc:title> are ONE phrase, no period (stock review 2026-10-08)
-    expect(svgText).toContain("<title>Minimal line icon of growth and rising momentum</title>");
-    expect(svgText).toContain("<dc:title>Minimal line icon of growth and rising momentum</dc:title>");
+    expect(svgText).toContain("<title>Minimal line icon of growth and speed</title>");
+    expect(svgText).toContain("<dc:title>Minimal line icon of growth and speed</dc:title>");
     expect(svgText).toContain("<desc>Clean line icon showing growth and rising business trends</desc>");
     const jpegBytes = await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile);
     expect(verifyJpeg(jpegBytes, { width: 3886, height: 3886, metadata: META }).ok).toBe(true);
@@ -364,7 +364,7 @@ describe("runExport — selective re-export (no redundant work)", () => {
       requestId: null, usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(META),
     };
     await runExport(args(root, { metadata: META, metadataInfo: info }));
-    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress. Speed and growth pictogram" };
+    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress and speed" };
     const spy = { renders: 0 };
     const result = await runExport(args(root, {
       record: readRecord(root),

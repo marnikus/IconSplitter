@@ -8,6 +8,11 @@
 // of at least 7 words. Nothing is refused for being too long or too rich —
 // a longer title, a fuller description and more tags always pass — because the
 // only failure the field reported was a good answer being thrown away.
+//
+// The title and the description share ONE shape rule that is normalized,
+// never refused (stock review, 2026-10-08): each is ONE clean phrase —
+// `cleanPhrase` cuts a second sentence, strips the end punctuation and writes
+// sentence case, so "X Y Z. Icon of Y and Z." ships as "X y z".
 
 import { fnv1a32 } from "../pairing";
 
@@ -33,7 +38,7 @@ Description: <ONE phrase of at least 7 words, sentence case, no period>
 Tags: <at least 10 unique keywords, comma-separated, all lowercase>
 
 Hard rules:
-- Title: ONE phrase of at least 5 words — never a second sentence. Sentence case (capitalise only the first word), with no trailing period or other end punctuation. Longer is fine.
+- Title: ONE phrase of at least 5 words — never a second sentence, and no "Icon of X and Y" restatement of the tags (they already carry those words). Sentence case (capitalise only the first word), with no trailing period or other end punctuation. Longer is fine.
 - Description: ONE phrase of at least 7 words — never a second sentence. Sentence case, no period or other end punctuation. More words are welcome.
 - Tags: at least 10 unique lowercase keywords, no duplicates, and the list MUST include these seven: icon, pictogram, vector, stroke, line, editable, web. More tags are welcome.
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
