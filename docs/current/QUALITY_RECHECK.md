@@ -2073,3 +2073,52 @@ meaning of the settings changed (the artboard no longer implies the JPEG size).
 * Unchanged from the previous entry: §2 field ranges (padding 0–40, stroke
   0.2–8 pt, MP 1–30, quality 0.98), T17/T19/T25/T27/T28, P5–P7, and the
   `docs/README.md` §10 design pointers.
+
+## 2026-10-08 — four-point batch: silent tags dedupe, EPS 10, the two global buttons
+
+Landed together (the user's four points, one batch): silent tag dedupe
+(`dedupeTags` in `lib/upload/meta.ts` feeds both `parseMetadata` and the tags
+edit path, and the ≥10 minimum counts the deduped list), the **EPS 10** document
+layer (DSC comment block with `%%HiResBoundingBox` / `%%DocumentData: Clean7Bit`
+/ `%%LanguageLevel: 3`, `verifyEps` requiring all three, `%%Title` from the
+`${stem}.eps` name and `%%CreationDate` from the run's clock) built from the
+CLEANED/optimized export SVG, and the two global buttons plus the export chain
+(`✦ Generate metadata (N)` = only the selected icons with no metadata text;
+`⇪ Export selected` = generate the missing metadata, accept every valid answer
+as it lands, then export the WHOLE selection).
+
+The batch's real bug was a React-timing race, and it is worth the record: the
+accepts were dispatched, but `runExportBatch` read the rows back through
+`latest.current` BEFORE React re-rendered, so the first icon exported with no
+metadata at all (it was the `freshMeta` map that fixed it). Never re-read
+`latest.current` for state the current task just dispatched.
+
+### Structure work forced by the gate (RULE 18/19)
+
+The gate failed three NEW files, and the fixes are structural, not cosmetic:
+
+| File | Was | Now |
+| --- | --- | --- |
+| `src/lib/upload/eps.ts` | 342 lines, `assemble` 5 params | 271 lines — the DSC document layer moved to **`src/lib/upload/epsdoc.ts`** (96 lines: `assemble({…})` takes ONE document object, `verifyEps`, the markers, the boxes), and `eps.ts` re-exports the public surface so its importers do not move |
+| `src/upload/metaactions.ts` | 365 lines, `useMetaRequestActions` 57 loc, `runMetadataBatch` 31 loc | 262 lines — the selection-level buttons, the confirmation they open and their guards moved to **`src/upload/metaselect.ts`** (155 lines); the batch's tail became `exportAfterMetadata` |
+| `src/upload/UploadMetaDialog.tsx` | `UploadMetaDialog` 42 loc | the header / note / prompt blocks are their own components (`MetaDialogHead`, `SentNote`, `ThenExportNote`, `MetaPrompt`) |
+
+### Gates (full run)
+
+| Lane | Result | Numbers |
+| --- | --- | --- |
+| 1/6 types | ✅ | 10.8 s |
+| 2/6 lint | ✅ | 0 errors, 9 legacy warnings |
+| 3/6 quality gate (changed) | ✅ | `GATE PASSED` after the three splits above |
+| 4/6 tests | ✅/⚠️ | **128 files / 1385 tests** (was 1376). One run reported the suite green (`128 passed`, `1385 passed`) yet exited non-zero on a **harness flake**: `EnvironmentTeardownError: [vitest-worker]: Closing rpc while "onUserConsoleLog" was pending`, attributed to `tests/selectionv2_ui.test.tsx` — the same code then passed this lane in the re-run, and lane 5 (same suite + coverage) passed in both |
+| 5/6 tests + coverage | ✅ | statements **95.75 %**, branches **89.29 %**, functions 96.82 %, lines 97.75 % |
+| 6/6 build | ✅ | `dist/index.html` 1,489.75 kB (gzip 427.77 kB) |
+
+### Known debt carried
+
+* Unchanged: the `duplicate tags: …` refusal is gone by design (the tags are
+  deduped silently), T17 now reads as "a list of fewer than 10 UNIQUE tags is
+  refused" and stays open with T19/T25/T27/T28 and P5–P7.
+* The lane-4 flake above is environmental (act() warning volume during
+  teardown), not a failing assertion: worth one `vitest`/pool note, not a code
+  change, until it reproduces with a failing test named.

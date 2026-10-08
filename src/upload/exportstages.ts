@@ -44,6 +44,8 @@ export interface StageContext {
   settings: UploadSettings;
   metadata: IconMetadata | null;
   raster?: RasterDeps;
+  /** The run's clock, written into the EPS 10 `%%CreationDate` (never invented). */
+  now?: string;
 }
 
 /** prepare → optimize → embed → render → eps, per the plan's rebuild flags. */
@@ -57,7 +59,7 @@ export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promis
   if (needSvgText || needRender) await buildSvgText(art, ctx);
   if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx.metadata);
   if (plan.rebuild.jpg) await buildJpegArtifact(plan, ctx, art);
-  if (plan.rebuild.eps) buildEps(art, ctx.settings);
+  if (plan.rebuild.eps) buildEps(art, ctx);
   return art;
 }
 
@@ -87,8 +89,14 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
   if (ctx.metadata !== null) art.jpeg = embedXmpMetadata(art.jpeg, ctx.metadata);
 }
 
-function buildEps(art: Artifacts, settings: UploadSettings): void {
-  const eps = writeEps(art.optimizedSvg as string, settings.background);
+/**
+ * SVG → EPS 10, from the text the optimize/clean stages produced (never the
+ * source): that is the "convert after the SVG was optimized" order.
+ */
+function buildEps(art: Artifacts, ctx: StageContext): void {
+  const eps = writeEps(art.optimizedSvg as string, ctx.settings.background, {
+    title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
+  });
   if (eps.ok) art.epsText = eps.eps;
   else art.epsFailure = eps.reason; // honest: the EPS stage failed → partial
 }

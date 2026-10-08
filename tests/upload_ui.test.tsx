@@ -23,6 +23,7 @@ import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { minimalJpeg } from "./helpers/minijpeg";
+import { clearGeminiKey } from "../src/upload/keystore";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 
@@ -723,6 +724,116 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
   });
 
+  itSlow("generates metadata for ALL selected icons that need it, and says what it skipped", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+
+    // FOG and ARCH are the two listed rows; both need metadata
+    await check(FOG);
+    await check(ARCH);
+    expect(text("[data-testid=upload-meta-selected]")).toContain("Generate metadata (2)");
+    await click("[data-testid=upload-meta-selected]");
+    // ONE confirmation covers the whole selection, and it shows both images
+    expect(text("#upload-meta-title")).toContain("2 icons");
+    await waitForEl("[data-testid=upload-preview-count]");
+    expect(qa("[data-testid^=upload-preview-pair_]").length).toBeGreaterThanOrEqual(1);
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 2, "both requests to land");
+    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("generated")
+      && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("generated"), "both drafts to land");
+
+    // one paid call per icon, each row carrying its own draft
+    expect(t.calls).toHaveLength(2);
+    // the batch does NOT accept on the user's behalf: accepting stays a per-row decision
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
+    expect(text("[data-testid=upload-toast]")).toContain("Metadata ready");
+
+    // now that both have metadata, the button says there is nothing left to generate
+    expect(text("[data-testid=upload-meta-selected]")).toContain("Generate metadata (0)");
+    await click("[data-testid=upload-meta-selected]");
+    expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();
+    expect(text("[data-testid=upload-toast]")).toContain("already have metadata");
+    expect(t.calls).toHaveLength(2); // no second paid call
+  });
+
+  itSlow("export selected generates metadata FIRST, then exports everything", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+
+    await check(FOG);
+    await check(ARCH);
+    await click("[data-testid=upload-export-selected]");
+    // the SAME confirmation, and it says what happens after the paid calls
+    expect(text("[data-testid=upload-meta-backdrop]")).toContain("then export");
+    expect(text("#upload-meta-title")).toContain("2 icons");
+    await click("[data-testid=upload-meta-confirm]");
+
+    // both requests land, both answers are accepted (valid, unedited), both export
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "fog to export");
+    await waitFor(() => text(`[data-testid=upload-status-${ARCH}]`).includes("Processed"), "arch to export");
+    expect(t.calls).toHaveLength(2);
+    for (const [id, stem] of [[FOG, "fog_AI"], [ARCH, "arch_AI"]] as const) {
+      expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
+      const svg = fileText(root, `${DIR}/export/${stem}.svg`);
+      expect(svg).toContain("<metadata>");        // the metadata really is in the package
+      expect(svg).toContain("Minimal line icon of growth");
+    }
+    // and the record names the prompt that produced it
+    expect(fileText(root, `${DIR}/export/export.json`)).toContain("at least 10 unique keywords");
+  });
+
+  itSlow("export selected refuses when metadata is needed and no key is set", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRoot();
+    // a genuinely key-free panel: clear the vault BEFORE the panel boots and reads it
+    await clearGeminiKey();
+    await mount(root);
+    await check(FOG);
+    await click("[data-testid=upload-export-selected]");
+    expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();      // no confirmation, no request
+    expect(t.calls).toHaveLength(0);
+    expect(text("[data-testid=upload-toast]")).toContain("API key"); // names the missing piece
+    expect(q(`[data-testid=upload-export-path-${FOG}]`)).not.toBeNull();
+  });
+
+  itSlow("export selected only asks for the icons that still need metadata", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+
+    // FOG gets metadata the long way: generate, accept, export it
+    await check(FOG);
+    await click("[data-testid=upload-meta-selected]");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 1, "fog's answer");
+    await activate(FOG); // the editable fields (and Accept) render under the active row
+    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    expect(t.calls).toHaveLength(1);
+
+    // now select both: only ARCH still needs a request, and BOTH export
+    await check(ARCH);
+    await click("[data-testid=upload-export-selected]");
+    expect(text("#upload-meta-title")).toContain("1 icon");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => text(`[data-testid=upload-status-${ARCH}]`).includes("Processed"), "arch to export");
+    expect(t.calls).toHaveLength(2); // exactly one more call — fog was never re-charged
+    expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Processed");
+  });
+
   itSlow("shows the ONE selected row's own 512 px JPEG, and sends exactly those bytes", async () => {
     const root = makeDistinctRoot();
     const t = geminiTransport(GOOD_ANSWER);
@@ -962,12 +1073,22 @@ describe("metadata — the exact request, editable fields, accept", () => {
 
 describe("export — green means a complete committed package", () => {
   itSlow("exports the selection: SVG + JPEG + export.json commit, the source is untouched", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
     const root = makeRoot();
     const before = fileText(root, `${DIR}/fog_AI.svg`);
     await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
     await check(FOG);
+    // since 2026-10-08 this button generates the missing metadata first
     await click("[data-testid=upload-export-selected]");
+    expect(text("#upload-meta-title")).toContain("then export 1");
+    await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
+    expect(t.calls).toHaveLength(1); // exactly one paid call, and the package carries it
+    expect(fileText(root, `${DIR}/export/fog_AI.svg`)).toContain("Minimal line icon of growth");
 
     const exp = `${DIR}/export`;
     expect(fileText(root, `${exp}/fog_AI.svg`)).toContain("<svg");

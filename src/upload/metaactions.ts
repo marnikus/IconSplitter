@@ -3,7 +3,9 @@
 // confirm/cancel, accept (re-validates, persists via the embed commit) and edit.
 // The batch runs with bounded concurrency, per-item isolation and an abort the
 // cancel action owns; in-flight requests are journalled, so a restart reports
-// them interrupted and never resends them (I-20).
+// them interrupted and never resends them (I-20). The SELECTION-level buttons
+// ("Generate metadata" / "Export selected") and the confirmation they open live
+// in `metaselect.ts`.
 
 import { useCallback, useRef } from "react";
 import { log } from "../log/logstore";
@@ -11,22 +13,23 @@ import type { DirHandleLike } from "../lib/fs";
 import { validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { previewFor, type SentPreview } from "../lib/upload/sentpreview";
 import { readSvgText } from "../svg/svgfiles";
-import { preparePreviews } from "./metapreview";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
 import { rememberMeta } from "./metacache";
 import { namedSpec, nameRefusedSpec, type IconRef } from "./uploadlog";
 import type { Latest, UploadMetaState, UploadRow } from "./types";
 import type { UploadActions, UploadCtx } from "./actions";
 import { rowOf, runExportBatch } from "./exportactions";
+import { openMetaDialog, useMetaSelectionActions } from "./metaselect";
 
 /** The metadata hooks' share of the action surface (composition stays typed). */
 type MetaSlice = Pick<UploadActions,
-  "requestMetadata" | "confirmMetadata" | "cancelMetadata" | "acceptMetadata" | "editMetadata">;
+  "requestMetadata" | "generateMetadataSelected" | "exportSelected"
+  | "confirmMetadata" | "cancelMetadata" | "acceptMetadata" | "editMetadata">;
 
 export function useMetaActions(ctx: UploadCtx): MetaSlice {
   const latest = useRef(ctx);
   latest.current = ctx;
-  return { ...useMetaRequestActions(latest), ...useMetaEditActions(latest) };
+  return { ...useMetaRequestActions(latest), ...useMetaSelectionActions(latest), ...useMetaEditActions(latest) };
 }
 
 // --- request + cancel ------------------------------------------------------------
@@ -34,21 +37,16 @@ export function useMetaActions(ctx: UploadCtx): MetaSlice {
 function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
   "requestMetadata" | "confirmMetadata" | "cancelMetadata"> {
   const requestMetadata = useCallback((ids: string[]) => {
-    const c = latest.current;
-    const why = metaGuard(c, ids);
-    if (why !== null) return c.say(why, true);
-    c.dispatch({ type: "dialog", dialog: { kind: "meta", ids, previews: [], preparing: true } });
-    // The images the request will carry are rendered NOW, so the confirmation
-    // shows exactly the bytes that will be sent (design §2.4).
-    void fillPreviews(latest, ids);
+    openMetaDialog(latest, ids, []);
   }, [latest]);
   const confirmMetadata = useCallback(() => {
     const c = latest.current;
     const dialog = c.m.dialog;
     if (dialog === null || dialog.kind !== "meta") return;
     const previews = dialog.previews;
+    const thenExport = dialog.thenExport;
     c.dispatch({ type: "dialog", dialog: null });
-    void runMetadataBatch(latest, dialog.ids, previews);
+    void runMetadataBatch(latest, dialog.ids, previews, { acceptValid: thenExport.length > 0, thenExport });
   }, [latest]);
   const cancelMetadata = useCallback(() => {
     const c = latest.current;
@@ -57,35 +55,6 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
     c.say("Cancelling — finished results are kept");
   }, [latest]);
   return { requestMetadata, confirmMetadata, cancelMetadata };
-}
-
-/** Why a metadata batch cannot start right now, or null when it can. */
-function metaGuard(c: UploadCtx, ids: string[]): string | null {
-  if (ids.length === 0) return "Select at least one icon first";
-  if (c.refs.root.current === null) return "Open a folder first";
-  if (c.refs.key.current === null || c.refs.key.current.trim() === "") return "No Gemini API key — add one in the provider card";
-  if (c.m.runningMeta > 0) return "A metadata request is already in flight — cancel it or wait";
-  return null;
-}
-
-/**
- * Renders the previews for an open confirmation: each selected icon's own
- * approved SVG, bounded, in the selection's order. It lands only on the dialog
- * that asked for it — a dialog the user closed (or reopened for another
- * selection) is never repainted (RULE 24).
- */
-async function fillPreviews(latest: Latest, ids: string[]): Promise<void> {
-  const c = latest.current;
-  const root = c.refs.root.current as DirHandleLike | null;
-  if (root === null) return;
-  const wanted = new Set(ids);
-  const sources = c.rows
-    .filter((r) => wanted.has(r.source.id))
-    .map((r) => ({ id: r.source.id, svgPath: r.source.svgPath, svgName: r.source.svgName, fingerprint: r.source.fingerprint }));
-  const previews = await preparePreviews({ root, sources, ids });
-  const dialog = latest.current.m.dialog;
-  if (dialog === null || dialog.kind !== "meta" || dialog.ids.join("\u0000") !== ids.join("\u0000")) return;
-  latest.current.dispatch({ type: "previews", previews, preparing: false });
 }
 
 // --- accept + edit ----------------------------------------------------------------
@@ -121,8 +90,25 @@ function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | 
 
 // --- the batch ---------------------------------------------------------------------
 
+/** What the batch does beyond producing answers (RULE 3: one place that decides). */
+interface MetaBatchOptions {
+  /**
+   * Accept every answer that PASSES the policy the moment it lands (unedited,
+   * machine-produced). "Export selected" sets this: it promised metadata in the
+   * package, and an unaccepted draft is never exportable.
+   */
+  acceptValid?: boolean;
+  /** The whole selection to export once the answers are in (empty = none). */
+  thenExport?: string[];
+}
+
 /** One metadata batch: bounded concurrency, per-item isolation, cancel-aware. */
-async function runMetadataBatch(latest: Latest, ids: string[], previews: readonly SentPreview[] = []): Promise<void> {
+async function runMetadataBatch(
+  latest: Latest,
+  ids: string[],
+  previews: readonly SentPreview[] = [],
+  opts: MetaBatchOptions = {},
+): Promise<void> {
   const c = latest.current;
   const root = c.refs.root.current as DirHandleLike | null;
   const key = c.refs.key.current;
@@ -132,13 +118,30 @@ async function runMetadataBatch(latest: Latest, ids: string[], previews: readonl
   c.dispatch({ type: "running", kind: "metadata", n: ids.length });
   const tally = { done: 0, ok: 0, total: ids.length };
   c.dispatch({ type: "progress", progress: { done: 0, total: tally.total } });
-  const ctx: MetaRunCtx = { latest, root, key, queue: [...ids], previews, signal: abort.signal, tally };
+  const ctx: MetaRunCtx = {
+    latest, root, key, queue: [...ids], previews,
+    signal: abort.signal, tally, accept: opts.acceptValid === true, accepted: new Map(),
+  };
   const width = Math.max(1, Math.min(c.m.gemini.concurrency, ids.length));
   await Promise.all(Array.from({ length: width }, () => drainMeta(ctx)));
   c.refs.abortMeta.current = null;
   c.dispatch({ type: "running", kind: "metadata", n: 0 });
   c.dispatch({ type: "progress", progress: null });
-  c.say(`Metadata ready for ${tally.ok} of ${ids.length} icon${ids.length === 1 ? "" : "s"}`);
+  const accepted = opts.acceptValid === true ? ` — ${tally.ok} accepted` : "";
+  c.say(`Metadata ready for ${tally.ok} of ${ids.length} icon${ids.length === 1 ? "" : "s"}${accepted}`);
+  await exportAfterMetadata(latest, opts, ctx.accepted);
+}
+
+/**
+ * The promised second half of "Export selected": the WHOLE selection, so an
+ * icon that already had metadata is exported just like the fresh ones — with
+ * the run's own accepted states, which React has not re-rendered yet (RULE 24).
+ */
+function exportAfterMetadata(
+  latest: Latest, opts: MetaBatchOptions, accepted: ReadonlyMap<string, UploadMetaState>,
+): Promise<void> {
+  const then = opts.thenExport ?? [];
+  return then.length > 0 ? runExportBatch(latest, then, accepted) : Promise.resolve();
 }
 
 /** Everything the workers share — one domain object (RULE 16). */
@@ -151,6 +154,10 @@ interface MetaRunCtx {
   previews: readonly SentPreview[];
   signal: AbortSignal;
   tally: { done: number; ok: number; total: number };
+  /** Accept each valid answer as it lands (the "then export" flow). */
+  accept: boolean;
+  /** What this run accepted, keyed by row id — the export's own truth. */
+  accepted: Map<string, UploadMetaState>;
 }
 
 async function drainMeta(ctx: MetaRunCtx): Promise<void> {
@@ -187,6 +194,10 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
     deps: { journal: c.refs.journal.current },
   });
   applyMetaResult(ctx.latest, id, row.meta, result);
+  const validation = result.validation;
+  if (ctx.accept && result.outcome === "generated" && validation !== null && validation.ok) {
+    acceptNow(ctx, id, result);
+  }
   return result.outcome === "generated" || result.outcome === "invalid";
 }
 
@@ -195,6 +206,29 @@ function unreadable(c: UploadCtx, id: string, meta: UploadMetaState): boolean {
   c.dispatch({ type: "meta", id, meta: { ...meta, detail: "the source SVG could not be read" } });
   c.dispatch({ type: "run", id, run: { running: null } });
   return false;
+}
+
+/**
+ * The acceptance the "then export" flow performs: a valid, unedited,
+ * machine-produced answer, stored exactly as the Accept button stores it (same
+ * state, same remembered fingerprint) — the user asked for a package that
+ * CARRIES the metadata, and a draft is never exportable.
+ */
+function acceptNow(ctx: MetaRunCtx, id: string, result: MetadataResult): void {
+  const c = ctx.latest.current;
+  const row = rowOf(c, id);
+  if (row === null || result.metadata === null || result.validation === null) return;
+  const meta: UploadMetaState = {
+    state: "accepted", metadata: result.metadata, validation: result.validation,
+    usage: result.usage, detail: result.detail, edited: false,
+  };
+  c.dispatch({ type: "meta", id, meta });
+  // The dispatch above is not readable from `latest.current` until React
+  // re-renders, and the export of THIS task runs before that — so the answer
+  // travels with the run instead of being looked up again (RULE 24).
+  ctx.accepted.set(id, meta);
+  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: result.metadata });
+  log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: result.metadata.tags.length }));
 }
 
 /** The run's outcome → the row's metadata state; a failure keeps the prior text. */

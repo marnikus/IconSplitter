@@ -13,6 +13,48 @@ const PREPARED = `<svg ${NS} viewBox="0 0 92.8 92.8" width="92.8" height="92.8">
 const art = (inner: string) => `<svg ${NS} viewBox="0 0 100 100">${inner}</svg>`;
 
 describe("writeEps — a genuine EPS document", () => {
+  it("emits an EPS 10 document: the DSC comments Illustrator 10 expects", () => {
+    const result = writeEps(PREPARED, "#ffffff", { title: "fog_AI.eps", createdAt: "2026-10-08T00:00:00.000Z" });
+    if (!result.ok) throw new Error(result.reason);
+    const head = result.eps.split("%%EndComments")[0];
+    expect(head.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
+    expect(head).toContain("%%Creator: IconSplitter");
+    expect(head).toContain("%%Title: fog_AI.eps");
+    expect(head).toContain("%%CreationDate: 2026-10-08T00:00:00.000Z");
+    expect(head).toContain("%%BoundingBox: 0 0 70 70");
+    expect(head).toContain("%%HiResBoundingBox: 0 0 69.6 69.6");
+    expect(head).toContain("%%DocumentData: Clean7Bit");
+    expect(head).toContain("%%LanguageLevel: 3");
+    // the DSC structure around the body, in order
+    const order = ["%%EndComments", "%%BeginProlog", "%%EndProlog", "%%BeginSetup", "%%EndSetup"];
+    let at = -1;
+    for (const part of order) {
+      const next = result.eps.indexOf(part);
+      expect(next).toBeGreaterThan(at);
+      at = next;
+    }
+    expect(result.eps.trimEnd().endsWith("%%EOF")).toBe(true);
+    // and it still passes our own verifier
+    expect(verifyEps(result.eps).ok).toBe(true);
+  });
+
+  it("escapes a title so a stray parenthesis cannot break the DSC string", () => {
+    const result = writeEps(PREPARED, "#ffffff", { title: "odd (1) name.eps" });
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.eps).toContain("%%Title: odd \\(1\\) name.eps");
+  });
+
+  it("verifies the EPS 10 markers, not just the header", () => {
+    const doc = (body: string) => `%!PS-Adobe-3.0 EPSF-3.0\n${body}\n%%EOF\n`;
+    expect(verifyEps(doc("%%BoundingBox: 0 0 1 1")).errors).toContain("missing %%HiResBoundingBox");
+    expect(verifyEps(doc("%%BoundingBox: 0 0 1 1\n%%HiResBoundingBox: 0 0 1 1")).errors)
+      .toContain("missing %%DocumentData: Clean7Bit");
+    expect(verifyEps(doc("%%BoundingBox: 0 0 1 1\n%%HiResBoundingBox: 0 0 1 1\n%%DocumentData: Clean7Bit")).errors)
+      .toContain("missing %%LanguageLevel: 3");
+    const full = doc("%%BoundingBox: 0 0 1 1\n%%HiResBoundingBox: 0 0 1 1\n%%DocumentData: Clean7Bit\n%%LanguageLevel: 3");
+    expect(verifyEps(full).ok).toBe(true);
+  });
+
   it("emits the EPS header, an integer bounding box and %%EOF", () => {
     const result = writeEps(PREPARED, "#ffffff");
     expect(result.ok).toBe(true);

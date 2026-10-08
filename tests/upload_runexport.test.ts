@@ -214,6 +214,33 @@ describe("runExport — the full package commits per icon", () => {
     expect(doc.documentElement.getAttribute("viewBox")).toBe("0 0 512 256");
   });
 
+  it("converts to EPS from the OPTIMIZED svg, never from the source text", async () => {
+    // The source carries a paint-only stylesheet the EPS writer itself would
+    // refuse ("CSS <style> blocks are outside the EPS subset") and editor
+    // bookkeeping the clean policy strips. The export must therefore feed the
+    // EPS stage the PROCESSED text: clean + optimize ran before the conversion,
+    // which is exactly what "convert after the SVG was optimized" means.
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><style>.a{fill:#123456}</style>` +
+      `<rect class="a" x="4" y="4" width="16" height="16" data-name="Layer 1"/></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, {
+      settings, defaults: settings,
+      deps: { raster: fakeRaster(3886, 3886), now: () => "2026-10-08T12:00:00.000Z" },
+    }));
+    expect(result.status).toBe("processed");
+    const eps = fileText(root, `${DIR}/export/${STEM}.eps`);
+    // a real EPS 10 document, carrying the icon's own file name and the run's clock
+    expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
+    expect(eps).toContain(`%%Title: ${STEM}.eps`);
+    expect(eps).toContain("%%CreationDate: 2026-10-08T12:00:00.000Z");
+    expect(eps).toContain("%%LanguageLevel: 3");
+    // the stylesheet's paint arrived as a folded attribute, and no <style> text did
+    expect(eps).toContain("0.071 0.204 0.337"); // #123456, setrgbcolor
+    expect(eps).not.toContain("style");
+    expect(verifyEps(eps).ok).toBe(true);
+  });
+
   it("never touches the approved source", async () => {
     const root = pairRoot();
     await runExport(args(root));

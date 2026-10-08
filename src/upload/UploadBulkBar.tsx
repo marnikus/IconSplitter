@@ -20,6 +20,8 @@ export interface UploadBulkBarProps {
   progress: { done: number; total: number } | null;
   runningMeta: number;
   runningExport: number;
+  /** How many of the checked icons still have no metadata (the paid-call count). */
+  metaNeeded: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
   onDeselectAll: () => void;
@@ -76,7 +78,11 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
       <button type="button" className="svg-btn" data-testid="upload-apply-settings"
         disabled={p.checkedCount === 0} onClick={p.onApplySettings}>Apply settings to selected</button>
       <button type="button" className="svg-btn" data-testid="upload-meta-selected"
-        disabled={p.checkedCount === 0} onClick={p.onMetadata}>✦ Metadata selected</button>
+        disabled={p.checkedCount === 0} onClick={p.onMetadata}
+        title={p.checkedCount === 0
+          ? "Select icons first"
+          : `${p.metaNeeded} of ${p.checkedCount} selected still need metadata — one paid request each`}>
+        ✦ Generate metadata ({p.metaNeeded})</button>
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
     </div>
@@ -104,7 +110,10 @@ function Progress({ p, running }: { p: UploadBulkBarProps; running: number }) {
     return (
       <div className="svg-estimate" data-testid="upload-estimate">
         <strong>{p.checkedCount} icon{p.checkedCount === 1 ? "" : "s"} selected</strong>
-        <span>packages commit into each pair's export folder · the approved source is never touched</span>
+        <span>
+          ⇪ Export selected generates the missing metadata first ({p.metaNeeded} paid call
+          {p.metaNeeded === 1 ? "" : "s"}), then commits every package · the approved source is never touched
+        </span>
       </div>
     );
   }

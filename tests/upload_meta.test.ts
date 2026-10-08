@@ -11,6 +11,7 @@ import {
   TAGS_MIN,
   countWords,
   metadataFingerprint,
+  dedupeTags,
   parseMetadata,
   validateMetadata,
   type IconMetadata,
@@ -68,6 +69,13 @@ describe("countWords", () => {
 });
 
 describe("parseMetadata — deterministic labeled-text parsing", () => {
+  it("parses duplicate tags away, keeping the first spelling in order", () => {
+    const parsed = parseMetadata(
+      `Title: ${VALID.title}\nDescription: ${VALID.description}\nTags: icon, Icon, web, web , vector, ICON`,
+    );
+    expect(parsed?.tags).toEqual(["icon", "web", "vector"]);
+  });
+
   it("parses the three labeled lines", () => {
     const text = `Title: Minimal line icon of growth. Speed and growth pictogram\nDescription: Clean line icon showing growth\nTags: ${TAGS.join(", ")}`;
     const parsed = parseMetadata(text);
@@ -116,10 +124,21 @@ describe("validateMetadata — the resolved rules", () => {
     expect(validateMetadata(meta({ tags: ten })).errors).toEqual([]);
   });
 
-  it("rejects duplicate tags case-insensitively", () => {
+  it("removes duplicate tags silently — no error, no warning (2026-10-08)", () => {
     const tags = [...TAGS.slice(0, -1), "Icon"]; // 40 tags, "icon" twice (case differs)
     const v = validateMetadata(meta({ tags }));
-    expect(v.errors.some((e) => e.includes("duplicate"))).toBe(true);
+    expect(v.errors).toEqual([]);
+    expect(v.warnings).toEqual([]);
+    // a duplicate is never mentioned anywhere the user can read it
+    expect(JSON.stringify(v)).not.toContain("duplicate");
+    // the FIRST spelling survives, and removal happens case-insensitively
+    expect(dedupeTags(["Icon", "icon", "Icons", "icons"])).toEqual(["Icon", "Icons"]);
+    expect(dedupeTags(["  web ", "web", "WEB"])).toEqual(["web"]);
+    // the minimum counts the DEDUPED list: 9 unique + 1 repeat is still 9
+    const nine = [...MANDATORY_TAGS, "growth", "speed"];  // 9 unique
+    expect(validateMetadata(meta({ tags: [...nine, "growth"] })).errors)
+      .toEqual(["tags must be at least 10 (got 9)"]);
+    expect(validateMetadata(meta({ tags: [...nine, "arrow"] })).errors).toEqual([]);
   });
 
   it("requires all 7 mandatory tags", () => {

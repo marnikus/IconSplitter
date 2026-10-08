@@ -12,33 +12,77 @@ import type { MetaDialog as MetaDialogModel } from "./types";
 
 /** The exact request, shown before any paid submission (design §2.4/§5). */
 export default function UploadMetaDialog({ g, dialog }: { g: UploadApi; dialog: MetaDialogModel }) {
-  const ids = dialog.ids;
   return (
     <div className="svg-backdrop" data-testid="upload-meta-backdrop" onClick={g.dismissDialog}>
       <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="upload-meta-title"
         onClick={(e) => e.stopPropagation()}>
-        <header className="svg-modal-head">
-          <h2 id="upload-meta-title">Generate metadata for {ids.length} icon{ids.length === 1 ? "" : "s"}</h2>
-          <button type="button" className="svg-btn tiny" data-testid="upload-meta-cancel" onClick={g.dismissDialog}>Cancel</button>
-        </header>
+        <MetaDialogHead count={dialog.ids.length} thenExport={dialog.thenExport.length} onDismiss={g.dismissDialog} />
         <div className="svg-modal-body">
-          <p className="svg-note">
-            Each icon's image is sent to Gemini inside this one request — nothing is uploaded
-            automatically, and a timeout or disconnect is never resent on its own.
-          </p>
+          <SentNote />
+          <ThenExportNote count={dialog.thenExport.length} />
           <MetaFacts g={g} />
           <MetaPreviews dialog={dialog} />
-          <p className="svg-note">The exact prompt that will be sent (the validator enforces every rule it states):</p>
-          <textarea className="svg-code up-meta-prompt" readOnly data-testid="upload-meta-prompt"
-            aria-label="The exact metadata prompt" value={g.prompt} />
-          <p className="svg-note">
-            Request body: <code>{"{ contents: [{ role: \"user\", parts: [{ text: <the prompt> }, { inlineData: { mimeType: \"image/jpeg\", data: <the base64 preview shown above> } }] }] }"}</code>
-            {" "}The image is sent exactly as previewed — one 512 px JPEG of each icon's own approved SVG.
-          </p>
+          <MetaPrompt g={g} />
           <DialogActions onDismiss={g.dismissDialog} onConfirm={g.confirmMetadata} disabled={dialog.preparing} />
         </div>
       </section>
     </div>
+  );
+}
+
+/** The dialog's title line — what is asked for, and what follows it. */
+function MetaDialogHead({ count, thenExport, onDismiss }: {
+  count: number; thenExport: number; onDismiss: () => void;
+}) {
+  const icons = `icon${count === 1 ? "" : "s"}`;
+  return (
+    <header className="svg-modal-head">
+      <h2 id="upload-meta-title">
+        Generate metadata for {count} {icons}
+        {thenExport > 0 ? `, then export ${thenExport}` : ""}
+      </h2>
+      <button type="button" className="svg-btn tiny" data-testid="upload-meta-cancel" onClick={onDismiss}>Cancel</button>
+    </header>
+  );
+}
+
+/** What this ONE request does — and what it never does on its own. */
+function SentNote() {
+  return (
+    <p className="svg-note">
+      Each icon's image is sent to Gemini inside this one request — nothing is uploaded
+      automatically, and a timeout or disconnect is never resent on its own.
+    </p>
+  );
+}
+
+/** The second half of "Export selected", stated before anything is paid for. */
+function ThenExportNote({ count }: { count: number }) {
+  if (count === 0) return null;
+  const icons = `icon${count === 1 ? "" : "s"}`;
+  return (
+    <p className="svg-note" data-testid="upload-meta-then-export">
+      Then <strong>export {count} {icons}</strong>.
+      {" "}An answer that passes the policy is accepted as it lands, so the package really
+      carries the metadata; an answer that breaks the policy stays a draft, and that icon
+      exports without metadata. Nothing here is re-charged — an icon that already has
+      metadata is exported, not generated again.
+    </p>
+  );
+}
+
+/** The prompt that will be sent, plus the exact request shape it travels in. */
+function MetaPrompt({ g }: { g: UploadApi }) {
+  return (
+    <>
+      <p className="svg-note">The exact prompt that will be sent (the validator enforces every rule it states):</p>
+      <textarea className="svg-code up-meta-prompt" readOnly data-testid="upload-meta-prompt"
+        aria-label="The exact metadata prompt" value={g.prompt} />
+      <p className="svg-note">
+        Request body: <code>{"{ contents: [{ role: \"user\", parts: [{ text: <the prompt> }, { inlineData: { mimeType: \"image/jpeg\", data: <the base64 preview shown above> } }] }] }"}</code>
+        {" "}The image is sent exactly as previewed — one 512 px JPEG of each icon's own approved SVG.
+      </p>
+    </>
   );
 }
 

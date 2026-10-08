@@ -1,6 +1,12 @@
 // eps.ts — the genuine EPS writer for the "SVG to upload" tab
-// (design §2.5): a documented SUBSET of SVG → real PostScript
-// (`%!PS-Adobe-3.0 EPSF-3.0` + `%%BoundingBox`), never a renamed PS/PDF.
+// (design §2.5): a documented SUBSET of SVG → real PostScript, written as an
+// **EPS 10 / Illustrator-10-compatible** document (2026-10-08): the full DSC
+// comment block stock sites and Illustrator expect — `%!PS-Adobe-3.0 EPSF-3.0`,
+// `%%BoundingBox` AND `%%HiResBoundingBox`, `%%DocumentData: Clean7Bit`,
+// `%%LanguageLevel: 3`, `%%Creator/%%Title/%%CreationDate`, the Prolog/Setup
+// sections — never a renamed PS/PDF. The conversion consumes the OPTIMIZED,
+// cleaned export SVG (the pipeline runs it after prepare → optimize → clean),
+// so what Illustrator opens is what the package ships.
 //
 // Subset: path/rect/circle/ellipse/line/polyline/polygon; solid fill/stroke
 // (hex, rgb(), the 16 basic names); dash; linecap/linejoin/miterlimit;
@@ -15,8 +21,10 @@ import { identity, multiply, parseTransform, type Matrix } from "./geom/matrix";
 import { inheritStroke, styleMap, type Stroke } from "./geom/stroke";
 import { shapePathPs } from "./epspath";
 import { fmt } from "./geom";
+import { assemble, PX_TO_PT, type EpsBoundingBox, type EpsOptions } from "./epsdoc";
 
-const PX_TO_PT = 0.75;
+export { EPS10_MARKERS, verifyEps } from "./epsdoc";
+export type { EpsBoundingBox, EpsOptions, EpsVerification } from "./epsdoc";
 
 const SHAPES = ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"];
 const CONTAINERS = ["svg", "g", "a", "switch"];
@@ -26,37 +34,18 @@ const SKIP = [
   "lineargradient", "radialgradient", "pattern", "filter", "script", "animate", "set",
 ];
 
-export interface EpsBoundingBox { llx: number; lly: number; urx: number; ury: number }
-
 export type EpsResult =
   | { ok: true; eps: string; boundingBox: EpsBoundingBox; shapes: number }
   | { ok: false; reason: string };
 
-export interface EpsVerification {
-  ok: boolean;
-  errors: string[];
-  boundingBox: EpsBoundingBox | null;
-}
-
-/** The export SVG → a genuine EPS document, or an honest subset failure. */
-export function writeEps(svgText: string, background: string): EpsResult {
+/** The export SVG → a genuine EPS 10 document, or an honest subset failure. */
+export function writeEps(svgText: string, background: string, opts: EpsOptions = {}): EpsResult {
   try {
-    return writeEpsUnsafe(svgText, background);
+    return writeEpsUnsafe(svgText, background, opts);
   } catch (error) {
     if (error instanceof Unsupported) return { ok: false, reason: error.message };
     throw error;
   }
-}
-
-/** Verifies an EPS document: header, integer bounding box, %%EOF. */
-export function verifyEps(eps: string): EpsVerification {
-  const errors: string[] = [];
-  if (!eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")) errors.push("missing %!PS-Adobe-3.0 EPSF-3.0 header");
-  const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
-  if (m === null) errors.push("missing or malformed %%BoundingBox");
-  if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");
-  const box = m === null ? null : { llx: +m[1], lly: +m[2], urx: +m[3], ury: +m[4] };
-  return { ok: errors.length === 0, errors, boundingBox: box };
 }
 
 class Unsupported extends Error {}
@@ -75,7 +64,7 @@ interface Paint {
   strokeOpacity: number;
 }
 
-function writeEpsUnsafe(svgText: string, background: string): EpsResult {
+function writeEpsUnsafe(svgText: string, background: string, opts: EpsOptions): EpsResult {
   const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
   const root = doc.documentElement;
   if (root === null || root.nodeName.toLowerCase() !== "svg") throw new Unsupported("not an SVG document");
@@ -86,19 +75,14 @@ function writeEpsUnsafe(svgText: string, background: string): EpsResult {
   if (bg === null) throw new Unsupported(`unsupported background paint: ${background}`);
   const ctx: WalkCtx = { ctm: identity(), paint: basePaint(), bg, body: [], count: { shapes: 0 } };
   walk(root, ctx);
-  const box = { llx: 0, lly: 0, urx: Math.ceil(vb[2] * PX_TO_PT), ury: Math.ceil(vb[3] * PX_TO_PT) };
-  return { ok: true, eps: assemble(vb, box, ctx.body), boundingBox: box, shapes: ctx.count.shapes };
-}
-
-function assemble(vb: number[], box: EpsBoundingBox, body: string[]): string {
-  const header = [
-    "%!PS-Adobe-3.0 EPSF-3.0",
-    `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
-    "%%Creator: IconSplitter (SVG to upload)",
-    "%%EndComments",
-    `${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${fmt(-PX_TO_PT * vb[0])} ${fmt(PX_TO_PT * (vb[1] + vb[3]))} concat`,
-  ].join("\n");
-  return `${header}\n${body.join("\n")}\n%%EOF\n`;
+  // Two boxes, as DSC wants: the integer one a Level-1 reader uses, and the
+  // exact one (`%%HiResBoundingBox`) a modern consumer places the art by.
+  const ptW = vb[2] * PX_TO_PT;
+  const ptH = vb[3] * PX_TO_PT;
+  const hires = { llx: 0, lly: 0, urx: ptW, ury: ptH };
+  const box = { llx: 0, lly: 0, urx: Math.ceil(ptW), ury: Math.ceil(ptH) };
+  const eps = assemble({ viewBox: vb, box, hires, body: ctx.body, opts });
+  return { ok: true, eps, boundingBox: box, shapes: ctx.count.shapes };
 }
 
 /** The walk state: CTM + paint cascade in, emitted PS and shape count out. */

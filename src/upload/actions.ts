@@ -82,6 +82,10 @@ export interface UploadActions extends PromptActions {
   openSettings: (id: string | null) => void;
   dismissDialog: () => void;
   requestMetadata: (ids: string[]) => void;
+  /** Bulk: every selected icon that still needs metadata gets one paid call. */
+  generateMetadataSelected: (ids: string[]) => void;
+  /** Bulk: generate the missing metadata FIRST, then export the whole selection. */
+  exportSelected: (ids: string[]) => void;
   confirmMetadata: () => void;
   cancelMetadata: () => void;
   acceptMetadata: (id: string) => void;

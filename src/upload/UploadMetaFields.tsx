@@ -5,7 +5,7 @@
 // errors and warnings show under the fields. Nothing here writes files: the
 // accepted text persists in the pair's export.json at the next export commit.
 
-import { countWords, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
+import { countWords, dedupeTags, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
 import type { UploadMetaState } from "./types";
 
 export interface UploadMetaFieldsProps {
@@ -59,7 +59,7 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
         onEdit={(v) => onEdit({ description: v })} onCopy={() => onCopy("description")} />
       <Field id={id} label="Tags" testid="tags" value={m.tags.join(", ")} count={m.tags.length}
         hint="at least 10 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
-        multiline onEdit={(v) => onEdit({ tags: v.split(",").map((t) => t.trim()).filter((t) => t !== "") })}
+        multiline onEdit={(v) => onEdit({ tags: dedupeTags(v.split(",").map((t) => t.trim()).filter((t) => t !== "")) })}
         onCopy={() => onCopy("tags")} />
     </>
   );

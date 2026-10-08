@@ -62,7 +62,7 @@ export function parseMetadata(text: string): IconMetadata | null {
   const description = labeled(text, "description");
   const tagsRaw = labeled(text, "tags");
   if (title === null || description === null || tagsRaw === null) return null;
-  const tags = tagsRaw.split(",").map((t) => t.trim()).filter((t) => t !== "");
+  const tags = dedupeTags(tagsRaw.split(",").map((t) => t.trim()).filter((t) => t !== ""));
   return { title: title.trim(), description: description.trim(), tags };
 }
 
@@ -76,13 +76,36 @@ export function countWords(text: string): number {
   return text.trim().split(/\s+/).filter((w) => w !== "").length;
 }
 
-/** Validates the metadata against every rule; warnings never block. */
+/**
+ * Validates the metadata against every rule; warnings never block. Duplicates
+ * are REMOVED, never reported (2026-10-08, the user's rule): a repeated tag is
+ * a noisy model, not a user mistake, so nothing is said about it anywhere — the
+ * list is deduped (case-insensitively, first spelling wins) and the minimum
+ * then counts what is really there.
+ */
 export function validateMetadata(meta: IconMetadata): MetadataValidation {
   const errors: string[] = [];
   checkMinWords(errors, "title", countWords(meta.title), TITLE_MIN_WORDS);
   checkMinWords(errors, "description", countWords(meta.description), DESC_MIN_WORDS);
-  validateTags(meta.tags, errors);
+  validateTags(dedupeTags(meta.tags), errors);
   return { ok: errors.length === 0, errors, warnings: restrictedWarnings(meta) };
+}
+
+/**
+ * The tags as they will be stored and searched: case-insensitive duplicates
+ * gone, the FIRST spelling of each kept, the order untouched. The same
+ * normalization the mandatory-tag check uses.
+ */
+export function dedupeTags(tags: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tag of tags) {
+    const key = normalizeTag(tag);
+    if (key === "" || seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag.trim());
+  }
+  return out;
 }
 
 /** A minimum, never a range: an answer richer than the minimum is accepted. */
@@ -92,21 +115,8 @@ function checkMinWords(errors: string[], what: string, count: number, min: numbe
 
 function validateTags(tags: string[], errors: string[]): void {
   if (tags.length < TAGS_MIN) errors.push(`tags must be at least ${TAGS_MIN} (got ${tags.length})`);
-  const dupes = duplicates(tags);
-  if (dupes.length > 0) errors.push(`duplicate tags: ${dupes.join(", ")}`);
   const missing = MANDATORY_TAGS.filter((t) => !hasTag(tags, t));
   if (missing.length > 0) errors.push(`missing mandatory tags: ${missing.join(", ")}`);
-}
-
-function duplicates(tags: string[]): string[] {
-  const seen = new Set<string>();
-  const dupes = new Set<string>();
-  for (const tag of tags) {
-    const key = normalizeTag(tag);
-    if (seen.has(key)) dupes.add(tag);
-    seen.add(key);
-  }
-  return [...dupes];
 }
 
 function hasTag(tags: string[], tag: string): boolean {

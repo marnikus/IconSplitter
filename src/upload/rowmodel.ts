@@ -120,6 +120,45 @@ export function metaFromRecord(record: ExportRecord | null, interrupted: boolean
   };
 }
 
+/**
+ * "A REQUEST is required": the icon has no metadata text at all. This is the
+ * count the global "Generate metadata" button acts on — icon that already has a
+ * draft or an accepted answer is never paid for again behind the user's back.
+ */
+export function needsMetadata(row: UploadRow): boolean {
+  return row.meta.metadata === null;
+}
+
+/**
+ * "The EXPORT cannot carry metadata yet": nothing, or a draft that was never
+ * accepted. Wiring the two questions apart is deliberate (2026-10-08): a draft
+ * needs no new request, it needs the user's Accept — and an export must never
+ * quietly ship a package without the metadata the button promised.
+ */
+export function needsAccepted(row: UploadRow): boolean {
+  return row.meta.state !== "accepted" || row.meta.metadata === null;
+}
+
+/** The icons needing a paid request, in the selection's own order. */
+export function idsNeedingMetadata(rows: readonly UploadRow[], ids: readonly string[]): string[] {
+  const wanted = new Set(ids);
+  return rows.filter((row) => wanted.has(row.source.id) && needsMetadata(row)).map((row) => row.source.id);
+}
+
+/** The icons whose metadata is not exportable yet, in the selection's order. */
+export function idsNeedingAccepted(rows: readonly UploadRow[], ids: readonly string[]): string[] {
+  const wanted = new Set(ids);
+  return rows.filter((row) => wanted.has(row.source.id) && needsAccepted(row)).map((row) => row.source.id);
+}
+
+/** Drafts: metadata exists, the user has not accepted it (no request needed). */
+export function idsWithDraft(rows: readonly UploadRow[], ids: readonly string[]): string[] {
+  const wanted = new Set(ids);
+  return rows
+    .filter((row) => wanted.has(row.source.id) && row.meta.metadata !== null && row.meta.state !== "accepted")
+    .map((row) => row.source.id);
+}
+
 /** The visible status: the run in flight wins, then stale, then the record. */
 export function statusOf(row: UploadRow): UploadJobStatus {
   if (row.running === "metadata") return "metadata";

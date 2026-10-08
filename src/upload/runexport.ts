@@ -125,6 +125,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
     const art = await buildArtifacts(plan.plan, {
       root: args.root, sourceText: plan.sourceText, exportDir: plan.exportDir, stem: plan.stem,
       settings: args.settings, metadata: args.metadata, raster: args.deps?.raster,
+      now: args.deps?.now?.() ?? new Date().toISOString(),
     });
     checkCancel(args.signal);
     const validation = validateArtifacts(art, metadata);

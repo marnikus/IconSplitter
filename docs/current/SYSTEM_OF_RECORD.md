@@ -404,7 +404,11 @@ opt-in class as Generate SVG → Requesty; design
   warnings only — they never block the accept (the prompt forbids them).
   Errors are verbatim and actionable (`tags must be at least 10 (got N)`,
   `title must be at least 5 words (got N)`, `description must be at least 7
-  words (got N)`, `duplicate tags: …`, `missing mandatory tags: …`). The fields
+  words (got N)`, `missing mandatory tags: …`). 2026-10-08: duplicates are
+  removed SILENTLY before validation — case-insensitively, first spelling kept,
+  order kept, blanks dropped (`dedupeTags`), and the ≥10 minimum counts the
+  DEDUPED list, so a tag written twice is never a refusal or a warning. The
+  fields
   under each row are editable and copiable, empty until generated; Accept
   re-validates and persists through the embed commit. The confirmation dialog shows the exact
   request (prompt, endpoint, auth rule) before any paid send; a timeout or
@@ -1884,3 +1888,38 @@ scan's own seam (`upload_scan.test.ts`: a scan writes `scanKey` and leaves the
 Honesty note: a key that the provider itself rejects is a different case — this
 fix is about a key the app already holds, and a wrong or revoked key still
 answers `400` from the provider.
+
+## The four-point batch (2026-10-08, `four-point`)
+
+* **Tags dedupe silently** (point 1): see the metadata policy above — one
+  `dedupeTags` in `lib/upload/meta.ts` feeds BOTH `parseMetadata` and the tags
+  edit path, so a pasted list with repeats becomes one clean list before the
+  policy ever looks at it.
+* **EPS 10 after the SVG is optimized** (point 2): the EPS stage runs on the
+  CLEANED/optimized export SVG and writes an **EPS 10 /
+  Illustrator-10-compatible** document — `%!PS-Adobe-3.0 EPSF-3.0`, the DSC
+  order `%%Creator` → `%%Title` (the `${stem}.eps` name, DSC-escaped) →
+  `%%CreationDate` (the run's clock) → `%%BoundingBox` (integer) →
+  `%%HiResBoundingBox` (exact points) → `%%DocumentData: Clean7Bit` →
+  `%%LanguageLevel: 3`, then EndComments/Prolog/Setup sections, the uprighting
+  CTM and `%%EOF`. `verifyEps` requires those three markers, so a file that
+  lost them is `partial`, never shipped as EPS 10.
+* **Two global buttons** (points 3 + 4), both acting on the checked rows:
+  * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts the selected
+    icons that have NO metadata text yet (a draft is not re-requested); rows
+    that already have text are named in the status line instead of being paid
+    for again, and at N = 0 the line says why nothing was sent.
+  * `upload-export-selected` ("⇪ Export selected") — metadata first, then the
+    WHOLE selection: the confirmation (`#upload-meta-title` "…, then export N",
+    the note `upload-meta-then-export`) opens, each answer that passes the
+    policy is accepted as it lands, and after the batch every selected icon is
+    exported. An icon that already had metadata is exported, never re-charged;
+    a policy-breaking answer stays a draft and that icon exports without it.
+    With nothing to generate the export starts immediately. Needing metadata
+    with no key is refused up front, naming the missing API key.
+* **The batch → export handoff** (RULE 24): `acceptNow` records the accepted
+  state in the run's own `MetaRunCtx.accepted` map, and `runExportBatch` prefers
+  that map over re-reading `latest.current` — a `dispatch` is not visible in the
+  rows until React re-renders, so reading them back exported the first icon
+  WITHOUT its metadata. Never re-read `latest.current` for state the current
+  task just dispatched.

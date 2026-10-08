@@ -11,12 +11,13 @@ import { copyFolderText } from "../lib/copypath";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { publishedJpegPath } from "../lib/upload/export";
+import type { IconMetadata } from "../lib/upload/meta";
 import { effectiveSettings } from "../lib/upload/settings";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
 import { cancelledSpec, exportedSpec, type IconRef } from "./uploadlog";
-import type { Latest, UploadRow } from "./types";
+import type { Latest, UploadMetaState, UploadRow } from "./types";
 import type { UploadRunUpdate } from "./statemodel";
 import type { UploadActions, UploadCtx } from "./actions";
 
@@ -75,8 +76,19 @@ function exportGuard(c: UploadCtx, ids: string[]): string | null {
   return null;
 }
 
-/** One export batch: sequential, per-item isolated, cancel-aware (RULE 5/7). */
-export async function runExportBatch(latest: Latest, ids: string[]): Promise<void> {
+/**
+ * One export batch: sequential, per-item isolated, cancel-aware (RULE 5/7).
+ *
+ * `freshMeta` carries metadata an action accepted moments ago in THIS task
+ * (the "Export selected" flow): React may not have committed that dispatch to
+ * `latest.current` yet, and reading the row would export the previous — metadata
+ * free — state. The map is the truth the run was promised, so it wins.
+ */
+export async function runExportBatch(
+  latest: Latest,
+  ids: string[],
+  freshMeta: ReadonlyMap<string, UploadMetaState> = new Map(),
+): Promise<void> {
   const c = latest.current;
   const root = c.refs.root.current as DirHandleLike | null;
   if (root === null) return;
@@ -89,7 +101,7 @@ export async function runExportBatch(latest: Latest, ids: string[]): Promise<voi
   for (const id of ids) {
     if (abort.signal.aborted) break;
     rememberJob(id, "running");
-    await exportOne({ latest, root, id, signal: abort.signal });
+    await exportOne({ latest, root, id, signal: abort.signal, freshMeta });
     tally.done += 1;
     c.dispatch({ type: "progress", progress: { ...tally } });
   }
@@ -109,6 +121,8 @@ interface ExportOneArgs {
   root: DirHandleLike;
   id: string;
   signal: AbortSignal;
+  /** Answers accepted in this task, before React re-rendered (see the batch). */
+  freshMeta: ReadonlyMap<string, UploadMetaState>;
 }
 
 async function exportOne(args: ExportOneArgs): Promise<void> {
@@ -117,23 +131,29 @@ async function exportOne(args: ExportOneArgs): Promise<void> {
   if (row === null) return;
   c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "" } });
   const overrides = c.m.overrides[args.id] ?? {};
+  const meta = acceptedOf(args.freshMeta.get(args.id) ?? row.meta);
   const result = await runExport({
     root: args.root, row: row.source,
     settings: effectiveSettings(c.m.defaults, overrides),
     defaults: c.m.defaults, overrides,
-    metadata: row.meta.state === "accepted" ? row.meta.metadata : null,
-    metadataInfo: metadataInfoOf(c, row),
+    metadata: meta === null ? null : meta.metadata,
+    metadataInfo: metadataInfoOf(c, meta),
     record: row.record, signal: args.signal,
   });
   applyExportResult(args.latest, args.id, row, result);
 }
 
-/** The metadata block's provenance, when the row carries accepted metadata. */
-function metadataInfoOf(c: UploadCtx, row: UploadRow): ExportRunArgs["metadataInfo"] {
-  if (row.meta.state !== "accepted" || row.meta.validation === null) return null;
+/** The accepted state an export may carry, or null when there is nothing to embed. */
+function acceptedOf(meta: UploadMetaState): (UploadMetaState & { metadata: IconMetadata }) | null {
+  return meta.state === "accepted" && meta.metadata !== null ? meta as UploadMetaState & { metadata: IconMetadata } : null;
+}
+
+/** The metadata block's provenance, when the run carries accepted metadata. */
+function metadataInfoOf(c: UploadCtx, meta: (UploadMetaState & { metadata: IconMetadata }) | null): ExportRunArgs["metadataInfo"] {
+  if (meta === null || meta.validation === null) return null;
   return {
     prompt: c.m.prompt, provider: PROVIDER_NAME, model: c.m.gemini.model,
-    requestId: null, usage: row.meta.usage, validation: row.meta.validation,
+    requestId: null, usage: meta.usage, validation: meta.validation,
   };
 }
 

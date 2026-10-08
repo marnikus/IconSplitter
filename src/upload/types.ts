@@ -101,8 +101,12 @@ export interface UploadListRow {
 
 export type UploadDialog =
   | { kind: "settings"; id: string | null } // null = the global defaults
-  /** The exact request preview, before any paid send, with the images it carries. */
-  | { kind: "meta"; ids: string[]; previews: SentPreview[]; preparing: boolean };
+  /**
+   * The exact request preview, before any paid send, with the images it carries.
+   * `thenExport` names the selection "Export selected" must export once the
+   * answers land (empty for the plain "Generate metadata" button).
+   */
+  | { kind: "meta"; ids: string[]; previews: SentPreview[]; preparing: boolean; thenExport: string[] };
 
 /** The metadata confirmation, narrowed (its own module renders it). */
 export type MetaDialog = Extract<UploadDialog, { kind: "meta" }>;

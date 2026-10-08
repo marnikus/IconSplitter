@@ -538,8 +538,8 @@ Bulk bar (`upload-bulk`):
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
 | `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
 | `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
-| `upload-meta-selected` | button | opens the exact-request confirmation (disabled at 0 selected) |
-| `upload-export-selected` | button | runs the export pipeline on the selection (disabled at 0 selected) |
+| `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = the selected icons with NO metadata text yet; opens the exact-request confirmation for those (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
+| `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
 | `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
 
 List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),
@@ -596,7 +596,10 @@ the auth/retries facts, the images the request will carry
 `upload-preview-caption-{id}`, `upload-preview-count`,
 `upload-preview-busy` while they render, `upload-preview-none` when none could
 be), `upload-meta-confirm` (sends; disabled until the previews are ready) /
-`upload-meta-dismiss` / `upload-meta-cancel`.
+`upload-meta-dismiss` / `upload-meta-cancel`. The title `#upload-meta-title`
+reads "Generate metadata for N icons" and, when the dialog was opened by
+"⇪ Export selected", "…, then export N"; the extra note `upload-meta-then-export`
+states the accept-as-it-lands rule before anything is paid for.
 
 Banners: `upload-warn-excluded`, `upload-warn-corrupt`,
 `upload-warn-unreadable`, `upload-warn-interrupted` (a metadata request in
