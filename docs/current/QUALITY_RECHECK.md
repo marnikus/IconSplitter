@@ -2139,7 +2139,10 @@ Final pre-push run: **`npm run verify` — ALL LANES PASSED**.
 
 `npx jscpd src --min-tokens 60` completed: 33 repository-wide clone reports
 (365 duplicated lines, largely existing CSS and paired-tab code); review found
-no clone introduced in the stock-cleanup/stroke changes. Knip's default parser
+no clone introduced in the stock-cleanup/stroke changes. The exact `readBytesAt`
+pair in `rowmodel.ts:240–251` and `runexport.ts:276–287` was checked against
+base `46d2804`: it is identical pre-existing code, left for a separate filesystem
+cleanup rather than expanding this feature's scope. Knip's default parser
 could not allocate its 6 GiB raw-transfer buffer in this sandbox. The supported
 fallback `KNIP_DISABLE_RAW_TRANSFER=1 npx knip` completed analysis and reported
 the existing repository-wide inventory (8 unused design files, 1 unused
