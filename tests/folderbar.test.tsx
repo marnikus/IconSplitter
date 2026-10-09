@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { saveRootPathInfo, ROOT_PATH_KEY } from "../src/lib/rootpath";
 import { FolderPathRow, OpenFolderButton } from "../src/ui/FolderBar";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,7 +71,7 @@ describe("OpenFolderButton — the one folder control", () => {
 
 describe("FolderPathRow — the full path, in one full-width read-only row", () => {
   it("shows the captured path as text, word for word, with nothing to click or type", async () => {
-    saveRootPathInfo(ROOT, `"${FULL}\\"`, "copied"); // Explorer's quotes and trailing slash
+    saveRootPathInfo(ROOT, `"${FULL}\\"`); // Explorer's quotes and trailing slash
     await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
     const row = q("[data-testid=x-folder-path]");
     expect(row).not.toBeNull();
@@ -89,11 +89,11 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
     expect(q("[data-testid=x-folder-path]")?.querySelector("input, button")).toBeNull();
   });
 
-  it("flags a path completed from the copied parent folder", async () => {
-    saveRootPathInfo(ROOT, FULL, "completed");
+  it("shows a stored `completed` guess (an older build's) as NOT captured — never the guess", async () => {
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: FULL, how: "completed" } }));
     await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
-    expect(text("[data-testid=x-folder-path]")).toContain(FULL);
-    expect(text("[data-testid=x-folder-path]")).toContain("completed — check it");
+    expect(text("[data-testid=x-folder-path]")).not.toContain(FULL);
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
   });
 
   it("renders nothing while no folder is loaded", async () => {
@@ -105,7 +105,7 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
   it("follows the memory live: a capture in any tab appears without a reload (I-36/RULE 24)", async () => {
     await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
-    await act(async () => { saveRootPathInfo(ROOT, FULL, "copied"); });
+    await act(async () => { saveRootPathInfo(ROOT, FULL); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
   });
@@ -130,7 +130,7 @@ describe("FolderPathRow — the note says what to do (I-52)", () => {
   });
 
   it("keeps the plain note when a path IS known", async () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(q("[data-testid=x-folder-path] em")?.textContent).toBe("");

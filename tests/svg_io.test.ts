@@ -306,7 +306,7 @@ describe("scanSources", () => {
   it("remembers the restored folder at boot, so a pick inside it is named exactly (I-51)", async () => {
     const root = makeRoot();
     root.children.set("2026-10", new FakeDir("2026-10")); // a folder inside it, not yet picked
-    saveRootPathInfo(root.name, "F:\\work\\split_root", "copied");
+    saveRootPathInfo(root.name, "F:\\work\\split_root");
     await rememberRoot(root);
     const r = refs();
     await bootSources(r, { setRootName: () => {}, loadAll: () => {}, refreshKey: () => {} });

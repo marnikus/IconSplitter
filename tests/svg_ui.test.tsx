@@ -274,13 +274,13 @@ describe("the folder control and the path row", () => {
     expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
   });
 
-  it("flags a path completed from the copied parent, so a completed guess is never silent", async () => {
+  it("never completes a copied PARENT into a guess — the row says 'not captured' instead (I-59)", async () => {
     const root = await makeRoot();
-    stubClipboard("F:\\Stocks 2026\\icons testing\\single"); // the folder it lives in
+    stubClipboard("F:\\Stocks 2026\\icons testing\\single"); // the folder it lives in — not the folder
     try {
       await mountPick(root);
-      expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons testing\\single\\split_root");
-      expect(text("[data-testid=svg-folder-path]")).toContain("completed — check it");
+      expect(text("[data-testid=svg-folder-path]")).not.toContain("icons testing");
+      expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }

@@ -43,5 +43,5 @@ export async function readClipboardText(): Promise<ClipRead> {
 export function adoptCopiedText(folderName: string, copied: string): RootPathInfo {
   const info = pathFromCopied(copied, folderName);
   if (info.path === "") return { path: "", how: null };
-  return saveRootPathInfo(folderName, info.path, info.how ?? "copied");
+  return saveRootPathInfo(folderName, info.path);
 }

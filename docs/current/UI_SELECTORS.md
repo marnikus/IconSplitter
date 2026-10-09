@@ -164,7 +164,7 @@ Header + status:
 | Test id | Element | Notes |
 |---|---|---|
 | `sel-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root |
-| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* / *completed — check it* (I-46) |
+| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* (I-46; *completed — check it* removed by I-59) |
 | `sel-rescan` | `↺ Rescan` | re-walks the root |
 | `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
@@ -203,7 +203,7 @@ Source bar + layout switch:
 | Test id | Element | Notes |
 |---|---|---|
 | `v2-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root (I-30) |
-| `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* / *completed — check it* name the states |
+| `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* names the missing state (*completed — check it* removed by I-59) |
 | `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
@@ -337,7 +337,7 @@ and stay distinct):
 | Test id | Element | Notes |
 |---|---|---|
 | `svg-open-folder` | green `Open folder` button | the same shared control as the Selection tabs (I-44), offered whether or not a root is loaded (I-30); `svg-root-empty`'s button is `svg-open-folder-empty` |
-| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* / *completed — check it* name the states (I-46) |
+| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* names the missing state (*completed — check it* removed by I-59) (I-46) |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |

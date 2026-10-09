@@ -22,11 +22,13 @@ import { isRecord } from "./isrecord";
 export const ROOT_PATH_KEY = "iconSplitter.rootpaths.v1";
 
 /**
- * How a remembered path was obtained (I-46 — the row says which one it is):
- * `copied`, the user's own Explorer copy, or `completed`, that copy with the
- * picked folder's name appended. The path is never typed by hand any more.
+ * How a remembered path was obtained: `copied` — the user's own Explorer copy
+ * of THIS folder, or a derivation from a folder captured that way (I-51). The
+ * older `completed` (a copied parent with the picked name appended) is gone
+ * (I-59, 2026-10-09): it glued unrelated folders together twice; a stored one
+ * now reads as no path at all. The path is never typed by hand.
  */
-export type PathHow = "copied" | "completed";
+export type PathHow = "copied";
 
 export interface RootPathInfo {
   path: string;
@@ -80,24 +82,16 @@ function hasControl(path: string): boolean {
   return [...path].some((ch) => ch.charCodeAt(0) < 0x20);
 }
 
-/** A tail that looks like a file name — a folder path never ends in one. */
-function looksLikeFile(path: string): boolean {
-  return /\.[A-Za-z0-9]{1,8}$/.test(path);
-}
-
 /**
  * The real path of the folder named `folderName`, as told by a copied path
- * (I-35/I-39): text whose leaf IS the folder name is adopted as it is; a folder
- * path whose leaf is something else — the parent the user copied — gets the
- * picked name appended and is marked `completed`, so the UI can ask for a second
- * look. Anything that is not an Explorer folder path (markup, a URL, a word, a
- * file) is refused: nothing is invented, and a wrong path is worse than none.
+ * (I-35/I-39): text whose leaf IS the folder name is adopted as it is. Anything
+ * else — a parent folder, another folder, markup, a URL, a word, a file — is
+ * refused: nothing is invented (RULE 13), and a wrong path is worse than none.
  */
 export function pathFromCopied(copied: string, folderName: string): RootPathInfo {
   if (folderName === "" || !isFolderPathText(copied)) return UNKNOWN;
   const path = normalizeRootPath(copied);
-  if (pathLeaf(path).toLowerCase() === folderName.toLowerCase()) return { path, how: "copied" };
-  return looksLikeFile(path) ? UNKNOWN : { path: `${path}\\${folderName}`, how: "completed" };
+  return pathLeaf(path).toLowerCase() === folderName.toLowerCase() ? { path, how: "copied" } : UNKNOWN;
 }
 
 /** The remembered full path of a root, or "" when none was captured. */
@@ -110,8 +104,9 @@ export function loadRootPathInfo(rootName: string): RootPathInfo {
   const value = readPaths()[rootName];
   if (typeof value === "string") return fromString(value); // written before `how` existed
   if (!isRecord(value)) return UNKNOWN;
+  if (value.how === "completed") return UNKNOWN; // an older build's guess: no memory (I-59)
   const path = typeof value.path === "string" ? normalizeRootPath(value.path) : "";
-  return valid(path) ? { path, how: readHow(value.how) } : UNKNOWN;
+  return valid(path) ? { path, how: "copied" } : UNKNOWN;
 }
 
 function fromString(value: string): RootPathInfo {
@@ -128,22 +123,16 @@ function valid(path: string): boolean {
   return path !== "" && isFolderPathText(path);
 }
 
-function readHow(value: unknown): PathHow {
-  // anything unrecognised is a record from before `how` (or a hand-edited one):
-  // the path still came from the user, so it reads as captured
-  return value === "completed" ? "completed" : "copied";
-}
-
 /**
  * Remembers (or, with an empty value, forgets) a root's full path. Returns the
  * stored info unchanged when nothing moved, so a caller can stay quiet about a
  * repeat.
  */
-export function saveRootPathInfo(rootName: string, text: string, how: PathHow = "copied"): RootPathInfo {
+export function saveRootPathInfo(rootName: string, text: string): RootPathInfo {
   if (rootName === "") return UNKNOWN;
   const path = normalizeRootPath(text);
   if (path !== "" && !isFolderPathText(path)) return loadRootPathInfo(rootName); // refused
-  const info: RootPathInfo = path === "" ? UNKNOWN : { path, how };
+  const info: RootPathInfo = path === "" ? UNKNOWN : { path, how: "copied" };
   const before = loadRootPathInfo(rootName);
   if (before.path === info.path && before.how === info.how) return info;
   const all = readPaths();

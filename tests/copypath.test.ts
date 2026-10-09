@@ -25,7 +25,7 @@ beforeEach(() => {
 
 describe("copyFolderText", () => {
   it("copies the full path of the folder the file lives in, and says it (I-56)", async () => {
-    saveRootPathInfo(ROOT, FULL, "copied"); // the pick-time capture
+    saveRootPathInfo(ROOT, FULL); // the pick-time capture
     const written: string[] = [];
     useClipboard(async (t) => { written.push(t); });
     const said: Said[] = [];
@@ -40,7 +40,7 @@ describe("copyFolderText", () => {
   });
 
   it("names the folder of the sidecar and of the AI piece the same way", async () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     const written: string[] = [];
     useClipboard(async (t) => { written.push(t); });
     await copyFolderText(ROOT, `${PIECE}/icon-bunny-face_AI_7_04.svg.json`, () => undefined);

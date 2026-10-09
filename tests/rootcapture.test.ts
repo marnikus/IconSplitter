@@ -5,7 +5,9 @@
 // when its leaf is the root's own name. Anything else — a pasted parent folder,
 // a pasted word, a URL, a leaf-only copy — is ignored and writes nothing.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadRootPath, loadRootPathInfo, ROOT_PATH_KEY, saveRootPathInfo } from "../src/lib/rootpath";
+import { loadRootPath, loadRootPathInfo, ROOT_PATH_KEY } from "../src/lib/rootpath";
+import { clearKnownRoots, deriveRootPath, rememberKnownRoot } from "../src/ui/knownroots";
+import type { DirHandleLike } from "../src/lib/fs";
 import { bindPasteCapture, captureFromPaste, retryCapture } from "../src/ui/rootcapture";
 
 const ROOT = "_split_output";
@@ -19,6 +21,7 @@ function stubClipboard(readText: () => Promise<string>): () => void {
 
 beforeEach(() => {
   localStorage.clear();
+  clearKnownRoots();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -65,19 +68,19 @@ describe("retryCapture — Rescan's one extra attempt (I-52)", () => {
     expect(read).toHaveBeenCalledTimes(1); // the second call never touched the clipboard
   });
 
-  it("replaces a COMPLETED guess with an exact match — a guess is not a capture", async () => {
-    saveRootPathInfo(ROOT, `${PARENT}\\wrong\\${ROOT}`, "completed");
+  it("replaces an older build's stored `completed` guess with an exact match — a guess is no capture", async () => {
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: `${PARENT}\\wrong\\${ROOT}`, how: "completed" } }));
     stubClipboard(async () => FULL);
     expect(await retryCapture(ROOT)).toBe(`Folder path captured: ${FULL}`);
     expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "copied" });
   });
 
-  it("keeps the completed guess when the clipboard cannot name the folder exactly", async () => {
-    const guess = `${PARENT}\\wrong\\${ROOT}`;
-    saveRootPathInfo(ROOT, guess, "completed");
-    stubClipboard(async () => PARENT);
-    expect(await retryCapture(ROOT)).toBeNull();
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: guess, how: "completed" });
+  it("hands the capture to the known handle of that name, so the next pick inside it is exact", async () => {
+    const parent = { kind: "directory", name: ROOT, resolve: async () => ["2026-10"] } as unknown as DirHandleLike;
+    rememberKnownRoot(parent, "");
+    stubClipboard(async () => FULL);
+    await retryCapture(ROOT);
+    expect(await deriveRootPath({ kind: "directory", name: "2026-10" } as DirHandleLike)).toBe(`${FULL}\\2026-10`);
   });
 
   it("stays quiet when the clipboard cannot name this folder", async () => {

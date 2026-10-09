@@ -52,7 +52,7 @@ describe("normalizeRootPath", () => {
 
 describe("the remembered full path", () => {
   it("round-trips per folder name, normalised", () => {
-    saveRootPathInfo(ROOT, `"F:\\Stocks 2026\\icons testing\\single\\test_processing\\"`, "copied");
+    saveRootPathInfo(ROOT, `"F:\\Stocks 2026\\icons testing\\single\\test_processing\\"`);
     expect(loadRootPath(ROOT)).toBe(FULL);
     expect(rememberedRootPath(ROOT)).toBe(FULL);
   });
@@ -63,11 +63,11 @@ describe("the remembered full path", () => {
   });
 
   it("remembers each folder separately and forgets a cleared one", () => {
-    saveRootPathInfo("a", "F:\\one", "copied");
-    saveRootPathInfo("b", "D:\\two", "copied");
+    saveRootPathInfo("a", "F:\\one");
+    saveRootPathInfo("b", "D:\\two");
     expect(rememberedRootPath("a")).toBe("F:\\one");
     expect(rememberedRootPath("b")).toBe("D:\\two");
-    saveRootPathInfo("a", "", "copied");
+    saveRootPathInfo("a", "");
     expect(loadRootPath("a")).toBe("");
   });
 
@@ -88,7 +88,7 @@ describe("folderCopyText", () => {
   const SHOWN_FOLDER = `${FULL}\\_split_output\\2026-10\\2026-10-05_18-45-20\\icon-bunny-face_AI_7\\split_04`;
 
   it("copies the folder of the file, never the run's folder (I-56)", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     for (const file of ["icon-bunny-face_AI_7_04_v2.svg", "icon-bunny-face_AI_7_04.svg", "icon-bunny-face_AI_7_04_AI.png"]) {
       expect(folderCopyText(ROOT, `${PIECE}/${file}`)).toBe(SHOWN_FOLDER);
     }
@@ -99,19 +99,19 @@ describe("folderCopyText", () => {
   });
 
   it("copies the containing folder for a source-tree item, never the file", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     expect(folderCopyText(ROOT, "Category-A/icon_AI.png")).toBe(`${FULL}\\Category-A`);
     expect(folderCopyText(ROOT, "icon_AI.png")).toBe(FULL);
   });
 
   it("names the run folder only for a file that really sits in it", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     expect(folderCopyText(ROOT, `${RUN}/icon_AI_02.png`))
       .toBe(`${FULL}\\_split_output\\2026-10\\2026-10-05_18-45-20`);
   });
 
   it("keeps the whole folder chain, batch-looking or not", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     expect(folderCopyText(ROOT, "_split_output/2026-10/notes/icon_AI.png"))
       .toBe(`${FULL}\\_split_output\\2026-10\\notes`);
     expect(folderCopyText(ROOT, "_split_output/latest/icon_AI.png"))
@@ -119,7 +119,7 @@ describe("folderCopyText", () => {
   });
 
   it("never returns a file name", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     const text = folderCopyText(ROOT, "a/b/icon-airplane-landing.svg.json");
     expect(text.endsWith(".svg.json")).toBe(false);
     expect(text.endsWith("icon-airplane-landing")).toBe(false);
@@ -136,15 +136,15 @@ describe("folderCopyText", () => {
     // once with one run folder picked: the answer only ever depends on the file.
     const out = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
     const deep = "icon-sheet_AI/split_02/icon-sheet_AI_02.png";
-    saveRootPathInfo("_split_output", out, "copied");
+    saveRootPathInfo("_split_output", out);
     expect(folderCopyText("_split_output", `2026-10/2026-10-05_18-45-20/${deep}`))
       .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
     // a month folder picked instead: the run stamp is the first segment
-    saveRootPathInfo("2026-10", `${out}\\2026-10`, "copied");
+    saveRootPathInfo("2026-10", `${out}\\2026-10`);
     expect(folderCopyText("2026-10", `2026-10-05_18-45-20/${deep}`))
       .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
     // a run folder picked: the same folder again, said from the root
-    saveRootPathInfo("2026-10-05_18-45-20", `${out}\\2026-10\\2026-10-05_18-45-20`, "copied");
+    saveRootPathInfo("2026-10-05_18-45-20", `${out}\\2026-10\\2026-10-05_18-45-20`);
     expect(folderCopyText("2026-10-05_18-45-20", deep))
       .toBe(`${out}\\2026-10\\2026-10-05_18-45-20\\icon-sheet_AI\\split_02`);
     // an item directly in the output folder keeps its own folder
@@ -152,7 +152,7 @@ describe("folderCopyText", () => {
   });
 
   it("keeps a batch-looking chain that is nested under a subfolder of the root", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     expect(folderCopyText(ROOT, "sub/_split_output/2026-10/2026-10-01_10-24-31/a_AI/split_01/a_01.png"))
       .toBe(`${FULL}\\sub\\_split_output\\2026-10\\2026-10-01_10-24-31\\a_AI\\split_01`);
   });
@@ -174,10 +174,12 @@ describe("pathFromCopied — the picked folder's real path (I-35)", () => {
       .toEqual({ path: FULL, how: "copied" });
   });
 
-  it("completes the path when the user copied the parent it lives in", () => {
-    expect(pathFromCopied("F:\\Stocks 2026\\icons testing\\single", ROOT))
-      .toEqual({ path: FULL, how: "completed" });
-    expect(pathFromCopied("F:", ROOT)).toEqual({ path: `F:\\${ROOT}`, how: "completed" });
+  it("does NOT complete a copied parent into a guess — exact leaf or nothing (I-59, 2026-10-09)", () => {
+    // the twice-reported mistake: a folder path from somewhere else on the
+    // clipboard became `<that path>\\<picked name>` and stuck
+    expect(pathFromCopied("F:\\Stocks 2026\\icons testing\\single", ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied("F:", ROOT)).toEqual({ path: "", how: null });
+    expect(pathFromCopied("\\\\server\\share\\icons", ROOT)).toEqual({ path: "", how: null });
   });
 
   it("refuses a file path, a bare word and an empty clipboard — never invents a path", () => {
@@ -188,16 +190,21 @@ describe("pathFromCopied — the picked folder's real path (I-35)", () => {
     expect(pathFromCopied(FULL, "")).toEqual({ path: "", how: null });
   });
 
-  it("keeps UNC shares intact when completing them", () => {
-    expect(pathFromCopied("\\\\server\\share\\icons", ROOT))
-      .toEqual({ path: `\\\\server\\share\\icons\\${ROOT}`, how: "completed" });
+  it("keeps UNC shares intact", () => {
+    expect(pathFromCopied(`\\\\server\\share\\icons\\${ROOT}\\`, ROOT))
+      .toEqual({ path: `\\\\server\\share\\icons\\${ROOT}`, how: "copied" });
   });
 });
 
 describe("the stored record and its revision (I-36)", () => {
-  it("remembers how the path was obtained, and still believes a legacy string", () => {
-    saveRootPathInfo(ROOT, FULL, "completed");
-    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "completed" });
+  it("reads a stored `completed` guess (an older build's) as NO path, and still believes a legacy string", () => {
+    // the guess an older build stored is exactly what glued two folders together;
+    // reading it as unknown is what lets Rescan / Ctrl+V replace it
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: FULL, how: "completed" } }));
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: "", how: null });
+    expect(loadRootPath(ROOT)).toBe("");
+    saveRootPathInfo(ROOT, FULL);
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "copied" });
     localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: FULL })); // written before `how`
     expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "copied" }); // a legacy string
     localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: 42, how: "copied" } }));
@@ -207,11 +214,11 @@ describe("the stored record and its revision (I-36)", () => {
   it("notifies subscribers on a real change, and stays quiet on an identical save", () => {
     let notifications = 0;
     const stop = subscribeRootPaths(() => { notifications++; });
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     expect(notifications).toBe(1);
-    saveRootPathInfo(ROOT, FULL, "copied"); // nothing moved
+    saveRootPathInfo(ROOT, FULL); // nothing moved
     expect(notifications).toBe(1);
-    saveRootPathInfo(ROOT, "F:\\elsewhere", "copied"); // a real change
+    saveRootPathInfo(ROOT, "F:\\elsewhere"); // a real change
     expect(notifications).toBe(2);
     expect(rootPathRevision()).toBeGreaterThan(0);
     stop();
@@ -253,14 +260,14 @@ describe("isFolderPathText — what Explorer can hand over, and nothing else", (
 
 describe("the guard at every entry point (I-39)", () => {
   it("refuses to remember markup handed to the memory, and keeps the old value", () => {
-    saveRootPathInfo(ROOT, FULL, "copied");
+    saveRootPathInfo(ROOT, FULL);
     for (const junk of [SVG, URL, "hello"]) {
       // refused: the writer reports what it actually holds, never "the last thing
       // typed" — the one entry point left after the field was removed (I-45)
-      expect(saveRootPathInfo(ROOT, junk, "copied")).toEqual({ path: FULL, how: "copied" });
+      expect(saveRootPathInfo(ROOT, junk)).toEqual({ path: FULL, how: "copied" });
       expect(loadRootPath(ROOT)).toBe(FULL);
     }
-    expect(saveRootPathInfo(ROOT, "", "copied")).toEqual({ path: "", how: null }); // empty forgets
+    expect(saveRootPathInfo(ROOT, "")).toEqual({ path: "", how: null }); // empty forgets
     expect(loadRootPath(ROOT)).toBe("");
   });
 

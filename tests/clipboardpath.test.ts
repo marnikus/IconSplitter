@@ -48,8 +48,9 @@ describe("adoptCopiedText — the pick-time capture (I-35)", () => {
     expect(loadRootPath(ROOT)).toBe(FULL);
   });
 
-  it("completes the path from the copied parent folder and says so", () => {
-    expect(adoptCopiedText(ROOT, PARENT)).toEqual({ path: `${PARENT}\\${ROOT}`, how: "completed" });
+  it("refuses a copied PARENT folder — nothing is completed into a guess (I-59)", () => {
+    expect(adoptCopiedText(ROOT, PARENT)).toEqual({ path: "", how: null });
+    expect(loadRootPath(ROOT)).toBe("");
   });
 
   it("refuses a copied file path and a copied non-path, writing nothing", () => {

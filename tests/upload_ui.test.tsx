@@ -20,7 +20,7 @@ import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { ROOT_PATH_KEY, saveRootPathInfo } from "../src/lib/rootpath";
 import { clearKnownRoots } from "../src/ui/knownroots";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
@@ -443,15 +443,34 @@ describe("the Full path row — never a previous root with the new name appended
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
   });
 
-  itSlow("Rescan replaces a completed guess with the exact path Explorer copied", async () => {
+  itSlow("a stored guess for the restored root is shown as 'not captured' and never glued onto a child pick", async () => {
+    // the second report (2026-10-09): an older build had stored the glued guess
+    // for the root; the user then picked its `_split_output`
     const root = makeRoot();
-    saveRootPathInfo(root.name, `${OLD}\\wrong\\${root.name}`, "completed");
+    const glued = `${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\${root.name}`;
+    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [root.name]: { path: glued, how: "completed" } }));
+    Object.assign(root, { resolve: async () => ["_split_output"] });
     await mount(root);
-    expect(text("[data-testid=upload-folder-path]")).toContain("completed — check it");
+    expect(text("[data-testid=upload-folder-path] code")).toBe(root.name);
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    readClipboard("");
+    usePicker(async () => new BinDir("_split_output"));
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === "_split_output", "the child's row");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+  });
+
+  itSlow("Rescan captures the exact path Explorer copied, and the next child pick derives from it", async () => {
+    const root = makeRoot();
+    Object.assign(root, { resolve: async () => ["_split_output"] });
+    await mount(root);
     readClipboard(`${SINGLE}\\${root.name}`);
     await click("[data-testid=upload-rescan]");
     await waitFor(() => text("[data-testid=upload-folder-path] code") === `${SINGLE}\\${root.name}`, "the exact path");
-    expect(text("[data-testid=upload-folder-path]")).not.toContain("check it");
+    readClipboard("");
+    usePicker(async () => new BinDir("_split_output"));
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === `${SINGLE}\\${root.name}\\_split_output`, "the derived child path");
   });
 });
 

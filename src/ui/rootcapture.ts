@@ -19,38 +19,35 @@
 
 import { readClipboardText } from "../lib/clipboardpath";
 import { loadRootPathInfo, pathFromCopied, saveRootPathInfo, type RootPathInfo } from "../lib/rootpath";
+import { nameKnownRoot } from "./knownroots";
 
 /**
  * The path a pasted (or re-read) text names for `rootName`: the exact folder it
- * names, else null. The picker's "parent + name" completion is deliberately NOT
- * applied here — outside the pick, the app completes nothing.
+ * names, else null — the same rule as the pick (I-59: nothing is completed).
  */
 export function captureFromPaste(text: string, rootName: string): RootPathInfo | null {
   if (rootName === "" || text === "") return null;
   const info = pathFromCopied(text, rootName);
-  if (info.path === "" || info.how !== "copied") return null;
-  return saveRootPathInfo(rootName, info.path, "copied");
+  if (info.path === "") return null;
+  const saved = saveRootPathInfo(rootName, info.path);
+  nameKnownRoot(rootName, saved.path); // the next pick inside this folder derives from it (I-51)
+  return saved;
 }
 
 /**
- * One more capture attempt for a root whose path is still unknown — or only a
- * flagged completion, which an exact match replaces (I-59) — the line `Rescan`
- * says when it lands, null when there is nothing to do or nothing to report.
- * Only a real user gesture may read the clipboard (I-52), which is what keeps a
- * scan at boot from touching it.
+ * One more capture attempt for a root whose path is still unknown (an older
+ * build's stored guess counts as unknown, I-59) — the line `Rescan` says when
+ * it lands, null when there is nothing to do or nothing to report. Only a real
+ * user gesture may read the clipboard (I-52), which is what keeps a scan at
+ * boot from touching it.
  */
 export async function retryCapture(rootName: string): Promise<string | null> {
-  if (rootName === "" || settled(loadRootPathInfo(rootName))) return null;
+  if (rootName === "" || loadRootPathInfo(rootName).path !== "") return null;
   if (!byUserGesture()) return null;
   const read = await readClipboardText();
   if (read.state !== "text") return null;
   const info = captureFromPaste(read.text, rootName);
   return info === null ? null : `Folder path captured: ${info.path}`;
-}
-
-/** A path that needs no second look: captured exactly (a completion is a guess). */
-function settled(info: RootPathInfo): boolean {
-  return info.path !== "" && info.how !== "completed";
 }
 
 /**

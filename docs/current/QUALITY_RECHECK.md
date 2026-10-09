@@ -2601,3 +2601,10 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * RULE 18: no new source file; largest touched `src/upload/actions.ts` 291 lines (baseline file, +6). `src/svg/` directory debt unchanged.
 * Honesty: the completion is still offered (flagged) when nothing contradicts it — the one case it serves (first pick with the parent copied) keeps working; nothing is stored before the answer is settled.
 
+## 2026-10-09 — fix(ui): no completed path at all — a stored guess reads as nothing (I-59, round 2)
+
+* Second report the same day: the stored guess (localStorage, older build) became the BASE of a derivation (`<guess>\\_split_output`, labelled `copied`). Root cause of both rounds: a guess treated as a capture. Fix: the completion is removed (exact leaf or nothing); `{how:"completed"}` reads as no path; `knownroots.nameKnownRoot` hands late captures to the registry. Removed: `provenOutside`, `lastCopiedByApp`, `believable`, the `completed — check it` state/toast, `saveRootPathInfo`'s `how` parameter, `looksLikeFile`.
+* TDD: red first — `rootpath`, `clipboardpath`, `folderbar`, `pickroot` (the second report at unit level), `knownroots`, `rootcapture`, `upload_ui` (both reports end to end; 10 red → green). Tests that pinned the completion were CHANGED to pin its absence (the behaviour was the defect).
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 pre-existing warnings); `npm run quality:changed` GATE PASSED (`rootpath.ts` 23 fns/220, `knownroots.ts` 11/85, `pickroot.ts` 6/98, `rootcapture.ts` 8/84, `copypath.ts` 1/20, `FolderBar.tsx` 5/71). RULE 18: every touched file SHRANK (−16 … −4 lines); no new file.
+* Honesty: no migration rewrites storage — the guess is simply not believed when read; the row then names the way out (Ctrl+Shift+C → Rescan, or Ctrl+V).
+

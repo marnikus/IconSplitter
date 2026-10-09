@@ -6,7 +6,9 @@
 // it can be named exactly: the known path plus the segments `resolve()` returns.
 // Session state only, plus whatever the tabs restore at boot; nothing is stored,
 // because a handle is the record (RULE 13: an unanswerable question stays
-// unanswered, never guessed).
+// unanswered, never guessed). Only an EXACT capture is a path here: a stored
+// guess reads as none (lib/rootpath, I-59), so a derivation can never start
+// from one — that is what glued `…\export\test_process_3\_split_output`.
 
 import type { DirHandleLike } from "../lib/fs";
 
@@ -44,51 +46,33 @@ export async function deriveRootPath(handle: DirHandleLike): Promise<string | nu
   for (const root of knownRoots()) {
     if (root.path === "") continue;
     const segments = await resolveSegments(root.handle, handle);
-    if (Array.isArray(segments)) return joinPath(root.path, segments);
+    if (segments !== null) return joinPath(root.path, segments);
   }
   return null;
 }
 
 /**
- * True when a folder this app already named proves that `folderPath` cannot be
- * the parent of `handle`: the copied folder lies under (or is) that known folder,
- * and the known folder's own `resolve(handle)` answers null — "not below me".
- * The reported mistake (2026-10-09): a folder of the PREVIOUS root still on the
- * clipboard, a sibling tree picked, and the two completed into one wrong path.
- * A refusal to answer (no `resolve`, a throw) proves nothing and yields false.
+ * A capture that arrived AFTER the pick — `Rescan` or the user's own Ctrl+V
+ * (I-52) — names every known handle of that name that has no path yet, so the
+ * next pick inside it derives an exact path (I-51). A handle that already has
+ * a path keeps it: a later same-named folder is not this one.
  */
-export async function provenOutside(handle: DirHandleLike, folderPath: string): Promise<boolean> {
-  const copied = comparable(folderPath);
-  for (const root of knownRoots()) {
-    if (root.path === "" || !isWithin(copied, comparable(root.path))) continue;
-    if ((await resolveSegments(root.handle, handle)) === "outside") return true;
+export function nameKnownRoot(name: string, path: string): void {
+  if (name === "" || path === "") return;
+  for (const root of known) {
+    if (root.handle.name === name && root.path === "") root.path = path;
   }
-  return false;
 }
 
-/** `path` is `base` itself or a folder below it (both already `comparable`). */
-function isWithin(path: string, base: string): boolean {
-  return path === base || path.startsWith(`${base}\\`);
-}
-
-/** Case-folded, without a trailing separator — Windows paths compare that way. */
-function comparable(path: string): string {
-  return path.replace(/\\+$/, "").toLowerCase();
-}
-
-/**
- * `parent.resolve(child)`: the segments when it is a descendant, "outside" when
- * the platform answered null (a definite no), "unknown" when it could not say.
- */
-async function resolveSegments(parent: DirHandleLike, child: DirHandleLike): Promise<string[] | "outside" | "unknown"> {
+/** `parent.resolve(child)`, or null when it is not a descendant / not allowed. */
+async function resolveSegments(parent: DirHandleLike, child: DirHandleLike): Promise<string[] | null> {
   const resolve = (parent as unknown as { resolve?: (h: DirHandleLike) => Promise<unknown> }).resolve;
-  if (typeof resolve !== "function") return "unknown";
+  if (typeof resolve !== "function") return null;
   try {
     const answer = await resolve.call(parent, child);
-    if (answer === null) return "outside";
-    return Array.isArray(answer) && answer.every((s) => typeof s === "string") ? answer : "unknown";
+    return Array.isArray(answer) && answer.every((s) => typeof s === "string") ? answer : null;
   } catch {
-    return "unknown"; // a lost permission or a foreign file system: no path, never an error
+    return null; // a lost permission or a foreign file system: no path, never an error
   }
 }
 

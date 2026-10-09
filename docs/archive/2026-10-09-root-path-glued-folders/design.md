@@ -81,3 +81,44 @@ Three breaches of the rules, one root: a guess was treated as a capture.
    the old root's export folder on the clipboard + a sibling pick → the row
    shows the folder name with `full path not captured`, never the glued path;
    `Rescan` turns `completed — check it` into the exact path.
+
+## 5. Follow-up the same day — the fix above was not enough
+
+Second report: picking `F:\…\single\test_process_3\_split_output` showed
+`F:\…\test_processing_2\_split_output\…\split_03\export\test_process_3\_split_output`.
+
+Measured cause: the glued guess for `test_process_3` was still **in storage**
+(`how: "completed"`, written by the older build — a code fix does not rewrite
+localStorage). The SVG-to-upload tab restored `test_process_3` at boot and
+registered it as a known root *with that path*; the user picked its
+`_split_output` with nothing useful on the clipboard; `deriveRootPath` (I-51)
+found the known root, `resolve()` answered `["_split_output"]`, and the app
+built `<guess>\_split_output` — and labelled it `copied`. D2's veto never ran:
+the derivation comes before the completion, and the derivation trusted its base.
+
+Lesson: a flagged guess that can become the **base** of a derivation is not a
+flag; it is a wrong path waiting for a child pick. So:
+
+* **D5 — no completion at all.** `pathFromCopied` adopts an exact leaf or
+  nothing. `PathHow` is `copied` only. The `completed — check it` row state and
+  toast are gone. (D1's "the app's own copy is never completed" and D2's veto
+  are thereby unnecessary and removed — less code, one rule.)
+* **D6 — a stored guess reads as no path.** `loadRootPathInfo` returns unknown
+  for `{ how: "completed" }`: the poison an older build left purges itself on
+  read — the row says *full path not captured*, copies fall back to the folder
+  name, and the known-root registry (seeded from that read at boot) never
+  derives from it.
+* **D7 — a late capture reaches the registry.** `knownroots.nameKnownRoot(name,
+  path)` is called by `rootcapture.captureFromPaste` (Rescan and Ctrl+V), so a
+  root picked with an empty clipboard and captured a moment later still names
+  its children exactly.
+
+TDD (red first): `rootpath.test.ts` (parent → unknown; stored `completed` →
+unknown), `clipboardpath.test.ts`, `folderbar.test.tsx` (stored guess renders
+*not captured*), `pickroot.test.ts` (the second report at unit level: known
+root seeded from the poisoned storage + child pick → `""`; late capture →
+exact derivation; the app's own copy adopted only when exact),
+`knownroots.test.ts` (`nameKnownRoot`), `rootcapture.test.ts` (Rescan replaces
+the stored guess and names the handle), `upload_ui.test.tsx` (both reports end
+to end: the restored root shows *not captured*, the child pick is never glued;
+Rescan → exact → the child pick derives).

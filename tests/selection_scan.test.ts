@@ -339,7 +339,7 @@ describe("Rescan captures a path the pick missed (I-52)", () => {
 describe("the restored folder is remembered at boot (I-51)", () => {
   it("names a pick inside it exactly, with no clipboard involved", async () => {
     const root = makeBatchRoot();
-    saveRootPathInfo(root.name, "F:\\work\\test_processing", "copied");
+    saveRootPathInfo(root.name, "F:\\work\\test_processing");
     await saveHandles(SELECTION_HANDLE_KEY, { source: root });
     const h = harness(root);
     await boot(h.ctx, h.set);

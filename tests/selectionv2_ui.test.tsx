@@ -146,7 +146,7 @@ describe("Selection V2 panel", () => {
     const before = rows(el).length;
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
     // a capture in another tab reaches this row live (I-36/RULE 24)
-    await act(async () => { saveRootPathInfo("split_root", "D:\\backup\\split_root", "copied"); });
+    await act(async () => { saveRootPathInfo("split_root", "D:\\backup\\split_root"); });
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("D:\\backup\\split_root");
     expect(rows(el).length).toBe(before); // the list is untouched by a path capture
   });

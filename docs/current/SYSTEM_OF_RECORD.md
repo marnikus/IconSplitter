@@ -878,14 +878,14 @@ Batch:
 * **I-35 (the pick captures the path, RULE 4/13):** every way of pointing the app
   at a folder to scan goes through `ui/pickroot.pickRootWithPath()`, which
   captures the picked folder's real path from the clipboard when that text names
-  the folder (exactly, or completed from its parent) and remembers it. The app
+  the folder exactly (nothing is completed from a parent — I-59) and remembers it. The app
   never invents a path: text that does not name the folder is not stored, and
   what was captured is stated to the user.
 * **I-36 (the path is visible, RULE 12):** wherever a root is shown, its full
   path is shown with it once known — the full-width row below the controls
   (`ui/FolderBar`, `sel-folder-path` / `v2-folder-path` / `svg-folder-path`) —
-  and the row names the state the value is in (*the path*, *completed — check
-  it*, *full path not captured*). A user never has to open a dialog to find out
+  and the row names the state the value is in (*the path*, *full path not
+  captured*). A user never has to open a dialog to find out
   what a copy will hand over, and a capture in one tab reaches the others without
   a reload. The pill that showed the folder in place of the action, and the field
   that let the path be typed, are gone (§16, I-44/I-45).
@@ -948,8 +948,8 @@ Batch:
   `lib/rootpath.saveRootPath`, `lib/clipboardpath.adoptCopiedPath`).
 * **I-46 (the path row never lies, RULE 4):** the row shows the captured path
   word for word (whole value in its `title`, selectable like any text), or the
-  folder's name with `full path not captured` when the browser withheld it; a
-  path the app completed from a copied parent carries `completed — check it`.
+  folder's name with `full path not captured` when the browser withheld it
+  (the `completed — check it` state is gone with the completion itself, I-59).
   Copies are unaffected (I-28): they hand over a folder path, the real one when
   captured and the folder-name fallback otherwise.
 * **I-47 (picking the output folder is picking the set, RULE 3/12):** when the
@@ -975,7 +975,8 @@ Batch:
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
   capture; when it finds nothing the path is still recoverable without another
   dialog, and the UI says how. `Rescan` (in all three tabs) makes one more
-  attempt for a root whose path is unknown or only completed (I-59), and a `paste` anywhere outside
+  attempt for a root whose path is unknown (an older build's stored guess counts
+  as unknown, I-59), and a `paste` anywhere outside
   a text field adopts the text for the root on screen
   (`ui/rootcapture.retryCapture` / `bindPasteCapture`, mounted by
   `ui/FolderBar.FolderPathRow`). Both take an **exact leaf match only** — a
@@ -1008,28 +1009,26 @@ Batch:
   (`pickroot.pathForPick`), and each tab remembers the root it restores at boot
   (`selection/rootsource.boot`, `svg/scan.bootSources`) — so a pick inside a
   folder the app already knows is exact with an empty clipboard, while a
-  clipboard guess that only *looks* right is overruled or left flagged
-  `completed — check it` — and refused outright when the evidence says it is
-  wrong (I-59).
-* **I-59 (a guess yields to evidence, RULE 4/12/13 — 2026-10-09):** the
-  "parent + name" completion is a guess, and three things outrank it. (1) The
-  text this app itself last put on the clipboard (`lib/copypath.lastCopiedByApp`,
-  the "copy folder path" output) is never completed — it is adopted only when it
-  names the picked folder exactly. (2) A known root whose captured path
-  contains the copied folder, and whose own `resolve(picked)` answers `null`
-  ("not below me"), proves the copied folder cannot be the pick's parent
-  (`ui/knownroots.provenOutside`); `resolveSegments` tells that definite
-  `"outside"` apart from `"unknown"` (no `resolve`, a throw), and only the
-  definite answer vetoes. (3) `Rescan` re-reads for a root whose path is empty
-  **or** `completed`, and an exact leaf match replaces the guess
-  (`ui/rootcapture.retryCapture`, now also behind the SVG-to-upload `Rescan`).
-  `pickroot.pathForPick` settles its answer before it writes anything — exact
-  clipboard → derivation → believable completion → nothing — so a wrong
-  completion is never stored first and overruled later. The reported case
-  (the previous root's `…\split_03\export` on the clipboard, a sibling tree
-  picked, the row showing `…\export\test_process_3`) now shows the folder's
-  name with `full path not captured`, and every copy made from it says the
-  honest fallback instead of a wrong drive path.
+  clipboard text that names some OTHER folder yields nothing at all (I-59). A
+  capture that lands later — `Rescan`, `Ctrl+V` — reaches the known handle of
+  that name (`knownroots.nameKnownRoot`), so the next pick inside it is exact.
+* **I-59 (exact or nothing — no completed path, RULE 4/13 — 2026-10-09, rewritten
+  the same day after a second report):** the "parent + name" completion is gone.
+  A copied path is adopted only when its leaf IS the picked folder's name
+  (`lib/rootpath.pathFromCopied`); otherwise the path comes from a folder the app
+  already named exactly (I-51), or it is unknown and the row says so. `PathHow`
+  is `copied` only; a stored `{ how: "completed" }` written by an older build
+  **reads as no path** (`loadRootPathInfo`), so the glued guesses it left behind
+  vanish from the row, from every copy (I-56) and — decisively — from the
+  known-root registry, which may derive only from an exact capture. The first
+  fix of the day (a veto by a known root + "the app's own copy is never
+  completed") was not enough: the stored guess for `test_process_3` survived
+  the fix, the tab restored that folder at boot as a known root, and picking
+  its `_split_output` *derived* `<glued guess>\\_split_output` — labelled
+  `copied`. A guess must never be a base, so there is no guess. What remains:
+  `Rescan` (all three tabs) re-reads for an unknown path, `Ctrl+V` adopts an
+  exact leaf, and both hand the capture to the known handle
+  (`knownroots.nameKnownRoot`) for the next derivation.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -1810,20 +1809,20 @@ now takes:
   used by all three tabs' pickers. It reads the clipboard before the dialog (the
   click's activation is freshest there) and once more only if that read was empty
   (the other natural order: copy after picking), then matches the text against
-  the folder that was really picked: the same leaf → adopted as *copied*; the
-  copied parent → the picked name appended and flagged *completed*; a file path
-  or a bare word → **nothing** is stored (I-29: no memory beats a guess).
+  the folder that was really picked: the same leaf → adopted as *copied*;
+  anything else — a copied parent (since I-59), a file path or a bare word →
+  **nothing** is stored (I-29: no memory beats a guess).
 * **The full path is visible with the root** (I-36): the row under the controls
   shows it once known (`ui/FolderBar`, §16) and names the state the value is in —
-  the path, *completed — check it*, or *full path not captured*. The row follows
+  the path, or *full path not captured* (*completed — check it* existed until I-59). The row follows
   the storage (`ui/FolderBar.useRootPath`, a subscription), so a capture in one
   tab is visible in the other without a reload. Until 2026-10-05 this was a pill
   plus a `Full path for copies` field with a `Use copied path` button and a
   status sentence; the row replaced all three (I-44/I-45).
 * The storage keeps one entry per folder name and records *how* the path was
-  obtained (`{ path, how }`, `how ∈ copied|completed`); a value written before
-  this change — a bare string, or a `pasted` record from the field's days — is
-  read as `copied`, so no memory is lost.
+  obtained (`{ path, how }`, `how = copied`; a `completed` record reads as no
+  path since I-59); a value written before this change — a bare string, or a
+  `pasted` record from the field's days — is read as `copied`, so no memory is lost.
 * The bug the pick-time capture exposed is fixed with it: a scan commit is built
   from a state snapshot, and when React batched it with the pick's own update the
   snapshot carried the **old** (empty) root name and won — what showed the root
@@ -1937,9 +1936,9 @@ All three now mount one shared control, `ui/FolderBar`:
 * `sel-folder-path` / `v2-folder-path` / `svg-folder-path` — a full-width,
   read-only row directly below the controls: the complete captured path in
   monospace text, whole value in its `title`, selectable like any text. No input,
-  no button, no status line; the three states are the path, the same path plus
-  `completed — check it`, and the folder's name plus `full path not captured`
-  (I-46).
+  no button, no status line; the states are the path, and the folder's name plus
+  `full path not captured` (I-46; the `completed — check it` state was removed
+  with the completion, I-59).
 * Removed with it: `ui/RootPathField` (the field, the `Use copied path` button,
   the note), `ui/userootpath` (the live read lives in `ui/FolderBar`),
   `lib/rootpath.saveRootPath` (the field's own setter, and `PathHow` loses the
@@ -1950,9 +1949,8 @@ All three now mount one shared control, `ui/FolderBar`:
 * The pick-time capture (I-35) is untouched and is now the **only** writer of the
   memory: `ui/pickroot.pickRootWithPath` still reads the clipboard before and
   after the dialog, matches it against the folder that was really picked, and
-  never invents a path. Its toast now says `Folder path captured: …` /
-  `Folder path completed from the copied folder: … — check it`, because the path
-  itself is on screen in the row.
+  never invents a path. Its toast now says `Folder path captured: …`, because
+  the path itself is on screen in the row.
 * Rescan is unchanged in all three tabs (same handlers, labels and testids), and
   copies are unchanged (I-28): the real folder path when one was captured, the
   folder-name fallback otherwise.
@@ -2272,9 +2270,20 @@ guess had already been stored, keyed by the folder's name; and `Rescan`
 re-read only for an **empty** path, so the one button the row names could not
 repair it. One root cause: a guess was treated as a capture.
 
-The fix (I-59): the app's own copy is never completed (only adopted when
-exact); a known root that contains the copied folder and does not contain the
-pick vetoes the completion; `pathForPick` settles before it writes; `Rescan`
-reconsiders a `completed` path in every tab. The completion itself remains,
-flagged, when nothing contradicts it. No new control, no new storage key.
-Design: `archive/2026-10-09-root-path-glued-folders/design.md`.
+The first fix (I-59 as first written): the app's own copy is never completed;
+a known root vetoes a completion its `resolve()` rules out; `Rescan`
+reconsiders a `completed` path. **Not enough** — second report the same day:
+picking `…\\test_process_3\\_split_output` showed `<the glued guess>\\_split_output`.
+The stored guess for `test_process_3` had survived (it was storage, not code),
+the upload tab restored that folder at boot as a known root, and the
+derivation (I-51) — trusted as exact — built on it. A guess that can become a
+base for an exact-looking path is not a flag, it is a lie waiting for a child.
+
+The second fix (I-59 as it stands): **no completion at all** — exact leaf or
+nothing; a stored `completed` record reads as no path (the poison purges
+itself on read); derivation starts only from an exact capture; a capture that
+arrives later (`Rescan`, `Ctrl+V`) names the known handle so the next child
+pick is exact. Removed with it: `knownroots.provenOutside`,
+`copypath.lastCopiedByApp`, `pickroot.believable`, the `completed — check it`
+row state and toast. No new control, no new storage key.
+Design: `archive/2026-10-09-root-path-glued-folders/design.md` (§5 follow-up).

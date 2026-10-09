@@ -135,7 +135,7 @@ beforeEach(async () => {
   window.localStorage.clear();
   stored.clear();
   resetAppStore();
-  saveRootPathInfo(ROOT, FULL, "copied"); // the full path captured at pick time
+  saveRootPathInfo(ROOT, FULL); // the full path captured at pick time
   Object.defineProperty(navigator, "clipboard", {
     value: { writeText: async (t: string) => { copied.push(t); } }, configurable: true,
   });

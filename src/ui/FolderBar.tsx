@@ -63,7 +63,6 @@ export function FolderPathRow({ rootName, testid }: { rootName: string; testid: 
  * row's `title`, so a long path never hides the way out.
  */
 function note(info: RootPath): string {
-  if (info.how === "completed") return "completed — check it";
   if (info.path !== "") return "";
   // both ways out are named, because the row cannot know which one the browser
   // will allow: Rescan re-reads the clipboard, Ctrl+V needs no permission (I-52)
