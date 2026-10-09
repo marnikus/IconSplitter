@@ -24,6 +24,7 @@ import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { minimalJpeg } from "./helpers/minijpeg";
 import { pairFile } from "./helpers/pairfile";
+import { hiResBox, runPostScript } from "./helpers/psrun";
 import { svgVersion } from "./helpers/svgpair";
 import type { UploadRowSource } from "../src/upload/discovery";
 
@@ -305,6 +306,15 @@ describe("runExport — the full package commits per icon", () => {
     expect(eps).toContain("0.071 0.204 0.337"); // #123456, setrgbcolor
     expect(eps).not.toContain("style");
     expect(verifyEps(eps).ok).toBe(true);
+    // and it RUNS (I-61): the subset interpreter executes it with no error and
+    // paints only inside the declared box — the file Illustrator opens
+    const run = runPostScript(eps);
+    expect(run.errors).toEqual([]);
+    const box = hiResBox(eps);
+    expect(run.painted!.urx).toBeLessThanOrEqual(box.urx + 1e-6);
+    expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
+    expect(run.painted!.llx).toBeGreaterThanOrEqual(-1e-6);
+    expect(run.painted!.lly).toBeGreaterThanOrEqual(-1e-6);
   });
 
   it("a rounded <rect> is written to EPS exactly and the automatic fix is recorded, not asked (2026-10-08)", async () => {

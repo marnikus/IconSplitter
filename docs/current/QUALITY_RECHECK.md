@@ -2608,3 +2608,9 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 pre-existing warnings); `npm run quality:changed` GATE PASSED (`rootpath.ts` 23 fns/220, `knownroots.ts` 11/85, `pickroot.ts` 6/98, `rootcapture.ts` 8/84, `copypath.ts` 1/20, `FolderBar.tsx` 5/71). RULE 18: every touched file SHRANK (−16 … −4 lines); no new file.
 * Honesty: no migration rewrites storage — the guess is simply not believed when read; the row then names the way out (Ctrl+Shift+C → Rescan, or Ctrl+V).
 
+## 2026-10-09 — fix(upload): the built-in EPS is an executable PostScript program (I-61, commit A)
+
+* TDD: red first — `tests/upload_epscheck.test.ts` (the reported `concat` typecheck, arity/type per operator, path-before-paint, gsave balance, first-error semantics), `tests/upload_eps.test.ts` (the pinned bare-number line CHANGED to the array form — the old assertion had enshrined the defect; fill-inside-gsave then stroke; unpainted shape emits nothing; `verifyEps` rejects the bare concat by line), `tests/helpers/psrun.ts` (executes the subset, painted extent inside `%%HiResBoundingBox`), `tests/upload_runexport.test.ts` (the committed EPS runs), `tests/upload_epsconv.test.ts` (the converter verifies its own output) — then green.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 pre-existing warnings — the gate caught `checkPostScript` CC 11 and `apply` CC 12 → `runLine`/`atEnd`/`plural` extracted and an `EFFECTS` table replaced the if-chain); `npm run quality:changed` GATE PASSED (`epscheck.ts` 23 fns/136 lines). RULE 18: new file 136 lines; `eps.ts` 299 (+1), `epsdoc.ts` 114 (+1), `builtin.ts` 26.
+* Honesty: the check stops at the first error like the interpreter; it judges the built-in writer's output only (Inkscape's cairo PostScript is outside its vocabulary and keeps the neutral gate).
+

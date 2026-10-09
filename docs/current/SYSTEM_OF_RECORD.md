@@ -558,7 +558,9 @@ opt-in class as Generate SVG → Requesty; design
   Every EPS — whoever wrote it — passes the SAME converter-neutral gate
   before commit (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`,
   a `%%BoundingBox`, `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are
-  the built-in writer's own contract. A helper that is down / an Inkscape
+  the built-in writer's own contract — and since 2026-10-09 `verifyEps` also
+  runs the subset stack checker (`lib/upload/epscheck`, I-61), which the
+  built-in converter applies to its own output before it answers ok. A helper that is down / an Inkscape
   not installed / a conversion refused → the EPS stage fails honestly with
   the reason AND its fix (`run_inkscape_bridge.bat`; "install Inkscape 1.x
   or set INKSCAPE_PATH") → `partial`, SVG/JPEG stay committed. The record
@@ -1029,6 +1031,30 @@ Batch:
   `Rescan` (all three tabs) re-reads for an unknown path, `Ctrl+V` adopts an
   exact leaf, and both hand the capture to the known handle
   (`knownroots.nameKnownRoot`) for the next derivation.
+* **I-61 (the built-in EPS is an executable program, RULE 4/13 — 2026-10-09):**
+  an EPS is PostScript; one invalid instruction and the interpreter stops before
+  the artwork (the report: `-0.75 0 0 -0.75 0 750 concat` → `/typecheck` in
+  Illustrator — `concat` takes ONE array). So: the uprighting CTM is written as
+  `[a b c d tx ty] concat`; a shape with both paints fills inside its own
+  `gsave … grestore` and THEN strokes (PostScript `fill` consumes the current
+  path — the old `… fill … stroke` stroked nothing); a shape that paints
+  nothing emits nothing (an unpainted path is not an object; the DSC box
+  carries the artboard). And the program is CHECKED: `lib/upload/epscheck.
+  checkPostScript` is an operand-stack model of the writer's own subset
+  (numbers, `[…]`, `newpath moveto lineto curveto closepath concat setrgbcolor
+  setlinewidth setdash setlinecap setlinejoin setmiterlimit fill stroke gsave
+  grestore`) — arity, operand types, a current point before `lineto`/`curveto`,
+  a path before `fill`/`stroke`, balanced `gsave`, an empty stack at the end —
+  stopping at the first error like the interpreter and naming its line.
+  `verifyEps` runs it, and the built-in converter runs `verifyEps` on its own
+  output before answering ok, so a non-executable EPS is an EPS-stage failure
+  (`partial`, SVG/JPEG committed), never a file. The converter-neutral commit
+  gate (`verifyEpsDocument`) is unchanged: Inkscape's cairo PostScript uses
+  procedures and dictionaries outside the subset's vocabulary and is not
+  judged by it. Tests execute the subset too (`tests/helpers/psrun.ts`): every
+  fixture runs without error and paints only inside `%%HiResBoundingBox`.
+  No `showpage`, `%%Pages` or preview was added — none is required for an EPS
+  import, and none was the cause.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -2163,8 +2189,9 @@ answers `400` from the provider.
   `%%CreationDate` (the run's clock) → `%%BoundingBox` (integer) →
   `%%HiResBoundingBox` (exact points) → `%%DocumentData: Clean7Bit` →
   `%%LanguageLevel: 3`, then EndComments/Prolog/Setup sections, the uprighting
-  CTM and `%%EOF`. `verifyEps` requires those three markers, so a file that
-  lost them is `partial`, never shipped as EPS 10.
+  CTM (`[a b c d tx ty] concat` — ONE array, I-61) and `%%EOF`. `verifyEps`
+  requires those three markers AND an executable program, so a file that lost
+  them, or one the interpreter would stop in, is `partial`, never shipped.
 * **Two global buttons** (points 3 + 4), both acting on the checked rows:
   * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts the selected
     icons that have NO metadata text yet (a draft is not re-requested); rows

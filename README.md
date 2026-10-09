@@ -87,8 +87,10 @@ that one file anywhere and open it directly in a browser.
 
 ## Inkscape EPS converter (optional)
 
-The **SVG to upload** tab writes EPS with its built-in writer by default. The
-export settings offer a second converter, **Inkscape CLI (local helper)**,
+The **SVG to upload** tab writes EPS with its built-in writer by default (an
+EPS 10 subset document that the app also *executes* through a PostScript stack
+checker before it is written, so a file Illustrator would refuse is reported
+as a partial export instead). The export settings offer a second converter, **Inkscape CLI (local helper)**,
 which hands the prepared SVG to a real Inkscape on your machine — for stocks
 whose EPS checks are stricter than the built-in subset.
 

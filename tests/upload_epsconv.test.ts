@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { writeEps } from "../src/lib/upload/eps";
 import { CONVERTERS, CONVERTER_IDS, converterOf, parseConverterId } from "../src/lib/upload/epsconv/registry";
+import { verifyEps } from "../src/lib/upload/eps";
 import { DEFAULT_BRIDGE_URL, parseBridgeConfig, serializeBridgeConfig } from "../src/lib/upload/epsconv/bridgeconfig";
 import type { ConverterDeps } from "../src/lib/upload/epsconv/types";
 
@@ -52,6 +53,16 @@ describe("the built-in converter IS writeEps", () => {
     expect(viaRegistry.writer).toBe("builtin-subset-1");
     expect(viaRegistry.fixes).toEqual([]);
     expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-subset-1" });
+  });
+
+  it("the built-in converter verifies its own program before it answers ok (I-61)", async () => {
+    const out = await CONVERTERS.builtin.convert(
+      { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="1" y="1" width="4" height="4" fill="#f00" stroke="#000"/></svg>`, background: "#ffffff", title: "x.eps" },
+      deps(() => Promise.reject(new Error("never"))), undefined,
+    );
+    expect(out.ok).toBe(true);
+    expect(out.ok && verifyEps(out.eps).ok).toBe(true);
+    expect(out.ok && out.eps).toContain("] concat");
   });
 
   it("an honest subset failure stays a failure, with its reason", async () => {

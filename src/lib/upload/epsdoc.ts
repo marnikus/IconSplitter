@@ -4,6 +4,7 @@
 // shape walker there stays about SVG, and every fact about what makes the file
 // an **EPS 10 / Illustrator-10-compatible** document lives in ONE place here.
 
+import { checkPostScript } from "./epscheck";
 import { fmt } from "./geom";
 
 /** SVG user units (px at 96 DPI) → PostScript points. */
@@ -56,7 +57,9 @@ export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
     "%%BeginSetup",
     "%%EndSetup",
   ].join("\n");
-  const upright = `${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${fmt(-PX_TO_PT * viewBox[0])} ${fmt(PX_TO_PT * (viewBox[1] + viewBox[3]))} concat`;
+  // ONE array: `concat` takes a matrix operand, never six bare numbers (I-61 —
+  // the bare form raised /typecheck in Illustrator and the file would not open)
+  const upright = `[${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${fmt(-PX_TO_PT * viewBox[0])} ${fmt(PX_TO_PT * (viewBox[1] + viewBox[3]))}] concat`;
   return `${header}\n${upright}\n${body.join("\n")}\n%%EOF\n`;
 }
 
@@ -81,10 +84,14 @@ function dscString(value: string): string {
   return value.replace(/[\\()]/g, (ch) => `\\${ch}`).replace(/\s+/g, " ");
 }
 
-/** Verifies an EPS 10 document — the built-in writer's own contract: header, the DSC markers, bounding box, %%EOF. */
+/**
+ * Verifies an EPS 10 document — the built-in writer's own contract: header, the
+ * DSC markers, bounding box, %%EOF, AND an executable program (I-61): the
+ * subset stack checker names the first instruction PostScript would stop at.
+ */
 export function verifyEps(eps: string): EpsVerification {
   const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker)).map((marker) => `missing ${marker.replace(/:$/, "")}`);
-  return verifyDsc(eps, errors);
+  return verifyDsc(eps, [...errors, ...checkPostScript(eps)]);
 }
 
 /**

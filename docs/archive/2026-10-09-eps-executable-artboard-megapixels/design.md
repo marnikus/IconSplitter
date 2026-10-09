@@ -1,6 +1,6 @@
 # An EPS Illustrator can open · an artboard that IS the artwork · "scale to N MP"
 
-Date: 2026-10-09 · Area: SVG to upload (export pipeline) · Status: DESIGN — no code yet
+Date: 2026-10-09 · Area: SVG to upload (export pipeline) · Status: Commit A (D1, I-61) SHIPPED 2026-10-09 — the executable check lives in the built-in converter (`verifyEps` before it answers ok → EPS-stage failure → `partial`), not in `exportvalidate`, which stays converter-neutral; B and C follow
 
 ## 1. What the user asked for
 

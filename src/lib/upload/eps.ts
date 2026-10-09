@@ -133,14 +133,21 @@ function checkSupported(el: Element): void {
   }
 }
 
-/** One shape: gsave, CTM, path, fill, stroke, grestore. */
+/**
+ * One shape: gsave, CTM, path, fill, stroke, grestore. `fill` CONSUMES the
+ * current path, so a shape with both paints fills inside its own
+ * gsave/grestore and strokes the path that is then still there (I-61). A shape
+ * that paints nothing emits nothing — an unpainted path is not an object.
+ */
 function emitShape(el: Element, ctx: WalkCtx, out: WalkCtx): void {
   const path = shapePathPs(el);
   if (path === null) throw new Unsupported(`<${el.nodeName.toLowerCase()}> uses features outside the EPS subset`);
+  const { fill, stroke } = ctx.paint;
+  if (fill === null && stroke === null) return;
   const m = `${fmt(ctx.ctm.a)} ${fmt(ctx.ctm.b)} ${fmt(ctx.ctm.c)} ${fmt(ctx.ctm.d)} ${fmt(ctx.ctm.e)} ${fmt(ctx.ctm.f)}`;
-  const fill = ctx.paint.fill === null ? "" : ` ${psColor(mix(ctx.paint.fill, ctx.bg, ctx.paint.fillOpacity))} setrgbcolor fill`;
-  const stroke = ctx.paint.stroke === null ? "" : strokePs(ctx.paint, ctx.bg);
-  out.body.push(`gsave\n[${m}] concat\n${path}${fill}${stroke}\ngrestore`);
+  const fillPs = fill === null ? "" : ` ${psColor(mix(fill, ctx.bg, ctx.paint.fillOpacity))} setrgbcolor fill`;
+  const paints = stroke === null ? fillPs : `${fill === null ? "" : ` gsave${fillPs} grestore`}${strokePs(ctx.paint, ctx.bg)}`;
+  out.body.push(`gsave\n[${m}] concat\n${path}${paints}\ngrestore`);
   out.count.shapes++;
   if (isRoundedRect(el)) out.count.roundedRects++;
 }
