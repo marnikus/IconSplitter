@@ -1065,9 +1065,11 @@ Batch:
 * **I-49 (a pair file is read from where it sits, RULE 3/13):** every read of a
   pair file rebases it onto the root doing the reading — `dirPath` is the file's
   own directory, each face's `relPath` is that directory plus the name the file
-  stored, and the id is recomputed exactly as a scan of this root computes it
-  (`lib/pairrebase.rebaseMeta`, applied by `selection/pairstore.loadMetaAt`). A
-  decision therefore follows the folder between roots; a pair file that names an
+  stored, each generated version's `svgPath` is that directory plus the SVG file
+  name it stored (a failure keeps its empty path), and the id is recomputed
+  exactly as a scan of this root computes it (`lib/pairrebase.rebaseMeta`,
+  applied by `selection/pairstore.loadMetaAt`). A decision — and the artwork it
+  approved — therefore follows the folder between roots; a pair file that names an
   id no scan of this root would produce (a legacy record) still answers for that
   id when the legacy file is merged (`pairstore.loadPairDecisions` keeps the id
   each file carried).
