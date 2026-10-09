@@ -169,7 +169,7 @@ describe("runGeneration cost plumbing", () => {
     const metas = new Map();
     const summary = await runGeneration({
       root: dir, apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 1, retries: 0 },
-      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS,
+      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS, regen: { kind: "main" },
       prompt: "p", sources: [source], metas, signal: new AbortController().signal, onEvent: () => undefined,
     });
     expect(summary.saved).toBe(1);
@@ -195,7 +195,7 @@ describe("runGeneration cost plumbing", () => {
     const metas = new Map();
     const summary = await runGeneration({
       root: dir, apiKey: "key", config: { ...DEFAULT_CONFIG, imagesPerRequest: 2, retries: 0 },
-      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS,
+      caps: capsFor(DEFAULT_CONFIG.model), params: DEFAULT_PARAMS, regen: { kind: "main" },
       prompt: "p", sources: [source, court], metas, signal: new AbortController().signal, onEvent: () => undefined,
     });
     expect(summary.saved).toBe(1);

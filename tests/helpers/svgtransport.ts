@@ -9,6 +9,12 @@
 const SVG = (name: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><title>${name}</title>`
   + `<path d="M2 2h20v20H2z"/></svg>`;
 
+/** The text part of a request — what the user's prompt (and any SVG code) said. */
+export function requestPrompt(init: RequestInit): string {
+  const body = JSON.parse(String(init.body)) as { messages: { content: { type?: string; text?: string }[] }[] };
+  return body.messages[0].content.filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n");
+}
+
 export function requestItems(init: RequestInit): string[] {
   const body = JSON.parse(String(init.body)) as { messages: { content: { image_url?: { url: string } }[] }[] };
   const url = body.messages[0].content.find((c) => c.image_url)?.image_url?.url ?? "";
@@ -67,7 +73,7 @@ export function sseResponse(body: ReadableStream<Uint8Array>, requestId: string)
 export type Mode = "json" | "sse" | "silent" | "never";
 
 export interface Transport {
-  calls: { items: string[]; effort: string | null; stream: boolean; usage: boolean }[];
+  calls: { items: string[]; prompt: string; effort: string | null; stream: boolean; usage: boolean }[];
   fetch: typeof fetch;
   /** The manual bodies, one per call, for the tests that drive the stream. */
   streams: ManualStream[];
@@ -84,7 +90,7 @@ export function transport(opts: { failAt?: number; mode?: Mode | ((call: number)
   const doFetch = async (_url: string, init: RequestInit): Promise<Response> => {
     const items = requestItems(init);
     const body = JSON.parse(String(init.body)) as { reasoning_effort?: string; stream?: boolean; stream_options?: { include_usage?: boolean } };
-    calls.push({ items, effort: body.reasoning_effort ?? null, stream: body.stream === true, usage: body.stream_options?.include_usage === true });
+    calls.push({ items, prompt: requestPrompt(init), effort: body.reasoning_effort ?? null, stream: body.stream === true, usage: body.stream_options?.include_usage === true });
     const index = calls.length;
     const mode = typeof opts.mode === "function" ? opts.mode(index) : opts.mode ?? "sse";
     if (mode === "never") {

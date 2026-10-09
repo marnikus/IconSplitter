@@ -17,6 +17,8 @@ import type { DirHandleLike } from "../lib/fs";
 import { log } from "../log/logstore";
 import type { SvgAction } from "./statemodel";
 import { planOf } from "./runplan";
+import { resolveRegen } from "./regenstore";
+import { regenLabelOf } from "../lib/svgregen";
 import { inIdOrder } from "../lib/selectionorder";
 import { runGeneration } from "./runner";
 import { withRunLog } from "./runlog";
@@ -162,11 +164,15 @@ async function drainQueue(ctx: RunCtx): Promise<void> {
 /** One batch leaves for the provider: exactly the path a first run always took. Returns its per-request record. */
 async function startRun(ctx: RunCtx, item: QueueItem): Promise<BatchOutcome[]> {
   const ids = item.ids;
-  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
-  const controller = new AbortController();
-  ctx.refs.abort.current = controller;
-  ctx.dispatch({ type: "running", running: true });
-  ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
+  // Resolved at the moment the run starts, so a saved prompt deleted while this
+  // batch waited is refused honestly instead of sent without its text.
+  const regen = resolveRegen();
+  if (!regen.ok) {
+    ctx.say(regen.problem, true);
+    return [];
+  }
+  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s) · ${regenLabelOf(regen.plan)}`, data: { sources: ids.length } });
+  const controller = beginRun(ctx, ids);
   // The pick order, the same list the confirmation planned and previewed from:
   // the contact sheet this request carries is drawn cell by cell in it, so the
   // picture the user approved IS the picture that leaves (lib/selectionorder).
@@ -174,7 +180,7 @@ async function startRun(ctx: RunCtx, item: QueueItem): Promise<BatchOutcome[]> {
   const summary = await runGeneration({
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
+    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, regen: regen.plan, sources,
     metas: ctx.refs.metas, signal: controller.signal,
     onEvent: withRunLog((event) => onRunEvent(event, ctx)),
   });
@@ -185,6 +191,15 @@ async function startRun(ctx: RunCtx, item: QueueItem): Promise<BatchOutcome[]> {
   await reloadSidecars(ctx.refs, sources, ctx);
   ctx.say(endLine(summary, controller.signal.reason), summary.saved === 0 && summary.problems.length > 0);
   return summary.outcomes;
+}
+
+/** Marks the selection as generating and returns the controller that cancels it. */
+function beginRun(ctx: RunCtx, ids: string[]): AbortController {
+  const controller = new AbortController();
+  ctx.refs.abort.current = controller;
+  ctx.dispatch({ type: "running", running: true });
+  ctx.setRowsFn((rows) => rows.map((r) => (ids.includes(r.source.id) ? { ...r, status: "generating", running: true, error: null } : r)));
+  return controller;
 }
 
 /** The run's last word: its summary, plus what a cancel threw away (I-53). */

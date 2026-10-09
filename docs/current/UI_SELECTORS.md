@@ -669,3 +669,15 @@ Status bar (`upload-statusbar`): `upload-status-counts`
 Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
 settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
 (§O).
+
+## S. Regenerate SVG from — Export settings row (2026-10-09, `src/upload/UploadRegenSetting.tsx`)
+
+Global scope only (the dialog's `upload-settings-open` → no icon id). Choice and
+saved prompt are written at the moment of change (RULE 24).
+
+| Handle | Kind | Notes |
+|---|---|---|
+| `upload-regen` | container | the whole row, label "Regenerate SVG from" |
+| `upload-regen-mode` | `select` (aria-label "Regenerate SVG from") | `main` = "Main prompt + first image" (default), `current-svg` = "Regenerate from current SVG" |
+| `upload-regen-preset` | `select` (aria-label "Saved prompt for regeneration") | shown only in the current-SVG mode; first option "— choose a saved prompt —", then the saved prompt presets by name |
+| `upload-regen-note` | `small` | says what the choice will do, or why it cannot run yet (no pick, a gone or blank prompt, no saved prompts) |
