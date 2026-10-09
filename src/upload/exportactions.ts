@@ -64,7 +64,8 @@ export function useExportActions(ctx: UploadCtx): ExportSlice {
 function copyLocation(c: UploadCtx, id: string): void {
   const row = rowOf(c, id);
   if (row === null) return;
-  void copyFolderText(c.m.rootName, artifactPathOf(row), c.say);
+  const root = { name: c.m.rootName, handle: c.refs.root.current as DirHandleLike | null };
+  void copyFolderText(root, artifactPathOf(row), c.say);
 }
 
 /** The file that decides which folder a copy names: committed first, plan second. */

@@ -1,30 +1,38 @@
 // folderbar.test.tsx — RULE 8/10/12: ONE folder control for every tab (I-44),
 // and its read-only path row (I-46). The button says "Open folder" in every
 // state, carries the green class whose hover/active/focus states live in the
-// stylesheet, and the row below it is plain text: the complete captured path
-// when there is one, the folder's name plus an honest note when there is not,
-// and never an input. Nothing here re-implements a component — it drives the
-// shared one the three toolbars mount.
+// stylesheet, and the row below it is plain text: the path PROVEN for that
+// folder's handle when there is one, the folder's name plus an honest note when
+// there is not, and never an input. Nothing here re-implements a component — it
+// drives the shared one every toolbar mounts.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saveRootPathInfo, ROOT_PATH_KEY } from "../src/lib/rootpath";
+import { rememberPath, resetPathMemory, type PathStore } from "../src/lib/pathmemory";
 import { FolderPathRow, OpenFolderButton } from "../src/ui/FolderBar";
+import { FakeDir } from "./helpers/fakefs";
+import type { DirHandleLike } from "../src/lib/fs";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ROOT = "split_root";
 const FULL = "F:\\Stocks 2026\\icons\\split_root";
+const emptyStore = (): PathStore => ({ read: async () => [], write: async () => undefined });
 
 const css = () => readFileSync(join(process.cwd(), "src/index.css"), "utf8");
 
 let host: HTMLDivElement;
 let ui: Root | null = null;
+let folder: FakeDir;
+
+const folderRef = (handle: DirHandleLike | null = folder) => ({ name: handle?.name ?? "", handle });
 
 beforeEach(() => {
   localStorage.clear();
+  resetPathMemory(emptyStore());
+  folder = new FakeDir(ROOT);
   host = document.createElement("div");
   document.body.appendChild(host);
 });
@@ -70,9 +78,9 @@ describe("OpenFolderButton — the one folder control", () => {
 });
 
 describe("FolderPathRow — the full path, in one full-width read-only row", () => {
-  it("shows the captured path as text, word for word, with nothing to click or type", async () => {
-    saveRootPathInfo(ROOT, `"${FULL}\\"`); // Explorer's quotes and trailing slash
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+  it("shows the proven path as text, word for word, with nothing to click or type", async () => {
+    await act(async () => { await rememberPath(folder, `"${FULL}\\"`); }); // Explorer's quotes
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     const row = q("[data-testid=x-folder-path]");
     expect(row).not.toBeNull();
     expect(row?.className).toContain("folder-path");
@@ -83,29 +91,37 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
   });
 
   it("names the folder and says when no full path was captured", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain(ROOT);
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
     expect(q("[data-testid=x-folder-path]")?.querySelector("input, button")).toBeNull();
   });
 
-  it("shows a stored `completed` guess (an older build's) as NOT captured — never the guess", async () => {
-    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: FULL, how: "completed" } }));
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
-    expect(text("[data-testid=x-folder-path]")).not.toContain(FULL);
+  it("never shows the path of another folder that only shares the name (I-63)", async () => {
+    // the reported bug, on screen: a stale path captured for a same-named folder
+    await act(async () => { await rememberPath(new FakeDir(ROOT), "F:\\somewhere\\else\\split_root"); });
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
+    expect(text("[data-testid=x-folder-path]")).not.toContain("somewhere");
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
   });
 
+  it("shows the path a captured folder proves for the one BELOW it", async () => {
+    const child = await folder.getDirectoryHandle("2026-10", { create: true });
+    await act(async () => { await rememberPath(folder, FULL); });
+    await mount(<FolderPathRow folder={folderRef(child)} testid="x-folder-path" />);
+    expect(text("[data-testid=x-folder-path] code")).toBe(`${FULL}\\2026-10`);
+  });
+
   it("renders nothing while no folder is loaded", async () => {
-    await mount(<FolderPathRow rootName="" testid="x-folder-path" />);
+    await mount(<FolderPathRow folder={{ name: "", handle: null }} testid="x-folder-path" />);
     expect(q("[data-testid=x-folder-path]")).toBeNull();
     expect(host.textContent).toBe("");
   });
 
   it("follows the memory live: a capture in any tab appears without a reload (I-36/RULE 24)", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
-    await act(async () => { saveRootPathInfo(ROOT, FULL); });
+    await act(async () => { await rememberPath(folder, FULL); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
   });
@@ -122,7 +138,7 @@ describe("the removed folder chrome stays removed", () => {
 
 describe("FolderPathRow — the note says what to do (I-52)", () => {
   it("names the Explorer copy and the Rescan that captures it when there is no path", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     const note = q("[data-testid=x-folder-path] em") as HTMLElement;
     expect(note.textContent).toContain("Ctrl+Shift+C");
     expect(note.textContent).toContain("Rescan");
@@ -130,22 +146,22 @@ describe("FolderPathRow — the note says what to do (I-52)", () => {
   });
 
   it("keeps the plain note when a path IS known", async () => {
-    saveRootPathInfo(ROOT, FULL);
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await act(async () => { await rememberPath(folder, FULL); });
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(q("[data-testid=x-folder-path] em")?.textContent).toBe("");
     expect((q("[data-testid=x-folder-path]") as HTMLElement).title).toBe(FULL);
   });
 
   it("fills in from the user's own Ctrl+V, with no picker and no reload", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     await act(async () => { pasteInto(document.body, `"${FULL}"`); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
   });
 
   it("adds no control — the bar is still one button and one line of text", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow folder={folderRef()} testid="x-folder-path" />);
     expect(host.querySelectorAll("button, input, textarea")).toHaveLength(0);
   });
 });
@@ -156,4 +172,3 @@ function pasteInto(target: Element, text: string): void {
   event.clipboardData = { getData: (type: string) => (type === "text/plain" ? text : "") };
   target.dispatchEvent(event);
 }
-

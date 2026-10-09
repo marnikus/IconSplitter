@@ -144,7 +144,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
     const c = latest.current;
     // before any await: the click's own gesture is what allows the read (I-52)
     const root = c.refs.root.current as DirHandleLike | null;
-    void retryCapture(root?.name ?? "").then((captured) => { if (captured !== null) c.say(captured); });
+    void retryCapture(root).then((captured) => { if (captured !== null) c.say(captured); });
     c.loadAll();
   }, []);
   return { chooseRoot, rescan };

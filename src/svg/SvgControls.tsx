@@ -18,12 +18,15 @@ import type { SvgListFilter, SvgSort } from "../lib/svglist";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import SvgSampling from "./SvgSampling";
 import SourceLine, { type SvgCounts } from "./SourceLine";
+import type { DirHandleLike } from "../lib/fs";
 import type { Discovery } from "./sources";
 
 export type { SvgCounts } from "./SourceLine";
 
 export interface SvgControlsProps {
   rootName: string;
+  /** The handle behind the name — the row proves its path from it (I-63). */
+  rootHandle: DirHandleLike | null;
   discovery: Discovery | null;
   busy: string | null;
   counts: SvgCounts;
@@ -61,7 +64,7 @@ export interface SvgControlsProps {
 export default function SvgControls(p: SvgControlsProps) {
   return (
     <section className="svg-controls" aria-label="SVG generation controls">
-      <SourceLine rootName={p.rootName} discovery={p.discovery} busy={p.busy} counts={p.counts}
+      <SourceLine rootName={p.rootName} rootHandle={p.rootHandle} discovery={p.discovery} busy={p.busy} counts={p.counts}
         onChooseRoot={p.onChooseRoot} onRescan={p.onRescan} />
       <div className="svg-toolbar">
         <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />

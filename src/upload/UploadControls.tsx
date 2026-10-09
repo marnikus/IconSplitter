@@ -23,9 +23,12 @@ import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import type { DirHandleLike } from "../lib/fs";
 
 export interface UploadControlsProps {
   rootName: string;
+  /** The handle behind the name — the row proves its path from it (I-63). */
+  rootHandle: DirHandleLike | null;
   discovery: UploadDiscovery | null;
   busy: string | null;
   counts: UploadCounts;
@@ -92,7 +95,7 @@ function SourceLine({ p }: { p: UploadControlsProps }) {
           <Chip value={p.counts.stale} label="stale" testid="upload-count-stale" />
         </div>
       </div>
-      <FolderPathRow rootName={p.rootName} testid="upload-folder-path" />
+      <FolderPathRow folder={{ name: p.rootName, handle: p.rootHandle }} testid="upload-folder-path" />
     </>
   );
 }

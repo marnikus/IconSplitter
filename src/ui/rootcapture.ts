@@ -6,47 +6,46 @@
 // was blocked, or the copy happened after the pick — these two channels recover
 // it without another trip through the folder dialog:
 //
-//   * `retryCapture`   — what the existing `Rescan` does first: one more read,
-//                        adopted only on an EXACT name match.
+//   * `retryCapture`    — what the existing `Rescan` does first: one more read,
+//                         adopted only on an EXACT name match.
 //   * `bindPasteCapture` — the user's own Ctrl+V anywhere outside a text field.
-//                        A paste needs no permission and works inside iframes,
-//                        so it is the way out when the browser blocks the
-//                        clipboard API.
+//                         A paste needs no permission and works inside iframes,
+//                         so it is the way out when the browser blocks the
+//                         clipboard API.
 //
-// Both obey one rule (RULE 13/4): an exact leaf match or nothing. A pasted
-// parent folder, a word, a URL or markup is ignored and writes nothing, and no
-// read happens without the user's own gesture — the clipboard is never polled.
+// Both obey one rule (RULE 13/4): an exact leaf match or nothing, recorded for
+// the HANDLE on screen (I-63/D4) — so a capture repairs the folder it was made
+// for, can replace a wrong one, and never reaches a folder that merely shares
+// the name. And no read happens without the user's own gesture.
 
-import { readClipboardText } from "../lib/clipboardpath";
-import { loadRootPathInfo, pathFromCopied, saveRootPathInfo, type RootPathInfo } from "../lib/rootpath";
-import { nameKnownRoot } from "./knownroots";
+import { adoptCopiedText, readClipboardText } from "../lib/clipboardpath";
+import type { DirHandleLike } from "../lib/fs";
+import { pathFor, type FolderRef, type RootPathInfo } from "../lib/pathmemory";
 
 /**
- * The path a pasted (or re-read) text names for `rootName`: the exact folder it
+ * The path a pasted (or re-read) text names for this folder: the exact folder it
  * names, else null — the same rule as the pick (I-59: nothing is completed).
  */
-export function captureFromPaste(text: string, rootName: string): RootPathInfo | null {
-  if (rootName === "" || text === "") return null;
-  const info = pathFromCopied(text, rootName);
-  if (info.path === "") return null;
-  const saved = saveRootPathInfo(rootName, info.path);
-  nameKnownRoot(rootName, saved.path); // the next pick inside this folder derives from it (I-51)
-  return saved;
+export async function captureFromPaste(text: string, handle: DirHandleLike | null): Promise<RootPathInfo | null> {
+  if (handle === null || text === "") return null;
+  const info = await adoptCopiedText(handle, text);
+  return info.path === "" ? null : info;
 }
 
 /**
- * One more capture attempt for a root whose path is still unknown (an older
- * build's stored guess counts as unknown, I-59) — the line `Rescan` says when
- * it lands, null when there is nothing to do or nothing to report. Only a real
- * user gesture may read the clipboard (I-52), which is what keeps a scan at
- * boot from touching it.
+ * One more capture attempt for the folder on screen — the line `Rescan` says
+ * when it lands, null when there is nothing to do or nothing to report. It reads
+ * while the folder has no exact capture of its own: an unknown path, or one the
+ * app could only DERIVE from a captured relative, which a real copy upgrades
+ * (I-63/D4). Only a user gesture may read the clipboard (I-52), which is what
+ * keeps a scan at boot from touching it.
  */
-export async function retryCapture(rootName: string): Promise<string | null> {
-  if (rootName === "" || loadRootPathInfo(rootName).path !== "") return null;
+export async function retryCapture(handle: DirHandleLike | null): Promise<string | null> {
+  if (handle === null || (await pathFor(handle)).how === "copied") return null;
   if (!byUserGesture()) return null;
   const read = await readClipboardText();
   if (read.state !== "text") return null;
-  const info = captureFromPaste(read.text, rootName);
+  const info = await captureFromPaste(read.text, handle);
   return info === null ? null : `Folder path captured: ${info.path}`;
 }
 
@@ -61,16 +60,17 @@ function byUserGesture(): boolean {
 }
 
 /**
- * Adopts a pasted folder path for the root on screen. Returns its unsubscribe.
+ * Adopts a pasted folder path for the folder on screen. Returns its unsubscribe.
  * A paste inside a text field is left alone — the app's own inputs keep their
  * text — and a paste that does not name this folder is silently ignored.
  */
-export function bindPasteCapture(rootName: string): () => void {
-  if (typeof document === "undefined" || rootName === "") return () => undefined;
+export function bindPasteCapture(folder: FolderRef): () => void {
+  const { name, handle } = folder;
+  if (typeof document === "undefined" || handle === null || name === "") return () => undefined;
   const onPaste = (event: Event): void => {
     if (isField(event.target)) return;
     const data = (event as ClipboardEvent).clipboardData;
-    captureFromPaste(data?.getData("text/plain") ?? "", rootName);
+    void captureFromPaste(data?.getData("text/plain") ?? "", handle);
   };
   document.addEventListener("paste", onPaste);
   return () => document.removeEventListener("paste", onPaste);

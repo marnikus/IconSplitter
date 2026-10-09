@@ -28,6 +28,15 @@ export interface DirHandleLike {
   entries(): AsyncIterable<[string, DirHandleLike | FileHandleLike]>;
   /** Real FS handles remove files and (with `recursive`) whole subfolders. */
   removeEntry?(name: string, opts?: { recursive?: boolean }): Promise<void>;
+  /**
+   * Real FS handles answer the segments from here down to a folder of the same
+   * file system (`[]` for this folder itself) and reject one they cannot place.
+   * Optional: a fake or an older browser may have neither identity method, and
+   * `lib/fsrelate` reads a missing one as "no proof", never as "not related".
+   */
+  resolve?(possible: DirHandleLike): Promise<string[] | null>;
+  /** Real FS handles say whether two handles name the same folder. */
+  isSameEntry?(other: DirHandleLike): Promise<boolean>;
 }
 
 /** Recursively snapshots a directory into a TreeNode (files get size/mtime). */

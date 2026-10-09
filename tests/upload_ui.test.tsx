@@ -20,8 +20,8 @@ import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
-import { ROOT_PATH_KEY, saveRootPathInfo } from "../src/lib/rootpath";
-import { clearKnownRoots } from "../src/ui/knownroots";
+import { LEGACY_NAME_KEY, rememberPath } from "../src/lib/pathmemory";
+import { freshPathMemory } from "./helpers/pathmem";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { BinDir, BinFile } from "./helpers/binfakefs";
@@ -353,7 +353,7 @@ function fileText(root: BinDir, relPath: string): string {
 beforeEach(() => {
   localStorage.clear();
   stored.clear();
-  clearKnownRoots();
+  freshPathMemory(); // the captured paths are per handle; a test must not inherit one
   resetAppStore();
   resetLogStore();
   forgetRestoreNote(); // every test gets a fresh page load
@@ -432,7 +432,7 @@ describe("the Full path row — never a previous root with the new name appended
     // "copy folder path" of an export folder deep inside the previous root
     const root = makeRoot();
     Object.assign(root, { resolve: async () => null }); // the new pick is NOT below this root
-    saveRootPathInfo(root.name, OLD);
+    await rememberPath(root, OLD); // captured for THIS handle, not for a name
     await mount(root);
     expect(text("[data-testid=upload-folder-path] code")).toBe(OLD);
     readClipboard(`${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export`);
@@ -443,21 +443,42 @@ describe("the Full path row — never a previous root with the new name appended
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
   });
 
-  itSlow("a stored guess for the restored root is shown as 'not captured' and never glued onto a child pick", async () => {
-    // the second report (2026-10-09): an older build had stored the glued guess
-    // for the root; the user then picked its `_split_output`
+  itSlow("the name-keyed store an older build left behind is never read, and never glued onto a child pick", async () => {
+    // the second report (2026-10-09): an older build had stored a glued guess
+    // under the folder's NAME; the user then picked its `_split_output`, and the
+    // row answered with the old path plus the new name
     const root = makeRoot();
     const glued = `${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\${root.name}`;
-    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [root.name]: { path: glued, how: "completed" } }));
+    localStorage.setItem(LEGACY_NAME_KEY, JSON.stringify({ [root.name]: { path: glued, how: "completed" } }));
     Object.assign(root, { resolve: async () => ["_split_output"] });
     await mount(root);
     expect(text("[data-testid=upload-folder-path] code")).toBe(root.name);
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("test_processing_2");
     readClipboard("");
     usePicker(async () => new BinDir("_split_output"));
     await click("[data-testid=upload-open-folder]");
     await waitFor(() => text("[data-testid=upload-folder-path] code") === "_split_output", "the child's row");
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("export\\_split_output");
+  });
+
+  itSlow("a pick ONE LEVEL UP from a captured folder is proved without the clipboard (Failure B, I-63)", async () => {
+    // the second report (2026-10-09): the pick shared a root with a folder the
+    // app had already named and differed by one level — it must resolve itself
+    const parent = makeRoot();
+    const child = new BinDir("_split_output");
+    Object.assign(child, { resolve: async () => null }); // the child cannot see upward
+    Object.assign(parent, { resolve: async () => ["_split_output"] }); // the parent can
+    await rememberPath(child, `${SINGLE}\\${parent.name}\\_split_output`);
+    readClipboard(""); // nothing on the clipboard: the proof is the platform's
+    await mount(parent);
+    await waitFor(
+      () => text("[data-testid=upload-folder-path] code") === `${SINGLE}\\${parent.name}`,
+      "the parent's own path, derived from its captured child",
+    );
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("_split_output");
   });
 
   itSlow("Rescan captures the exact path Explorer copied, and the next child pick derives from it", async () => {

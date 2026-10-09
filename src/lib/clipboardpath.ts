@@ -3,16 +3,18 @@
 // lives (only its name), so the one place the real path exists is what the user
 // copied in Explorer — "Copy as path" (Ctrl+Shift+C) puts it on the clipboard.
 // This module reads that, matches it against the folder that was really picked
-// (lib/rootpath.pathFromCopied), remembers it, and never invents one (I-35). It
-// holds no UI: ui/pickroot and ui/rootcapture are the callers, and ui/FolderBar
-// shows the result (I-45).
+// (lib/rootpath.pathFromCopied) and remembers it for THAT HANDLE (I-63) — never
+// for its name, and never inventing one (I-35). It holds no UI: ui/pickroot and
+// ui/rootcapture are the callers, and ui/FolderBar shows the result (I-45).
 //
 // The read answers with a STATE, not just text (I-52): "nothing was copied" and
 // "the browser blocked the read" need different words on screen and a different
 // way out for the user (Rescan vs. a paste), so the caller can no longer see
 // both of them as one empty string.
 
-import { pathFromCopied, saveRootPathInfo, type RootPathInfo } from "./rootpath";
+import type { DirHandleLike } from "./fs";
+import { rememberPath, UNKNOWN_PATH, type RootPathInfo } from "./pathmemory";
+import { pathFromCopied } from "./rootpath";
 
 /** What the clipboard read produced — why it is empty, when it is. */
 export type ClipState = "text" | "empty" | "blocked" | "unsupported";
@@ -35,13 +37,13 @@ export async function readClipboardText(): Promise<ClipRead> {
 }
 
 /**
- * Remembers the path of the folder the user picked, from text the caller already
- * has (the pre-dialog read). Returns what the memory now holds — `{ "", null }`
- * when the clipboard named nothing usable, which is no error: the user's real
- * goal (scanning the folder) never depends on the capture.
+ * The one way clipboard text becomes a capture: it names this folder exactly
+ * (its leaf IS the folder's name), and it is recorded for this handle. Anything
+ * else — a parent folder, another folder, markup, a URL, a word, a file — is
+ * refused and records nothing (I-35/I-39/I-59). A refusal is not an error: the
+ * user's real goal (scanning the folder) never depends on the capture.
  */
-export function adoptCopiedText(folderName: string, copied: string): RootPathInfo {
-  const info = pathFromCopied(copied, folderName);
-  if (info.path === "") return { path: "", how: null };
-  return saveRootPathInfo(folderName, info.path);
+export async function adoptCopiedText(handle: DirHandleLike, copied: string): Promise<RootPathInfo> {
+  if (pathFromCopied(copied, handle.name) === "") return UNKNOWN_PATH;
+  return rememberPath(handle, copied);
 }

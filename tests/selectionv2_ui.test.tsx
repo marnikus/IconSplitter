@@ -10,7 +10,8 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { rememberPath } from "../src/lib/pathmemory";
+import { freshPathMemory } from "./helpers/pathmem";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
@@ -73,6 +74,7 @@ function makeBatchRoot(): FakeDir {
 describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
+    freshPathMemory(); // the captured paths are per handle; a test must not inherit one
     resetAppStore(); // no checked rows / filters leaking between tests
     await dropDb();
   });
@@ -142,11 +144,12 @@ describe("Selection V2 panel", () => {
   });
 
   it("shows the full path in its own row as soon as a pick captures it, without a reload", async () => {
-    const { el } = await mount(makeRoot(), "F:\\Stocks 2026\\icons\\split_root\\");
+    const root = makeRoot();
+    const { el } = await mount(root, "F:\\Stocks 2026\\icons\\split_root\\");
     const before = rows(el).length;
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
     // a capture in another tab reaches this row live (I-36/RULE 24)
-    await act(async () => { saveRootPathInfo("split_root", "D:\\backup\\split_root"); });
+    await act(async () => { await rememberPath(root, "D:\\backup\\split_root"); });
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("D:\\backup\\split_root");
     expect(rows(el).length).toBe(before); // the list is untouched by a path capture
   });

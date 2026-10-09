@@ -10,7 +10,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { serializePairMeta } from "../src/lib/pairmeta";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { rememberPath } from "../src/lib/pathmemory";
+import { freshPathMemory } from "./helpers/pathmem";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -110,6 +111,7 @@ async function waitForRow(): Promise<void> {
 
 async function mount(root: FakeDir): Promise<void> {
   stored.set("__svg__", { source: root });
+  await rememberPath(root, FULL); // the full path captured at pick time, for this handle
   await act(async () => {
     ui = createRoot(host);
     ui.render(<HistoryProvider><Host><SvgPanel /></Host></HistoryProvider>);
@@ -135,7 +137,7 @@ beforeEach(async () => {
   window.localStorage.clear();
   stored.clear();
   resetAppStore();
-  saveRootPathInfo(ROOT, FULL); // the full path captured at pick time
+  freshPathMemory(); // the captured paths are per handle; a test must not inherit one
   Object.defineProperty(navigator, "clipboard", {
     value: { writeText: async (t: string) => { copied.push(t); } }, configurable: true,
   });

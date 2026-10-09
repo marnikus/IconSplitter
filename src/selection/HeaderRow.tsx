@@ -5,9 +5,12 @@ import { counters } from "./state";
 import type { ViewPair } from "../lib/reviewfilter";
 import { scopeText, type ScanScope } from "../lib/splitscope";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import type { DirHandleLike } from "../lib/fs";
 
 export interface HeaderProps {
   rootName: string;
+  /** The handle behind the name — the row proves its path from it (I-63). */
+  rootHandle: DirHandleLike | null;
   scope: ScanScope;
   pairs: ViewPair[];
   chooseRoot: () => void;
@@ -31,7 +34,7 @@ export default function HeaderRow(p: HeaderProps) {
         <Count n={c.declined} label="declined" cls="text-rose-300" />
         <HelpBtn help={help} setHelp={setHelp} />
       </div>
-      <FolderPathRow rootName={p.rootName} testid="sel-folder-path" />
+      <FolderPathRow folder={{ name: p.rootName, handle: p.rootHandle }} testid="sel-folder-path" />
     </section>
   );
 }

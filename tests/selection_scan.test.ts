@@ -16,8 +16,8 @@ import { pairFile } from "./helpers/pairfile";
 import { dropDb } from "./helpers/idb";
 import { SELECTION_HANDLE_KEY } from "../src/selection/offline";
 import { saveHandles } from "../src/batch/store";
-import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
-import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
+import { pathFor, rememberPath } from "../src/lib/pathmemory";
+import { freshPathMemory } from "./helpers/pathmem";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot real (and the
 // handle it restores is the very object the test picked, as in the browser).
@@ -305,7 +305,8 @@ class OneShotGate extends FakeFile {
 beforeEach(async () => {
   await dropDb();
   setAppState({});
-  localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  freshPathMemory(); // the captured paths are per handle; a test must not inherit one
+  localStorage.clear();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -319,7 +320,7 @@ describe("Rescan captures a path the pick missed (I-52)", () => {
     const h = harness(root);
     stubClipboard(async () => "F:\\work\\split_root");
     await rescan(h.ctx, h.set, h.say);
-    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect((await pathFor(root)).path).toBe("F:\\work\\split_root");
     expect(h.sayings.join(" | ")).toContain("Folder path captured: F:\\work\\split_root");
     // a second rescan has nothing to capture and stays quiet about it
     h.sayings.length = 0;
@@ -332,21 +333,20 @@ describe("Rescan captures a path the pick missed (I-52)", () => {
     const h = harness(root);
     stubClipboard(async () => "F:\\work\\icons testing");
     await rescan(h.ctx, h.set, h.say);
-    expect(loadRootPath(root.name)).toBe("");
+    expect((await pathFor(root)).path).toBe("");
   });
 });
 
 describe("the restored folder is remembered at boot (I-51)", () => {
   it("names a pick inside it exactly, with no clipboard involved", async () => {
     const root = makeBatchRoot();
-    saveRootPathInfo(root.name, "F:\\work\\test_processing");
+    await rememberPath(root, "F:\\work\\test_processing");
     await saveHandles(SELECTION_HANDLE_KEY, { source: root });
     const h = harness(root);
     await boot(h.ctx, h.set);
     const out = root.children.get("_split_output") as FakeDir;
     // the folder the app already has a path for answers where the next pick lives
-    expect(await deriveRootPath(out)).toBe("F:\\work\\test_processing\\_split_output");
-    clearKnownRoots();
+    expect((await pathFor(out)).path).toBe("F:\\work\\test_processing\\_split_output");
   });
 });
 

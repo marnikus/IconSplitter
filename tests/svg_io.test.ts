@@ -26,8 +26,8 @@ import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
-import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
-import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
+import { pathFor, rememberPath } from "../src/lib/pathmemory";
+import { freshPathMemory } from "./helpers/pathmem";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 
@@ -127,7 +127,8 @@ function refs(root: FakeDir | null = null) {
 beforeEach(async () => {
   await dropDb();
   setAppState({});
-  localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  freshPathMemory(); // the captured paths are per handle; a test must not inherit one
+  localStorage.clear();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -299,22 +300,21 @@ describe("scanSources", () => {
     const s = setters();
     stubClipboardRead(async () => "F:\\work\\split_root");
     await scanSources(refs(root), s.api);
-    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect((await pathFor(root)).path).toBe("F:\\work\\split_root");
     expect(s.out.said.join(" ")).toContain("Folder path captured");
   });
 
   it("remembers the restored folder at boot, so a pick inside it is named exactly (I-51)", async () => {
     const root = makeRoot();
     root.children.set("2026-10", new FakeDir("2026-10")); // a folder inside it, not yet picked
-    saveRootPathInfo(root.name, "F:\\work\\split_root");
+    await rememberPath(root, "F:\\work\\split_root");
     await rememberRoot(root);
     const r = refs();
     await bootSources(r, { setRootName: () => {}, loadAll: () => {}, refreshKey: () => {} });
     // the folder that was just restored reports where a pick inside it lives —
     // no clipboard involved
     const child = root.children.get("2026-10") as FakeDir;
-    expect(await deriveRootPath(child)).toBe("F:\\work\\split_root\\2026-10");
-    clearKnownRoots();
+    expect((await pathFor(child)).path).toBe("F:\\work\\split_root\\2026-10");
   });
 
   it("remembers and restores the picked folder", async () => {

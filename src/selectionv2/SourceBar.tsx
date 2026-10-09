@@ -7,10 +7,13 @@ import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
 import { scopeText, type ScanScope } from "../lib/splitscope";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import type { DirHandleLike } from "../lib/fs";
 import SegButton from "./SegButton";
 
 export interface SourceBarProps {
   rootName: string;
+  /** The handle behind the name — the row proves its path from it (I-63). */
+  rootHandle: DirHandleLike | null;
   scope: ScanScope;
   pairs: ViewPair[];
   mode: ViewMode;
@@ -35,7 +38,7 @@ export default function SourceBar(p: SourceBarProps) {
           <Summary c={counters(p.pairs)} />
         </div>
       </div>
-      <FolderPathRow rootName={p.rootName} testid="v2-folder-path" />
+      <FolderPathRow folder={{ name: p.rootName, handle: p.rootHandle }} testid="v2-folder-path" />
     </>
   );
 }

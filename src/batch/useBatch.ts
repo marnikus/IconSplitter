@@ -58,6 +58,8 @@ export function useBatch() {
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
   return {
     s, say,
+    /** The picked folder: the copy action proves its full path from it (I-63). */
+    rootRef: ctx.root,
     ...useCoreActions(ctx, setS, say),
     ...useViewActions(ctx, setS),
     ...usePresetActions(ctx, setS, say),

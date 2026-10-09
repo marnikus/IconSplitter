@@ -29,7 +29,27 @@ export class FakeFile implements FileHandleLike {
 export class FakeDir implements DirHandleLike {
   kind = "directory" as const;
   children = new Map<string, FakeDir | FakeFile>();
+  /** Other handles that name THIS folder (another pick session, a restore). */
+  private aliases = new Set<unknown>();
   constructor(public name: string) {}
+
+  /**
+   * A SECOND handle for this same folder — what another pick session, or a
+   * restore from IndexedDB, hands back. Both handles answer `isSameEntry` for
+   * each other, as the platform does for one entry (I-63: a handle, not a name,
+   * is what proves a captured path belongs to the folder on screen).
+   */
+  alias(): DirHandleLike {
+    const twin = {
+      kind: "directory", name: this.name,
+      resolve: async () => null,
+      // an arrow keeps `this` the folder, so the twin and the folder answer for
+      // each other exactly as two handles of one entry do
+      isSameEntry: async (other: unknown) => other === twin || other === (this as unknown),
+    };
+    this.aliases.add(twin);
+    return twin as unknown as DirHandleLike;
+  }
   async getDirectoryHandle(n: string, opts?: { create?: boolean }): Promise<FakeDir> {
     const c = this.children.get(n);
     if (c instanceof FakeDir) return c;
@@ -65,6 +85,14 @@ export class FakeDir implements DirHandleLike {
   async resolve(possible: DirHandleLike): Promise<string[] | null> {
     const hit = walkTo(this, possible as unknown as FakeDir | FakeFile, []);
     return hit;
+  }
+  /**
+   * The real `isSameEntry`: two handles name the same folder. For a fake the
+   * object IS the folder, so identity is the answer (I-63 — a handle, not a
+   * name, is what proves a captured full path belongs to the folder on screen).
+   */
+  async isSameEntry(other: DirHandleLike): Promise<boolean> {
+    return (other as unknown) === (this as unknown) || this.aliases.has(other);
   }
 }
 

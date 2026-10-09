@@ -28,7 +28,7 @@ export default function UploadPanel() {
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
-      <UploadControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={g.counts}
+      <UploadControls rootName={g.rootName} rootHandle={rootRef.current} discovery={g.discovery} busy={g.busy} counts={g.counts}
         gemini={g.gemini} modelCheck={g.modelCheck} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
         filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
         promptPanel={promptPanel(g)}

@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
-import { loadRootPath } from "../src/lib/rootpath";
+import { pathFor, rememberPath } from "../src/lib/pathmemory";
+import { freshPathMemory } from "./helpers/pathmem";
 import { saveCatalog } from "../src/svg/catalog";
 import { clearApiKey } from "../src/svg/keystore";
 import SvgPanel from "../src/svg/SvgPanel";
@@ -199,6 +200,7 @@ afterEach(() => {
 
 beforeEach(async () => {
   await dropDb();
+  freshPathMemory(); // the captured paths are per handle; a test must not inherit one
   // dropDb() empties IndexedDB but not the key store's session copy, and the
   // config/effort/prefs live in localStorage: without both resets a test that
   // saves a key or picks a tier would leak into the next one (RULE 8).
@@ -257,7 +259,7 @@ describe("the folder control and the path row", () => {
     stubClipboard(`"F:\\Stocks 2026\\icons\\split_root\\"`);
     try {
       await mountPick(root); // a hand pick, with the path on the clipboard
-      expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons\\split_root");
+      expect((await pathFor(root)).path).toBe("F:\\Stocks 2026\\icons\\split_root");
       expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons\\split_root");
       expect(text("[data-testid=svg-toast]")).toContain("Folder path captured: F:\\Stocks 2026\\icons\\split_root");
       await act(async () => { ui.unmount(); }); // a restart: the row reads the memory
@@ -266,6 +268,24 @@ describe("the folder control and the path row", () => {
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }
+  });
+
+  it("never shows a path captured for ANOTHER folder that only shares the name (I-63)", async () => {
+    // Failure A, in the tab it was reported in: the app had a path for a folder
+    // called `split_root` somewhere else, so a name-keyed memory answered with
+    // it for every folder of that name
+    const root = await makeRoot();
+    const OLD = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\export";
+    await rememberPath(new FakeDir(root.name), OLD); // a DIFFERENT folder, same name
+    await mount(root);
+    const row = text("[data-testid=svg-folder-path]");
+    expect(row).toContain("split_root");
+    expect(row).toContain("full path not captured");
+    expect(row).not.toContain("test_processing_2");
+    // one capture for THIS folder is all it takes to fill the row in
+    await act(async () => { await rememberPath(root, "F:\\Stocks 2026\\icons\\split_root"); });
+    expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons\\split_root");
+    expect(text("[data-testid=svg-folder-path]")).not.toContain("full path not captured");
   });
 
   it("names the folder and says when no full path was captured (RULE 4)", async () => {

@@ -28,7 +28,7 @@ export default function SelectionPanel() {
   if (!api.supported) return <UnsupportedNote onPick={api.chooseRoot} />;
   return (
     <div className="space-y-3">
-      <HeaderRow rootName={api.s.rootName} scope={api.s.scope} pairs={api.s.pairs}
+      <HeaderRow rootName={api.s.rootName} rootHandle={api.rootRef.current} scope={api.s.scope} pairs={api.s.pairs}
         chooseRoot={api.chooseRoot} rescan={api.rescan} />
       <Banners api={api} />
       {api.s.rootName !== "" && (
@@ -60,7 +60,8 @@ function MainGrid({ api, search, setSearch, thumbFor }: {
 }) {
   const selected = api.visible.find((v) => v.pairId === api.s.selectedId)
     ?? api.s.pairs.find((v) => v.pairId === api.s.selectedId) ?? null;
-  const copyPath = (relPath: string) => { void copyFolderText(api.s.rootName, relPath, api.say); };
+  const root = { name: api.s.rootName, handle: api.rootRef.current };
+  const copyPath = (relPath: string) => { void copyFolderText(root, relPath, api.say); };
   return (
     <div className="grid items-start gap-3 lg:grid-cols-[22rem_1fr]">
       <PairList visible={api.visible} totalPairs={api.s.pairs.length} attention={counters(api.s.pairs).attention}

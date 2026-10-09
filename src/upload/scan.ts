@@ -8,8 +8,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { fnv1a32 } from "../lib/pairing";
 import { loadHandles, saveHandles } from "../batch/store";
-import { loadRootPath } from "../lib/rootpath";
-import { rememberKnownRoot } from "../ui/knownroots";
+import { restoredRoot } from "../ui/pickroot";
 import { discoverUploadSources, type UploadDiscovery, type UploadRowSource } from "./discovery";
 
 /** This tab's remembered root handle (its own slot, like `__svg__`). */
@@ -71,13 +70,14 @@ export async function rememberRoot(handle: DirHandleLike): Promise<void> {
 }
 
 /** Restores the remembered root: this tab's handle, else Generate SVG's, else Selection's. */
+/** The folder is proven for the restored handle, so its row is right at once (I-63/D6). */
 export async function bootRoot(): Promise<DirHandleLike | null> {
-  const stored = (await loadHandles(UPLOAD_HANDLE_KEY))?.source
+  return restoredRoot(
+    (await loadHandles(UPLOAD_HANDLE_KEY))?.source
     ?? (await loadHandles("__svg__"))?.source
     ?? (await loadHandles("__selection__"))?.source
-    ?? null;
-  if (stored !== null) rememberKnownRoot(stored, loadRootPath(stored.name)); // a restored folder names its children (I-51)
-  return stored;
+    ?? null,
+  );
 }
 
 /** The snapshot key: a stable fingerprint of what the scan found. */

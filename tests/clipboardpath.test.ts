@@ -1,10 +1,12 @@
 // clipboardpath.test.ts — RULE 4/9: the picked folder's real path can only come
 // from Explorer's "Copy as path" (the File System Access API never reveals the
 // drive), so reading the clipboard is a normal, guarded action and the text is
-// adopted only when it really names the picked folder.
+// adopted only when it really names the folder that was picked — for THAT
+// handle, in the handle-keyed memory (I-63).
 import { beforeEach, describe, expect, it } from "vitest";
 import { adoptCopiedText, readClipboardText } from "../src/lib/clipboardpath";
-import { loadRootPath, ROOT_PATH_KEY } from "../src/lib/rootpath";
+import { pathFor, recordedPaths, resetPathMemory } from "../src/lib/pathmemory";
+import { FakeDir } from "./helpers/fakefs";
 
 const ROOT = "test_processing";
 const FULL = "F:\\Stocks 2026\\icons testing\\single\\test_processing";
@@ -12,6 +14,7 @@ const PARENT = "F:\\Stocks 2026\\icons testing\\single";
 
 beforeEach(() => {
   localStorage.clear();
+  resetPathMemory({ read: async () => [], write: async () => undefined });
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -28,7 +31,7 @@ describe("readClipboardText — the read says why it failed (I-52)", () => {
   });
 
   it("tells a BLOCKED read apart from an empty clipboard", async () => {
-    refuseClipboard();
+    stubClipboard(async () => { throw new Error("denied: not focused"); });
     // the row must be able to say "the browser blocked it" — not "nothing copied"
     expect(await readClipboardText()).toEqual({ text: "", state: "blocked" });
   });
@@ -38,32 +41,39 @@ describe("readClipboardText — the read says why it failed (I-52)", () => {
   });
 });
 
-function refuseClipboard(): void {
-  stubClipboard(async () => { throw new Error("denied: not focused"); });
-}
-
 describe("adoptCopiedText — the pick-time capture (I-35)", () => {
-  it("adopts the copied path when its leaf is the picked folder", () => {
-    expect(adoptCopiedText(ROOT, `"${FULL}\\"`)).toEqual({ path: FULL, how: "copied" }); // Explorer's quotes
-    expect(loadRootPath(ROOT)).toBe(FULL);
+  it("adopts the copied path when its leaf is the picked folder", async () => {
+    const root = new FakeDir(ROOT);
+    expect(await adoptCopiedText(root, `"${FULL}\\"`)).toEqual({ path: FULL, how: "copied" });
+    expect((await pathFor(root)).path).toBe(FULL);
   });
 
-  it("refuses a copied PARENT folder — nothing is completed into a guess (I-59)", () => {
-    expect(adoptCopiedText(ROOT, PARENT)).toEqual({ path: "", how: null });
-    expect(loadRootPath(ROOT)).toBe("");
+  it("refuses a copied PARENT folder — nothing is completed into a guess (I-59)", async () => {
+    const root = new FakeDir(ROOT);
+    expect(await adoptCopiedText(root, PARENT)).toEqual({ path: "", how: null });
+    expect(recordedPaths()).toEqual([]);
   });
 
-  it("refuses a copied file path and a copied non-path, writing nothing", () => {
-    expect(adoptCopiedText(ROOT, "F:\\Stocks 2026\\icons testing\\single\\icon-airplane-landing.png"))
-      .toEqual({ path: "", how: null });
-    expect(adoptCopiedText(ROOT, "hello")).toEqual({ path: "", how: null });
-    expect(localStorage.getItem(ROOT_PATH_KEY)).toBeNull();
+  it("refuses a copied file path and a copied non-path, recording nothing", async () => {
+    const root = new FakeDir(ROOT);
+    expect(await adoptCopiedText(root, `${PARENT}\\icon-airplane-landing.png`)).toEqual({ path: "", how: null });
+    expect(await adoptCopiedText(root, "hello")).toEqual({ path: "", how: null });
+    expect(recordedPaths()).toEqual([]);
   });
 
-  it("refuses an SVG document or a URL on the clipboard, writing nothing", () => {
+  it("refuses an SVG document or a URL on the clipboard, recording nothing", async () => {
+    const root = new FakeDir(ROOT);
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25">';
-    expect(adoptCopiedText(ROOT, svg)).toEqual({ path: "", how: null });
-    expect(adoptCopiedText(ROOT, "http://www.w3.org/2000/svg")).toEqual({ path: "", how: null });
-    expect(localStorage.getItem(ROOT_PATH_KEY)).toBeNull();
+    expect(await adoptCopiedText(root, svg)).toEqual({ path: "", how: null });
+    expect(await adoptCopiedText(root, "http://www.w3.org/2000/svg")).toEqual({ path: "", how: null });
+    expect(recordedPaths()).toEqual([]);
+  });
+
+  it("records the capture for the folder that was picked, not for its name", async () => {
+    const picked = new FakeDir(ROOT);
+    const sameNameElsewhere = new FakeDir(ROOT);
+    await adoptCopiedText(picked, FULL);
+    expect((await pathFor(picked)).path).toBe(FULL);
+    expect(await pathFor(sameNameElsewhere)).toEqual({ path: "", how: null }); // another tree
   });
 });
