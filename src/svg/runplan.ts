@@ -6,8 +6,9 @@
 
 import { planBatches, type BatchPlan } from "../lib/svgbatch";
 import { inIdOrder } from "../lib/selectionorder";
-import { clampImagesPerRequest } from "../lib/svgconfig";
+import { MAIN_PLAN, requestSizeFor, type RegenPlan } from "../lib/svgregen";
 import { toBatchSource } from "./sources";
+import { resolveRegen } from "./regenstore";
 import type { SvgCtx } from "./actions";
 
 /** What planning needs: the rows to split and the size the user configured. */
@@ -32,7 +33,17 @@ export function planOf(c: PlanCtx, ids: string[]): BatchPlan[] {
  * reasoning tier changes only how long silence is tolerated (2026-10-05 D1).
  */
 export function perRequestOf(c: PlanCtx): number {
-  return clampImagesPerRequest(c.m.config.imagesPerRequest);
+  return requestSizeFor(c.m.config.imagesPerRequest, plannedRegen());
+}
+
+/**
+ * The regeneration the next run uses. A stored choice that cannot run is
+ * reported by guard() before any plan is shown; the plan itself then counts
+ * the main prompt, which is what a refused run would have counted anyway.
+ */
+function plannedRegen(): RegenPlan {
+  const regen = resolveRegen();
+  return regen.ok ? regen.plan : MAIN_PLAN;
 }
 
 /** Why a run cannot start, or null when it can. Never a partial reason. */
@@ -40,5 +51,6 @@ export function guard(c: SvgCtx, ids: string[]): string | null {
   if (ids.length === 0) return "Select at least one approved source";
   if (c.refs.root.current === null) return "Pick the source folder first";
   if (c.refs.key.current === null) return "Add your Requesty API key first — it stays on this device";
-  return null;
+  const regen = resolveRegen();
+  return regen.ok ? null : regen.problem;
 }

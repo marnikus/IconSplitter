@@ -12,7 +12,10 @@ import {
 } from "../src/lib/pairmeta";
 import { loadMetaAt, loadPairDecisions, savePairDecision } from "../src/selection/pairstore";
 import { metaPathOf } from "../src/selection/pairrecord";
+import { resolveFile } from "../src/selection/handles";
 import { FakeDir, FakeFile, BrokenFile } from "./helpers/fakefs";
+import { pairFile } from "./helpers/pairfile";
+import { svgVersion } from "./helpers/svgpair";
 
 const PIECE = pairId("split_01", "icon", "_01");
 const SHEET = pairId("", "icon-sheet", "");
@@ -112,6 +115,38 @@ describe("a pair file read from a DIFFERENT root (I-49)", () => {
     const load = await loadPairDecisions(out, await walk(out));
     const here = pairId("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01", "icon-sheet", "_01");
     expect(load.metas.get(here)?.ai.name).toBe("icon-sheet_AI_01.png");
+  });
+
+  /** The `split_01` folder of the main-root tree, whatever picked it. */
+  function split01(main: FakeDir): FakeDir {
+    let dir = main;
+    for (const seg of ["_split_output", "2026-10", "2026-10-05_18-45-20", "icon-sheet_AI", "split_01"]) {
+      dir = dir.children.get(seg) as FakeDir;
+    }
+    return dir;
+  }
+
+  it("re-points a generated version's SVG at the root that reads it", async () => {
+    const main = mainRoot();
+    const split = split01(main);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>`;
+    split.children.set("icon-sheet_AI_01.svg", new FakeFile("icon-sheet_AI_01.svg", svg.length, 970, svg));
+    // the pair file as the generation wrote it: the version's path is relative to the MAIN root
+    const deep = "_split_output/2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01";
+    writeMeta(split, "icon-sheet_AI_01.svg.json", pairFile(deep, "icon-sheet_AI_01.png", {
+      versions: [svgVersion(`${deep}/icon-sheet_AI_01.svg`, { review: "approved" })],
+    }));
+    const out = main.children.get("_split_output") as FakeDir;
+    const load = await loadPairDecisions(out, await walk(out));
+    const here = pairId("2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01", "icon-sheet", "_01");
+    const versions = load.metas.get(here)?.versions ?? [];
+    expect(versions.map((v) => v.svgPath)).toEqual([
+      "2026-10/2026-10-05_18-45-20/icon-sheet_AI/split_01/icon-sheet_AI_01.svg",
+    ]);
+    // the file the Generate SVG preview reads resolves under THIS root
+    const fh = await resolveFile(out, versions[0].svgPath);
+    expect(fh).not.toBeNull();
+    expect(await (await fh!.getFile()).text()).toBe(svg);
   });
 });
 

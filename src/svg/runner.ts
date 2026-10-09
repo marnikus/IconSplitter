@@ -7,7 +7,7 @@
 // unmatched or duplicate result is reported.
 
 import { planBatches, validateBatchPlan, type BatchSource } from "../lib/svgbatch";
-import { clampImagesPerRequest } from "../lib/svgconfig";
+import { requestSizeFor } from "../lib/svgregen";
 import { effectiveStallMs } from "../lib/effortlimits";
 import { costInfoFor } from "../lib/svgpricing";
 import { sumUsage } from "../lib/svgusage";
@@ -23,8 +23,9 @@ export type { RunArgs, RunEvent, RunSummary } from "./runtypes";
 
 export async function runGeneration(args: RunArgs): Promise<RunSummary> {
   // The user's request size, unchanged by the reasoning level (D1): 8 images at
-  // size 4 are two requests of four at every tier, however long they take.
-  const perRequest = clampImagesPerRequest(args.config.imagesPerRequest);
+  // size 4 are two requests of four at every tier, however long they take. The
+  // current-SVG regeneration is the one exception: each icon carries its own code.
+  const perRequest = requestSizeFor(args.config.imagesPerRequest, args.regen);
   const plans = planBatches(toBatchSources(args.sources), perRequest);
   const state = newRunState(args, plans.length, perRequest);
   const problems = validateBatchPlan(plans, perRequest);

@@ -4,6 +4,7 @@
 
 import type { ExportRecord } from "./export";
 import type { EpsConverterId } from "./epsconv/types";
+import { BUILTIN_WRITER } from "./epsconv/builtin";
 
 export type Stage = "prepare" | "render" | "optimize" | "embed" | "eps" | "validate" | "commit";
 
@@ -31,12 +32,13 @@ export interface StagePlan {
 
 /**
  * Which stages must re-run. The rules (design §4.4): a source or settings
- * change rebuilds the geometry chain; a metadata edit re-embeds only (no AI,
- * no render); an optimize toggle re-optimizes (JPEG kept); an EPS toggle is
- * EPS-only; a missing/corrupt output rebuilds just that output; no change
- * means no work at all. `rebuild` disambiguates the shared stages: `embed`
- * touches the SVG and the JPEG's XMP, but a missing JPEG re-embeds nothing
- * into the SVG and an optimize toggle keeps the JPEG.
+ * change rebuilds the geometry chain; a metadata edit re-embeds without AI or
+ * raster render (and refreshes EPS when EPS is requested); an optimize toggle
+ * re-optimizes (JPEG kept); an EPS toggle is EPS-only; a missing/corrupt output
+ * rebuilds just that output; no change means no work at all. `rebuild`
+ * disambiguates the shared stages: `embed` touches the SVG and the JPEG's XMP,
+ * but a missing JPEG re-embeds nothing into the SVG and an optimize toggle keeps
+ * the JPEG.
  */
 export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
   const need = new Set<Stage>();
@@ -75,6 +77,12 @@ function planMetadataDelta(record: ExportRecord, input: PlanInput, need: Set<Sta
   need.add("embed");
   rebuild.svg = true;
   rebuild.jpg = true;
+  // EPS is converted before its XMP is embedded, so a metadata edit must also
+  // refresh it whenever EPS is part of this run (no raster render is added).
+  if (input.includeEps) {
+    need.add("eps");
+    rebuild.eps = true;
+  }
 }
 
 function planToggleDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
@@ -83,7 +91,9 @@ function planToggleDeltas(record: ExportRecord, input: PlanInput, need: Set<Stag
     if (input.hasMetadata) need.add("embed");
     rebuild.svg = true;
   }
-  if (input.includeEps && (!record.tools.eps.enabled || recordConverter(record) !== input.epsConverter)) {
+  const writerChanged = input.epsConverter === "builtin" && record.tools.eps.writer !== BUILTIN_WRITER;
+  const retryFailedEps = record.status === "partial" && record.error !== null;
+  if (input.includeEps && (!record.tools.eps.enabled || recordConverter(record) !== input.epsConverter || writerChanged || retryFailedEps)) {
     need.add("eps");
     rebuild.eps = true;
   }

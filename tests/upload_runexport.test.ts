@@ -15,7 +15,8 @@ import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
 import type { RasterDeps } from "../src/lib/upload/raster";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
 import { verifyExportSvg } from "../src/lib/upload/clean";
-import { verifyEps } from "../src/lib/upload/eps";
+import { verifyEps, verifyEpsDocument } from "../src/lib/upload/eps";
+import { readXmpMetadataFromEps } from "../src/lib/upload/epsmetadata";
 import { MANDATORY_TAGS, metadataFingerprint, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { sha256HexText } from "../src/lib/upload/hash";
 import { serializePairMeta } from "../src/lib/pairmeta";
@@ -317,6 +318,63 @@ describe("runExport — the full package commits per icon", () => {
     expect(run.painted!.lly).toBeGreaterThanOrEqual(-1e-6);
   });
 
+  it("embeds and reads back accepted Title, Description, and Tags in EPS after conversion", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, {
+      settings, defaults: settings, metadata: META,
+      metadataInfo: {
+        prompt: "p", provider: "Gemini", model: "gemini-3.1-flash-lite", requestId: null,
+        usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(META),
+      },
+      deps: { raster: fakeRaster(3886, 3886) },
+    }));
+    expect(result.status).toBe("processed");
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(eps).toContain("%ADO_ContainsXMP: MainFirst");
+    expect(eps).toContain("%%DocumentData: Clean8Bit");
+    expect(readXmpMetadataFromEps(eps)).toEqual(META);
+    expect(verifyEpsDocument(eps).ok).toBe(true);
+    expect(readRecord(root).validation).toMatchObject({ eps: true, readback: true });
+    // Metadata postprocessing preserves the built-in EPS artboard and artwork.
+    expect(eps).toContain("%AI5_ArtSize:");
+    expect(eps).toContain("[0.75 0 0 -0.75");
+    expect(eps).toContain("newpath");
+    expect(eps.indexOf("/BDC pdfmark")).toBeLessThan(eps.indexOf("newpath"));
+    expect(eps.indexOf("[/EMC pdfmark")).toBeLessThan(eps.indexOf("%%EOF"));
+  });
+
+  it("updates EPS XMP on a metadata edit without rendering, and handles Inkscape output too", async () => {
+    const EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: cairo 1.18.0\n%%LanguageLevel: 2\n%%BoundingBox: 0 0 70 70\n%%EndComments\n0 0 moveto fill\n%%EOF\n";
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true, epsConverter: "inkscape" };
+    const converter = { bridgeUrl: "http://127.0.0.1:47391", fetch: async () => new Response(EPS, { status: 200 }) };
+    const root = pairRoot();
+    const info = {
+      prompt: "p", provider: "Gemini", model: "gemini-3.1-flash-lite", requestId: null,
+      usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(META),
+    };
+    const first = await runExport(args(root, {
+      settings, defaults: settings, metadata: META, metadataInfo: info,
+      deps: { raster: fakeRaster(3886, 3886), converter },
+    }));
+    expect(first.status).toBe("processed");
+    expect(readXmpMetadataFromEps(fileText(root, `${DIR}/export/${ART}.eps`))).toEqual(META);
+
+    const edited: IconMetadata = { ...META, title: "Minimal line icon of progress and speed" };
+    const spy = { renders: 0 };
+    const second = await runExport(args(root, {
+      settings, defaults: settings, record: readRecord(root), metadata: edited,
+      metadataInfo: { ...info, validation: validateMetadata(edited) },
+      deps: { raster: fakeRaster(3886, 3886, spy), converter },
+    }));
+    expect(second.stages).toEqual(["embed", "eps", "validate", "commit"]);
+    expect(spy.renders).toBe(0);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(readXmpMetadataFromEps(eps)).toEqual(edited);
+    expect(eps).toContain("0 0 moveto fill");
+    expect(readRecord(root).validation).toMatchObject({ eps: true, readback: true });
+  });
+
   it("a rounded <rect> is written to EPS exactly and the automatic fix is recorded, not asked (2026-10-08)", async () => {
     const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
       `<rect x="4" y="4" width="16" height="16" rx="3" fill="#000"/></svg>`;
@@ -368,7 +426,7 @@ describe("runExport — the full package commits per icon", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
     expect(result.status).toBe("processed");
-    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-1" });
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-2" });
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 

@@ -11,12 +11,12 @@ import { message } from "./runner";
 import { validateBatchPlan } from "../lib/svgbatch";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
-import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { useKeyActions } from "./keyactions";
+import { useSvgPromptActions, type SvgPromptActions } from "./promptactions";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
@@ -64,7 +64,7 @@ export type SvgSetters = Pick<SvgCtx,
   | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn">;
 
 /** The public action surface of the tab, in the order the panel uses them. */
-export interface SvgActions {
+export interface SvgActions extends SvgPromptActions {
   readCode: (id: string, version: number) => Promise<string | null>;
   chooseRoot: () => void;
   rescan: () => void;
@@ -76,8 +76,6 @@ export interface SvgActions {
   setProviderOpen: (open: boolean) => void;
   setParams: (patch: Partial<SamplingParams>) => void;
   refreshModels: () => void;
-  setPrompt: (text: string) => void;
-  resetPrompt: () => void;
   saveKey: (key: string) => void;
   forgetKey: () => void;
   toggleCheck: (id: string) => void;
@@ -115,6 +113,7 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
     ...useRunActions(ctx),
     ...useQueueActions(ctx),
     ...useCodeActions(ctx),
+    ...useSvgPromptActions(ctx),
   };
 }
 
@@ -143,7 +142,7 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   return { chooseRoot, rescan };
 }
 
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setProviderOpen" | "setFilter" | "setSort" | "setPrompt" | "resetPrompt"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setProviderOpen" | "setFilter" | "setSort"> {
   const latest = useRef(ctx);
   latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
@@ -152,14 +151,7 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPr
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
-  const setPrompt = useCallback((text: string) => latest.current.dispatch({ type: "prompt", prompt: text }), []);
-  const resetPrompt = useCallback(() => {
-    const c = latest.current;
-    c.dispatch({ type: "prompt", prompt: DEFAULT_SVG_PROMPT });
-    log({ feature: "svg", action: "prompt-reset", detail: "the default prompt was restored" });
-    c.say("Default prompt restored");
-  }, []);
-  return { setThumb, setPreviewBg, setProviderOpen, setFilter, setSort, setPrompt, resetPrompt };
+  return { setThumb, setPreviewBg, setProviderOpen, setFilter, setSort };
 }
 
 /**

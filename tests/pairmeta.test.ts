@@ -151,6 +151,44 @@ describe("the chosen version is part of the pair file (I-54)", () => {
   });
 });
 
+describe("a generated SVG follows the pair file between roots (I-49)", () => {
+  it("re-points each generated version's svgPath at the file's own directory", () => {
+    const moved = rebaseMeta(meta({ versions: [version(1), version(2)] }), "copied");
+    expect(moved.versions.map((v) => v.svgPath)).toEqual([
+      "copied/icon_AI.svg",
+      "copied/icon_AI_v2.svg",
+    ]);
+  });
+
+  it("keeps a failed version's empty path empty — there is no file to point at", () => {
+    const moved = rebaseMeta(meta({ versions: [version(1), version(2, { status: "failed", svgPath: "" })] }), "copied");
+    expect(moved.versions.map((v) => v.svgPath)).toEqual(["copied/icon_AI.svg", ""]);
+  });
+
+  it("leaves the paths alone when the file is read from the root that wrote it", () => {
+    const moved = rebaseMeta(meta({ versions: [version(1), version(2)] }), "a");
+    expect(moved.versions.map((v) => v.svgPath)).toEqual(["a/icon_AI.svg", "a/icon_AI_v2.svg"]);
+  });
+
+  it("reads a root-level pair file: the file name alone is the path", () => {
+    const moved = rebaseMeta(meta({ versions: [version(1)] }), "");
+    expect(moved.versions.map((v) => v.svgPath)).toEqual(["icon_AI.svg"]);
+  });
+
+  it("tolerates a hand-edited Windows-style path instead of carrying it over", () => {
+    const moved = rebaseMeta(meta({ versions: [version(1, { svgPath: "a\\icon_AI.svg" })] }), "copied");
+    expect(moved.versions.map((v) => v.svgPath)).toEqual(["copied/icon_AI.svg"]);
+  });
+
+  it("forgives a trailing slash and leaves a path with no file name alone", () => {
+    const moved = rebaseMeta(meta({ versions: [
+      version(1, { svgPath: "a/icon_AI.svg/" }),
+      version(2, { svgPath: "/" }),
+    ] }), "copied");
+    expect(moved.versions.map((v) => v.svgPath)).toEqual(["copied/icon_AI.svg", "/"]);
+  });
+});
+
 describe("the record rules are unchanged (I-13)", () => {
   it("a pending pair owns no record, even after being reviewed before", () => {
     expect(toRecord(meta({ decision: "pending", reviewedAt: "2026-10-05T17:02:11.000Z" }), pair())).toBeNull();

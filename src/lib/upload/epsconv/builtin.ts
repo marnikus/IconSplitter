@@ -1,11 +1,11 @@
 // builtin.ts — the built-in PostScript-subset writer as a converter (2026-10-09):
-// `writeEps` unchanged behind the common contract. Always available; its
-// writer id is the one every pre-2026-10-09 package already carries.
+// `writeEps` behind the common contract. Always available; the writer id tracks
+// output changes so the planner can refresh stale EPS files selectively.
 
 import { verifyEps, writeEps } from "../eps";
 import type { ConvertResult, EpsConverter, EpsConvertInput } from "./types";
 
-export const BUILTIN_WRITER = "builtin-subset-1";
+export const BUILTIN_WRITER = "builtin-subset-2";
 
 export const builtinConverter: EpsConverter = {
   id: "builtin",

@@ -7,6 +7,7 @@
 import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEpsDocument } from "../lib/upload/eps";
+import { verifyEpsMetadata } from "../lib/upload/epsmetadata";
 import { sha256Hex } from "../lib/upload/hash";
 import { parseExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -63,7 +64,7 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
     outputs.jpg = `${input.stem}.jpg`;
   }
   if (input.epsText !== null) {
-    await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => verifyEpsDocument(decode(back)).ok);
+    await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => epsVerifies(back, input));
     outputs.eps = `${input.stem}.eps`;
   }
   const named = previousNames(input);
@@ -160,6 +161,11 @@ function jpegVerifies(back: Uint8Array, input: CommitExportInput): boolean {
       && dimsOf(back)?.height === input.jpegExpected.height;
   }
   return verifyJpeg(back, { ...input.jpegExpected, metadata: input.metadata }).ok;
+}
+
+function epsVerifies(back: Uint8Array, input: CommitExportInput): boolean {
+  const eps = decode(back);
+  return verifyEpsDocument(eps).ok && (input.metadata === null || verifyEpsMetadata(eps, input.metadata));
 }
 
 function dimsOf(jpeg: Uint8Array): { width: number; height: number } | null {
