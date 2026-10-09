@@ -16,7 +16,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { previewTargetOf, shownVersion, targetPathOf } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
 import { PROBLEM_LABEL, type SvgSource } from "./sources";
-import type { Placement, SvgRow } from "./types";
+import type { Placement, SvgOperation, SvgRow } from "./types";
 
 export interface SvgRowActions {
   activeId: string | null;
@@ -28,7 +28,7 @@ export interface SvgRowActions {
   rootRef: { current: DirHandleLike | null };
   toggleCheck: (id: string) => void;
   setActive: (id: string) => void;
-  generate: (ids: string[], placement?: Placement) => void;
+  generate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   copyCode: (id: string, version: number) => void;
   showCode: (id: string, version: number) => void;
@@ -91,7 +91,7 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
   return (
     <div className="svg-decision-actions">
       <button type="button" className="svg-btn tiny primary" data-testid={`svg-generate-${id}`}
-        onClick={click(() => a.generate([id], "front"))}>{row.newest ? "Regenerate" : "Generate"}</button>
+        onClick={click(() => a.generate([id], "front", row.newest ? "regenerate" : "generate"))}>{row.newest ? "Regenerate" : "Generate"}</button>
       <button type="button" className="svg-btn tiny success" data-testid={`svg-approve-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}

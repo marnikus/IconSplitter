@@ -87,6 +87,8 @@ export interface UploadActions extends PromptActions {
   requestMetadata: (ids: string[]) => void;
   /** Bulk: every selected icon that still needs metadata gets one paid call. */
   generateMetadataSelected: (ids: string[]) => void;
+  /** Bulk: replace metadata only for selected icons that already have it. */
+  regenerateMetadataSelected: (ids: string[]) => void;
   /** Bulk: generate the missing metadata FIRST, then export the whole selection. */
   exportSelected: (ids: string[]) => void;
   confirmMetadata: () => void;

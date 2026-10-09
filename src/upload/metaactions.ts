@@ -4,8 +4,8 @@
 // The batch runs with bounded concurrency, per-item isolation and an abort the
 // cancel action owns; in-flight requests are journalled, so a restart reports
 // them interrupted and never resends them (I-20). The SELECTION-level buttons
-// ("Generate metadata" / "Export selected") and the confirmation they open live
-// in `metaselect.ts`.
+// ("Generate metadata", "Regenerate metadata", "Export selected") and their
+// confirmation live in `metaselect.ts`.
 
 import { useCallback, useRef } from "react";
 import { log } from "../log/logstore";
@@ -15,6 +15,7 @@ import { previewFor, type SentPreview } from "../lib/upload/sentpreview";
 import { readSvgText } from "../svg/svgfiles";
 import { generateMetadata, type MetadataResult } from "./runmetadata";
 import { rememberMeta } from "./metacache";
+import { idsWithMetadata } from "./rowmodel";
 import { namedSpec, nameRefusedSpec, type IconRef } from "./uploadlog";
 import type { Latest, UploadMetaState, UploadRow } from "./types";
 import type { UploadActions, UploadCtx } from "./actions";
@@ -23,7 +24,7 @@ import { openMetaDialog, useMetaSelectionActions } from "./metaselect";
 
 /** The metadata hooks' share of the action surface (composition stays typed). */
 type MetaSlice = Pick<UploadActions,
-  "requestMetadata" | "generateMetadataSelected" | "exportSelected"
+  "requestMetadata" | "generateMetadataSelected" | "regenerateMetadataSelected" | "exportSelected"
   | "confirmMetadata" | "cancelMetadata" | "acceptMetadata" | "editMetadata">;
 
 export function useMetaActions(ctx: UploadCtx): MetaSlice {
@@ -37,7 +38,8 @@ export function useMetaActions(ctx: UploadCtx): MetaSlice {
 function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
   "requestMetadata" | "confirmMetadata" | "cancelMetadata"> {
   const requestMetadata = useCallback((ids: string[]) => {
-    openMetaDialog(latest, ids, []);
+    const existing = idsWithMetadata(latest.current.rows, ids).length === ids.length;
+    openMetaDialog(latest, ids, [], existing ? "regenerate" : "generate");
   }, [latest]);
   const confirmMetadata = useCallback(() => {
     const c = latest.current;

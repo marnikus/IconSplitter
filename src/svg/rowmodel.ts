@@ -129,6 +129,12 @@ export function sortedIds(rows: SvgRow[], sort: SvgSort): string[] {
   return visibleRows(rows, ALL_SVG_FILTER, sort).map((r) => r.source.id);
 }
 
+/** Selected ids that already have a valid SVG, preserving checkbox pick order. */
+export function idsWithGeneratedSvg(rows: SvgRow[], ids: string[]): string[] {
+  const generated = new Set(rows.filter((row) => row.newest !== null).map((row) => row.source.id));
+  return ids.filter((id) => generated.has(id));
+}
+
 /** Header checkbox state for the visible rows (indeterminate = some). */
 export function headerState(visible: SvgRow[], checked: string[]): "none" | "some" | "all" {
   if (visible.length === 0) return "none";

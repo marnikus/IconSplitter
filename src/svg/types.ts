@@ -41,6 +41,9 @@ export interface SvgRow {
 /** Where a confirmed batch goes: behind what waits (bulk) or first (a row's Regenerate). */
 export type Placement = "front" | "back";
 
+/** The intent named by the shared confirmation; both paths save a new version. */
+export type SvgOperation = "generate" | "regenerate";
+
 /** Live state of the run: the batch in flight plus every finished request. */
 export interface RunProgress {
   /** The run this request belongs to — batch ids repeat per run, this does not. */
@@ -73,7 +76,7 @@ import type { QueueItem } from "./runqueue";
 export type { QueueItem } from "./runqueue";
 
 export type Dialog =
-  | { kind: "confirm"; ids: string[] }
+  | { kind: "confirm"; ids: string[]; operation: SvgOperation }
   | { kind: "code"; id: string; version: number }
   | { kind: "history"; id: string };
 

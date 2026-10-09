@@ -54,6 +54,7 @@ interface MountOpts {
   count: number;
   perRequest?: number;
   effort?: SamplingParams["effort"];
+  operation?: "generate" | "regenerate";
 }
 
 async function mount(opts: MountOpts): Promise<SvgRow[]> {
@@ -63,6 +64,7 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
     ui.render(
       <SvgConfirm
         ids={all.map((r) => r.source.id)}
+        operation={opts.operation ?? "generate"}
         rows={all}
         config={{ ...DEFAULT_CONFIG, imagesPerRequest: opts.perRequest ?? 4 }}
         caps={capsFor(DEFAULT_CONFIG.model)}
@@ -107,6 +109,12 @@ describe("SvgConfirm — the whole plan before any request", () => {
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 2");
     // ...and the dialog says the answer is streamed with no total limit
     expect(q("[data-testid=svg-confirm-streaming]")?.textContent).toContain("never cut");
+  });
+
+  it("names regeneration explicitly and keeps the confirm action separate from generation", async () => {
+    await mount({ count: 2, operation: "regenerate" });
+    expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
+    expect(q("[data-testid=svg-confirm-generate]")?.textContent).toBe("Regenerate now");
   });
 
   it("paginates every batch with its own composite and exact ordered filenames", async () => {
@@ -170,7 +178,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
     await act(async () => {
       ui = createRoot(host);
       ui.render(
-        <SvgConfirm ids={all.map((r) => r.source.id)} rows={all} config={DEFAULT_CONFIG}
+        <SvgConfirm ids={all.map((r) => r.source.id)} operation="generate" rows={all} config={DEFAULT_CONFIG}
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
           rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={onConfirm} onDismiss={onDismiss} />,
       );
@@ -192,7 +200,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
     await act(async () => {
       ui = createRoot(host);
       ui.render(
-        <SvgConfirm ids={ids} rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+        <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
           rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />,
       );
@@ -208,7 +216,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
   it("never shows a previous selection's sheet just because the page label repeats", async () => {
     const all = rows(4);
     const render = (ids: string[]) => (
-      <SvgConfirm ids={ids} rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+      <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
         caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
         rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />
     );

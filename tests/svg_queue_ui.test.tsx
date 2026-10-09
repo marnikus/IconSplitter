@@ -11,12 +11,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { pairId } from "../src/lib/pairing";
+import { serializePairMeta } from "../src/lib/pairmeta";
 import { saveApiKey } from "../src/svg/keystore";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 import { streamFrames, transport, type Transport } from "./helpers/svgtransport";
 
@@ -56,6 +58,7 @@ const KEY = ["rq", "live", "queue_ui_key_1234"].join("_");
 
 const FOG = pairId("architecture", "fog", "");
 const COURT = pairId("architecture", "court", "");
+const MIST = pairId("architecture", "mist", "");
 
 /** The turn of the event loop a real run needs to advance one step. */
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -83,6 +86,27 @@ function makeRoot(): FakeDir {
   }));
   root.children.set("review-decision.json", new FakeFile("review-decision.json", 2, 2, "{}"));
   root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({ records: recs })));
+  return root;
+}
+
+/** Two pre-approved rows plus one approved row that has never produced an SVG. */
+function makeRegenerationRoot(): FakeDir {
+  const root = makeRoot();
+  const arch = root.children.get("architecture") as FakeDir;
+  const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M2 2h20v20H2z\"/></svg>";
+  const fog = svgSource(FOG, { name: "fog_AI.png", sourceName: "fog.png" });
+  const meta = pairMetaFor(fog, [svgVersion("architecture/fog_AI.svg")], "approved");
+  arch.children.set("fog_AI.svg", new FakeFile("fog_AI.svg", svg.length, 3200, svg));
+  arch.children.set("fog_AI.svg.json", new FakeFile("fog_AI.svg.json", 10, 3200, serializePairMeta(meta)));
+  arch.children.set("mist.png", new FakeFile("mist.png", 12, 1000, "e"));
+  arch.children.set("mist_AI.png", new FakeFile("mist_AI.png", 20, 1100, "f"));
+  const decisions = root.children.get("review-decisions.json") as FakeFile;
+  const parsed = JSON.parse(decisions.text) as { records: { pair_id: string; source: string; ai_result: string; decision: string; reviewed_at: string }[] };
+  parsed.records.push({
+    pair_id: MIST, source: "architecture/mist.png", ai_result: "architecture/mist_AI.png",
+    decision: "approved", reviewed_at: "2026-10-01T09:00:00.000Z",
+  });
+  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify(parsed)));
   return root;
 }
 
@@ -125,6 +149,11 @@ async function pick(id: string): Promise<void> {
   await act(async () => { (q(`[data-testid=svg-check-${id}]`) as HTMLInputElement).click(); });
   await settle();
   await click("[data-testid=svg-generate-selected]");
+}
+
+async function check(id: string): Promise<void> {
+  await act(async () => { (q(`[data-testid=svg-check-${id}]`) as HTMLInputElement).click(); });
+  await settle();
 }
 
 /** The requests the provider really received, as the items each one carried. */
@@ -307,6 +336,100 @@ describe("the generation queue (I-53)", () => {
   });
 });
 
+describe("bulk Regenerate selected (2026-10-09)", () => {
+  it("regenerates only checked rows with an existing SVG, in one confirmed batch", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    const root = makeRegenerationRoot();
+    await mount(root);
+    const regenerate = () => q("[data-testid=svg-regenerate-selected]") as HTMLButtonElement;
+
+    // No selection, and a selection containing only an empty row, cannot
+    // regenerate. Generate selected remains broad: it sends the checked empty
+    // court row and the checked fog row that already has an SVG.
+    expect(regenerate().textContent).toBe("↻ Regenerate selected (0)");
+    expect(regenerate().disabled).toBe(true);
+    await check(MIST);
+    expect(regenerate().disabled).toBe(true);
+    await check(MIST);
+    await check(COURT);
+    expect(regenerate().disabled).toBe(true);
+    await check(FOG);
+    expect(regenerate().textContent).toBe("↻ Regenerate selected (1)");
+    expect(regenerate().disabled).toBe(false);
+    await click("[data-testid=svg-generate-selected]");
+    expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG generation");
+    expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "Generate selected to send both checked rows");
+    expect(callsOf(t)).toEqual([["court_AI.png", "fog_AI.png"]]);
+    await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the first SVG to finish");
+    expect(txt(`[data-testid=svg-status-${COURT}]`)).toContain("Generated");
+
+    // The mixed checkbox selection is three rows, but only fog and court now
+    // have valid SVGs. The preview and provider request must both omit mist.
+    await click("[data-testid=svg-check-all]");
+    expect(txt("[data-testid=svg-selected-count]")).toBe("3 selected");
+    expect(regenerate().textContent).toBe("↻ Regenerate selected (2)");
+    expect(regenerate().disabled).toBe(false);
+    await click("[data-testid=svg-regenerate-selected]");
+    expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
+    expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
+    const manifest = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+      .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
+    expect([...manifest].sort()).toEqual(["court_AI", "fog_AI"]);
+    expect(manifest.some((name) => name.includes("mist"))).toBe(false);
+
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 2, "the Regenerate batch to send");
+    const sent = (callsOf(t)[1] ?? []).map((name) => name ?? "");
+    expect([...sent].sort()).toEqual(["court_AI.png", "fog_AI.png"]);
+    expect(sent.map((name) => name.replace(/\.png$/, ""))).toEqual(manifest);
+    expect(sent).toHaveLength(2);
+    expect(sent.some((name) => name.includes("mist"))).toBe(false);
+    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the regeneration batch to finish");
+
+    const arch = root.children.get("architecture") as FakeDir;
+    const versionsOf = async (file: string) => JSON.parse(await (await (await arch.getFileHandle(file)).getFile()).text()) as {
+      versions: { version: number }[];
+    };
+    expect((await versionsOf("fog_AI.svg.json")).versions.map((version) => version.version)).toEqual([1, 2, 3]);
+    expect((await versionsOf("court_AI.svg.json")).versions.map((version) => version.version)).toEqual([1, 2]);
+    expect(arch.children.has("mist_AI.svg")).toBe(false);
+    expect(arch.children.has("mist_AI.svg.json")).toBe(false);
+  });
+
+  it("confirms a bulk Regenerate during a run and appends it behind the current request", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRegenerationRoot());
+
+    await check(COURT);
+    await click("[data-testid=svg-generate-selected]");
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "the first request to leave");
+    expect(callsOf(t)).toEqual([["court_AI.png"]]);
+
+    await check(COURT);
+    await check(FOG);
+    await click("[data-testid=svg-regenerate-selected]");
+    expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
+    expect(q("[data-testid=svg-confirm-queue-note]")).not.toBeNull();
+    expect(txt("[data-testid=svg-confirm-generate]")).toContain("Add to queue");
+    await click("[data-testid=svg-confirm-generate]");
+    expect(t.calls).toHaveLength(1); // queuing never interrupts or duplicates the active request
+    expect(txt("[data-testid=svg-queue-line-1]")).toContain("fog_AI.png");
+
+    await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+    await waitFor(() => t.calls.length === 2, "the queued regeneration to start");
+    expect(callsOf(t)).toEqual([["court_AI.png"], ["fog_AI.png"]]);
+    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the queued regeneration to finish");
+  });
+});
+
 describe("the NEXT attempt (2026-10-08): a waiting row says so, and Regenerate jumps the queue", () => {
   it("a row that waits shows the grey 'Next attempt' badge, the head counts it, and a drop restores the old badge", async () => {
     const t = transport({ mode: "silent" });
@@ -376,9 +499,11 @@ describe("the NEXT attempt (2026-10-08): a waiting row says so, and Regenerate j
   it("Regenerate on a row while nothing runs still confirms first (the cost gate is unchanged when idle)", async () => {
     const t = transport({ mode: "silent" });
     vi.stubGlobal("fetch", t.fetch);
-    await mount(makeRoot());
-    await click(`[data-testid=svg-generate-${COURT}]`);
+    await mount(makeRegenerationRoot());
+    await click(`[data-testid=svg-generate-${FOG}]`);
     expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    expect(txt("[data-testid=svg-confirm-title]")).toBe("Confirm SVG regeneration");
+    expect(txt("[data-testid=svg-confirm-generate]")).toContain("Regenerate now");
     expect(t.calls).toHaveLength(0);
   });
 });

@@ -391,7 +391,8 @@ Bulk bar (`svg-bulk`):
 | `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, **48–800** step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout. Same range, same rule and the same shared layout as Selection V2's `v2-thumb` (I-55 — one implementation, `lib/zoom` + `ui/PairedThumbs`) |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | arms first (`Confirm generate`), then queues/sends; **stays enabled while a run is in flight** (I-53) and is disabled only at 0 selected |
+| `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
+| `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration appends behind a run in flight (I-53) |
 | `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
@@ -406,7 +407,7 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
-| `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row actions; approve/decline disabled until a version exists |
+| `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate; an existing SVG uses regeneration wording in the idle confirmation; while running this row action queues first (I-53); approve/decline disabled until a version exists |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
@@ -457,7 +458,7 @@ Dialogs:
 
 | Test id | Notes |
 |---|---|
-| `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-generate`, `svg-confirm-cancel`, `svg-confirm-close` |
+| `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-title` is "Confirm SVG generation" or "Confirm SVG regeneration"; `svg-confirm-generate` says "Generate now" / "Regenerate now" while idle and "Add to queue" during a run, with `svg-confirm-cancel` / `svg-confirm-close` |
 | `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
@@ -554,7 +555,8 @@ Bulk bar (`upload-bulk`):
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
 | `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
 | `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
-| `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = the selected icons with NO metadata text yet; opens the exact-request confirmation for those (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
+| `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = selected icons with NO metadata text yet; the paid request never replaces existing text (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
+| `upload-meta-regenerate-selected` | button | "↻ Regenerate metadata (N)" — N = selected icons whose metadata is non-null; opens an exact-request confirmation/previews for only those rows, excluding empty rows (disabled at 0 eligible rows) |
 | `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
 | `upload-download-selected` | button | "⤓ Download all (N files)" — N = the committed SVG/JPG/EPS files of the SELECTION; opens the browser's folder dialog and copies them there under their artifact names, never overwriting (disabled at 0 selected; the `title` says so). The toast/log line: "Saved N files (M icons) to <folder> · k kept (already there) · j icons not exported yet" |
 | `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
@@ -651,11 +653,15 @@ the auth/retries facts, the images the request will carry
 (`upload-preview-strip`, one `upload-preview-{id}` with its own
 `upload-preview-caption-{id}`, `upload-preview-count`,
 `upload-preview-busy` while they render, `upload-preview-none` when none could
-be), `upload-meta-confirm` (sends; disabled until the previews are ready) /
-`upload-meta-dismiss` / `upload-meta-cancel`. The title `#upload-meta-title`
-reads "Generate metadata for N icons" and, when the dialog was opened by
-"⇪ Export selected", "…, then export N"; the extra note `upload-meta-then-export`
-states the accept-as-it-lands rule before anything is paid for.
+be), `upload-meta-confirm` (sends; disabled until the previews are ready;
+label matches Generate vs Regenerate) / `upload-meta-dismiss` /
+`upload-meta-cancel`. The title `#upload-meta-title` reads "Generate metadata
+for N icons" or "Regenerate metadata for N icons"; when opened by "⇪ Export
+selected", it also says "…, then export N". Regeneration's note states that a
+returned answer replaces current text and is never auto-accepted; review it and
+fix validation errors before accepting, while provider failure preserves it. The
+extra note `upload-meta-then-export` states
+the accept-as-it-lands rule before anything is paid for.
 
 Banners: `upload-warn-excluded`, `upload-warn-corrupt`,
 `upload-warn-unreadable`, `upload-warn-interrupted` (a metadata request in

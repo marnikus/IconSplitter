@@ -160,6 +160,14 @@ export function idsNeedingMetadata(rows: readonly UploadRow[], ids: readonly str
   return rows.filter((row) => wanted.has(row.source.id) && needsMetadata(row)).map((row) => row.source.id);
 }
 
+/** The selected icons with existing metadata text, in the list's order. */
+export function idsWithMetadata(rows: readonly UploadRow[], ids: readonly string[]): string[] {
+  const wanted = new Set(ids);
+  return rows
+    .filter((row) => wanted.has(row.source.id) && row.meta.metadata !== null)
+    .map((row) => row.source.id);
+}
+
 /** The icons whose metadata is not exportable yet, in the selection's order. */
 export function idsNeedingAccepted(rows: readonly UploadRow[], ids: readonly string[]): string[] {
   const wanted = new Set(ids);

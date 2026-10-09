@@ -16,7 +16,7 @@ import { SCAN_IDLE } from "../src/lib/scanseq";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
 import { scanKey } from "../src/svg/scankey";
 import type { Discovery } from "../src/svg/sources";
-import { headerState, previewTargetOf, pruneChecked, shownVersion, sortedIds, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
+import { headerState, idsWithGeneratedSvg, previewTargetOf, pruneChecked, shownVersion, sortedIds, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
 import { pinOrder } from "../src/lib/svglist";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
@@ -346,6 +346,20 @@ describe("row model", () => {
     expect(row.newest).toBeNull();
     expect(row.approved).toBeNull();
     expect(toListRow(row)).toMatchObject({ generation: "not-generated", review: "pending", version: 0, tokens: null, cost: null });
+  });
+
+  it("filters selected ids to valid existing SVGs and keeps the user's pick order", () => {
+    const courtSource = COURT_SRC;
+    const mistSource = svgSource(pairId("architecture", "mist", ""), { name: "mist_AI.png", sourceName: "mist.png" });
+    const failedSource = svgSource(pairId("architecture", "echo", ""), { name: "echo_AI.png", sourceName: "echo.png" });
+    const existing = (item: SvgSource) => toRow(item, pairMetaFor(item, [svgVersion(`${item.dirPath}/${item.stem}.svg`)]), false);
+    const fog = existing(FOG_SRC);
+    const court = existing(courtSource);
+    const mist = toRow(mistSource, null, false);
+    const failed = toRow(failedSource, pairMetaFor(failedSource, [svgVersion("", { status: "failed" })]), false);
+
+    expect(idsWithGeneratedSvg([fog, mist, court, failed], [COURT, FOG, mistSource.id, failedSource.id, "missing"])).toEqual([COURT, FOG]);
+    expect(idsWithGeneratedSvg([fog, mist, court, failed], [mistSource.id, failedSource.id])).toEqual([]);
   });
 
   it("previews the newest VALID version and flags a corrupt pair file", async () => {

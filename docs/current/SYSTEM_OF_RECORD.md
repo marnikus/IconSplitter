@@ -200,6 +200,14 @@ that makes a network call, only when the user asks it to):
   out-of-range positions are reported, never guessed, and empty cells never
   produce output. A plan that cannot be mapped is refused before a byte is
   sent (`lib/svgbatch.validateBatchPlan`, fail-closed).
+* Bulk selection actions (2026-10-09): **Generate selected** remains the
+  existing all-checked-rows path, including rows with no SVG. **Regenerate
+  selected (N)** is separate and selection-only: `N` counts checked rows with
+  `row.newest !== null`; the action filters again against the current rows and
+  the confirmation contains only those eligible rows. Checked rows without a
+  valid generated SVG never enter that batch. The shared confirmation says
+  "Confirm SVG regeneration"; both actions keep the existing validation,
+  versioned-save and confirmation gates.
 * Confirmation (nothing is sent by opening it): the selected count, the
   **total request count** and the configured per-request size, the
   provider/model, the sampling settings, the streaming fact and the effective
@@ -520,6 +528,13 @@ opt-in class as Generate SVG → Requesty; design
   request (prompt, endpoint, auth rule) before any paid send; a timeout or
   disconnect is NEVER resent automatically (no duplicate paid submission);
   in-flight requests are journalled and reported `interrupted` after a restart.
+  The bulk bar keeps **Generate metadata** (selected rows whose metadata is
+  null) separate from **Regenerate metadata** (selected rows whose metadata is
+  non-null). Regeneration's count and confirmed preview include only existing
+  answers; a returned answer replaces that text but is never auto-accepted —
+  review it and pass validation before Accept. Provider failure leaves the
+  previous text. Empty rows are never part of this
+  regeneration batch; `Export selected` remains unchanged.
 * Clean export SVG (2026-10-08, the user's clean-code rule): the file that
   ships is SVG 1.1 (`version="1.1"` re-added after SVGO, which strips it), holds
   a real four-number `viewBox`, contains no raster content anywhere (an
@@ -1307,7 +1322,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 | The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets` + `rootpaths`, v3) |
 | Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `src/lib/upload/restyle.ts`, `src/lib/upload/place.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: `place.ts` = the clone-bake-restyle-measure placement loop with `shippedBounds`/`insideArtboard`, `restyle.ts` = the stroke width written verbatim + colour restyle, `prepare.ts` = clean → place → viewBox-only root with the artboard rect always first, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
-| Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportmetadata.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export), accepted metadata readback for reusable SVG/EPS outputs, and the atomic commit |
+| Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `metaselect.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportmetadata.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, selection-level generate/regenerate/export filters and shared metadata confirmation, both pipelines (metadata + export), accepted metadata readback for reusable SVG/EPS outputs, and the atomic commit |
 | Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `UploadArtboardSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset; `UploadArtboardSettings.tsx` = the artboard select, the custom W×H and the "Scale to N MP" row), the framed SVG preview |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
@@ -1458,8 +1473,10 @@ with hotkeys and `data-testid` handles):
   and the same image leaves every later waiting batch (`dropIdFrom`, batches
   re-planned and re-labelled, an emptied batch goes) so one queue never
   generates it twice; the toast says "… — next attempt, first in the queue (N
-  queued) · removed from N waiting batch(es)". Bulk Generate, `G` and the
-  recovery retry still confirm and append. Every run event carries the run's
+  queued) · removed from N waiting batch(es)". Bulk Generate, bulk Regenerate,
+  `G` and the recovery retry still confirm and append; bulk Regenerate first
+  filters the checked ids to rows with an existing valid SVG, while the row's
+  Regenerate remains the front-of-queue action above. Every run event carries the run's
   image total (`run-start.images`, `batch-start.images`, `batch-done.done /
   .images`) and a run id (`batch-start.runId` — batch ids repeat per run), so
   the log's request-done line reads "· d of m image(s) done".
@@ -1514,6 +1531,11 @@ with hotkeys and `data-testid` handles):
   fields, invalid-answer refusal, cancel (never resent), interrupted after a
   restart, export → green committed package with the source untouched, stale →
   re-export, metadata embedded + verified, honest failure commits nothing
+* `svg_queue_ui.test.tsx` — the real panel + streaming transport: bulk Generate
+  still includes existing and empty rows; bulk Regenerate filters a mixed
+  selection to several existing SVGs, confirms the exact preview/request, leaves
+  the empty row untouched, and appends behind an in-flight request; a row's
+  Regenerate still jumps to the front
 * `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
@@ -1686,7 +1708,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-select-visible`, `svg-deselect`, `svg-thumb` + `svg-thumb-value`,
   preview background (`svg-bg`, `svg-bg-{white,black,gray,green,red}`,
   `svg-bg-custom`, `svg-bg-value`), `svg-estimate`,
-  `svg-generate-selected`, `svg-approve-selected`,
+  `svg-generate-selected`, `svg-regenerate-selected`, `svg-approve-selected`,
   `svg-decline-selected`, `svg-cancel-run`), list (`svg-list`, `svg-rows`,
   `svg-row-*`, `svg-check-*`, `svg-ai-*` / `svg-prev-*`,
   `svg-prev-frame-*` (the coloured frame), `svg-target-*` (the SVG the row
@@ -1700,7 +1722,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `svg-batch-progress` line carries the same clock as `svg-bulk-elapsed`), `svg-batch-reports` +
   `svg-batch-report-{n}` (with `outcome unknown` and its own elapsed time),
   `svg-batch-cancel`), confirmation
-  (`svg-confirm`,
+  (`svg-confirm`, `svg-confirm-title` ("Confirm SVG generation" or "Confirm SVG regeneration"),
   `svg-confirm-{count,requests,model,sampling,timeout,streaming}`,
   `svg-confirm-{close,cancel,generate}`, `svg-confirm-limit`,
   `svg-confirm-problem`, one page per request: `svg-batch-page`,
@@ -1728,7 +1750,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-bg-{white,black,gray,green,red}`, `upload-bg-custom`,
   `upload-bg-value`), `upload-estimate` / `upload-progress`,
   `upload-apply-settings`, `upload-meta-selected`,
-  `upload-export-selected`, `upload-cancel-run`), list (`upload-list`,
+  `upload-meta-regenerate-selected`, `upload-export-selected`,
+  `upload-cancel-run`), list (`upload-list`,
   `upload-rows`, `upload-row-*`, `upload-check-*`, `upload-prev-*` +
   `upload-prev-*-frame`, `upload-target-*`, `upload-export-path-*`,
   `upload-status-*`, `upload-meta-cell-*`, `upload-settings-*` +
@@ -2352,11 +2375,18 @@ answers `400` from the provider.
   CTM (`[a b c d tx ty] concat` — ONE array, I-61) and `%%EOF`. `verifyEps`
   requires those three markers AND an executable program, so a file that lost
   them, or one the interpreter would stop in, is `partial`, never shipped.
-* **Two global buttons** (points 3 + 4), both acting on the checked rows:
-  * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts the selected
-    icons that have NO metadata text yet (a draft is not re-requested); rows
-    that already have text are named in the status line instead of being paid
-    for again, and at N = 0 the line says why nothing was sent.
+* **Global selection actions** (points 3 + 4; bulk regeneration added
+  2026-10-09), all acting on checked rows:
+  * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts selected
+    icons with NO metadata text yet (a draft is not re-requested); existing text
+    is never paid for again by this action. At N = 0 the line says why nothing
+    was sent.
+  * `upload-meta-regenerate-selected` ("↻ Regenerate metadata (N)") — N counts
+    only selected rows whose `row.meta.metadata !== null`; disabled at 0. The
+    confirmation and previews contain only those rows, even in a mixed
+    selection. A returned answer replaces the existing text and is a draft
+    until the user accepts it; a provider failure keeps the previous text.
+    Empty rows remain solely under Generate metadata.
   * `upload-export-selected` ("⇪ Export selected") — metadata first, then the
     WHOLE selection: the confirmation (`#upload-meta-title` "…, then export N",
     the note `upload-meta-then-export`) opens, each answer that passes the
