@@ -974,8 +974,8 @@ Batch:
   before; `lib/batchlayout` owns the names both rules read.
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
   capture; when it finds nothing the path is still recoverable without another
-  dialog, and the UI says how. `Rescan` (and the Generate SVG rescan) makes one
-  more attempt for a root whose path is unknown, and a `paste` anywhere outside
+  dialog, and the UI says how. `Rescan` (in all three tabs) makes one more
+  attempt for a root whose path is unknown or only completed (I-59), and a `paste` anywhere outside
   a text field adopts the text for the root on screen
   (`ui/rootcapture.retryCapture` / `bindPasteCapture`, mounted by
   `ui/FolderBar.FolderPathRow`). Both take an **exact leaf match only** — a
@@ -1009,7 +1009,27 @@ Batch:
   (`selection/rootsource.boot`, `svg/scan.bootSources`) — so a pick inside a
   folder the app already knows is exact with an empty clipboard, while a
   clipboard guess that only *looks* right is overruled or left flagged
-  `completed — check it`.
+  `completed — check it` — and refused outright when the evidence says it is
+  wrong (I-59).
+* **I-59 (a guess yields to evidence, RULE 4/12/13 — 2026-10-09):** the
+  "parent + name" completion is a guess, and three things outrank it. (1) The
+  text this app itself last put on the clipboard (`lib/copypath.lastCopiedByApp`,
+  the "copy folder path" output) is never completed — it is adopted only when it
+  names the picked folder exactly. (2) A known root whose captured path
+  contains the copied folder, and whose own `resolve(picked)` answers `null`
+  ("not below me"), proves the copied folder cannot be the pick's parent
+  (`ui/knownroots.provenOutside`); `resolveSegments` tells that definite
+  `"outside"` apart from `"unknown"` (no `resolve`, a throw), and only the
+  definite answer vetoes. (3) `Rescan` re-reads for a root whose path is empty
+  **or** `completed`, and an exact leaf match replaces the guess
+  (`ui/rootcapture.retryCapture`, now also behind the SVG-to-upload `Rescan`).
+  `pickroot.pathForPick` settles its answer before it writes anything — exact
+  clipboard → derivation → believable completion → nothing — so a wrong
+  completion is never stored first and overruled later. The reported case
+  (the previous root's `…\split_03\export` on the clipboard, a sibling tree
+  picked, the row showing `…\export\test_process_3`) now shows the folder's
+  name with `full path not captured`, and every copy made from it says the
+  honest fallback instead of a wrong drive path.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -1093,7 +1113,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
-| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52): `Rescan`'s one exact-match retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name |
+| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path or only guessed it (I-52/I-59): `Rescan`'s one exact-match retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
@@ -1101,7 +1121,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
 | The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) and `lib/rootpath` (where a copy stops, I-28/I-48) |
-| The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named and the derivation from one of them (`resolve()` segments, I-51), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
+| The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named, the derivation from one of them (`resolve()` segments, I-51) and the veto one of them can give a clipboard guess (`provenOutside`, I-59), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
@@ -2234,3 +2254,27 @@ leftover from before the rename. The sweep removes such a leftover in both
 shapes: named by the icon's own previous `export.json` (when the current EPS is
 on disk), or an orphan no record names — an orphan still has to pass the naming
 rule that proves the app wrote it, so a foreign file is never a candidate.
+
+## The Full path that glued two folders together (2026-10-09, I-59)
+
+Report (SVG to upload, two screenshots): the user picked
+`F:\…\single\test_process_3`; the list was right, but the `Full path` row
+read `F:\…\single\test_processing_2\_split_output\2026-10\<run>\<piece>\split_03\export\test_process_3`,
+and every "copy folder path" made from the new root inherited the wrong prefix
+(I-56 builds the copy from the remembered root path).
+
+Measured cause: the clipboard still held the app's **own** last copy — the
+export folder of the previous root — and the picker's "parent + name"
+completion appended the new folder's name to it. The known-root derivation
+(I-51) could not overrule it, because the known root's `resolve()` answered
+`null` (a sibling tree) and that definite "no" was read as "cannot say"; the
+guess had already been stored, keyed by the folder's name; and `Rescan`
+re-read only for an **empty** path, so the one button the row names could not
+repair it. One root cause: a guess was treated as a capture.
+
+The fix (I-59): the app's own copy is never completed (only adopted when
+exact); a known root that contains the copied folder and does not contain the
+pick vetoes the completion; `pathForPick` settles before it writes; `Rescan`
+reconsiders a `completed` path in every tab. The completion itself remains,
+flagged, when nothing contradicts it. No new control, no new storage key.
+Design: `archive/2026-10-09-root-path-glued-folders/design.md`.

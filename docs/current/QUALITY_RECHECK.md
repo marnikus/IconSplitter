@@ -2593,3 +2593,11 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * Test corrections made FOR honesty, not convenience: the shoelace area of a ring counts the pivot's corner loops twice (winding 2) — the assertion moved to the nonzero-sampled `filledArea`; a KAPPA quarter is not an arc (2e-4 relative length, 0.027 % radial) — thresholds say so; a closed dashed circle's "on" length includes the wrapping dash.
 * RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (the gate caught `sideOps` CC 12 → `cornerAt` + `segOp` extracted; `normalizeDash` CC 11 → `dashValues` extracted); `npm run quality:changed` GATE PASSED; `npm run verify` ALL LANES PASSED. RULE 18: seven new files 36–119 lines (ideals ~110–150 met), `prepare.ts` +4.
 * RULE 18 directory note: `src/lib/upload/` now holds `geom/expand/` (6 files) and `epsconv/` (5 files) as their own concept folders; `src/svg/` (53 files) remains the recorded debt.
+
+## 2026-10-09 — fix(ui): the Full path row no longer glues a previous root onto a new pick (I-59)
+
+* TDD: red first — `tests/knownroots.test.ts` (`provenOutside`: veto only on a definite `resolve() === null` under a known path; sibling prefix, containing root, no-resolve/throw/no-path all false), `tests/pickroot.test.ts` (the reported `…\export\test_process_3` refused; the app's own copy never completed, adopted when exact), `tests/rootcapture.test.ts` (`Rescan` replaces a `completed` guess, keeps it otherwise), `tests/upload_ui.test.tsx` (end to end in the reporting tab; the red run printed the exact path from the screenshot) — then green.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 warnings, all pre-existing — same count on HEAD); `npm run quality:changed` GATE PASSED (`knownroots.ts` 13 fns/101, `pickroot.ts` 7 fns/121, `rootcapture.ts` 9 fns/87, `copypath.ts` 2 fns/33, `actions.ts` 31 fns/292); every new fn ≤ 30 lines, ≤ 2 params, CC ≤ 4.
+* RULE 18: no new source file; largest touched `src/upload/actions.ts` 291 lines (baseline file, +6). `src/svg/` directory debt unchanged.
+* Honesty: the completion is still offered (flagged) when nothing contradicts it — the one case it serves (first pick with the parent copied) keeps working; nothing is stored before the answer is settled.
+

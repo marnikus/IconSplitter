@@ -20,6 +20,8 @@ import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
+import { saveRootPathInfo } from "../src/lib/rootpath";
+import { clearKnownRoots } from "../src/ui/knownroots";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { BinDir, BinFile } from "./helpers/binfakefs";
@@ -351,6 +353,7 @@ function fileText(root: BinDir, relPath: string): string {
 beforeEach(() => {
   localStorage.clear();
   stored.clear();
+  clearKnownRoots();
   resetAppStore();
   resetLogStore();
   forgetRestoreNote(); // every test gets a fresh page load
@@ -413,6 +416,42 @@ describe("the tab", () => {
     await type("[data-testid=upload-search]", "arch_AI");
     expect(qa("[data-testid^=upload-row-pair_]")).toHaveLength(1);
     expect(q(`[data-testid=upload-row-${ARCH}]`)).not.toBeNull();
+  });
+});
+
+describe("the Full path row — never a previous root with the new name appended (I-46/I-51)", () => {
+  const SINGLE = "F:\\Stocks 2026\\icons testing\\single";
+  const OLD = `${SINGLE}\\test_processing_2\\_split_output`;
+  const usePicker = (pick: () => Promise<unknown>) =>
+    Object.defineProperty(window, "showDirectoryPicker", { value: pick, configurable: true });
+  const readClipboard = (text: string) =>
+    Object.defineProperty(navigator, "clipboard", { value: { readText: async () => text }, configurable: true });
+
+  itSlow("picks a sibling tree while the clipboard holds a folder of the old root: the row says 'not captured'", async () => {
+    // the reported mistake (2026-10-09): the clipboard still held the app's own
+    // "copy folder path" of an export folder deep inside the previous root
+    const root = makeRoot();
+    Object.assign(root, { resolve: async () => null }); // the new pick is NOT below this root
+    saveRootPathInfo(root.name, OLD);
+    await mount(root);
+    expect(text("[data-testid=upload-folder-path] code")).toBe(OLD);
+    readClipboard(`${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export`);
+    usePicker(async () => new BinDir("test_process_3"));
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === "test_process_3", "the new root's row");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("export\\test_process_3");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+  });
+
+  itSlow("Rescan replaces a completed guess with the exact path Explorer copied", async () => {
+    const root = makeRoot();
+    saveRootPathInfo(root.name, `${OLD}\\wrong\\${root.name}`, "completed");
+    await mount(root);
+    expect(text("[data-testid=upload-folder-path]")).toContain("completed — check it");
+    readClipboard(`${SINGLE}\\${root.name}`);
+    await click("[data-testid=upload-rescan]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === `${SINGLE}\\${root.name}`, "the exact path");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("check it");
   });
 });
 

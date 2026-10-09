@@ -9,6 +9,7 @@
 // are persisted but not undoable (the same class as presets).
 
 import { useCallback, useRef, type Dispatch } from "react";
+import type { DirHandleLike } from "../lib/fs";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
 import type { GeminiConfig } from "../lib/upload/gemini";
@@ -19,6 +20,7 @@ import {
 } from "../lib/upload/settings";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
+import { retryCapture } from "../ui/rootcapture";
 import { clearGeminiKey, saveGeminiKey } from "./keystore";
 import type { UploadDiscovery } from "./discovery";
 import { rememberRoot } from "./scan";
@@ -138,7 +140,13 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
       c.say(picked.message ?? `Approved SVGs scanned from ${picked.handle.name}`);
     })();
   }, []);
-  const rescan = useCallback(() => latest.current.loadAll(), []);
+  const rescan = useCallback(() => {
+    const c = latest.current;
+    // before any await: the click's own gesture is what allows the read (I-52)
+    const root = c.refs.root.current as DirHandleLike | null;
+    void retryCapture(root?.name ?? "").then((captured) => { if (captured !== null) c.say(captured); });
+    c.loadAll();
+  }, []);
   return { chooseRoot, rescan };
 }
 

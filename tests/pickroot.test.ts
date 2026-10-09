@@ -4,7 +4,8 @@
 // costs the user the folder they just chose.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adoptCopiedText } from "../src/lib/clipboardpath";
-import { loadRootPath, loadRootPathInfo } from "../src/lib/rootpath";
+import { copyFolderText } from "../src/lib/copypath";
+import { loadRootPath, loadRootPathInfo, saveRootPathInfo } from "../src/lib/rootpath";
 import { pickMessage, pickRootWithPath } from "../src/ui/pickroot";
 import { clearKnownRoots, rememberKnownRoot } from "../src/ui/knownroots";
 import type { DirHandleLike } from "../src/lib/fs";
@@ -27,9 +28,9 @@ function stubClipboard(readText: () => Promise<string>): void {
 /**
  * A KNOWN folder: the handle the app already picked, whose `resolve` answers the
  * segments from itself down to the folder about to be picked (the real API is
- * `parent.resolve(child)`).
+ * `parent.resolve(child)`), or null when the pick is not below it.
  */
-function ancestorOf(name: string, segments: string[]): DirHandleLike {
+function ancestorOf(name: string, segments: string[] | null): DirHandleLike {
   return {
     kind: "directory", name,
     resolve: async () => segments,
@@ -164,6 +165,51 @@ describe("the full path of a pick whose clipboard says nothing (I-51)", () => {
     const picked = await pickRootWithPath();
     expect(picked?.path).toBe(`${OUT}\\2026-10-05_18-45-20`); // the old, flagged guess
     expect(picked?.how).toBe("completed");
+  });
+
+  it("refuses a completion a known folder proves wrong — the reported concatenation", async () => {
+    // the clipboard still held a folder deep inside the PREVIOUS root
+    // (`…\\split_03\\export`); the user picked a sibling tree, `test_process_3`
+    const deep = `${OUT}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export`;
+    stubClipboard(async () => deep);
+    rememberKnownRoot(ancestorOf("_split_output", null), OUT); // null: the pick is not below it
+    usePicker(async () => handle("test_process_3"));
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe(""); // not `…\\export\\test_process_3`
+    expect(picked?.how).toBeNull();
+    expect(loadRootPathInfo("test_process_3")).toEqual({ path: "", how: null });
+    expect(pickMessage(picked!)).toContain("Ctrl+Shift+C"); // the honest way out, not a wrong path
+  });
+
+  it("never completes from text this app itself put on the clipboard", async () => {
+    // the app's own "copy folder path" (an export folder) is on the clipboard;
+    // it is a real folder, but not an Explorer copy of the folder being picked
+    saveRootPathInfo("_split_output", OUT);
+    const clip = { text: "" };
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: async () => clip.text, writeText: async (t: string) => { clip.text = t; } },
+      configurable: true,
+    });
+    await copyFolderText("_split_output", "2026-10/run/piece/split_03/export/icon.svg", () => undefined);
+    expect(clip.text).toBe(`${OUT}\\2026-10\\run\\piece\\split_03\\export`);
+    usePicker(async () => handle("test_process_3"));
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe("");
+    expect(picked?.how).toBeNull();
+  });
+
+  it("still adopts the app's own copy when it names the picked folder exactly", async () => {
+    saveRootPathInfo("_split_output", OUT);
+    const clip = { text: "" };
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: async () => clip.text, writeText: async (t: string) => { clip.text = t; } },
+      configurable: true,
+    });
+    await copyFolderText("_split_output", "2026-10/run/piece/split_03/export/icon.svg", () => undefined);
+    usePicker(async () => handle("export"));
+    const picked = await pickRootWithPath();
+    expect(picked?.path).toBe(`${OUT}\\2026-10\\run\\piece\\split_03\\export`);
+    expect(picked?.how).toBe("copied");
   });
 
   it("remembers the pick it just captured, so the NEXT pick inside it is exact", async () => {

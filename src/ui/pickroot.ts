@@ -8,13 +8,17 @@
 // returned, because the scan is what the user asked for. When the clipboard
 // cannot name the folder exactly (nothing, or only a guess), the path is derived
 // from a folder this app already picked (I-51) — a real handle relationship,
-// never text.
+// never text. The guess that remains is kept only while nothing contradicts it
+// (I-59): not the app's own last copy, not a folder a known root rules out.
 
 import { pickDirectory } from "../batch/picker";
 import { adoptCopiedText, readClipboardText, type ClipState } from "../lib/clipboardpath";
+import { lastCopiedByApp } from "../lib/copypath";
 import type { DirHandleLike } from "../lib/fs";
-import { loadRootPathInfo, saveRootPathInfo, type PathHow, type RootPathInfo } from "../lib/rootpath";
-import { deriveRootPath, rememberKnownRoot } from "./knownroots";
+import {
+  loadRootPathInfo, normalizeRootPath, pathFromCopied, saveRootPathInfo, type PathHow, type RootPathInfo,
+} from "../lib/rootpath";
+import { deriveRootPath, provenOutside, rememberKnownRoot } from "./knownroots";
 
 /** The picked folder, plus the full path captured for it ("" when none). */
 export interface PickedRoot {
@@ -47,14 +51,28 @@ export async function pickRootWithPath(): Promise<PickedRoot | null> {
 /**
  * The path of the picked folder: the clipboard when it names it exactly, else
  * the derivation from a known ancestor (which is exact), else the clipboard's
- * flagged completion, else nothing at all (I-51).
+ * flagged completion — only while nothing the app knows contradicts it (I-59) —
+ * else nothing at all (I-51). Nothing is written until the answer is settled.
  */
 async function pathForPick(handle: DirHandleLike, copied: string): Promise<RootPathInfo> {
-  const info = copied === "" ? UNKNOWN : adoptCopiedText(handle.name, copied);
-  if (info.path !== "" && info.how !== "completed") return info;
+  const fromClip = copied === "" ? UNKNOWN : pathFromCopied(copied, handle.name);
+  if (fromClip.how === "copied") return adoptCopiedText(handle.name, copied);
   const derived = await deriveRootPath(handle);
-  if (derived === null) return info;
-  return saveRootPathInfo(handle.name, derived, "copied");
+  if (derived !== null) return saveRootPathInfo(handle.name, derived, "copied");
+  if (fromClip.how !== "completed" || !(await believable(handle, copied))) return UNKNOWN;
+  return adoptCopiedText(handle.name, copied);
+}
+
+/**
+ * A completion is a guess, and a guess yields to evidence (I-59): the text the
+ * app itself copied last is not an Explorer copy of this pick's parent, and a
+ * copied folder that lies under a known folder which does NOT contain the pick
+ * cannot be its parent either (the reported `…\\export\\<new root>` concatenation).
+ */
+async function believable(handle: DirHandleLike, copied: string): Promise<boolean> {
+  const path = normalizeRootPath(copied);
+  if (path === normalizeRootPath(lastCopiedByApp())) return false;
+  return !(await provenOutside(handle, path));
 }
 
 const UNKNOWN: RootPathInfo = { path: "", how: null };

@@ -33,18 +33,24 @@ export function captureFromPaste(text: string, rootName: string): RootPathInfo |
 }
 
 /**
- * One more capture attempt for a root whose path is still unknown — the line
- * `Rescan` says when it lands, null when there is nothing to do or nothing to
- * report. Only a real user gesture may read the clipboard (I-52), which is what
- * keeps a scan at boot from touching it.
+ * One more capture attempt for a root whose path is still unknown — or only a
+ * flagged completion, which an exact match replaces (I-59) — the line `Rescan`
+ * says when it lands, null when there is nothing to do or nothing to report.
+ * Only a real user gesture may read the clipboard (I-52), which is what keeps a
+ * scan at boot from touching it.
  */
 export async function retryCapture(rootName: string): Promise<string | null> {
-  if (rootName === "" || loadRootPathInfo(rootName).path !== "") return null;
+  if (rootName === "" || settled(loadRootPathInfo(rootName))) return null;
   if (!byUserGesture()) return null;
   const read = await readClipboardText();
   if (read.state !== "text") return null;
   const info = captureFromPaste(read.text, rootName);
   return info === null ? null : `Folder path captured: ${info.path}`;
+}
+
+/** A path that needs no second look: captured exactly (a completion is a guess). */
+function settled(info: RootPathInfo): boolean {
+  return info.path !== "" && info.how !== "completed";
 }
 
 /**

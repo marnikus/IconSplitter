@@ -8,7 +8,7 @@
 // guessed path.
 import { beforeEach, describe, expect, it } from "vitest";
 import type { DirHandleLike } from "../src/lib/fs";
-import { clearKnownRoots, deriveRootPath, knownRoots, rememberKnownRoot } from "../src/ui/knownroots";
+import { clearKnownRoots, deriveRootPath, knownRoots, provenOutside, rememberKnownRoot } from "../src/ui/knownroots";
 
 /** A plain directory handle — what the picker hands back. */
 function dir(name: string): DirHandleLike {
@@ -86,5 +86,49 @@ describe("deriveRootPath — where a newly picked folder lives", () => {
     rememberKnownRoot(same, "F:\\work\\main");
     rememberKnownRoot(same, "F:\\work\\main");
     expect(knownRoots()).toEqual([{ handle: same, path: "F:\\work\\main" }]);
+  });
+});
+
+// The reported mistake (2026-10-09): the clipboard held a folder path from an
+// EARLIER root (`…\\test_processing_2\\_split_output\\…\\split_03\\export`, the
+// app's own "copy folder path"), the user picked a sibling tree
+// (`…\\single\\test_process_3`), and the picker completed the two into
+// `…\\export\\test_process_3`. A known folder that CONTAINS the copied path can
+// settle it: its own `resolve(picked)` says whether the pick lies below it at all.
+describe("provenOutside — a copied folder a known folder rules out as the parent", () => {
+  const OUT = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
+  const DEEP = `${OUT}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export`;
+
+  it("is true when the copied folder lies under a known folder that does not contain the pick", async () => {
+    rememberKnownRoot(ancestorOf("_split_output", null), OUT); // null: the pick is NOT below it
+    expect(await provenOutside(dir("test_process_3"), DEEP)).toBe(true);
+    expect(await provenOutside(dir("test_process_3"), OUT)).toBe(true); // the known folder itself
+  });
+
+  it("forgives case and a trailing separator in the comparison", async () => {
+    rememberKnownRoot(ancestorOf("_split_output", null), OUT);
+    expect(await provenOutside(dir("x"), `${DEEP.toLowerCase()}\\`)).toBe(true);
+  });
+
+  it("is false when the copied folder is not under any known folder", async () => {
+    rememberKnownRoot(ancestorOf("_split_output", null), OUT);
+    expect(await provenOutside(dir("x"), "F:\\Stocks 2026\\icons testing\\single")).toBe(false);
+    expect(await provenOutside(dir("x"), `${OUT}_other\\sub`)).toBe(false); // a sibling with the same prefix
+  });
+
+  it("is false when the known folder DOES contain the pick (derivation answers instead)", async () => {
+    rememberKnownRoot(ancestorOf("_split_output", ["2026-10", "run"]), OUT);
+    expect(await provenOutside(dir("run"), `${OUT}\\2026-10`)).toBe(false);
+  });
+
+  it("is false when the platform cannot say: no resolve(), a throw, or no captured path", async () => {
+    rememberKnownRoot(ancestorOf("_split_output", null, false), OUT);
+    expect(await provenOutside(dir("x"), DEEP)).toBe(false);
+    clearKnownRoots();
+    rememberKnownRoot(ancestorOf("_split_output", "throw"), OUT);
+    expect(await provenOutside(dir("x"), DEEP)).toBe(false);
+    clearKnownRoots();
+    rememberKnownRoot(ancestorOf("_split_output", null), "");
+    expect(await provenOutside(dir("x"), DEEP)).toBe(false);
   });
 });

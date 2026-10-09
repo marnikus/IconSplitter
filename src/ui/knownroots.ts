@@ -44,21 +44,51 @@ export async function deriveRootPath(handle: DirHandleLike): Promise<string | nu
   for (const root of knownRoots()) {
     if (root.path === "") continue;
     const segments = await resolveSegments(root.handle, handle);
-    if (segments === null) continue;
-    return joinPath(root.path, segments);
+    if (Array.isArray(segments)) return joinPath(root.path, segments);
   }
   return null;
 }
 
-/** `parent.resolve(child)`, or null when it is not a descendant / not allowed. */
-async function resolveSegments(parent: DirHandleLike, child: DirHandleLike): Promise<string[] | null> {
+/**
+ * True when a folder this app already named proves that `folderPath` cannot be
+ * the parent of `handle`: the copied folder lies under (or is) that known folder,
+ * and the known folder's own `resolve(handle)` answers null — "not below me".
+ * The reported mistake (2026-10-09): a folder of the PREVIOUS root still on the
+ * clipboard, a sibling tree picked, and the two completed into one wrong path.
+ * A refusal to answer (no `resolve`, a throw) proves nothing and yields false.
+ */
+export async function provenOutside(handle: DirHandleLike, folderPath: string): Promise<boolean> {
+  const copied = comparable(folderPath);
+  for (const root of knownRoots()) {
+    if (root.path === "" || !isWithin(copied, comparable(root.path))) continue;
+    if ((await resolveSegments(root.handle, handle)) === "outside") return true;
+  }
+  return false;
+}
+
+/** `path` is `base` itself or a folder below it (both already `comparable`). */
+function isWithin(path: string, base: string): boolean {
+  return path === base || path.startsWith(`${base}\\`);
+}
+
+/** Case-folded, without a trailing separator — Windows paths compare that way. */
+function comparable(path: string): string {
+  return path.replace(/\\+$/, "").toLowerCase();
+}
+
+/**
+ * `parent.resolve(child)`: the segments when it is a descendant, "outside" when
+ * the platform answered null (a definite no), "unknown" when it could not say.
+ */
+async function resolveSegments(parent: DirHandleLike, child: DirHandleLike): Promise<string[] | "outside" | "unknown"> {
   const resolve = (parent as unknown as { resolve?: (h: DirHandleLike) => Promise<unknown> }).resolve;
-  if (typeof resolve !== "function") return null;
+  if (typeof resolve !== "function") return "unknown";
   try {
     const answer = await resolve.call(parent, child);
-    return Array.isArray(answer) && answer.every((s) => typeof s === "string") ? answer : null;
+    if (answer === null) return "outside";
+    return Array.isArray(answer) && answer.every((s) => typeof s === "string") ? answer : "unknown";
   } catch {
-    return null; // a lost permission or a foreign file system: no path, never an error
+    return "unknown"; // a lost permission or a foreign file system: no path, never an error
   }
 }
 

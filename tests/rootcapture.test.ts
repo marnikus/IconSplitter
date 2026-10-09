@@ -5,7 +5,7 @@
 // when its leaf is the root's own name. Anything else — a pasted parent folder,
 // a pasted word, a URL, a leaf-only copy — is ignored and writes nothing.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadRootPath, ROOT_PATH_KEY } from "../src/lib/rootpath";
+import { loadRootPath, loadRootPathInfo, ROOT_PATH_KEY, saveRootPathInfo } from "../src/lib/rootpath";
 import { bindPasteCapture, captureFromPaste, retryCapture } from "../src/ui/rootcapture";
 
 const ROOT = "_split_output";
@@ -63,6 +63,21 @@ describe("retryCapture — Rescan's one extra attempt (I-52)", () => {
     await retryCapture(ROOT); // first call captures it
     expect(await retryCapture(ROOT)).toBeNull();
     expect(read).toHaveBeenCalledTimes(1); // the second call never touched the clipboard
+  });
+
+  it("replaces a COMPLETED guess with an exact match — a guess is not a capture", async () => {
+    saveRootPathInfo(ROOT, `${PARENT}\\wrong\\${ROOT}`, "completed");
+    stubClipboard(async () => FULL);
+    expect(await retryCapture(ROOT)).toBe(`Folder path captured: ${FULL}`);
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: FULL, how: "copied" });
+  });
+
+  it("keeps the completed guess when the clipboard cannot name the folder exactly", async () => {
+    const guess = `${PARENT}\\wrong\\${ROOT}`;
+    saveRootPathInfo(ROOT, guess, "completed");
+    stubClipboard(async () => PARENT);
+    expect(await retryCapture(ROOT)).toBeNull();
+    expect(loadRootPathInfo(ROOT)).toEqual({ path: guess, how: "completed" });
   });
 
   it("stays quiet when the clipboard cannot name this folder", async () => {
