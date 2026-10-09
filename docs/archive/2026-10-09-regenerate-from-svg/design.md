@@ -1,6 +1,6 @@
 # Regenerate SVG — main prompt + image, and "Regenerate from current SVG"
 
-Date: 2026-10-09 · Area: Generate SVG (`src/svg/`) + Export settings (`src/upload/`)
+Date: 2026-10-09 · Area: Generate SVG (`src/svg/`), shared prompt window (`src/ui/`), Export settings (`src/upload/`)
 
 This doc has two features. Feature 1 is the baseline contract that already
 holds; Feature 2 is new. Read §1 for the contract, §2 for the new option.
@@ -25,8 +25,18 @@ silently alter what a regeneration sends.
 
 ### 2.1 What the user sees
 
-Export settings (`⚙ Export settings…`, global scope only) gets one row,
-**Regenerate SVG from**:
+> **Revision 2026-10-09 (same day, after the first cut):** the row moved out of
+> Export settings into the Generate SVG tab, as a window directly above the
+> main prompt window. The drop-down lists the **SVG prompt presets**, which are
+> their own list (`iconSplitter.svg.prompts.v1`). The main prompt window gained
+> the same preset controls as the metadata prompt (select, Quick load, Delete,
+> Save as), and both windows now share one implementation (`ui/PromptWindow`,
+> `ui/PromptPresetBar`, `ui/presetops`, see SYSTEM_OF_RECORD I-65). The text
+> below describes the first cut where it says Export settings; the placement
+> and the preset list named in §4 are the revised ones.
+
+In the Generate SVG tab, a window **Regenerate SVG from** sits above the prompt
+window (global; one choice for the whole tab). It has one row:
 
 | Choice | What a regeneration sends |
 |---|---|
@@ -73,11 +83,11 @@ duplicate data. (`RequestText.record` in `svg/regenprompt.ts`.)
 | Setting shape, parse/serialize | `src/lib/svgregen.ts` | `RegenSetting`, `RegenPlan`, `regenPlanOf`, `requestSizeFor`, `currentSvgPrompt`, `regenLabelOf` (pure) |
 | Persistence | `src/svg/regenstore.ts` | key `iconSplitter.svg.regen.v1`, `resolveRegen()` (setting + saved presets) |
 | Request text | `src/svg/regenprompt.ts` | which text and image one request carries; reads the current SVG |
-| Export settings row | `src/upload/UploadRegenSetting.tsx` | the choice, the preset drop-down, the live note |
+| Regen window | `src/svg/RegenSetting.tsx`, `src/svg/SvgPromptZone.tsx` | the choice, the SVG preset drop-down (live from the prompt window), the live note |
 | Plan / run wiring | `runplan.ts`, `runcontrol.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts` | the guard, the request size, the plan handed to the run |
 
-The saved prompt presets are the existing metadata prompt presets
-(`iconSplitter.upload.prompts.v1`, `lib/upload/promptpresets`). The setting is
+The saved prompts are the SVG prompt presets (`iconSplitter.svg.prompts.v1`,
+`lib/promptpresets`), separate from the metadata presets. The setting is
 kept OUT of `iconSplitter.upload.settings.v1` on purpose: that object is
 fingerprinted for selective re-export, and a generation choice must not
 invalidate exports.
@@ -94,7 +104,9 @@ invalidate exports.
 ## 3. Verification
 
 * TDD: `tests/svg_regen.test.ts`, `tests/svg_regenprompt.test.ts`,
-  `tests/upload_regen_ui.test.tsx` written red first; `tests/svg_runner.test.ts`
+  `tests/svg_regen_ui.test.tsx` written red first; the shared preset rule
+  (`tests/prompt_presets_shared.test.ts`, `tests/svg_prompt_presets.test.ts`)
+  written red first as well; `tests/svg_runner.test.ts`
   gained the end-to-end v2 case (one request per icon, code in the body, the
   record without the code).
 * Gates: `npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,

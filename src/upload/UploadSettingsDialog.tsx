@@ -17,7 +17,6 @@ import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./se
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
-import UploadRegenSetting from "./UploadRegenSetting";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -81,7 +80,6 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
         hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />
-      {p.id === null && <UploadRegenSetting />}
     </div>
   );
 }

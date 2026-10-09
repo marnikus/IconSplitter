@@ -14,8 +14,8 @@ import { loadRegenSetting, resolveRegen, saveRegenSetting } from "../src/svg/reg
 import { guard, perRequestOf } from "../src/svg/runplan";
 import type { SvgCtx } from "../src/svg/actions";
 import { FakeDir } from "./helpers/fakefs";
-import { savePresets } from "../src/upload/promptstore";
-import { PRESET_NAME_MAX, type PromptPreset } from "../src/lib/upload/promptpresets";
+import { savePresets } from "../src/svg/promptstore";
+import { PRESET_NAME_MAX, type PromptPreset } from "../src/lib/promptpresets";
 
 const PRESETS: PromptPreset[] = [
   { name: "Bolder", text: "Make the strokes bolder and keep the layout." },

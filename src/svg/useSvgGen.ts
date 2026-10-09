@@ -8,7 +8,7 @@
 
 import { useRef } from "react";
 import { fsSupported } from "../batch/picker";
-import { loadConfig, loadPrompt } from "./promptstore";
+import { loadConfig, loadPrompt, loadPresets } from "./promptstore";
 import { loadSvgPrefs } from "./prefsstore";
 import { useSvgCtx } from "./ctx";
 import { useSvgModel, type SvgModel, type ViewPrefs } from "./statemodel";
@@ -35,7 +35,7 @@ export type SvgGenApi = SvgModel & SvgActions & {
 
 export function useSvgGen(): SvgGenApi {
   const boot = useRef(loadBoot()).current;
-  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs);
+  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs, boot.presets);
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
   const recovery = useInflightRecovery(model.rows, ctx.setRowsFn, actions.requestGenerate);
@@ -50,11 +50,12 @@ interface Boot {
   config: ReturnType<typeof loadConfig>;
   prompt: string;
   prefs: ViewPrefs;
+  presets: ReturnType<typeof loadPresets>;
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */
 function loadBoot(): Boot {
   const prefs = loadSvgPrefs();
   const view: ViewPrefs = { thumb: prefs.thumbHeight, providerOpen: prefs.providerOpen, bg: prefs.previewBg };
-  return { config: loadConfig(), prompt: loadPrompt(), prefs: view };
+  return { config: loadConfig(), prompt: loadPrompt(), prefs: view, presets: loadPresets() };
 }

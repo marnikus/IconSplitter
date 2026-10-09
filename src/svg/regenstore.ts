@@ -5,7 +5,7 @@
 
 import { DEFAULT_REGEN, parseRegen, regenPlanOf, serializeRegen, type RegenResult, type RegenSetting } from "../lib/svgregen";
 import { readKey, writeKey } from "../state/safestorage";
-import { loadPresets } from "../upload/promptstore";
+import { loadPresets } from "./promptstore";
 
 const KEY = "iconSplitter.svg.regen.v1";
 

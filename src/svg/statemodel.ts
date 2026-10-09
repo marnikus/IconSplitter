@@ -15,6 +15,7 @@ import {
 } from "../lib/modelcaps";
 import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
 import type { PreviewBackground } from "../lib/svgbackground";
+import { findPreset, type PromptPreset } from "../lib/promptpresets";
 import type { Discovery } from "./sources";
 import type { QueueItem } from "./runqueue";
 import type { Dialog, RunProgress, SvgRow } from "./types";
@@ -43,6 +44,10 @@ export interface SvgModel {
   /** Warning shown until dismissed: what a model change had to reset. */
   paramNote: string | null;
   prompt: string;
+  /** Named snapshots of the generation prompt, newest first (RULE 13 bounds). */
+  presets: PromptPreset[];
+  /** Which preset the list row acts on (empty = none picked yet). */
+  presetPick: string;
   /** Masked key for display; the key itself lives in svg/keystore. */
   keyMask: string;
   keySet: boolean;
@@ -85,6 +90,8 @@ export type SvgAction =
   | { type: "catalog"; catalog: CatalogModel[] | null }
   | { type: "param-note"; note: string | null }
   | { type: "prompt"; prompt: string }
+  | { type: "presets"; presets: PromptPreset[] }
+  | { type: "preset-pick"; name: string }
   | { type: "key"; key: string | null; source?: KeySource }
   | { type: "root-token" }
   | { type: "thumb"; px: number }
@@ -114,6 +121,8 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   catalog: (m, a) => ({ ...m, catalog: (a as { catalog: CatalogModel[] | null }).catalog }),
   "param-note": (m, a) => ({ ...m, paramNote: (a as { note: string | null }).note }),
   prompt: (m, a) => ({ ...m, prompt: (a as { prompt: string }).prompt }),
+  presets: (m, a) => presetsModel(m, (a as { presets: PromptPreset[] }).presets),
+  "preset-pick": (m, a) => ({ ...m, presetPick: (a as { name: string }).name }),
   key: (m, a) => keyModel(m, (a as { key: string | null }).key, (a as { source?: KeySource }).source),
   "root-token": (m) => ({ ...m, rootToken: m.rootToken + 1 }),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
@@ -164,17 +173,23 @@ export interface ViewPrefs {
 }
 
 /** The model a fresh tab opens with (persisted values are merged in boot). */
-export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs): SvgModel {
+/** A list change keeps the pick only while that preset still exists. */
+function presetsModel(m: SvgModel, presets: PromptPreset[]): SvgModel {
+  const picked = findPreset(presets, m.presetPick) === null ? "" : m.presetPick;
+  return { ...m, presets, presetPick: picked };
+}
+
+export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, presets: PromptPreset[] = []): SvgModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
+    prompt, presets, presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
     filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [],
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
-export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs): [SvgModel, Dispatch<SvgAction>] {
-  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs));
+export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, presets: PromptPreset[]): [SvgModel, Dispatch<SvgAction>] {
+  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, presets));
 }

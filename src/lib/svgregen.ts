@@ -8,7 +8,7 @@
 
 import { isRecord } from "./isrecord";
 import { clampImagesPerRequest } from "./svgconfig";
-import { findPreset, validPresetName, type PromptPreset } from "./upload/promptpresets";
+import { findPreset, validPresetName, type PromptPreset } from "./promptpresets";
 
 export const REGEN_VERSION = 1;
 

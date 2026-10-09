@@ -13,7 +13,9 @@ import {
   clampImagesPerRequest, clampRetries, clampTimeoutMs, modelLabel, type SvgConfig,
 } from "../lib/svgconfig";
 import { stallLabel, stallNote } from "../lib/effortlimits";
-import { DEFAULT_SVG_PROMPT, isDefaultPrompt } from "../lib/svgprompt";
+import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
+import type { PromptWindowProps } from "../ui/PromptWindow";
+import SvgPromptZone from "./SvgPromptZone";
 import type { SvgListFilter, SvgSort } from "../lib/svglist";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import SvgSampling from "./SvgSampling";
@@ -29,7 +31,8 @@ export interface SvgControlsProps {
   discovery: Discovery | null;
   busy: string | null;
   counts: SvgCounts;
-  prompt: string;
+  /** The prompt window (text, presets) — built by svgPromptWindowOf in SvgPanel. */
+  prompt: PromptWindowProps;
   provider: string;
   config: SvgConfig;
   caps: ModelCaps;
@@ -46,8 +49,6 @@ export interface SvgControlsProps {
   total: number;
   onChooseRoot: () => void;
   onRescan: () => void;
-  onPrompt: (text: string) => void;
-  onResetPrompt: () => void;
   onConfig: (patch: Partial<SvgConfig>) => void;
   onParams: (patch: Partial<SamplingParams>) => void;
   onRefreshModels: () => void;
@@ -66,7 +67,7 @@ export default function SvgControls(p: SvgControlsProps) {
       <SourceLine rootName={p.rootName} root={p.root} discovery={p.discovery} busy={p.busy} counts={p.counts}
         onChooseRoot={p.onChooseRoot} onRescan={p.onRescan} />
       <div className="svg-toolbar">
-        <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />
+        <SvgPromptZone win={p.prompt} />
         <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params}
           paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} open={p.providerOpen}
           onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
@@ -75,19 +76,6 @@ export default function SvgControls(p: SvgControlsProps) {
       <FilterLine filter={p.filter} sort={p.sort} shown={p.shown} total={p.total}
         onFilter={p.onFilter} onSort={p.onSort} onClear={p.onClearFilters} />
     </section>
-  );
-}
-
-function PromptZone({ prompt, onPrompt, onReset }: { prompt: string; onPrompt: (t: string) => void; onReset: () => void }) {
-  return (
-    <div className="svg-prompt-zone">
-      <div className="svg-field-label">
-        <span>Generation prompt · saved locally{isDefaultPrompt(prompt) ? " · default" : ""}</span>
-        <button type="button" className="svg-link" data-testid="svg-reset-prompt" onClick={onReset}>Reset default</button>
-      </div>
-      <textarea className="svg-prompt" data-testid="svg-prompt" aria-label="Generation prompt" spellCheck={false}
-        value={prompt} onChange={(e) => onPrompt(e.target.value)} />
-    </div>
   );
 }
 

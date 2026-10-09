@@ -347,7 +347,7 @@ Prompt + provider card:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-reset-prompt` restores the documented default |
+| `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-prompt-reset` restores the documented default; `svg-prompt-window` wraps the window. The shared preset bar (2026-10-09): `svg-preset-list`, `svg-preset-quick-load`, `svg-preset-delete`, `svg-preset-name`, `svg-preset-save` — the same handles and rules as the metadata prompt, over the SVG preset list |
 | `svg-provider` | text | provider name + "OpenAI-compatible" |
 | `svg-limits` | text | the values that will really be used: "\{stall label} · N retries · N per request" — the label names its tier floor ("600s stall (high floor)") and the per-request size is **exactly what the user configured** (no tier ever shrinks it); the `title` carries the tier note |
 | `svg-per-request` | `input[type=number]` | images per request, 1–9 — the size that is really sent, at every reasoning tier |
@@ -670,14 +670,16 @@ Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
 settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
 (§O).
 
-## S. Regenerate SVG from — Export settings row (2026-10-09, `src/upload/UploadRegenSetting.tsx`)
+## S. Regenerate SVG from — window above the Generate SVG prompt (2026-10-09, `src/svg/RegenSetting.tsx`)
 
-Global scope only (the dialog's `upload-settings-open` → no icon id). Choice and
-saved prompt are written at the moment of change (RULE 24).
+Moved here from Export settings on 2026-10-09; it is no longer in the Export settings dialog.
+It sits directly above the prompt window (`svg-prompt-zone`). Its drop-down lists the SVG
+prompt presets (`iconSplitter.svg.prompts.v1`), not the metadata presets. Choice and saved
+prompt are written at the moment of change (RULE 24).
 
 | Handle | Kind | Notes |
 |---|---|---|
-| `upload-regen` | container | the whole row, label "Regenerate SVG from" |
-| `upload-regen-mode` | `select` (aria-label "Regenerate SVG from") | `main` = "Main prompt + first image" (default), `current-svg` = "Regenerate from current SVG" |
-| `upload-regen-preset` | `select` (aria-label "Saved prompt for regeneration") | shown only in the current-SVG mode; first option "— choose a saved prompt —", then the saved prompt presets by name |
-| `upload-regen-note` | `small` | says what the choice will do, or why it cannot run yet (no pick, a gone or blank prompt, no saved prompts) |
+| `svg-regen` | container | the whole row, label "Regenerate SVG from" |
+| `svg-regen-mode` | `select` (aria-label "Regenerate SVG from") | `main` = "Main prompt + first image" (default), `current-svg` = "Regenerate from current SVG" |
+| `svg-regen-preset` | `select` (aria-label "Saved prompt for regeneration") | shown only in the current-SVG mode; first option "— choose a saved prompt —", then the saved prompt presets by name |
+| `svg-regen-note` | `small` | says what the choice will do, or why it cannot run yet (no pick, a gone or blank prompt, no saved prompts) |

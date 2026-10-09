@@ -2647,3 +2647,13 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - RULE 18/19 remediation during the change: `runbatch.ts` reached 303 lines (over the 300 hard line) — the wire of one request (send, journal, confirmed-only retries) moved to `src/svg/runsend.ts` (100 lines), `runbatch.ts` → 217; `startRun` reached 33 lines — the "mark generating" step extracted as `beginRun` (startRun now ≈ 22).
 - `npm run verify:fast` ALL LANES PASSED: 147 files / 1,669 tests; `src/lib` lines 96.17%, branches 89.83%; build `dist/index.html` 1,457.37 kB (430.38 kB gzip).
 - Known limit, stated in the UI and the design: the saved prompts are the metadata prompt presets; a preset written for metadata (three labelled lines) will not yield an SVG and is rejected by the existing SVG validator.
+
+## 2026-10-09 — feat(svg): regen window moved to the Generate SVG tab; shared prompt presets (I-65)
+
+- Moved "Regenerate SVG from" out of Export settings into a window above the Generate SVG prompt (`src/svg/RegenSetting.tsx`, `src/svg/SvgPromptZone.tsx`). Its drop-down lists the SVG prompt presets (`iconSplitter.svg.prompts.v1`), live from the prompt window (RULE 24).
+- The Generate SVG prompt window gained the same preset controls as the metadata prompt (select, Quick load, Delete, Save as). One implementation serves both tabs: `src/ui/PromptWindow.tsx`, `src/ui/PromptPresetBar.tsx`, `src/ui/presetops.ts`, `src/lib/promptpresets.ts`, `src/state/presetstore.ts`. The upload prompt panel keeps its handles and renders the same window. No save code is duplicated.
+- TDD: `tests/prompt_presets_shared.test.ts` (14 incl. the svg one), `tests/svg_prompt_presets.test.ts`, `tests/svg_regen_ui.test.tsx` written red first (module-missing failures), then green. `tests/upload_regen_ui.test.tsx` removed (its subject moved). `tests/secret_hygiene.test.ts` needed no change; the stale index entry was staged out with `git rm`.
+- Test-id change: `svg-reset-prompt` → `svg-prompt-reset`. No test used the old id. Docs updated (UI_SELECTORS §P/§S, SYSTEM_OF_RECORD §2/§5 I-65/§6/§7/§8/§11).
+- RULE 16 gate (changed files): `node tools/quality.mjs --changed --allow-legacy --base HEAD` → GATE PASSED. Largest touched: `SvgPanel.tsx` 287, `actions.ts` 278, `SvgControls.tsx` 251, `statemodel.ts` 196. New files all under 90 lines. Functions ≤ 20 lines.
+- RULE 18 note: the new lib and UI files are below the 150-line floor on purpose (the shared pieces are small by design). `SvgPanel.tsx` (287) and `actions.ts` (278) are near the 300 limit; any further additions there must move code out first.
+- Lint: 0 errors, 10 warnings (all pre-existing). `npx tsc --noEmit` clean.
