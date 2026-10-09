@@ -349,6 +349,31 @@ opt-in class as Generate SVG → Requesty; design
   pushes one entry each; global-defaults edits are persisted but NOT undoable
   (the same class as presets). The checkbox selection is session-persisted but
   not on the undo timeline.
+* **Scale to N MP** (2026-10-09, I-62, design
+  `docs/archive/2026-10-09-eps-executable-artboard-megapixels/design.md` D5):
+  two more settings fields, `scaleToMegapixels` (default off) and
+  `artboardMegapixels` (default 5, clamped 1–64 like the JPEG; junk → 5). On,
+  and only in `content` mode, the artboard is the content fit (icon + padding)
+  scaled uniformly so `artW × artH = N × 10⁶` (`fitArtboard` with a
+  `{ megapixels }` target; `artboardTarget` makes a pinned size win) — the
+  padding keeps its meaning (how small the icon sits in the artboard), strokes
+  keep their verbatim px (the placement loop re-measures, so the area lands
+  within the file's precision; exact in one pass when the artwork is all
+  fills), and the JPEG is untouched (it still renders at `jpegMegapixels` in
+  the artboard's ratio — the MP target is about the vector's artboard, which
+  is what a stock measures). The fingerprint appends `["mp", N]` ONLY while the
+  box is on, so the defaults' fingerprint (`36232c04`) and every existing
+  package stay as they are; the number is dormant while the box is off (it
+  does not move the fingerprint, but `settingsEqual` sees it). The record's
+  `tools.artboard.scaledTo` is N while it applies and null otherwise (a pinned
+  artboard with the box on records null — the px decided); the row's settings
+  line appends `· artboard N MP` under the same rule. UI: the row under the
+  artboard select in `src/upload/UploadArtboardSettings.tsx` — the checkbox
+  `upload-set-mp-scale`, the number `upload-set-mp-target` (disabled while the
+  box is off) and the note `upload-set-mp-scale-note` (`the artboard (icon +
+  padding) is scaled to N MP · strokes keep their px`; with a pinned artboard
+  the checkbox is disabled and the note reads `the pinned size decides the
+  megapixels`). "N fields overridden" after a bulk apply is 14.
 * The artboard (2026-10-08) is one more settings field, with three modes:
   `content` (the artboard hugs the artwork, as before), a square px preset
   (256/512/1024/2048/4096 — "512×512 and other popular") or an exact CUSTOM
@@ -1066,6 +1091,15 @@ Batch:
   (unpainted shapes have no bounds), `upload_optimize`/`upload_clean`/
   `upload_eps` (the invisible rect through the pipeline) and `upload_runexport`
   (`tools.artboard` agrees with the viewBox).
+* **I-62 ("scale to N MP" scales the artboard, not the JPEG, RULE 4/13 —
+  2026-10-09):** on, in `content` mode only, the content fit is scaled
+  uniformly so `artW × artH = N × 10⁶` (to the file's precision; exact in one
+  pass when the artwork is all fills), strokes keep the verbatim px, the record
+  carries `tools.artboard.scaledTo = N` (null whenever it does not apply), the
+  fingerprint moves only while the box is on, and the JPEG keeps
+  `jpegMegapixels`. Pinned by `upload_settings`, `upload_geom` (the megapixel
+  fit), `upload_prepare` ("scale the artboard to N megapixels"),
+  `upload_runexport` and `upload_eps_settings_ui`.
 * **I-61 (the built-in EPS is an executable program, RULE 4/13 — 2026-10-09):**
   an EPS is PostScript; one invalid instruction and the interpreter stops before
   the artwork (the report: `-0.75 0 0 -0.75 0 750 concat` → `/typecheck` in
@@ -1188,7 +1222,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
 | Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `src/lib/upload/restyle.ts`, `src/lib/upload/place.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: `place.ts` = the clone-bake-restyle-measure placement loop with `shippedBounds`/`insideArtboard`, `restyle.ts` = the stroke width written verbatim + colour restyle, `prepare.ts` = clean → place → viewBox-only root with the artboard rect always first, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
 | Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
-| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset), the framed SVG preview |
+| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `UploadArtboardSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset; `UploadArtboardSettings.tsx` = the artboard select, the custom W×H and the "Scale to N MP" row), the framed SVG preview |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 

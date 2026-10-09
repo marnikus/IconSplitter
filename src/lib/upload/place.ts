@@ -13,7 +13,7 @@
 
 import { bakeGeometry } from "./bake";
 import { expandStrokes } from "./expand";
-import { fitArtboard, type ArtboardFit, type PinnedSize } from "./geom";
+import { fitArtboard, type ArtboardFit, type FitTarget } from "./geom";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { identity, type Matrix } from "./geom/matrix";
 import { restyleStrokes, type StrokeStyle } from "./restyle";
@@ -24,7 +24,7 @@ const FILE_PRECISION = 0.002;
 
 export interface PlaceWant {
   paddingPct: number;
-  target: PinnedSize | null;
+  target: FitTarget | null;
   style: StrokeStyle;
   expand: boolean;
 }

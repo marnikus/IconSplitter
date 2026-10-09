@@ -20,7 +20,7 @@ import type { EpsConverterId } from "./epsconv/types";
 
 export {
   ARTBOARD_MAX, ARTBOARD_MAX_PIXELS, ARTBOARD_MIN, ARTBOARD_PRESETS, CONTENT_ARTBOARD,
-  artboardSize, clampArtboard, type Artboard,
+  artboardSize, artboardTarget, clampArtboard, megapixelTargetOf, type Artboard,
 } from "./artboard";
 
 export interface UploadSettings {
@@ -55,6 +55,14 @@ export interface UploadSettings {
   /** The artboard the export is built at: content-hugging, or an exact px size. */
   artboard: Artboard;
   /**
+   * "Scale to N MP" (2026-10-09, I-62): in `content` mode, scale the artwork
+   * (icon + padding) uniformly so the artboard's area is `artboardMegapixels`
+   * × 10⁶ px² — strokes keep their verbatim px. A pinned artboard ignores it.
+   */
+  scaleToMegapixels: boolean;
+  /** The megapixel target of that scaling (default 5, 1…64); dormant while the box is off. */
+  artboardMegapixels: number;
+  /**
    * When the artboard pins a px size, render the JPEG at exactly those px
    * (default). Switching it off keeps the artboard's RATIO but renders at
    * `jpegMegapixels` instead — a small artboard must never cap the resolution.
@@ -73,6 +81,8 @@ export const STROKE_DEFAULT = 0;
 export const MP_MIN = 1;
 export const MP_MAX = 64;
 export const MP_DEFAULT = 15.1;
+/** The artboard's own megapixel target (I-62) — shares the 1…64 range with the JPEG. */
+export const ARTBOARD_MP_DEFAULT = 5;
 export const QUALITY_MIN = 0.5;
 export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
@@ -99,6 +109,8 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   expandStrokes: false,
   artboard: { ...CONTENT_ARTBOARD },
   jpegMatchArtboard: true,
+  scaleToMegapixels: false,
+  artboardMegapixels: ARTBOARD_MP_DEFAULT,
 };
 
 export function clampPaddingPct(value: unknown): number {
@@ -111,6 +123,10 @@ export function clampStrokePx(value: unknown): number {
 
 export function clampMegapixels(value: unknown): number {
   return clampNum(value, MP_MIN, MP_MAX, MP_DEFAULT);
+}
+
+export function clampArtboardMegapixels(value: unknown): number {
+  return clampNum(value, MP_MIN, MP_MAX, ARTBOARD_MP_DEFAULT);
 }
 
 export function clampQuality(value: unknown): number {
@@ -154,6 +170,8 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     expandStrokes: raw.expandStrokes === true,
     artboard: clampArtboard(raw.artboard),
     jpegMatchArtboard: raw.jpegMatchArtboard !== false,
+    scaleToMegapixels: raw.scaleToMegapixels === true,
+    artboardMegapixels: clampArtboardMegapixels(raw.artboardMegapixels),
   };
 }
 
@@ -175,6 +193,7 @@ const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["strokePx", clampStrokePx],
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
+  ["artboardMegapixels", clampArtboardMegapixels],
 ];
 
 /** The paint fields and the word that means "none of ours". */
@@ -191,7 +210,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -229,6 +248,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
+  "scaleToMegapixels", "artboardMegapixels",
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
@@ -257,6 +277,8 @@ export function settingsFingerprint(s: UploadSettings): string {
     // field existed keeps its fingerprint; the converter is a tool choice the
     // planner compares against the record, not geometry — never in here.
     ...(s.expandStrokes ? ["expand"] : []),
+    // the MP target is geometry only while the box is on (the number is dormant otherwise)
+    ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

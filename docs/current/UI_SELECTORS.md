@@ -636,6 +636,13 @@ same gesture, and `upload-set-mp-note` says what the JPEG will really be
 (`the JPEG is the artboard itself: 1024×576 px — untick for a bigger file` vs
 `rendered from the vectors at this resolution, at the artboard's aspect
 ratio`). With a `content` artboard the checkbox is not rendered at all.
+Under the artboard select (2026-10-09, I-62): `upload-set-mp-scale` (checkbox
+"scale to", disabled with a pinned artboard), `upload-set-mp-target` (number
+1–64 step 0.1, disabled while the box is off; the artboard's megapixels, NOT
+the JPEG's `upload-set-mp`) and `upload-set-mp-scale-note` (`the artboard
+(icon + padding) is scaled to 5 MP · strokes keep their px` / `the pinned size
+decides the megapixels`); the row's settings cell appends `· artboard 5 MP`
+while it applies.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,

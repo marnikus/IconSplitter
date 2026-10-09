@@ -32,8 +32,9 @@ It has six modes (tabs across the top):
   uploaded anywhere else and the key never leaves the browser. Also Chrome/Edge
   only.
 * **SVG to upload** — takes the chosen, approved SVG version of each icon and
-  builds its upload-ready package beside the sources: fitted artboard with the
-  chosen background and stroke width, conceptual metadata from the model,
+  builds its upload-ready package beside the sources: an artboard fitted to
+  the artwork as it ships (or pinned to a size, or scaled to N megapixels)
+  with the chosen background and stroke width, conceptual metadata from the model,
   SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
   `export.json`. Nothing is uploaded to any website by the app. Also
   Chrome/Edge only.

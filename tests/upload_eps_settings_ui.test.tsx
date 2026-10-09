@@ -186,6 +186,40 @@ describe("Expand strokes to fills", () => {
   });
 });
 
+describe("Scale to N megapixels (I-62)", () => {
+  it("renders under the artboard in content mode, is disabled with the pinned note otherwise, stores live and shows on the row line", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));
+    await mount();
+    await click("[data-testid=upload-settings-open]");
+    const box = q("[data-testid=upload-set-mp-scale]") as HTMLInputElement;
+    const target = q("[data-testid=upload-set-mp-target]") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(box.disabled).toBe(false);
+    expect(target.value).toBe("5");
+    expect(target.disabled).toBe(true); // the number waits for the box
+    expect(text("[data-testid=upload-set-mp-scale-note]")).toContain("scaled to");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).not.toContain("artboard");
+    await act(async () => { box.click(); });
+    await settle();
+    expect(storedDefaults().scaleToMegapixels).toBe(true);
+    expect((q("[data-testid=upload-set-mp-target]") as HTMLInputElement).disabled).toBe(false);
+    await act(async () => {
+      const el = q("[data-testid=upload-set-mp-target]") as HTMLInputElement;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, "10");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+    expect(storedDefaults().artboardMegapixels).toBe(10);
+    expect(text("[data-testid=upload-set-mp-scale-note]")).toContain("10 MP");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("artboard 10 MP");
+    // a pinned artboard decides the megapixels: the row is disabled and says so
+    await choose("[data-testid=upload-set-artboard]", "512");
+    expect((q("[data-testid=upload-set-mp-scale]") as HTMLInputElement).disabled).toBe(true);
+    expect(text("[data-testid=upload-set-mp-scale-note]")).toContain("pinned size decides");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).not.toContain("artboard 10 MP");
+  });
+});
+
 describe("the pre-batch probe (RULE 9: the other outputs never wait)", () => {
   it("with the Inkscape converter and no helper, the batch says so up front, every row still commits SVG + JPEG → Partial", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));

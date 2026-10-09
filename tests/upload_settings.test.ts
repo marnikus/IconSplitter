@@ -8,6 +8,7 @@ import {
   DEFAULT_UPLOAD_SETTINGS,
   artboardSize,
   clampArtboard,
+  clampArtboardMegapixels,
   clampMegapixels,
   clampPaddingPct,
   clampQuality,
@@ -38,6 +39,7 @@ describe("defaults and clamps", () => {
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
       epsConverter: "builtin", expandStrokes: false, // 2026-10-09
+      scaleToMegapixels: false, artboardMegapixels: 5, // 2026-10-09 (I-62)
     });
   });
 
@@ -229,6 +231,33 @@ describe("EPS converter + expand strokes (2026-10-09)", () => {
     expect(settingsFingerprint(changed({ expandStrokes: true }))).not.toBe(a);
     expect(settingsFingerprint(changed({ epsConverter: "inkscape" }))).toBe(a);
     expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, changed({ epsConverter: "inkscape" }))).toBe(false); // but it IS a different setting
+  });
+});
+
+describe("Scale to N megapixels (2026-10-09, I-62)", () => {
+  it("defaults off at 5 MP; both are settings fields; the clamp is 1…64 and junk costs the default", () => {
+    expect(DEFAULT_UPLOAD_SETTINGS.scaleToMegapixels).toBe(false);
+    expect(DEFAULT_UPLOAD_SETTINGS.artboardMegapixels).toBe(5);
+    expect(SETTINGS_FIELDS).toContain("scaleToMegapixels");
+    expect(SETTINGS_FIELDS).toContain("artboardMegapixels");
+    expect(clampArtboardMegapixels(0.2)).toBe(1);
+    expect(clampArtboardMegapixels(100)).toBe(64);
+    expect(clampArtboardMegapixels(12.34)).toBe(12.34);
+    expect(clampArtboardMegapixels("junk")).toBe(5);
+    expect(normalizeSettings({ scaleToMegapixels: true, artboardMegapixels: 10 })).toMatchObject({ scaleToMegapixels: true, artboardMegapixels: 10 });
+    expect(normalizeSettings({ scaleToMegapixels: "yes", artboardMegapixels: "lots" })).toMatchObject({ scaleToMegapixels: false, artboardMegapixels: 5 });
+    expect(parseOverrides({ scaleToMegapixels: true, artboardMegapixels: 2.5 })).toEqual({ scaleToMegapixels: true, artboardMegapixels: 2.5 });
+    expect(parseOverrides({ scaleToMegapixels: 1, artboardMegapixels: "x" })).toEqual({});
+    expect(overrideKeys({ scaleToMegapixels: true, artboardMegapixels: 2.5 })).toEqual(["scaleToMegapixels", "artboardMegapixels"]);
+  });
+
+  it("the defaults' fingerprint is unchanged; the fingerprint moves only while the box is on", () => {
+    const a = settingsFingerprint(DEFAULT_UPLOAD_SETTINGS);
+    expect(a).toBe("36232c04");
+    expect(settingsFingerprint(changed({ artboardMegapixels: 10 }))).toBe(a); // off: the number is dormant
+    expect(settingsFingerprint(changed({ scaleToMegapixels: true }))).not.toBe(a);
+    expect(settingsFingerprint(changed({ scaleToMegapixels: true, artboardMegapixels: 10 }))).not.toBe(settingsFingerprint(changed({ scaleToMegapixels: true })));
+    expect(settingsEqual(DEFAULT_UPLOAD_SETTINGS, changed({ artboardMegapixels: 10 }))).toBe(false); // but it IS a different setting
   });
 });
 

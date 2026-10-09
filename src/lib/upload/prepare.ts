@@ -17,7 +17,7 @@
 // the background colour, or `fill="none"` when transparent (the artboard is an
 // object of the artwork, "select all" in an editor is the artboard).
 
-import { artboardSize, isTransparent, readPaint, TRANSPARENT, type UploadSettings } from "./settings";
+import { artboardTarget, isTransparent, megapixelTargetOf, readPaint, TRANSPARENT, type UploadSettings } from "./settings";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
@@ -69,7 +69,7 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
   const placed = placeArtwork(root, {
-    paddingPct: settings.paddingPct, target: artboardSize(settings.artboard),
+    paddingPct: settings.paddingPct, target: artboardTarget(settings.artboard, megapixelsOf(settings)),
     style: strokeStyleOf(settings), expand: settings.expandStrokes,
   });
   if (!placed.ok) return fail(placed.code, placed.detail);
@@ -114,6 +114,11 @@ function parseSvgDocument(source: string): Document | null {
 
 function fail(code: PrepareFailureCode, detail: string): PrepareFailure {
   return { ok: false, code, detail };
+}
+
+/** The "Scale to N MP" target that applies (I-62): null when off or when a pinned size decides. */
+function megapixelsOf(settings: UploadSettings): number | null {
+  return megapixelTargetOf(settings.artboard, settings.scaleToMegapixels, settings.artboardMegapixels);
 }
 
 /** Re-roots the document: the artboard viewBox (no px size) and the artboard rect first — the artwork already sits in it. */

@@ -346,6 +346,23 @@ describe("runExport — the full package commits per icon", () => {
     expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain(`viewBox="0 0 ${artboard!.width} ${artboard!.height}"`);
   });
 
+  it("Scale to 5 MP: the record says scaledTo 5 and the artboard IS 5 MP; the JPEG still follows jpegMegapixels (I-62)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, scaleToMegapixels: true, artboardMegapixels: 5, jpegMegapixels: 15.1 };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    const record = readRecord(root);
+    expect(record.tools.artboard).toMatchObject({ mode: "content", scaledTo: 5 });
+    expect(record.tools.artboard!.megapixels).toBeCloseTo(5, 3);
+    expect(record.jpeg.width).toBe(3886); // the JPEG resolution is its own setting
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain(`viewBox="0 0 ${record.tools.artboard!.width} ${record.tools.artboard!.height}"`);
+    // a pinned artboard: the px decide, scaledTo stays null even with the box on
+    const pinnedRoot = pairRoot();
+    const pinned: UploadSettings = { ...settings, artboard: { mode: "preset", size: 512, width: 512, height: 512 } };
+    await runExport(args(pinnedRoot, { settings: pinned, defaults: pinned, deps: { raster: fakeRaster(512, 512) } }));
+    expect(readRecord(pinnedRoot).tools.artboard).toMatchObject({ mode: "preset", width: 512, height: 512, scaledTo: null });
+  });
+
   it("records the converter that wrote the EPS and the expand block (2026-10-09)", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };

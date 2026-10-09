@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitArtboard,
+  fmt,
   pinnedDimensions,
   parseSvgLength,
   targetDimensions,
@@ -74,6 +75,34 @@ describe("fitArtboard — a pinned artboard scales the artwork into it", () => {
     expect(fit.scale).toBeCloseTo(256 / 80); // the SHORT side decides
     expect(fit.offsetY + bounds.minY * fit.scale).toBeCloseTo(0);
     expect(fit.offsetX + bounds.minX * fit.scale).toBeCloseTo((512 - 80 * fit.scale) / 2);
+  });
+});
+
+describe("fitArtboard — a megapixel target scales the content fit (I-62)", () => {
+  const bounds: Bounds = { minX: 10, minY: 10, width: 100, height: 50 };
+
+  it("lands on exactly N·10⁶ px², keeps the padded content fit's aspect and reports the scale", () => {
+    const fit = fitArtboard(bounds, 8, { megapixels: 5 });
+    expect(Math.abs(fit.artW * fit.artH - 5e6) / 5e6).toBeLessThan(1e-9);
+    const content = fitArtboard(bounds, 8);
+    expect(fit.artW / fit.artH).toBeCloseTo(content.artW / content.artH, 9);
+    expect(fit.scale).toBeCloseTo(Math.sqrt(5e6 / (content.artW * content.artH)), 9);
+    expect(fit.pad).toBeCloseTo(content.pad * fit.scale, 9);
+    // the artwork sits at the scaled pad: translate · scale, as the bake expects
+    expect(fit.offsetX + bounds.minX * fit.scale).toBeCloseTo(fit.pad, 9);
+    expect(fit.offsetY + bounds.minY * fit.scale).toBeCloseTo(fit.pad, 9);
+    expect(fit.viewBox).toBe(`0 0 ${fmt(fit.artW)} ${fmt(fit.artH)}`);
+  });
+
+  it("padding 0 on a 100×50 artwork at 5 MP: 3162.278 × 1581.139", () => {
+    const fit = fitArtboard({ minX: 0, minY: 0, width: 100, height: 50 }, 0, { megapixels: 5 });
+    expect(fit.viewBox).toBe("0 0 3162.278 1581.139");
+  });
+
+  it("a zero-area artwork cannot be scaled to an area: scale 1, no division by zero", () => {
+    const fit = fitArtboard({ minX: 0, minY: 0, width: 0, height: 0 }, 8, { megapixels: 5 });
+    expect(fit.scale).toBe(1);
+    expect(Number.isFinite(fit.artW)).toBe(true);
   });
 });
 

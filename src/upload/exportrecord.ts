@@ -10,7 +10,7 @@ import { readJpegDimensions } from "../lib/upload/jpeg";
 import { metadataBlock, type ArtboardBlock, type ExportRecord } from "../lib/upload/export";
 import type { PrepareResult } from "../lib/upload/prepare";
 import { metadataFingerprint } from "../lib/upload/meta";
-import type { UploadSettings } from "../lib/upload/settings";
+import { megapixelTargetOf, type UploadSettings } from "../lib/upload/settings";
 import type { Artifacts } from "./exportstages";
 import type { ExportRunArgs, ExportRunDeps } from "./runexport";
 
@@ -39,7 +39,8 @@ export function artboardBlock(settings: UploadSettings, prepared: PrepareResult 
   if (prepared === null || !prepared.ok) return null;
   const width = Number(fmt(prepared.fit.artW));
   const height = Number(fmt(prepared.fit.artH));
-  return { mode: settings.artboard.mode, width, height, megapixels: (width * height) / 1e6, scaledTo: null, passes: prepared.passes };
+  const scaledTo = megapixelTargetOf(settings.artboard, settings.scaleToMegapixels, settings.artboardMegapixels);
+  return { mode: settings.artboard.mode, width, height, megapixels: (width * height) / 1e6, scaledTo, passes: prepared.passes };
 }
 
 export function jpegBlock(

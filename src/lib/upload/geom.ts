@@ -65,18 +65,13 @@ export interface ArtboardFit {
  * that size, padding is a share of ITS largest side, and the artwork is scaled
  * by the same factor on both axes to fit inside — centred, never stretched,
  * never cropped, so a non-square target letterboxes instead of distorting.
+ * With a megapixel `target` (I-62) the artboard is the content fit scaled
+ * uniformly so its area is N × 10⁶ px² — the same box, the same padding share.
  */
-export function fitArtboard(bounds: Bounds, paddingPct: number, target?: PinnedSize | null): ArtboardFit {
+export function fitArtboard(bounds: Bounds, paddingPct: number, target?: FitTarget | null): ArtboardFit {
   const pct = Math.max(0, paddingPct);
-  if (target === undefined || target === null) {
-    const pad = (Math.max(bounds.width, bounds.height) * pct) / 100;
-    const artW = bounds.width + 2 * pad;
-    const artH = bounds.height + 2 * pad;
-    return {
-      viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH,
-      offsetX: pad - bounds.minX, offsetY: pad - bounds.minY, pad, scale: 1,
-    };
-  }
+  if (target === undefined || target === null) return contentFit(bounds, pct, 1);
+  if ("megapixels" in target) return contentFit(bounds, pct, megapixelScale(bounds, pct, target.megapixels));
   const artW = Math.max(1, target.width);
   const artH = Math.max(1, target.height);
   const pad = (Math.max(artW, artH) * pct) / 100;
@@ -89,11 +84,38 @@ export function fitArtboard(bounds: Bounds, paddingPct: number, target?: PinnedS
   };
 }
 
+/** The content fit scaled by k: the box, its padding and the artwork all grow together. */
+function contentFit(bounds: Bounds, pct: number, k: number): ArtboardFit {
+  const pad = ((Math.max(bounds.width, bounds.height) * pct) / 100) * k;
+  const artW = bounds.width * k + 2 * pad;
+  const artH = bounds.height * k + 2 * pad;
+  return {
+    viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH,
+    offsetX: pad - bounds.minX * k, offsetY: pad - bounds.minY * k, pad, scale: k,
+  };
+}
+
+/** The uniform factor that makes the padded content fit's area N × 10⁶ px²; 1 when the fit has no area. */
+function megapixelScale(bounds: Bounds, pct: number, megapixels: number): number {
+  const unscaled = contentFit(bounds, pct, 1);
+  const area = unscaled.artW * unscaled.artH;
+  if (!(area > 0) || !(megapixels > 0)) return 1;
+  return Math.sqrt((megapixels * 1e6) / area);
+}
+
 /** The exact px size a pinned artboard asks for. */
 export interface PinnedSize {
   width: number;
   height: number;
 }
+
+/** An artboard area target: scale the content fit so artW × artH = megapixels × 10⁶. */
+export interface MegapixelTarget {
+  megapixels: number;
+}
+
+/** What `fitArtboard` fits into: an exact px size, an area, or nothing (hug the content). */
+export type FitTarget = PinnedSize | MegapixelTarget;
 
 /** Uniform factor that fits the bounds inside the box; 1 when the box is degenerate. */
 function fitScale(bounds: Bounds, boxW: number, boxH: number): number {

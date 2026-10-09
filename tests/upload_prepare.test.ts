@@ -228,6 +228,45 @@ describe("prepareExportSvg — the artboard is the shipped artwork (I-60, 2026-1
   });
 });
 
+describe("prepareExportSvg — scale the artboard to N megapixels (I-62, 2026-10-09)", () => {
+  const WIDE = `<svg ${NS} viewBox="0 0 200 100"><rect x="50" y="25" width="100" height="50" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+  const MP5: SettingsOverrides = { scaleToMegapixels: true, artboardMegapixels: 5 };
+
+  it("all fills (strokes expanded), padding 0: the 100×50 outline scales to exactly 3162.278 × 1581.139", () => {
+    const { result, root } = prepared(WIDE, { ...MP5, strokePx: 0, paddingPct: 0, expandStrokes: true });
+    // the 1 px stroke expanded (own width, × the scale) makes the content 101×51 → the fit uses THAT box
+    const final = shippedBounds(root)!;
+    expect(final.minX).toBeCloseTo(0, 3);
+    expect(Math.abs(result.fit.artW * result.fit.artH - 5e6) / 5e6).toBeLessThan(1e-4);
+    expect(result.fit.artW / result.fit.artH).toBeCloseTo(101 / 51, 4);
+    expect(insideArtboard(root)).toBe(true);
+    const square = prepared(`<svg ${NS} viewBox="0 0 200 100"><rect x="50" y="25" width="100" height="50" fill="#000"/></svg>`, { ...MP5, paddingPct: 0 });
+    expect(square.root.getAttribute("viewBox")).toBe("0 0 3162.278 1581.139");
+    expect(square.result.passes).toBe(1);
+  });
+
+  it("verbatim 2 px strokes, expansion off: the area is 5 MP within 0.01 %, stroke-width=\"2\" is in the file, nothing outside, ≤ 4 passes", () => {
+    const { result, root } = prepared(WIDE, { ...MP5, strokePx: 2, paddingPct: 8 });
+    expect(Math.abs(result.fit.artW * result.fit.artH - 5e6) / 5e6).toBeLessThan(1e-4);
+    expect(root.getAttribute("stroke-width")).toBe("2");
+    expect(insideArtboard(root)).toBe(true);
+    expect(result.passes).toBeLessThanOrEqual(4);
+    const final = shippedBounds(root)!;
+    expect(final.minX).toBeCloseTo(result.fit.pad, 2);
+    expect(final.minX + final.width).toBeCloseTo(result.fit.artW - result.fit.pad, 2);
+  });
+
+  it("a pinned artboard wins: in preset mode the megapixel target is ignored", () => {
+    const { result } = prepared(WIDE, { ...MP5, ...SQUARE_512 });
+    expect(result.fit.viewBox).toBe("0 0 512 512");
+  });
+
+  it("the box off leaves the number dormant: the content fit hugs the artwork", () => {
+    const { result } = prepared(WIDE, { artboardMegapixels: 10, paddingPct: 0, strokePx: 0 });
+    expect(result.fit.scale).toBe(1);
+  });
+});
+
 /** Every element carrying the attribute, as `tag=value`, sorted — where a property is defined, in one line. */
 function where(root: Element, attr: string): string[] {
   return Array.from(root.querySelectorAll("*")).concat(root)

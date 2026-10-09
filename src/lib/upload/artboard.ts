@@ -5,6 +5,7 @@
 // number fields; settings.ts re-exports this surface, so importers never moved.
 
 import { isRecord } from "../isrecord";
+import type { FitTarget } from "./geom";
 
 /**
  * The export artboard's size. `content` hugs the artwork (the padded fit, the
@@ -45,6 +46,22 @@ export function artboardSize(a: Artboard): { width: number; height: number } | n
   if (a.mode === "preset") return { width: a.size, height: a.size };
   if (a.mode === "custom") return { width: a.width, height: a.height };
   return null;
+}
+
+/**
+ * What the export fits into (I-62): a pinned artboard's px win; otherwise the
+ * megapixel target when "Scale to N MP" is on (`megapixels` null = off); else
+ * nothing — the artboard hugs the content.
+ */
+export function artboardTarget(a: Artboard, megapixels: number | null): FitTarget | null {
+  const pinned = artboardSize(a);
+  if (pinned !== null) return pinned;
+  return megapixels === null ? null : { megapixels };
+}
+
+/** The megapixel target that really applies: null when the box is off or a pinned size decides. */
+export function megapixelTargetOf(a: Artboard, scaleTo: boolean, megapixels: number): number | null {
+  return scaleTo && artboardSize(a) === null ? megapixels : null;
 }
 
 export function artboardsEqual(a: Artboard, b: Artboard): boolean {
