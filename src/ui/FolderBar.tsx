@@ -4,22 +4,21 @@
 // not a field: the File System Access API hands a page only the picked folder's
 // NAME, so the real path is captured at pick time from the user's own Explorer
 // copy (ui/pickroot, I-35) — there is nothing here to type, clear or paste.
-// Storage (lib/rootpath) is the single source of truth: a capture made by any
-// picker appears in every row at once, with no reload (I-36/RULE 24).
+// The path is bound to the root's HANDLE (I-63): a capture made for one folder
+// never appears for a same-named folder (the report of 2026-10-09), and a
+// capture made by any picker appears in every row at once, with no reload
+// (I-36/RULE 24).
 
 import { useEffect, useSyncExternalStore } from "react";
-import { loadRootPathInfo, rootPathRevision, subscribeRootPaths, type PathHow } from "../lib/rootpath";
+import type { DirHandleLike } from "../lib/fs";
+import { bindingRevision, boundRootPathInfo, subscribeRootBindings } from "../lib/knownroots";
+import type { RootPathInfo } from "../lib/rootpath";
 import { bindPasteCapture } from "./rootcapture";
 
-export interface RootPath {
-  path: string;
-  how: PathHow | null;
-}
-
-/** The full path of `rootName`, re-read whenever any tab captures one. */
-export function useRootPath(rootName: string): RootPath {
-  useSyncExternalStore(subscribeRootPaths, rootPathRevision, rootPathRevision);
-  return loadRootPathInfo(rootName);
+/** The full path of `root`, re-read whenever any tab captures one. */
+function useRootPath(root: DirHandleLike | null): RootPathInfo {
+  useSyncExternalStore(subscribeRootBindings, bindingRevision, bindingRevision);
+  return boundRootPathInfo(root);
 }
 
 /** The one button that opens the folder picker — the same words in every tab. */
@@ -39,11 +38,11 @@ export function OpenFolderButton({ onClick, testid }: { onClick: () => void; tes
  * controls: read-only text — never an input, never a button — plus the one
  * honest note when the browser withheld the path (I-46).
  */
-export function FolderPathRow({ rootName, testid }: { rootName: string; testid: string }) {
-  const info = useRootPath(rootName);
-  useEffect(() => bindPasteCapture(rootName), [rootName]); // the user's own Ctrl+V still captures (I-52)
-  if (rootName === "") return null;
-  const path = info.path === "" ? rootName : info.path;
+export function FolderPathRow({ root, testid }: { root: DirHandleLike | null; testid: string }) {
+  const info = useRootPath(root);
+  useEffect(() => bindPasteCapture(root), [root]); // the user's own Ctrl+V still captures (I-52)
+  if (root === null || root.name === "") return null;
+  const path = info.path === "" ? root.name : info.path;
   const warning = note(info);
   return (
     <div
@@ -62,7 +61,7 @@ export function FolderPathRow({ rootName, testid }: { rootName: string; testid: 
  * one action that still fills it in (I-46/I-52). The whole sentence is in the
  * row's `title`, so a long path never hides the way out.
  */
-function note(info: RootPath): string {
+function note(info: RootPathInfo): string {
   if (info.path !== "") return "";
   // both ways out are named, because the row cannot know which one the browser
   // will allow: Rescan re-reads the clipboard, Ctrl+V needs no permission (I-52)

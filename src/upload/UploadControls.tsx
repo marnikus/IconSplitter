@@ -10,6 +10,7 @@
 
 import type { KeySource } from "../lib/keyvault";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
+import type { DirHandleLike } from "../lib/fs";
 
 import {
   CONCURRENCY_MAX, CONCURRENCY_MIN, DEFAULT_MODEL, generateContentUrl,
@@ -26,6 +27,7 @@ import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 
 export interface UploadControlsProps {
   rootName: string;
+  root: DirHandleLike | null;
   discovery: UploadDiscovery | null;
   busy: string | null;
   counts: UploadCounts;
@@ -92,7 +94,7 @@ function SourceLine({ p }: { p: UploadControlsProps }) {
           <Chip value={p.counts.stale} label="stale" testid="upload-count-stale" />
         </div>
       </div>
-      <FolderPathRow rootName={p.rootName} testid="upload-folder-path" />
+      <FolderPathRow root={p.root} testid="upload-folder-path" />
     </>
   );
 }

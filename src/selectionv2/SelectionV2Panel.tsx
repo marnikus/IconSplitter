@@ -29,7 +29,7 @@ export default function SelectionV2Panel() {
   return (
     <div className="v2" data-testid="v2-panel">
       <section className="v2-controls" aria-label="Review controls">
-        <SourceBar rootName={v.core.s.rootName} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode}
+        <SourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} scope={v.core.s.scope} pairs={v.core.s.pairs} mode={v.prefs.mode}
           chooseRoot={v.core.chooseRoot} rescan={v.core.rescan} setMode={v.setMode} />
         {v.core.s.rootName !== "" && (
           <FilterGrid filter={v.core.s.filter} sort={v.core.s.sort} shown={v.core.visible.length}
@@ -78,7 +78,7 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
 }
 
 function openSide(v: SelectionV2Api, relPath: string): void {
-  void copyFolderText(v.core.s.rootName, relPath, v.core.say);
+  void copyFolderText(v.core.rootRef.current, relPath, v.core.say);
 }
 
 function CompareBody({ v }: { v: SelectionV2Api }) {

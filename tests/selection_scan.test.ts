@@ -16,18 +16,23 @@ import { pairFile } from "./helpers/pairfile";
 import { dropDb } from "./helpers/idb";
 import { SELECTION_HANDLE_KEY } from "../src/selection/offline";
 import { saveHandles } from "../src/batch/store";
-import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
-import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
+import { boundRootPathInfo, clearKnownRoots, deriveRootPath } from "../src/lib/knownroots";
+import { persistRootPath } from "../src/lib/rootstore";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot real (and the
 // handle it restores is the very object the test picked, as in the browser).
+// The rootpath store rides along, so a boot restores the persisted capture.
 const stored = new Map<string, unknown>();
+const idb = new Map<string, unknown>();
 vi.mock("../src/batch/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/batch/store")>();
   return {
     ...actual,
     saveHandles: vi.fn(async (name: string, handles: unknown) => { stored.set(name, handles); }),
     loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
+    idbPut: async (_store: string, key: string, value: unknown) => { idb.set(key, value); return true; },
+    idbGet: async (_store: string, key: string) => idb.get(key) ?? null,
+    idbDelete: async (_store: string, key: string) => { idb.delete(key); return true; },
   };
 });
 
@@ -306,6 +311,9 @@ beforeEach(async () => {
   await dropDb();
   setAppState({});
   localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  clearKnownRoots();
+  stored.clear();
+  idb.clear();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -319,7 +327,7 @@ describe("Rescan captures a path the pick missed (I-52)", () => {
     const h = harness(root);
     stubClipboard(async () => "F:\\work\\split_root");
     await rescan(h.ctx, h.set, h.say);
-    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect(boundRootPathInfo(root).path).toBe("F:\\work\\split_root");
     expect(h.sayings.join(" | ")).toContain("Folder path captured: F:\\work\\split_root");
     // a second rescan has nothing to capture and stays quiet about it
     h.sayings.length = 0;
@@ -332,14 +340,14 @@ describe("Rescan captures a path the pick missed (I-52)", () => {
     const h = harness(root);
     stubClipboard(async () => "F:\\work\\icons testing");
     await rescan(h.ctx, h.set, h.say);
-    expect(loadRootPath(root.name)).toBe("");
+    expect(boundRootPathInfo(root)).toEqual({ path: "", how: null });
   });
 });
 
 describe("the restored folder is remembered at boot (I-51)", () => {
   it("names a pick inside it exactly, with no clipboard involved", async () => {
     const root = makeBatchRoot();
-    saveRootPathInfo(root.name, "F:\\work\\test_processing");
+    await persistRootPath(root, { path: "F:\\work\\test_processing", how: "copied" }); // captured last session
     await saveHandles(SELECTION_HANDLE_KEY, { source: root });
     const h = harness(root);
     await boot(h.ctx, h.set);

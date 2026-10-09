@@ -26,19 +26,24 @@ import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
-import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
-import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
+import { boundRootPathInfo, clearKnownRoots, deriveRootPath } from "../src/lib/knownroots";
+import { persistRootPath } from "../src/lib/rootstore";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot/remember real.
+// The rootpath store rides along, so a boot restores the persisted capture.
 const stored = new Map<string, unknown>();
+const idb = new Map<string, unknown>();
 vi.mock("../src/batch/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/batch/store")>();
   return {
     ...actual,
     saveHandles: vi.fn(async (name: string, handles: unknown) => { stored.set(name, handles); }),
     loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
+    idbPut: async (_store: string, key: string, value: unknown) => { idb.set(key, value); return true; },
+    idbGet: async (_store: string, key: string) => idb.get(key) ?? null,
+    idbDelete: async (_store: string, key: string) => { idb.delete(key); return true; },
   };
 });
 
@@ -128,6 +133,9 @@ beforeEach(async () => {
   await dropDb();
   setAppState({});
   localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  clearKnownRoots();
+  stored.clear();
+  idb.clear();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -299,14 +307,14 @@ describe("scanSources", () => {
     const s = setters();
     stubClipboardRead(async () => "F:\\work\\split_root");
     await scanSources(refs(root), s.api);
-    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect(boundRootPathInfo(root).path).toBe("F:\\work\\split_root");
     expect(s.out.said.join(" ")).toContain("Folder path captured");
   });
 
   it("remembers the restored folder at boot, so a pick inside it is named exactly (I-51)", async () => {
     const root = makeRoot();
     root.children.set("2026-10", new FakeDir("2026-10")); // a folder inside it, not yet picked
-    saveRootPathInfo(root.name, "F:\\work\\split_root");
+    await persistRootPath(root, { path: "F:\\work\\split_root", how: "copied" }); // captured last session
     await rememberRoot(root);
     const r = refs();
     await bootSources(r, { setRootName: () => {}, loadAll: () => {}, refreshKey: () => {} });

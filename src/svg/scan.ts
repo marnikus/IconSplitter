@@ -5,9 +5,8 @@
 // snapshot commits nothing, only the newest scan may commit, and the cache
 // write can no longer half-commit a scan (design D6/D7).
 
-import { rememberKnownRoot } from "../ui/knownroots";
+import { restoreKnownRoot } from "../lib/knownroots";
 import { retryCapture } from "../ui/rootcapture";
-import { loadRootPath } from "../lib/rootpath";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
@@ -45,7 +44,7 @@ export interface BootArgs {
 export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> {
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
-  const captured = await retryCapture(root.name); // before any await: the click's own gesture (I-52)
+  const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
   if (captured !== null) s.say(captured);
   const ticket = beginScan(refs.seq.current);
   refs.seq.current = ticket.seq;
@@ -151,7 +150,7 @@ export async function bootSources(refs: SvgRefs, s: BootArgs): Promise<void> {
   const stored = (await loadHandles(SVG_HANDLE_KEY))?.source ?? (await loadHandles("__selection__"))?.source ?? null;
   if (!stored) return;
   refs.root.current = stored;
-  rememberKnownRoot(stored, loadRootPath(stored.name)); // a restored folder names its children (I-51)
+  await restoreKnownRoot(stored); // its persisted path binds to THIS handle (I-51/I-63)
   s.setRootName(stored.name);
   s.loadAll();
   s.refreshKey();

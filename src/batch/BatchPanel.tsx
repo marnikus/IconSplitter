@@ -120,5 +120,5 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
 
 /** Honest substitute for "Open in File Explorer": the folder, never the file. */
 function copyPath(b: Batch, relPath: string): void {
-  void copyFolderText(b.s.rootName, relPath, b.say);
+  void copyFolderText(b.rootRef.current, relPath, b.say);
 }

@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { counters } from "./state";
 import type { ViewPair } from "../lib/reviewfilter";
+import type { DirHandleLike } from "../lib/fs";
 import { scopeText, type ScanScope } from "../lib/splitscope";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 
 export interface HeaderProps {
   rootName: string;
+  root: DirHandleLike | null;
   scope: ScanScope;
   pairs: ViewPair[];
   chooseRoot: () => void;
@@ -31,7 +33,7 @@ export default function HeaderRow(p: HeaderProps) {
         <Count n={c.declined} label="declined" cls="text-rose-300" />
         <HelpBtn help={help} setHelp={setHelp} />
       </div>
-      <FolderPathRow rootName={p.rootName} testid="sel-folder-path" />
+      <FolderPathRow root={p.root} testid="sel-folder-path" />
     </section>
   );
 }

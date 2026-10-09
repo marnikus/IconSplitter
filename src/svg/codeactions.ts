@@ -52,7 +52,7 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
     // ITS folder (I-56). `targetPathOf` is root-relative and complete: joining
     // the row's folder onto it doubled the chain before this (the reason a deep
     // file's location came out at the wrong level).
-    void copyFolderText(c.m.rootName, targetPathOf(row), c.say);
+    void copyFolderText(c.refs.root.current as DirHandleLike | null, targetPathOf(row), c.say);
   }, []);
   const readCode = useCallback((id: string, version: number) => readCodeOf(latest.current, id, version), []);
   const preferVersion = useCallback((id: string, version: number) => preferOf(latest.current, id, version), []);
