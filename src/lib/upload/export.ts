@@ -6,6 +6,7 @@
 
 import { isRecord } from "../isrecord";
 import type { UploadSettings, SettingsOverrides } from "./settings";
+import type { Artboard } from "./artboard";
 import type { IconMetadata, MetadataValidation } from "./meta";
 import type { GeminiUsage } from "./gemini";
 import type { OptimizeRecord } from "./optimize";
@@ -70,6 +71,15 @@ export interface OutputRecord {
   hash: string;
 }
 
+export interface ArtboardBlock {
+  mode: Artboard["mode"];
+  width: number;
+  height: number;
+  megapixels: number;
+  scaledTo: number | null;
+  passes: number;
+}
+
 export interface ExportRecord {
   v: number;
   pair: { id: string; base: string; suffix: string; dir: string };
@@ -86,6 +96,13 @@ export interface ExportRecord {
     eps: { enabled: boolean; converter?: EpsConverterId; writer: string; fixes?: string[] };
     /** Strokes expanded to fills (2026-10-09; absent on older packages). */
     expand?: { enabled: boolean; shapes: number };
+    /**
+     * The artboard the file ships (I-60, 2026-10-09; absent on older packages):
+     * its mode and px (the viewBox), the megapixels those px make, the
+     * "scale to N MP" target when that was on (else null), and how many
+     * placement passes it took to settle the shipped artwork inside it.
+     */
+    artboard?: ArtboardBlock;
   };
   metadata: {
     state: "pending" | "generated" | "invalid" | "accepted";

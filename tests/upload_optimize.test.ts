@@ -35,6 +35,16 @@ describe("optimizeSvg — disabled passes through with an honest record", () => 
 });
 
 describe("optimizeSvg — enabled preserves content", () => {
+  it("keeps the invisible artboard rect (fill none, stroke none) — it is an object, not junk (I-60)", async () => {
+    const svg = `<svg ${NS} viewBox="0 0 92.8 92.8"><rect x="0" y="0" width="92.8" height="92.8" fill="none" stroke="none"/><rect x="6.4" y="6.4" width="80" height="80" fill="#000"/></svg>`;
+    const out = (await optimizeSvg(svg, true)).svg;
+    const root = new DOMParser().parseFromString(out, "image/svg+xml").documentElement;
+    const board = root.firstElementChild!;
+    expect(board.getAttribute("fill")).toBe("none");
+    expect(boundsOf(out)?.bounds).toMatchObject({ minX: 6.4, width: 80 });
+    expect(root.children).toHaveLength(2);
+  });
+
   it("keeps the viewBox, the visible geometry and the strokes", async () => {
     const { svg, record } = await optimizeSvg(SOURCE, true);
     expect(record.enabled).toBe(true);

@@ -205,9 +205,10 @@ function resolvePaint(el: Element, parent: Paint): Paint {
   };
 }
 
+/** The EPS keeps its own RGB paints; the inheritance only needs to know whether it strokes (and fills). */
 function strokeOf(p: Paint): Stroke {
-  // The EPS keeps its own RGB paint; the inheritance only needs to know whether it strokes.
-  return { width: p.strokeWidth, paint: p.stroke === null ? "none" : "rgb", none: p.stroke === null, cap: "butt", join: "miter", miter: p.miter };
+  const none = p.stroke === null;
+  return { width: p.strokeWidth, paint: none ? "none" : "rgb", none, fillNone: p.fill === null, cap: "butt", join: "miter", miter: p.miter };
 }
 
 /** A paint keyword → RGB; "none" → null; anything else → Unsupported. */

@@ -371,13 +371,30 @@ opt-in class as Generate SVG → Requesty; design
   field, so a change confined to the artboard or the flag can never be
   swallowed as "nothing changed".
 * Geometry: the visible bounds include strokes (width/caps/joins), transforms
-  and non-scaling-stroke; unsupported elements (text, image, use,
-  foreignObject, risky `<style>`) are named, never guessed. The artwork is
-  fitted proportionally into the padded artboard: in `content` mode the padding
-  is a uniform % of the artwork's largest side, and on a PINNED artboard it is
-  a % of the TARGET's largest side while the artwork is scaled by one uniform
-  factor and centred (letterboxed — never stretched, never cropped), the pinned
-  px are exact (`viewBox="0 0 W H"`). **Every transform is baked into the
+  and non-scaling-stroke; a shape whose fill is `none` and that does not
+  stroke paints nothing and has no visible bounds (2026-10-09 — an icon set's
+  invisible frame, the artboard rect); unsupported elements (text, image, use,
+  foreignObject, risky `<style>`) are named, never guessed. **The artboard is
+  the artwork as it SHIPS** (I-60, 2026-10-09, `lib/upload/place.ts`): the
+  placement works on a CLONE of the cleaned source — bake(translate·scale) →
+  the configured stroke (verbatim px, `lib/upload/restyle.ts`) → expansion when
+  on — and MEASURES that candidate (`shippedBounds`: every stroke expanded into
+  its real outline on a probe copy, so joins and caps are exact; the analytic
+  hull only when the expander refuses), so the viewBox is the FINAL bounds
+  plus the padding and nothing visible lies outside it (the field report: a
+  1 px source stroke widened to 8 px lay 3.5 px outside the old viewBox on
+  every edge). A pinned artboard with verbatim strokes is not linear in its
+  scale, so the fit is corrected from the measurements (each edge is
+  `k · geometry + a constant stroke reach`; two samples pin both) and
+  re-measured — at most 4 passes, settled when every edge is within the file's
+  own precision (0.002 px); the count is recorded (`tools.artboard.passes`;
+  1 when the first fit was exact — fills only, or width 0) and a candidate
+  that never settles is an honest `no-fit` failure, never a guess. The
+  artwork is fitted proportionally into the padded artboard: in `content`
+  mode the padding is a uniform % of the artwork's largest side, and on a
+  PINNED artboard it is a % of the TARGET's largest side while the artwork is
+  scaled by one uniform factor and centred (letterboxed — never stretched,
+  never cropped), the pinned px are exact (`viewBox="0 0 W H"`). **Every transform is baked into the
   geometry** (2026-10-08, `lib/upload/bake`): the artwork's own `transform`s
   and the artboard's translate+scale become the shapes' coordinates (3
   decimals, in artboard px), so the shipped file carries NO `transform` and no
@@ -422,10 +439,14 @@ opt-in class as Generate SVG → Requesty; design
   The root carries NO
   `width`/`height` — the `viewBox` is the size (every consumer that needs px
   — the rasterizer, the EPS — derives them; the browser rasterizer pins the
-  render size on an in-memory copy only). A `transparent` background (the
-  default) paints no rectangle in the SVG or the EPS; a colour paints one
-  fill-only rectangle in both; the JPEG, which cannot be transparent, flattens
-  onto the colour or onto white. The JPEG
+  render size on an in-memory copy only). **The artboard rect is always the
+  first child** (I-60, 2026-10-09 — the user's definition: the full artwork is
+  the icon plus the artboard): `fill="<hex>"` for a colour background,
+  `fill="none"` for `transparent` (the default) — invisible, but an object, so
+  "select all" in an editor is the artboard; it survives SVGO (as a
+  `<path fill="none">`) and the clean-code report, has no visible bounds, and
+  emits nothing in the EPS (whose `%%BoundingBox` is the artboard anyway); the
+  JPEG, which cannot be transparent, flattens onto the colour or onto white. The JPEG
   rasterizes the VECTORS directly — at the artboard's px while
   `jpegMatchArtboard` is on, otherwise at the integer MP target in the
   artboard's ratio (15.1 MP on a square artboard → 3886×3886; 4 MP on 512×256 →
@@ -487,10 +508,11 @@ opt-in class as Generate SVG → Requesty; design
   check and the fix can never disagree; an unparseable or unfixable document is
   reported with its violation instead of shipping, and the file the export
   COMMITS is re-verified from its own text, not from the copy that was built.
-  The background rectangle the prepare pass paints (only for a colour
-  background) is fill-ONLY (`stroke="none"`, 2026-10-08): `stroke` is
-  inherited, so an artwork that strokes on the root or a group would otherwise
-  put a border around the whole artboard. The `<metadata>` subtree is the one
+  The artboard rectangle the prepare pass paints is fill-ONLY (`stroke="none"`,
+  2026-10-08; since 2026-10-09 the stroke unification keeps that `none` exactly
+  when the root hoists a paint): `stroke` is inherited, so an artwork that
+  strokes on the root or a group would otherwise put a border around the whole
+  artboard. The `<metadata>` subtree is the one
   place the clean pass leaves alone for both the check and the rebuild — it is
   the embed step's output (RDF/DC vocabulary by design), verified by its own
   readback, and the namespace rule still covers it (a declaration inside it is
@@ -599,8 +621,9 @@ opt-in class as Generate SVG → Requesty; design
   `expandStrokes` (default off; fingerprinted ONLY when on, so no existing
   package flips to stale) makes the prepare stage turn every visibly stroked
   shape into a filled outline — what some stocks require — so the SVG, JPEG
-  and EPS all ship without strokes. It runs AFTER the stroke restyle (the
-  setting's px IS the expanded width) and BEFORE the global stroke pass
+  and EPS all ship without strokes. It runs AFTER the bake and the stroke
+  restyle on every placement candidate (the setting's px IS the expanded
+  width, whatever the artboard's scale) and BEFORE the global stroke pass
   (which then finds nothing to hoist): `src/lib/upload/expand.ts` (the DOM
   pass) over `src/lib/upload/geom/expand/` (`pen` vocabulary, `offset` —
   lines exactly, cubics by Tiller–Hanson checked at t = ¼ ½ ¾ against the
@@ -1031,6 +1054,18 @@ Batch:
   `Rescan` (all three tabs) re-reads for an unknown path, `Ctrl+V` adopts an
   exact leaf, and both hand the capture to the known handle
   (`knownroots.nameKnownRoot`) for the next derivation.
+* **I-60 (the artboard is the shipped artwork, RULE 4/13 — 2026-10-09):** the
+  viewBox is computed from the bounds of the FINAL document — the configured
+  stroke width, expansion, joins and caps included, measured by the strokes'
+  real outlines — plus the padding; nothing visible lies outside it; a pinned
+  artboard centres the shipped bounds to the file's precision; the artboard
+  rect is always the first child (the background colour, or `fill="none"` when
+  transparent); the placement passes are recorded, and a placement that does
+  not settle fails by name (`no-fit`) instead of shipping a guess. Pinned by
+  `upload_prepare` ("the artboard is the shipped artwork"), `upload_geom`
+  (unpainted shapes have no bounds), `upload_optimize`/`upload_clean`/
+  `upload_eps` (the invisible rect through the pipeline) and `upload_runexport`
+  (`tools.artboard` agrees with the viewBox).
 * **I-61 (the built-in EPS is an executable program, RULE 4/13 — 2026-10-09):**
   an EPS is PostScript; one invalid instruction and the interpreter stops before
   the artwork (the report: `-0.75 0 0 -0.75 0 750 concat` → `/typecheck` in
@@ -1151,7 +1186,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
 | The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
-| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: bake, viewBox-only root, optional background rect, stroke width written verbatim + colour restyle, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
+| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `src/lib/upload/restyle.ts`, `src/lib/upload/place.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: `place.ts` = the clone-bake-restyle-measure placement loop with `shippedBounds`/`insideArtboard`, `restyle.ts` = the stroke width written verbatim + colour restyle, `prepare.ts` = clean → place → viewBox-only root with the artboard rect always first, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
 | Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
 | Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset), the framed SVG preview |
 

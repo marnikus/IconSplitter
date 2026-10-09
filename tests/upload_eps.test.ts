@@ -112,6 +112,15 @@ describe("writeEps — a genuine EPS document", () => {
     expect((result.ok ? result.eps : "").match(/newpath/g)?.length).toBe(1);
   });
 
+  it("the invisible artboard rect: no path in the EPS, and the bounding box is still the artboard (I-60)", () => {
+    const svg = `<svg ${NS} viewBox="0 0 92.8 92.8"><rect x="0" y="0" width="92.8" height="92.8" fill="none" stroke="none"/><rect x="6.4" y="6.4" width="80" height="80" fill="#000"/></svg>`;
+    const result = writeEps(svg, "#ffffff");
+    const eps = result.ok ? result.eps : "";
+    expect(eps.match(/newpath/g)?.length).toBe(1);
+    expect(eps).toContain("%%BoundingBox: 0 0 70 70"); // 92.8 px × 0.75 = 69.6 pt, rounded outwards
+    expect(runPostScript(eps).errors).toEqual([]);
+  });
+
   it("paints fills with setrgbcolor inside gsave/concat/grestore", () => {
     const result = writeEps(PREPARED, "#ffffff");
     expect(result.ok && result.eps).toContain("1 1 1 setrgbcolor fill"); // the white background

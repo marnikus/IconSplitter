@@ -12,9 +12,11 @@
 // accumulated CTM, then grown by the extension scaled by the CTM's largest
 // axis scale (conservative under non-uniform transforms).
 // `vector-effect="non-scaling-stroke"` is treated as a normal stroke
-// (conservative when the artwork is scaled down). Elements whose bounds no
-// geometry can answer for (text, image, use…) are named `unsupported`, never
-// guessed.
+// (conservative when the artwork is scaled down). A shape whose fill is `none`
+// and that does not stroke paints nothing and has no visible bounds (the
+// artboard rect of a transparent export, an icon set's invisible frame —
+// 2026-10-09). Elements whose bounds no geometry can answer for (text, image,
+// use…) are named `unsupported`, never guessed.
 
 import { identity, multiply, parseTransform, scaleOf, type Matrix } from "./matrix";
 import { pathGeometry, type ShapeGeom, type Subpath } from "./path";
@@ -68,11 +70,16 @@ export function visibleBounds(root: Element): BoundsResult | null {
       acc.unsupported.push(bad);
       return;
     }
-    const b = SHAPES.includes(name(el)) ? shapeBounds(el, stroke, ctm) : null;
+    const b = SHAPES.includes(name(el)) && !paintsNothing(stroke) ? shapeBounds(el, stroke, ctm) : null;
     if (b !== null) acc.bounds = acc.bounds === null ? b : union(acc.bounds, b);
   });
   if (acc.bounds === null) return null;
   return { bounds: acc.bounds, unsupported: [...new Set(acc.unsupported)] };
+}
+
+/** `fill="none"` and no stroke: the shape is an object but paints nothing — not visible, so not in the bounds (I-60). */
+export function paintsNothing(stroke: Stroke): boolean {
+  return stroke.fillNone && stroke.none;
 }
 
 /** Every element with its accumulated CTM and inherited stroke state. */

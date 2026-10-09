@@ -334,6 +334,18 @@ describe("runExport — the full package commits per icon", () => {
     expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("rx=");
   });
 
+  it("records the artboard the file ships: mode, px, megapixels, scaledTo null, passes — and the viewBox agrees (I-60)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2 };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    const artboard = readRecord(root).tools.artboard;
+    expect(artboard).toMatchObject({ mode: "content", scaledTo: null });
+    expect(artboard!.passes).toBeGreaterThanOrEqual(1);
+    expect(artboard!.megapixels).toBeCloseTo((artboard!.width * artboard!.height) / 1e6, 6);
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain(`viewBox="0 0 ${artboard!.width} ${artboard!.height}"`);
+  });
+
   it("records the converter that wrote the EPS and the expand block (2026-10-09)", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
@@ -352,7 +364,7 @@ describe("runExport — the full package commits per icon", () => {
     expect(result.status).toBe("processed");
     const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(svgText).not.toMatch(/stroke/);
-    expect(svgText.match(/<path/g)?.length).toBe(2);
+    expect(svgText.match(/<path/g)?.length).toBe(3); // the artboard (a path after SVGO) + the two outlines
     expect(verifyExportSvg(svgText)).toEqual([]);
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
@@ -669,7 +681,7 @@ describe("runExport — EPS success and atomic leftovers", () => {
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
   });
 
-  it("a transparent background (the default) ships no background rect in the SVG, no background shape in the EPS, and flattens the JPEG onto white (2026-10-08)", async () => {
+  it("a transparent background (the default) ships the artboard rect INVISIBLE in the SVG, no shape for it in the EPS, and flattens the JPEG onto white (2026-10-08, I-60 2026-10-09)", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, background: "transparent", includeEps: true };
     const seen: string[] = [];
@@ -683,11 +695,12 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const svg = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(verifyExportSvg(svg)).toEqual([]);
     expect(svg).not.toMatch(/<svg[^>]*\swidth=/); // no px size on the root either
-    const shapes = Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("rect, path, circle"));
-    expect(shapes.filter((el) => el.getAttribute("stroke") === "none" && el.getAttribute("x") === "0")).toHaveLength(0);
+    const board = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement.firstElementChild!;
+    expect(board.getAttribute("fill")).toBe("none"); // the artboard is an object, but paints nothing
+    expect(svg).not.toMatch(/fill="#fff/);
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — no background shape before it
+    expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — the unpainted artboard emits nothing
     expect(readRecord(root).settings.effective.background).toBe("transparent");
   });
 

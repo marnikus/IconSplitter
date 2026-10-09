@@ -78,6 +78,14 @@ describe("fitArtboard — a pinned artboard scales the artwork into it", () => {
 });
 
 describe("visibleBounds — geometry including strokes, caps, joins, transforms", () => {
+  it("a shape that paints nothing — fill none and no stroke — has no visible bounds (the artboard rect, an icon's invisible frame)", () => {
+    const only = visibleBounds(rootOf(`<rect x="0" y="0" width="24" height="24" fill="none"/><rect x="4" y="4" width="8" height="8" fill="#000"/>`));
+    expect(at(only!.bounds)).toEqual([4, 4, 8, 8]);
+    const inherited = visibleBounds(rootOf(`<g fill="none"><rect x="0" y="0" width="24" height="24"/><rect x="4" y="4" width="8" height="8" stroke="#000" stroke-width="2" stroke-linejoin="round"/></g>`));
+    expect(at(inherited!.bounds)).toEqual([3, 3, 10, 10]);
+    expect(visibleBounds(rootOf(`<rect x="0" y="0" width="24" height="24" fill="none" stroke="none"/>`))).toBeNull();
+  });
+
   it("covers plain shapes without stroke", () => {
     const r = visibleBounds(rootOf(`<rect x="2" y="4" width="10" height="6"/>`));
     expect(r?.bounds && at(r.bounds)).toEqual([2, 4, 10, 6]);
@@ -136,7 +144,7 @@ describe("visibleBounds — geometry including strokes, caps, joins, transforms"
     ));
     expect(circle?.bounds && at(circle.bounds)).toEqual([2, 2, 20, 20]);
     const rel = visibleBounds(rootOf(
-      `<path d="M2 2h20v20H2z M5 5c2 0 4 2 6 6s4 4 6 4q2 -2 4 0t4 0" fill="none"/>`,
+      `<path d="M2 2h20v20H2z M5 5c2 0 4 2 6 6s4 4 6 4q2 -2 4 0t4 0" fill="#000"/>`,
     ));
     expect(rel?.bounds?.minX).toBeLessThanOrEqual(2);
     expect(rel?.bounds && rel.bounds.minX >= 0 && rel.bounds.minY >= 0 && rel.bounds.width <= 24 && rel.bounds.height <= 24).toBe(true);

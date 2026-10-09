@@ -17,7 +17,8 @@ function prepared(source: string, overrides: SettingsOverrides = {}) {
   const result = prepare(source, overrides);
   if (!result.ok) throw new Error(`prepare failed: ${result.code} ${result.detail}`);
   const doc = new DOMParser().parseFromString(result.svg, "image/svg+xml");
-  return { result, doc, root: doc.documentElement, shapes: Array.from(doc.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon")) };
+  // the first shape is always the artboard rect (I-60); `shapes` is the artwork
+  return { result, doc, root: doc.documentElement, shapes: Array.from(doc.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon")).slice(1) };
 }
 const STROKE_PROPS = ["stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stroke-dasharray", "stroke-dashoffset", "stroke-opacity"];
 
