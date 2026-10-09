@@ -15,7 +15,7 @@ import {
 } from "../src/lib/upload/export";
 import { getAppState, patchUpload, resetAppStore } from "../src/state/appstore";
 import {
-  assembleRows, countsOf, metaFromRecord, pruneChecked, statusOf, staleOf, toRow,
+  assembleRows, countsOf, idsWithMetadata, metaFromRecord, pruneChecked, statusOf, staleOf, toRow,
 } from "../src/upload/rowmodel";
 import {
   applyUploadFilters, headerState, sortUploadRows, toListRow, visibleRows,
@@ -181,6 +181,14 @@ describe("metaFromRecord + statusOf", () => {
 });
 
 describe("filters, sort, header, counts", () => {
+
+  it("finds only selected rows whose metadata already exists, in row order", () => {
+    const draft = rowOf(null, { ...EMPTY_META, state: "generated", metadata: META }, DEFAULT_UPLOAD_SETTINGS, null, "pair_draft");
+    const accepted = rowOf(null, ACCEPTED, DEFAULT_UPLOAD_SETTINGS, null, "pair_accepted");
+    const empty = rowOf(null, EMPTY_META, DEFAULT_UPLOAD_SETTINGS, null, "pair_empty");
+    expect(idsWithMetadata([draft, empty, accepted], ["pair_empty", "pair_accepted", "pair_draft", "pair_gone"]))
+      .toEqual(["pair_draft", "pair_accepted"]);
+  });
 
   it("filters by package status, metadata state and search text", () => {
     const list = rows.map(toListRow);

@@ -3,11 +3,10 @@
 // the two PREVIEW settings (thumbnail zoom and the frame background — one
 // control per decision, RULE 10) with the global Export settings button beside
 // them (the reference puts the tools here, not in the provider card), the live
-// progress line, and the five bulk actions: Apply settings to selected (ONE
-// undoable entry), Metadata selected (confirmed against the exact request
-// first), Export selected, Download all (the selection's committed packages
-// into one folder the user picks, 2026-10-08) and Cancel while a run is in
-// flight. Every bulk action applies to the SELECTION only.
+// progress line, and the bulk controls: Apply settings, Generate metadata,
+// Regenerate metadata, Export selected, Download all (the selection's committed
+// packages into one folder the user picks, 2026-10-08), and Cancel while a run
+// is in flight. Every bulk action applies to the SELECTION only.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
@@ -21,8 +20,10 @@ export interface UploadBulkBarProps {
   progress: { done: number; total: number } | null;
   runningMeta: number;
   runningExport: number;
-  /** How many of the checked icons still have no metadata (the paid-call count). */
+  /** How many checked icons still have no metadata (the Generate paid-call count). */
   metaNeeded: number;
+  /** How many checked icons have metadata text available to replace. */
+  metaRegenerateCount: number;
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
   onToggleAll: (on: boolean) => void;
@@ -33,6 +34,7 @@ export interface UploadBulkBarProps {
   onSettings: () => void;
   onApplySettings: () => void;
   onMetadata: () => void;
+  onRegenerateMetadata: () => void;
   onExport: () => void;
   onDownload: () => void;
   onCancel: () => void;
@@ -63,7 +65,7 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
   );
 }
 
-/** The action half: preview settings, progress, cancel, the four bulk actions. */
+/** The action half: preview settings, progress, cancel and five bulk actions. */
 function BulkRight({ p }: { p: UploadBulkBarProps }) {
   const running = p.runningMeta + p.runningExport;
   return (
@@ -84,7 +86,7 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
   );
 }
 
-/** The four bulk actions, every one on the SELECTION only. */
+/** The five bulk actions, every one on the SELECTION only. */
 function BulkActions({ p }: { p: UploadBulkBarProps }) {
   return (
     <>
@@ -96,6 +98,12 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
           ? "Select icons first"
           : `${p.metaNeeded} of ${p.checkedCount} selected still need metadata — one paid request each`}>
         ✦ Generate metadata ({p.metaNeeded})</button>
+      <button type="button" className="svg-btn" data-testid="upload-meta-regenerate-selected"
+        disabled={p.metaRegenerateCount === 0} onClick={p.onRegenerateMetadata}
+        title={p.metaRegenerateCount === 0
+          ? "Select icons with existing metadata first"
+          : `${p.metaRegenerateCount} of ${p.checkedCount} selected already have metadata — one replacement request each`}>
+        ↻ Regenerate metadata ({p.metaRegenerateCount})</button>
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
       <button type="button" className="svg-btn" data-testid="upload-download-selected"

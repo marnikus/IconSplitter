@@ -18,10 +18,11 @@ import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { toBatchSource, type SvgSource } from "./sources";
-import type { SvgRow } from "./types";
+import type { SvgOperation, SvgRow } from "./types";
 
 export interface SvgConfirmProps {
   ids: string[];
+  operation: SvgOperation;
   rows: SvgRow[];
   config: SvgConfig;
   caps: ModelCaps;
@@ -39,7 +40,9 @@ export default function SvgConfirm(p: SvgConfirmProps) {
     <div className="svg-backdrop" data-testid="svg-confirm">
       <section className="svg-modal wide" role="dialog" aria-modal="true" aria-labelledby="svg-confirm-title">
         <header className="svg-modal-head">
-          <h2 id="svg-confirm-title">Confirm SVG generation</h2>
+          <h2 id="svg-confirm-title" data-testid="svg-confirm-title">
+            Confirm SVG {p.operation === "regenerate" ? "regeneration" : "generation"}
+          </h2>
           <button type="button" className="svg-btn" data-testid="svg-confirm-close" onClick={p.onDismiss}>Close</button>
         </header>
         <div className="svg-modal-body">
@@ -101,7 +104,7 @@ function Actions({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
       <button type="button" className="svg-btn" data-testid="svg-confirm-cancel" onClick={p.onDismiss}>Cancel</button>
       <button type="button" className="svg-btn primary" data-testid="svg-confirm-generate"
         disabled={plan.problems.length > 0 || plan.active === null} onClick={p.onConfirm}>
-        {p.running ? "Add to queue" : "Generate now"}
+        {p.running ? "Add to queue" : p.operation === "regenerate" ? "Regenerate now" : "Generate now"}
       </button>
     </div>
   );

@@ -190,6 +190,17 @@ function makeRoot(): BinDir {
   return root;
 }
 
+/** Add a third approved row so the regeneration batch includes a selected empty row to exclude. */
+function makeRegenerationRoot(): BinDir {
+  const root = makeRoot();
+  const dir = root.children.get(DIR) as BinDir;
+  const meta = pairFile(DIR, "court_AI.png", {
+    id: COURT, versions: [svgVersion(`${DIR}/court_AI.svg`, { version: 1, review: "approved" })],
+  });
+  dir.children.set("court_AI.svg.json", new BinFile("court_AI.svg.json", serializePairMeta(meta), 3300));
+  return root;
+}
+
 /** The Gemini transport: a valid answer, a bad answer, or silence until abort. */
 function geminiTransport(answer: string | null) {
   const calls: { url: string; key: string | null; body: string }[] = [];
@@ -869,6 +880,47 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();
     expect(text("[data-testid=upload-toast]")).toContain("already have metadata");
     expect(t.calls).toHaveLength(2); // no second paid call
+  });
+
+  itSlow("bulk regeneration replaces metadata only for selected rows that already have it", async () => {
+    const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRegenerationRoot());
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+
+    await check(FOG);
+    await check(ARCH);
+    const regen = await waitForEl("[data-testid=upload-meta-regenerate-selected]") as HTMLButtonElement;
+    expect(regen.textContent).toContain("Regenerate metadata (0)");
+    expect(regen.disabled).toBe(true);
+    await click("[data-testid=upload-meta-selected]");
+    expect(text("#upload-meta-title")).toContain("Generate metadata for 2 icons");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 2
+      && text(`[data-testid=upload-meta-cell-${FOG}]`).includes("generated")
+      && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("generated"), "the initial metadata to land");
+
+    await check(COURT); // selected, approved SVG, but no metadata yet
+    expect(text("[data-testid=upload-meta-selected]")).toContain("Generate metadata (1)");
+    expect(text("[data-testid=upload-meta-regenerate-selected]")).toContain("Regenerate metadata (2)");
+    await click("[data-testid=upload-meta-regenerate-selected]");
+    expect(text("#upload-meta-title")).toContain("Regenerate metadata for 2 icons");
+    expect(text("[data-testid=upload-meta-confirm]")).toContain("Regenerate metadata");
+    expect(text("[data-testid=upload-meta-backdrop]")).toContain("replaces the current text");
+    await waitForEl("[data-testid=upload-preview-count]");
+    expect(q(`[data-testid=upload-preview-${FOG}]`)).not.toBeNull();
+    expect(q(`[data-testid=upload-preview-${ARCH}]`)).not.toBeNull();
+    expect(q(`[data-testid=upload-preview-${COURT}]`)).toBeNull();
+
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length >= 4 && q("[data-testid=upload-progress]") === null, "regeneration batch to finish");
+    expect(t.calls).toHaveLength(4); // two initial requests plus only the two existing metadata rows
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("generated");
+    expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).toContain("generated");
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
+    expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
   });
 
   itSlow("export selected generates metadata FIRST, then exports everything", async () => {

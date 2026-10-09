@@ -26,7 +26,8 @@ import { guard, perRequestOf, planOf } from "./runplan";
 import { busy, confirmRun, dropQueueForCancel, dropWaiting, regenerateNext, type CancelNote } from "./runcontrol";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
-import type { Dialog, Placement, RunProgress, SvgRefs, SvgRow } from "./types";
+import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
+import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
 
 /** Everything an action may touch. One object, passed everywhere. */
@@ -86,7 +87,9 @@ export interface SvgActions {
   setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   /** `front` (a row's Regenerate) while a run is in flight skips the dialog and queues first (2026-10-08). */
-  requestGenerate: (ids: string[], placement?: Placement) => void;
+  requestGenerate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
+  /** Bulk Regenerate: only checked rows with a valid existing SVG enter confirmation. */
+  regenerateSelected: (ids: string[]) => void;
   cancelRun: () => void;
   confirmGenerate: () => void;
   dismissDialog: () => void;
@@ -221,10 +224,10 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
   return { toggleCheck, selectVisible, deselectAll, setActive, decide };
 }
 
-function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "dismissDialog"> {
+function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelected" | "dismissDialog"> {
   const latest = useRef(ctx);
   latest.current = ctx;
-  const requestGenerate = useCallback((ids: string[], placement: Placement = "back") => {
+  const requestGenerate = useCallback((ids: string[], placement: Placement = "back", operation: SvgOperation = "generate") => {
     const c = latest.current;
     const why = guard(c, ids);
     if (why !== null) return c.say(why, true);
@@ -233,12 +236,18 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "dismissDialog"> 
     const problems = validateBatchPlan(planOf(c, ids), perRequestOf(c));
     if (problems.length > 0) return c.say(problems[0], true);
     if (placement === "front" && busy(c)) return regenerateNext(c, ids);
-    const dialog: Dialog = { kind: "confirm", ids };
+    const dialog: Dialog = { kind: "confirm", ids, operation };
     log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
     c.dispatch({ type: "dialog", dialog });
   }, []);
+  const regenerateSelected = useCallback((ids: string[]) => {
+    const c = latest.current;
+    const eligible = idsWithGeneratedSvg(c.rows, ids);
+    if (eligible.length === 0) return c.say("Select a source with an existing valid SVG to regenerate", true);
+    requestGenerate(eligible, "back", "regenerate");
+  }, [requestGenerate]);
   const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
-  return { requestGenerate, dismissDialog };
+  return { requestGenerate, regenerateSelected, dismissDialog };
 }
 
 /**

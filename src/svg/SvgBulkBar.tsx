@@ -2,10 +2,10 @@
 // Header checkbox with an indeterminate state, the selected/visible scope,
 // select-visible and deselect-all, the two PREVIEW settings (thumbnail zoom and
 // the frame background — one control per decision, RULE 10), the estimate line,
-// and the three bulk actions: Generate, Approve, Decline. There is no "approve
-// visible" action — every bulk operation applies to the SELECTION only, and
-// Approve/Decline stay disabled until a selected row has a valid SVG. While a
-// run is in flight the bar shows the live batch progress and a Cancel that
+// and the four bulk actions: Generate, Regenerate, Approve, Decline. There is
+// no "approve visible" action — every bulk operation applies to the SELECTION
+// only. Approve/Decline stay disabled until a selected row has a valid SVG.
+// While a run is in flight the bar shows the live batch progress and a Cancel that
 // keeps everything already saved.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
@@ -17,6 +17,8 @@ import type { RunProgress } from "./types";
 export interface SvgBulkBarProps {
   header: "none" | "some" | "all";
   checkedCount: number;
+  /** Checked rows with a valid, existing SVG version. */
+  regenerableCount: number;
   /** Requests the selection becomes at the effective per-request size. */
   requestCount: number;
   visibleCount: number;
@@ -33,6 +35,7 @@ export interface SvgBulkBarProps {
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
   onGenerate: () => void;
+  onRegenerate: () => void;
   onDecide: (decision: "approved" | "declined") => void;
   onCancel: () => void;
 }
@@ -63,30 +66,48 @@ function BulkLeft({ p }: { p: SvgBulkBarProps }) {
 
 function BulkRight({ p }: { p: SvgBulkBarProps }) {
   return (
-      <div className="svg-bulk-right">
-        <PreviewBg bg={p.bg} onBg={p.onBg} />
-        <span className="svg-divider" aria-hidden="true" />
-        <div className="svg-zoom">
-          <label htmlFor="svg-thumb">ZOOM</label>
-          <span aria-hidden="true">{ZOOM_MIN}</span>
-          <input id="svg-thumb" data-testid="svg-thumb" type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={ZOOM_STEP}
-            value={p.thumb} aria-label="Thumbnail maximum height"
-            onChange={(e) => p.onThumb(clampZoom(Number(e.target.value)))} />
-          <span aria-hidden="true">{ZOOM_MAX}</span>
-          <output className="svg-zoom-value" data-testid="svg-thumb-value" htmlFor="svg-thumb">{zoomLabel(p.thumb)}</output>
-        </div>
-        <span className="svg-divider" aria-hidden="true" />
-        <Estimate p={p} />
-        {p.running && (
-          <button type="button" className="svg-btn" data-testid="svg-cancel-run" onClick={p.onCancel}>Cancel run</button>
-        )}
-        <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
-          disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
-        <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
-          disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
-        <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"
-          disabled={p.decidableCount === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
+    <div className="svg-bulk-right">
+      <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <span className="svg-divider" aria-hidden="true" />
+      <div className="svg-zoom">
+        <label htmlFor="svg-thumb">ZOOM</label>
+        <span aria-hidden="true">{ZOOM_MIN}</span>
+        <input id="svg-thumb" data-testid="svg-thumb" type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={ZOOM_STEP}
+          value={p.thumb} aria-label="Thumbnail maximum height"
+          onChange={(e) => p.onThumb(clampZoom(Number(e.target.value)))} />
+        <span aria-hidden="true">{ZOOM_MAX}</span>
+        <output className="svg-zoom-value" data-testid="svg-thumb-value" htmlFor="svg-thumb">{zoomLabel(p.thumb)}</output>
       </div>
+      <span className="svg-divider" aria-hidden="true" />
+      <Estimate p={p} />
+      <BulkActions p={p} />
+    </div>
+  );
+}
+
+function BulkActions({ p }: { p: SvgBulkBarProps }) {
+  return (
+    <>
+      {p.running && <button type="button" className="svg-btn" data-testid="svg-cancel-run" onClick={p.onCancel}>Cancel run</button>}
+      <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
+        disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
+      <RegenerateButton p={p} />
+      <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
+      <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
+    </>
+  );
+}
+
+function RegenerateButton({ p }: { p: SvgBulkBarProps }) {
+  const title = p.regenerableCount === 0
+    ? "Select sources with a valid existing SVG first"
+    : `${p.regenerableCount} of ${p.checkedCount} selected sources have a valid existing SVG; only those will be regenerated`;
+  return (
+    <button type="button" className="svg-btn" data-testid="svg-regenerate-selected"
+      disabled={p.regenerableCount === 0} onClick={p.onRegenerate} title={title}>
+      ↻ Regenerate selected ({p.regenerableCount})</button>
   );
 }
 

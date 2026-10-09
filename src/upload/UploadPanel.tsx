@@ -12,7 +12,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
 import { downloadPlanOf } from "./downloadactions";
-import { idsNeedingMetadata } from "./rowmodel";
+import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
@@ -71,14 +71,15 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
       <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
         thumb={g.thumb} bg={g.bg} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport}
-        metaNeeded={idsNeedingMetadata(g.rows, g.checked).length}
+        metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
         onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
-        onMetadata={() => g.generateMetadataSelected(g.checked)} onExport={() => g.exportSelected(g.checked)}
-        onDownload={() => g.downloadSelected(g.checked)}
+        onMetadata={() => g.generateMetadataSelected(g.checked)}
+        onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
+        onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
         onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
       <UploadList g={g} actions={actions} />
     </>
