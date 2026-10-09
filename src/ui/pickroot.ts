@@ -11,10 +11,12 @@
 // a copied folder that is not this one is not completed into a guess (I-59).
 
 import { pickDirectory } from "../batch/picker";
-import { adoptCopiedText, readClipboardText, type ClipState } from "../lib/clipboardpath";
+import {
+  isLastAppCopiedPath, isRejectedClipboardPath, readClipboardText, rejectClipboardPath, type ClipState,
+} from "../lib/clipboardpath";
 import type { DirHandleLike } from "../lib/fs";
-import { loadRootPathInfo, saveRootPathInfo, type PathHow, type RootPathInfo } from "../lib/rootpath";
-import { deriveRootPath, rememberKnownRoot } from "./knownroots";
+import { loadRootPathInfo, normalizeRootPath, pathFromCopied, saveRootPathInfo, type PathHow, type RootPathInfo } from "../lib/rootpath";
+import { deriveRootPath, knownRootPath, publishKnownRootPath, rememberKnownRoot } from "./knownroots";
 
 /** The picked folder, plus the full path captured for it ("" when none). */
 export interface PickedRoot {
@@ -27,7 +29,7 @@ export interface PickedRoot {
 
 /** The path captured at pick time for a handle, or the remembered one. */
 export function capturedPath(handle: DirHandleLike): PickedRoot["path"] {
-  return loadRootPathInfo(handle.name).path;
+  return knownRootPath(handle) ?? loadRootPathInfo(handle.name).path;
 }
 
 /**
@@ -41,20 +43,36 @@ export async function pickRootWithPath(): Promise<PickedRoot | null> {
   const read = before.text === "" ? await readClipboardText() : before;
   const info = await pathForPick(handle, read.text);
   rememberKnownRoot(handle, info.path);
+  publishKnownRootPath(handle, info.path);
   return { handle, path: info.path, how: info.how, clip: read.state };
 }
 
 /**
- * The path of the picked folder: the clipboard when it names it exactly, else
- * the derivation from a known ancestor (which is exact), else nothing at all
- * (I-51/I-59). Nothing is written until the answer is settled, and nothing is
- * ever completed from a copied folder that is not this one.
+ * The path of the picked folder: a verified handle relationship first, then a
+ * fresh exact clipboard capture, else nothing (I-51/I-59). An app-owned location
+ * copy is not fresh evidence, and ambiguous handle evidence fails closed. A
+ * failed answer clears the previous same-name path rather than leaving it stale.
  */
 async function pathForPick(handle: DirHandleLike, copied: string): Promise<RootPathInfo> {
-  const fromClip = copied === "" ? UNKNOWN : adoptCopiedText(handle.name, copied);
-  if (fromClip.path !== "") return fromClip;
+  const prior = loadRootPathInfo(handle.name).path;
+  const appCopy = isLastAppCopiedPath(copied);
+  const rejected = isRejectedClipboardPath(handle.name, copied);
   const derived = await deriveRootPath(handle);
-  return derived === null ? UNKNOWN : saveRootPathInfo(handle.name, derived);
+  if (derived.kind === "derived") return saveRootPathInfo(handle.name, derived.path);
+  if (derived.kind === "ambiguous" || appCopy || rejected) return saveRootPathInfo(handle.name, "");
+
+  const fromClip = copied === "" ? UNKNOWN : pathFromCopied(copied, handle.name);
+  if (fromClip.path === "") return saveRootPathInfo(handle.name, "");
+  if (samePath(prior, fromClip.path)) {
+    rejectClipboardPath(handle.name, copied);
+    return saveRootPathInfo(handle.name, "");
+  }
+  return saveRootPathInfo(handle.name, fromClip.path);
+}
+
+/** A stale saved path cannot authenticate itself just because its leaf matches. */
+function samePath(left: string, right: string): boolean {
+  return left !== "" && normalizeRootPath(left).toLowerCase() === normalizeRootPath(right).toLowerCase();
 }
 
 const UNKNOWN: RootPathInfo = { path: "", how: null };
@@ -67,11 +85,11 @@ const UNKNOWN: RootPathInfo = { path: "", how: null };
  */
 export async function pickFolderFor(
   take: (handle: DirHandleLike) => void | Promise<void>,
-): Promise<{ handle: DirHandleLike; message: string | null } | null> {
+): Promise<{ handle: DirHandleLike; message: string | null; pathCaptured: boolean } | null> {
   const picked = await pickRootWithPath();
   if (!picked) return null;
   await take(picked.handle);
-  return { handle: picked.handle, message: pickMessage(picked) };
+  return { handle: picked.handle, message: pickMessage(picked), pathCaptured: picked.path !== "" };
 }
 
 /**

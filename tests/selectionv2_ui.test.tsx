@@ -8,9 +8,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { clearAppCopiedPath, clearRejectedClipboardPaths } from "../src/lib/clipboardpath";
+import { clearKnownRoots, updateKnownRootPath } from "../src/ui/knownroots";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
@@ -22,6 +23,16 @@ import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const mountedRoots = new Set<Root>();
+
+afterEach(async () => {
+  const open = [...mountedRoots];
+  mountedRoots.clear();
+  if (open.length > 0) await act(async () => { for (const root of open) root.unmount(); });
+  clearKnownRoots();
+  clearAppCopiedPath();
+  clearRejectedClipboardPaths();
+});
 
 type PickerWindow = { showDirectoryPicker?: () => Promise<unknown> };
 
@@ -73,6 +84,9 @@ function makeBatchRoot(): FakeDir {
 describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
+    clearKnownRoots();
+    clearAppCopiedPath();
+    clearRejectedClipboardPaths();
     resetAppStore(); // no checked rows / filters leaking between tests
     await dropDb();
   });
@@ -142,11 +156,12 @@ describe("Selection V2 panel", () => {
   });
 
   it("shows the full path in its own row as soon as a pick captures it, without a reload", async () => {
-    const { el } = await mount(makeRoot(), "F:\\Stocks 2026\\icons\\split_root\\");
+    const root = makeRoot();
+    const { el } = await mount(root, "F:\\Stocks 2026\\icons\\split_root\\");
     const before = rows(el).length;
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
-    // a capture in another tab reaches this row live (I-36/RULE 24)
-    await act(async () => { saveRootPathInfo("split_root", "D:\\backup\\split_root"); });
+    // an exact-handle capture in another tab reaches this row live (I-36/RULE 24)
+    await act(async () => { await updateKnownRootPath(root, "D:\\backup\\split_root"); });
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("D:\\backup\\split_root");
     expect(rows(el).length).toBe(before); // the list is untouched by a path capture
   });
@@ -217,11 +232,11 @@ describe("Selection V2 panel", () => {
     const row = q(el, `[data-testid='v2-row-${FOG}']`) as HTMLElement;
     expect(box(row, "v2-thumb-src")).toEqual({ w: 128, h: 128 });
     expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).thumbHeight).toBe(128);
-    await act(async () => { ui.unmount(); });
+    await unmount(ui);
     const again = await mount(makeRoot());
     expect((q(again.el, "[data-testid='v2-thumb']") as HTMLInputElement).value).toBe("128");
     expect(text(again.el, "[data-testid='v2-thumb-value']")).toBe("128 px");
-    await act(async () => { again.ui.unmount(); });
+    await unmount(again.ui);
   });
 
   it("zooms to 800 px at each side's own ratio and never upscales a small source (I-55)", async () => {
@@ -354,7 +369,7 @@ describe("Selection V2 panel", () => {
     expect(q(full.el, "[data-testid='v2-nomatch']")).toBeTruthy();
     await click(q(full.el, "[data-testid='v2-clear-empty']")!);
     expect(rows(full.el).length).toBe(4);
-    await act(async () => { full.ui.unmount(); });
+    await unmount(full.ui);
   });
 
   it("warns about a corrupt legacy file without losing the review", async () => {
@@ -413,11 +428,11 @@ describe("Selection V2 panel", () => {
     const first = await mount(root);
     await click(q(first.el, `[data-testid='v2-row-${HARBOR}']`)!);
     await key("a");
-    await act(async () => { first.ui.unmount(); });
+    await unmount(first.ui);
     const second = await mount(root);
     expect(text(second.el, `[data-testid='v2-status-${HARBOR}']`)).toBe("✓ Approved");
     expect(text(second.el, "[data-testid='v2-count-approved']")).toContain("1");
-    await act(async () => { second.ui.unmount(); });
+    await unmount(second.ui);
   });
 
   it("labels the review controls for keyboard and screen-reader users", async () => {
@@ -435,6 +450,9 @@ describe("Selection V2 panel", () => {
 describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
   beforeEach(async () => {
     localStorage.clear();
+    clearKnownRoots();
+    clearAppCopiedPath();
+    clearRejectedClipboardPaths();
     resetAppStore();
     await dropDb();
   });
@@ -575,9 +593,15 @@ async function mount(root: FakeDir, copied = ""): Promise<{ el: HTMLElement; ui:
   const el = document.createElement("div");
   document.body.appendChild(el);
   const ui = createRoot(el);
+  mountedRoots.add(ui);
   await act(async () => { ui.render(<HistoryProvider><PrefsHost><SelectionV2Panel /></PrefsHost></HistoryProvider>); });
   await click(q(el, "[data-testid='v2-open-folder']")!);
   return { el, ui, pick };
+}
+
+async function unmount(ui: Root): Promise<void> {
+  await act(async () => { ui.unmount(); });
+  mountedRoots.delete(ui);
 }
 
 function q(el: HTMLElement, sel: string): HTMLElement | null {

@@ -6,6 +6,7 @@
 // here — every value comes from the hook and every change goes back to it.
 
 import type { KeySource } from "../lib/keyvault";
+import type { DirHandleLike } from "../lib/fs";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 
 import {
@@ -24,6 +25,7 @@ export type { SvgCounts } from "./SourceLine";
 
 export interface SvgControlsProps {
   rootName: string;
+  rootHandle: DirHandleLike | null;
   discovery: Discovery | null;
   busy: string | null;
   counts: SvgCounts;
@@ -61,7 +63,7 @@ export interface SvgControlsProps {
 export default function SvgControls(p: SvgControlsProps) {
   return (
     <section className="svg-controls" aria-label="SVG generation controls">
-      <SourceLine rootName={p.rootName} discovery={p.discovery} busy={p.busy} counts={p.counts}
+      <SourceLine rootName={p.rootName} rootHandle={p.rootHandle} discovery={p.discovery} busy={p.busy} counts={p.counts}
         onChooseRoot={p.onChooseRoot} onRescan={p.onRescan} />
       <div className="svg-toolbar">
         <PromptZone prompt={p.prompt} onPrompt={p.onPrompt} onReset={p.onResetPrompt} />

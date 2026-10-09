@@ -12,7 +12,61 @@
 // way out for the user (Rescan vs. a paste), so the caller can no longer see
 // both of them as one empty string.
 
-import { pathFromCopied, saveRootPathInfo, type RootPathInfo } from "./rootpath";
+import { normalizeRootPath, pathFromCopied, saveRootPathInfo, type RootPathInfo } from "./rootpath";
+
+// A location copied by this app is useful to the user, but is not new evidence
+// that the next same-named folder they pick lives there. Track equality in
+// memory only; no durable path store is added.
+let appCopiedPath = "";
+const rejectedPaths = new Map<string, string>();
+
+/** Mark a successful app-owned location copy so a later pick cannot reuse it. */
+export function rememberAppCopiedPath(text: string): void {
+  appCopiedPath = normalizeRootPath(text).toLowerCase();
+}
+
+/** True for the app's still-current clipboard text; a different read clears it. */
+export function isLastAppCopiedPath(text: string): boolean {
+  if (appCopiedPath === "") return false;
+  const current = normalizeRootPath(text).toLowerCase();
+  if (current === "") return false; // an empty/blocked read proves no clipboard change
+  if (current === appCopiedPath) return true;
+  appCopiedPath = "";
+  return false;
+}
+
+/** Tests only: clear the app-copy marker between independent clipboard states. */
+export function clearAppCopiedPath(): void {
+  appCopiedPath = "";
+}
+
+/** Remember an exact clipboard value that repeated a saved same-name path. */
+export function rejectClipboardPath(rootName: string, text: string): void {
+  const key = rootName.toLowerCase();
+  const path = normalizeRootPath(text).toLowerCase();
+  if (key !== "" && path !== "") rejectedPaths.set(key, path);
+}
+
+/** True while the clipboard still contains a value rejected for this root. */
+export function isRejectedClipboardPath(rootName: string, text: string): boolean {
+  const key = rootName.toLowerCase();
+  const rejected = rejectedPaths.get(key);
+  if (rejected === undefined) return false;
+  const current = normalizeRootPath(text).toLowerCase();
+  if (current === rejected) return true;
+  if (current !== "") rejectedPaths.delete(key); // a genuinely different path is new evidence
+  return false;
+}
+
+/** Explicit Ctrl+V is a deliberate user correction to a rejected pick. */
+export function clearRejectedClipboardPath(rootName: string): void {
+  rejectedPaths.delete(rootName.toLowerCase());
+}
+
+/** Tests only: clear rejected text between independent runs. */
+export function clearRejectedClipboardPaths(): void {
+  rejectedPaths.clear();
+}
 
 /** What the clipboard read produced — why it is empty, when it is. */
 export type ClipState = "text" | "empty" | "blocked" | "unsupported";

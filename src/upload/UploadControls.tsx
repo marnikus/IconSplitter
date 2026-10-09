@@ -9,6 +9,7 @@
 // straight back to it.
 
 import type { KeySource } from "../lib/keyvault";
+import type { DirHandleLike } from "../lib/fs";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 
 import {
@@ -26,6 +27,7 @@ import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 
 export interface UploadControlsProps {
   rootName: string;
+  rootHandle: DirHandleLike | null;
   discovery: UploadDiscovery | null;
   busy: string | null;
   counts: UploadCounts;
@@ -92,7 +94,7 @@ function SourceLine({ p }: { p: UploadControlsProps }) {
           <Chip value={p.counts.stale} label="stale" testid="upload-count-stale" />
         </div>
       </div>
-      <FolderPathRow rootName={p.rootName} testid="upload-folder-path" />
+      <FolderPathRow rootName={p.rootName} rootHandle={p.rootHandle} testid="upload-folder-path" />
     </>
   );
 }

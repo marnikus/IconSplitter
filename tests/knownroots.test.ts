@@ -6,9 +6,12 @@
 // `resolve()` returns. Anything the platform refuses — no `resolve`, null, a
 // throw, a handle that is not a directory — must simply yield nothing, never a
 // guessed path.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DirHandleLike } from "../src/lib/fs";
-import { clearKnownRoots, deriveRootPath, knownRoots, nameKnownRoot, rememberKnownRoot } from "../src/ui/knownroots";
+import {
+  clearKnownRoots, deriveRootPath, knownRootPath, knownRoots, publishKnownRootPath, rememberKnownRoot,
+  subscribeKnownRoots, updateKnownRootPath,
+} from "../src/ui/knownroots";
 
 /** A plain directory handle — what the picker hands back. */
 function dir(name: string): DirHandleLike {
@@ -37,47 +40,74 @@ describe("deriveRootPath — where a newly picked folder lives", () => {
   it("completes the path from the folder the app already picked", async () => {
     const out = ancestorOf("_split_output", ["2026-10", "2026-10-05_18-45-20"]);
     rememberKnownRoot(out, "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output");
-    expect(await deriveRootPath(dir("2026-10-05_18-45-20")))
-      .toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-05_18-45-20");
+    expect(await deriveRootPath(dir("2026-10-05_18-45-20"))).toEqual({
+      kind: "derived",
+      path: "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-05_18-45-20",
+    });
   });
 
   it("prefers the DEEPEST known folder that contains the pick", async () => {
     const deep = ancestorOf("_split_output", ["2026-10-05_18-45-20"]);
     rememberKnownRoot(ancestorOf("main", ["_split_output", "2026-10-05_18-45-20"]), "F:\\work\\test_processing_2");
     rememberKnownRoot(deep, "F:\\work\\test_processing_2\\_split_output");
-    expect(await deriveRootPath(dir("2026-10-05_18-45-20")))
-      .toBe("F:\\work\\test_processing_2\\_split_output\\2026-10-05_18-45-20");
+    expect(await deriveRootPath(dir("2026-10-05_18-45-20"))).toEqual({
+      kind: "derived", path: "F:\\work\\test_processing_2\\_split_output\\2026-10-05_18-45-20",
+    });
   });
 
   it("answers the known path itself when the pick IS that folder", async () => {
     const out = ancestorOf("_split_output", []);
     rememberKnownRoot(out, "F:\\work\\test_processing_2\\_split_output");
-    expect(await deriveRootPath(out)).toBe("F:\\work\\test_processing_2\\_split_output");
+    expect(await deriveRootPath(out)).toEqual({ kind: "derived", path: "F:\\work\\test_processing_2\\_split_output" });
   });
 
-  it("stays silent when no known folder contains the pick", async () => {
-    rememberKnownRoot(ancestorOf("main", null), "F:\\work\\test_processing_2"); // null: not below it
-    expect(await deriveRootPath(dir("elsewhere"))).toBeNull();
+  it("recognizes a separately restored handle for the same directory", async () => {
+    const known = {
+      kind: "directory", name: "main",
+      isSameEntry: async (other: DirHandleLike) => other.name === "main",
+    } as unknown as DirHandleLike;
+    const picked = { kind: "directory", name: "main" } as unknown as DirHandleLike;
+    rememberKnownRoot(known, "F:\\work\\main");
+    expect(await deriveRootPath(picked)).toEqual({ kind: "derived", path: "F:\\work\\main" });
+  });
+
+  it("derives a picked parent from an exact known child handle", async () => {
+    const parent = ancestorOf("test_process_3", ["_split_output"]);
+    rememberKnownRoot(dir("_split_output"), "F:\\Stocks 2026\\icons testing\\single\\test_process_3\\_split_output");
+    expect(await deriveRootPath(parent)).toEqual({
+      kind: "derived", path: "F:\\Stocks 2026\\icons testing\\single\\test_process_3",
+    });
+  });
+
+  it("refuses conflicting paths proven by different known handles", async () => {
+    rememberKnownRoot(ancestorOf("first", ["child"]), "F:\\work\\first");
+    rememberKnownRoot(ancestorOf("second", ["child"]), "D:\\work\\second");
+    expect(await deriveRootPath(dir("child"))).toEqual({ kind: "ambiguous" });
+  });
+
+  it("stays silent when no known folder relates to the pick", async () => {
+    rememberKnownRoot(ancestorOf("main", null), "F:\\work\\test_processing_2");
+    expect(await deriveRootPath(dir("elsewhere"))).toEqual({ kind: "none" });
   });
 
   it("stays silent when the platform refuses: no resolve, or a throw", async () => {
-    rememberKnownRoot(ancestorOf("main", null, false), "F:\\work\\test_processing_2"); // no resolve() at all
-    expect(await deriveRootPath(dir("legacy"))).toBeNull();
+    rememberKnownRoot(ancestorOf("main", null, false), "F:\\work\\test_processing_2");
+    expect(await deriveRootPath(dir("legacy"))).toEqual({ kind: "none" });
     clearKnownRoots();
     rememberKnownRoot(ancestorOf("main", "throw"), "F:\\work\\test_processing_2");
-    expect(await deriveRootPath(dir("denied"))).toBeNull();
+    expect(await deriveRootPath(dir("denied"))).toEqual({ kind: "none" });
   });
 
   it("never invents a path from a known folder with no captured path", async () => {
     rememberKnownRoot(ancestorOf("main", ["child"]), "");
-    expect(await deriveRootPath(dir("child"))).toBeNull();
+    expect(await deriveRootPath(dir("child"))).toEqual({ kind: "none" });
   });
 
   it("keeps the newest capture for a folder that was picked twice", async () => {
     const main = ancestorOf("main", ["child"]);
     rememberKnownRoot(main, "F:\\one\\main");
     rememberKnownRoot(main, "D:\\two\\main");
-    expect(await deriveRootPath(dir("child"))).toBe("D:\\two\\main\\child");
+    expect(await deriveRootPath(dir("child"))).toEqual({ kind: "derived", path: "D:\\two\\main\\child" });
     expect(knownRoots().length).toBe(1);
   });
 
@@ -89,23 +119,70 @@ describe("deriveRootPath — where a newly picked folder lives", () => {
   });
 });
 
-// A folder picked with nothing on the clipboard is still a known HANDLE; when
-// Rescan or the user's Ctrl+V captures its exact path later (I-52), that
-// capture must reach the registry, so the next pick inside it is exact (I-51).
-describe("nameKnownRoot — a late capture names the handle already known", () => {
-  it("fills the path of every known handle with that name that has none", async () => {
+// A late capture must update only the same directory: the channel shares the
+// handle, then `isSameEntry` keeps same-name folders apart (I-36/I-52/I-63).
+describe("cross-tab path capture — exact handle, never just its leaf name", () => {
+  it("updates the matching same-name handle and leaves its unrelated sibling alone", async () => {
     const main = ancestorOf("main", ["child"]);
+    const differentMain = ancestorOf("main", ["different-child"]);
     rememberKnownRoot(main, "");
-    expect(await deriveRootPath(dir("child"))).toBeNull();
-    nameKnownRoot("main", "F:\\work\\main");
-    expect(await deriveRootPath(dir("child"))).toBe("F:\\work\\main\\child");
+    rememberKnownRoot(differentMain, "");
+    expect(await deriveRootPath(dir("child"))).toEqual({ kind: "none" });
+    await updateKnownRootPath(main, "F:\\work\\main");
+    expect(await deriveRootPath(dir("child"))).toEqual({ kind: "derived", path: "F:\\work\\main\\child" });
+    expect(knownRoots()).toEqual([
+      { handle: main, path: "F:\\work\\main" },
+      { handle: differentMain, path: "" },
+    ]);
   });
 
-  it("never overwrites a path a handle already has, and ignores unknown names", () => {
-    const main = ancestorOf("main", []);
-    rememberKnownRoot(main, "D:\\two\\main");
-    nameKnownRoot("main", "F:\\one\\main");
-    nameKnownRoot("nobody", "F:\\x\\nobody");
-    expect(knownRoots()).toEqual([{ handle: main, path: "D:\\two\\main" }]);
+  it("matches an alias with isSameEntry and accepts the exact new path", async () => {
+    const entry = {};
+    const local = {
+      kind: "directory", name: "main", isSameEntry: async (other: DirHandleLike) => (other as { entry?: object }).entry === entry,
+    } as DirHandleLike & { entry: object };
+    const received = {
+      kind: "directory", name: "main", entry,
+    } as unknown as DirHandleLike & { entry: object };
+    rememberKnownRoot(local, "F:\\old\\main");
+    await updateKnownRootPath(received, "D:\\new\\main");
+    expect(knownRootPath(local)).toBe("D:\\new\\main");
+  });
+
+  it("learns an exact remote handle so a later child pick can derive its path", async () => {
+    const remote = ancestorOf("main", ["child"]);
+    await updateKnownRootPath(remote, "F:\\work\\main");
+    expect(await deriveRootPath(dir("child"))).toEqual({ kind: "derived", path: "F:\\work\\main\\child" });
+  });
+
+  it("publishes a captured handle path to the live cross-tab channel", async () => {
+    class EchoChannel {
+      static open: EchoChannel[] = [];
+      readonly listeners: Array<(event: MessageEvent<unknown>) => void> = [];
+      constructor(readonly name: string) { EchoChannel.open.push(this); }
+      addEventListener(_type: string, listener: (event: MessageEvent<unknown>) => void): void { this.listeners.push(listener); }
+      postMessage(data: unknown): void {
+        for (const channel of EchoChannel.open) {
+          if (channel.name === this.name) for (const listener of channel.listeners) listener({ data } as MessageEvent<unknown>);
+        }
+      }
+      close(): void { EchoChannel.open = EchoChannel.open.filter((channel) => channel !== this); }
+    }
+    vi.stubGlobal("BroadcastChannel", EchoChannel);
+    try {
+      const entry = {};
+      const local = {
+        kind: "directory", name: "main", isSameEntry: async (other: DirHandleLike) => (other as { entry?: object }).entry === entry,
+      } as DirHandleLike & { entry: object };
+      const received = { kind: "directory", name: "main", entry } as unknown as DirHandleLike & { entry: object };
+      rememberKnownRoot(local, "F:\\old\\main");
+      const unsubscribe = subscribeKnownRoots(() => {});
+      publishKnownRootPath(received, "D:\\new\\main");
+      await vi.waitFor(() => expect(knownRootPath(local)).toBe("D:\\new\\main"));
+      unsubscribe();
+    } finally {
+      clearKnownRoots();
+      vi.unstubAllGlobals();
+    }
   });
 });

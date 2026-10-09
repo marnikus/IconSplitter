@@ -1,32 +1,52 @@
-// knownroots.ts — the folders this app has already picked, each with the full
-// path captured for it (I-51). Why they matter: the File System Access API never
-// tells a page the drive path of a picked folder (I-35), so the clipboard is the
-// only source of the FIRST path — but its own `resolve()` does tell the page that
-// one folder contains another. With a folder already known, the next pick inside
-// it can be named exactly: the known path plus the segments `resolve()` returns.
-// Session state only, plus whatever the tabs restore at boot; nothing is stored,
-// because a handle is the record (RULE 13: an unanswerable question stays
-// unanswered, never guessed). Only an EXACT capture is a path here: a stored
-// guess reads as none (lib/rootpath, I-59), so a derivation can never start
-// from one — that is what glued `…\export\test_process_3\_split_output`.
+// knownroots.ts — folders this app has picked, with paths captured from
+// Explorer (I-51). A directory handle reveals relationships, not a drive path:
+// resolve() can prove either that a known folder contains a new pick or that a
+// known child sits below a newly picked parent. Only exact captured paths seed
+// this session registry; stored guesses are excluded by lib/rootpath (I-59).
 
 import type { DirHandleLike } from "../lib/fs";
+import { pathFromCopied } from "../lib/rootpath";
+import { isRecord } from "../lib/isrecord";
 
 interface KnownRoot {
   handle: DirHandleLike;
   path: string;
 }
 
+export type RootPathDerivation =
+  | { kind: "derived"; path: string }
+  | { kind: "none" }
+  | { kind: "ambiguous" };
+
 const known: KnownRoot[] = [];
+let revision = 0;
+const listeners = new Set<() => void>();
+let captureChannel: BroadcastChannel | null = null;
 
 /** Remembers a picked folder with the full path captured for it (newest wins). */
 export function rememberKnownRoot(handle: DirHandleLike, path: string): void {
-  const at = known.findIndex((k) => k.handle === handle);
+  const at = known.findIndex((root) => root.handle === handle);
   if (at >= 0) known.splice(at, 1);
   known.push({ handle, path });
+  notifyKnownRoots();
 }
 
-/** The known folders, deepest path first — the order derivation should try. */
+/** The captured path for this exact known handle; null means it is not registered. */
+export function knownRootPath(handle: DirHandleLike): string | null {
+  return known.find((root) => root.handle === handle)?.path ?? null;
+}
+
+export function subscribeKnownRoots(listener: () => void): () => void {
+  listeners.add(listener);
+  watchCaptureChannel();
+  return () => { listeners.delete(listener); };
+}
+
+export function knownRootRevision(): number {
+  return revision;
+}
+
+/** The known folders, deepest captured path first. */
 export function knownRoots(): KnownRoot[] {
   return [...known].sort((a, b) => b.path.length - a.path.length);
 }
@@ -34,51 +54,138 @@ export function knownRoots(): KnownRoot[] {
 /** Tests only: forget every known folder. */
 export function clearKnownRoots(): void {
   known.length = 0;
+  captureChannel?.close();
+  captureChannel = null;
+  notifyKnownRoots();
 }
 
 /**
- * The exact full path of `handle`, derived from a folder this app already picked
- * — or null when no known folder contains it (or the platform refuses). The
- * answer is only ever `known path + the segments resolve() reported`, so it can
- * never be a guess.
+ * Derives a path only from a verified handle relationship. The nearest known
+ * handle wins; contradictory evidence at that same distance is ambiguous and
+ * must not be replaced by clipboard text that happens to share a leaf name.
  */
-export async function deriveRootPath(handle: DirHandleLike): Promise<string | null> {
-  for (const root of knownRoots()) {
-    if (root.path === "") continue;
-    const segments = await resolveSegments(root.handle, handle);
-    if (segments !== null) return joinPath(root.path, segments);
+export async function deriveRootPath(handle: DirHandleLike): Promise<RootPathDerivation> {
+  const evidence = (await Promise.all(knownRoots().map((root) => evidenceFrom(root, handle)))).flat();
+  return chooseDerivation(evidence);
+}
+
+async function evidenceFrom(root: KnownRoot, handle: DirHandleLike): Promise<Array<{ path: string; distance: number }>> {
+  if (root.path === "") return [];
+  const evidence: Array<{ path: string; distance: number }> = [];
+  if (root.handle === handle || await sameEntry(root.handle, handle)) evidence.push({ path: root.path, distance: 0 });
+  const below = await resolveSegments(root.handle, handle);
+  if (below !== null) evidence.push({ path: joinPath(root.path, below), distance: below.length });
+  const above = await resolveSegments(handle, root.handle);
+  if (above !== null) addParentEvidence(evidence, root.path, above.length);
+  return evidence;
+}
+
+function addParentEvidence(evidence: Array<{ path: string; distance: number }>, path: string, distance: number): void {
+  const parent = removePathSegments(path, distance);
+  if (parent !== null) evidence.push({ path: parent, distance });
+}
+
+function chooseDerivation(evidence: Array<{ path: string; distance: number }>): RootPathDerivation {
+  if (evidence.length === 0) return { kind: "none" };
+  const nearest = Math.min(...evidence.map((item) => item.distance));
+  const paths = new Map<string, string>();
+  for (const item of evidence) {
+    if (item.distance === nearest) paths.set(item.path.toLowerCase(), item.path);
   }
-  return null;
+  if (paths.size !== 1) return { kind: "ambiguous" };
+  return { kind: "derived", path: [...paths.values()][0] };
 }
 
-/**
- * A capture that arrived AFTER the pick — `Rescan` or the user's own Ctrl+V
- * (I-52) — names every known handle of that name that has no path yet, so the
- * next pick inside it derives an exact path (I-51). A handle that already has
- * a path keeps it: a later same-named folder is not this one.
- */
-export function nameKnownRoot(name: string, path: string): void {
-  if (name === "" || path === "") return;
+/** Updates exact same-directory handles when another tab captures their path. */
+export async function updateKnownRootPath(handle: DirHandleLike, path: string): Promise<void> {
+  const exactPath = pathFromCopied(path, handle.name).path;
+  if (exactPath === "") return;
+  let matched = false;
+  let changed = false;
   for (const root of known) {
-    if (root.handle.name === name && root.path === "") root.path = path;
+    if (root.handle.name.toLowerCase() !== handle.name.toLowerCase()) continue;
+    if (root.handle === handle || await sameEntry(root.handle, handle)) {
+      matched = true;
+      if (root.path !== exactPath) { root.path = exactPath; changed = true; }
+    }
   }
+  if (!matched) return rememberKnownRoot(handle, exactPath);
+  if (changed) notifyKnownRoots();
+}
+
+/** Shares a captured File System handle, not just its ambiguous leaf name. */
+export function publishKnownRootPath(handle: DirHandleLike, path: string): void {
+  const exactPath = pathFromCopied(path, handle.name).path;
+  if (exactPath === "") return;
+  watchCaptureChannel();
+  try { captureChannel?.postMessage({ type: "root-path-captured", handle, path: exactPath }); }
+  catch { /* Never fall back to a name-only match if a handle cannot be cloned. */ }
+}
+
+function watchCaptureChannel(): void {
+  if (captureChannel !== null || typeof BroadcastChannel === "undefined") return;
+  let channel: BroadcastChannel | null = null;
+  try {
+    channel = new BroadcastChannel("icon-splitter-root-path-v1");
+    channel.addEventListener("message", (event: MessageEvent<unknown>) => {
+      if (isCaptureMessage(event.data)) void updateKnownRootPath(event.data.handle, event.data.path);
+    });
+    captureChannel = channel;
+  } catch {
+    channel?.close();
+  }
+}
+
+function isCaptureMessage(value: unknown): value is { handle: DirHandleLike; path: string } {
+  if (!isRecord(value) || value.type !== "root-path-captured" || typeof value.path !== "string" || !isRecord(value.handle)) return false;
+  return value.handle.kind === "directory" && typeof value.handle.name === "string";
+}
+
+function notifyKnownRoots(): void {
+  revision += 1;
+  for (const listener of listeners) listener();
 }
 
 /** `parent.resolve(child)`, or null when it is not a descendant / not allowed. */
 async function resolveSegments(parent: DirHandleLike, child: DirHandleLike): Promise<string[] | null> {
-  const resolve = (parent as unknown as { resolve?: (h: DirHandleLike) => Promise<unknown> }).resolve;
+  const resolve = parent.resolve;
   if (typeof resolve !== "function") return null;
   try {
     const answer = await resolve.call(parent, child);
-    return Array.isArray(answer) && answer.every((s) => typeof s === "string") ? answer : null;
+    return Array.isArray(answer) && answer.every((segment) => typeof segment === "string") ? answer : null;
   } catch {
-    return null; // a lost permission or a foreign file system: no path, never an error
+    return null; // lost permission or foreign file system: no path, never an error
+  }
+}
+
+/** Handles from another tab may be distinct JS objects for the same directory. */
+async function sameEntry(left: DirHandleLike, right: DirHandleLike): Promise<boolean> {
+  if (typeof left.isSameEntry !== "function") return false;
+  try {
+    return await left.isSameEntry(right);
+  } catch {
+    return false;
   }
 }
 
 /** A captured path plus segments, with the app's one separator and no doubling. */
 function joinPath(base: string, segments: readonly string[]): string {
-  const tail = segments.filter((s) => s !== "").join("\\");
+  const tail = segments.filter((segment) => segment !== "").join("\\");
   if (tail === "") return base;
   return `${base.replace(/\\+$/, "")}\\${tail}`;
+}
+
+/** Removes verified descendant segments from an exact known Windows/UNC path. */
+function removePathSegments(path: string, count: number): string | null {
+  if (count === 0) return path;
+  const normalized = path.replace(/\//g, "\\").replace(/\\+$/, "");
+  const drive = /^([A-Za-z]:)(?:\\|$)/.exec(normalized);
+  const unc = /^(\\\\[^\\]+\\[^\\]+)(?:\\|$)/.exec(normalized);
+  const root = drive?.[1] ?? unc?.[1];
+  if (root === undefined) return null;
+  const tail = normalized.slice(root.length).replace(/^\\+/, "");
+  const segments = tail === "" ? [] : tail.split("\\").filter((segment) => segment !== "");
+  if (count > segments.length) return null;
+  const parent = segments.slice(0, segments.length - count);
+  return parent.length === 0 ? root : `${root}\\${parent.join("\\")}`;
 }

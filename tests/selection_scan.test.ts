@@ -345,7 +345,7 @@ describe("the restored folder is remembered at boot (I-51)", () => {
     await boot(h.ctx, h.set);
     const out = root.children.get("_split_output") as FakeDir;
     // the folder the app already has a path for answers where the next pick lives
-    expect(await deriveRootPath(out)).toBe("F:\\work\\test_processing\\_split_output");
+    expect(await deriveRootPath(out)).toEqual({ kind: "derived", path: "F:\\work\\test_processing\\_split_output" });
     clearKnownRoots();
   });
 });

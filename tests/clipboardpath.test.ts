@@ -3,7 +3,10 @@
 // drive), so reading the clipboard is a normal, guarded action and the text is
 // adopted only when it really names the picked folder.
 import { beforeEach, describe, expect, it } from "vitest";
-import { adoptCopiedText, readClipboardText } from "../src/lib/clipboardpath";
+import {
+  adoptCopiedText, clearAppCopiedPath, clearRejectedClipboardPaths, isLastAppCopiedPath, isRejectedClipboardPath,
+  readClipboardText, rejectClipboardPath, rememberAppCopiedPath,
+} from "../src/lib/clipboardpath";
 import { loadRootPath, ROOT_PATH_KEY } from "../src/lib/rootpath";
 
 const ROOT = "test_processing";
@@ -12,6 +15,8 @@ const PARENT = "F:\\Stocks 2026\\icons testing\\single";
 
 beforeEach(() => {
   localStorage.clear();
+  clearAppCopiedPath();
+  clearRejectedClipboardPaths();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -41,6 +46,24 @@ describe("readClipboardText — the read says why it failed (I-52)", () => {
 function refuseClipboard(): void {
   stubClipboard(async () => { throw new Error("denied: not focused"); });
 }
+
+describe("clipboard ownership markers — only the current app copy is ignored", () => {
+  it("keeps the marker through an empty read, then clears it on genuinely different text", () => {
+    rememberAppCopiedPath(FULL);
+    expect(isLastAppCopiedPath("")).toBe(false); // an empty/blocked read cannot prove a clipboard change
+    expect(isLastAppCopiedPath(FULL)).toBe(true);
+    expect(isLastAppCopiedPath(PARENT)).toBe(false);
+    expect(isLastAppCopiedPath(FULL)).toBe(false); // the old app marker was cleared
+  });
+
+  it("keeps a rejected path through empty reads but forgets a different clipboard value", () => {
+    rejectClipboardPath(ROOT, FULL);
+    expect(isRejectedClipboardPath(ROOT, "")).toBe(false);
+    expect(isRejectedClipboardPath(ROOT, FULL)).toBe(true);
+    expect(isRejectedClipboardPath(ROOT, PARENT)).toBe(false);
+    expect(isRejectedClipboardPath(ROOT, FULL)).toBe(false);
+  });
+});
 
 describe("adoptCopiedText — the pick-time capture (I-35)", () => {
   it("adopts the copied path when its leaf is the picked folder", () => {

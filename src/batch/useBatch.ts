@@ -9,6 +9,8 @@ import { readDirTree, ensureDirPath, probePath, type DirHandleLike, type FileHan
 import { defaultPreset, type Preset } from "../lib/presets";
 import { pickDirectory, fsSupported, ensurePermission } from "./picker";
 import { pickFolderFor } from "../ui/pickroot";
+import { rememberKnownRoot } from "../ui/knownroots";
+import { loadRootPath } from "../lib/rootpath";
 import { syncAndCollect, applyOutcomes, type StateKey } from "./statewrite";
 import { tally, toOutcomes } from "./outcomes";
 import { processItems, type BatchItem, type ItemResult } from "./process";
@@ -76,7 +78,7 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     const picked = await pickFolderFor((h) => { ctx.root.current = h; });
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     await scan(ctx, setS, say);
-    if (picked.message !== null) say(picked.message);
+    if (picked.message !== null) say(picked.message, !picked.pathCaptured);
   }, [ctx, setS, say]);
 
   // The destination is not a scan root: no copy action names it, so its path is
@@ -164,7 +166,10 @@ async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<voi
   ctx.root.current = await grant(stored?.source);
   ctx.dest.current = await grant(stored?.dest);
   setS((p) => ({ ...p, preset, destName: ctx.dest.current?.name ?? "" }));
-  if (ctx.root.current) await scan(ctx, setS, () => {});
+  if (ctx.root.current) {
+    rememberKnownRoot(ctx.root.current, loadRootPath(ctx.root.current.name));
+    await scan(ctx, setS, () => {});
+  }
 }
 
 async function grant(h: DirHandleLike | undefined): Promise<DirHandleLike | null> {

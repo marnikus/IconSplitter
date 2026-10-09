@@ -26,6 +26,9 @@ export interface DirHandleLike {
   getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandleLike>;
   getFileHandle(name: string, opts?: { create?: boolean }): Promise<FileHandleLike>;
   entries(): AsyncIterable<[string, DirHandleLike | FileHandleLike]>;
+  /** The File System Access API's verified descendant / identity operations. */
+  resolve?(possibleDescendant: DirHandleLike): Promise<string[] | null>;
+  isSameEntry?(other: DirHandleLike): Promise<boolean>;
   /** Real FS handles remove files and (with `recursive`) whole subfolders. */
   removeEntry?(name: string, opts?: { recursive?: boolean }): Promise<void>;
 }

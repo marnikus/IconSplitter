@@ -913,9 +913,11 @@ Batch:
   and the row names the state the value is in (*the path*, *full path not
   captured*). A registered active handle's session path takes precedence over a
   same-name persisted value (I-63), so one folder cannot paint another folder's
-  path into its row. A capture in one tab reaches the other rows without a reload.
-  The pill that showed the folder in place of the action, and the field that let
-  the path be typed, are gone (§16, I-44/I-45).
+  path into its row. A capture in another tab sends the directory handle and
+  exact path over a same-origin `BroadcastChannel`; the receiving tab updates only
+  an identical / `isSameEntry` handle, never every folder with that leaf name.
+  Rows update without a reload. The old pill and typed path field are gone (§16,
+  I-44/I-45).
 * **I-37 (the boundary is stated, RULE 9):** the browser can never read the drive
   path of a picked folder, so the app states that boundary where the path would
   be: the row prints the folder's name with `full path not captured`, and the

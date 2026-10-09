@@ -20,6 +20,7 @@ import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
+import { clearAppCopiedPath, clearRejectedClipboardPaths } from "../src/lib/clipboardpath";
 import { ROOT_PATH_KEY, saveRootPathInfo } from "../src/lib/rootpath";
 import { clearKnownRoots } from "../src/ui/knownroots";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -354,6 +355,9 @@ beforeEach(() => {
   localStorage.clear();
   stored.clear();
   clearKnownRoots();
+  clearAppCopiedPath();
+  clearRejectedClipboardPaths();
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   resetAppStore();
   resetLogStore();
   forgetRestoreNote(); // every test gets a fresh page load
@@ -441,6 +445,43 @@ describe("the Full path row — never a previous root with the new name appended
     await waitFor(() => text("[data-testid=upload-folder-path] code") === "test_process_3", "the new root's row");
     expect(text("[data-testid=upload-folder-path]")).not.toContain("export\\test_process_3");
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+  });
+
+  itSlow("derives the selected split-output child instead of trusting a stale path with the same leaf", async () => {
+    const root = makeRoot();
+    root.name = "test_process_3";
+    const child = new BinDir("_split_output");
+    root.children.set(child.name, child);
+    const rootPath = `${SINGLE}\\test_process_3`;
+    const stale = `${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\test_process_3\\_split_output`;
+    saveRootPathInfo(root.name, rootPath);
+    saveRootPathInfo(child.name, stale);
+    await mount(root);
+    expect(text("[data-testid=upload-folder-path] code")).toBe(rootPath);
+    readClipboard(`"${stale}\\"`);
+    usePicker(async () => child);
+    await click("[data-testid=upload-open-folder]");
+    const expected = `${rootPath}\\_split_output`;
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === expected, "the selected child's exact path");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("test_processing_2");
+    expect(text("[data-testid=upload-toast]")).toContain("Folder path captured");
+    expect(q("[data-testid=upload-toast]")?.className).not.toContain("error");
+  });
+
+  itSlow("raises an error instead of reusing a saved path for an unrelated same-name folder", async () => {
+    const root = makeRoot();
+    const stale = `${SINGLE}\\test_processing_2\\_split_output`;
+    const unrelated = new BinDir("_split_output");
+    saveRootPathInfo(unrelated.name, stale);
+    await mount(root);
+    readClipboard(`"${stale}\\"`);
+    usePicker(async () => unrelated);
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === unrelated.name, "the unrelated selected folder");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("test_processing_2");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-toast]")).toContain("Folder path not captured");
+    expect(q("[data-testid=upload-toast]")?.className).toContain("error");
   });
 
   itSlow("a stored guess for the restored root is shown as 'not captured' and never glued onto a child pick", async () => {

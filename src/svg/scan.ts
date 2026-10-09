@@ -45,7 +45,7 @@ export interface BootArgs {
 export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> {
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
-  const captured = await retryCapture(root.name); // before any await: the click's own gesture (I-52)
+  const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
   if (captured !== null) s.say(captured);
   const ticket = beginScan(refs.seq.current);
   refs.seq.current = ticket.seq;

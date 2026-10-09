@@ -4,6 +4,7 @@
 // lib/rootpath, so the Batch, Selection and Generate SVG copies cannot drift
 // apart (they used to: one wrote a file path with forward slashes).
 
+import { rememberAppCopiedPath } from "./clipboardpath";
 import { folderCopyText } from "./rootpath";
 
 export async function copyFolderText(
@@ -12,6 +13,7 @@ export async function copyFolderText(
   const text = folderCopyText(rootName, relPath);
   try {
     await navigator.clipboard.writeText(text);
+    rememberAppCopiedPath(text);
     say(`Folder path copied — browsers can't open Explorer directly: ${text}`);
   } catch {
     say("Could not copy the path", true);

@@ -313,7 +313,7 @@ describe("scanSources", () => {
     // the folder that was just restored reports where a pick inside it lives —
     // no clipboard involved
     const child = root.children.get("2026-10") as FakeDir;
-    expect(await deriveRootPath(child)).toBe("F:\\work\\split_root\\2026-10");
+    expect(await deriveRootPath(child)).toEqual({ kind: "derived", path: "F:\\work\\split_root\\2026-10" });
     clearKnownRoots();
   });
 

@@ -11,12 +11,16 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { saveRootPathInfo, ROOT_PATH_KEY } from "../src/lib/rootpath";
+import type { DirHandleLike } from "../src/lib/fs";
+import { clearKnownRoots, rememberKnownRoot } from "../src/ui/knownroots";
+import { captureFromPaste } from "../src/ui/rootcapture";
 import { FolderPathRow, OpenFolderButton } from "../src/ui/FolderBar";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ROOT = "split_root";
 const FULL = "F:\\Stocks 2026\\icons\\split_root";
+const rootHandle = { kind: "directory", name: ROOT } as DirHandleLike;
 
 const css = () => readFileSync(join(process.cwd(), "src/index.css"), "utf8");
 
@@ -25,6 +29,7 @@ let ui: Root | null = null;
 
 beforeEach(() => {
   localStorage.clear();
+  clearKnownRoots();
   host = document.createElement("div");
   document.body.appendChild(host);
 });
@@ -109,6 +114,32 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
   });
+
+  it("shows the active handle's path instead of a stale same-name path", async () => {
+    const stale = "F:\\old-tree\\split_root";
+    saveRootPathInfo(ROOT, stale);
+    rememberKnownRoot(rootHandle, "");
+    await mount(<FolderPathRow rootName={ROOT} rootHandle={rootHandle} testid="x-folder-path" />);
+    expect(text("[data-testid=x-folder-path]")).not.toContain(stale);
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
+    await act(async () => { await captureFromPaste(FULL, rootHandle); });
+    expect(text("[data-testid=x-folder-path]")).toContain(FULL);
+    expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
+  });
+
+  it("does not let a same-name handle's later capture relabel this handle's row", async () => {
+    const otherPath = "D:\\backup\\split_root";
+    const otherHandle = { kind: "directory", name: ROOT } as DirHandleLike;
+    rememberKnownRoot(rootHandle, FULL);
+    rememberKnownRoot(otherHandle, otherPath);
+    saveRootPathInfo(ROOT, otherPath);
+    await mount(<>
+      <FolderPathRow rootName={ROOT} rootHandle={rootHandle} testid="first-path" />
+      <FolderPathRow rootName={ROOT} rootHandle={otherHandle} testid="second-path" />
+    </>);
+    expect(text("[data-testid=first-path]")).toContain(FULL);
+    expect(text("[data-testid=second-path]")).toContain(otherPath);
+  });
 });
 
 describe("the removed folder chrome stays removed", () => {
@@ -138,7 +169,7 @@ describe("FolderPathRow — the note says what to do (I-52)", () => {
   });
 
   it("fills in from the user's own Ctrl+V, with no picker and no reload", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow rootName={ROOT} rootHandle={rootHandle} testid="x-folder-path" />);
     await act(async () => { pasteInto(document.body, `"${FULL}"`); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");

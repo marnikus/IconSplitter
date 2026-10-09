@@ -3,6 +3,7 @@
 // folder's full path in its own read-only row below (I-44/I-46).
 
 import type { ViewMode } from "../lib/reviewprefs";
+import type { DirHandleLike } from "../lib/fs";
 import type { ViewPair } from "../lib/reviewfilter";
 import { counters, type Counters } from "../selection/state";
 import { scopeText, type ScanScope } from "../lib/splitscope";
@@ -11,6 +12,7 @@ import SegButton from "./SegButton";
 
 export interface SourceBarProps {
   rootName: string;
+  rootHandle: DirHandleLike | null;
   scope: ScanScope;
   pairs: ViewPair[];
   mode: ViewMode;
@@ -35,7 +37,7 @@ export default function SourceBar(p: SourceBarProps) {
           <Summary c={counters(p.pairs)} />
         </div>
       </div>
-      <FolderPathRow rootName={p.rootName} testid="v2-folder-path" />
+      <FolderPathRow rootName={p.rootName} rootHandle={p.rootHandle} testid="v2-folder-path" />
     </>
   );
 }

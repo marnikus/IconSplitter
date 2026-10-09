@@ -2620,3 +2620,67 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings); `npm run quality:changed` GATE PASSED (`place.ts` 15 fns/149 lines, `restyle.ts` 4/59, `prepare.ts` 7/145; `eps.ts` trimmed back to 299 after the `fillNone` field pushed it to 302). RULE 18: two new concept files instead of growing `prepare.ts` (199 → 145).
 * Design deviations recorded in the archive doc's status line: no separate normalise bake (one bake per candidate, expansion after restyle so the expanded width is the setting's px under any scale); exact measurement via the expander instead of the conservative hull; settle tolerance = the file's precision.
 
+
+## 2026-10-09 — fix(ui): exact picked-folder identity across Generate SVG and SVG to upload
+
+The docs-first follow-up was pushed separately as `3895876`, before source or
+test changes. This implementation closes the repeated stale `_split_output`
+path: `FileSystemDirectoryHandle.resolve()` is evidence in both directions
+(known parent → picked child, and known child → picked parent); the nearest
+verified relationship wins, conflicting evidence fails closed. Without such a
+relationship, a saved same-name path or the app's own still-current clipboard
+copy cannot authenticate an unrelated pick. A rejected stale value cannot be
+resurrected by Rescan; an explicit Ctrl+V remains the recovery action.
+
+The active row and late-capture listener now belong to the exact directory
+handle, not its leaf name. Same-origin tabs broadcast the handle plus captured
+path and update only the same entry (`isSameEntry`), never every same-name row.
+A selected folder remains usable when its path is unknown, but both SVG tabs
+show an error toast; Generate SVG re-reads the path after its scan retry so a
+late successful capture cannot leave the pick-time warning on screen. The
+existing persistent path key remains the record; no new path store was added.
+
+### TDD — red before the corrective behavior
+
+* The new unrelated, same-name picker regressions in `tests/svg_ui.test.tsx`
+  and `tests/upload_ui.test.tsx` were run with the saved-path replay guard
+  temporarily removed: SVG showed the stale
+  `F:\\…\\test_processing_2\\_split_output` in place of the selected name,
+  and Upload never reached the selected folder's honest `not captured` row.
+  Restoring the guard made both pass, including the error toast assertion.
+* The SVG late-capture test was run with the old pick-time message restored:
+  the scan captured and displayed the exact path, but the toast still said
+  `Folder path not captured`. Re-reading the exact handle's path after scan
+  made it pass and removed the stale warning.
+* `knownroots` / `pickroot` tests cover parent↔child derivation, same-name
+  unrelated handles, ambiguous evidence, clearing stale paths, app-owned copy
+  markers, rejected-path Rescan, deliberate paste, and cross-tab `isSameEntry`
+  matching. `clipboardpath` also pins that empty/blocked reads do not erase
+  ownership or rejection markers.
+
+### Gates (`npm run verify`)
+
+| Lane | Result |
+|---|---|
+| 1/6 TypeScript | clean |
+| 2/6 ESLint | 0 errors; 10 existing warnings, none introduced by this change |
+| 3/6 RULE 16 changed-file gate | **GATE PASSED**; 21 changed source files |
+| Explicit source gate | **GATE PASSED** with `--files` over the same 21 files |
+| 4/6 Vitest | **143 files / 1,634 tests passed** (also confirmed by a separate `npx vitest run --reporter=dot`) |
+| 5/6 Coverage | all files 96.16 statements / 89.68 branches / 97.59 functions / 98.04 lines; `src/lib` 98.11 lines (80% floor) |
+| 6/6 Production build | `dist/index.html` 1,453.41 kB; gzip 429.46 kB |
+
+The seven focused suites (`clipboardpath`, `knownroots`, `pickroot`,
+`rootcapture`, `folderbar`, SVG UI and Upload UI) passed **162 tests**. The
+quality runner notes this is a shallow checkout without a merge-base and uses
+`HEAD~1`; the explicit `--files` gate independently measured every changed
+source file. RULE 18: every touched source file stays below 300 lines; largest
+are `upload/actions.ts` 292, `svg/actions.ts` 288 and `svg/SvgPanel.tsx` 287;
+all functions pass the RULE 16 limits. Baseline untouched, no ideal-size
+exception or new debt.
+
+Review lanes: `npx jscpd src --min-tokens 60` remains at **30 clones**, the same
+as the archived `HEAD` baseline. Knip with `KNIP_DISABLE_RAW_TRANSFER=1` found
+no new baseline findings; unused exports decreased **64 → 63**. Its default
+OXC raw-transfer mode still fails in this Node sandbox with the pre-existing
+`RangeError: Array buffer allocation failed`.

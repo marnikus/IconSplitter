@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
-import { loadRootPath } from "../src/lib/rootpath";
+import { clearAppCopiedPath, clearRejectedClipboardPaths } from "../src/lib/clipboardpath";
+import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
+import { clearKnownRoots } from "../src/ui/knownroots";
 import { saveCatalog } from "../src/svg/catalog";
 import { clearApiKey } from "../src/svg/keystore";
 import SvgPanel from "../src/svg/SvgPanel";
@@ -205,6 +207,10 @@ beforeEach(async () => {
   await clearApiKey();
   window.localStorage.clear();
   stored.clear();
+  clearKnownRoots();
+  clearAppCopiedPath();
+  clearRejectedClipboardPaths();
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   resetAppStore();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -263,6 +269,64 @@ describe("the folder control and the path row", () => {
       await act(async () => { ui.unmount(); }); // a restart: the row reads the memory
       await mount(root);
       expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons\\split_root");
+    } finally {
+      Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    }
+  });
+
+  it("replaces the pick-time warning when the scan retry captures the path", async () => {
+    const root = await makeRoot();
+    const path = "F:\\Stocks 2026\\icons testing\\single\\split_root";
+    const reads = ["", "", path]; // before dialog, after dialog, then the scan's retry
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: async () => reads.shift() ?? "" }, configurable: true,
+    });
+    try {
+      await mountPick(root);
+      expect(loadRootPath(root.name)).toBe(path);
+      expect(text("[data-testid=svg-folder-path] code")).toBe(path);
+      expect(text("[data-testid=svg-toast]")).toContain(`Folder path captured: ${path}`);
+      expect(q("[data-testid=svg-toast]")?.className).not.toContain("error");
+    } finally {
+      Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    }
+  });
+
+  it("uses the known parent instead of a stale clipboard path with the same folder name", async () => {
+    const root = await makeRoot();
+    root.name = "test_process_3";
+    const child = new FakeDir("_split_output");
+    root.children.set(child.name, child);
+    const parentPath = "F:\\Stocks 2026\\icons testing\\single\\test_process_3";
+    const stale = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\test_process_3\\_split_output";
+    saveRootPathInfo(root.name, parentPath);
+    saveRootPathInfo(child.name, stale);
+    await mount(root);
+    stubClipboard(`"${stale}\\"`);
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(child);
+    await click(q("[data-testid=svg-open-folder]")!);
+    await settle();
+    expect(text("[data-testid=svg-folder-path] code")).toBe(`${parentPath}\\_split_output`);
+    expect(text("[data-testid=svg-folder-path]")).not.toContain("test_processing_2");
+    expect(q("[data-testid=svg-toast]")?.className).not.toContain("error");
+  });
+
+  it("shows an error instead of reusing a saved path for an unrelated same-name folder", async () => {
+    const root = await makeRoot();
+    const stale = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output";
+    const unrelated = new FakeDir("_split_output");
+    saveRootPathInfo(unrelated.name, stale);
+    await mount(root);
+    stubClipboard(`"${stale}\\"`);
+    (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(unrelated);
+    try {
+      await click(q("[data-testid=svg-open-folder]")!);
+      await settle();
+      expect(text("[data-testid=svg-folder-path] code")).toBe(unrelated.name);
+      expect(text("[data-testid=svg-folder-path]")).not.toContain("test_processing_2");
+      expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
+      expect(text("[data-testid=svg-toast]")).toContain("Folder path not captured");
+      expect(q("[data-testid=svg-toast]")?.className).toContain("error");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }

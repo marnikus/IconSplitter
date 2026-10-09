@@ -5,6 +5,7 @@
 // (I-44/I-46). Extracted from SvgControls so both stay inside the RULE 18 budget.
 
 import { auditText } from "./sourcelist";
+import type { DirHandleLike } from "../lib/fs";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 import type { Discovery } from "./sources";
 
@@ -17,6 +18,7 @@ export interface SvgCounts {
 
 export interface SourceLineProps {
   rootName: string;
+  rootHandle: DirHandleLike | null;
   discovery: Discovery | null;
   busy: string | null;
   counts: SvgCounts;
@@ -24,7 +26,7 @@ export interface SourceLineProps {
   onRescan: () => void;
 }
 
-export default function SourceLine({ rootName, discovery, busy, counts, onChooseRoot, onRescan }: SourceLineProps) {
+export default function SourceLine({ rootName, rootHandle, discovery, busy, counts, onChooseRoot, onRescan }: SourceLineProps) {
   return (
     <>
       <div className="svg-toolbar">
@@ -44,7 +46,7 @@ export default function SourceLine({ rootName, discovery, busy, counts, onChoose
           <Chip value={counts.failed} label="failed" cls="failed" testid="svg-count-failed" />
         </div>
       </div>
-      <FolderPathRow rootName={rootName} testid="svg-folder-path" />
+      <FolderPathRow rootName={rootName} rootHandle={rootHandle} testid="svg-folder-path" />
     </>
   );
 }
