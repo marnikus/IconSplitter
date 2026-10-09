@@ -1,6 +1,6 @@
 // epsdoc.ts — the document layer of the EPS writer (design §2.5): the DSC
-// comment block, the two bounding boxes, the uprighting CTM and the structural
-// verification of a finished document. Split out of `eps.ts` (RULE 18) so the
+// comment block, the EPS and Illustrator artboard bounds, the uprighting CTM
+// and structural verification. Split out of `eps.ts` (RULE 18) so the
 // shape walker there stays about SVG, and every fact about what makes the file
 // an **EPS 10 / Illustrator-10-compatible** document lives in ONE place here.
 
@@ -11,6 +11,11 @@ import { fmt } from "./geom";
 export const PX_TO_PT = 0.75;
 
 export interface EpsBoundingBox { llx: number; lly: number; urx: number; ury: number }
+
+/** Integer DSC bounds round out from the exact art rectangle on all four sides. */
+export function integerBounds(box: EpsBoundingBox): EpsBoundingBox {
+  return { llx: Math.floor(box.llx), lly: Math.floor(box.lly), urx: Math.ceil(box.urx), ury: Math.ceil(box.ury) };
+}
 
 /** The document identity the DSC comments carry (never invented, never Adobe's). */
 export interface EpsOptions {
@@ -57,9 +62,12 @@ export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
     "%%BeginSetup",
     "%%EndSetup",
   ].join("\n");
-  // ONE array: `concat` takes a matrix operand, never six bare numbers (I-61 —
-  // the bare form raised /typecheck in Illustrator and the file would not open)
-  const upright = `[${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${fmt(-PX_TO_PT * viewBox[0])} ${fmt(PX_TO_PT * (viewBox[1] + viewBox[3]))}] concat`;
+  // Anchor the artwork to the exact HiRes artboard; the integer DSC box only
+  // rounds outward for legacy readers (AI5_ArtSize preserves the exact size).
+  // `concat` takes ONE matrix, never six bare numbers (I-61 / Illustrator).
+  const tx = fmt(hires.llx - PX_TO_PT * viewBox[0]);
+  const ty = fmt(hires.ury + PX_TO_PT * viewBox[1]);
+  const upright = `[${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${tx} ${ty}] concat`;
   return `${header}\n${upright}\n${body.join("\n")}\n%%EOF\n`;
 }
 
@@ -72,11 +80,24 @@ function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptio
   if (opts.createdAt !== undefined) lines.push(`%%CreationDate: ${dscString(opts.createdAt)}`);
   lines.push(
     `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
-    `%%HiResBoundingBox: ${hires.llx} ${hires.lly} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
+    `%%HiResBoundingBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     "%%DocumentData: Clean7Bit",
     "%%LanguageLevel: 3",
+    ...illustratorArtboard(hires),
   );
   return lines;
+}
+
+/** Illustrator's AI5 comment stores height then width and a centered template point. */
+function illustratorArtboard(box: EpsBoundingBox): string[] {
+  const width = box.urx - box.llx;
+  const height = box.ury - box.lly;
+  const cx = (box.llx + box.urx) / 2;
+  const cy = (box.lly + box.ury) / 2;
+  return [
+    `%AI5_ArtSize: ${fmt(height)} ${fmt(width)}`,
+    `%AI3_TemplateBox: ${fmt(cx)} ${fmt(cy)} ${fmt(cx)} ${fmt(cy)}`,
+  ];
 }
 
 /** A DSC `(…)` string: backslash and parentheses escaped, newlines flattened. */

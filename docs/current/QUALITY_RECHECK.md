@@ -2626,3 +2626,15 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 * RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings); `npm run quality:changed` GATE PASSED. RULE 18: the artboard block moved out of `UploadSettingsDialog.tsx` (236 → 171 lines) into `UploadArtboardSettings.tsx` (115); `geom.ts` gained `contentFit`/`megapixelScale` instead of a third branch in `fitArtboard`.
 * Honesty: the design's `upload-set-mp-note` testid collided with the JPEG row's existing hint — the new note is `upload-set-mp-scale-note` (UI_SELECTORS updated); the "batch log names it once per run" line of the design was not implemented because the batch log names no setting today (the row line carries it).
 
+
+## 2026-10-09 — EPS page bounds for Inkscape conversion
+- `npm run verify:fast`: PASS — TypeScript, lint (0 errors; 10 existing warnings), changed-file gate, full test + coverage lane, production build.
+- Coverage: `src/lib` lines 96.56%; build: single-file `dist/index.html` 1,452.92 kB (428.89 kB gzip).
+- Focused EPS suites: 4 files / 88 tests PASS; viewBox-only EPS page regression checks integer and HiRes BoundingBox.
+
+## 2026-10-09 — built-in EPS Illustrator artboard bounds
+- Scope correction: the earlier Inkscape-only sizing change was reverted; this fix is confined to the built-in EPS writer. SVG export is unchanged.
+- The writer keeps the HiRes box on the viewBox (including the painted white background), rounds the DSC integer box outward, emits single-`%` `%AI5_ArtSize` (height then width) and centered `%AI3_TemplateBox`, and anchors the CTM to the exact HiRes rectangle. No page-level `%%PageBoundingBox` was added. Built-in writer ID bumped to `builtin-subset-2`; old built-in EPS outputs are refreshed EPS-only.
+- Regression test: nonzero-origin 1025 × 512 white artboard → integer box 769 × 384, HiRes 768.75 × 384, AI5 art size 384 × 768.75; interpreted painted bounds equal HiRes bounds.
+- `npm run verify:fast`: ALL LANES PASSED — TypeScript clean; lint 0 errors / 10 existing warnings; changed-file quality gate passed; coverage lane passed (1,632 tests; `src/lib` lines 96.56%, branches 91.13%); build passed (`dist/index.html` 1,453.27 kB, 429.07 kB gzip). Existing network-bound tests logged caught `ECONNRESET` messages for `router.requesty.ai` but did not fail.
+- No Illustrator executable is available in this environment, so application-level opening was not tested; the EPS comments and painted bounds are covered by regression tests and the PostScript subset interpreter.

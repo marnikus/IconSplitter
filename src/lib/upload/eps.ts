@@ -24,7 +24,7 @@ import { inheritStroke, styleMap, type Stroke } from "./geom/stroke";
 import { shapePathPs } from "./epspath";
 import { rectRadii } from "./geom/shapes";
 import { fmt } from "./geom";
-import { assemble, PX_TO_PT, type EpsBoundingBox, type EpsOptions } from "./epsdoc";
+import { assemble, integerBounds, PX_TO_PT, type EpsBoundingBox, type EpsOptions } from "./epsdoc";
 
 export { EPS10_MARKERS, verifyEps, verifyEpsDocument } from "./epsdoc";
 export type { EpsBoundingBox, EpsOptions, EpsVerification } from "./epsdoc";
@@ -84,7 +84,7 @@ function writeEpsUnsafe(svgText: string, background: string, opts: EpsOptions): 
   const ptW = vb[2] * PX_TO_PT;
   const ptH = vb[3] * PX_TO_PT;
   const hires = { llx: 0, lly: 0, urx: ptW, ury: ptH };
-  const box = { llx: 0, lly: 0, urx: Math.ceil(ptW), ury: Math.ceil(ptH) };
+  const box = integerBounds(hires);
   const eps = assemble({ viewBox: vb, box, hires, body: ctx.body, opts });
   return { ok: true, eps, boundingBox: box, shapes: ctx.count.shapes, fixes: fixLines(ctx.count) };
 }

@@ -77,6 +77,22 @@ describe("writeEps — a genuine EPS document", () => {
     expect(result.shapes).toBe(2); // background rect + artwork rect
   });
 
+  it("pins Illustrator's artboard to the exact painted white rectangle, not the integer EPS box", () => {
+    const svg = `<svg ${NS} viewBox="10 20 1025 512"><rect x="10" y="20" width="1025" height="512" fill="#fff"/></svg>`;
+    const result = writeEps(svg, "#ffffff");
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.eps).toContain("%%BoundingBox: 0 0 769 384");
+    expect(result.eps).toContain("%%HiResBoundingBox: 0 0 768.75 384");
+    expect(result.eps).toContain("%AI5_ArtSize: 384 768.75"); // AI5 stores height, then width
+    expect(result.eps).toContain("%AI3_TemplateBox: 384.375 192 384.375 192");
+    for (const tag of ["%AI5_ArtSize:", "%AI3_TemplateBox:"]) {
+      expect(result.eps.indexOf(tag)).toBeLessThan(result.eps.indexOf("%%EndComments"));
+    }
+    expect(result.eps).not.toContain("%%PageBoundingBox:");
+    expect(result.eps).toContain("[0.75 0 0 -0.75 -7.5 399] concat");
+    expect(runPostScript(result.eps).painted).toEqual(hiResBox(result.eps));
+  });
+
   it("flips y and scales px→pt once, up front — as ONE array, the only operand concat accepts", () => {
     // the 2026-10-09 report: bare numbers before `concat` raised /typecheck in
     // Illustrator, and the program stopped before the artwork
@@ -265,6 +281,6 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 13: concat expects an array, found number"); // no %%CreationDate in this fixture: the CTM is line 13 (14 in the report);
+    expect(verdict.errors).toContain("line 15: concat expects an array, found number"); // the two AI artboard comments precede the CTM
   });
 });

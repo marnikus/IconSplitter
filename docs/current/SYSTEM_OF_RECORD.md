@@ -594,7 +594,7 @@ opt-in class as Generate SVG → Requesty; design
   EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`
   (`src/lib/upload/epsconv/registry.ts`) is the one table the drop list, the
   settings parser and the EPS stage read: `builtin` (the subset writer above,
-  `writer: "builtin-subset-1"`) and `inkscape` (Inkscape on this machine
+  `writer: "builtin-subset-2"`) and `inkscape` (Inkscape on this machine
   through the local helper at `http://127.0.0.1:47391` — `GET /health` to
   probe, `POST /convert/eps` with the prepared SVG to convert, `writer:
   "inkscape-cli@<version>"` from the `x-inkscape-version` header). The
@@ -602,6 +602,15 @@ opt-in class as Generate SVG → Requesty; design
   converters rebuilds the EPS only (the planner compares
   `tools.eps.converter` with the run's converter; a record from before the
   field is `builtin`), and choosing a converter never toggles `includeEps`.
+  The built-in writer treats the prepared SVG `viewBox` as the intended artboard,
+  including its white background rectangle: it keeps `%%HiResBoundingBox` exact,
+  rounds `%%BoundingBox` outward for integer-only readers, and emits Illustrator's
+  single-`%` `%AI5_ArtSize: height width` and centered `%AI3_TemplateBox` comments
+  using the HiRes dimensions (the AI5 order is height before width). Its upright
+  transform is anchored to that same exact rectangle. No `%%PageBoundingBox` is
+  added because this writer emits EPS, not a page-structured PostScript document.
+  The writer ID is `builtin-subset-2`; planning compares it as well as the
+  converter so existing packages refresh the EPS only after this metadata change.
   Every EPS — whoever wrote it — passes the SAME converter-neutral gate
   before commit (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`,
   a `%%BoundingBox`, `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are

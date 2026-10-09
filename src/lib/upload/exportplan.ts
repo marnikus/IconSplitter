@@ -4,6 +4,7 @@
 
 import type { ExportRecord } from "./export";
 import type { EpsConverterId } from "./epsconv/types";
+import { BUILTIN_WRITER } from "./epsconv/builtin";
 
 export type Stage = "prepare" | "render" | "optimize" | "embed" | "eps" | "validate" | "commit";
 
@@ -83,7 +84,8 @@ function planToggleDeltas(record: ExportRecord, input: PlanInput, need: Set<Stag
     if (input.hasMetadata) need.add("embed");
     rebuild.svg = true;
   }
-  if (input.includeEps && (!record.tools.eps.enabled || recordConverter(record) !== input.epsConverter)) {
+  const writerChanged = input.epsConverter === "builtin" && record.tools.eps.writer !== BUILTIN_WRITER;
+  if (input.includeEps && (!record.tools.eps.enabled || recordConverter(record) !== input.epsConverter || writerChanged)) {
     need.add("eps");
     rebuild.eps = true;
   }
