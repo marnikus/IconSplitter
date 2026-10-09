@@ -4,14 +4,13 @@
 // so a crash mid-commit leaves the last valid package in place. The record's
 // outputs/status/timestamps are filled here, from what was actually written.
 
-import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
+import { ensureDirPath, readBytesAt, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEpsDocument } from "../lib/upload/eps";
 import { verifyEpsMetadata } from "../lib/upload/epsmetadata";
 import { sha256Hex } from "../lib/upload/hash";
 import { parseExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
-import { readBytesAt } from "./runexport";
 import { sweepSuperseded } from "./exportsweep";
 
 export interface CommitValidation {

@@ -8,7 +8,7 @@
 // `partial` (SVG/JPEG stay committed), a validation failure → `failed` (the
 // previous package stays), a cancel → `cancelled` (nothing new committed).
 
-import { probePath, tryGetFile, type DirHandleLike } from "../lib/fs";
+import { fileExistsAt, readTextAt, type DirHandleLike } from "../lib/fs";
 import type { RasterDeps } from "../lib/upload/raster";
 import type { ConverterDeps } from "../lib/upload/epsconv/types";
 import { readJpegDimensions } from "../lib/upload/jpeg";
@@ -27,6 +27,7 @@ import {
 
 import { commitExport, type CommitExportInput, type CommitValidation } from "./exportcommit";
 import { converterDeps, fillToolBlocks, jpegBlock, metadataBlockOf } from "./exportrecord";
+import { metadataOutputsAt } from "./exportmetadata";
 import type { UploadRowSource } from "./discovery";
 
 export type ExportRunStatus = "processed" | "partial" | "failed" | "cancelled";
@@ -106,10 +107,14 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
   }
   const sourceHash = `sha256:${await sha256HexText(sourceText)}`;
   const outputs = {
-    svg: await existsAt(args.root, `${exportDir}/${stem}.svg`),
-    jpg: await existsAt(args.root, `${exportDir}/${stem}.jpg`),
-    eps: await existsAt(args.root, `${exportDir}/${stem}.eps`),
+    svg: await fileExistsAt(args.root, `${exportDir}/${stem}.svg`),
+    jpg: await fileExistsAt(args.root, `${exportDir}/${stem}.jpg`),
+    eps: await fileExistsAt(args.root, `${exportDir}/${stem}.eps`),
   };
+  const metadataOutputs = await metadataOutputsAt({
+    root: args.root, exportDir, stem, metadata: args.metadata,
+    recordMetadata: args.record?.metadata ?? null, includeEps: args.settings.includeEps,
+  });
   const plan = planStages(args.record, {
     sourceHash,
     settingsFp: settingsFingerprint(args.settings),
@@ -119,6 +124,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     includeEps: args.settings.includeEps,
     epsConverter: args.settings.epsConverter,
     outputs,
+    metadataOutputs,
   });
   return { plan, sourceText, sourceHash, exportDir, stem, error: null };
 }
@@ -147,13 +153,21 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
       validation,
     });
   } catch (error) {
-    if (isCancel(error)) {
-      return { rowId: row.id, status: "cancelled", stages: plan.plan.stages, outputs: outputsOf(args.record), record: args.record, error: { klass: "cancel", detail: "cancelled" }, notes: [] };
-    }
-    const klass = error instanceof StageError ? error.klass : "pipeline";
-    const detail = error instanceof Error ? redact(error.message) : "unknown error";
-    return failedResult({ rowId: row.id, stages: plan.plan.stages, record: args.record, klass, detail });
+    return stageFailureResult(error, args, plan);
   }
+}
+
+function stageFailureResult(error: unknown, args: ExportRunArgs, plan: PlanFor): ExportRunResult {
+  if (isCancel(error)) {
+    return {
+      rowId: args.row.id, status: "cancelled", stages: plan.plan.stages,
+      outputs: outputsOf(args.record), record: args.record,
+      error: { klass: "cancel", detail: "cancelled" }, notes: [],
+    };
+  }
+  const klass = error instanceof StageError ? error.klass : "pipeline";
+  const detail = error instanceof Error ? redact(error.message) : "unknown error";
+  return failedResult({ rowId: args.row.id, stages: plan.plan.stages, record: args.record, klass, detail });
 }
 
 function artifactsInvalid(art: Artifacts, validation: CommitValidation): boolean {
@@ -255,29 +269,4 @@ function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {
 
 function passthroughOptimize(): OptimizeRecord {
   return { enabled: false, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" };
-}
-
-async function readTextAt(root: DirHandleLike, relPath: string): Promise<string | null> {
-  const bytes = await readBytesAt(root, relPath);
-  return bytes === null ? null : new TextDecoder().decode(bytes);
-}
-
-export async function readBytesAt(root: DirHandleLike, relPath: string): Promise<Uint8Array | null> {
-  const at = relPath.lastIndexOf("/");
-  const dir = at < 0 ? root : await probePath(root, relPath.slice(0, at));
-  if (dir === null) return null;
-  const fh = await tryGetFile(dir, relPath.slice(at + 1));
-  if (fh === null) return null;
-  try {
-    return new Uint8Array(await (await fh.getFile()).arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-
-async function existsAt(root: DirHandleLike, relPath: string): Promise<boolean> {
-  const at = relPath.lastIndexOf("/");
-  const dir = at < 0 ? root : await probePath(root, relPath.slice(0, at));
-  if (dir === null) return false;
-  return (await tryGetFile(dir, relPath.slice(at + 1))) !== null;
 }

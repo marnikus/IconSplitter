@@ -20,8 +20,10 @@ export interface PlanInput {
   includeEps: boolean;
   /** The converter the run would use; a record written by another one rebuilds the EPS only (2026-10-09). */
   epsConverter: EpsConverterId;
-  /** Which output files exist and hash-verify on disk right now. */
+  /** Which output file handles exist on disk right now. */
   outputs: { svg: boolean; jpg: boolean; eps: boolean };
+  /** Whether SVG/EPS read back to the accepted metadata; JPEG is deliberately unchanged. */
+  metadataOutputs: { svg: boolean; eps: boolean };
 }
 
 /** The plan: which stages re-run, and which OUTPUT files rebuild. */
@@ -34,11 +36,12 @@ export interface StagePlan {
  * Which stages must re-run. The rules (design §4.4): a source or settings
  * change rebuilds the geometry chain; a metadata edit re-embeds without AI or
  * raster render (and refreshes EPS when EPS is requested); an optimize toggle
- * re-optimizes (JPEG kept); an EPS toggle is EPS-only; a missing/corrupt output
- * rebuilds just that output; no change means no work at all. `rebuild`
- * disambiguates the shared stages: `embed` touches the SVG and the JPEG's XMP,
- * but a missing JPEG re-embeds nothing into the SVG and an optimize toggle keeps
- * the JPEG.
+ * re-optimizes (JPEG kept); an EPS toggle is EPS-only; a missing/corrupt
+ * output rebuilds just that file, while absent accepted metadata rebuilds only
+ * the affected SVG/EPS; no change means no work at all. `rebuild` disambiguates
+ * the shared stages: `embed`
+ * touches the SVG and the JPEG's XMP on an explicit metadata change, but
+ * repairing an SVG/EPS readback never rewrites the JPEG.
  */
 export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
   const need = new Set<Stage>();
@@ -105,9 +108,10 @@ export function recordConverter(record: ExportRecord): EpsConverterId {
 }
 
 function planMissingOutputs(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  if (!input.outputs.svg) planSvgRebuild(input, need, rebuild);
+  if (!input.outputs.svg || (input.hasMetadata && !input.metadataOutputs.svg)) planSvgRebuild(input, need, rebuild);
   if (!input.outputs.jpg) planJpegRebuild(input, need, rebuild);
-  if (!input.outputs.eps && input.includeEps) {
+  const epsNeedsRebuild = !input.outputs.eps || (input.hasMetadata && !input.metadataOutputs.eps);
+  if (epsNeedsRebuild && input.includeEps) {
     need.add("eps");
     rebuild.eps = true;
   }

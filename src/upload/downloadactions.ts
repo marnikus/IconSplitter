@@ -9,10 +9,9 @@
 
 import { useCallback, useRef } from "react";
 import { pickDirectory } from "../batch/picker";
-import { nameExists, writeFileNew, type DirHandleLike } from "../lib/fs";
+import { nameExists, readBytesAt, writeFileNew, type DirHandleLike } from "../lib/fs";
 import { downloadLine, planDownload, type DownloadItem, type DownloadPlan, type DownloadResult } from "../lib/upload/download";
 import { log } from "../log/logstore";
-import { readBytesAt } from "./runexport";
 import { downloadedSpec } from "./uploadlog";
 import type { Latest } from "./types";
 import type { UploadActions, UploadCtx } from "./actions";
