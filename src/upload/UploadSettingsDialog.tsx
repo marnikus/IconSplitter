@@ -17,6 +17,7 @@ import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./se
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
+import UploadRegenSettings from "./UploadRegenSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -77,6 +78,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
         hint="a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly" />
       <ConverterSetting p={p} effective={effective} />
+      <UploadRegenSettings />
       <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
         hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />

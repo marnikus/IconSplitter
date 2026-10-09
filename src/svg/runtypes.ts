@@ -37,6 +37,8 @@ export interface RunArgs {
   params: SamplingParams;
   prompt: string;
   sources: readonly SvgSource[];
+  /** The v2 regeneration mode for this run (design 2026-10-09): off when disabled or unpreset. */
+  regen?: { enabled: boolean; presetText: string | null };
   /** Sidecars loaded before the run; refreshed in place as results are saved. */
   metas: Map<string, PairMeta | null>;
   onEvent: (event: RunEvent) => void;

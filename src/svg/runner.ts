@@ -25,7 +25,9 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
   // The user's request size, unchanged by the reasoning level (D1): 8 images at
   // size 4 are two requests of four at every tier, however long they take.
   const perRequest = clampImagesPerRequest(args.config.imagesPerRequest);
-  const plans = planBatches(toBatchSources(args.sources), perRequest);
+  // A solo mark only means something while the v2 mode is armed (D3/D5).
+  const regenOn = args.regen?.enabled === true && args.regen.presetText !== null;
+  const plans = planBatches(toBatchSources(args.sources).map((s) => ({ ...s, solo: regenOn ? s.solo : undefined })), perRequest);
   const state = newRunState(args, plans.length, perRequest);
   const problems = validateBatchPlan(plans, perRequest);
   if (problems.length > 0) return failPlan(state, problems);

@@ -8,7 +8,8 @@
 // dialog's lifetime. A plan that cannot be mapped is refused here (RULE 15).
 
 import { useEffect, useMemo, useState } from "react";
-import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
+import { validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
+import { effectiveRegen, planWithRegen, regenMarked } from "./runplan";
 import { compositeSheetKey } from "../lib/svgcomposite";
 import { inIdOrder } from "../lib/selectionorder";
 import { stallLabel, stallNote } from "../lib/effortlimits";
@@ -17,7 +18,7 @@ import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelca
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
 import { buildComposite, type BuiltComposite } from "./composite";
-import { toBatchSource, type SvgSource } from "./sources";
+import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 
 export interface SvgConfirmProps {
@@ -68,6 +69,10 @@ interface ConfirmPlan {
   cache: Map<string, BuiltComposite>;
   active: BatchPlan | null;
   setPage: (page: number) => void;
+  /** The v2 mode as this confirmation sees it (D7). */
+  regenOn: boolean;
+  regenCount: number;
+  regenPreset: string;
 }
 
 /** The whole split, computed once per dialog — the runner uses the same maths. */
@@ -77,12 +82,15 @@ function useConfirmPlan(p: SvgConfirmProps): ConfirmPlan {
   // user approves is the picture the request carries.
   const picked = useMemo(() => inIdOrder(p.rows, p.ids, (r) => r.source.id), [p.rows, p.ids]);
   const perRequest = clampImagesPerRequest(p.config.imagesPerRequest);
-  const plans = useMemo(() => planBatches(picked.map((r) => toBatchSource(r.source)), perRequest), [picked, perRequest]);
+  // Read once per open: the plan the user confirms is the plan that leaves (RUN-1).
+  const regen = useMemo(() => effectiveRegen(), []);
+  const plans = useMemo(() => planWithRegen(p.rows, p.ids, perRequest, regen), [p.rows, p.ids, perRequest, regen]);
   const problems = validateBatchPlan(plans, perRequest);
   const [page, setPage] = useState(0);
   const cache = useMemo(() => new Map<string, BuiltComposite>(), []);
   const active = plans[Math.min(page, Math.max(0, plans.length - 1))] ?? null;
-  return { picked, perRequest, plans, problems, page, cache, active, setPage };
+  const regenCount = useMemo(() => regenMarked(p.rows, p.ids, regen).length, [p.rows, p.ids, regen]);
+  return { picked, perRequest, plans, problems, page, cache, active, setPage, regenOn: regen.on, regenCount, regenPreset: regen.preset };
 }
 
 /** The refusal when the plan cannot be mapped, or the page in view. */
@@ -118,6 +126,11 @@ function Facts({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
       <Fact label="Model settings" value={paramsLabel(p.caps, p.params)} testid="svg-confirm-sampling" />
       <Fact label="Stall window" value={stallLabel(p.config.timeoutMs, p.caps, p.params)} testid="svg-confirm-timeout" />
       <Fact label="Streaming" value="on — a live request is never cut, however long it runs" testid="svg-confirm-streaming" />
+      {plan.regenOn && plan.regenCount > 0 && (
+        <Fact label="Regenerate from current SVG"
+          value={`${plan.regenCount} of ${plan.picked.length} icon(s) send their current SVG code · preset “${plan.regenPreset}”`}
+          testid="svg-confirm-regen" />
+      )}
       {note !== null && <p className="svg-note warn" data-testid="svg-confirm-limit">{note}</p>}
     </div>
   );

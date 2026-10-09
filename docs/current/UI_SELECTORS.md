@@ -337,7 +337,7 @@ and stay distinct):
 | Test id | Element | Notes |
 |---|---|---|
 | `svg-open-folder` | green `Open folder` button | the same shared control as the Selection tabs (I-44), offered whether or not a root is loaded (I-30); `svg-root-empty`'s button is `svg-open-folder-empty` |
-| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* names the missing state (*completed — check it* removed by I-59) (I-46) |
+| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and proved for THAT folder's handle (I-63, `lib/pathmemory`; a path remembered for a folder that only shares the name is never shown here); *full path not captured* names the missing state (*completed — check it* removed by I-59) (I-46) |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |
@@ -462,6 +462,7 @@ Dialogs:
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
 | `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
+| `svg-confirm-regen` | only when the regeneration option (I-64) is armed AND at least one selected icon has a generated version: "N of M icon(s) send their current SVG code · preset "X"" — `svg-confirm-requests` already counts the solo split |
 | `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
@@ -643,6 +644,18 @@ the JPEG's `upload-set-mp`) and `upload-set-mp-scale-note` (`the artboard
 (icon + padding) is scaled to 5 MP · strokes keep their px` / `the pinned size
 decides the megapixels`); the row's settings cell appends `· artboard 5 MP`
 while it applies.
+
+The regeneration row (2026-10-09, I-64) belongs to the Generate SVG tab but is
+placed here (owner placement directive): `regen-from-svg` (checkbox
+"Regenerate from current SVG" — when on, re-generating an icon that already
+has a generated version sends that version's SVG code with the chosen preset's
+prompt instead of a first generation; icons without a version, and their
+requests, keep the main prompt), `regen-preset` (`<select>` whose options ARE
+the saved prompt presets, by name, with a placeholder option first; disabled
+while no preset exists and `regen-preset-note` says to save one in the SVG tab
+first). The choice is stored per browser (`iconSplitter.svg.regen.v1`) and
+arms only when the chosen name resolves to a preset — otherwise the run is
+exactly today's run.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,

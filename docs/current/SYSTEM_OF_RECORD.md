@@ -955,14 +955,16 @@ Batch:
   never silently dropped, and the records of out-of-scope pairs stay as orphans.
   A tree without such a folder behaves exactly as before.
 * **I-39 (a "full path" is only a folder path, RULE 13):** the value remembered
-  for a root (`iconSplitter.rootpaths.v1`) is either an Explorer-usable **folder**
-  path — a drive path (`F:`, `F:\`, `F:\a\b`; forward slashes and surrounding
-  quotes forgiven) or a UNC path (`\\server\share[\…]`) — or nothing at all.
-  `isFolderPathText` is the only judge, and it runs on the raw text at every
-  entry point (the clipboard adoption at pick time, and the one writer
-  `saveRootPathInfo`) and again on read, so SVG markup, URLs, relative text and
-  file names can never be stored, replayed, shown as the root's path or prefixed
-  to a copy. A refusal stores nothing and leaves the previous memory in place.
+  for a folder (I-63) is either an Explorer-usable **folder** path — a drive
+  path (`F:`, `F:\`, `F:\a\b`; forward slashes and surrounding quotes forgiven)
+  or a UNC path (`\\server\share[\…]`) — or nothing at all. `isFolderPathText`
+  is the only judge, and it runs on the raw text at every entry point (the
+  clipboard adoption at pick time, and the one writer
+  `pathmemory.rememberPath`) and again on read, so SVG markup, URLs, relative
+  text and file names can never be stored, replayed, shown as the root's path or
+  prefixed to a copy. A refusal stores nothing and leaves the previous memory in
+  place. `iconSplitter.rootpaths.v1` — the name-keyed map an older build used —
+  is retired: it is never read and is deleted on first load (I-63).
 * **I-41 (one file per pair, RULE 3/13):** a pair's metadata is a single JSON in
   the folder that holds the pair, named after the AI image's stem
   (`<stem>.svg.json`). It stores the pair's identity, both image faces, the
@@ -996,10 +998,13 @@ Batch:
   copied-path control are gone from the UI *and* from the code (`SelState.watcher`,
   `useSelection.useWatcher`, `WATCH_MS`, `ui/RootPathField`, `ui/userootpath`,
   `lib/rootpath.saveRootPath`, `lib/clipboardpath.adoptCopiedPath`).
-* **I-46 (the path row never lies, RULE 4):** the row shows the captured path
-  word for word (whole value in its `title`, selectable like any text), or the
-  folder's name with `full path not captured` when the browser withheld it
-  (the `completed — check it` state is gone with the completion itself, I-59).
+* **I-46 (the path row never lies, RULE 4):** the row is given the **folder**
+  (`ui/FolderBar.FolderPathRow`, `{ name, handle }`) and shows the path proven
+  for THAT handle — word for word, whole value in its `title`, selectable like
+  any text — or the folder's name with `full path not captured` when the browser
+  withheld it (the `completed — check it` state is gone with the completion
+  itself, I-59; a path remembered for a lookalike folder is simply not this
+  folder's, I-63).
   Copies are unaffected (I-28): they hand over a folder path, the real one when
   captured and the folder-name fallback otherwise.
 * **I-47 (picking the output folder is picking the set, RULE 3/12):** when the
@@ -1024,17 +1029,19 @@ Batch:
   before; `lib/batchlayout` owns the names both rules read.
 * **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
   capture; when it finds nothing the path is still recoverable without another
-  dialog, and the UI says how. `Rescan` (in all three tabs) makes one more
-  attempt for a root whose path is unknown (an older build's stored guess counts
-  as unknown, I-59), and a `paste` anywhere outside
-  a text field adopts the text for the root on screen
-  (`ui/rootcapture.retryCapture` / `bindPasteCapture`, mounted by
-  `ui/FolderBar.FolderPathRow`). Both take an **exact leaf match only** — a
-  pasted parent, a word, a URL or markup writes nothing — and no read happens
-  without the user's own gesture (`navigator.userActivation`), so a boot-time
-  scan never touches the clipboard. The read reports a state, not just text
-  (`lib/clipboardpath.ClipRead`: `text` / `empty` / `blocked` / `unsupported`),
-  which is what lets the toast name the reason and the row name both ways out.
+  dialog, and the UI says how. `Rescan` (in all four tabs) makes one more
+  attempt for a folder whose path is not yet *captured* — a derived answer does
+  **not** close the door, so a wrong or half-known value can still be upgraded
+  (I-63/RC3) — and a `paste` anywhere outside a text field adopts the text for
+  the folder on screen (`ui/rootcapture.retryCapture(folder)` /
+  `bindPasteCapture(folder)`, mounted by `ui/FolderBar.FolderPathRow`). Both
+  take an **exact leaf match only** — a pasted parent, a word, a URL or markup
+  writes nothing — write for the handle they were given (I-63), and no read
+  happens without the user's own gesture (`navigator.userActivation`), so a
+  boot-time scan never touches the clipboard. The read reports a state, not just
+  text (`lib/clipboardpath.ClipState`: `ok` / `empty` / `blocked` /
+  `unsupported`), which is what lets the toast name the reason and the row name
+  both ways out.
 * **I-49 (a pair file is read from where it sits, RULE 3/13):** every read of a
   pair file rebases it onto the root doing the reading — `dirPath` is the file's
   own directory, each face's `relPath` is that directory plus the name the file
@@ -1052,16 +1059,22 @@ Batch:
   strictly below the root (the `test_processing_2` case, I-38/I-40).
 * **I-51 (the app names a folder only from a folder it already named, RULE 4/13):**
   the full path of a pick comes from the clipboard **only** when it matches the
-  picked folder's name exactly; otherwise `ui/knownroots.deriveRootPath` answers
-  it: the deepest folder this app already has a captured path for, plus the
-  segments that folder's own `resolve(picked)` reports (`[]` when it is the same
-  folder, `null` when it is not below). Every capture is remembered
-  (`pickroot.pathForPick`), and each tab remembers the root it restores at boot
-  (`selection/rootsource.boot`, `svg/scan.bootSources`) — so a pick inside a
-  folder the app already knows is exact with an empty clipboard, while a
-  clipboard text that names some OTHER folder yields nothing at all (I-59). A
-  capture that lands later — `Rescan`, `Ctrl+V` — reaches the known handle of
-  that name (`knownroots.nameKnownRoot`), so the next pick inside it is exact.
+  picked folder's name exactly; otherwise `lib/pathmemory.pathFor(handle)`
+  answers it by asking the platform how the picked handle relates to every
+  captured one (`lib/fsrelate.relate`): **the same folder** (`isSameEntry`) →
+  that path; **below it** (`known.resolve(picked)` gives the segments down) →
+  the path plus those segments; **above it** (`picked.resolve(known)` gives the
+  segments up) → the path trimmed back by exactly that many (a root, `F:` or
+  `\\server\share`, is provable this way and is not trimmed away). The newest
+  capture that can answer wins; nothing derived is ever stored (I-63/D3), and a
+  folder the platform cannot place answers **no path** (`unproven`) — never a
+  guess. Every exact capture is remembered (`pathmemory.rememberPath`), and
+  every tab restores its folder through one helper (`pickroot.restoredRoot`,
+  I-63/D6), so a pick inside — or one level up from — a folder the app already
+  captured is exact with an empty clipboard, while a clipboard text that names
+  some OTHER folder yields nothing at all (I-59). A capture that lands later —
+  `Rescan`, `Ctrl+V` — is written for the handle on screen (I-63), so the next
+  pick inside it is exact.
 * **I-59 (exact or nothing — no completed path, RULE 4/13 — 2026-10-09, rewritten
   the same day after a second report):** the "parent + name" completion is gone.
   A copied path is adopted only when its leaf IS the picked folder's name
@@ -1076,9 +1089,40 @@ Batch:
   the fix, the tab restored that folder at boot as a known root, and picking
   its `_split_output` *derived* `<glued guess>\\_split_output` — labelled
   `copied`. A guess must never be a base, so there is no guess. What remains:
-  `Rescan` (all three tabs) re-reads for an unknown path, `Ctrl+V` adopts an
-  exact leaf, and both hand the capture to the known handle
-  (`knownroots.nameKnownRoot`) for the next derivation.
+  `Rescan` (all four tabs) re-reads for a path that is not captured, `Ctrl+V`
+  adopts an exact leaf, and both write the capture for the handle on screen
+  (I-63), which is what the next derivation is proved from.
+* **I-63 (a full path belongs to a HANDLE, not to a name, RULE 4/13 —
+  2026-10-09, the third report):** the memory of "which folder has which full
+  path" is one list of records `{ handle, path, at }` in IndexedDB
+  (`lib/pathmemory`, store `handles`, key `__rootpaths__`, newest first), and a
+  path is answered **only** for a handle it was captured for — or for one the
+  platform can place against such a handle (I-51). A folder's *name* proves
+  nothing: this app's own output tree reuses `_split_output`, `export`,
+  `2026-10` and `split_03` many times over, so a name-keyed entry served many
+  folders and the row could show the path of a folder that was never picked
+  (RC1). The decisions (D1…D7, one per cause — RC1…RC7 are the design doc's
+  table) are pinned by a test each: **D1** records are keyed by handle, in the
+  existing IndexedDB store — no new database, no version bump (RC1); **D2** the
+  name-keyed `iconSplitter.rootpaths.v1` is deleted on first load and never
+  read, so a value poisoned by an older build cannot outlive it (RC1/RC2/RC4 —
+  and why three code-only fixes never changed what the user saw); **D3** only
+  an exact clipboard capture is stored — a derived answer is computed on read
+  and never written back, so a guess can never become a base (RC3, the reason
+  I-59's purge alone could not hold); **D4** a capture replaces only its own
+  handle's record, and a folder whose path is merely *derived* can still be
+  upgraded, so a wrong value is bounded to one folder and repairable (RC4);
+  **D5** one generation counter in `ui/pickroot` decides which pick is newest,
+  and a superseded answer is reported but never written (RC6); **D6** one boot
+  helper (`pickroot.restoredRoot`) replaces the three near-identical seeds, so
+  the four tabs cannot drift apart again (RC7); **D7** every reader — the row,
+  all five copy sites (`lib/copypath.copyFolderText(folder, …)`) and both
+  recovery channels — asks the same `pathFor(handle)`, so the row and a copy
+  can never disagree (RC2). When the platform cannot answer (`resolve` / `isSameEntry`
+  missing or silent) the answer is `unproven` and the row says `full path not
+  captured`: an honest gap beats a confident wrong folder. Pinned by `pathmemory`, `fsrelate`,
+  `rootpath`, `clipboardpath`, `copypath`, `pickroot`, `rootcapture`,
+  `folderbar`, `upload_ui` and `svg_ui`.
 * **I-60 (the artboard is the shipped artwork, RULE 4/13 — 2026-10-09):** the
   viewBox is computed from the bounds of the FINAL document — the configured
   stroke width, expansion, joins and caps included, measured by the strokes'
@@ -1207,7 +1251,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
-| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path or only guessed it (I-52/I-59): `Rescan`'s one exact-match retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name |
+| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path or only guessed it (I-52/I-59): `Rescan`'s one exact-match retry and the user's own `Ctrl+V`, both acting on the folder on screen (I-63); the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
@@ -1215,7 +1259,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
 | The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) and `lib/rootpath` (where a copy stops, I-28/I-48) |
-| The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named, the derivation from one of them (`resolve()` segments, I-51) and the veto one of them can give a clipboard guess (`provenOutside`, I-59), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
+| The picked folder's path | `src/lib/pathmemory.ts`, `src/lib/fsrelate.ts`, `src/lib/rootpath.ts`, `src/ui/pickroot.ts`, `src/lib/clipboardpath.ts`, `src/lib/copypath.ts`, `src/ui/FolderBar.tsx` | the ONE handle-keyed memory (`{ handle, path, at }[]` in IndexedDB, I-63) and its live revision, the handle-identity vocabulary every proof is built from (`same` / `below` / `above` / `unproven`, I-51), the pure Windows path-string rules (normalize / leaf / join / trim / the folder-text judge / the one copy join), the pick entry point + boot restore every tab shares (I-35/D6) with its pick-generation token, the guarded clipboard read + exact-leaf match, the copy base the row and all five copy sites read together, and the one folder control (green button + read-only path row, I-44/I-46) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
@@ -2383,3 +2427,102 @@ pick is exact. Removed with it: `knownroots.provenOutside`,
 `copypath.lastCopiedByApp`, `pickroot.believable`, the `completed — check it`
 row state and toast. No new control, no new storage key.
 Design: `archive/2026-10-09-root-path-glued-folders/design.md` (§5 follow-up).
+
+## The Full path that belonged to another folder (2026-10-09, I-63)
+
+Third report in one day, and the two before were real but incomplete. The user
+picked `…\single\test_process_3`; the app descended into its `_split_output`,
+and the row answered
+`…\test_processing_2\_split_output\2026-10\<run>\<piece>\split_03\export\test_process_3`
+— a path from the *previous* root with the new folder's name glued onto it, and
+the scan it started said the same wrong thing. The opposite failure appeared a
+moment later: a pick **one level up** from a folder the app had already
+captured reported `full path not captured`, asking for `Ctrl+Shift+C` although
+the answer was one segment away.
+
+Measured causes (each read from the code, not assumed):
+
+* **RC1** the memory was keyed by folder **name**
+  (`iconSplitter.rootpaths.v1`, `{ [name]: { path, how } }`), and this app's own
+  output tree repeats `_split_output`, `export`, `2026-10`, `split_03` many
+  times over — so one entry served many folders and no read ever checked which
+  handle it belonged to.
+* **RC2** a pick that captured nothing wrote nothing, so the stale same-name
+  value stayed on screen and was displayed as this folder's path, with no
+  warning (I-46).
+* **RC3** a *derived* path was written back as `how: "copied"`
+  (`pickroot.pathForPick` → `saveRootPathInfo`), so the next derivation trusted
+  it as an exact capture; I-59's purge only removed `how: "completed"`.
+* **RC4** a wrong stored value was **immortal**: `retryCapture` early-returned
+  on any non-empty path, so the one button the row names could not repair it —
+  why three code-only fixes never changed what the user saw.
+* **RC5** only the *downward* direction was derived (`known.resolve(picked)`);
+  `picked.resolve(known)` and `isSameEntry` were never asked — the false error.
+* **RC6** no pick generation token: a slow answer from an earlier pick wrote
+  after a newer pick had landed.
+* **RC7** the boot restore was copied three times, each one seeding the
+  registry from the name-keyed value — the step that turned a stale value into
+  a derivation base (`selection/rootsource`, `svg/scan`, `upload/scan`).
+
+The fix is a rewrite of the ownership, not a fourth patch: `lib/pathmemory` is
+now the ONE owner of "which folder has which full path" — records
+`{ handle, path, at }` in the existing IndexedDB store (`handles`, key
+`__rootpaths__`, newest first, one live revision the row subscribes to), and
+`lib/fsrelate.relate` is the one vocabulary for handle identity (`same` /
+`below(segments)` / `above(segments)` / `unproven`), which makes "a pick one
+level up" as provable as "a pick one level down" (RC4). `lib/rootpath` went back
+to pure string rules — it stores nothing. `ui/knownroots` is **deleted**: its
+name-keyed registry was RC1, and both of its jobs (derivation, the veto) now
+belong to the two modules above. D1…D7 are listed with I-63.
+
+What the row shows now, in one line: the path captured for *this* handle, or one
+proved from a captured handle by the platform's own answers, or the folder's
+name with `full path not captured`. A path remembered for a folder that only
+shares the name is not this folder's path, and the row will not say it is.
+Design: `archive/2026-10-09-root-path-handle-identity/design.md`.
+
+## Regenerate from the current SVG (2026-10-09, I-64)
+
+Until now, hitting Generate again on an icon that already had versions sent a
+first generation once more: the main prompt plus the original/source image —
+the provider never saw the SVG it had produced. The new option changes what
+ONE KIND of request carries, nothing else.
+
+**The control** (owner placement directive) lives in the Export settings
+dialog (`upload/UploadRegenSettings`, rendered inside
+`upload/UploadSettingsDialog`): the checkbox `regen-from-svg` and the preset
+dropdown `regen-preset`, whose options are the saved prompt presets from the
+Generate SVG tab (`upload/promptstore`), by name. The choice persists per
+browser in `iconSplitter.svg.regen.v1` (`svg/regenstore`).
+
+**The arm rule** (`svg/runplan.effectiveRegen` — the ONE source confirm, run
+and the runner all read): the option is ON only when the checkbox is on AND
+the chosen name resolves to a saved preset. A missing, empty or renamed-away
+preset downgrades silently to today's behaviour — the run never sends a half
+prompt. An icon takes part only when it already has a version with status
+`generated` (`planWithRegen`/`regenMarked`); fresh icons always batch normally.
+
+**The request** (`lib/regensvg.regenPrompt`, `svg/regenprompt`): a
+regeneration icon travels ALONE — one icon per request, the plan splits it out
+(`lib/svgbatch.planBatches` honours `solo` by flushing the batch and sending
+it alone). Its text is the preset's words, then the icon's CURRENT SVG code
+(newest generated version, read from disk via `lastGenerated` + `readSvgText`)
+in a fenced block, then the `Icon name (use it as the SVG <title>): …`
+contract line, so mapping stays position-based and the `<title>` rule (I-40)
+still holds. The same reference image travels with it. If the version's file
+cannot be read, the icon downgrades to the main prompt and the run's problems
+say so by name (RULE 4) — it is never silently regenerated without its code.
+
+**The record** (`svg/runbatch.promptUsed` → `svg/runsave`): the pair meta
+records the text that REALLY travelled — the preset-based prompt for a v2
+request, the main prompt otherwise — for saved versions and failure entries
+alike. Everything else is unchanged: same versioning, same stall window, same
+journal, same costs; the confirm dialog states the split before anything is
+paid for (`svg-confirm-regen`: "N of M icon(s) send their current SVG code ·
+preset "X"", and `svg-confirm-requests` counts the solo requests).
+
+Tests: `tests/regensvg.test.ts` (the prompt and version-pick rules),
+`tests/svg_regen.test.ts` (a real `runGeneration` through a recorded fetch:
+solo split, code in the request, downgrade, the no-preset regression guard),
+`tests/regen_ui.test.tsx` (dialog rows and the confirm fact).
+Design: `archive/2026-10-09-regenerate-from-svg/design.md`.

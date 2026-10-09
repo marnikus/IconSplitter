@@ -16,7 +16,7 @@
 import type { DirHandleLike } from "../lib/fs";
 import { log } from "../log/logstore";
 import type { SvgAction } from "./statemodel";
-import { planOf } from "./runplan";
+import { effectiveRegen, planOf, regenMarked } from "./runplan";
 import { inIdOrder } from "../lib/selectionorder";
 import { runGeneration } from "./runner";
 import { withRunLog } from "./runlog";
@@ -170,11 +170,15 @@ async function startRun(ctx: RunCtx, item: QueueItem): Promise<BatchOutcome[]> {
   // The pick order, the same list the confirmation planned and previewed from:
   // the contact sheet this request carries is drawn cell by cell in it, so the
   // picture the user approved IS the picture that leaves (lib/selectionorder).
-  const sources = inIdOrder(ctx.rows, ids, (r) => r.source.id).map((r) => r.source);
+  const regen = effectiveRegen();
+  const marked = new Set(regenMarked(ctx.rows, ids, regen).map((r) => r.source.id));
+  const sources = inIdOrder(ctx.rows, ids, (r) => r.source.id)
+    .map((r) => ({ ...r.source, solo: marked.has(r.source.id) || undefined }));
   const summary = await runGeneration({
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
     config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, sources,
+    regen: { enabled: regen.on, presetText: regen.presetText },
     metas: ctx.refs.metas, signal: controller.signal,
     onEvent: withRunLog((event) => onRunEvent(event, ctx)),
   });

@@ -15,6 +15,8 @@ import type { Usage } from "./svgrequest";
 export interface BatchItem {
   /** Batch-local position, 1-based. This is the id the provider answers with. */
   position: number;
+  /** Travels alone: a regeneration carrying its own current SVG (D4). */
+  solo?: boolean;
   /** Stable source identity (pair id) — survives sorting and filtering. */
   sourceId: string;
   /** SVG base name, e.g. "fog_architecture_041_AI" (the manifest name). */
@@ -47,6 +49,8 @@ export interface BatchSource {
   name: string;
   relPath: string;
   fingerprint: string;
+  /** True = this source's request carries its current SVG code, so it goes alone (D4). */
+  solo?: boolean;
 }
 
 /** Smallest square-ish grid: 3 images -> 2x2 with one empty cell, 4 -> 2x2. */
@@ -56,13 +60,25 @@ export function gridSize(count: number): { cols: number; rows: number } {
   return { cols, rows: Math.ceil(count / cols) };
 }
 
-/** Splits the selection into deterministic batches of at most `perRequest`. */
+/**
+ * Splits the selection into deterministic batches of at most `perRequest`, in
+ * pick order. A `solo` source (a regeneration that carries its current SVG
+ * code, D4) flushes the open batch and travels alone — one old SVG per request.
+ */
 export function planBatches(sources: readonly BatchSource[], perRequest: number): BatchPlan[] {
   const size = clampImagesPerRequest(perRequest);
   const out: BatchPlan[] = [];
-  for (let start = 0; start < sources.length; start += size) {
-    out.push(toBatch(sources.slice(start, start + size), out.length + 1));
+  let open: BatchSource[] = [];
+  const flush = (): void => {
+    if (open.length === 0) return;
+    out.push(toBatch(open, out.length + 1));
+    open = [];
+  };
+  for (const source of sources) {
+    if (source.solo === true) { flush(); out.push(toBatch([source], out.length + 1)); }
+    else { open.push(source); if (open.length === size) flush(); }
   }
+  flush();
   return out;
 }
 

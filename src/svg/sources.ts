@@ -31,6 +31,8 @@ export interface SvgSource {
   fingerprint: string;
   /** Per-file reasons this pair is not fully usable; empty when healthy. */
   problems: PairProblem[];
+  /** This run regenerates the icon from its current SVG: the request goes alone (D4). */
+  solo?: boolean;
   /** The pair's own file, relative to the root (I-41): decision + SVG history. */
   metaPath: string;
   /** The pair's identity, so a record can be rebuilt without a second walk. */
@@ -157,7 +159,7 @@ function stemOf(name: string): string {
 
 /** The batch view of a source: stable identity beside the manifest name. */
 export function toBatchSource(s: SvgSource): BatchSource {
-  return { sourceId: s.id, name: s.stem, relPath: s.relPath, fingerprint: s.fingerprint };
+  return { sourceId: s.id, name: s.stem, relPath: s.relPath, fingerprint: s.fingerprint, solo: s.solo === true ? true : undefined };
 }
 
 /** The pair's file content for a source the list just discovered (I-41). */
