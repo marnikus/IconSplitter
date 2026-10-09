@@ -28,6 +28,8 @@ export interface DirHandleLike {
   entries(): AsyncIterable<[string, DirHandleLike | FileHandleLike]>;
   /** Real FS handles remove files and (with `recursive`) whole subfolders. */
   removeEntry?(name: string, opts?: { recursive?: boolean }): Promise<void>;
+  /** The platform's identity question — a captured path binds to a folder, not a name (I-63). */
+  isSameEntry?(other: DirHandleLike): Promise<boolean>;
 }
 
 /** Recursively snapshots a directory into a TreeNode (files get size/mtime). */

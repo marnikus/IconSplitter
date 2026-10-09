@@ -1,34 +1,22 @@
-// rootpath.ts — the full path of a picked root, and the copy text built from it
-// (feature §2). Why a memory: the File System Access API gives a page only the
+// rootpath.ts — the string rules of a folder's full path (feature §2). Why
+// there are rules at all: the File System Access API gives a page only the
 // picked folder's NAME ("test_processing") — the drive and the folders above it
 // are invisible to the browser for privacy, so a pasteable Windows path has to
-// come from the user. It is captured when they pick a folder (the clipboard
-// normally still holds Explorer's "Copy as path"), remembered per folder name,
-// reused by every tab, and never invented (I-35): with no memory the copy falls
-// back to the name. Only ever an Explorer FOLDER path — markup, URLs and words
-// are refused by the one writer (I-39). `pickroot`/`clipboardpath` do the
-// capturing; this file owns the string rules and the one storage; the row that
-// shows it is `ui/FolderBar` (I-46).
+// come from the user's own Explorer copy ("Copy as path", Ctrl+Shift+C).
 //
-// The copy itself names a FOLDER, never a file (the user's request), and it is
-// the folder the file LIVES IN (2026-10-06, I-56): a split piece deep in a run's
-// output tree copies `…\<piece>\split_NN`, not the run folder — the location a
-// human needs to reach that file.
+// This file owns PURE STRING RULES only and stores nothing (I-63): a captured
+// path is bound to the folder's HANDLE (lib/knownroots, persisted by
+// lib/rootstore), never to its name — every run of this app creates another
+// `_split_output`, and the old name-keyed memory showed one folder's path for
+// another (three reports, last on 2026-10-09). `lib/clipboardpath` and
+// `ui/pickroot` do the capturing; `ui/FolderBar` shows the result (I-46).
+//
+// The copy itself names a FOLDER, never a file (I-28/I-56): the folder the
+// file LIVES IN, e.g. `…\icon_7\split_04`, not the run folder and never the
+// file name.
 
-import { readKey, writeKey } from "../state/safestorage";
-import { isRecord } from "./isrecord";
-
-/** `{ [folderName]: { path, how } }`; one key so a root has one path everywhere. */
-export const ROOT_PATH_KEY = "iconSplitter.rootpaths.v1";
-
-/**
- * How a remembered path was obtained: `copied` — the user's own Explorer copy
- * of THIS folder, or a derivation from a folder captured that way (I-51). The
- * older `completed` (a copied parent with the picked name appended) is gone
- * (I-59, 2026-10-09): it glued unrelated folders together twice; a stored one
- * now reads as no path at all. The path is never typed by hand.
- */
-export type PathHow = "copied";
+/** `{ path, how }` — how a path was obtained (`null` = nothing is known). */
+export type PathHow = "copied" | "derived";
 
 export interface RootPathInfo {
   path: string;
@@ -36,7 +24,7 @@ export interface RootPathInfo {
   how: PathHow | null;
 }
 
-const UNKNOWN: RootPathInfo = { path: "", how: null };
+export const NO_ROOT_PATH: RootPathInfo = { path: "", how: null };
 
 /**
  * The path as Explorer would show it: no surrounding quotes (its "Copy as
@@ -56,6 +44,18 @@ export function normalizeRootPath(text: string): string {
 export function pathLeaf(text: string): string {
   const parts = normalizeRootPath(text).split("\\");
   return parts[parts.length - 1] ?? "";
+}
+
+/**
+ * One folder up: `F:\a\b` -> `F:\a`, `F:\a` -> `F:` — and "" above the drive
+ * or the share root, because `\\srv` is not a folder path anyone can open.
+ */
+export function pathParent(text: string): string {
+  const path = normalizeRootPath(text);
+  const at = path.lastIndexOf("\\");
+  if (at < 0) return "";
+  const parent = path.slice(0, at);
+  return isFolderPathText(parent) ? parent : "";
 }
 
 /**
@@ -84,136 +84,69 @@ function hasControl(path: string): boolean {
 
 /**
  * The real path of the folder named `folderName`, as told by a copied path
- * (I-35/I-39): text whose leaf IS the folder name is adopted as it is. Anything
- * else — a parent folder, another folder, markup, a URL, a word, a file — is
- * refused: nothing is invented (RULE 13), and a wrong path is worse than none.
+ * (I-35/I-39): text whose leaf IS the folder name is adopted as it is
+ * (`how: "copied"`), and text whose leaf sits DIRECTLY INSIDE the folder names
+ * its parent exactly (`how: "derived"` — one level down is the same root; the
+ * third report, 2026-10-09). Anything else — an unrelated folder, a parent,
+ * markup, a URL, a word, a file — is refused: appending a picked name to a
+ * copied folder IS the glue of all three reports and is never done (I-59).
  */
 export function pathFromCopied(copied: string, folderName: string): RootPathInfo {
-  if (folderName === "" || !isFolderPathText(copied)) return UNKNOWN;
+  if (folderName === "" || !isFolderPathText(copied)) return NO_ROOT_PATH;
   const path = normalizeRootPath(copied);
-  return pathLeaf(path).toLowerCase() === folderName.toLowerCase() ? { path, how: "copied" } : UNKNOWN;
+  const leaf = folderName.toLowerCase();
+  if (pathLeaf(path).toLowerCase() === leaf) return { path, how: "copied" };
+  const parent = pathParent(path);
+  return pathLeaf(parent).toLowerCase() === leaf ? { path: parent, how: "derived" } : NO_ROOT_PATH;
 }
 
-/** The remembered full path of a root, or "" when none was captured. */
-export function loadRootPath(rootName: string): string {
-  return loadRootPathInfo(rootName).path;
-}
-
-/** The remembered path with the way it was obtained (I-36). */
-export function loadRootPathInfo(rootName: string): RootPathInfo {
-  const value = readPaths()[rootName];
-  if (typeof value === "string") return fromString(value); // written before `how` existed
-  if (!isRecord(value)) return UNKNOWN;
-  if (value.how === "completed") return UNKNOWN; // an older build's guess: no memory (I-59)
-  const path = typeof value.path === "string" ? normalizeRootPath(value.path) : "";
-  return valid(path) ? { path, how: "copied" } : UNKNOWN;
-}
-
-function fromString(value: string): RootPathInfo {
-  const path = normalizeRootPath(value);
-  return valid(path) ? { path, how: "copied" } : UNKNOWN; // a record predating `how`
+/** A captured path plus segments, with the app's one separator and no doubling. */
+export function joinPath(base: string, segments: readonly string[]): string {
+  const root = normalizeRootPath(base);
+  const tail = segments.filter((s) => s !== "").join("\\");
+  return tail === "" ? root : `${root}\\${tail}`;
 }
 
 /**
- * A stored value is only believed while it is a folder path: one written by an
- * older build (or by hand) that is markup, a URL or a relative word counts as no
- * memory, so it can never reach a pill, a status or a copy (I-39).
+ * The reverse join, VERIFIED: `F:\a\test_process_3\_split_output` minus
+ * `["_split_output"]` is `F:\a\test_process_3` — only when the tail segments
+ * really are the ones `resolve()` reported, and only when the result is still a
+ * folder path. Anything else answers null: a tail that does not match strips
+ * nothing (never a guess, RULE 13).
  */
-function valid(path: string): boolean {
-  return path !== "" && isFolderPathText(path);
+export function stripPathTail(path: string, segments: readonly string[]): string | null {
+  const norm = normalizeRootPath(path);
+  if (norm === "") return null;
+  const segs = segments.filter((s) => s !== "");
+  const parts = norm.split("\\");
+  if (segs.length > parts.length) return null;
+  const tail = parts.slice(parts.length - segs.length);
+  if (tail.some((part, i) => part.toLowerCase() !== segs[i].toLowerCase())) return null;
+  const head = parts.slice(0, parts.length - segs.length).join("\\");
+  return head !== "" && isFolderPathText(head) ? head : null;
 }
 
 /**
- * Remembers (or, with an empty value, forgets) a root's full path. Returns the
- * stored info unchanged when nothing moved, so a caller can stay quiet about a
- * repeat.
+ * The text a copy action hands over: a folder path, full when one was captured
+ * for the root, backslashes throughout, never a file name (I-28/I-56). `base`
+ * is the root's own bound path — else the folder's name (the honest fallback).
  */
-export function saveRootPathInfo(rootName: string, text: string): RootPathInfo {
-  if (rootName === "") return UNKNOWN;
-  const path = normalizeRootPath(text);
-  if (path !== "" && !isFolderPathText(path)) return loadRootPathInfo(rootName); // refused
-  const info: RootPathInfo = path === "" ? UNKNOWN : { path, how: "copied" };
-  const before = loadRootPathInfo(rootName);
-  if (before.path === info.path && before.how === info.how) return info;
-  const all = readPaths();
-  if (info.path === "") delete all[rootName];
-  else all[rootName] = { path: info.path, how: info.how };
-  writePaths(all);
-  return info;
-}
-
-/** What every copy starts with: the remembered path, else the folder's name. */
-export function rememberedRootPath(rootName: string): string {
-  return loadRootPath(rootName) || rootName;
-}
-
-/**
- * Revision + subscribers: the root pills show the full path, and a path captured
- * at pick time must reach them without a reload (I-36). Same-origin tabs notify
- * each other too, so the other tab's pill is right as well.
- */
-let revision = 0;
-const listeners = new Set<() => void>();
-let watching = false;
-
-export function subscribeRootPaths(fn: () => void): () => void {
-  listeners.add(fn);
-  watchStorage();
-  return () => { listeners.delete(fn); };
-}
-
-export function rootPathRevision(): number {
-  return revision;
-}
-
-function watchStorage(): void {
-  if (watching || typeof window === "undefined") return;
-  watching = true;
-  window.addEventListener("storage", (e) => { if (e.key === ROOT_PATH_KEY) notify(); });
-}
-
-function writePaths(all: Record<string, unknown>): void {
-  writeKey(ROOT_PATH_KEY, JSON.stringify(all));
-  notify();
-}
-
-function notify(): void {
-  revision += 1;
-  for (const fn of listeners) fn();
-}
-
-/**
- * The text a copy action hands over: a folder path, full when one was captured,
- * backslashes throughout, never a file name (invariant I-28).
- */
-export function folderCopyText(rootName: string, relPath: string): string {
-  const base = normalizeRootPath(rememberedRootPath(rootName));
+export function folderCopyText(base: string, relPath: string): string {
+  const root = normalizeRootPath(base);
   const rel = folderOf(relPath);
-  if (base === "") return rel;
-  return rel === "" ? base : `${base}\\${rel}`;
+  if (root === "") return rel;
+  return rel === "" ? root : `${root}\\${rel}`;
 }
 
 /**
  * The folder a copy names: the one holding the file at `relPath` — every folder
  * above it is kept, whether or not it looks like a month, a run stamp or a
- * `split_NN`. A file sitting directly in the root (or a folder path longer than
- * the file name) resolves to the root itself, which `folderCopyText` already
- * handles. Nothing is ever inferred from the file name: the answer is the path
- * the caller handed over, minus its last segment (I-56).
+ * `split_NN` (I-56). Nothing is ever inferred from the file name: the answer is
+ * the path the caller handed over, minus its last segment.
  */
 function folderOf(relPath: string): string {
   const segs = relPath.split("/").filter((s) => s !== "");
   return segs.slice(0, Math.max(0, segs.length - 1)).join("\\");
 }
 
-/** The stored map, validated on read: anything unexpected is no memory. */
-function readPaths(): Record<string, unknown> {
-  const raw = readKey(ROOT_PATH_KEY);
-  if (raw === null) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isRecord(parsed) ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
+

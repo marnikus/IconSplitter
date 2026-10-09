@@ -1,16 +1,18 @@
 // folderbar.test.tsx — RULE 8/10/12: ONE folder control for every tab (I-44),
 // and its read-only path row (I-46). The button says "Open folder" in every
 // state, carries the green class whose hover/active/focus states live in the
-// stylesheet, and the row below it is plain text: the complete captured path
-// when there is one, the folder's name plus an honest note when there is not,
-// and never an input. Nothing here re-implements a component — it drives the
-// shared one the three toolbars mount.
+// stylesheet, and the row below it is plain text: the complete captured path of
+// THIS folder when there is one, the folder's name plus an honest note when
+// there is not, and never an input. Since the third report (2026-10-09) the row
+// reads the path bound to the root's HANDLE (I-63) — a same-named folder's
+// path, and anything in the old name-keyed store, must never appear here.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saveRootPathInfo, ROOT_PATH_KEY } from "../src/lib/rootpath";
+import type { DirHandleLike } from "../src/lib/fs";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { FolderPathRow, OpenFolderButton } from "../src/ui/FolderBar";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,11 +22,16 @@ const FULL = "F:\\Stocks 2026\\icons\\split_root";
 
 const css = () => readFileSync(join(process.cwd(), "src/index.css"), "utf8");
 
+function dir(name: string): DirHandleLike {
+  return { kind: "directory", name } as DirHandleLike;
+}
+
 let host: HTMLDivElement;
 let ui: Root | null = null;
 
 beforeEach(() => {
   localStorage.clear();
+  clearKnownRoots();
   host = document.createElement("div");
   document.body.appendChild(host);
 });
@@ -71,8 +78,9 @@ describe("OpenFolderButton — the one folder control", () => {
 
 describe("FolderPathRow — the full path, in one full-width read-only row", () => {
   it("shows the captured path as text, word for word, with nothing to click or type", async () => {
-    saveRootPathInfo(ROOT, `"${FULL}\\"`); // Explorer's quotes and trailing slash
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    const root = dir(ROOT);
+    rememberKnownRoot(root, `F:\\Stocks 2026\\icons\\${ROOT}`); // normalized capture
+    await mount(<FolderPathRow root={root} testid="x-folder-path" />);
     const row = q("[data-testid=x-folder-path]");
     expect(row).not.toBeNull();
     expect(row?.className).toContain("folder-path");
@@ -83,29 +91,38 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
   });
 
   it("names the folder and says when no full path was captured", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain(ROOT);
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
     expect(q("[data-testid=x-folder-path]")?.querySelector("input, button")).toBeNull();
   });
 
-  it("shows a stored `completed` guess (an older build's) as NOT captured — never the guess", async () => {
-    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [ROOT]: { path: FULL, how: "completed" } }));
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+  it("never shows a same-named folder's path — the third report (2026-10-09)", async () => {
+    const GLUED = "F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\test_process_3\\_split_output";
+    rememberKnownRoot(dir("_split_output"), GLUED); // ANOTHER folder with this name
+    await mount(<FolderPathRow root={dir("_split_output")} testid="x-folder-path" />);
+    expect(text("[data-testid=x-folder-path]")).not.toContain("export");
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
+  });
+
+  it("never shows anything from the old name-keyed store (I-63: it is not read)", async () => {
+    localStorage.setItem("iconSplitter.rootpaths.v1", JSON.stringify({ [ROOT]: { path: FULL, how: "copied" } }));
+    await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).not.toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
   });
 
   it("renders nothing while no folder is loaded", async () => {
-    await mount(<FolderPathRow rootName="" testid="x-folder-path" />);
+    await mount(<FolderPathRow root={null} testid="x-folder-path" />);
     expect(q("[data-testid=x-folder-path]")).toBeNull();
     expect(host.textContent).toBe("");
   });
 
   it("follows the memory live: a capture in any tab appears without a reload (I-36/RULE 24)", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    const root = dir(ROOT);
+    await mount(<FolderPathRow root={root} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
-    await act(async () => { saveRootPathInfo(ROOT, FULL); });
+    await act(async () => { rememberKnownRoot(root, FULL); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
   });
@@ -122,7 +139,7 @@ describe("the removed folder chrome stays removed", () => {
 
 describe("FolderPathRow — the note says what to do (I-52)", () => {
   it("names the Explorer copy and the Rescan that captures it when there is no path", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     const note = q("[data-testid=x-folder-path] em") as HTMLElement;
     expect(note.textContent).toContain("Ctrl+Shift+C");
     expect(note.textContent).toContain("Rescan");
@@ -130,30 +147,30 @@ describe("FolderPathRow — the note says what to do (I-52)", () => {
   });
 
   it("keeps the plain note when a path IS known", async () => {
-    saveRootPathInfo(ROOT, FULL);
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    const root = dir(ROOT);
+    rememberKnownRoot(root, FULL);
+    await mount(<FolderPathRow root={root} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(q("[data-testid=x-folder-path] em")?.textContent).toBe("");
     expect((q("[data-testid=x-folder-path]") as HTMLElement).title).toBe(FULL);
   });
 
   it("fills in from the user's own Ctrl+V, with no picker and no reload", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     await act(async () => { pasteInto(document.body, `"${FULL}"`); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
   });
 
   it("adds no control — the bar is still one button and one line of text", async () => {
-    await mount(<FolderPathRow rootName={ROOT} testid="x-folder-path" />);
+    await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     expect(host.querySelectorAll("button, input, textarea")).toHaveLength(0);
   });
 });
 
 /** One paste event, as the browser delivers it when the user presses Ctrl+V. */
-function pasteInto(target: Element, text: string): void {
+function pasteInto(target: Element, eventText: string): void {
   const event = new Event("paste", { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown };
-  event.clipboardData = { getData: (type: string) => (type === "text/plain" ? text : "") };
+  event.clipboardData = { getData: (type: string) => (type === "text/plain" ? eventText : "") };
   target.dispatchEvent(event);
 }
-

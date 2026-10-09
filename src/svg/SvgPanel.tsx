@@ -42,7 +42,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
       <SvgRunPopup progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} />
-      <Controls g={g} />
+      <Controls g={g} root={rootRef.current} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
@@ -71,9 +71,9 @@ function useActivation(active: boolean, g: SvgGenApi): void {
 }
 
 /** The control block, wired straight from the api — one place to read it. */
-function Controls({ g }: { g: SvgGenApi }) {
+function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
   return (
-    <SvgControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
+    <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
       prompt={g.prompt} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
       paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
       filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}

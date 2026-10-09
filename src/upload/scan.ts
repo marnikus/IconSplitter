@@ -8,8 +8,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { fnv1a32 } from "../lib/pairing";
 import { loadHandles, saveHandles } from "../batch/store";
-import { loadRootPath } from "../lib/rootpath";
-import { rememberKnownRoot } from "../ui/knownroots";
+import { restoreKnownRoot } from "../lib/knownroots";
 import { discoverUploadSources, type UploadDiscovery, type UploadRowSource } from "./discovery";
 
 /** This tab's remembered root handle (its own slot, like `__svg__`). */
@@ -76,7 +75,7 @@ export async function bootRoot(): Promise<DirHandleLike | null> {
     ?? (await loadHandles("__svg__"))?.source
     ?? (await loadHandles("__selection__"))?.source
     ?? null;
-  if (stored !== null) rememberKnownRoot(stored, loadRootPath(stored.name)); // a restored folder names its children (I-51)
+  if (stored !== null) await restoreKnownRoot(stored); // its persisted path binds to THIS handle (I-51/I-63)
   return stored;
 }
 

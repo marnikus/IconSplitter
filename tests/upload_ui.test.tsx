@@ -20,8 +20,7 @@ import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
-import { ROOT_PATH_KEY, saveRootPathInfo } from "../src/lib/rootpath";
-import { clearKnownRoots } from "../src/ui/knownroots";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { BinDir, BinFile } from "./helpers/binfakefs";
@@ -419,9 +418,10 @@ describe("the tab", () => {
   });
 });
 
-describe("the Full path row — never a previous root with the new name appended (I-46/I-51)", () => {
+describe("the Full path row — never a previous root with the new name appended (I-46/I-51/I-63)", () => {
   const SINGLE = "F:\\Stocks 2026\\icons testing\\single";
   const OLD = `${SINGLE}\\test_processing_2\\_split_output`;
+  const LEGACY_KEY = "iconSplitter.rootpaths.v1"; // the old name-keyed store: never read
   const usePicker = (pick: () => Promise<unknown>) =>
     Object.defineProperty(window, "showDirectoryPicker", { value: pick, configurable: true });
   const readClipboard = (text: string) =>
@@ -432,7 +432,7 @@ describe("the Full path row — never a previous root with the new name appended
     // "copy folder path" of an export folder deep inside the previous root
     const root = makeRoot();
     Object.assign(root, { resolve: async () => null }); // the new pick is NOT below this root
-    saveRootPathInfo(root.name, OLD);
+    rememberKnownRoot(root, OLD);
     await mount(root);
     expect(text("[data-testid=upload-folder-path] code")).toBe(OLD);
     readClipboard(`${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export`);
@@ -443,12 +443,13 @@ describe("the Full path row — never a previous root with the new name appended
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
   });
 
-  itSlow("a stored guess for the restored root is shown as 'not captured' and never glued onto a child pick", async () => {
+  itSlow("a stored guess in the old name-keyed store is never shown and never glued onto a child pick", async () => {
     // the second report (2026-10-09): an older build had stored the glued guess
-    // for the root; the user then picked its `_split_output`
+    // for the root; the user then picked its `_split_output`. Since I-63 the
+    // name-keyed store is not read at all — a guess cannot even survive.
     const root = makeRoot();
     const glued = `${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\${root.name}`;
-    localStorage.setItem(ROOT_PATH_KEY, JSON.stringify({ [root.name]: { path: glued, how: "completed" } }));
+    localStorage.setItem(LEGACY_KEY, JSON.stringify({ [root.name]: { path: glued, how: "completed" } }));
     Object.assign(root, { resolve: async () => ["_split_output"] });
     await mount(root);
     expect(text("[data-testid=upload-folder-path] code")).toBe(root.name);
@@ -458,6 +459,7 @@ describe("the Full path row — never a previous root with the new name appended
     await click("[data-testid=upload-open-folder]");
     await waitFor(() => text("[data-testid=upload-folder-path] code") === "_split_output", "the child's row");
     expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("export");
   });
 
   itSlow("Rescan captures the exact path Explorer copied, and the next child pick derives from it", async () => {

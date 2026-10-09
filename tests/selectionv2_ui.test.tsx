@@ -10,7 +10,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
@@ -74,6 +74,7 @@ describe("Selection V2 panel", () => {
   beforeEach(async () => {
     localStorage.clear();
     resetAppStore(); // no checked rows / filters leaking between tests
+    clearKnownRoots(); // no path bindings leaking between tests (I-63)
     await dropDb();
   });
 
@@ -142,11 +143,13 @@ describe("Selection V2 panel", () => {
   });
 
   it("shows the full path in its own row as soon as a pick captures it, without a reload", async () => {
-    const { el } = await mount(makeRoot(), "F:\\Stocks 2026\\icons\\split_root\\");
+    const root = makeRoot();
+    const { el } = await mount(root, "F:\\Stocks 2026\\icons\\split_root\\");
     const before = rows(el).length;
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("F:\\Stocks 2026\\icons\\split_root");
-    // a capture in another tab reaches this row live (I-36/RULE 24)
-    await act(async () => { saveRootPathInfo("split_root", "D:\\backup\\split_root"); });
+    // a capture in another tab reaches this row live (I-36/RULE 24) — bound to
+    // THIS folder's handle, never to its name (I-63)
+    await act(async () => { rememberKnownRoot(root, "D:\\backup\\split_root"); });
     expect(text(el, "[data-testid='v2-folder-path']")).toContain("D:\\backup\\split_root");
     expect(rows(el).length).toBe(before); // the list is untouched by a path capture
   });
@@ -436,6 +439,7 @@ describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
   beforeEach(async () => {
     localStorage.clear();
     resetAppStore();
+    clearKnownRoots();
     await dropDb();
   });
 

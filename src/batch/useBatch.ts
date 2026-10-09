@@ -9,6 +9,7 @@ import { readDirTree, ensureDirPath, probePath, type DirHandleLike, type FileHan
 import { defaultPreset, type Preset } from "../lib/presets";
 import { pickDirectory, fsSupported, ensurePermission } from "./picker";
 import { pickFolderFor } from "../ui/pickroot";
+import { restoreKnownRoot } from "../lib/knownroots";
 import { syncAndCollect, applyOutcomes, type StateKey } from "./statewrite";
 import { tally, toOutcomes } from "./outcomes";
 import { processItems, type BatchItem, type ItemResult } from "./process";
@@ -62,6 +63,7 @@ export function useBatch() {
     ...useViewActions(ctx, setS),
     ...usePresetActions(ctx, setS, say),
     supported: fsSupported(),
+    rootRef: ctx.root,
   };
 }
 
@@ -164,7 +166,10 @@ async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<voi
   ctx.root.current = await grant(stored?.source);
   ctx.dest.current = await grant(stored?.dest);
   setS((p) => ({ ...p, preset, destName: ctx.dest.current?.name ?? "" }));
-  if (ctx.root.current) await scan(ctx, setS, () => {});
+  if (ctx.root.current) {
+    await restoreKnownRoot(ctx.root.current); // its persisted path binds to THIS handle (I-63)
+    await scan(ctx, setS, () => {});
+  }
 }
 
 async function grant(h: DirHandleLike | undefined): Promise<DirHandleLike | null> {
