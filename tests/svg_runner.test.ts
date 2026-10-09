@@ -14,10 +14,13 @@ import { effectiveStallMs, EFFORT_RULES } from "../src/lib/effortlimits";
 import { clearInflight, inflightSummary, loadInflight } from "../src/svg/journal";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { runGeneration, type RunEvent, type RunSummary } from "../src/svg/runner";
+import { singlePrompt } from "../src/lib/svgprompt";
+import type { RegenPlan } from "../src/lib/svgregen";
+import type { RunArgs } from "../src/svg/runtypes";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { streamFrames, transport } from "./helpers/svgtransport";
-import { svgSource } from "./helpers/svgpair";
+import { pairMetaFor, svgPathFor, svgSource, svgVersion } from "./helpers/svgpair";
 
 // The contact sheet is the only browser-canvas step; its own pixel test lives
 // in tests/svg_canvas.test.ts. Here it is replaced by a deterministic marker so
@@ -84,6 +87,7 @@ function runArgs(root: FakeDir, sources: SvgSource[], config: Partial<SvgConfig>
       caps: capsFor(full.model),
       params,
       prompt: "p",
+      regen: { kind: "main" } as RegenPlan,
       sources,
       metas: new Map(),
       onEvent: (e: RunEvent) => events.push(e),
@@ -384,5 +388,53 @@ describe("runGeneration — one request per batch", () => {
     expect(summary.outcomes.map((o) => [o.status, o.saved])).toEqual([["done", 1], ["failed", 0]]);
     // a cancel IS a confirmed outcome: nothing is left dangling in the journal
     expect(loadInflight()).toEqual([]);
+  });
+});
+
+describe("runGeneration — Regenerate from current SVG (one icon per request)", () => {
+  const PRESET = "Make the strokes bolder.";
+  const codeOf = (i: number) => `<svg viewBox="0 0 24 24"><title>old ${i}</title></svg>`;
+
+  /** Three icons, each with a valid v1 SVG on disk and in its pair file. */
+  function regenFixture(): { args: RunArgs; sources: SvgSource[] } {
+    const { root, sources } = fixture(3);
+    const arch = root.children.get("architecture") as FakeDir;
+    sources.forEach((s, i) => {
+      arch.children.set(`${s.stem}_v1.svg`, new FakeFile(`${s.stem}_v1.svg`, 10, 1, codeOf(i + 1)));
+    });
+    const run = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    run.args.regen = { kind: "current-svg", presetName: "Bolder", presetText: PRESET };
+    for (const s of sources) run.args.metas.set(s.id, pairMetaFor(s, [svgVersion(svgPathFor(s, 1))]));
+    return { args: run.args, sources };
+  }
+
+  it("sends every icon alone, at size 1, with its own SVG code and the saved prompt", async () => {
+    const run = regenFixture();
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(summary.perRequest).toBe(1);
+    expect(t.calls.map((c) => c.items)).toEqual(run.sources.map((s) => [s.relPath]));
+    t.calls.forEach((c, i) => {
+      expect(c.prompt.startsWith(PRESET)).toBe(true);
+      expect(c.prompt).toContain(codeOf(i + 1));
+      expect(c.prompt).not.toContain(codeOf(i + 2));
+    });
+  });
+
+  it("records the saved prompt in the new version, never the SVG code", async () => {
+    const run = regenFixture();
+    vi.stubGlobal("fetch", transport().fetch);
+
+    await runGeneration(run.args);
+
+    for (const s of run.sources) {
+      const last = run.args.metas.get(s.id)?.versions.at(-1);
+      expect(last?.version).toBe(2);
+      expect(last?.prompt).toBe(singlePrompt(PRESET, s.stem));
+      expect(last?.prompt).not.toContain("old ");
+    }
   });
 });

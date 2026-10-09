@@ -15,6 +15,7 @@ import SvgBulkBar from "./SvgBulkBar";
 import RunRecord from "./RunRecord";
 import SvgRunPopup from "./SvgRunPopup";
 import SvgControls, { type SvgCounts } from "./SvgControls";
+import { svgPromptWindowOf } from "./SvgPromptZone";
 import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import { shownVersion } from "./rowmodel";
@@ -74,11 +75,10 @@ function useActivation(active: boolean, g: SvgGenApi): void {
 function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
   return (
     <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
-      prompt={g.prompt} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
+      prompt={svgPromptWindowOf(g)} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
       paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
       filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
-      onChooseRoot={g.chooseRoot} onRescan={g.rescan} onPrompt={g.setPrompt} onResetPrompt={g.resetPrompt}
-      onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}
+      onChooseRoot={g.chooseRoot} onRescan={g.rescan} onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}
       onDismissNote={() => g.dispatch({ type: "param-note", note: null })}
       onSaveKey={g.saveKey} onForgetKey={g.forgetKey} onProviderOpen={g.setProviderOpen}
       onFilter={g.setFilter} onSort={g.setSort}

@@ -10,6 +10,7 @@ import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { DirHandleLike } from "../lib/fs";
 import type { PairMeta } from "../lib/pairmeta";
 import type { SvgSource } from "./sources";
+import type { RegenPlan } from "../lib/svgregen";
 
 export type RunEvent =
   /** `images` = the run's image total, so every reader can say "N of M done". */
@@ -36,6 +37,8 @@ export interface RunArgs {
   caps: ModelCaps;
   params: SamplingParams;
   prompt: string;
+  /** The main prompt, or the saved prompt that regenerates from each icon's current SVG (2026-10-09). */
+  regen: RegenPlan;
   sources: readonly SvgSource[];
   /** Sidecars loaded before the run; refreshed in place as results are saved. */
   metas: Map<string, PairMeta | null>;
