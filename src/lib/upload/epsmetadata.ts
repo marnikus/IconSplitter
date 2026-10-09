@@ -20,13 +20,9 @@ export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata): stri
   const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
     .replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "");
   const id = `${metadataFingerprint(metadata)}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
-  const dictionary = `IconSplitterXmp_${id}`;
-  const stream = `IconSplitterStream_${id}`;
-  let marker = `% IconSplitterXmpEnd_${id}`;
-  while (packet.includes(marker)) marker += "_";
   const header = addXmpHeader(clean, eol);
-  const setup = setupBlock({ dictionary, stream, marker, packet, eol });
-  const trailer = trailerBlock(dictionary, eol);
+  const setup = setupBlock(id, packet, eol);
+  const trailer = trailerBlock(id, eol);
   const setupAt = afterSetup(header);
   const trailerAt = beforeTrailer(header);
   const closeAt = trailerAt !== null && trailerAt > setupAt ? trailerAt : header.length;
@@ -57,8 +53,10 @@ export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean 
     && actual.tags.join("\u0000") === expected.tags.join("\u0000");
 }
 
-function setupBlock(input: { dictionary: string; stream: string; marker: string; packet: string; eol: string }): string {
-  const { dictionary, stream, marker, packet, eol } = input;
+function setupBlock(id: string, packet: string, eol: string): string {
+  const dictionary = `IconSplitterXmp_${id}`;
+  const stream = `IconSplitterStream_${id}`;
+  const marker = uniquePacketMarker(id, packet);
   return [
     SETUP_BEGIN,
     `/${dictionary} 8 dict def`,
@@ -81,8 +79,15 @@ function setupBlock(input: { dictionary: string; stream: string; marker: string;
   ].join(eol);
 }
 
-function trailerBlock(dictionary: string, eol: string): string {
+function trailerBlock(id: string, eol: string): string {
+  const dictionary = `IconSplitterXmp_${id}`;
   return [TRAILER_BEGIN, `${dictionary} begin`, "[/EMC pdfmark", "end", TRAILER_END].join(eol);
+}
+
+function uniquePacketMarker(id: string, packet: string): string {
+  let marker = `% IconSplitterXmpEnd_${id}`;
+  while (packet.includes(marker)) marker += "_";
+  return marker;
 }
 
 function stripPreviousEmbedding(eps: string): string {
@@ -135,36 +140,32 @@ function headerEnd(lines: string[]): number {
 }
 
 function afterSetup(eps: string): number {
-  const pageSetup = indexAfterLine(eps, /^%%EndPageSetup\b/);
-  if (pageSetup !== null) return pageSetup;
-  const setup = indexAfterLine(eps, /^%%EndSetup\b/);
-  if (setup !== null) return setup;
-  const comments = indexAfterLine(eps, /^%%EndComments\b/);
-  if (comments !== null) return comments;
+  const pageSetup = findLineSpan(eps, /^%%EndPageSetup\b/);
+  if (pageSetup !== null) return pageSetup.end;
+  const setup = findLineSpan(eps, /^%%EndSetup\b/);
+  if (setup !== null) return setup.end;
+  const comments = findLineSpan(eps, /^%%EndComments\b/);
+  if (comments !== null) return comments.end;
   return startOfLine(eps, headerEnd(linesOf(eps)));
 }
 
 function beforeTrailer(eps: string): number | null {
-  return indexOfLine(eps, /^%%PageTrailer\b/)
-    ?? indexOfLine(eps, /^%%Trailer\b/)
-    ?? indexOfLine(eps, /^%%EOF\b/)
-    ?? (eps.lastIndexOf("%%EOF") < 0 ? null : eps.lastIndexOf("%%EOF"));
+  const eof = eps.lastIndexOf("%%EOF");
+  return findLineSpan(eps, /^%%PageTrailer\b/)?.start
+    ?? findLineSpan(eps, /^%%Trailer\b/)?.start
+    ?? findLineSpan(eps, /^%%EOF\b/)?.start
+    ?? (eof < 0 ? null : eof);
 }
 
-function indexAfterLine(eps: string, pattern: RegExp): number | null {
-  let at = 0;
-  for (const line of linesOf(eps)) {
-    if (pattern.test(lineText(line))) return at + line.length;
-    at += line.length;
-  }
-  return null;
-}
+interface LineSpan { start: number; end: number }
 
-function indexOfLine(eps: string, pattern: RegExp): number | null {
-  let at = 0;
+/** Find a DSC line once and expose both insertion boundaries. */
+function findLineSpan(eps: string, pattern: RegExp): LineSpan | null {
+  let start = 0;
   for (const line of linesOf(eps)) {
-    if (pattern.test(lineText(line))) return at;
-    at += line.length;
+    const end = start + line.length;
+    if (pattern.test(lineText(line))) return { start, end };
+    start = end;
   }
   return null;
 }

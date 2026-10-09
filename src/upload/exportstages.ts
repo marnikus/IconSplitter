@@ -12,13 +12,12 @@ import { CONVERTERS } from "../lib/upload/epsconv/registry";
 import { describeFailure, type ConverterDeps } from "../lib/upload/epsconv/types";
 import { artboardSize, flattenColor, type UploadSettings } from "../lib/upload/settings";
 import type { IconMetadata } from "../lib/upload/meta";
-import type { DirHandleLike } from "../lib/fs";
+import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { enforceExportSvg } from "../lib/upload/clean";
-import { readBytesAt } from "./runexport";
 
 /** A stage failure carries its class, so the log names the failing stage. */
 export class StageError extends Error {

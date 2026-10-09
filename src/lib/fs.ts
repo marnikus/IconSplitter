@@ -146,6 +146,34 @@ export async function probePath(root: DirHandleLike, relPath: string): Promise<D
   return cur;
 }
 
+/** Reads one file's bytes under the root; null when absent or unreadable. */
+export async function readBytesAt(root: DirHandleLike, relPath: string): Promise<Uint8Array | null> {
+  const fh = await fileAt(root, relPath);
+  if (fh === null) return null;
+  try {
+    return new Uint8Array(await (await fh.getFile()).arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/** Reads UTF-8 text under the root; null when absent or unreadable. */
+export async function readTextAt(root: DirHandleLike, relPath: string): Promise<string | null> {
+  const bytes = await readBytesAt(root, relPath);
+  return bytes === null ? null : new TextDecoder().decode(bytes);
+}
+
+/** Whether a file handle exists at a relative path; this does not read the file. */
+export async function fileExistsAt(root: DirHandleLike, relPath: string): Promise<boolean> {
+  return (await fileAt(root, relPath)) !== null;
+}
+
+async function fileAt(root: DirHandleLike, relPath: string): Promise<FileHandleLike | null> {
+  const at = relPath.lastIndexOf("/");
+  const dir = at < 0 ? root : await probePath(root, relPath.slice(0, at));
+  return dir === null ? null : tryGetFile(dir, relPath.slice(at + 1));
+}
+
 /** Names of every child (dirs and files) of a directory. */
 export async function listChildNames(dir: DirHandleLike): Promise<string[]> {
   const out: string[] = [];

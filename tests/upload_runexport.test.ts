@@ -534,6 +534,33 @@ describe("runExport — selective re-export (no redundant work)", () => {
     expect(fileText(root, `${DIR}/export/export.json`)).toBe(before);
   });
 
+  it("repairs existing SVG and EPS that lost accepted metadata even when fingerprints match", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const info = {
+      prompt: "p", provider: "Gemini", model: "gemini-3.1-flash-lite", requestId: null,
+      usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(META),
+    };
+    await runExport(args(root, { settings, defaults: settings, metadata: META, metadataInfo: info }));
+    const exportDir = dirAt(root, `${DIR}/export`);
+    const jpegBefore = await bytesOf(exportDir.children.get(`${ART}.jpg`) as FakeFile);
+    exportDir.children.set(`${ART}.svg`, new BinFile(`${ART}.svg`, SOURCE_SVG));
+    exportDir.children.set(`${ART}.eps`, new BinFile(`${ART}.eps`,
+      "%!PS-Adobe-3.0 EPSF-3.0\n%%DocumentData: Clean7Bit\n%%EOF\n"));
+
+    const spy = { renders: 0 };
+    const repaired = await runExport(args(root, {
+      settings, defaults: settings, record: readRecord(root), metadata: META, metadataInfo: info,
+      deps: { raster: fakeRaster(3886, 3886, spy) },
+    }));
+
+    expect(repaired.stages).not.toEqual([]);
+    expect(readEmbeddedMetadata(fileText(root, `${DIR}/export/${ART}.svg`))).toEqual(META);
+    expect(readXmpMetadataFromEps(fileText(root, `${DIR}/export/${ART}.eps`))).toEqual(META);
+    expect(spy.renders).toBe(0);
+    expect(await bytesOf(dirAt(root, `${DIR}/export`).children.get(`${ART}.jpg`) as FakeFile)).toEqual(jpegBefore);
+  });
+
   it("a metadata edit re-embeds only — no AI, no render", async () => {
     const root = pairRoot();
     const info = {

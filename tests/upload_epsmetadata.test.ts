@@ -47,9 +47,44 @@ describe("EPS XMP metadata", () => {
     expect(bdcAt).toBeLessThan(drawingAt);
     expect(drawingAt).toBeLessThan(emcAt);
     expect(emcAt).toBeLessThan(pageTrailerAt);
+    const dictionary = eps.match(/^(IconSplitterXmp_[a-f0-9]+) begin$/m)?.[1];
+    const stream = eps.match(/^\[\/_objdef \{(IconSplitterStream_[a-f0-9]+)\} \/type \/stream \/OBJ pdfmark$/m)?.[1];
+    expect(dictionary).toBeDefined();
+    expect(stream).toBeDefined();
+    expect(Array.from(eps.matchAll(new RegExp(`^${dictionary} begin$`, "gm")))).toHaveLength(2);
+    expect(eps).toContain(`/Metadata {${stream}}`);
     expect(readXmpMetadataFromEps(eps)).toEqual(META);
     expect(verifyEpsMetadata(eps, META)).toBe(true);
     expect(verifyEpsDocument(eps).ok).toBe(true);
+  });
+
+  it("places metadata without explicit EndComments or Setup markers and uses the Trailer fallback", () => {
+    const bareEps = [
+      "%!PS-Adobe-3.0 EPSF-3.0",
+      "%%Creator: a minimal converter",
+      "%%LanguageLevel: 2",
+      "%%BoundingBox: 0 0 70 70",
+      "/paint { 0 0 moveto fill } def",
+      "%%Trailer",
+      "%%EOF",
+    ].join("\n");
+    const eps = embedXmpMetadataInEps(bareEps, META);
+    const setupAt = eps.indexOf("% IconSplitter XMP setup begin");
+    const artworkAt = eps.indexOf("/paint { 0 0 moveto fill } def");
+    const emcAt = eps.indexOf("[/EMC pdfmark");
+    const trailerAt = eps.indexOf("%%Trailer");
+    expect(setupAt).toBeGreaterThan(eps.indexOf("%%BoundingBox"));
+    expect(setupAt).toBeLessThan(artworkAt);
+    expect(artworkAt).toBeLessThan(emcAt);
+    expect(emcAt).toBeLessThan(trailerAt);
+    expect(readXmpMetadataFromEps(eps)).toEqual(META);
+  });
+
+  it("fails closed for missing, truncated, or malformed XMP packets", () => {
+    expect(readXmpMetadataFromEps("%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n")).toBeNull();
+    expect(readXmpMetadataFromEps('<?xpacket begin="w"?><?xpacket end="w"')).toBeNull();
+    expect(readXmpMetadataFromEps('<?xpacket begin="w"?>not xml<?xpacket end="w"?>')).toBeNull();
+    expect(verifyEpsMetadata("%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n", META)).toBe(false);
   });
 
   it("is idempotent and keeps the converter's drawing bytes", () => {

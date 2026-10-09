@@ -2,7 +2,7 @@
 // The fakes implement the same interfaces the browser File System Access API
 // satisfies, so the adapter logic really executes — no mocks of the code itself.
 import { describe, expect, it } from "vitest";
-import { copyFileTo, ensureDirPath, nameExists, readDirTree, writeFileNew } from "../src/lib/fs";
+import { copyFileTo, ensureDirPath, fileExistsAt, nameExists, readBytesAt, readDirTree, readTextAt, writeFileNew } from "../src/lib/fs";
 import { FakeDir, FlakyFile, LockedFile } from "./helpers/fakefs";
 
 describe("readDirTree — recursive snapshot with size/mtime and ignore list", () => {
@@ -19,6 +19,29 @@ describe("readDirTree — recursive snapshot with size/mtime and ignore list", (
     expect(sub.children![0].name).toBe("a_AI.png");
     expect(sub.children![0].size).toBe(4); // "data"
     expect(sub.children![0].mtime).toBe(1000);
+  });
+});
+
+describe("relative filesystem reads", () => {
+  it("reads nested file bytes and text without creating missing paths", async () => {
+    const root = new FakeDir("root");
+    const dir = await ensureDirPath(root, "exports/current");
+    await writeFileNew(dir, "icon.svg", new Blob(["<svg/>"], { type: "image/svg+xml" }));
+    expect(await readTextAt(root, "exports/current/icon.svg")).toBe("<svg/>");
+    expect(await readBytesAt(root, "exports/current/icon.svg")).toEqual(new TextEncoder().encode("<svg/>"));
+    expect(await fileExistsAt(root, "exports/current/icon.svg")).toBe(true);
+    expect(await readBytesAt(root, "missing/icon.svg")).toBeNull();
+    expect(await readTextAt(root, "missing/icon.svg")).toBeNull();
+    expect(await fileExistsAt(root, "missing/icon.svg")).toBe(false);
+    expect(root.children.has("missing")).toBe(false);
+  });
+
+  it("distinguishes an existing but unreadable file from a missing file", async () => {
+    const root = new FakeDir("root");
+    root.children.set("locked.svg", new LockedFile("locked.svg"));
+    expect(await fileExistsAt(root, "locked.svg")).toBe(true);
+    expect(await readBytesAt(root, "locked.svg")).toBeNull();
+    expect(await readTextAt(root, "locked.svg")).toBeNull();
   });
 });
 

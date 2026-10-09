@@ -5,7 +5,7 @@
 // header checkbox state, the counts and dropping checked ids a rescan removed.
 // Pure except for the store write and the two file reads.
 
-import { probePath, tryGetFile, type DirHandleLike } from "../lib/fs";
+import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import { sha256HexText } from "../lib/upload/hash";
 import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
 import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
@@ -249,20 +249,6 @@ async function readRecordAt(root: DirHandleLike, dirPath: string): Promise<Expor
 async function hashAt(root: DirHandleLike, relPath: string): Promise<string | null> {
   const bytes = await readBytesAt(root, relPath);
   return bytes === null ? null : `sha256:${await sha256HexText(new TextDecoder().decode(bytes))}`;
-}
-
-/** Reads one file's bytes under the root; null when any segment is absent. */
-async function readBytesAt(root: DirHandleLike, relPath: string): Promise<Uint8Array | null> {
-  const at = relPath.lastIndexOf("/");
-  const dir = at < 0 ? root : await probePath(root, relPath.slice(0, at));
-  if (dir === null) return null;
-  const fh = await tryGetFile(dir, relPath.slice(at + 1));
-  if (fh === null) return null;
-  try {
-    return new Uint8Array(await (await fh.getFile()).arrayBuffer());
-  } catch {
-    return null;
-  }
 }
 
 // --- list filter / sort ---------------------------------------------------------
