@@ -20,6 +20,7 @@ import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
 import UploadPanel from "../src/upload/UploadPanel";
 import { resetAppStore } from "../src/state/appstore";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { BinDir, BinFile } from "./helpers/binfakefs";
@@ -351,6 +352,7 @@ function fileText(root: BinDir, relPath: string): string {
 beforeEach(() => {
   localStorage.clear();
   stored.clear();
+  clearKnownRoots();
   resetAppStore();
   resetLogStore();
   forgetRestoreNote(); // every test gets a fresh page load
@@ -413,6 +415,64 @@ describe("the tab", () => {
     await type("[data-testid=upload-search]", "arch_AI");
     expect(qa("[data-testid^=upload-row-pair_]")).toHaveLength(1);
     expect(q(`[data-testid=upload-row-${ARCH}]`)).not.toBeNull();
+  });
+});
+
+describe("the Full path row — never a previous root with the new name appended (I-46/I-51/I-63)", () => {
+  const SINGLE = "F:\\Stocks 2026\\icons testing\\single";
+  const OLD = `${SINGLE}\\test_processing_2\\_split_output`;
+  const LEGACY_KEY = "iconSplitter.rootpaths.v1"; // the old name-keyed store: never read
+  const usePicker = (pick: () => Promise<unknown>) =>
+    Object.defineProperty(window, "showDirectoryPicker", { value: pick, configurable: true });
+  const readClipboard = (text: string) =>
+    Object.defineProperty(navigator, "clipboard", { value: { readText: async () => text }, configurable: true });
+
+  itSlow("picks a sibling tree while the clipboard holds a folder of the old root: the row says 'not captured'", async () => {
+    // the reported mistake (2026-10-09): the clipboard still held the app's own
+    // "copy folder path" of an export folder deep inside the previous root
+    const root = makeRoot();
+    Object.assign(root, { resolve: async () => null }); // the new pick is NOT below this root
+    rememberKnownRoot(root, OLD);
+    await mount(root);
+    expect(text("[data-testid=upload-folder-path] code")).toBe(OLD);
+    readClipboard(`${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export`);
+    usePicker(async () => new BinDir("test_process_3"));
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === "test_process_3", "the new root's row");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("export\\test_process_3");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+  });
+
+  itSlow("a stored guess in the old name-keyed store is never shown and never glued onto a child pick", async () => {
+    // the second report (2026-10-09): an older build had stored the glued guess
+    // for the root; the user then picked its `_split_output`. Since I-63 the
+    // name-keyed store is not read at all — a guess cannot even survive.
+    const root = makeRoot();
+    const glued = `${OLD}\\2026-10\\2026-10-08_18-46-23\\icon-bank-institution_AI_10\\split_03\\export\\${root.name}`;
+    localStorage.setItem(LEGACY_KEY, JSON.stringify({ [root.name]: { path: glued, how: "completed" } }));
+    Object.assign(root, { resolve: async () => ["_split_output"] });
+    await mount(root);
+    expect(text("[data-testid=upload-folder-path] code")).toBe(root.name);
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    readClipboard("");
+    usePicker(async () => new BinDir("_split_output"));
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === "_split_output", "the child's row");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).not.toContain("export");
+  });
+
+  itSlow("Rescan captures the exact path Explorer copied, and the next child pick derives from it", async () => {
+    const root = makeRoot();
+    Object.assign(root, { resolve: async () => ["_split_output"] });
+    await mount(root);
+    readClipboard(`${SINGLE}\\${root.name}`);
+    await click("[data-testid=upload-rescan]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === `${SINGLE}\\${root.name}`, "the exact path");
+    readClipboard("");
+    usePicker(async () => new BinDir("_split_output"));
+    await click("[data-testid=upload-open-folder]");
+    await waitFor(() => text("[data-testid=upload-folder-path] code") === `${SINGLE}\\${root.name}\\_split_output`, "the derived child path");
   });
 });
 
@@ -610,7 +670,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toEqual(saved.defaults);
     expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("10 fields overridden");
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("14 fields overridden"); // 10 + epsConverter + expandStrokes + scaleToMegapixels + artboardMegapixels (2026-10-09)
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -763,16 +823,16 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(input(`[data-testid=upload-meta-tags-${FOG}]`).value.split(",")).toHaveLength(40);
     expect(text(`[data-testid=upload-meta-usage-${FOG}]`)).toContain("300 tokens");
 
-    // edit + accept (no record yet → no auto export); the second sentence and
-    // the Title Case the user typed are gone at the accept gate — ONE clean
-    // phrase — and the field shows it at once (RULE 24)
+    // edit + accept (no record yet → no auto export); the Title Case and the
+    // FINAL period the user typed are gone at the accept gate — every sentence
+    // kept — and the field shows it at once (RULE 24)
     await type(`[data-testid=upload-meta-title-${FOG}]`, "Minimal Line Icon Of Growth. Speed and growth chart.");
     await typeArea(`[data-testid=upload-meta-description-${FOG}]`, "Clean line icon showing growth and rising trends. Second sentence here.");
     await click(`[data-testid=upload-meta-accept-${FOG}]`);
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
-    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth");
-    expect((q(`[data-testid=upload-meta-description-${FOG}]`) as HTMLTextAreaElement).value).toBe("Clean line icon showing growth and rising trends");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth. Speed and growth chart");
+    expect((q(`[data-testid=upload-meta-description-${FOG}]`) as HTMLTextAreaElement).value).toBe("Clean line icon showing growth and rising trends. Second sentence here");
   });
 
   itSlow("generates metadata for ALL selected icons that need it, and says what it skipped", async () => {

@@ -112,6 +112,17 @@ describe("toRow + staleOf — staleness is exact", () => {
     expect(row.stale).toBe(false);
   });
 
+  it("the EPS writer's automatic fixes become the row's note; the row stays processed (2026-10-08)", () => {
+    const record = committedRecord(DEFAULT_UPLOAD_SETTINGS);
+    record.tools.eps = { ...record.tools.eps, fixes: ["1 rounded <rect> written as an exact path outline"] };
+    const row = rowOf(record);
+    expect(row.status).toBe("processed");
+    expect(row.error).toBe("");
+    expect(row.note).toBe("EPS auto-fixed: 1 rounded <rect> written as an exact path outline");
+    expect(rowOf(committedRecord(DEFAULT_UPLOAD_SETTINGS)).note).toBe(""); // no fixes → no note
+    expect(rowOf(null, EMPTY_META, DEFAULT_UPLOAD_SETTINGS, null).note).toBe("");
+  });
+
   it("a settings change marks the row stale", () => {
     const changed = { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 20 };
     expect(staleOf({ record: committedRecord(DEFAULT_UPLOAD_SETTINGS), source: SRC, effective: changed, meta: EMPTY_META, sourceHash: SOURCE_HASH })).toBe(true);
@@ -140,11 +151,11 @@ describe("metaFromRecord + statusOf", () => {
     expect(meta.metadata).toEqual(META);
   });
 
-  it("cleans the record's title — a pre-fix package reads back one phrase and reports stale", () => {
-    const old = committedRecord(DEFAULT_UPLOAD_SETTINGS, { ...META, title: "Minimal line icon of growth. Speed and growth pictogram" });
+  it("cleans the record's title — a pre-fix package reads back the clean text and reports stale", () => {
+    const old = committedRecord(DEFAULT_UPLOAD_SETTINGS, { ...META, title: "Minimal Line Icon Of Growth. Speed and growth pictogram." });
     const meta = metaFromRecord(old, false);
-    expect(meta.metadata?.title).toBe("Minimal line icon of growth");
-    // the block still carries the two-sentence fingerprint → the FILE must move
+    expect(meta.metadata?.title).toBe("Minimal line icon of growth. Speed and growth pictogram"); // both sentences, no final period
+    // the block still carries the uncleaned fingerprint → the FILE must move
     expect(staleOf({ record: old, source: SRC, effective: DEFAULT_UPLOAD_SETTINGS, meta, sourceHash: SOURCE_HASH })).toBe(true);
   });
 

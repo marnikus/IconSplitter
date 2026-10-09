@@ -83,11 +83,23 @@ describe("bakeGeometry — the artwork's own stroke width follows its geometry",
   });
 });
 
+describe("bakeGeometry — a rounded rect turns like any shape (2026-10-08)", () => {
+  it("a rotated rounded rect becomes a <path> with its four corner arcs — no refusal, no distortion", () => {
+    const root = parse(`<rect x="0" y="0" width="10" height="10" rx="2" fill="#000" transform="rotate(90 5 5)"/>`);
+    const out = bakeGeometry(root, parseTransform("scale(1)"));
+    expect(out.unsupported).toEqual([]);
+    expect(root.querySelector("rect")).toBeNull();
+    const d = root.querySelector("path")?.getAttribute("d") ?? "";
+    expect(d.match(/C/g)).toHaveLength(4);
+    expect(d).toContain("M10 2"); // (2,0) rotated 90° about the centre lands on (10,2)
+    expect(root.querySelector("path")?.getAttribute("transform")).toBeNull();
+  });
+});
+
 describe("bakeGeometry — refusals, named (never guessed)", () => {
   it.each([
     ["a stroked shape under a non-uniform scale", `<path d="M0 0 L1 0" stroke="#000" transform="scale(2 1)"/>`, "a stroked <path> under a non-uniform transform"],
     ["a stroked shape under a skew", `<rect x="0" y="0" width="1" height="1" stroke="#000" transform="skewX(10)"/>`, "a stroked <rect> under a non-uniform transform"],
-    ["a rounded rect under rotation", `<rect x="0" y="0" width="1" height="1" rx="0.2" fill="#000" transform="rotate(10)"/>`, "a rounded <rect> under a rotation or skew"],
     ["a pattern", `<pattern id="p"/><rect x="0" y="0" width="1" height="1"/>`, "a <pattern>"],
     ["a userSpaceOnUse gradient", `<defs><linearGradient id="g" gradientUnits="userSpaceOnUse"/></defs><rect x="0" y="0" width="1" height="1" fill="url(#g)"/>`, "a userSpaceOnUse <linearGradient>"],
     ["a clipPath", `<defs><clipPath id="c"><rect width="1" height="1"/></clipPath></defs><rect x="0" y="0" width="1" height="1" clip-path="url(#c)"/>`, "a <clipPath>"],

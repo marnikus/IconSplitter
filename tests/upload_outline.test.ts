@@ -15,12 +15,29 @@ function el(markup: string): Element {
 const ops = (o: Outline | null) => (o === null ? null : o.ops.map((op) => op.op).join(""));
 
 describe("shapeOutline — every shape of the subset as ops", () => {
-  it("rect → four lines closed; a rounded rect is outside the model", () => {
+  it("rect → four lines closed; a degenerate rect has no outline", () => {
     const o = shapeOutline(el(`<rect x="1" y="2" width="4" height="3"/>`));
     expect(ops(o)).toBe("MLLLZ");
     expect(outlineToPathData(o as Outline)).toBe("M1 2L5 2L5 5L1 5Z");
-    expect(shapeOutline(el(`<rect x="1" y="2" width="4" height="3" rx="1"/>`))).toBeNull();
     expect(shapeOutline(el(`<rect x="1" y="2" width="0" height="3"/>`))).toBeNull();
+    expect(shapeOutline(el(`<rect x="1" y="2" width="4" height="3" rx="0"/>`))?.ops).toEqual(o?.ops); // rx=0 IS a plain rect
+  });
+
+  it("rounded rect → four lines and four quarter-ellipses, exact (2026-10-08: no longer outside the model)", () => {
+    const o = shapeOutline(el(`<rect x="0" y="0" width="10" height="10" rx="2"/>`));
+    expect(ops(o)).toBe("MLCLCLCLCZ");
+    // KAPPA corners, clockwise from the top edge — the same arc the model draws for a circle
+    expect(outlineToPathData(o as Outline)).toBe(
+      "M2 0L8 0C9.105 0 10 0.895 10 2L10 8C10 9.105 9.105 10 8 10L2 10C0.895 10 0 9.105 0 8L0 2C0 0.895 0.895 0 2 0Z",
+    );
+    // SVG's rules: a missing radius copies the other; each radius is clamped to half its side
+    expect(outlineToPathData(shapeOutline(el(`<rect x="0" y="0" width="10" height="10" ry="2"/>`)) as Outline))
+      .toBe(outlineToPathData(o as Outline));
+    const pill = shapeOutline(el(`<rect x="0" y="0" width="10" height="4" rx="50" ry="50"/>`)) as Outline;
+    expect(outlineToPathData(pill).startsWith("M5 0L5 0C")).toBe(true); // rx → 5, ry → 2: a true pill, nothing squeezed
+    expect(outlineToPathData(pill)).toContain("L10 2"); // the right edge collapses to its midpoint
+    expect(outlineToPathData(shapeOutline(el(`<rect x="0" y="0" width="10" height="10" rx="2" ry="1"/>`)) as Outline))
+      .toBe("M2 0L8 0C9.105 0 10 0.448 10 1L10 9C10 9.552 9.105 10 8 10L2 10C0.895 10 0 9.552 0 9L0 1C0 0.448 0.895 0 2 0Z");
   });
 
   it("circle and ellipse → four cubics, closed", () => {

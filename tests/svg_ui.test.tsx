@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
-import { loadRootPath } from "../src/lib/rootpath";
+import { boundRootPathInfo, clearKnownRoots } from "../src/lib/knownroots";
 import { saveCatalog } from "../src/svg/catalog";
 import { clearApiKey } from "../src/svg/keystore";
 import SvgPanel from "../src/svg/SvgPanel";
@@ -205,6 +205,7 @@ beforeEach(async () => {
   await clearApiKey();
   window.localStorage.clear();
   stored.clear();
+  clearKnownRoots();
   resetAppStore();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -257,7 +258,7 @@ describe("the folder control and the path row", () => {
     stubClipboard(`"F:\\Stocks 2026\\icons\\split_root\\"`);
     try {
       await mountPick(root); // a hand pick, with the path on the clipboard
-      expect(loadRootPath("split_root")).toBe("F:\\Stocks 2026\\icons\\split_root");
+      expect(boundRootPathInfo(root).path).toBe("F:\\Stocks 2026\\icons\\split_root");
       expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons\\split_root");
       expect(text("[data-testid=svg-toast]")).toContain("Folder path captured: F:\\Stocks 2026\\icons\\split_root");
       await act(async () => { ui.unmount(); }); // a restart: the row reads the memory
@@ -274,13 +275,13 @@ describe("the folder control and the path row", () => {
     expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
   });
 
-  it("flags a path completed from the copied parent, so a completed guess is never silent", async () => {
+  it("never completes a copied PARENT into a guess — the row says 'not captured' instead (I-59)", async () => {
     const root = await makeRoot();
-    stubClipboard("F:\\Stocks 2026\\icons testing\\single"); // the folder it lives in
+    stubClipboard("F:\\Stocks 2026\\icons testing\\single"); // the folder it lives in — not the folder
     try {
       await mountPick(root);
-      expect(text("[data-testid=svg-folder-path]")).toContain("F:\\Stocks 2026\\icons testing\\single\\split_root");
-      expect(text("[data-testid=svg-folder-path]")).toContain("completed — check it");
+      expect(text("[data-testid=svg-folder-path]")).not.toContain("icons testing");
+      expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }

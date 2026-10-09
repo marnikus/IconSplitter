@@ -3,7 +3,8 @@
 // and anything outside the subset fails honestly (design §2.5) — never a
 // renamed PS/PDF, never a guessed rendering.
 import { describe, expect, it } from "vitest";
-import { verifyEps, writeEps } from "../src/lib/upload/eps";
+import { verifyEps, verifyEpsDocument, writeEps } from "../src/lib/upload/eps";
+import { hiResBox, runPostScript } from "./helpers/psrun";
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
 const PREPARED = `<svg ${NS} viewBox="0 0 92.8 92.8" width="92.8" height="92.8">`
@@ -55,6 +56,16 @@ describe("writeEps — a genuine EPS document", () => {
     expect(verifyEps(full).ok).toBe(true);
   });
 
+  it("verifyEpsDocument — the converter-neutral gate (2026-10-09): header, a LanguageLevel, a bounding box, %%EOF — no EPS 10 markers", () => {
+    const cairo = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: cairo 1.18.0\n%%LanguageLevel: 2\n%%BoundingBox: 0 0 70 70\n%%EndComments\n0 0 moveto fill\n%%EOF\n";
+    expect(verifyEpsDocument(cairo)).toEqual({ ok: true, errors: [], boundingBox: { llx: 0, lly: 0, urx: 70, ury: 70 } });
+    expect(verifyEps(cairo).ok).toBe(false); // the strict EPS 10 check is the built-in writer's own contract
+    expect(verifyEpsDocument("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 1 1\n%%EOF\n").errors).toEqual(["missing %%LanguageLevel"]);
+    expect(verifyEpsDocument("<html>").ok).toBe(false);
+    const own = writeEps(PREPARED, "#ffffff");
+    expect(own.ok && verifyEpsDocument(own.eps).ok).toBe(true); // the built-in passes both
+  });
+
   it("emits the EPS header, an integer bounding box and %%EOF", () => {
     const result = writeEps(PREPARED, "#ffffff");
     expect(result.ok).toBe(true);
@@ -66,9 +77,48 @@ describe("writeEps — a genuine EPS document", () => {
     expect(result.shapes).toBe(2); // background rect + artwork rect
   });
 
-  it("flips y and scales px→pt once, up front", () => {
+  it("flips y and scales px→pt once, up front — as ONE array, the only operand concat accepts", () => {
+    // the 2026-10-09 report: bare numbers before `concat` raised /typecheck in
+    // Illustrator, and the program stopped before the artwork
     const result = writeEps(PREPARED, "#ffffff");
-    expect(result.ok && result.eps).toContain("0.75 0 0 -0.75 0 69.6 concat");
+    expect(result.ok && result.eps).toContain("[0.75 0 0 -0.75 0 69.6] concat");
+    const lines = (result.ok ? result.eps : "").split("\n").filter((l) => l.endsWith("concat"));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line).toMatch(/^\[(-?\d+(\.\d+)? ){5}-?\d+(\.\d+)?\] concat$/);
+  });
+
+  it("runs: the subset interpreter executes the document and every painted point is inside the box", () => {
+    const result = writeEps(PREPARED, "#ffffff");
+    const run = runPostScript(result.ok ? result.eps : "");
+    expect(run.errors).toEqual([]);
+    const box = hiResBox(result.ok ? result.eps : "");
+    expect(run.painted).not.toBeNull();
+    expect(run.painted!.llx).toBeGreaterThanOrEqual(box.llx - 1e-6);
+    expect(run.painted!.lly).toBeGreaterThanOrEqual(box.lly - 1e-6);
+    expect(run.painted!.urx).toBeLessThanOrEqual(box.urx + 1e-6);
+    expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
+  });
+
+  it("fills INSIDE gsave/grestore before it strokes, so a filled-and-stroked shape keeps its stroke", () => {
+    // `fill` consumes the current path: `… fill … stroke` stroked nothing
+    const result = writeEps(art(`<rect x="1" y="1" width="4" height="4" fill="#f00" stroke="#000" stroke-width="1"/>`), "#ffffff");
+    expect(result.ok && result.eps).toContain("gsave 1 0 0 setrgbcolor fill grestore 0 0 0 setrgbcolor 1 setlinewidth");
+    expect(runPostScript(result.ok ? result.eps : "").errors).toEqual([]);
+  });
+
+  it("emits nothing for a shape that paints nothing (fill none, stroke none)", () => {
+    const result = writeEps(art(`<rect x="0" y="0" width="100" height="100" fill="none" stroke="none"/><rect x="1" y="1" width="4" height="4" fill="#000"/>`), "#ffffff");
+    expect(result.ok && result.shapes).toBe(1);
+    expect((result.ok ? result.eps : "").match(/newpath/g)?.length).toBe(1);
+  });
+
+  it("the invisible artboard rect: no path in the EPS, and the bounding box is still the artboard (I-60)", () => {
+    const svg = `<svg ${NS} viewBox="0 0 92.8 92.8"><rect x="0" y="0" width="92.8" height="92.8" fill="none" stroke="none"/><rect x="6.4" y="6.4" width="80" height="80" fill="#000"/></svg>`;
+    const result = writeEps(svg, "#ffffff");
+    const eps = result.ok ? result.eps : "";
+    expect(eps.match(/newpath/g)?.length).toBe(1);
+    expect(eps).toContain("%%BoundingBox: 0 0 70 70"); // 92.8 px × 0.75 = 69.6 pt, rounded outwards
+    expect(runPostScript(eps).errors).toEqual([]);
   });
 
   it("paints fills with setrgbcolor inside gsave/concat/grestore", () => {
@@ -153,6 +203,25 @@ describe("writeEps — the shape subset", () => {
   });
 });
 
+describe("writeEps — a rounded <rect> is written, exactly, and the fix is reported (2026-10-08)", () => {
+  it("draws the corners as curveto arcs and names the automatic fix on the ok result", () => {
+    const result = writeEps(art(`<rect x="1" y="1" width="8" height="4" rx="1" fill="#000"/>`), "#ffffff");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.eps.match(/curveto/g)).toHaveLength(4);
+    expect(result.eps.match(/lineto/g)).toHaveLength(4);
+    expect(result.shapes).toBe(1);
+    expect(result.fixes).toEqual(["1 rounded <rect> written as an exact path outline"]);
+    const two = writeEps(art(`<rect x="1" y="1" width="4" height="4" rx="1" fill="#000"/><rect x="5" y="5" width="2" height="2" ry="0.5" fill="#000"/>`), "#ffffff");
+    if (two.ok) expect(two.fixes).toEqual(["2 rounded <rect>s written as exact path outlines"]);
+  });
+
+  it("a plain package reports no fix", () => {
+    const result = writeEps(PREPARED, "#ffffff");
+    if (result.ok) expect(result.fixes).toEqual([]);
+  });
+});
+
 describe("writeEps — honest subset failures (never guessed)", () => {
   const failures: [string, string][] = [
     ["gradient fill", `<rect x="1" y="1" width="4" height="4" fill="url(#g)"/>`],
@@ -161,7 +230,6 @@ describe("writeEps — honest subset failures (never guessed)", () => {
     ["use", `<use href="#x"/>`],
     ["CSS style", `<style>.a{fill:red}</style><rect class="a" x="1" y="1" width="4" height="4"/>`],
     ["group opacity", `<g opacity="0.5"><rect x="1" y="1" width="4" height="4" fill="#000"/></g>`],
-    ["rounded rect", `<rect x="1" y="1" width="4" height="4" rx="2" fill="#000"/>`],
     ["currentColor", `<rect x="1" y="1" width="4" height="4" fill="currentColor"/>`],
     ["clip path", `<rect x="1" y="1" width="4" height="4" fill="#000" clip-path="url(#c)"/>`],
   ];
@@ -190,5 +258,13 @@ describe("verifyEps", () => {
     expect(verifyEps("not postscript").errors.length).toBeGreaterThan(0);
     expect(verifyEps("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 1 1\n").errors).toContain("missing %%EOF");
     expect(verifyEps("%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n").errors[0]).toContain("BoundingBox");
+  });
+
+  it("rejects a document that is not executable — the bare-number concat (2026-10-09)", () => {
+    const result = writeEps(PREPARED, "#ffffff");
+    const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
+    const verdict = verifyEps(broken);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.errors).toContain("line 13: concat expects an array, found number"); // no %%CreationDate in this fixture: the CTM is line 13 (14 in the report);
   });
 });

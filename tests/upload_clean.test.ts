@@ -116,7 +116,16 @@ describe("prepareExportSvg — the export copy the user inspects", () => {
     if (!result.ok) throw new Error(result.detail);
     const root = new DOMParser().parseFromString(result.svg, "image/svg+xml").documentElement;
     expect(root.getAttribute("version")).toBe("1.1");
-    expect(root.getAttribute("viewBox")).toBe("0 0 20.2 20.2");
+    expect(root.getAttribute("viewBox")).toBe("0 0 19.72 19.72"); // the 1 px stroke measured by its outline: 17 + 2 × 8 %
+  });
+
+  it("the invisible artboard rect of a transparent export is clean — no violation, and it survives the pipeline (I-60)", async () => {
+    const svg = await exported(CLEAN_SOURCE);
+    const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+    expect(root.children).toHaveLength(2); // the artboard, then the artwork
+    expect(root.firstElementChild?.getAttribute("fill")).toBe("none");
+    expect(root.firstElementChild?.getAttribute("d")).toMatch(/^M0 0h/);
+    expect(verifyExportSvg(svg)).toEqual([]);
   });
 
   it("paints the background with fill ONLY — an inherited stroke never reaches it", () => {

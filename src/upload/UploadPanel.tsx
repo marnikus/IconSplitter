@@ -11,6 +11,7 @@ import { PROVIDER_NAME } from "../lib/upload/gemini";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
+import { downloadPlanOf } from "./downloadactions";
 import { idsNeedingMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
 import UploadControls from "./UploadControls";
@@ -27,7 +28,7 @@ export default function UploadPanel() {
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
-      <UploadControls rootName={g.rootName} discovery={g.discovery} busy={g.busy} counts={g.counts}
+      <UploadControls rootName={g.rootName} root={rootRef.current} discovery={g.discovery} busy={g.busy} counts={g.counts}
         gemini={g.gemini} modelCheck={g.modelCheck} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
         filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
         promptPanel={promptPanel(g)}
@@ -71,11 +72,13 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
         thumb={g.thumb} bg={g.bg} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length}
+        downloadFiles={downloadPlanOf(g, g.checked).items.length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
         onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
         onMetadata={() => g.generateMetadataSelected(g.checked)} onExport={() => g.exportSelected(g.checked)}
+        onDownload={() => g.downloadSelected(g.checked)}
         onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
       <UploadList g={g} actions={actions} />
     </>

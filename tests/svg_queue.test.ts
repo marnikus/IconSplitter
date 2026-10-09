@@ -5,7 +5,7 @@
 // of the file). Getting these wrong is what silently lost the user's added work.
 import { describe, expect, it } from "vitest";
 import {
-  dropAll, dropQueued, enqueue, nextRun, queuedCount, queueItem, shiftQueue,
+  dropAll, dropIdFrom, dropQueued, enqueue, enqueueFront, nextRun, queuedCount, queuedIds, queueItem, shiftQueue,
 } from "../src/svg/runqueue";
 
 const first = queueItem(["a"], 1, "fog_AI.png");
@@ -52,5 +52,35 @@ describe("the generation queue", () => {
     expect(again.requests).toBe(2); // the user's images-per-request, not a tier cap
     expect(again.label).toBe("court_AI.png + 1 more"); // the waiting list can name it
     expect(queueItem([], 0, "").requests).toBe(1); // never "zero requests"
+  });
+});
+
+describe("the front of the queue (2026-10-08: Regenerate is the NEXT attempt)", () => {
+  const retry = queueItem(["b"], 1, "court_AI.png");
+
+  it("enqueueFront puts the item first and displaces nothing behind it", () => {
+    const queue = enqueueFront([first, second], retry);
+    expect(queue.map((i) => i.id)).toEqual([retry.id, first.id, second.id]);
+    expect(enqueueFront([], retry).map((i) => i.id)).toEqual([retry.id]);
+    expect(nextRun(queue, false)?.id).toBe(retry.id); // it is what starts next
+  });
+
+  it("dropIdFrom removes the source from every later batch, drops a batch left empty, and counts what it touched", () => {
+    const replan = (ids: readonly string[]) => ({ requests: Math.max(1, Math.ceil(ids.length / 1)), label: ids.join("+") });
+    const { queue, removedFrom } = dropIdFrom([first, second], "b", replan);
+    expect(removedFrom).toBe(1);
+    expect(queue.map((i) => i.id)).toEqual([first.id, second.id]);
+    expect(queue[1]).toMatchObject({ ids: ["c"], count: 1, requests: 1, label: "c" }); // shrunk, re-planned, re-labelled
+    const emptied = dropIdFrom([first, second], "a", replan);
+    expect(emptied.queue.map((i) => i.id)).toEqual([second.id]); // `first` carried only "a"
+    expect(emptied.removedFrom).toBe(1);
+    const untouched = dropIdFrom([first, second], "zzz", replan);
+    expect(untouched.removedFrom).toBe(0);
+    expect(untouched.queue).toEqual([first, second]);
+  });
+
+  it("queuedIds names every source that waits, once", () => {
+    expect([...queuedIds([first, second, retry])].sort()).toEqual(["a", "b", "c"]);
+    expect(queuedIds([]).size).toBe(0);
   });
 });

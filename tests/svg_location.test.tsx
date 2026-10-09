@@ -10,7 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { serializePairMeta } from "../src/lib/pairmeta";
-import { saveRootPathInfo } from "../src/lib/rootpath";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -65,6 +65,7 @@ const txt = (sel: string) => q(sel)?.textContent ?? "";
 /** The user's piece folder, with the pair file the generation wrote beside it. */
 function makePieceTree(opts: { versions: number; preferred: number | null }): FakeDir {
   const root = new FakeDir(ROOT);
+  rememberKnownRoot(root, FULL); // the full path captured at pick time (I-35)
   const pieces = PIECE_DIR.split("/");
   let dir = root;
   for (const name of pieces) {
@@ -134,8 +135,8 @@ beforeEach(async () => {
   await dropDb();
   window.localStorage.clear();
   stored.clear();
+  clearKnownRoots();
   resetAppStore();
-  saveRootPathInfo(ROOT, FULL, "copied"); // the full path captured at pick time
   Object.defineProperty(navigator, "clipboard", {
     value: { writeText: async (t: string) => { copied.push(t); } }, configurable: true,
   });

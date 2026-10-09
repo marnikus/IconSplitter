@@ -39,8 +39,8 @@ export default tseslint.config(
     },
   },
   {
-    // Node scripts (gate, hooks installer) run outside the browser.
-    files: ["tools/**/*.mjs", "*.config.js"],
+    // Node scripts (gate, hooks installer, the Inkscape helper, test fakes) run outside the browser.
+    files: ["tools/**/*.mjs", "tests/helpers/*.mjs", "*.config.js"],
     languageOptions: {
       globals: {
         process: "readonly",
@@ -48,6 +48,9 @@ export default tseslint.config(
         URL: "readonly",
         Buffer: "readonly",
         __dirname: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
       },
     },
   },

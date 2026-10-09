@@ -2475,3 +2475,154 @@ lines, 1 param; RULE 18: `meta.ts` 175 lines.
 * The sentence-break heuristic needs a word of 2+ letters before the
   punctuation, so "plan B. Next" would not be cut — the prompt forbids a
   second sentence anyway; revisit only if the field shows it.
+
+## 2026-10-08 — Generate SVG: the run outlives the tab, the next attempt, the pinned list (`feat(svg)`)
+
+Four findings on one screen, one cause each (measured, not guessed): a tab
+switch UNMOUNTED `SvgPanel` (the run and its queue died with it); Regenerate
+APPENDED a batch (the bad image came last); a landing SVG re-sorted the list
+(`date` sort on `item-saved`) while the strip and the queue were inserted
+ABOVE it (the header walked away); a waiting source looked like nothing was
+planned for it. Now: the Workbench parks the panel `hidden` and never unmounts
+it (I-57); `SvgRunPopup` on every tab says "N done · M left" from the ONE
+arithmetic in `runtotals.ts`, one count across the whole queue chain; a row's
+Regenerate while busy is the NEXT attempt — first in the queue, no dialog, the
+image removed from every later batch (I-53); the visible order is pinned and
+refreshed only by a scan, a sort or a return to the tab, and the run record
+sits below the list (I-58). Lesson: **a queue the user cannot see is not a
+queue** — the grey "Next attempt" badge is derived from the queue every render,
+so dropping a batch restores nothing because nothing was written.
+
+### Structure work (RULE 3/18/19)
+
+* New files, each one responsibility: `runtotals.ts` (76 lines: totals, line,
+  chain), `RunRecord.tsx` (29), `SvgRunPopup.tsx` (39). `SvgPanel.tsx` gave the
+  strip + queue to `RunRecord` and took `useActivation` (286 lines);
+  `Workbench.tsx` extracted `Panels` when `Shell` hit 31 lines (RULE 16 caught
+  it: `quality_base` went red on the working tree).
+* `enqueueBatch` returns `{ waiting, removedFrom }`; `dropIdFrom` takes one
+  `Replan` callback (requests AND label — the first cut re-planned the count
+  and kept the stale label, the UI test found it). Helpers stay ≤ 4 params.
+* The render-observed tally was abandoned: React batches the hand-over from
+  one run to the next, so the popup never saw run 1's final render. The chain
+  is now a model fact (`model.chain`) written by `drainQueue` from the run
+  summary's outcomes — data, not timing.
+* `batch-start.runId` added because batch ids (`batch_1_1`) repeat per run; a
+  reader keyed on them confused two runs.
+
+### Gates (full run)
+
+`npm run verify`: types, lint (0 errors), quality (changed) GATE PASSED, 133
+files / 1505 tests, coverage (lines 98 %), build — PASS. One full run showed a
+pre-existing teardown flake in `selectionv2_ui` ("window is not defined" from a
+late scheduler tick; that file mounts no Workbench, is green 3× alone and in
+the two other full runs). RULE 16: every new fn ≤ 30 lines, ≤ 4 params; RULE 18:
+largest touched files `runbatch.ts` 298, `SvgPanel.tsx` 286, `actions.ts` 285.
+
+### Known debt carried
+
+* Unchanged from the previous entry.
+* `src/svg/` has 53 files (RULE 18 ideal 5–15 per directory): a grouping
+  into `run/`, `list/`, `ui/` is due but is its own change.
+* The popup does not yet survive a page reload (the queue is session-only by
+  I-53, so there is nothing to count after one).
+
+## 2026-10-08 — SVG to upload: Download all (`feat(upload)`)
+
+The user wanted the selection's prepared files in ONE folder instead of N
+`export/` folders. The button reads `⤓ Download all (N files)` — the count
+comes from the same pure planner (`lib/upload/download.ts`) that decides the
+names, so what the button promises is what the copy writes. The destination
+is the browser's folder dialog; the copy is `writeFileNew` (a name already
+there is kept and said), read back and compared, one file isolated from the
+next; the result is one line in the toast and in the log (`downloaded`, the
+seventh closed-set action). Lesson: **a fixture must obey the record's own
+assumptions** — the first UI fixture put two pairs in one folder, so both rows
+read one `export.json` (the SOR's "one icon per export folder" note); the
+fixture was wrong, not the feature.
+
+### Structure work (RULE 3/18/19)
+
+* New files, one responsibility each: `lib/upload/download.ts` (planner +
+  line, 103 lines, pure), `upload/downloadactions.ts` (I/O, 96 lines).
+* `UploadBulkBar.BulkRight` hit 34 lines with the fifth button → `BulkActions`
+  extracted by concept (the ratchet caught it on `quality:changed`).
+* No new fs primitive: `pickDirectory`, `nameExists`, `writeFileNew`,
+  `readBytesAt` were enough.
+
+### Gates (full run)
+
+`npm run verify`: types, lint (0 errors), quality (changed) GATE PASSED, 135
+files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
+≤ 30 lines, ≤ 4 params; RULE 18: largest touched file `UploadPanel.tsx` 254.
+
+### Known debt carried
+
+* Unchanged from the previous entry.
+* The destination is flat; a per-icon subfolder option was not asked for.
+
+## 2026-10-08 — fix(eps): rounded `<rect>` as an exact outline
+
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings, none in touched files); `npm run quality:changed` GATE PASSED — `roundedRectOutline` first failed params 6/4 → takes a `box` object; `outline.ts` first hit 303 lines → split into `geom/ops.ts` (primitives, 27 lines) + `geom/shapes.ts` (basic-shape builders, 87 lines), `outline.ts` now 211 (ideal-size tag dropped: it is well under the 300 default).
+* RULE 18: no new directory debt (`src/lib/upload/geom/` 10 files). `src/svg/` 53-file debt unchanged.
+* Tests: 5 red → green at the geometry/EPS layer, 7 red → green at the pipeline/row/log/UI layer; `tests/helpers/uploadpackage.ts` extracted from `upload_download_ui` so the new `upload_epsnote_ui` shares the package fixture (one pair per folder).
+
+## 2026-10-08 — fix(meta): keep every sentence, strip only the final period
+
+* User correction: the clean pass must not cut a second sentence. `cleanPhrase` now keeps the whole text; `sentenceCase` extracted (per-sentence first letter up) so the function stays ≤ 30 lines; `SENTENCE_BREAK` narrowed to `.`/`!`/`?` (a `;`/ellipsis no longer starts a "sentence" and so no longer capitalises the next word); `CAPITALISED` allows trailing punctuation so `Empathy.` lowers like `Empathy`.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED; `npm run verify` ALL LANES PASSED. RULE 18: no size change of note (`meta.ts` +6 lines).
+* Also in this commit: `tests/quality_base.test.ts` "shallow-clone honesty" expected the fetch hint whenever the repo is shallow; after a `git fetch` a shallow sandbox DOES have a merge-base with `origin/main`, so the gate (correctly) prints none. The test now expects the hint only when shallow AND no merge-base — the tool is unchanged.
+
+## 2026-10-09 — feat(upload): EPS converter registry, Inkscape client, expand-strokes setting (commit A of the design)
+
+* TDD: red first — `tests/upload_epsconv.test.ts` (registry, built-in wrapper, Inkscape probe/convert/failure mapping, bridge config), new describes in `upload_settings`/`upload_export`/`upload_runexport`, `tests/upload_eps_settings_ui.test.tsx` (drop list, helper row states, expand toggle, row line) — then green.
+* Gate split: the commit/validate gate is now `verifyEpsDocument` (converter-neutral; Inkscape's cairo EPS has no EPS 10 markers); `verifyEps` stays the built-in writer's strict contract. Pinned in `upload_eps.test.ts`.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (the one new CC warning — `assembleRecord` 13 — removed by extracting `fillToolBlocks`); `npm run quality:changed` GATE PASSED after two RULE 18 splits: `export.ts` 313 → 202 (`exportplan.ts` 117, the stage planner) and `runexport.ts` 306 → ~280 (`exportrecord.ts` 48, the record blocks); `npm run verify` ALL LANES PASSED. RULE 18: new files 27–117 lines; `UploadEpsSettings.tsx` 73; `src/upload/` grows by 2 files (debt noted).
+* `tests/upload_ui.test.tsx` pinned "10 fields overridden" → 12 (the two new settings fields); the settings fingerprint of the defaults is unchanged (`expandStrokes` is appended only when on).
+
+## 2026-10-09 — feat(bridge): the Inkscape EPS helper, its launchers and the pre-batch probe (commit B of the design)
+
+* TDD: red first — `tests/bridge_inkscape.test.ts` (node env; spawns the REAL `tools/bridge/server.mjs` against `tests/helpers/fakeinkscape.mjs`: health live/found:false, convert + version header + temp cleanup, 502/504/499/413/400/404, CORS/PNA, `dist/` at `/`) and the pre-batch probe toast in `upload_eps_settings_ui.test.tsx` — then green.
+* RULE 16 by hand (tools/ is outside the gate's measurement): `server.mjs` ~170 lines, `inkscape.mjs` ~115, every function ≤ 30 lines, ≤ 4 params (options objects), nesting ≤ 3. `src/` changes: `exportactions.ts` +28 (`probeEpsNote`, `browserConverterDeps`, `finishBatch` — the gate caught `runExportBatch` at 31 lines, split in RULE 19 order), `uploadlog.ts` +2. `eslint.config.js`: Node timer globals + `tests/helpers/*.mjs` under the Node block.
+* Gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED; `npm run verify` ALL LANES PASSED.
+* Honesty: the 413 path answers before the body is consumed (`connection: close`) so the client sees a status, not a dropped socket — found by the test, fixed in the helper, not the test.
+
+## 2026-10-09 — feat(upload): Expand strokes to fills — the built-in geometry expander (commit C of the design)
+
+* TDD: red first — `tests/upload_expand_geom.test.ts` (pinned butt rectangle, caps, miter/limit/round/bevel, ring, circle annulus, S-curve offset error, zero-length dots), `tests/upload_expand_dash.test.ts` (arc length, de Casteljau split at a length, SVG pattern rules, pieces, the wrapping dash), `tests/upload_expand.test.ts` (the real prepare pass, refusals, the `expandStrokes:false` equivalence gate), one end-to-end run in `upload_runexport` — then green. Test helper `tests/helpers/outlinemath.ts` (winding, filled area, offset distance).
+* Test corrections made FOR honesty, not convenience: the shoelace area of a ring counts the pivot's corner loops twice (winding 2) — the assertion moved to the nonzero-sampled `filledArea`; a KAPPA quarter is not an arc (2e-4 relative length, 0.027 % radial) — thresholds say so; a closed dashed circle's "on" length includes the wrapping dash.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (the gate caught `sideOps` CC 12 → `cornerAt` + `segOp` extracted; `normalizeDash` CC 11 → `dashValues` extracted); `npm run quality:changed` GATE PASSED; `npm run verify` ALL LANES PASSED. RULE 18: seven new files 36–119 lines (ideals ~110–150 met), `prepare.ts` +4.
+* RULE 18 directory note: `src/lib/upload/` now holds `geom/expand/` (6 files) and `epsconv/` (5 files) as their own concept folders; `src/svg/` (53 files) remains the recorded debt.
+
+## 2026-10-09 — fix(ui): the Full path row no longer glues a previous root onto a new pick (I-59)
+
+* TDD: red first — `tests/knownroots.test.ts` (`provenOutside`: veto only on a definite `resolve() === null` under a known path; sibling prefix, containing root, no-resolve/throw/no-path all false), `tests/pickroot.test.ts` (the reported `…\export\test_process_3` refused; the app's own copy never completed, adopted when exact), `tests/rootcapture.test.ts` (`Rescan` replaces a `completed` guess, keeps it otherwise), `tests/upload_ui.test.tsx` (end to end in the reporting tab; the red run printed the exact path from the screenshot) — then green.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 warnings, all pre-existing — same count on HEAD); `npm run quality:changed` GATE PASSED (`knownroots.ts` 13 fns/101, `pickroot.ts` 7 fns/121, `rootcapture.ts` 9 fns/87, `copypath.ts` 2 fns/33, `actions.ts` 31 fns/292); every new fn ≤ 30 lines, ≤ 2 params, CC ≤ 4.
+* RULE 18: no new source file; largest touched `src/upload/actions.ts` 291 lines (baseline file, +6). `src/svg/` directory debt unchanged.
+* Honesty: the completion is still offered (flagged) when nothing contradicts it — the one case it serves (first pick with the parent copied) keeps working; nothing is stored before the answer is settled.
+
+## 2026-10-09 — fix(ui): no completed path at all — a stored guess reads as nothing (I-59, round 2)
+
+* Second report the same day: the stored guess (localStorage, older build) became the BASE of a derivation (`<guess>\\_split_output`, labelled `copied`). Root cause of both rounds: a guess treated as a capture. Fix: the completion is removed (exact leaf or nothing); `{how:"completed"}` reads as no path; `knownroots.nameKnownRoot` hands late captures to the registry. Removed: `provenOutside`, `lastCopiedByApp`, `believable`, the `completed — check it` state/toast, `saveRootPathInfo`'s `how` parameter, `looksLikeFile`.
+* TDD: red first — `rootpath`, `clipboardpath`, `folderbar`, `pickroot` (the second report at unit level), `knownroots`, `rootcapture`, `upload_ui` (both reports end to end; 10 red → green). Tests that pinned the completion were CHANGED to pin its absence (the behaviour was the defect).
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 pre-existing warnings); `npm run quality:changed` GATE PASSED (`rootpath.ts` 23 fns/220, `knownroots.ts` 11/85, `pickroot.ts` 6/98, `rootcapture.ts` 8/84, `copypath.ts` 1/20, `FolderBar.tsx` 5/71). RULE 18: every touched file SHRANK (−16 … −4 lines); no new file.
+* Honesty: no migration rewrites storage — the guess is simply not believed when read; the row then names the way out (Ctrl+Shift+C → Rescan, or Ctrl+V).
+
+## 2026-10-09 — fix(upload): the built-in EPS is an executable PostScript program (I-61, commit A)
+
+* TDD: red first — `tests/upload_epscheck.test.ts` (the reported `concat` typecheck, arity/type per operator, path-before-paint, gsave balance, first-error semantics), `tests/upload_eps.test.ts` (the pinned bare-number line CHANGED to the array form — the old assertion had enshrined the defect; fill-inside-gsave then stroke; unpainted shape emits nothing; `verifyEps` rejects the bare concat by line), `tests/helpers/psrun.ts` (executes the subset, painted extent inside `%%HiResBoundingBox`), `tests/upload_runexport.test.ts` (the committed EPS runs), `tests/upload_epsconv.test.ts` (the converter verifies its own output) — then green.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (11 pre-existing warnings — the gate caught `checkPostScript` CC 11 and `apply` CC 12 → `runLine`/`atEnd`/`plural` extracted and an `EFFECTS` table replaced the if-chain); `npm run quality:changed` GATE PASSED (`epscheck.ts` 23 fns/136 lines). RULE 18: new file 136 lines; `eps.ts` 299 (+1), `epsdoc.ts` 114 (+1), `builtin.ts` 26.
+* Honesty: the check stops at the first error like the interpreter; it judges the built-in writer's output only (Inkscape's cairo PostScript is outside its vocabulary and keeps the neutral gate).
+
+## 2026-10-09 — fix(upload): the artboard is the shipped artwork (I-60, commit B)
+
+* TDD: red first — `tests/upload_prepare.test.ts` ("the artboard is the shipped artwork": the F4 reproduction with 8 px verbatim strokes, with expansion, with padding, a pinned 512 with scale < 1 centred to 0.01 px, passes = 1 for fills, the invisible/filled artboard rect), `tests/upload_geom.test.ts` (unpainted shapes have no bounds), `tests/upload_optimize.test.ts` / `tests/upload_clean.test.ts` / `tests/upload_eps.test.ts` (the invisible rect survives SVGO, is not a violation, emits no EPS path), `tests/upload_runexport.test.ts` (`tools.artboard` agrees with the viewBox) — then green. Honesty: `upload_clean`'s pinned `0 0 20.2 20.2` enshrined the conservative hull (miter √2) — now `19.72`, the stroke's real outline; the `where(root,"stroke")` expectations gained `rect=none` because the artboard rect must not inherit a hoisted paint.
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings); `npm run quality:changed` GATE PASSED (`place.ts` 15 fns/149 lines, `restyle.ts` 4/59, `prepare.ts` 7/145; `eps.ts` trimmed back to 299 after the `fillNone` field pushed it to 302). RULE 18: two new concept files instead of growing `prepare.ts` (199 → 145).
+* Design deviations recorded in the archive doc's status line: no separate normalise bake (one bake per candidate, expansion after restyle so the expanded width is the setting's px under any scale); exact measurement via the expander instead of the conservative hull; settle tolerance = the file's precision.
+
+## 2026-10-09 — feat(upload): scale the artboard to N megapixels (I-62, commit C)
+
+* TDD: red first — `tests/upload_settings.test.ts` (defaults off / 5 MP, clamp 1…64, junk → 5, overrides, the defaults' fingerprint still `36232c04`, moves only while on), `tests/upload_geom.test.ts` (the megapixel fit: exact area, the content fit's aspect, 100×50 → 3162.278 × 1581.139, zero area → scale 1), `tests/upload_prepare.test.ts` (fills exact in one pass; verbatim 2 px strokes within the file's precision with `stroke-width="2"` in the file; a pinned artboard wins; the number is dormant while off), `tests/upload_runexport.test.ts` (`scaledTo` 5, JPEG untouched, pinned → null), `tests/upload_eps_settings_ui.test.tsx` (the row, its disabled states, live store, the row line) — then green; `upload_ui`'s "12 fields overridden" became 14 (the bulk apply serialises every field).
+* RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (10 pre-existing warnings); `npm run quality:changed` GATE PASSED. RULE 18: the artboard block moved out of `UploadSettingsDialog.tsx` (236 → 171 lines) into `UploadArtboardSettings.tsx` (115); `geom.ts` gained `contentFit`/`megapixelScale` instead of a third branch in `fitArtboard`.
+* Honesty: the design's `upload-set-mp-note` testid collided with the JPEG row's existing hint — the new note is `upload-set-mp-scale-note` (UI_SELECTORS updated); the "batch log names it once per run" line of the design was not implemented because the batch log names no setting today (the row line carries it).
+

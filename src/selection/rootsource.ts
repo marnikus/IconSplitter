@@ -17,8 +17,7 @@ import type { ViewPair } from "../lib/reviewfilter";
 import { loadHandles, saveHandles } from "../batch/store";
 import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
-import { rememberKnownRoot } from "../ui/knownroots";
-import { loadRootPath } from "../lib/rootpath";
+import { restoreKnownRoot } from "../lib/knownroots";
 import { getAppState, patchV2, patchView } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pruneIds } from "../lib/session";
@@ -46,7 +45,7 @@ export async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   const h = stored?.source ?? null;
   if (!h) return;
   setRoot(ctx, setS, h);
-  rememberRestored(h);
+  await restoreKnownRoot(h); // its persisted path binds to THIS handle (I-63)
   await rescan(ctx, setS, () => undefined);
 }
 
@@ -61,11 +60,6 @@ export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void
   if (picked.message !== null) say(picked.message);
 }
 
-/** A restored handle counts as a known folder: its captured path names its children (I-51). */
-function rememberRestored(h: DirHandleLike): void {
-  rememberKnownRoot(h, loadRootPath(h.name));
-}
-
 export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
   ctx.root.current = h;
   setS((p) => ({ ...p, rootName: h.name }));
@@ -75,7 +69,7 @@ export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
 export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
-  const captured = await retryCapture(root.name); // before any await: the click's own gesture (I-52)
+  const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
   if (captured !== null) say(captured);
   const ticket = beginScan(ctx.seq.current);
   ctx.seq.current = ticket.seq;

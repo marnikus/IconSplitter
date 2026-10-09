@@ -6,9 +6,12 @@
 
 import { isRecord } from "../isrecord";
 import type { UploadSettings, SettingsOverrides } from "./settings";
+import type { Artboard } from "./artboard";
 import type { IconMetadata, MetadataValidation } from "./meta";
 import type { GeminiUsage } from "./gemini";
 import type { OptimizeRecord } from "./optimize";
+import { BUILTIN_WRITER } from "./epsconv/builtin";
+import type { EpsConverterId } from "./epsconv/types";
 
 export const EXPORT_RECORD_VERSION = 1;
 
@@ -68,6 +71,15 @@ export interface OutputRecord {
   hash: string;
 }
 
+export interface ArtboardBlock {
+  mode: Artboard["mode"];
+  width: number;
+  height: number;
+  megapixels: number;
+  scaledTo: number | null;
+  passes: number;
+}
+
 export interface ExportRecord {
   v: number;
   pair: { id: string; base: string; suffix: string; dir: string };
@@ -76,7 +88,21 @@ export interface ExportRecord {
   jpeg: { width: number; height: number; megapixels: number; quality: number; profile: string };
   tools: {
     svgo: OptimizeRecord;
-    eps: { enabled: boolean; writer: string };
+    /**
+     * `converter`: which converter wrote the EPS (2026-10-09; absent = builtin on
+     * older packages); `writer`: the exact tool + version (RULE 22); `fixes`: what
+     * the writer adjusted on its own (2026-10-08) — absent on pre-fix packages.
+     */
+    eps: { enabled: boolean; converter?: EpsConverterId; writer: string; fixes?: string[] };
+    /** Strokes expanded to fills (2026-10-09; absent on older packages). */
+    expand?: { enabled: boolean; shapes: number };
+    /**
+     * The artboard the file ships (I-60, 2026-10-09; absent on older packages):
+     * its mode and px (the viewBox), the megapixels those px make, the
+     * "scale to N MP" target when that was on (else null), and how many
+     * placement passes it took to settle the shipped artwork inside it.
+     */
+    artboard?: ArtboardBlock;
   };
   metadata: {
     state: "pending" | "generated" | "invalid" | "accepted";
@@ -108,6 +134,7 @@ export interface NewRecordArgs {
   settings: { defaults: UploadSettings; overrides: SettingsOverrides; effective: UploadSettings; fingerprint: string };
   svgo: OptimizeRecord;
   epsEnabled: boolean;
+  epsConverter?: EpsConverterId;
   now?: string;
 }
 
@@ -119,7 +146,11 @@ export function newExportRecord(args: NewRecordArgs): ExportRecord {
     source: args.source,
     settings: args.settings,
     jpeg: { width: 0, height: 0, megapixels: 0, quality: args.settings.effective.jpegQuality, profile: "baseline" },
-    tools: { svgo: args.svgo, eps: { enabled: args.epsEnabled, writer: "builtin-subset-1" } },
+    tools: {
+      svgo: args.svgo,
+      eps: { enabled: args.epsEnabled, converter: args.epsConverter ?? "builtin", writer: BUILTIN_WRITER, fixes: [] },
+      expand: { enabled: false, shapes: 0 },
+    },
     metadata: null,
     outputs: { svg: null, jpg: null, eps: null },
     stage: "discovered",
@@ -157,111 +188,8 @@ function recordAt(raw: Record<string, unknown>, path: string): Record<string, un
   return isRecord(cur) ? cur : null;
 }
 
-// --- the stage planner (design §4.4) -------------------------------------------
-
-export type Stage = "prepare" | "render" | "optimize" | "embed" | "eps" | "validate" | "commit";
-
-const STAGE_ORDER: Stage[] = ["prepare", "render", "optimize", "embed", "eps", "validate", "commit"];
-
-export interface PlanInput {
-  /** sha256 of the source SVG bytes. */
-  sourceHash: string;
-  settingsFp: string;
-  metadataFp: string;
-  hasMetadata: boolean;
-  optimize: boolean;
-  includeEps: boolean;
-  /** Which output files exist and hash-verify on disk right now. */
-  outputs: { svg: boolean; jpg: boolean; eps: boolean };
-}
-
-/** The plan: which stages re-run, and which OUTPUT files rebuild. */
-export interface StagePlan {
-  stages: Stage[];
-  rebuild: { svg: boolean; jpg: boolean; eps: boolean };
-}
-
-/**
- * Which stages must re-run. The rules (design §4.4): a source or settings
- * change rebuilds the geometry chain; a metadata edit re-embeds only (no AI,
- * no render); an optimize toggle re-optimizes (JPEG kept); an EPS toggle is
- * EPS-only; a missing/corrupt output rebuilds just that output; no change
- * means no work at all. `rebuild` disambiguates the shared stages: `embed`
- * touches the SVG and the JPEG's XMP, but a missing JPEG re-embeds nothing
- * into the SVG and an optimize toggle keeps the JPEG.
- */
-export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
-  const need = new Set<Stage>();
-  const rebuild = { svg: false, jpg: false, eps: false };
-  const regeometry = record === null
-    || record.source.fingerprint !== input.sourceHash
-    || record.settings.fingerprint !== input.settingsFp;
-  if (regeometry) {
-    need.add("prepare");
-    need.add("render");
-    if (input.optimize) need.add("optimize");
-    if (input.hasMetadata) need.add("embed");
-    if (input.includeEps) need.add("eps");
-    rebuild.svg = true;
-    rebuild.jpg = true;
-    rebuild.eps = input.includeEps;
-  } else {
-    planDeltas(record as ExportRecord, input, need, rebuild);
-  }
-  if (need.size > 0) {
-    need.add("validate");
-    need.add("commit");
-  }
-  return { stages: STAGE_ORDER.filter((stage) => need.has(stage)), rebuild };
-}
-
-function planDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  planMetadataDelta(record, input, need, rebuild);
-  planToggleDeltas(record, input, need, rebuild);
-  planMissingOutputs(input, need, rebuild);
-}
-
-function planMetadataDelta(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  const metadataFp = input.hasMetadata ? input.metadataFp : "";
-  if ((record.metadata?.fingerprint ?? "") === metadataFp) return;
-  need.add("embed");
-  rebuild.svg = true;
-  rebuild.jpg = true;
-}
-
-function planToggleDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  if (record.tools.svgo.enabled !== input.optimize) {
-    need.add("optimize");
-    if (input.hasMetadata) need.add("embed");
-    rebuild.svg = true;
-  }
-  if (input.includeEps && !record.tools.eps.enabled) {
-    need.add("eps");
-    rebuild.eps = true;
-  }
-}
-
-function planMissingOutputs(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  if (!input.outputs.svg) planSvgRebuild(input, need, rebuild);
-  if (!input.outputs.jpg) planJpegRebuild(input, need, rebuild);
-  if (!input.outputs.eps && input.includeEps) {
-    need.add("eps");
-    rebuild.eps = true;
-  }
-}
-
-function planSvgRebuild(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  need.add("prepare");
-  if (input.optimize) need.add("optimize");
-  if (input.hasMetadata) need.add("embed");
-  rebuild.svg = true;
-}
-
-function planJpegRebuild(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  need.add("render");
-  if (input.hasMetadata) need.add("embed");
-  rebuild.jpg = true;
-}
+// --- the stage planner lives in exportplan.ts (design §4.4; moved 2026-10-09, RULE 18) ---
+export { planStages, recordConverter, type PlanInput, type Stage, type StagePlan } from "./exportplan";
 
 /** The metadata block for a record (null until metadata is accepted). */
 export function metadataBlock(meta: IconMetadata, args: {

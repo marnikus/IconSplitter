@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitArtboard,
+  fmt,
   pinnedDimensions,
   parseSvgLength,
   targetDimensions,
@@ -77,7 +78,43 @@ describe("fitArtboard — a pinned artboard scales the artwork into it", () => {
   });
 });
 
+describe("fitArtboard — a megapixel target scales the content fit (I-62)", () => {
+  const bounds: Bounds = { minX: 10, minY: 10, width: 100, height: 50 };
+
+  it("lands on exactly N·10⁶ px², keeps the padded content fit's aspect and reports the scale", () => {
+    const fit = fitArtboard(bounds, 8, { megapixels: 5 });
+    expect(Math.abs(fit.artW * fit.artH - 5e6) / 5e6).toBeLessThan(1e-9);
+    const content = fitArtboard(bounds, 8);
+    expect(fit.artW / fit.artH).toBeCloseTo(content.artW / content.artH, 9);
+    expect(fit.scale).toBeCloseTo(Math.sqrt(5e6 / (content.artW * content.artH)), 9);
+    expect(fit.pad).toBeCloseTo(content.pad * fit.scale, 9);
+    // the artwork sits at the scaled pad: translate · scale, as the bake expects
+    expect(fit.offsetX + bounds.minX * fit.scale).toBeCloseTo(fit.pad, 9);
+    expect(fit.offsetY + bounds.minY * fit.scale).toBeCloseTo(fit.pad, 9);
+    expect(fit.viewBox).toBe(`0 0 ${fmt(fit.artW)} ${fmt(fit.artH)}`);
+  });
+
+  it("padding 0 on a 100×50 artwork at 5 MP: 3162.278 × 1581.139", () => {
+    const fit = fitArtboard({ minX: 0, minY: 0, width: 100, height: 50 }, 0, { megapixels: 5 });
+    expect(fit.viewBox).toBe("0 0 3162.278 1581.139");
+  });
+
+  it("a zero-area artwork cannot be scaled to an area: scale 1, no division by zero", () => {
+    const fit = fitArtboard({ minX: 0, minY: 0, width: 0, height: 0 }, 8, { megapixels: 5 });
+    expect(fit.scale).toBe(1);
+    expect(Number.isFinite(fit.artW)).toBe(true);
+  });
+});
+
 describe("visibleBounds — geometry including strokes, caps, joins, transforms", () => {
+  it("a shape that paints nothing — fill none and no stroke — has no visible bounds (the artboard rect, an icon's invisible frame)", () => {
+    const only = visibleBounds(rootOf(`<rect x="0" y="0" width="24" height="24" fill="none"/><rect x="4" y="4" width="8" height="8" fill="#000"/>`));
+    expect(at(only!.bounds)).toEqual([4, 4, 8, 8]);
+    const inherited = visibleBounds(rootOf(`<g fill="none"><rect x="0" y="0" width="24" height="24"/><rect x="4" y="4" width="8" height="8" stroke="#000" stroke-width="2" stroke-linejoin="round"/></g>`));
+    expect(at(inherited!.bounds)).toEqual([3, 3, 10, 10]);
+    expect(visibleBounds(rootOf(`<rect x="0" y="0" width="24" height="24" fill="none" stroke="none"/>`))).toBeNull();
+  });
+
   it("covers plain shapes without stroke", () => {
     const r = visibleBounds(rootOf(`<rect x="2" y="4" width="10" height="6"/>`));
     expect(r?.bounds && at(r.bounds)).toEqual([2, 4, 10, 6]);
@@ -136,7 +173,7 @@ describe("visibleBounds — geometry including strokes, caps, joins, transforms"
     ));
     expect(circle?.bounds && at(circle.bounds)).toEqual([2, 2, 20, 20]);
     const rel = visibleBounds(rootOf(
-      `<path d="M2 2h20v20H2z M5 5c2 0 4 2 6 6s4 4 6 4q2 -2 4 0t4 0" fill="none"/>`,
+      `<path d="M2 2h20v20H2z M5 5c2 0 4 2 6 6s4 4 6 4q2 -2 4 0t4 0" fill="#000"/>`,
     ));
     expect(rel?.bounds?.minX).toBeLessThanOrEqual(2);
     expect(rel?.bounds && rel.bounds.minX >= 0 && rel.bounds.minY >= 0 && rel.bounds.width <= 24 && rel.bounds.height <= 24).toBe(true);

@@ -7,8 +7,11 @@
 //   * the ref is the authority (`refs.queue`, and a run in flight is
 //     `refs.abort.current !== null`), so a stale closure can never start two
 //     runs at once or lose a batch that was added mid-run;
-//   * a batch that waits is never a row status: nothing about the files
-//     changes until its request really starts.
+//   * a batch that waits changes nothing about the files until its request
+//     really starts — the row only SAYS it is next (`queued`, 2026-10-08);
+//   * a row's Regenerate while a run is in flight is the NEXT attempt: first in
+//     the queue, no dialog, and the same image leaves every later batch so one
+//     queue never generates it twice.
 
 import type { DirHandleLike } from "../lib/fs";
 import { log } from "../log/logstore";
@@ -18,11 +21,13 @@ import { inIdOrder } from "../lib/selectionorder";
 import { runGeneration } from "./runner";
 import { withRunLog } from "./runlog";
 import {
-  dropAll, dropQueued as removeQueued, enqueue, nextRun, queuedCount, queueItem, shiftQueue,
+  dropAll, dropIdFrom, dropQueued as removeQueued, enqueue, enqueueFront, nextRun, queuedCount, queueItem, shiftQueue,
   type QueueItem,
 } from "./runqueue";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "./runstate";
-import type { SvgRefs } from "./types";
+import { chainAdd, NO_CHAIN, type Chain } from "./runtotals";
+import type { BatchOutcome } from "../lib/svgbatch";
+import type { Placement, SvgRefs } from "./types";
 import type { SvgCtx } from "./actions";
 
 /**
@@ -54,17 +59,47 @@ export function setQueue(ctx: RunCtx, queue: QueueItem[]): void {
   ctx.dispatch({ type: "queue", queue });
 }
 
-/** Appends one confirmed batch and reports how many are waiting now. */
-export function enqueueBatch(ctx: RunCtx, ids: string[]): number {
+/** What queueing did: how many batches wait now, and how many later batches lost the image (front only). */
+export interface Queued {
+  waiting: number;
+  removedFrom: number;
+}
+
+/** Queues one confirmed batch — behind what waits, or first (a row's next attempt). */
+export function enqueueBatch(ctx: RunCtx, ids: string[], placement: Placement = "back"): Queued {
   const item = queueItem(ids, requestsOf(ctx, ids), labelOf(ctx, ids));
-  const queue = enqueue(ctx.refs.queue.current, item);
+  const { queue: base, removedFrom } = placement === "front" ? withoutIds(ctx, ids) : { queue: ctx.refs.queue.current, removedFrom: 0 };
+  const queue = placement === "front" ? enqueueFront(base, item) : enqueue(base, item);
   setQueue(ctx, queue);
   log({
     feature: "svg", action: "batch-queued",
-    detail: `${ids.length} source(s) → ${item.requests} request(s)`,
-    data: { sources: ids.length, requests: item.requests, waiting: queuedCount(queue) },
+    detail: `${ids.length} source(s) → ${item.requests} request(s)${placement === "front" ? " · first in the queue" : ""}`,
+    data: { sources: ids.length, requests: item.requests, waiting: queuedCount(queue), placement, removedFrom },
   });
-  return queuedCount(queue);
+  return { waiting: queuedCount(queue), removedFrom };
+}
+
+/** The images leave every batch that still waits for them (one queue, one attempt each). */
+function withoutIds(ctx: RunCtx, ids: string[]): { queue: QueueItem[]; removedFrom: number } {
+  let queue = ctx.refs.queue.current;
+  let removedFrom = 0;
+  for (const id of ids) {
+    const dropped = dropIdFrom(queue, id, (rest) => ({ requests: requestsOf(ctx, [...rest]), label: labelOf(ctx, [...rest]) }));
+    queue = dropped.queue;
+    removedFrom += dropped.removedFrom;
+  }
+  return { queue, removedFrom };
+}
+
+/**
+ * A row's Regenerate while a run is in flight (2026-10-08): the NEXT attempt.
+ * No dialog — the queue line and the grey badge are visible before it starts;
+ * the run in flight is never touched.
+ */
+export function regenerateNext(ctx: RunCtx, ids: string[]): void {
+  const { waiting, removedFrom } = enqueueBatch(ctx, ids, "front");
+  const tail = removedFrom === 0 ? "" : ` · removed from ${removedFrom} waiting batch${removedFrom === 1 ? "" : "es"}`;
+  ctx.say(`${labelOf(ctx, ids)} — next attempt, first in the queue (${waiting} queued)${tail}`);
 }
 
 /** Drops one batch that is still waiting; the run in flight is untouched. */
@@ -98,7 +133,7 @@ export async function confirmRun(ctx: RunCtx): Promise<void> {
   if (dialog === null || dialog.kind !== "confirm") return;
   const ids = dialog.ids;
   ctx.dispatch({ type: "dialog", dialog: null });
-  const waiting = enqueueBatch(ctx, ids);
+  const { waiting } = enqueueBatch(ctx, ids);
   if (nextRun(ctx.refs.queue.current, busy(ctx)) === null) {
     log({ feature: "svg", action: "batch-waiting", detail: `${waiting} batch(es) waiting`, data: { waiting } });
     return ctx.say(`${ids.length} image(s) added — they wait for the run in flight (${waiting} queued)`);
@@ -106,18 +141,26 @@ export async function confirmRun(ctx: RunCtx): Promise<void> {
   await drainQueue(ctx);
 }
 
-/** Runs the head of the queue, then the next, until nothing is waiting. */
+/**
+ * Runs the head of the queue, then the next, until nothing is waiting. The
+ * chain count (popup, 2026-10-08) starts over with the first run and folds
+ * each finished run in when the next one starts — the run on screen is never
+ * counted twice, and the last one stays on screen with the chain before it.
+ */
 async function drainQueue(ctx: RunCtx): Promise<void> {
   let head = nextRun(ctx.refs.queue.current, busy(ctx));
+  let chain: Chain | null = null;
   while (head !== null) {
     setQueue(ctx, shiftQueue(ctx.refs.queue.current).rest);
-    await startRun(ctx, head);
+    ctx.dispatch({ type: "chain", chain: chain ?? NO_CHAIN });
+    const outcomes = await startRun(ctx, head);
+    chain = chainAdd(chain ?? NO_CHAIN, outcomes);
     head = nextRun(ctx.refs.queue.current, busy(ctx));
   }
 }
 
-/** One batch leaves for the provider: exactly the path a first run always took. */
-async function startRun(ctx: RunCtx, item: QueueItem): Promise<void> {
+/** One batch leaves for the provider: exactly the path a first run always took. Returns its per-request record. */
+async function startRun(ctx: RunCtx, item: QueueItem): Promise<BatchOutcome[]> {
   const ids = item.ids;
   log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
   const controller = new AbortController();
@@ -141,6 +184,7 @@ async function startRun(ctx: RunCtx, item: QueueItem): Promise<void> {
   ctx.refs.abort.current = null;
   await reloadSidecars(ctx.refs, sources, ctx);
   ctx.say(endLine(summary, controller.signal.reason), summary.saved === 0 && summary.problems.length > 0);
+  return summary.outcomes;
 }
 
 /** The run's last word: its summary, plus what a cancel threw away (I-53). */

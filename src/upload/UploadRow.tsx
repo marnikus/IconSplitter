@@ -8,7 +8,9 @@
 
 import { useEffect, useRef } from "react";
 import type { IconMetadata } from "../lib/upload/meta";
-import { effectiveSettings, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import {
+  effectiveSettings, megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
+} from "../lib/upload/settings";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -101,7 +103,7 @@ function FileCell({ row }: { row: UploadRow }) {
   );
 }
 
-/** The package status badge, the stage while a run is in flight, the error. */
+/** The package status badge, the stage while a run is in flight, the error, the auto-fix note. */
 function StatusCell({ row, status }: { row: UploadRow; status: UploadJobStatus }) {
   const id = row.source.id;
   return (
@@ -109,6 +111,7 @@ function StatusCell({ row, status }: { row: UploadRow; status: UploadJobStatus }
       <span className={`svg-badge ${badgeClass(status)}`}>{label(status)}</span>
       {row.running !== null && <span className="svg-progress-mini" aria-hidden="true"><span /></span>}
       {row.error !== "" && <small className="svg-error" title={row.error}>{row.error}</small>}
+      {row.note !== "" && <small className="svg-note" title={row.note} data-testid={`upload-note-${id}`}>{row.note}</small>}
     </div>
   );
 }
@@ -132,6 +135,18 @@ function strokeLine(s: UploadSettings): string {
   return s.strokeColor === STROKE_COLOR_ARTWORK ? width : `${width} · stroke ${s.strokeColor}`;
 }
 
+/** "eps on · inkscape", then "· strokes → fills" when the strokes are expanded (2026-10-09). */
+function epsLine(s: UploadSettings): string {
+  const eps = `eps ${s.includeEps ? "on" : "off"} · ${s.epsConverter}`;
+  return s.expandStrokes ? `${eps} · strokes → fills` : eps;
+}
+
+/** "· artboard 5 MP" while "Scale to N MP" really applies (content mode, box on — I-62). */
+function artboardLine(s: UploadSettings): string {
+  const mp = megapixelTargetOf(s.artboard, s.scaleToMegapixels, s.artboardMegapixels);
+  return mp === null ? "" : ` · artboard ${mp} MP`;
+}
+
 /** The effective settings, one line, plus how many fields this icon pins. */
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
@@ -140,7 +155,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
       <small>pad {effective.paddingPct}% · {effective.background} · {strokeLine(effective)}</small>
-      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · eps {effective.includeEps ? "on" : "off"}</small>
+      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}
       </small>

@@ -9,6 +9,7 @@
 // are persisted but not undoable (the same class as presets).
 
 import { useCallback, useRef, type Dispatch } from "react";
+import type { DirHandleLike } from "../lib/fs";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
 import type { GeminiConfig } from "../lib/upload/gemini";
@@ -19,6 +20,7 @@ import {
 } from "../lib/upload/settings";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
+import { retryCapture } from "../ui/rootcapture";
 import { clearGeminiKey, saveGeminiKey } from "./keystore";
 import type { UploadDiscovery } from "./discovery";
 import { rememberRoot } from "./scan";
@@ -27,6 +29,7 @@ import { useMetaActions } from "./metaactions";
 import { usePromptActions, type PromptActions } from "./promptactions";
 import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
+import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
@@ -91,6 +94,8 @@ export interface UploadActions extends PromptActions {
   acceptMetadata: (id: string) => void;
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
+  /** Bulk: the selection's committed SVG/JPG/EPS copied into one folder the user picks (2026-10-08). */
+  downloadSelected: (ids: string[]) => void;
   exportRows: (ids: string[]) => void;
   exportRow: (id: string) => void;
   cancelExport: () => void;
@@ -114,6 +119,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useUiActions(ctx),
     ...useMetaActions(ctx),
     ...useExportActions(ctx),
+    ...useDownloadActions(ctx),
     ...usePromptActions(ctx),
   };
 }
@@ -134,7 +140,13 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
       c.say(picked.message ?? `Approved SVGs scanned from ${picked.handle.name}`);
     })();
   }, []);
-  const rescan = useCallback(() => latest.current.loadAll(), []);
+  const rescan = useCallback(() => {
+    const c = latest.current;
+    // before any await: the click's own gesture is what allows the read (I-52)
+    const root = c.refs.root.current as DirHandleLike | null;
+    void retryCapture(root).then((captured) => { if (captured !== null) c.say(captured); });
+    c.loadAll();
+  }, []);
   return { chooseRoot, rescan };
 }
 

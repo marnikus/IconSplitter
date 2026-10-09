@@ -4,16 +4,19 @@
 // scope. Every change is live (RULE 24): the global scope edits the defaults,
 // the icon scope pins the field into that icon's override — both validated by
 // lib/upload/settings. The shared row plumbing lives in settingsfield.tsx, the
-// two paint rows (background, stroke colour) in UploadPaintSettings.tsx.
+// two paint rows (background, stroke colour) in UploadPaintSettings.tsx, the
+// EPS converter list + Inkscape helper row in UploadEpsSettings.tsx, the
+// artboard block + "Scale to N MP" row in UploadArtboardSettings.tsx.
 
 import {
-  ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard,
-  clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx,
+  artboardSize, clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx,
   MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
-  type Artboard, type UploadSettings,
+  type UploadSettings,
 } from "../lib/upload/settings";
 import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
+import { ConverterSetting } from "./UploadEpsSettings";
+import { ArtboardSetting } from "./UploadArtboardSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -72,7 +75,10 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ToggleSetting p={p} effective={effective} field="optimizeSvg" label="Optimize SVG (SVGO)" testid="optimize"
         hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
-        hint="a genuine EPS for the documented subset; anything else fails that stage honestly" />
+        hint="a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly" />
+      <ConverterSetting p={p} effective={effective} />
+      <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
+        hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
@@ -110,73 +116,6 @@ function ToggleSetting({ p, effective, field, label, testid, hint }: {
       <small className="up-hint">{hint}</small>
     </label>
   );
-}
-
-/**
- * The artboard: the final px size of the export. `content` hugs the artwork
- * (padding as a share of it); a preset or a custom width×height pins EXACT px,
- * scaling the artwork into that box — which is where the aspect ratio lives.
- */
-function ArtboardSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const a = effective.artboard;
-  const pinned = artboardSize(a);
-  const patch = (next: Partial<Artboard>) => change(p, "artboard", clampArtboard({ ...a, ...next }));
-  return (
-    <div className="svg-field up-set-field">
-      <span className="svg-label">Artboard<Marker p={p} field="artboard" testid="artboard" /></span>
-      <select className="svg-input" data-testid="upload-set-artboard" aria-label="Artboard size"
-        value={a.mode === "preset" ? String(a.size) : a.mode}
-        onChange={(e) => patch(fromChoice(e.target.value, a))}>
-        <option value="content">Fit the artwork</option>
-        {ARTBOARD_PRESETS.map((size) => <option key={size} value={String(size)}>{size}×{size}</option>)}
-        <option value="custom">Custom…</option>
-      </select>
-      {a.mode === "custom" && <CustomSize a={a} patch={patch} />}
-      <small className="up-hint" data-testid="upload-set-artboard-note">{artboardNote(pinned)}</small>
-    </div>
-  );
-}
-
-/** The custom width × height, and the ratio they spell out. */
-function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>) => void }) {
-  return (
-    <div className="up-bg-row">
-      <input className="svg-input" type="number" data-testid="upload-set-artboard-w" aria-label="Artboard width in px"
-        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.width}
-        onChange={(e) => patch({ width: Number(e.target.value) })} />
-      <output className="svg-bg-value" data-testid="upload-set-artboard-ratio">{ratioOf(a)}</output>
-      <input className="svg-input" type="number" data-testid="upload-set-artboard-h" aria-label="Artboard height in px"
-        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.height}
-        onChange={(e) => patch({ height: Number(e.target.value) })} />
-      <output className="svg-bg-value" data-testid="upload-set-artboard-mp">{mpOf(a)}</output>
-    </div>
-  );
-}
-
-/** The select's value → the artboard it means (a preset keeps its square edge). */
-function fromChoice(choice: string, a: Artboard): Partial<Artboard> {
-  if (choice === "content") return { mode: "content" };
-  if (choice === "custom") return { mode: "custom", width: a.mode === "custom" ? a.width : 512, height: a.mode === "custom" ? a.height : 512 };
-  return { mode: "preset", size: Number(choice) };
-}
-
-function artboardNote(pinned: { width: number; height: number } | null): string {
-  if (pinned === null) return "hugs the artwork — the padding is a share of its largest side";
-  return `exactly ${pinned.width}×${pinned.height} px, artwork scaled in, padding a share of the artboard`;
-}
-
-/** A readable ratio: 16:9, 2:1, or the reduced integer pair. */
-function ratioOf(a: Artboard): string {
-  const g = gcd(a.width, a.height);
-  return `${Math.round(a.width / g)}:${Math.round(a.height / g)}`;
-}
-
-function mpOf(a: Artboard): string {
-  return `${((a.width * a.height) / 1e6).toFixed(2)} MP`;
-}
-
-function gcd(x: number, y: number): number {
-  return y === 0 ? Math.max(1, x) : gcd(y, x % y);
 }
 
 /**

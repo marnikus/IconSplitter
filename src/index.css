@@ -570,6 +570,7 @@
   --svg-thumb: 84px;
 }
 
+.svg-shell[hidden] { display: none; } /* parked on another tab (2026-10-08): mounted, not shown */
 .svg-shell {
   height: 100%; /* the band: the panel may floor itself at it (min-height) */
   background: var(--v2-bg);
@@ -943,6 +944,22 @@
 
 /* batch strip ──────────────────────────────────────────────────────────── */
 
+/* The run popup (2026-10-08): the run's numbers on every tab, fixed top-right, above the dock. */
+.svg-run-popup {
+  position: fixed; top: 10px; right: 14px; z-index: 60;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 10px; border-radius: 8px;
+  font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
+  color: var(--v2-text); background: var(--v2-surface); border: 1px solid var(--v2-line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.svg-run-popup-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--v2-muted); }
+.svg-run-popup.running .svg-run-popup-dot { background: var(--v2-green); animation: svg-run-pulse 1.2s ease-in-out infinite; }
+@keyframes svg-run-pulse { 50% { opacity: 0.35; } }
+.svg-run-popup-close { border: 0; background: transparent; color: var(--v2-muted); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.svg-run-popup-close:hover { color: var(--v2-text); }
+/* The run record (2026-10-08): strip + queue, BELOW the list so a landing SVG never moves it. */
+.svg-run-record { display: grid; gap: 8px; margin-top: 10px; }
 .svg-batch {
   display: flex;
   align-items: center;
@@ -1027,6 +1044,7 @@
 .svg-attention { display: flex; gap: 12px; font-size: 9px; text-transform: uppercase; color: var(--v2-muted); }
 .svg-attention .running { color: var(--v2-purple-2); }
 .svg-attention .needs { color: var(--v2-yellow); }
+.svg-attention .queued { color: var(--v2-muted); }
 
 .svg-columns,
 .svg-row {
@@ -1189,6 +1207,7 @@
 .svg-cell { color: #aab4cb; font-size: 9px; }
 .svg-cell small { display: block; margin-top: 4px; color: var(--v2-muted-2); font-size: 8px; }
 .svg-cell .svg-error { color: var(--v2-red); overflow: hidden; text-overflow: ellipsis; }
+.svg-cell .svg-note { color: var(--v2-yellow); overflow: hidden; text-overflow: ellipsis; } /* the EPS auto-fix: a warning, not a failure */
 .svg-usage strong { color: var(--v2-purple-2); font-size: 11px; }
 
 .svg-badge {
@@ -1206,6 +1225,8 @@
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
 .svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+/* Waiting in the queue (2026-10-08): grey — scheduled, nothing on disk changed yet. */
+.svg-badge.queued { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
 
 .svg-progress-mini {
   display: block;
@@ -1576,6 +1597,10 @@
 .up-meta-field textarea.svg-input { min-height: 44px; resize: vertical; }
 
 .up-hint { color: var(--v2-muted-2); font-size: 8px; line-height: 1.4; }
+.up-helper { display: grid; gap: 4px; margin-top: 4px; }
+.up-helper-state { font-size: 8px; line-height: 1.4; color: var(--v2-muted-2); }
+.up-helper-state.ok { color: var(--v2-green); }
+.up-helper-state.warn { color: var(--v2-yellow); } /* a helper that is down or an Inkscape not installed: a state, not an error */
 
 .up-meta-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .up-meta-state { color: var(--v2-text); font-size: 10px; font-weight: 650; }

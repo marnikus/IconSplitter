@@ -24,6 +24,7 @@ import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { minimalJpeg } from "./helpers/minijpeg";
 import { pairFile } from "./helpers/pairfile";
+import { hiResBox, runPostScript } from "./helpers/psrun";
 import { svgVersion } from "./helpers/svgpair";
 import type { UploadRowSource } from "../src/upload/discovery";
 
@@ -305,6 +306,124 @@ describe("runExport — the full package commits per icon", () => {
     expect(eps).toContain("0.071 0.204 0.337"); // #123456, setrgbcolor
     expect(eps).not.toContain("style");
     expect(verifyEps(eps).ok).toBe(true);
+    // and it RUNS (I-61): the subset interpreter executes it with no error and
+    // paints only inside the declared box — the file Illustrator opens
+    const run = runPostScript(eps);
+    expect(run.errors).toEqual([]);
+    const box = hiResBox(eps);
+    expect(run.painted!.urx).toBeLessThanOrEqual(box.urx + 1e-6);
+    expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
+    expect(run.painted!.llx).toBeGreaterThanOrEqual(-1e-6);
+    expect(run.painted!.lly).toBeGreaterThanOrEqual(-1e-6);
+  });
+
+  it("a rounded <rect> is written to EPS exactly and the automatic fix is recorded, not asked (2026-10-08)", async () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
+      `<rect x="4" y="4" width="16" height="16" rx="3" fill="#000"/></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed"); // not partial — the EPS stage succeeded
+    expect(result.error).toBeNull();
+    expect(result.notes).toEqual(["1 rounded <rect> written as an exact path outline"]);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(eps.match(/curveto/g)).toHaveLength(4);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, fixes: ["1 rounded <rect> written as an exact path outline"] });
+    // the SVG output keeps its <rect rx> — nothing about the artwork changed
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("rx=");
+  });
+
+  it("records the artboard the file ships: mode, px, megapixels, scaledTo null, passes — and the viewBox agrees (I-60)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2 };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    const artboard = readRecord(root).tools.artboard;
+    expect(artboard).toMatchObject({ mode: "content", scaledTo: null });
+    expect(artboard!.passes).toBeGreaterThanOrEqual(1);
+    expect(artboard!.megapixels).toBeCloseTo((artboard!.width * artboard!.height) / 1e6, 6);
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain(`viewBox="0 0 ${artboard!.width} ${artboard!.height}"`);
+  });
+
+  it("Scale to 5 MP: the record says scaledTo 5 and the artboard IS 5 MP; the JPEG still follows jpegMegapixels (I-62)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, scaleToMegapixels: true, artboardMegapixels: 5, jpegMegapixels: 15.1 };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    const record = readRecord(root);
+    expect(record.tools.artboard).toMatchObject({ mode: "content", scaledTo: 5 });
+    expect(record.tools.artboard!.megapixels).toBeCloseTo(5, 3);
+    expect(record.jpeg.width).toBe(3886); // the JPEG resolution is its own setting
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain(`viewBox="0 0 ${record.tools.artboard!.width} ${record.tools.artboard!.height}"`);
+    // a pinned artboard: the px decide, scaledTo stays null even with the box on
+    const pinnedRoot = pairRoot();
+    const pinned: UploadSettings = { ...settings, artboard: { mode: "preset", size: 512, width: 512, height: 512 } };
+    await runExport(args(pinnedRoot, { settings: pinned, defaults: pinned, deps: { raster: fakeRaster(512, 512) } }));
+    expect(readRecord(pinnedRoot).tools.artboard).toMatchObject({ mode: "preset", width: 512, height: 512, scaledTo: null });
+  });
+
+  it("records the converter that wrote the EPS and the expand block (2026-10-09)", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-1" });
+    expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
+  });
+
+  it("Expand strokes to fills: the shipped SVG has no stroke, the EPS no stroke operator, the record counts the shapes (2026-10-09)", async () => {
+    const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="scale(1.1)">`
+      + `<path d="M4 4h16v16H4z" fill="none" stroke="#333"/><circle cx="12" cy="12" r="3" fill="none" stroke="#333" stroke-dasharray="2 1"/></g></svg>`;
+    const root = pairRoot(source);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2, expandStrokes: true, optimizeSvg: true, includeEps: true, artboard: { mode: "preset", size: 512, width: 512, height: 512 } };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(512, 512) } }));
+    expect(result.status).toBe("processed");
+    const svgText = fileText(root, `${DIR}/export/${ART}.svg`);
+    expect(svgText).not.toMatch(/stroke/);
+    expect(svgText.match(/<path/g)?.length).toBe(3); // the artboard (a path after SVGO) + the two outlines
+    expect(verifyExportSvg(svgText)).toEqual([]);
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(eps).not.toMatch(/setlinewidth|\bstroke\b/);
+    expect(eps).toMatch(/\bfill\b/);
+    const record = readRecord(root);
+    expect(record.tools.expand).toEqual({ enabled: true, shapes: 2 });
+    expect(record.settings.effective.expandStrokes).toBe(true);
+  });
+
+  it("the Inkscape converter: the helper's EPS commits with its writer; an unreachable helper is a named partial (2026-10-09)", async () => {
+    const EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: cairo 1.18.0\n%%LanguageLevel: 2\n%%BoundingBox: 0 0 70 70\n%%EndComments\n0 0 moveto fill\n%%EOF\n";
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true, epsConverter: "inkscape" };
+    const up = async () => new Response(EPS, { status: 200, headers: { "x-inkscape-version": "1.3.2" } });
+    const okRoot = pairRoot();
+    const ok = await runExport(args(okRoot, {
+      settings, defaults: settings,
+      deps: { raster: fakeRaster(3886, 3886), converter: { bridgeUrl: "http://127.0.0.1:47391", fetch: up } },
+    }));
+    expect(ok.status).toBe("processed");
+    expect(fileText(okRoot, `${DIR}/export/${ART}.eps`)).toBe(EPS);
+    expect(readRecord(okRoot).tools.eps).toMatchObject({ converter: "inkscape", writer: "inkscape-cli@1.3.2" });
+
+    const downRoot = pairRoot();
+    const down = await runExport(args(downRoot, {
+      settings, defaults: settings,
+      deps: { raster: fakeRaster(3886, 3886), converter: { bridgeUrl: "http://127.0.0.1:47391", fetch: () => Promise.reject(new TypeError("Failed to fetch")) } },
+    }));
+    expect(down.status).toBe("partial");
+    expect(down.error?.detail).toContain("not reachable at http://127.0.0.1:47391");
+    expect(down.error?.detail).toContain("run_inkscape_bridge.bat");
+    expect(fileText(downRoot, `${DIR}/export/${ART}.svg`)).toContain("<svg"); // the required outputs committed
+    expect(readRecord(downRoot).outputs.eps).toBeNull();
+  });
+
+  it("a plain package carries no notes and no fixes", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
+    expect(result.status).toBe("processed");
+    expect(result.notes).toEqual([]);
+    expect(readRecord(root).tools.eps.fixes).toEqual([]);
   });
 
   it("never touches the approved source", async () => {
@@ -579,7 +698,7 @@ describe("runExport — EPS success and atomic leftovers", () => {
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
   });
 
-  it("a transparent background (the default) ships no background rect in the SVG, no background shape in the EPS, and flattens the JPEG onto white (2026-10-08)", async () => {
+  it("a transparent background (the default) ships the artboard rect INVISIBLE in the SVG, no shape for it in the EPS, and flattens the JPEG onto white (2026-10-08, I-60 2026-10-09)", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, background: "transparent", includeEps: true };
     const seen: string[] = [];
@@ -593,11 +712,12 @@ describe("runExport — EPS success and atomic leftovers", () => {
     const svg = fileText(root, `${DIR}/export/${ART}.svg`);
     expect(verifyExportSvg(svg)).toEqual([]);
     expect(svg).not.toMatch(/<svg[^>]*\swidth=/); // no px size on the root either
-    const shapes = Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("rect, path, circle"));
-    expect(shapes.filter((el) => el.getAttribute("stroke") === "none" && el.getAttribute("x") === "0")).toHaveLength(0);
+    const board = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement.firstElementChild!;
+    expect(board.getAttribute("fill")).toBe("none"); // the artboard is an object, but paints nothing
+    expect(svg).not.toMatch(/fill="#fff/);
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — no background shape before it
+    expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — the unpainted artboard emits nothing
     expect(readRecord(root).settings.effective.background).toBe("transparent");
   });
 

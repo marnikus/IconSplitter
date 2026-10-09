@@ -15,10 +15,12 @@ import { normalizeHex } from "../svgbackground";
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
+import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
+import type { EpsConverterId } from "./epsconv/types";
 
 export {
   ARTBOARD_MAX, ARTBOARD_MAX_PIXELS, ARTBOARD_MIN, ARTBOARD_PRESETS, CONTENT_ARTBOARD,
-  artboardSize, clampArtboard, type Artboard,
+  artboardSize, artboardTarget, clampArtboard, megapixelTargetOf, type Artboard,
 } from "./artboard";
 
 export interface UploadSettings {
@@ -42,8 +44,24 @@ export interface UploadSettings {
   optimizeSvg: boolean;
   /** Also write a genuine EPS (default off). */
   includeEps: boolean;
+  /** Which converter writes that EPS (2026-10-09): the built-in subset writer, or Inkscape through the local helper. */
+  epsConverter: EpsConverterId;
+  /**
+   * Expand every visible stroke into a filled shape (2026-10-09, what some
+   * stocks require): the SVG, JPEG and EPS all ship without strokes. Off = the
+   * strokes stay strokes.
+   */
+  expandStrokes: boolean;
   /** The artboard the export is built at: content-hugging, or an exact px size. */
   artboard: Artboard;
+  /**
+   * "Scale to N MP" (2026-10-09, I-62): in `content` mode, scale the artwork
+   * (icon + padding) uniformly so the artboard's area is `artboardMegapixels`
+   * × 10⁶ px² — strokes keep their verbatim px. A pinned artboard ignores it.
+   */
+  scaleToMegapixels: boolean;
+  /** The megapixel target of that scaling (default 5, 1…64); dormant while the box is off. */
+  artboardMegapixels: number;
   /**
    * When the artboard pins a px size, render the JPEG at exactly those px
    * (default). Switching it off keeps the artboard's RATIO but renders at
@@ -63,6 +81,8 @@ export const STROKE_DEFAULT = 0;
 export const MP_MIN = 1;
 export const MP_MAX = 64;
 export const MP_DEFAULT = 15.1;
+/** The artboard's own megapixel target (I-62) — shares the 1…64 range with the JPEG. */
+export const ARTBOARD_MP_DEFAULT = 5;
 export const QUALITY_MIN = 0.5;
 export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
@@ -85,8 +105,12 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
   includeEps: false,
+  epsConverter: DEFAULT_CONVERTER,
+  expandStrokes: false,
   artboard: { ...CONTENT_ARTBOARD },
   jpegMatchArtboard: true,
+  scaleToMegapixels: false,
+  artboardMegapixels: ARTBOARD_MP_DEFAULT,
 };
 
 export function clampPaddingPct(value: unknown): number {
@@ -99,6 +123,10 @@ export function clampStrokePx(value: unknown): number {
 
 export function clampMegapixels(value: unknown): number {
   return clampNum(value, MP_MIN, MP_MAX, MP_DEFAULT);
+}
+
+export function clampArtboardMegapixels(value: unknown): number {
+  return clampNum(value, MP_MIN, MP_MAX, ARTBOARD_MP_DEFAULT);
 }
 
 export function clampQuality(value: unknown): number {
@@ -138,8 +166,12 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
     includeEps: raw.includeEps === true,
+    epsConverter: parseConverterId(raw.epsConverter),
+    expandStrokes: raw.expandStrokes === true,
     artboard: clampArtboard(raw.artboard),
     jpegMatchArtboard: raw.jpegMatchArtboard !== false,
+    scaleToMegapixels: raw.scaleToMegapixels === true,
+    artboardMegapixels: clampArtboardMegapixels(raw.artboardMegapixels),
   };
 }
 
@@ -151,6 +183,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   readFlags(raw, out);
   readPaints(raw, out);
   readArtboard(raw, out);
+  if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
   return out;
 }
 
@@ -160,6 +193,7 @@ const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["strokePx", clampStrokePx],
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
+  ["artboardMegapixels", clampArtboardMegapixels],
 ];
 
 /** The paint fields and the word that means "none of ours". */
@@ -176,7 +210,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -213,7 +247,8 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
  */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
-  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard",
+  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
+  "scaleToMegapixels", "artboardMegapixels",
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
@@ -238,6 +273,12 @@ export function settingsFingerprint(s: UploadSettings): string {
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
+    // appended ONLY when set (2026-10-09), so every package exported before the
+    // field existed keeps its fingerprint; the converter is a tool choice the
+    // planner compares against the record, not geometry — never in here.
+    ...(s.expandStrokes ? ["expand"] : []),
+    // the MP target is geometry only while the box is on (the number is dormant otherwise)
+    ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

@@ -16,7 +16,8 @@ import { SCAN_IDLE } from "../src/lib/scanseq";
 import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
 import { scanKey } from "../src/svg/scankey";
 import type { Discovery } from "../src/svg/sources";
-import { headerState, previewTargetOf, pruneChecked, shownVersion, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
+import { headerState, previewTargetOf, pruneChecked, shownVersion, sortedIds, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
+import { pinOrder } from "../src/lib/svglist";
 import { onRunEvent, reloadSidecars, summaryLine, type RunSetters } from "../src/svg/runstate";
 import { applyReviewPatch, decideReview } from "../src/svg/reviewact";
 import { initialModel, reduceState } from "../src/svg/statemodel";
@@ -25,19 +26,24 @@ import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 import type { SvgRow } from "../src/svg/types";
 import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
-import { clearKnownRoots, deriveRootPath } from "../src/ui/knownroots";
-import { loadRootPath, saveRootPathInfo } from "../src/lib/rootpath";
+import { boundRootPathInfo, clearKnownRoots, deriveRootPath } from "../src/lib/knownroots";
+import { persistRootPath } from "../src/lib/rootstore";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 
 // No IndexedDB in this DOM: an in-memory handle store keeps boot/remember real.
+// The rootpath store rides along, so a boot restores the persisted capture.
 const stored = new Map<string, unknown>();
+const idb = new Map<string, unknown>();
 vi.mock("../src/batch/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/batch/store")>();
   return {
     ...actual,
     saveHandles: vi.fn(async (name: string, handles: unknown) => { stored.set(name, handles); }),
     loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
+    idbPut: async (_store: string, key: string, value: unknown) => { idb.set(key, value); return true; },
+    idbGet: async (_store: string, key: string) => idb.get(key) ?? null,
+    idbDelete: async (_store: string, key: string) => { idb.delete(key); return true; },
   };
 });
 
@@ -127,6 +133,9 @@ beforeEach(async () => {
   await dropDb();
   setAppState({});
   localStorage.clear(); // the path memory is one storage key; a test must not inherit it
+  clearKnownRoots();
+  stored.clear();
+  idb.clear();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
 });
 
@@ -298,14 +307,14 @@ describe("scanSources", () => {
     const s = setters();
     stubClipboardRead(async () => "F:\\work\\split_root");
     await scanSources(refs(root), s.api);
-    expect(loadRootPath(root.name)).toBe("F:\\work\\split_root");
+    expect(boundRootPathInfo(root).path).toBe("F:\\work\\split_root");
     expect(s.out.said.join(" ")).toContain("Folder path captured");
   });
 
   it("remembers the restored folder at boot, so a pick inside it is named exactly (I-51)", async () => {
     const root = makeRoot();
     root.children.set("2026-10", new FakeDir("2026-10")); // a folder inside it, not yet picked
-    saveRootPathInfo(root.name, "F:\\work\\split_root", "copied");
+    await persistRootPath(root, { path: "F:\\work\\split_root", how: "copied" }); // captured last session
     await rememberRoot(root);
     const r = refs();
     await bootSources(r, { setRootName: () => {}, loadAll: () => {}, refreshKey: () => {} });
@@ -426,6 +435,29 @@ describe("row model", () => {
     expect(visibleRows(list, { generation: "all", review: "all", search: "court_AI" }, "date").map((r) => r.source.id)).toEqual([COURT]);
   });
 
+  it("pins the list order: a result that lands never moves a row; a re-sort does (2026-10-08)", () => {
+    // pinOrder: what was there keeps its place; newcomers follow in sorted order; gone ids go
+    expect(pinOrder(["b", "a"], ["a", "b"])).toEqual(["b", "a"]);
+    expect(pinOrder(["b", "a"], ["c", "a", "b", "d"])).toEqual(["b", "a", "c", "d"]);
+    expect(pinOrder(["b", "x", "a"], ["a", "b"])).toEqual(["b", "a"]);
+    expect(pinOrder([], ["a", "b"])).toEqual(["a", "b"]);
+    // visibleRows under a pin: date sort would put the newest first, the pin keeps court first
+    const older = { ...toRow(FOG_SRC, null, false), status: "generated" as const };
+    const list = [older, { ...toRow(COURT_SRC, null, false), status: "generated" as const }];
+    const pinned = sortedIds(list, "name"); // [court, fog]
+    expect(pinned).toEqual([COURT, FOG]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "date", pinned).map((r) => r.source.id)).toEqual([COURT, FOG]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "fog" }, "date", pinned).map((r) => r.source.id)).toEqual([FOG]);
+    // the reducer: a scan (`rows`), a sort change and `repin` refresh the pin; a run event (`rows-fn`) never does
+    const start = reduceState(initialModel(CFG, "prompt", VIEW_PREFS), { type: "sort", sort: "name" });
+    const scanned = reduceState(start, { type: "rows", rows: list });
+    expect(scanned.order).toEqual([COURT, FOG]);
+    const landed = reduceState(scanned, { type: "rows-fn", fn: (rows) => [rows[1], rows[0]] });
+    expect(landed.order).toEqual([COURT, FOG]); // untouched by the event
+    expect(reduceState(landed, { type: "sort", sort: "date" }).order).toHaveLength(2);
+    expect(reduceState(landed, { type: "repin" }).order).toEqual(sortedIds(landed.rows, "name"));
+  });
+
   it("drops a checked id the rescan removed", () => {
     patchSvg({ checked: [FOG, COURT] });
     const rows = [toRow(svgSource(FOG), null, false)];
@@ -506,10 +538,10 @@ describe("runner events and the review decision", () => {
       setProgressFn: (fn) => { written.push(`progressFn:${fn(null) === null ? "null" : "set"}`); },
       setRowsFn: (fn) => { rows.splice(0, rows.length, ...fn(rows)); },
     };
-    onRunEvent({ kind: "run-start", batches: 1, perRequest: 4 }, api);
+    onRunEvent({ kind: "run-start", batches: 1, perRequest: 4, images: 1 }, api);
     // a new run clears whatever progress the last one left behind...
     expect(written[0]).toBe("progress:null");
-    onRunEvent({ kind: "batch-start", batchId: "b1", index: 1, count: 1, batches: 1, perRequest: 4, cols: 1, rows: 1, composite: "data:,", hash: "h", startedAt: Date.now() }, api);
+    onRunEvent({ kind: "batch-start", runId: "run_1", batchId: "b1", index: 1, count: 1, batches: 1, perRequest: 4, cols: 1, rows: 1, composite: "data:,", hash: "h", startedAt: Date.now(), images: 1 }, api);
     // ...then the request in flight is what the strip shows.
     expect(written).toEqual(["progress:null", "progressFn:set"]);
     onRunEvent({ kind: "item-failed", batchId: "b1", position: 1, sourceId: FOG, error: "boom", failure: "malformed", retryAfterMs: null }, api);
@@ -627,7 +659,7 @@ describe("state reducer and preview", () => {
     expect(reduceState(start, { type: "rows-fn", fn: (rows) => rows }).rows).toEqual([]);
     expect(reduceState(start, { type: "progress", progress: null }).progress).toBeNull();
     const patched = reduceState(reduceState(start, { type: "progress", progress: {
-      batchId: "b", index: 1, batches: 1, count: 1, cols: 1, rows: 1, composite: "", hash: "h",
+      runId: "run_1", batchId: "b", index: 1, batches: 1, count: 1, cols: 1, rows: 1, composite: "", hash: "h", images: 1,
       saved: 0, failed: 0, missing: 0, perRequest: 4, startedAt: Date.now(), outcomes: [],
     } }), { type: "progress-fn", fn: (p) => (p ? { ...p, saved: 2 } : p) });
     expect(patched.progress?.saved).toBe(2);

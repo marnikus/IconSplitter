@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, exportedSpec, modelCheckedSpec,
-  nameRefusedSpec, namedSpec, restoredSpec,
+  UPLOAD_FEATURE, UPLOAD_LOG_ACTIONS, cancelledSpec, downloadedSpec, exportedSpec, modelCheckedSpec,
+  exportBatchLine, exportOutcomeNote, nameRefusedSpec, namedSpec, restoredSpec,
 } from "../src/upload/uploadlog";
 
 const REF = { id: "pair_abc", base: "fog_AI" };
@@ -22,10 +22,11 @@ const ALL = [
   cancelledSpec(3),
   restoredSpec(2),
   modelCheckedSpec({ model: "gemini-3.1-flash-lite", ok: true, reason: "" }),
+  downloadedSpec({ line: "Saved 9 files (3 icons) to stock-drop", failed: 0 }),
 ];
 
 describe("the vocabulary is closed", () => {
-  it("every builder emits one of the six actions (T13)", () => {
+  it("every builder emits one of the seven actions (T13)", () => {
     for (const spec of ALL) {
       expect(UPLOAD_LOG_ACTIONS).toContain(spec.action);
     }
@@ -60,6 +61,24 @@ describe("the vocabulary is closed", () => {
     expect(exportedSpec({ ...REF, status: "processed", note: "n" }).level).toBe("info");
     expect(exportedSpec({ ...REF, status: "partial", note: "n" }).level).toBe("warn");
     expect(exportedSpec({ ...REF, status: "failed", note: "n" }).level).toBe("error");
+  });
+});
+
+describe("the export lines — the outcome note and the batch toast (2026-10-08)", () => {
+  const FIX = "1 rounded <rect> written as an exact path outline";
+  it("the note names the failure first, then the automatic fixes, then the plain outcome", () => {
+    expect(exportOutcomeNote({ status: "partial", error: "<text> is outside the EPS subset", notes: [] })).toBe("<text> is outside the EPS subset");
+    expect(exportOutcomeNote({ status: "processed", error: "", notes: [FIX] })).toBe(`EPS auto-fixed: ${FIX}`);
+    expect(exportOutcomeNote({ status: "processed", error: "", notes: [] })).toBe("export.json was written last; the approved source is untouched");
+    expect(exportOutcomeNote({ status: "partial", error: "", notes: [] })).toBe("the required outputs committed; the optional EPS stage failed");
+    expect(exportOutcomeNote({ status: "cancelled", error: "", notes: [] })).toBe("stopped before commit; the previous package is intact");
+    expect(exportOutcomeNote({ status: "failed", error: "", notes: [] })).toBe("nothing was committed");
+  });
+
+  it("the batch toast counts the auto-fixed EPS files at its tail — only when there were any", () => {
+    expect(exportBatchLine({ done: 3, total: 3, aborted: false, fixed: 0 })).toBe("Exported 3 icons — each pair's export folder holds the package");
+    expect(exportBatchLine({ done: 1, total: 1, aborted: false, fixed: 1 })).toBe("Exported 1 icon — each pair's export folder holds the package · 1 EPS auto-fixed");
+    expect(exportBatchLine({ done: 2, total: 5, aborted: true, fixed: 2 })).toBe("Export stopped after 2 of 5 — finished packages are kept · 2 EPS auto-fixed");
   });
 });
 

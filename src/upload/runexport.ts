@@ -9,8 +9,9 @@
 // previous package stays), a cancel → `cancelled` (nothing new committed).
 
 import { probePath, tryGetFile, type DirHandleLike } from "../lib/fs";
-import { readJpegDimensions } from "../lib/upload/jpeg";
 import type { RasterDeps } from "../lib/upload/raster";
+import type { ConverterDeps } from "../lib/upload/epsconv/types";
+import { readJpegDimensions } from "../lib/upload/jpeg";
 import type { OptimizeRecord } from "../lib/upload/optimize";
 import { buildArtifacts, StageError, type Artifacts } from "./exportstages";
 import { validateArtifacts } from "./exportvalidate";
@@ -20,11 +21,12 @@ import { metadataFingerprint, type IconMetadata, type MetadataValidation } from 
 import type { GeminiUsage } from "../lib/upload/gemini";
 import { redact } from "../lib/svgsecret";
 import {
-  exportDirOf, metadataBlock, newExportRecord, planStages, stemOf,
+  exportDirOf, newExportRecord, planStages, stemOf,
   type ExportRecord, type Stage, type StagePlan,
 } from "../lib/upload/export";
 
 import { commitExport, type CommitExportInput, type CommitValidation } from "./exportcommit";
+import { converterDeps, fillToolBlocks, jpegBlock, metadataBlockOf } from "./exportrecord";
 import type { UploadRowSource } from "./discovery";
 
 export type ExportRunStatus = "processed" | "partial" | "failed" | "cancelled";
@@ -39,10 +41,14 @@ export interface ExportRunResult {
   outputs: { svg: string | null; jpg: string | null; eps: string | null };
   record: ExportRecord | null;
   error: ExportRunError | null;
+  /** What the run adjusted on its own and wants said (the EPS writer's fixes) — never a question. */
+  notes: string[];
 }
 
 export interface ExportRunDeps {
   raster?: RasterDeps;
+  /** Where the Inkscape helper listens and the fetch to reach it (2026-10-09); defaults to the browser's fetch at the default URL. */
+  converter?: ConverterDeps;
   now?: () => string;
 }
 
@@ -69,12 +75,12 @@ export interface ExportRunArgs {
 export async function runExport(args: ExportRunArgs): Promise<ExportRunResult> {
   const plan = await planFor(args);
   if (plan.error !== null) {
-    return { rowId: args.row.id, status: "failed", stages: [], outputs: outputsOf(args.record), record: args.record, error: plan.error };
+    return { rowId: args.row.id, status: "failed", stages: [], outputs: outputsOf(args.record), record: args.record, error: plan.error, notes: [] };
   }
   if (plan.plan.stages.length === 0) {
     return {
       rowId: args.row.id, status: args.record?.status === "partial" ? "partial" : "processed", stages: [],
-      outputs: outputsOf(args.record), record: args.record, error: null,
+      outputs: outputsOf(args.record), record: args.record, error: null, notes: [],
     };
   }
   return runStages(args, plan);
@@ -111,6 +117,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     hasMetadata: args.metadata !== null,
     optimize: args.settings.optimizeSvg,
     includeEps: args.settings.includeEps,
+    epsConverter: args.settings.epsConverter,
     outputs,
   });
   return { plan, sourceText, sourceHash, exportDir, stem, error: null };
@@ -125,6 +132,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
     const art = await buildArtifacts(plan.plan, {
       root: args.root, sourceText: plan.sourceText, exportDir: plan.exportDir, stem: plan.stem,
       settings: args.settings, metadata: args.metadata, raster: args.deps?.raster,
+      converter: converterDeps(args.deps), signal: args.signal,
       now: args.deps?.now?.() ?? new Date().toISOString(),
     });
     checkCancel(args.signal);
@@ -140,7 +148,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
     });
   } catch (error) {
     if (isCancel(error)) {
-      return { rowId: row.id, status: "cancelled", stages: plan.plan.stages, outputs: outputsOf(args.record), record: args.record, error: { klass: "cancel", detail: "cancelled" } };
+      return { rowId: row.id, status: "cancelled", stages: plan.plan.stages, outputs: outputsOf(args.record), record: args.record, error: { klass: "cancel", detail: "cancelled" }, notes: [] };
     }
     const klass = error instanceof StageError ? error.klass : "pipeline";
     const detail = error instanceof Error ? redact(error.message) : "unknown error";
@@ -166,31 +174,14 @@ async function assembleRecord(args: ExportRunArgs, plan: PlanFor, art: Artifacts
     },
     svgo: art.optimizeRecord ?? passthroughOptimize(),
     epsEnabled: args.settings.includeEps,
+    epsConverter: args.settings.epsConverter,
     now: args.deps?.now?.() ?? new Date().toISOString(),
   });
   record.outputs = args.record?.outputs ?? record.outputs;
+  fillToolBlocks(record, art, args.settings, args.record);
   record.jpeg = jpegBlock(art, args.settings.jpegQuality, args.record?.jpeg);
   record.metadata = metadataBlockOf(args);
   return record;
-}
-
-function jpegBlock(
-  art: Artifacts, quality: number, prev?: ExportRecord["jpeg"],
-): ExportRecord["jpeg"] {
-  const dims = art.jpegRecord ?? (art.jpeg === null ? null : readJpegDimensions(art.jpeg));
-  if (dims === null) return prev ?? { width: 0, height: 0, megapixels: 0, quality, profile: "baseline" };
-  return {
-    width: dims.width,
-    height: dims.height,
-    megapixels: (dims.width * dims.height) / 1e6,
-    quality,
-    profile: "baseline",
-  };
-}
-
-function metadataBlockOf(args: ExportRunArgs): ExportRecord["metadata"] {
-  if (args.metadata === null || args.metadataInfo === null) return null;
-  return metadataBlock(args.metadata, { ...args.metadataInfo, fingerprint: metadataFingerprint(args.metadata) });
 }
 
 // --- commit ---------------------------------------------------------------------
@@ -213,6 +204,7 @@ async function commitAll(args: ExportRunArgs, plan: PlanFor, payload: CommitPayl
     outputs: committed.outputs,
     record: committed.record,
     error: partial ? { klass: "eps", detail: art.epsFailure ?? "the EPS stage failed" } : null,
+    notes: art.epsFixes,
   };
 }
 
@@ -246,7 +238,7 @@ function checkCancel(signal?: AbortSignal): void {
 }
 
 function failedResult(fail: { rowId: string; stages: Stage[]; record: ExportRecord | null; klass: string; detail: string }): ExportRunResult {
-  return { rowId: fail.rowId, status: "failed", stages: fail.stages, outputs: outputsOf(fail.record), record: fail.record, error: { klass: fail.klass, detail: fail.detail } };
+  return { rowId: fail.rowId, status: "failed", stages: fail.stages, outputs: outputsOf(fail.record), record: fail.record, error: { klass: fail.klass, detail: fail.detail }, notes: [] };
 }
 
 function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {

@@ -164,7 +164,7 @@ Header + status:
 | Test id | Element | Notes |
 |---|---|---|
 | `sel-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root |
-| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* / *completed — check it* (I-46) |
+| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* (I-46; *completed — check it* removed by I-59) |
 | `sel-rescan` | `↺ Rescan` | re-walks the root |
 | `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
 | `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
@@ -203,7 +203,7 @@ Source bar + layout switch:
 | Test id | Element | Notes |
 |---|---|---|
 | `v2-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root (I-30) |
-| `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* / *completed — check it* name the states |
+| `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* names the missing state (*completed — check it* removed by I-59) |
 | `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
@@ -337,7 +337,7 @@ and stay distinct):
 | Test id | Element | Notes |
 |---|---|---|
 | `svg-open-folder` | green `Open folder` button | the same shared control as the Selection tabs (I-44), offered whether or not a root is loaded (I-30); `svg-root-empty`'s button is `svg-open-folder-empty` |
-| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* / *completed — check it* name the states (I-46) |
+| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* names the missing state (*completed — check it* removed by I-59) (I-46) |
 | `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
 | `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
 | `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |
@@ -415,8 +415,14 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-problem-{sourceId}` | text | the row's scan status when a file of a **listed** source needs attention: "Reference missing" / "Unreadable file" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). An unreadable file or a missing reference is a status on the row, never a removal — but a missing **AI image** means there is no row at all (I-31): that source appears in `svg-warn-excluded` instead |
 
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
+`svg-queued-count` ("N next attempt" — rows waiting in a queued batch, I-53),
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved
 source matches these filters."), `svg-footer-summary` (`shownLabel`).
+
+Status badge while a row waits in the queue: `svg-status-{sourceId} .svg-badge`
+reads "Next attempt" with class `queued` (grey); the row's own status is back the
+moment the batch is dropped (I-53). `svg-generate-{sourceId}` while a run is in
+flight queues that source FIRST, with no dialog (idle: the dialog as before).
 
 Queue (waiting batches, I-53): `svg-queue` is absent when nothing waits; otherwise
 `svg-queue-count` ("N queued — they start as soon as the run in flight ends.
@@ -424,6 +430,16 @@ Adding more never interrupts it."), `svg-queue-line-{n}` (1-based, "#n · <first
 file> + N more · N images · N requests") and `svg-queue-drop-{n}` ("× Drop", drops
 exactly that batch — the run in flight is untouched). `svg-confirm-generate` reads
 "Add to queue" while a run is in flight and `svg-confirm-queue-note` explains why.
+
+Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
+BELOW the list; absent when nothing ran and nothing waits.
+
+Run popup (I-57, on EVERY tab, portalled to `<body>`): `svg-run-popup` (class
+`running` while a request is in flight), `svg-run-popup-line` ("Generating · 7
+done · 13 left · 1 failed · request 2 of 5" / "Done · 20 done · 0 left" — one count
+for the whole queue chain), `svg-run-popup-dismiss` (×; the final line stays until
+it is pressed, a new run brings the popup back). Shell: `svg-shell` is the
+Generate SVG tab's parked wrapper (`hidden` on other tabs, never unmounted).
 
 Batch strip (`svg-batch`, the request in flight and every finished request;
 it stays after the run ends so the record is readable): `svg-batch-composite`
@@ -540,6 +556,7 @@ Bulk bar (`upload-bulk`):
 | `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = the selected icons with NO metadata text yet; opens the exact-request confirmation for those (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
 | `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
+| `upload-download-selected` | button | "⤓ Download all (N files)" — N = the committed SVG/JPG/EPS files of the SELECTION; opens the browser's folder dialog and copies them there under their artifact names, never overwriting (disabled at 0 selected; the `title` says so). The toast/log line: "Saved N files (M icons) to <folder> · k kept (already there) · j icons not exported yet" |
 | `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
 
 List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),
@@ -552,7 +569,8 @@ Row (`upload-row-{id}`):
 | `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
 | `upload-target-{id}` | text | the row's source path (the approved SVG) |
 | `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
-| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error |
+| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |
+| `upload-note-{id}` | small | (2026-10-08) the amber `.svg-note` "EPS auto-fixed: …" line from `record.tools.eps.fixes` — present only when the EPS writer adjusted something on its own (a rounded `<rect>` drawn as an exact outline); the row stays Processed, nothing is asked |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
 | `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
 | `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
@@ -590,6 +608,23 @@ every swatch carrying `aria-pressed`, the per-field marker
 `upload-set-close`. The row's settings cell `upload-settings-{id}` names the
 background (`transparent` or the hex) and appends `· stroke #hex` when a
 stroke colour is pinned.
+The EPS converter row (2026-10-09) is `upload-set-eps-converter` (`<select>`
+whose options ARE the registry: `builtin` "Built-in (PostScript subset)",
+`inkscape` "Inkscape CLI (local helper)"; marker
+`upload-set-marker-eps-converter`; choosing one never toggles
+`upload-set-eps`). Only for `inkscape` the helper row `upload-eps-helper`
+renders: `upload-eps-helper-url` (the helper URL, saved as typed when valid),
+`upload-eps-helper-check` (re-probes) and the state line
+`upload-eps-helper-state` — `helper running · Inkscape 1.3.2` (class `ok`),
+or the reason + fix (class `warn`): `… not reachable — … run_inkscape_bridge.bat`
+/ `the Inkscape helper is running but Inkscape was not found — install
+Inkscape 1.x (inkscape.org) or set INKSCAPE_PATH`. The probe runs when the
+row appears and on Check. Before a batch that wants Inkscape EPS, one probe
+runs: when the helper is not usable the toast (`upload-toast`) says
+`EPS: <reason> — N rows will be partial · <fix>` up front and again on the
+batch's final line. `upload-set-expand` (checkbox) is "Expand strokes
+to fills". The row's settings cell reads `eps off · builtin` /
+`eps on · inkscape` and appends `· strokes → fills` when expansion is on.
 The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
@@ -601,6 +636,13 @@ same gesture, and `upload-set-mp-note` says what the JPEG will really be
 (`the JPEG is the artboard itself: 1024×576 px — untick for a bigger file` vs
 `rendered from the vectors at this resolution, at the artboard's aspect
 ratio`). With a `content` artboard the checkbox is not rendered at all.
+Under the artboard select (2026-10-09, I-62): `upload-set-mp-scale` (checkbox
+"scale to", disabled with a pinned artboard), `upload-set-mp-target` (number
+1–64 step 0.1, disabled while the box is off; the artboard's megapixels, NOT
+the JPEG's `upload-set-mp`) and `upload-set-mp-scale-note` (`the artboard
+(icon + padding) is scaled to 5 MP · strokes keep their px` / `the pinned size
+decides the megapixels`); the row's settings cell appends `· artboard 5 MP`
+while it applies.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,

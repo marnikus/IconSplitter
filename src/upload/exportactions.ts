@@ -16,7 +16,11 @@ import { effectiveSettings } from "../lib/upload/settings";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
-import { cancelledSpec, exportedSpec, type IconRef } from "./uploadlog";
+import { loadBridgeConfig } from "./configstore";
+import { CONVERTERS } from "../lib/upload/epsconv/registry";
+import type { ConverterDeps } from "../lib/upload/epsconv/types";
+import { cancelledSpec, exportBatchLine, exportOutcomeNote, exportedSpec, type IconRef } from "./uploadlog";
+import { noteOfRecord } from "./rowmodel";
 import type { Latest, UploadMetaState, UploadRow } from "./types";
 import type { UploadRunUpdate } from "./statemodel";
 import type { UploadActions, UploadCtx } from "./actions";
@@ -60,7 +64,7 @@ export function useExportActions(ctx: UploadCtx): ExportSlice {
 function copyLocation(c: UploadCtx, id: string): void {
   const row = rowOf(c, id);
   if (row === null) return;
-  void copyFolderText(c.m.rootName, artifactPathOf(row), c.say);
+  void copyFolderText(c.refs.root.current as DirHandleLike | null, artifactPathOf(row), c.say);
 }
 
 /** The file that decides which folder a copy names: committed first, plan second. */
@@ -96,23 +100,50 @@ export async function runExportBatch(
   c.refs.abortExport.current = abort;
   c.dispatch({ type: "running", kind: "export", n: ids.length });
   const tally = { done: 0, total: ids.length };
+  let fixed = 0;
   c.dispatch({ type: "progress", progress: { ...tally } });
   for (const id of ids) rememberJob(id, "queued");
+  const epsNote = await probeEpsNote(c, ids);
+  if (epsNote !== null) c.say(epsNote, true);
   for (const id of ids) {
     if (abort.signal.aborted) break;
     rememberJob(id, "running");
-    await exportOne({ latest, root, id, signal: abort.signal, freshMeta });
+    fixed += await exportOne({ latest, root, id, signal: abort.signal, freshMeta });
     tally.done += 1;
     c.dispatch({ type: "progress", progress: { ...tally } });
   }
+  finishBatch(c, { done: tally.done, total: ids.length, aborted: abort.signal.aborted, fixed, epsNote });
+}
+
+/** The batch's end: the run flags off, the cancel logged, the one toast line. */
+function finishBatch(c: UploadCtx, b: { done: number; total: number; aborted: boolean; fixed: number; epsNote: string | null }): void {
   c.refs.abortExport.current = null;
   c.dispatch({ type: "running", kind: "export", n: 0 });
   c.dispatch({ type: "progress", progress: null });
-  const done = tally.done;
-  if (abort.signal.aborted) log(cancelledSpec(ids.length - done));
-  c.say(abort.signal.aborted
-    ? `Export stopped after ${done} of ${ids.length} — finished packages are kept`
-    : `Exported ${done} icon${done === 1 ? "" : "s"} — each pair's export folder holds the package`);
+  if (b.aborted) log(cancelledSpec(b.total - b.done));
+  c.say(exportBatchLine(b));
+}
+
+/** The helper's URL from the device config + the browser's own fetch (2026-10-09). */
+function browserConverterDeps(): ConverterDeps {
+  return { bridgeUrl: loadBridgeConfig().url, fetch: (url: string, init?: RequestInit) => globalThis.fetch(url, init) };
+}
+
+/**
+ * One probe BEFORE the batch (design 2026-10-09, RULE 9): when rows want the
+ * Inkscape EPS and the helper is not usable, say so up front — those rows
+ * will be `partial`, their SVG + JPEG commit regardless. Null = nothing to say.
+ */
+async function probeEpsNote(c: UploadCtx, ids: string[]): Promise<string | null> {
+  const wanting = ids.filter((id) => {
+    const s = effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {});
+    return s.includeEps && s.epsConverter === "inkscape";
+  });
+  if (wanting.length === 0) return null;
+  const state = await CONVERTERS.inkscape.probe(browserConverterDeps());
+  if (state.ok) return null;
+  const n = wanting.length;
+  return `EPS: ${state.reason} — ${n} row${n === 1 ? "" : "s"} will be partial · ${state.fix}`;
 }
 
 /** Everything one export run needs — one domain object (RULE 16). */
@@ -125,11 +156,12 @@ interface ExportOneArgs {
   freshMeta: ReadonlyMap<string, UploadMetaState>;
 }
 
-async function exportOne(args: ExportOneArgs): Promise<void> {
+/** Runs one export; resolves 1 when its EPS was auto-fixed (the batch toast counts them), else 0. */
+async function exportOne(args: ExportOneArgs): Promise<number> {
   const c = args.latest.current;
   const row = rowOf(c, args.id);
-  if (row === null) return;
-  c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "" } });
+  if (row === null) return 0;
+  c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "", note: "" } });
   const overrides = c.m.overrides[args.id] ?? {};
   const meta = acceptedOf(args.freshMeta.get(args.id) ?? row.meta);
   const result = await runExport({
@@ -139,8 +171,10 @@ async function exportOne(args: ExportOneArgs): Promise<void> {
     metadata: meta === null ? null : meta.metadata,
     metadataInfo: metadataInfoOf(c, meta),
     record: row.record, signal: args.signal,
+    deps: { converter: browserConverterDeps() },
   });
   applyExportResult(args.latest, args.id, row, result);
+  return result.notes.length > 0 ? 1 : 0;
 }
 
 /** The accepted state an export may carry, or null when there is nothing to embed. */
@@ -164,20 +198,13 @@ function applyExportResult(latest: Latest, id: string, row: UploadRow, result: E
     running: null, stage: null,
     status: result.status, record: result.record,
     error: result.error?.detail ?? "",
+    note: noteOfRecord(result.record),
     stale: committed ? false : row.stale,
   };
   c.dispatch({ type: "run", id, run });
   rememberJob(id, result.status);
   const ref: IconRef = { id: row.source.id, base: row.source.base };
-  log(exportedSpec({ ...ref, status: result.status, note: run.error || noteForStatus(result.status) }));
-}
-
-/** The one-line note an entry carries when the run reported no failure detail. */
-function noteForStatus(status: ExportRunResult["status"]): string {
-  if (status === "processed") return "export.json was written last; the approved source is untouched";
-  if (status === "partial") return "the required outputs committed; the optional EPS stage failed";
-  if (status === "cancelled") return "stopped before commit; the previous package is intact";
-  return "nothing was committed";
+  log(exportedSpec({ ...ref, status: result.status, note: exportOutcomeNote({ status: result.status, error: run.error ?? "", notes: result.notes }) }));
 }
 
 /** The live row a run is about — read fresh, never a stale snapshot. */

@@ -27,10 +27,10 @@ const spec = (event: RunEvent) => runLogSpecs(event)[0];
 /** The one line the panel shows, after the log's own redaction. */
 const line = (event: RunEvent) => formatEntry(createEntry(spec(event), AT, "l1"));
 
-const START = { kind: "batch-start", batchId: "batch_1_1", index: 1, count: 1, batches: 2, perRequest: 4, cols: 1, rows: 1, composite: IMAGE, hash: "h1", startedAt: 0 } as const;
+const START = { kind: "batch-start", runId: "run_1", batchId: "batch_1_1", index: 1, count: 1, batches: 2, perRequest: 4, cols: 1, rows: 1, composite: IMAGE, hash: "h1", startedAt: 0, images: 5 } as const;
 
 const STAGES: RunEvent[] = [
-  { kind: "run-start", batches: 2, perRequest: 4 },
+  { kind: "run-start", batches: 2, perRequest: 4, images: 5 },
   START,
   { kind: "item-start", batchId: "batch_1_1", position: 1, sourceId: "pair_1" },
   { kind: "item-saved", batchId: "batch_1_1", position: 1, sourceId: "pair_1", version: 2, icons: 3, warnings: [], usage: USAGE, meta: null },
@@ -43,6 +43,7 @@ const STAGES: RunEvent[] = [
 /** One finished request, done or failed or stalled. */
 const done = (extra: Partial<Parameters<typeof batchOutcome>[0]> = {}): RunEvent => ({
   kind: "batch-done",
+  done: 1, images: 5,
   report: batchOutcome({
     plan: PLAN, index: 1, model: "openai/gpt-6.1-sol", saved: 1, failed: 0, missing: 0,
     usage: USAGE, error: null, elapsedMs: 1_000, requestId: "req_1", ...extra,
@@ -63,7 +64,8 @@ describe("runLogSpecs — the run stages and their ids", () => {
   });
 
   it("names the counts that make a request readable", () => {
-    expect(spec(STAGES[0]).data).toMatchObject({ batches: 2, perRequest: 4 });
+    expect(spec(STAGES[0]).data).toMatchObject({ batches: 2, perRequest: 4, images: 5 });
+    expect(line(STAGES[0])).toContain("5 image(s)");
     expect(spec(STAGES[1]).ids).toEqual({ batch: "batch_1_1" });
     expect(spec(STAGES[1]).data).toMatchObject({ request: 1, batches: 2, images: 1, grid: "1×1", composite: "h1" });
     expect(spec(STAGES[3]).data).toMatchObject({ version: 2, icons: 3, tokens: 300, cost: 0.01 });
@@ -95,6 +97,8 @@ describe("runLogSpecs — the run stages and their ids", () => {
     expect(spec(finished).data).toMatchObject({ request: 1, saved: 1, tokens: 300, status: "done", elapsedMs: 1_000, requestId: "req_1" });
     expect(spec(finished).ids).toEqual({ batch: "batch_1_1", request: "req_1" });
     expect(line(finished)).toContain("request 1");
+    expect(line(finished)).toContain("1 of 5 image(s) done"); // the run's done/left, in the log too (2026-10-08)
+    expect(spec(finished).data).toMatchObject({ done: 1, total: 5 });
     expect(line(finished)).toContain("reported");
     expect(line(finished)).toContain("0.01");
   });

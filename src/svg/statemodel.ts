@@ -18,6 +18,8 @@ import type { PreviewBackground } from "../lib/svgbackground";
 import type { Discovery } from "./sources";
 import type { QueueItem } from "./runqueue";
 import type { Dialog, RunProgress, SvgRow } from "./types";
+import { sortedIds } from "./rowmodel";
+import { NO_CHAIN, type Chain } from "./runtotals";
 
 export interface Toast {
   msg: string;
@@ -55,8 +57,16 @@ export interface SvgModel {
   bg: PreviewBackground;
   filter: SvgListFilter;
   sort: SvgSort;
+  /**
+   * The pinned list order (2026-10-08): refreshed by a scan, a sort change and
+   * `repin` (a tab re-activation) — never by a run event, so a landing result
+   * cannot move a row while the user looks at the list.
+   */
+  order: string[];
   dialog: Dialog | null;
   progress: RunProgress | null;
+  /** Done/failed of the runs before `progress` in the same queue chain (2026-10-08). */
+  chain: Chain;
   running: boolean;
   /** Batches waiting for their turn (I-53); the ref is the authority. */
   queue: QueueItem[];
@@ -82,8 +92,10 @@ export type SvgAction =
   | { type: "bg"; bg: PreviewBackground }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
+  | { type: "repin" }
   | { type: "dialog"; dialog: Dialog | null }
   | { type: "progress"; progress: RunProgress | null }
+  | { type: "chain"; chain: Chain }
   | { type: "progress-fn"; fn: (p: RunProgress | null) => RunProgress | null }
   | { type: "running"; running: boolean }
   | { type: "queue"; queue: QueueItem[] };
@@ -91,7 +103,7 @@ export type SvgAction =
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
   root: (m, a) => ({ ...m, rootName: (a as { name: string }).name, rootToken: m.rootToken + 1 }),
-  rows: (m, a) => ({ ...m, rows: (a as { rows: SvgRow[] }).rows }),
+  rows: (m, a) => repinned({ ...m, rows: (a as { rows: SvgRow[] }).rows }),
   "rows-fn": (m, a) => ({ ...m, rows: (a as { fn: (r: SvgRow[]) => SvgRow[] }).fn(m.rows) }),
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: Discovery | null }).discovery }),
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
@@ -108,9 +120,11 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
-  sort: (m, a) => ({ ...m, sort: (a as { sort: SvgSort }).sort }),
+  sort: (m, a) => repinned({ ...m, sort: (a as { sort: SvgSort }).sort }),
+  repin: (m) => repinned(m),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: Dialog | null }).dialog }),
   progress: (m, a) => ({ ...m, progress: (a as { progress: RunProgress | null }).progress }),
+  chain: (m, a) => ({ ...m, chain: (a as { chain: Chain }).chain }),
   "progress-fn": (m, a) => ({ ...m, progress: (a as { fn: (p: RunProgress | null) => RunProgress | null }).fn(m.progress) }),
   running: (m, a) => ({ ...m, running: (a as { running: boolean }).running }),
   queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
@@ -118,6 +132,11 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
 
 export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
   return HANDLERS[action.type](model, action);
+}
+
+/** The pin is the sort's order over every row at this moment. */
+function repinned(m: SvgModel): SvgModel {
+  return { ...m, order: sortedIds(m.rows, m.sort) };
 }
 
 /**
@@ -151,7 +170,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
     prompt, keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
-    filter: ALL_SVG_FILTER, sort: "date", dialog: null, progress: null, running: false, queue: [],
+    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [],
   };
 }
 

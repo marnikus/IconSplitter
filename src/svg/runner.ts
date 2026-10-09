@@ -29,7 +29,7 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
   const state = newRunState(args, plans.length, perRequest);
   const problems = validateBatchPlan(plans, perRequest);
   if (problems.length > 0) return failPlan(state, problems);
-  args.onEvent({ kind: "run-start", batches: plans.length, perRequest });
+  args.onEvent({ kind: "run-start", batches: plans.length, perRequest, images: state.images });
   for (const [i, plan] of plans.entries()) {
     if (args.signal.aborted) {
       args.onEvent({ kind: "cancelled" });
@@ -45,7 +45,7 @@ function newRunState(args: RunArgs, total: number, perRequest: number): RunState
   // total-duration limit is ever applied to a request that keeps talking.
   const stallMs = effectiveStallMs(args.config.timeoutMs, args.caps, args.params);
   return {
-    args, total, perRequest, stallMs, runId: args.runId ?? newRunId(),
+    args, total, images: args.sources.length, perRequest, stallMs, runId: args.runId ?? newRunId(),
     saved: 0, failed: 0, missing: 0, invalid: 0, unknown: 0, usages: [], outcomes: [], problems: [],
   };
 }

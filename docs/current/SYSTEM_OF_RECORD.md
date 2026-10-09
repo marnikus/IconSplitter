@@ -349,6 +349,31 @@ opt-in class as Generate SVG → Requesty; design
   pushes one entry each; global-defaults edits are persisted but NOT undoable
   (the same class as presets). The checkbox selection is session-persisted but
   not on the undo timeline.
+* **Scale to N MP** (2026-10-09, I-62, design
+  `docs/archive/2026-10-09-eps-executable-artboard-megapixels/design.md` D5):
+  two more settings fields, `scaleToMegapixels` (default off) and
+  `artboardMegapixels` (default 5, clamped 1–64 like the JPEG; junk → 5). On,
+  and only in `content` mode, the artboard is the content fit (icon + padding)
+  scaled uniformly so `artW × artH = N × 10⁶` (`fitArtboard` with a
+  `{ megapixels }` target; `artboardTarget` makes a pinned size win) — the
+  padding keeps its meaning (how small the icon sits in the artboard), strokes
+  keep their verbatim px (the placement loop re-measures, so the area lands
+  within the file's precision; exact in one pass when the artwork is all
+  fills), and the JPEG is untouched (it still renders at `jpegMegapixels` in
+  the artboard's ratio — the MP target is about the vector's artboard, which
+  is what a stock measures). The fingerprint appends `["mp", N]` ONLY while the
+  box is on, so the defaults' fingerprint (`36232c04`) and every existing
+  package stay as they are; the number is dormant while the box is off (it
+  does not move the fingerprint, but `settingsEqual` sees it). The record's
+  `tools.artboard.scaledTo` is N while it applies and null otherwise (a pinned
+  artboard with the box on records null — the px decided); the row's settings
+  line appends `· artboard N MP` under the same rule. UI: the row under the
+  artboard select in `src/upload/UploadArtboardSettings.tsx` — the checkbox
+  `upload-set-mp-scale`, the number `upload-set-mp-target` (disabled while the
+  box is off) and the note `upload-set-mp-scale-note` (`the artboard (icon +
+  padding) is scaled to N MP · strokes keep their px`; with a pinned artboard
+  the checkbox is disabled and the note reads `the pinned size decides the
+  megapixels`). "N fields overridden" after a bulk apply is 14.
 * The artboard (2026-10-08) is one more settings field, with three modes:
   `content` (the artboard hugs the artwork, as before), a square px preset
   (256/512/1024/2048/4096 — "512×512 and other popular") or an exact CUSTOM
@@ -371,20 +396,38 @@ opt-in class as Generate SVG → Requesty; design
   field, so a change confined to the artboard or the flag can never be
   swallowed as "nothing changed".
 * Geometry: the visible bounds include strokes (width/caps/joins), transforms
-  and non-scaling-stroke; unsupported elements (text, image, use,
-  foreignObject, risky `<style>`) are named, never guessed. The artwork is
-  fitted proportionally into the padded artboard: in `content` mode the padding
-  is a uniform % of the artwork's largest side, and on a PINNED artboard it is
-  a % of the TARGET's largest side while the artwork is scaled by one uniform
-  factor and centred (letterboxed — never stretched, never cropped), the pinned
-  px are exact (`viewBox="0 0 W H"`). **Every transform is baked into the
+  and non-scaling-stroke; a shape whose fill is `none` and that does not
+  stroke paints nothing and has no visible bounds (2026-10-09 — an icon set's
+  invisible frame, the artboard rect); unsupported elements (text, image, use,
+  foreignObject, risky `<style>`) are named, never guessed. **The artboard is
+  the artwork as it SHIPS** (I-60, 2026-10-09, `lib/upload/place.ts`): the
+  placement works on a CLONE of the cleaned source — bake(translate·scale) →
+  the configured stroke (verbatim px, `lib/upload/restyle.ts`) → expansion when
+  on — and MEASURES that candidate (`shippedBounds`: every stroke expanded into
+  its real outline on a probe copy, so joins and caps are exact; the analytic
+  hull only when the expander refuses), so the viewBox is the FINAL bounds
+  plus the padding and nothing visible lies outside it (the field report: a
+  1 px source stroke widened to 8 px lay 3.5 px outside the old viewBox on
+  every edge). A pinned artboard with verbatim strokes is not linear in its
+  scale, so the fit is corrected from the measurements (each edge is
+  `k · geometry + a constant stroke reach`; two samples pin both) and
+  re-measured — at most 4 passes, settled when every edge is within the file's
+  own precision (0.002 px); the count is recorded (`tools.artboard.passes`;
+  1 when the first fit was exact — fills only, or width 0) and a candidate
+  that never settles is an honest `no-fit` failure, never a guess. The
+  artwork is fitted proportionally into the padded artboard: in `content`
+  mode the padding is a uniform % of the artwork's largest side, and on a
+  PINNED artboard it is a % of the TARGET's largest side while the artwork is
+  scaled by one uniform factor and centred (letterboxed — never stretched,
+  never cropped), the pinned px are exact (`viewBox="0 0 W H"`). **Every transform is baked into the
   geometry** (2026-10-08, `lib/upload/bake`): the artwork's own `transform`s
   and the artboard's translate+scale become the shapes' coordinates (3
   decimals, in artboard px), so the shipped file carries NO `transform` and no
   wrapper group — a rect/ellipse/line/polyline/polygon keeps its element under
   an axis-aligned matrix, a circle under a uniform one, anything rotated or
-  skewed becomes a `<path>` from the one outline model (`geom/outline.ts`,
-  shared with the EPS writer). The stroke width is written AFTER that bake,
+  skewed (a rounded rect included, 2026-10-08) becomes a `<path>` from the one
+  outline model (`geom/outline.ts` + `geom/ops.ts` + `geom/shapes.ts`, shared
+  with the EPS writer). The stroke width is written AFTER that bake,
   **verbatim: the number in the setting is the number in the file**
   (`strokePx: 2` → `stroke-width="2"` on every visible stroke, whatever the
   artwork's transform or the artboard's scale — the reviewer's
@@ -396,10 +439,12 @@ opt-in class as Generate SVG → Requesty; design
   number and loses the attribute), dash arrays/offsets scale the same way, and
   containers lose their `stroke-width` because every shape now carries its
   own. What a bake would distort is refused by name before the tree is touched
-  (`unsupported: a stroked <path> under a non-uniform transform`, `a rounded
-  <rect> under a rotation or skew`, `a userSpaceOnUse <linearGradient>`, `a
-  <clipPath>` / `<mask>` / `<filter>` / `<pattern>`) — a deliberate narrowing
-  recorded in the 2026-10-08 stroke-width design; a stroke COLOUR
+  (`unsupported: a stroked <path> under a non-uniform transform`, `a
+  userSpaceOnUse <linearGradient>`, `a <clipPath>` / `<mask>` / `<filter>` /
+  `<pattern>`) — a deliberate narrowing recorded in the 2026-10-08
+  stroke-width design (the `a rounded <rect> under a rotation or skew` refusal
+  of that design was retired the same day: the outline model now draws rounded
+  corners, so the rect bakes to a `<path>`); a stroke COLOUR
   other than "artwork" is written onto every element that strokes visibly
   (fills, `stroke="none"` and gradient/pattern strokes are never touched, and
   a `currentColor` stroke becomes the chosen hex). **Each stroke property is
@@ -419,10 +464,14 @@ opt-in class as Generate SVG → Requesty; design
   The root carries NO
   `width`/`height` — the `viewBox` is the size (every consumer that needs px
   — the rasterizer, the EPS — derives them; the browser rasterizer pins the
-  render size on an in-memory copy only). A `transparent` background (the
-  default) paints no rectangle in the SVG or the EPS; a colour paints one
-  fill-only rectangle in both; the JPEG, which cannot be transparent, flattens
-  onto the colour or onto white. The JPEG
+  render size on an in-memory copy only). **The artboard rect is always the
+  first child** (I-60, 2026-10-09 — the user's definition: the full artwork is
+  the icon plus the artboard): `fill="<hex>"` for a colour background,
+  `fill="none"` for `transparent` (the default) — invisible, but an object, so
+  "select all" in an editor is the artboard; it survives SVGO (as a
+  `<path fill="none">`) and the clean-code report, has no visible bounds, and
+  emits nothing in the EPS (whose `%%BoundingBox` is the artboard anyway); the
+  JPEG, which cannot be transparent, flattens onto the colour or onto white. The JPEG
   rasterizes the VECTORS directly — at the artboard's px while
   `jpegMatchArtboard` is on, otherwise at the integer MP target in the
   artboard's ratio (15.1 MP on a square artboard → 3886×3886; 4 MP on 512×256 →
@@ -484,34 +533,37 @@ opt-in class as Generate SVG → Requesty; design
   check and the fix can never disagree; an unparseable or unfixable document is
   reported with its violation instead of shipping, and the file the export
   COMMITS is re-verified from its own text, not from the copy that was built.
-  The background rectangle the prepare pass paints (only for a colour
-  background) is fill-ONLY (`stroke="none"`, 2026-10-08): `stroke` is
-  inherited, so an artwork that strokes on the root or a group would otherwise
-  put a border around the whole artboard. The `<metadata>` subtree is the one
+  The artboard rectangle the prepare pass paints is fill-ONLY (`stroke="none"`,
+  2026-10-08; since 2026-10-09 the stroke unification keeps that `none` exactly
+  when the root hoists a paint): `stroke` is inherited, so an artwork that
+  strokes on the root or a group would otherwise put a border around the whole
+  artboard. The `<metadata>` subtree is the one
   place the clean pass leaves alone for both the check and the rebuild — it is
   the embed step's output (RDF/DC vocabulary by design), verified by its own
   readback, and the namespace rule still covers it (a declaration inside it is
   a violation, hoisted to the root).
-* Metadata title AND description (2026-10-08, stock review): each is ONE
-  clean phrase — `cleanPhrase` keeps the text up to the first sentence break
-  (end punctuation after a word of 2+ letters, then a space, then more text —
-  `2.5` and `e.g.` are not breaks), strips a trailing `.`, `!`, `;`, `:`,
-  `,`, `…` (a `?` stays: a question is a phrase) and writes sentence case
-  (first letter up, every later Capitalised word down; `SEO`, `iOS` and a
-  lone `A` untouched). The reviewer's "Collaborative Unity Promoting
-  Collective Social Empathy. Icon of charity and community." ships as
-  `<title>Collaborative unity promoting collective social empathy</title>`
-  (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
+* Metadata title AND description (2026-10-08, stock review; corrected the
+  same day — the first version CUT the second sentence, which lost the
+  model's words): clean text — `cleanPhrase` keeps the WHOLE text, every
+  sentence, strips only the END punctuation `.`, `!`, `;`, `:`, `,`, `…` (a
+  `?` stays: a question is a phrase; punctuation between sentences stays) and
+  writes sentence case per sentence (each sentence's first letter up — a
+  sentence starts after `.`/`!`/`?` + space following a word of 2+ letters,
+  so `2.5`, `e.g.`, a `;` and an ellipsis do not start one — every later
+  Capitalised word down; `SEO`, `iOS` and a lone `A` untouched). "Collaborative
+  Unity Promoting Collective Social Empathy. Icon of charity and community."
+  ships as `<title>Collaborative unity promoting collective social empathy.
+  Icon of charity and community</title>` (and the same text in `<dc:title>`). `cleanMetadata` applies it to both
   fields at every gate the text passes: the model's answer
   (`parseMetadata`), the accepted-metadata cache on read, the Accept button
   (an edit) and the committed `export.json` block a reload reads back
   (`metaFromRecord`); the fingerprint is over the cleaned text, so a
   remembered or exported answer the rule changes no longer matches its stored
   fingerprint — the row shows stale and the next export re-embeds the file
-  without a model call. It is a SHAPE rule, never a refusal: a phrase
-  cut below the minimum fails validation like any short answer (nothing is
-  padded). The prompt asks for exactly this ("ONE phrase … sentence case, no
-  period") for both lines; the field hints say the same.
+  without a model call. It is a SHAPE rule, never a refusal, and it never
+  removes words. The prompt still ASKS for one phrase ("ONE phrase … sentence
+  case, no period") for both lines; an answer that comes back as two sentences
+  is kept as written, minus its final period.
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
   — no AI, no render; a missing output rebuilds just that output; nothing
   changed → no work). Every output validates before it commits (SVG parses +
@@ -520,9 +572,129 @@ opt-in class as Generate SVG → Requesty; design
   cleanup, `export.json` LAST as the commit marker), so a crash mid-commit
   leaves the last valid package in place. EPS is a genuine writer for a
   documented subset; anything outside fails that stage honestly → `partial`
-  (SVG/JPEG stay committed). Green (`processed`) only when every requested
+  (SVG/JPEG stay committed). A **rounded `<rect>`** is INSIDE the subset
+  (2026-10-08, design `docs/archive/2026-10-08-eps-rounded-rect/design.md`):
+  the one outline model (`geom/shapes.ts`) draws it exactly — four lines and
+  four KAPPA quarter-ellipses, the SVG radius rules applied (a missing radius
+  copies the other, each clamped to half its side, 0 → a plain rect) — so the
+  EPS stage succeeds with NO distortion and no question asked; the writer
+  REPORTS the adjustment instead: `fixes: ["1 rounded <rect> written as an
+  exact path outline"]` on its ok result → `tools.eps.fixes` in `export.json`
+  (absent on pre-fix packages = none) → the row's amber note
+  (`upload-note-{id}`, `UploadRow.note`; the row stays `processed`, `error`
+  stays empty) → the `exported` log line (`EPS auto-fixed: …`) → the batch
+  toast's tail (`· N EPS auto-fixed`, only when N > 0). The same outline lets
+  a rounded rect under a rotation or skew bake to a `<path>` like any turned
+  shape (the former "a rounded <rect> under a rotation or skew" refusal is
+  gone). Green (`processed`) only when every requested
   output validated and committed; `stale` when fingerprints moved since the
   last commit.
+* EPS converters (2026-10-09, design
+  `docs/archive/2026-10-09-eps-converters-inkscape-expand/design.md`): the
+  EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`
+  (`src/lib/upload/epsconv/registry.ts`) is the one table the drop list, the
+  settings parser and the EPS stage read: `builtin` (the subset writer above,
+  `writer: "builtin-subset-1"`) and `inkscape` (Inkscape on this machine
+  through the local helper at `http://127.0.0.1:47391` — `GET /health` to
+  probe, `POST /convert/eps` with the prepared SVG to convert, `writer:
+  "inkscape-cli@<version>"` from the `x-inkscape-version` header). The
+  setting `epsConverter` is NOT in the settings fingerprint: switching
+  converters rebuilds the EPS only (the planner compares
+  `tools.eps.converter` with the run's converter; a record from before the
+  field is `builtin`), and choosing a converter never toggles `includeEps`.
+  Every EPS — whoever wrote it — passes the SAME converter-neutral gate
+  before commit (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`,
+  a `%%BoundingBox`, `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are
+  the built-in writer's own contract — and since 2026-10-09 `verifyEps` also
+  runs the subset stack checker (`lib/upload/epscheck`, I-61), which the
+  built-in converter applies to its own output before it answers ok. A helper that is down / an Inkscape
+  not installed / a conversion refused → the EPS stage fails honestly with
+  the reason AND its fix (`run_inkscape_bridge.bat`; "install Inkscape 1.x
+  or set INKSCAPE_PATH") → `partial`, SVG/JPEG stay committed. The record
+  names the converter and the writer: `tools.eps.{enabled, converter,
+  writer, fixes?}`. The helper URL lives in localStorage
+  `iconSplitter.upload.bridge.v1`. ONE probe runs before a batch that wants
+  Inkscape EPS (RULE 9): a helper that is not usable is said up front
+  (`EPS: <reason> — N rows will be partial · <fix>`, repeated on the batch's
+  final line) and the batch runs anyway — the SVG and JPEG never wait.
+* The Inkscape helper itself (`tools/bridge/server.mjs` + `inkscape.mjs`,
+  started by `run_inkscape_bridge.bat` / `run_app_inkscape.bat`, any OS:
+  `node tools/bridge/server.mjs [--port] [--inkscape] [--dist]`) is a
+  dependency-free Node HTTP server on **127.0.0.1 only** (RULE 20 adapted:
+  the artwork goes to a process on the user's own machine and nowhere else;
+  the log names method, status, duration and byte counts — never content,
+  never a package file name). `GET /health` → `{ ok, inkscape: { found,
+  path, version, fix? }, port }`, found LIVE on every call (installing
+  Inkscape while the helper runs is seen at the next Check, RULE 24); `POST
+  /convert/eps` (SVG text, ≤ 20 MB) → `200 application/postscript` +
+  `x-inkscape-version`, or JSON `{ reason }`: 400 not an SVG, 413 over the
+  limit, 503 no Inkscape, 502 Inkscape exited non-zero (its last stderr
+  line), 504 killed after 60 s (`BRIDGE_TIMEOUT_MS`), 499 the browser went
+  away (the child is killed at once, RULE 7). Each conversion runs in its own
+  temp folder (`in.svg` → `inkscape --export-type=eps --export-area-page
+  --export-text-to-path --export-ps-level=3`), deleted in `finally` — never
+  a half file; one conversion at a time. Discovery: `--inkscape` →
+  `INKSCAPE_PATH` → PATH → the platform's default install folders. CORS/PNA:
+  `Origin` `null` (a `file://` page), `localhost` and `127.0.0.1` get the
+  allow headers (+ `Access-Control-Allow-Private-Network: true` on the
+  preflight); any other origin is 403. `GET /` serves `dist/` (index.html,
+  files below dist only) so `run_app_inkscape.bat` opens the app from the
+  helper's own origin; without a build it says `run "npm run build"` (404,
+  honest). Tested by spawning the REAL server against a fake Inkscape
+  (`tests/helpers/fakeinkscape.mjs`, `tests/bridge_inkscape.test.ts`).
+* Expand strokes to fills (2026-10-09, same design, D4): the setting
+  `expandStrokes` (default off; fingerprinted ONLY when on, so no existing
+  package flips to stale) makes the prepare stage turn every visibly stroked
+  shape into a filled outline — what some stocks require — so the SVG, JPEG
+  and EPS all ship without strokes. It runs AFTER the bake and the stroke
+  restyle on every placement candidate (the setting's px IS the expanded
+  width, whatever the artboard's scale) and BEFORE the global stroke pass
+  (which then finds nothing to hoist): `src/lib/upload/expand.ts` (the DOM
+  pass) over `src/lib/upload/geom/expand/` (`pen` vocabulary, `offset` —
+  lines exactly, cubics by Tiller–Hanson checked at t = ¼ ½ ¾ against the
+  true offset and split at ½ until the error ≤ TOL 0.01 px, depth ≤ 8, so
+  curves stay curves; `joins` — the outer side gets miter-within-limit /
+  round (≤ 90° KAPPA-family cubics) / bevel, the inner side pivots through
+  the original vertex so every loop's winding fills under nonzero; caps butt
+  / square (+ w/2) / round; a zero-length subpath is a dot / square /
+  nothing; `arclen` + `dash` — `stroke-dasharray`/`-dashoffset` cut the
+  subpath by arc length into open pieces BEFORE offsetting, each capped like
+  a browser caps a dash, a boundary inside a curve is a de Casteljau split
+  of that cubic, a closed dashed subpath opens at its phase and the dash
+  that wraps the start is one piece; `assemble` — open: left side, end cap,
+  right side back, start cap, Z; closed: left loop + right loop reversed =
+  the ring in ONE `<path>`). The new `<path d fill=<the stroke paint>
+  fill-rule="nonzero" [fill-opacity=<stroke-opacity>]>` sits right AFTER its
+  original (paint order kept); the original loses every `stroke-*`
+  attribute/style key, a `fill="none"` original is removed, containers lose
+  their stroke properties too. Refused by name BEFORE the tree is touched
+  (`prepare` fails `unsupported: … under Expand strokes on <tag>`, nothing
+  commits): a `url(#…)` stroke paint, a negative dash value, a dash period
+  under 0.01 px. Known, documented property: at sharp inner corners the
+  pivot leaves small regions covered twice (winding 2) — identical under
+  nonzero, what every non-boolean expander produces; the tests measure
+  coverage, filled area and offset distance (`tests/helpers/outlinemath.ts`),
+  never anchor counts. The record carries `tools.expand: { enabled, shapes
+  }`; `PrepareResult.strokesExpanded` is the count; the row line appends
+  `· strokes → fills`. `expandStrokes:false` is byte-identical to before
+  (equivalence gate in `tests/upload_expand.test.ts`).
+* Download all (2026-10-08, design
+  `docs/archive/2026-10-08-upload-download-all/design.md`): the bulk bar's
+  `⤓ Download all (N files)` copies the SELECTION's committed packages into ONE
+  folder the user picks in the browser's folder dialog (`pickDirectory`, a
+  destination — no path capture, nothing remembered, no scan). What is copied
+  is what each row's `export.json` names and the disk has (`outputs.svg/jpg/
+  eps`, never `export.json` itself), byte for byte under the artifact's own
+  name; the pure planner (`lib/upload/download.ts`) keeps two icons with one
+  stem apart (`fog (2).*`, all three files of the package together) and is
+  what the button's count reads, so the count and the write agree. RULE 23
+  holds in the destination: `writeFileNew`, a name already there is KEPT and
+  counted, every write is read back and compared (a mismatch is removed and
+  counted `failed`), and one file's failure never stops the next (RULE 5). A
+  selected row with no record is "not exported yet", counted, never guessed
+  at. One line says it all — toast and the log's `downloaded` entry (counts in
+  text, no data): `Saved 9 files (3 icons) to stock-drop · 2 kept (already
+  there) · 1 icon not exported yet`.
 * Restart precedence (P2.6 — the two interruption models reconciled): there are
   TWO independent memories of work that did not finish, and they never silently
   disagree. **Disk wins on scan**: `export.json` beside the outputs is the
@@ -743,29 +915,37 @@ Batch:
   (I-56 — reversed 2026-10-06 from the older "stop at the batch folder" rule).
   The text uses backslashes throughout, and a blocked clipboard is reported as
   an error instead of being swallowed.
-* **I-29 (full path, RULE 13/20):** the full path of a picked root is
-  remembered per **folder name** in `iconSplitter.rootpaths.v1`, normalised on
-  write (Explorer's surrounding quotes, forward slashes, trailing and doubled
-  separators, UNC pairs kept) and validated on read — corrupt or hand-edited
-  payload means no memory, never a guess, and the app never invents a drive.
-  With no memory the copy falls back to the folder's own name.
+* **I-29 (full path, RULE 13/20 — amended 2026-10-09, I-63):** the full path of
+  a picked root is bound to the folder's **handle** and persisted with it
+  (IndexedDB `iconSplitter.rootpaths`, `lib/rootstore`), normalised on write
+  (Explorer's surrounding quotes, forward slashes, trailing and doubled
+  separators, UNC pairs kept) and validated on read — a corrupt payload or a
+  lost handle means no memory, never a guess, and the app never invents a
+  drive. The old name-keyed `localStorage iconSplitter.rootpaths.v1` is never
+  read (I-63: a name is not an identity). With no memory the copy falls back to
+  the folder's own name.
 * **I-30 (root picking, RULE 4/10):** the Generate SVG tab can always point
   itself at a folder — the picker is offered whether or not a root is loaded,
   because the Selection tab's handle is a fallback for the first run, not a
   lock — and each tab has exactly one picker control.
-* **I-35 (the pick captures the path, RULE 4/13):** every way of pointing the app
-  at a folder to scan goes through `ui/pickroot.pickRootWithPath()`, which
-  captures the picked folder's real path from the clipboard when that text names
-  the folder (exactly, or completed from its parent) and remembers it. The app
-  never invents a path: text that does not name the folder is not stored, and
-  what was captured is stated to the user.
+* **I-35 (the pick captures the path, RULE 4/13 — amended 2026-10-09):** every
+  way of pointing the app at a folder to scan goes through
+  `ui/pickroot.pickRootWithPath()`, which captures the picked folder's real
+  path from the clipboard when that text names the folder exactly, **or** is a
+  path one level directly inside it (its direct parent is then the exact answer,
+  `how: derived` — one level down is the same root, the third report of
+  2026-10-09), and binds it to the picked folder's HANDLE (I-63). Nothing is
+  completed from a parent or an unrelated folder (I-59). The app never invents
+  a path: text that does not name the folder is not stored, and what was
+  captured is stated to the user.
 * **I-36 (the path is visible, RULE 12):** wherever a root is shown, its full
   path is shown with it once known — the full-width row below the controls
-  (`ui/FolderBar`, `sel-folder-path` / `v2-folder-path` / `svg-folder-path`) —
-  and the row names the state the value is in (*the path*, *completed — check
-  it*, *full path not captured*). A user never has to open a dialog to find out
+  (`ui/FolderBar`, `sel-folder-path` / `v2-folder-path` / `svg-folder-path` /
+  `upload-folder-path`) — and the row names the state the value is in (*the
+  path*, *full path not captured*). A user never has to open a dialog to find out
   what a copy will hand over, and a capture in one tab reaches the others without
-  a reload. The pill that showed the folder in place of the action, and the field
+  a reload (the binding is per handle and the rows subscribe to the registry,
+  I-63). The pill that showed the folder in place of the action, and the field
   that let the path be typed, are gone (§16, I-44/I-45).
 * **I-37 (the boundary is stated, RULE 9):** the browser can never read the drive
   path of a picked folder, so the app states that boundary where the path would
@@ -782,15 +962,17 @@ Batch:
   counted and reported (both toolbars, the log, `outside-split` exclusions),
   never silently dropped, and the records of out-of-scope pairs stay as orphans.
   A tree without such a folder behaves exactly as before.
-* **I-39 (a "full path" is only a folder path, RULE 13):** the value remembered
-  for a root (`iconSplitter.rootpaths.v1`) is either an Explorer-usable **folder**
-  path — a drive path (`F:`, `F:\`, `F:\a\b`; forward slashes and surrounding
-  quotes forgiven) or a UNC path (`\\server\share[\…]`) — or nothing at all.
+* **I-39 (a "full path" is only a folder path, RULE 13 — amended 2026-10-09):**
+  the value bound to a root (`lib/knownroots`, persisted by `lib/rootstore`) is
+  either an Explorer-usable **folder** path — a drive path (`F:`, `F:\`,
+  `F:\a\b`; forward slashes and surrounding quotes forgiven) or a UNC path
+  (`\\server\share[\…]`) — or nothing at all.
   `isFolderPathText` is the only judge, and it runs on the raw text at every
-  entry point (the clipboard adoption at pick time, and the one writer
-  `saveRootPathInfo`) and again on read, so SVG markup, URLs, relative text and
-  file names can never be stored, replayed, shown as the root's path or prefixed
-  to a copy. A refusal stores nothing and leaves the previous memory in place.
+  entry point (the clipboard adoption at pick time and at a later capture, and
+  the one writer `rememberKnownRoot`) and again on read, so SVG markup, URLs,
+  relative text and file names can never be stored, replayed, shown as the
+  root's path or prefixed to a copy. A refusal stores nothing and leaves the
+  previous binding in place.
 * **I-41 (one file per pair, RULE 3/13):** a pair's metadata is a single JSON in
   the folder that holds the pair, named after the AI image's stem
   (`<stem>.svg.json`). It stores the pair's identity, both image faces, the
@@ -819,15 +1001,16 @@ Batch:
   below the controls (`sel-folder-path` / `v2-folder-path` / `svg-folder-path`):
   text, never an input, never a button.
 * **I-45 (no hidden scanning, no hidden writes, RULE 13/24):** only the user's
-  `Open folder` / `Rescan` (plus the boot restore) scans a folder, and only the
-  pick-time capture writes the path memory. The 30 s Watcher and every
+  `Open folder` / `Rescan` (plus the boot restore) scans a folder, and only a
+  capture made for the user's own gesture writes the path memory — the pick,
+  `Rescan`'s retry, or the user's own `Ctrl+V` (I-52). The 30 s Watcher and every
   copied-path control are gone from the UI *and* from the code (`SelState.watcher`,
   `useSelection.useWatcher`, `WATCH_MS`, `ui/RootPathField`, `ui/userootpath`,
   `lib/rootpath.saveRootPath`, `lib/clipboardpath.adoptCopiedPath`).
 * **I-46 (the path row never lies, RULE 4):** the row shows the captured path
   word for word (whole value in its `title`, selectable like any text), or the
-  folder's name with `full path not captured` when the browser withheld it; a
-  path the app completed from a copied parent carries `completed — check it`.
+  folder's name with `full path not captured` when the browser withheld it
+  (the `completed — check it` state is gone with the completion itself, I-59).
   Copies are unaffected (I-28): they hand over a folder path, the real one when
   captured and the folder-name fallback otherwise.
 * **I-47 (picking the output folder is picking the set, RULE 3/12):** when the
@@ -850,16 +1033,18 @@ Batch:
   folder onto an already root-relative `svgPath`, doubling the chain).
   A folder that merely resembles the layout keeps the item's own folder, as
   before; `lib/batchlayout` owns the names both rules read.
-* **I-52 (a capture is a conversation, RULE 4/12/13):** the pick is the primary
-  capture; when it finds nothing the path is still recoverable without another
-  dialog, and the UI says how. `Rescan` (and the Generate SVG rescan) makes one
-  more attempt for a root whose path is unknown, and a `paste` anywhere outside
-  a text field adopts the text for the root on screen
+* **I-52 (a capture is a conversation, RULE 4/12/13 — amended 2026-10-09):** the
+  pick is the primary capture; when it finds nothing the path is still
+  recoverable without another dialog, and the UI says how. `Rescan` (in all four
+  tabs) makes one more attempt for a root whose path is unknown, and a `paste`
+  anywhere outside a text field adopts the text for the root on screen
   (`ui/rootcapture.retryCapture` / `bindPasteCapture`, mounted by
-  `ui/FolderBar.FolderPathRow`). Both take an **exact leaf match only** — a
-  pasted parent, a word, a URL or markup writes nothing — and no read happens
-  without the user's own gesture (`navigator.userActivation`), so a boot-time
-  scan never touches the clipboard. The read reports a state, not just text
+  `ui/FolderBar.FolderPathRow`). Both take the same rule as the pick
+  (I-35/I-59): the text must name the folder exactly or be one level directly
+  inside it — a pasted parent two levels up, a word, a URL or markup writes
+  nothing — and no read happens without the user's own gesture
+  (`navigator.userActivation`), so a boot-time scan never touches the clipboard.
+  The read reports a state, not just text
   (`lib/clipboardpath.ClipRead`: `text` / `empty` / `blocked` / `unsupported`),
   which is what lets the toast name the reason and the row name both ways out.
 * **I-49 (a pair file is read from where it sits, RULE 3/13):** every read of a
@@ -877,17 +1062,105 @@ Batch:
   — so `_split_output`, a month folder and one run folder all review the pieces
   they contain. `hideOutside` still applies only while `_split_output` lies
   strictly below the root (the `test_processing_2` case, I-38/I-40).
-* **I-51 (the app names a folder only from a folder it already named, RULE 4/13):**
-  the full path of a pick comes from the clipboard **only** when it matches the
-  picked folder's name exactly; otherwise `ui/knownroots.deriveRootPath` answers
-  it: the deepest folder this app already has a captured path for, plus the
-  segments that folder's own `resolve(picked)` reports (`[]` when it is the same
-  folder, `null` when it is not below). Every capture is remembered
-  (`pickroot.pathForPick`), and each tab remembers the root it restores at boot
-  (`selection/rootsource.boot`, `svg/scan.bootSources`) — so a pick inside a
-  folder the app already knows is exact with an empty clipboard, while a
-  clipboard guess that only *looks* right is overruled or left flagged
-  `completed — check it`.
+* **I-51 (the app names a folder only from a folder it already named, RULE 4/13
+  — amended 2026-10-09):** the full path of a pick comes from the clipboard
+  **only** when it names the picked folder (exactly, or as its direct parent —
+  I-35); otherwise `lib/knownroots.deriveRootPath` answers it in EITHER
+  direction from the folders this app already placed exactly: below one (the
+  segments that folder's own `resolve(picked)` reports), the folder itself
+  (`[]`), or ABOVE it (the segments `picked.resolve(known)` reports, stripped
+  and verified — picking `test_process_3` with `test_process_3\_split_output`
+  known is exact, the third report). Every capture is bound to its handle and
+  persisted (`lib/rootstore`), each tab restores the root's record at boot
+  (`restoreKnownRoot`), and a capture that lands later — `Rescan`, `Ctrl+V` —
+  binds to that very handle, so the next pick related to it is exact. A
+  clipboard text that names some OTHER folder yields nothing at all (I-59), and
+  the old name-keyed registry (`nameKnownRoot` / `ui/knownroots`) is gone —
+  a name cannot carry a path (I-63).
+* **I-59 (exact or nothing — no completed path, RULE 4/13 — 2026-10-09, rewritten
+  twice the same day after three reports):** the "parent + name" completion is
+  gone. A copied path is adopted only when it names the picked folder — its
+  leaf IS the folder (`how: copied`), or the folder is the parent of the copied
+  path's leaf (one level down, `how: derived` — I-35, the third report);
+  otherwise the path comes from a folder the app already placed exactly
+  (I-51), or it is unknown and the row says so. `PathHow` is `copied` or
+  `derived`; a stored `{ how: "completed" }` written by an older build is never
+  read at all (the name-keyed store is gone, I-63), so the glued guesses it
+  left behind vanish from the row, from every copy (I-56) and from the
+  derivation, which may start only from an exact capture. The first fix of the
+  day (a veto by a known root + "the app's own copy is never completed") was
+  not enough: the stored guess for `test_process_3` survived the fix, the tab
+  restored that folder at boot as a known root, and picking its `_split_output`
+  *derived* `<glued guess>\\_split_output`. The second ("exact leaf or nothing")
+  was not enough either: the frozen glue — labelled `copied` — kept showing for
+  every same-named pick (report 1), and a parent pick read as unknown
+  (report 2). The real poison was the **name key** itself (I-63): no rule about
+  which strings to trust can survive a store that cannot tell two folders
+  apart. What remains: `Rescan` (all four tabs) re-reads for an unknown path,
+  `Ctrl+V` adopts the text, and both bind the capture to the folder's handle
+  for the next derivation.
+* **I-60 (the artboard is the shipped artwork, RULE 4/13 — 2026-10-09):** the
+  viewBox is computed from the bounds of the FINAL document — the configured
+  stroke width, expansion, joins and caps included, measured by the strokes'
+  real outlines — plus the padding; nothing visible lies outside it; a pinned
+  artboard centres the shipped bounds to the file's precision; the artboard
+  rect is always the first child (the background colour, or `fill="none"` when
+  transparent); the placement passes are recorded, and a placement that does
+  not settle fails by name (`no-fit`) instead of shipping a guess. Pinned by
+  `upload_prepare` ("the artboard is the shipped artwork"), `upload_geom`
+  (unpainted shapes have no bounds), `upload_optimize`/`upload_clean`/
+  `upload_eps` (the invisible rect through the pipeline) and `upload_runexport`
+  (`tools.artboard` agrees with the viewBox).
+* **I-62 ("scale to N MP" scales the artboard, not the JPEG, RULE 4/13 —
+  2026-10-09):** on, in `content` mode only, the content fit is scaled
+  uniformly so `artW × artH = N × 10⁶` (to the file's precision; exact in one
+  pass when the artwork is all fills), strokes keep the verbatim px, the record
+  carries `tools.artboard.scaledTo = N` (null whenever it does not apply), the
+  fingerprint moves only while the box is on, and the JPEG keeps
+  `jpegMegapixels`. Pinned by `upload_settings`, `upload_geom` (the megapixel
+  fit), `upload_prepare` ("scale the artboard to N megapixels"),
+  `upload_runexport` and `upload_eps_settings_ui`.
+* **I-61 (the built-in EPS is an executable program, RULE 4/13 — 2026-10-09):**
+  an EPS is PostScript; one invalid instruction and the interpreter stops before
+  the artwork (the report: `-0.75 0 0 -0.75 0 750 concat` → `/typecheck` in
+  Illustrator — `concat` takes ONE array). So: the uprighting CTM is written as
+  `[a b c d tx ty] concat`; a shape with both paints fills inside its own
+  `gsave … grestore` and THEN strokes (PostScript `fill` consumes the current
+  path — the old `… fill … stroke` stroked nothing); a shape that paints
+  nothing emits nothing (an unpainted path is not an object; the DSC box
+  carries the artboard). And the program is CHECKED: `lib/upload/epscheck.
+  checkPostScript` is an operand-stack model of the writer's own subset
+  (numbers, `[…]`, `newpath moveto lineto curveto closepath concat setrgbcolor
+  setlinewidth setdash setlinecap setlinejoin setmiterlimit fill stroke gsave
+  grestore`) — arity, operand types, a current point before `lineto`/`curveto`,
+  a path before `fill`/`stroke`, balanced `gsave`, an empty stack at the end —
+  stopping at the first error like the interpreter and naming its line.
+  `verifyEps` runs it, and the built-in converter runs `verifyEps` on its own
+  output before answering ok, so a non-executable EPS is an EPS-stage failure
+  (`partial`, SVG/JPEG committed), never a file. The converter-neutral commit
+  gate (`verifyEpsDocument`) is unchanged: Inkscape's cairo PostScript uses
+  procedures and dictionaries outside the subset's vocabulary and is not
+  judged by it. Tests execute the subset too (`tests/helpers/psrun.ts`): every
+  fixture runs without error and paints only inside `%%HiResBoundingBox`.
+  No `showpage`, `%%Pages` or preview was added — none is required for an EPS
+  import, and none was the cause.
+* **I-63 (a path is bound to the folder, not its name, RULE 4/13 — 2026-10-09,
+  after the third report):** a captured full path belongs to the picked FOLDER —
+  its `FileSystemDirectoryHandle` — and answers only for that handle
+  (`lib/knownroots.rememberKnownRoot` / `boundRootPathInfo`, identity `===`
+  plus the platform's own `isSameEntry`; persisted per handle in
+  IndexedDB `iconSplitter.rootpaths`, `lib/rootstore`). A name is not an
+  identity: every run of this app creates another `_split_output`, and the old
+  name-keyed store (`iconSplitter.rootpaths.v1`, one slot per folder name) let
+  a glued guess become the path of every same-named folder — the recurring bug
+  of 2026-10-09 (§"The Full path that glued two folders together"). With I-63:
+  two `_split_output` folders keep their own paths (or their own honest
+  unknown), a pick never reads another folder's record, the v1 key is never
+  read (an unverifiable payload is corrupt — RULE 13), and the derived path is
+  only ever `known handle path ± the segments resolve() reported` (I-51).
+  What stays name-shaped on purpose: the row's no-path fallback shows
+  `root.name`, and `folderCopyText`'s base falls back to the folder's name
+  (I-29) — the folder's own name, never a remembered path of some other folder.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -935,13 +1208,14 @@ Batch:
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, stall window, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |
 | localStorage `iconSplitter.svg.inflight.v1` | the in-flight journal: run/batch id, source ids + names, model, start time, provider request id — no key, no prompt, no answer | validated on read; corrupt = empty; cleared when a request gets a confirmed outcome |
 | IndexedDB `iconSplitter/secrets` | Requesty API key | never in localStorage, presets, reports or Git (RULE 20); DB version 2 added this store — an install that predates it upgrades on first open, and a write that still fails falls back to a session-only key the UI names as such |
-| localStorage `iconSplitter.rootpaths.v1` | the picked roots' real full paths, `{ [folderName]: path }` | normalised + validated on read (I-29); used only to build copy text; never leaves the browser |
+| IndexedDB `iconSplitter/rootpaths` | the picked folders' real full paths, records `[{ handle, path, how }]` — one per folder HANDLE (I-63) | normalised + validated on write and read (I-29/I-39); identity is `isSameEntry`, never the name; capped at 20; never leaves the browser. The old name-keyed `localStorage iconSplitter.rootpaths.v1` is **never read** (a guess may not survive as data, I-59) |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
 | `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
 | IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
 | localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map) | validated/clamped on read (RULE 13): `background` is `transparent` or a hex (a missing or junk value → `transparent`; a stored white from before 2026-10-08 stays white), `strokeColor` is a hex or `artwork` (missing or junk → `#000000`, the 2026-10-08 default; a stored `artwork` stays `artwork`), `strokePx` is 0–32 px (the pre-2026-10-08 key `strokePt` is read as the same number and never written back; the fingerprint is positional, so nothing flips to stale); the undo path writes through the same store |
 | localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
+| localStorage `iconSplitter.upload.bridge.v1` | the Inkscape helper config `{ v, url }` (2026-10-09) | validated on read (RULE 13): only an `http(s)://` URL is kept, anything else → `http://127.0.0.1:47391`; device config, never per icon |
 | localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt `{ v, prompt }` | validated on read: missing/empty/junk/foreign version → the documented default (`parsePromptText`, RULE 13); written on every edit, so a restart opens with the user's own text |
 | localStorage `iconSplitter.upload.prompts.v1` | the saved prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50; corrupt → no presets |
 | localStorage `iconSplitter.upload.prefs.v1` | upload view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read; display-only — the zoom never feeds the output scale |
@@ -970,7 +1244,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
-| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52): `Rescan`'s one exact-match retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name |
+| Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52/I-59): `Rescan`'s one retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name (the pick's own rule: exact leaf, or the direct parent of a path one level inside the folder — I-35) |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
@@ -978,20 +1252,20 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Selection V2 UI | `src/selectionv2/useSelectionV2.ts`, `SelectionV2Panel.tsx`, `SourceBar.tsx`, `FilterGrid.tsx`, `BulkBar.tsx`, `ZoomSlider.tsx`, `ReviewList.tsx`, `ReviewRow.tsx`, `ThumbPair.tsx`, `SegButton.tsx`, `prefsstore.ts` | view + selection state, list review, bulk bar, zoom, prefs IO |
 | SVG pure rules | `src/lib/svgconfig.ts`, `svgprompt.ts`, `svgbatch.ts`, `svgcomposite.ts`, `svgcanvas.ts`, `svgextract.ts`, `svgvalidate.ts`, `svgpreview.ts`, `svgicons.ts`, `svgfile.ts`, `svglist.ts`, `svgrequest.ts`, `svgstream.ts`, `svgstreamread.ts`, `svgusage.ts`, `svgpricing.ts`, `svgbackground.ts`, `svgsecret.ts`, `svgclock.ts`, `modelcaps.ts`, `effortlimits.ts` | provider settings, prompt + manifest, batch plan, grid layout, canvas composite, response split/match, validation/security, preview pipeline (parse → sanitize → fit → inline markup), icon count, sidecar model + versioning + cost basis, list filters/sort/totals (reported vs estimated cost kept apart), request building + HTTP/transport/error classification, the pure SSE frame parser, the streaming reader (stall watchdog, cancel, request-id capture), token/cost formatting, the pricing table + the one cost decision, preview-background presets/validation/contrast rule, secret masking, elapsed-time formatting, per-model capability rules (temperature / token field / effort tiers) + value sanitising, the reasoning-tier **stall-window floor** + its wording (no icon cap) |
 | The batch's output layout | `src/lib/batchlayout.ts` | the names of the app's own output tree — `_split_output` (tolerant variants), `<YYYY-MM>`, `<YYYY-MM-DD_HH-mm-ss>` — read by `lib/splitscope` (which set is reviewable, I-38/I-47) and `lib/rootpath` (where a copy stops, I-28/I-48) |
-| The picked root's path | `src/ui/pickroot.ts`, `src/ui/knownroots.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all three tabs (I-35), the guarded clipboard read + match, the string rules and the one storage key (`iconSplitter.rootpaths.v1`, `{ path, how }`), the folders the app already named and the derivation from one of them (`resolve()` segments, I-51), the live React view of it, and the one folder control (green button + read-only path row, I-44/I-46) |
+| The picked root's path | `src/ui/pickroot.ts`, `src/lib/knownroots.ts`, `src/lib/rootstore.ts`, `src/lib/clipboardpath.ts`, `src/lib/rootpath.ts`, `src/lib/copypath.ts`, `src/ui/FolderBar.tsx` | one pick entry point for all four tabs (I-35), the guarded clipboard read + match, the string rules (pure, name-free), the handle-keyed registry + its IndexedDB persistence (I-63: the path is bound to the folder, never its name), the derivation in both directions from a folder already placed exactly (`resolve()` segments, I-51), the copy-text builder every tab shares (I-28/I-56), the live React view of the binding, and the one folder control (green button + read-only path row, I-44/I-46) |
 | SVG list rules | `src/svg/sourcelist.ts` | which approved sources the Generate SVG tab may list (I-31…I-34): canonical `_AI` + raster, approval by pair id or by path, one row per normalized AI path, the exclusions with their reasons, the audit counts and its one-line text. Pure — no IO, no React |
 | SVG IO + state | `src/svg/sources.ts`, `scankey.ts`, `sidecar.ts`, `keystore.ts`, `promptstore.ts`, `prefsstore.ts`, `composite.ts`, `saveversion.ts`, `runner.ts`, `runtypes.ts`, `runbatch.ts`, `scan.ts`, `rowmodel.ts`, `runstate.ts`, `reviewact.ts`, `sourceindex.ts`, `reviewundo.ts`, `statemodel.ts`, `ctx.ts`, `actions.ts`, `codeactions.ts`, `useSvgGen.ts`, `paramstore.ts`, `catalog.ts`, `modelparams.ts`, `keyactions.ts` | approved-source discovery (every approved AI output listed once, with per-file problems, and everything excluded reported), the snapshot key an unchanged scan compares, sidecar IO, key store, the generation run (one module for the run, one for a single request, one for their shared vocabulary), row/event/review reducers, the undo bridge, per-model settings store (localStorage), the 24 h model-list cache + `GET /v1/models` fetch, the one resolve rule they all share, and the API-key actions |
 | SVG UI | `src/svg/SvgPanel.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `SvgBatchStrip.tsx`, `SvgConfirm.tsx`, `SvgDialogs.tsx`, `SvgHotkeys.ts`, `SvgSampling.tsx` | the tab shell, controls, bulk bar, list, rows, previews (AI thumb + inline SVG frame in the user's background), batch strip, the paginated confirmation, dialogs, hotkeys, the three sampling controls |
-| The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets`, v2) |
-| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: bake, viewBox-only root, optional background rect, stroke width written verbatim + colour restyle, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
+| The API key on this device | `src/lib/keyvault.ts`, `src/lib/idbvault.ts`, `src/ui/KeySlot.tsx`, `src/batch/store.ts`, `src/svg/keystore.ts`, `src/upload/keystore.ts` | ONE key vault both tabs wrap: `read()` answers where the key came from (`device` / `session` / `unreadable` / `none`) instead of a bare null, `save("")` reports `empty` and touches nothing, and a write the browser refused keeps a session copy; the one adapter wiring that vault to IndexedDB, the ONE widget both provider cards render (state button + `Forget` + editor whose Save is disabled while empty); the page's single IndexedDB connection (`handles` + `secrets` + `rootpaths`, v3) |
+| Upload pure rules | `src/lib/upload/settings.ts`, `src/lib/upload/artboard.ts`, `src/lib/upload/geom.ts`, `src/lib/upload/geom/matrix.ts`, `src/lib/upload/geom/seg.ts`, `src/lib/upload/geom/arc.ts`, `src/lib/upload/geom/path.ts`, `src/lib/upload/geom/bounds.ts`, `src/lib/upload/geom/stroke.ts`, `src/lib/upload/geom/outline.ts`, `src/lib/upload/geom/ops.ts`, `src/lib/upload/geom/shapes.ts`, `src/lib/upload/geom/bakeshape.ts`, `src/lib/upload/bake.ts`, `src/lib/upload/strokeglobal.ts`, `src/lib/upload/restyle.ts`, `src/lib/upload/place.ts`, `hash.ts`, `src/lib/upload/prepare.ts`, `src/lib/upload/meta.ts`, `src/lib/upload/gemini.ts`, `src/lib/upload/embed.ts`, `src/lib/upload/jpeg.ts`, `src/lib/upload/optimize.ts`, `src/lib/upload/epspath.ts`, `src/lib/upload/eps.ts`, `src/lib/upload/raster.ts`, `src/lib/upload/export.ts`, `src/lib/upload/svgdom.ts`, `src/lib/upload/clean.ts`, `src/lib/upload/cleandom.ts` | settings domain (defaults/overrides/effective/fingerprint, the two paints — `readPaint(value, sentinel)`, `isTransparent`, `flattenColor` — with their clamps; `artboard.ts` = the artboard's content/preset/custom modes with their clamps and presets), 96 DPI source-length reading + padded fit + pinned-artboard fit (scale, letterboxed offsets, exact pinned px) + integer 15.1 MP targets, the matrix/segment/arc/path primitives, visible bounds incl. strokes/caps/joins/CTM (unsupported named, never guessed), stroke inheritance, the geometry bake (`bake.ts`: every transform into the coordinates, named refusals; `geom/outline.ts`: the ONE outline model — shapes + full path grammar as absolute move/line/cubic/close ops, affine transform, SVG `d` writer; `geom/bakeshape.ts`: which element survives which matrix), sha256, export-SVG preparation (export copy only: `place.ts` = the clone-bake-restyle-measure placement loop with `shippedBounds`/`insideArtboard`, `restyle.ts` = the stroke width written verbatim + colour restyle, `prepare.ts` = clean → place → viewBox-only root with the artboard rect always first, then `strokeglobal.ts`: each stroke property defined once — on the root when the shapes agree, on the stroked shape otherwise, never on a container), the exact metadata prompt + deterministic parse/validate + fingerprint, the verified Gemini client (endpoint/model/auth header/request builder/readers/classification), SVG `<title>/<desc>` + keyword embed/readback, XMP APP1 JPEG embed/readback + SOF reader + verifyJpeg, the SVGO wrapper (recorded version/config/hashes), the EPS PostScript path writer over the outline model + genuine subset writer + verifier, direct vector rasterization with background flatten + decode-back verification, the export record schema v1 + stage planner, the DOM helpers the clean policy shares (`svgdom.ts`: element/attribute/reference readers), and the clean export policy itself — `clean.ts` = the rules as one violation list (`verifyExportSvg`), `cleandom.ts` = the rebuilding pass that satisfies them (fold paint-only stylesheets, drop naming and foreign vocabulary, keep a referenced id under a minimal generated name, SVG 1.1 root) |
 | Upload feature | `src/upload/discovery.ts`, `scan.ts`, `journal.ts`, `settingsstore.ts`, `configstore.ts`, `prefsstore.ts`, `keystore.ts`, `rowmodel.ts`, `statemodel.ts`, `uploadundo.ts`, `actions.ts`, `uiactions.ts`, `metaactions.ts`, `exportactions.ts`, `useUpload.ts`, `runmetadata.ts`, `runexport.ts`, `exportstages.ts`, `exportvalidate.ts`, `exportcommit.ts`, `types.ts` | approved-SVG discovery (export/ excluded), scan orchestration, the in-flight journal, the four stores, row assembly (record + source hash → row, exact staleness), the model + reducer, the undo bridge, the action surface, both pipelines (metadata + export) and the atomic commit |
-| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset), the framed SVG preview |
+| Upload UI | `src/upload/UploadPanel.tsx`, `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`, `UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`, `UploadPaintSettings.tsx`, `UploadArtboardSettings.tsx`, `settingsfield.tsx`, `UploadPreview.tsx` | the tab shell (reusing the Generate SVG look), controls + provider card, bulk bar, list, rows, the editable/copiable metadata fields, the settings dialog (number/toggle/artboard rows + the shell; `settingsfield.tsx` = the props, the inherited/overridden marker and the ONE write path every row shares; `UploadPaintSettings.tsx` = the background and stroke-colour pickers: a "none of ours" swatch — transparent / artwork — plus the shared presets and a custom colour; the stroke colour's default is the black preset; `UploadArtboardSettings.tsx` = the artboard select, the custom W×H and the "Scale to N MP" row), the framed SVG preview |
 
 Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 126 files / 1334 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 144 files / 1620 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2, Generate SVG and SVG to upload panels and drives them
 with hotkeys and `data-testid` handles):
@@ -1115,15 +1389,54 @@ with hotkeys and `data-testid` handles):
   to "nobody chose" (the newest valid version). It is written through
   `saveMetaAt` (tmp → verify → overwrite), off the undo timeline, and the
   version chooser refuses honestly when it cannot be written.
-* **I-53 — the generation queue.** Confirming a batch while a run is in flight
-  APPENDS it; the run in flight is never interrupted and the button is never
-  disabled by it. `refs.queue` is the synchronous authority and `refs.abort`
-  (non-null) is what "a request is in flight" means, so a stale closure can
-  never start two runs or lose a batch. The queue is session-only — nothing
-  queued is ever sent after a restart — and Cancel stops the run AND drops the
-  whole queue, saying how many batches that was. A waiting batch is a scheduling
-  fact, never a row status: nothing about the files changes until its request
-  really starts, and the run that finished it says so in its final line.
+* **I-53 — the generation queue (rewritten 2026-10-08).** Confirming a batch
+  while a run is in flight APPENDS it; the run in flight is never interrupted
+  and the button is never disabled by it. `refs.queue` is the synchronous
+  authority and `refs.abort` (non-null) is what "a request is in flight" means,
+  so a stale closure can never start two runs or lose a batch. The queue is
+  session-only — nothing queued is ever sent after a restart — and Cancel stops
+  the run AND drops the whole queue, saying how many batches that was. A
+  waiting batch changes nothing about the files until its request really
+  starts; the row only SAYS it is next: `SvgRow.queued` is derived from the
+  queue every render (`withQueued`), never stored, so the badge reads a grey
+  "Next attempt" (`.svg-badge.queued`) while the source waits and the row's own
+  status is back the moment the batch is dropped — nothing to restore. A row's
+  own Regenerate/Generate while a run is in flight is the NEXT attempt
+  (`placement: "front"` → `regenerateNext` → `enqueueFront`): no dialog (the
+  queue line and the badge are visible before it starts), first in the queue,
+  and the same image leaves every later waiting batch (`dropIdFrom`, batches
+  re-planned and re-labelled, an emptied batch goes) so one queue never
+  generates it twice; the toast says "… — next attempt, first in the queue (N
+  queued) · removed from N waiting batch(es)". Bulk Generate, `G` and the
+  recovery retry still confirm and append. Every run event carries the run's
+  image total (`run-start.images`, `batch-start.images`, `batch-done.done /
+  .images`) and a run id (`batch-start.runId` — batch ids repeat per run), so
+  the log's request-done line reads "· d of m image(s) done".
+  Design: `docs/archive/2026-10-08-svg-queue-keepalive/design.md`.
+* **I-57 — the run outlives the tab (2026-10-08).** The Workbench mounts
+  `SvgPanel` once and parks it `hidden` on every other tab
+  (`data-testid="svg-shell"`, the same node across switches); the panel takes
+  `active` and, on every RETURN to the tab, dispatches `repin` and rescans when
+  nothing runs — never on the first mount, which scans anyway. The run's
+  numbers follow the user: `SvgRunPopup` is portalled to `<body>` (a hidden
+  ancestor would hide a fixed child) and says
+  `totalsLine(withChain(runTotals(progress, queue), chain), running)` —
+  "Generating · 7 done · 13 left · 1 failed · request 2 of 5" / "Done · 20 done
+  · 0 left". One chain of runs is ONE count: a queued batch starts as its own
+  run, so `drainQueue` resets `model.chain` with the first run of a chain and
+  folds each finished run's outcomes in (`chainAdd`) when the next one starts —
+  the run on screen is never counted twice. The final line stays until the ×
+  dismisses it (keyed by `runId`); a new run brings the popup back. `runtotals.ts`
+  is the one arithmetic behind the popup, the bulk bar and the log.
+* **I-58 — the list never moves under the user (2026-10-08).** The visible
+  order is PINNED: `model.order` (`pinOrder(previous, sortedIds(rows, sort))`)
+  is refreshed only by a scan (`rows`), a sort change and `repin` (tab
+  activation) — never by a run event (`rows-fn`) or a filter (the pin spans all
+  rows, a filter only hides). A landing SVG updates its row in place; the date
+  sort is applied once, deliberately, when the user comes back. Everything that
+  appears or grows during a run — the batch strip and the queue, together the
+  `RunRecord` (`svg-run-record`) — sits BELOW the list, so nothing inserted
+  above it can push the "APPROVED SOURCES / SVG OUTPUT" header away.
 * `keyvault.test.ts` — the key rules on their own: a save that storage refused
   is reported `session` (and the key still loads), `save("")` is `empty` and
   erases nothing, an unreadable store answers `unreadable` — never `none` — and
@@ -1377,7 +1690,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-set-bg-{transparent,white,black,gray,green,red,custom}`,
   `upload-set-bg-value`,
   `upload-set-stroke-color-{artwork,white,black,gray,green,red,custom}`,
-  `upload-set-stroke-color-value`, `upload-set-marker-*`, `upload-set-reset`,
+  `upload-set-stroke-color-value`, `upload-set-eps-converter`,
+  `upload-set-expand`, `upload-eps-helper{,-url,-check,-state}`,
+  `upload-set-marker-*`, `upload-set-reset`,
   `upload-set-close`), the metadata confirmation (`upload-meta-backdrop`,
   `upload-meta-{provider,endpoint,prompt,confirm,dismiss,cancel}`,
   `upload-preview-strip` / `upload-preview-{id}` +
@@ -1623,23 +1938,26 @@ path on the clipboard ("Copy as path", `Ctrl+Shift+C`), and that is what the app
 now takes:
 
 * **One way to point the app at a folder to scan**: `ui/pickroot.pickRootWithPath()`,
-  used by all three tabs' pickers. It reads the clipboard before the dialog (the
-  click's activation is freshest there) and once more only if that read was empty
-  (the other natural order: copy after picking), then matches the text against
-  the folder that was really picked: the same leaf → adopted as *copied*; the
-  copied parent → the picked name appended and flagged *completed*; a file path
-  or a bare word → **nothing** is stored (I-29: no memory beats a guess).
+  used by all four tabs' pickers. It reads the clipboard before the dialog (the
+  click's activation is freshest there) and once more when that read did not
+  name the picked folder (the other natural orders: copy after picking, or a
+  stale non-empty clipboard beside a fresh copy), then matches the text against
+  the folder that was really picked: the same leaf → adopted as *copied*; a
+  path one level directly inside the folder → its exact parent, *derived*
+  (2026-10-09); anything else — an unrelated folder, a copied parent, a file
+  path or a bare word → **nothing** is adopted (I-29: no memory beats a guess).
 * **The full path is visible with the root** (I-36): the row under the controls
   shows it once known (`ui/FolderBar`, §16) and names the state the value is in —
-  the path, *completed — check it*, or *full path not captured*. The row follows
+  the path, or *full path not captured* (*completed — check it* existed until I-59). The row follows
   the storage (`ui/FolderBar.useRootPath`, a subscription), so a capture in one
   tab is visible in the other without a reload. Until 2026-10-05 this was a pill
   plus a `Full path for copies` field with a `Use copied path` button and a
   status sentence; the row replaced all three (I-44/I-45).
-* The storage keeps one entry per folder name and records *how* the path was
-  obtained (`{ path, how }`, `how ∈ copied|completed`); a value written before
-  this change — a bare string, or a `pasted` record from the field's days — is
-  read as `copied`, so no memory is lost.
+* The storage keeps one record per folder **handle** (`{ handle, path, how }`,
+  `how = copied | derived`, persisted per handle in IndexedDB — I-63); the
+  old name-keyed `{ [folderName]: path }` in `localStorage` is never read —
+  a value from before this change cannot prove which folder it was for, and a
+  guess may not survive as data (I-59).
 * The bug the pick-time capture exposed is fixed with it: a scan commit is built
   from a state snapshot, and when React batched it with the pick's own update the
   snapshot carried the **old** (empty) root name and won — what showed the root
@@ -1753,9 +2071,9 @@ All three now mount one shared control, `ui/FolderBar`:
 * `sel-folder-path` / `v2-folder-path` / `svg-folder-path` — a full-width,
   read-only row directly below the controls: the complete captured path in
   monospace text, whole value in its `title`, selectable like any text. No input,
-  no button, no status line; the three states are the path, the same path plus
-  `completed — check it`, and the folder's name plus `full path not captured`
-  (I-46).
+  no button, no status line; the states are the path, and the folder's name plus
+  `full path not captured` (I-46; the `completed — check it` state was removed
+  with the completion, I-59).
 * Removed with it: `ui/RootPathField` (the field, the `Use copied path` button,
   the note), `ui/userootpath` (the live read lives in `ui/FolderBar`),
   `lib/rootpath.saveRootPath` (the field's own setter, and `PathHow` loses the
@@ -1766,9 +2084,8 @@ All three now mount one shared control, `ui/FolderBar`:
 * The pick-time capture (I-35) is untouched and is now the **only** writer of the
   memory: `ui/pickroot.pickRootWithPath` still reads the clipboard before and
   after the dialog, matches it against the folder that was really picked, and
-  never invents a path. Its toast now says `Folder path captured: …` /
-  `Folder path completed from the copied folder: … — check it`, because the path
-  itself is on screen in the row.
+  never invents a path. Its toast now says `Folder path captured: …`, because
+  the path itself is on screen in the row.
 * Rescan is unchanged in all three tabs (same handlers, labels and testids), and
   copies are unchanged (I-28): the real folder path when one was captured, the
   folder-name fallback otherwise.
@@ -1981,8 +2298,9 @@ answers `400` from the provider.
   `%%CreationDate` (the run's clock) → `%%BoundingBox` (integer) →
   `%%HiResBoundingBox` (exact points) → `%%DocumentData: Clean7Bit` →
   `%%LanguageLevel: 3`, then EndComments/Prolog/Setup sections, the uprighting
-  CTM and `%%EOF`. `verifyEps` requires those three markers, so a file that
-  lost them is `partial`, never shipped as EPS 10.
+  CTM (`[a b c d tx ty] concat` — ONE array, I-61) and `%%EOF`. `verifyEps`
+  requires those three markers AND an executable program, so a file that lost
+  them, or one the interpreter would stop in, is `partial`, never shipped.
 * **Two global buttons** (points 3 + 4), both acting on the checked rows:
   * `upload-meta-selected` ("✦ Generate metadata (N)") — N counts the selected
     icons that have NO metadata text yet (a draft is not re-requested); rows
@@ -2070,3 +2388,69 @@ leftover from before the rename. The sweep removes such a leftover in both
 shapes: named by the icon's own previous `export.json` (when the current EPS is
 on disk), or an orphan no record names — an orphan still has to pass the naming
 rule that proves the app wrote it, so a foreign file is never a candidate.
+
+## The Full path that glued two folders together (2026-10-09, I-59)
+
+Report (SVG to upload, two screenshots): the user picked
+`F:\…\single\test_process_3`; the list was right, but the `Full path` row
+read `F:\…\single\test_processing_2\_split_output\2026-10\<run>\<piece>\split_03\export\test_process_3`,
+and every "copy folder path" made from the new root inherited the wrong prefix
+(I-56 builds the copy from the remembered root path).
+
+Measured cause: the clipboard still held the app's **own** last copy — the
+export folder of the previous root — and the picker's "parent + name"
+completion appended the new folder's name to it. The known-root derivation
+(I-51) could not overrule it, because the known root's `resolve()` answered
+`null` (a sibling tree) and that definite "no" was read as "cannot say"; the
+guess had already been stored, keyed by the folder's name; and `Rescan`
+re-read only for an **empty** path, so the one button the row names could not
+repair it. One root cause: a guess was treated as a capture.
+
+The first fix (I-59 as first written): the app's own copy is never completed;
+a known root vetoes a completion its `resolve()` rules out; `Rescan`
+reconsiders a `completed` path. **Not enough** — second report the same day:
+picking `…\\test_process_3\\_split_output` showed `<the glued guess>\\_split_output`.
+The stored guess for `test_process_3` had survived (it was storage, not code),
+the upload tab restored that folder at boot as a known root, and the
+derivation (I-51) — trusted as exact — built on it. A guess that can become a
+base for an exact-looking path is not a flag, it is a lie waiting for a child.
+
+The second fix (I-59 as it stands): **no completion at all** — exact leaf or
+nothing; a stored `completed` record reads as no path (the poison purges
+itself on read); derivation starts only from an exact capture; a capture that
+arrives later (`Rescan`, `Ctrl+V`) names the known handle so the next child
+pick is exact. Removed with it: `knownroots.provenOutside`,
+`copypath.lastCopiedByApp`, `pickroot.believable`, the `completed — check it`
+row state and toast. No new control, no new storage key.
+Design: `archive/2026-10-09-root-path-glued-folders/design.md` (§5 follow-up).
+
+### Third report the same evening — and the root cause (I-63)
+
+**Not fixed.** The user re-picked `single\test_process_3\_split_output` (its
+exact path on the clipboard) and the row kept showing the glued path; picking
+`test_process_3` itself raised *full path not captured* although it is the same
+root one level up — *"it is the same root and only one level down or up so it
+should not change anything or raise a error"*. Re-read with that lens the two
+symptoms are one bug: the memory was keyed by folder NAME, so the frozen glue
+served every `_split_output` (report 1: it stayed glued), while the `test_process_3`
+slot — holding a guess — read as unknown for the parent pick (report 2: a false
+alarm). Boot re-seeding, a stale pre-dialog clipboard re-freezing glue as
+`copied`, and `pathFromCopied`'s exact-leaf-only (it could see `…\test_process_3`
+was one level inside the picked `test_process_3` and refused anyway) were the
+three amplifiers; the name key was the root cause. No string rule can survive a
+store that cannot tell two folders apart.
+
+What this build does instead (I-59 rewritten, I-51/I-35/I-52 amended, I-63 new):
+the path is bound to the picked folder's **handle** and persisted with it
+(IDB `iconSplitter/rootpaths`, `isSameEntry` identity); the v1 name-keyed key is
+never read; a copied path names the folder when its leaf is the folder **or**
+the folder is the leaf's parent (one level down/up is the same root and is
+exact, `how: derived`); derivation runs in both directions from a handle the
+app already placed (`resolve` down, `picked.resolve(known)` up, both tails
+verified); `pathForPick` re-reads the clipboard after the dialog whenever the
+pre-dialog text did not match (the stale-text trap); a pick that cannot be
+named binds nothing for that handle — a name-same's path can never stand in.
+One regression for each report is in `tests/pickroot.test.ts`
+("the third report (2026-10-09)"), `tests/folderbar.test.tsx` and
+`tests/upload_ui.test.tsx`.
+Design: `archive/2026-10-09-root-path-identity/DESIGN.md`.

@@ -11,6 +11,8 @@ const LAST_KEY = "iconSplitter.lastPreset.v1";
 const DB_NAME = "iconSplitter";
 const DB_STORE = "handles";
 const SECRET_STORE = "secrets";
+/** Captured full paths, each WITH the folder handle it was captured for (I-63). */
+export const ROOTPATHS_STORE = "rootpaths";
 
 export function loadPresets(): Preset[] {
   const text = localStorage.getItem(PRESETS_KEY);
@@ -45,13 +47,13 @@ export async function loadHandles(presetName: string): Promise<StoredHandles | n
 }
 
 /**
- * Version 2 added the `secrets` object store (RULE 20). Anyone who used the
- * app before it shipped already has a version-1 database holding only
- * `handles`, and opening it at the same version never runs `onupgradeneeded` —
- * so every key write would fail. Bumping the version is what creates the store
- * for them.
+ * Version 2 added the `secrets` object store (RULE 20). Version 3 adds
+ * `rootpaths` (I-63): captured folder paths travel with their handle. Anyone
+ * who used an older build never gets the new store without a version bump —
+ * opening at the same version never runs `onupgradeneeded`, so every write
+ * would fail. Bumping the version is what creates the store for them.
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /**
  * The page's ONE connection. Opening a fresh connection per read and per write
@@ -98,11 +100,12 @@ function connect(): Promise<IDBDatabase | null> {
   });
 }
 
-/** First open of a database (or of a new version): both stores must exist. */
+/** First open of a database (or of a new version): every store must exist. */
 function upgrade(req: IDBOpenDBRequest): void {
   const db = req.result;
   if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
   if (!db.objectStoreNames.contains(SECRET_STORE)) db.createObjectStore(SECRET_STORE);
+  if (!db.objectStoreNames.contains(ROOTPATHS_STORE)) db.createObjectStore(ROOTPATHS_STORE);
 }
 
 /** Lets go the moment someone else needs the database, then reopens on demand. */
