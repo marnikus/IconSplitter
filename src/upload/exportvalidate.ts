@@ -2,13 +2,14 @@
 // §3.2): everything is checked BEFORE anything commits, so a failed check
 // leaves the last valid package untouched. The SVG must parse (and its
 // embedded metadata must read back exactly), the JPEG must decode to the
-// recorded dimensions (and its XMP must read back exactly), the EPS must
-// verify, and the record must round-trip.
+// recorded dimensions (and its XMP must read back exactly), and EPS must
+// verify with its XMP fields reading back exactly when metadata was accepted.
 
 import { readEmbeddedMetadata } from "../lib/upload/embed";
 import { verifyExportSvg } from "../lib/upload/clean";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEpsDocument } from "../lib/upload/eps";
+import { verifyEpsMetadata } from "../lib/upload/epsmetadata";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { CommitValidation } from "./exportcommit";
 import type { Artifacts } from "./exportstages";
@@ -20,11 +21,14 @@ export interface ArtifactValidation extends CommitValidation {
 /** Validation runs BEFORE commit: a failed check commits nothing. */
 export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null): ArtifactValidation {
   const errors: string[] = [];
+  const svgReadback = readbackCheck(art.svgOut, metadata, errors);
+  const epsReadback = epsMetadataCheck(art.epsText, metadata, errors);
+  const epsDocument = art.epsFailure === null && epsCheck(art.epsText, errors);
   return {
     svg: svgCheck(art.svgOut, errors),
-    readback: readbackCheck(art.svgOut, metadata, errors),
+    readback: svgReadback && epsReadback,
     jpeg: jpegCheck(art, metadata, errors),
-    eps: epsCheck(art.epsText, errors),
+    eps: epsDocument && epsReadback,
     json: true,
     errors,
   };
@@ -64,6 +68,13 @@ function epsCheck(epsText: string | null, errors: string[]): boolean {
   if (epsText === null) return true;
   const ok = verifyEpsDocument(epsText).ok; // converter-neutral (2026-10-09): Inkscape's EPS passes too
   if (!ok) errors.push("the EPS does not verify");
+  return ok;
+}
+
+function epsMetadataCheck(epsText: string | null, metadata: IconMetadata | null, errors: string[]): boolean {
+  if (epsText === null || metadata === null) return true;
+  const ok = verifyEpsMetadata(epsText, metadata);
+  if (!ok) errors.push("the embedded EPS XMP metadata does not read back");
   return ok;
 }
 

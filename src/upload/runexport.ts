@@ -137,7 +137,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
     });
     checkCancel(args.signal);
     const validation = validateArtifacts(art, metadata);
-    if (!validation.svg || !validation.jpeg) {
+    if (artifactsInvalid(art, validation)) {
       return failedResult({ rowId: row.id, stages: plan.plan.stages, record: args.record, klass: "validate", detail: validation.errors.join("; ") });
     }
     return await commitAll(args, plan, {
@@ -156,6 +156,10 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
   }
 }
 
+function artifactsInvalid(art: Artifacts, validation: CommitValidation): boolean {
+  return !validation.svg || !validation.jpeg || !validation.readback
+    || (art.epsText !== null && !validation.eps);
+}
 
 /**
  * The record for this run (outputs/status/timestamps are filled at commit).

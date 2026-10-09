@@ -183,11 +183,16 @@ describe("planStages — selective re-export (design §4.4)", () => {
     expect(plan.rebuild).toEqual({ svg: true, jpg: true, eps: false });
   });
 
-  it("a metadata edit re-embeds only — no render, no AI", () => {
+  it("a metadata edit re-embeds without render or AI, and refreshes requested EPS", () => {
     const withMeta = withMetadata("m-old");
     const plan = planStages(withMeta, input({ hasMetadata: true, metadataFp: "m-new" }));
     expect(plan.stages).toEqual(["embed", "validate", "commit"]);
     expect(plan.rebuild).toEqual({ svg: true, jpg: true, eps: false });
+
+    withMeta.tools.eps.enabled = true;
+    const withEps = planStages(withMeta, input({ hasMetadata: true, metadataFp: "m-new", includeEps: true }));
+    expect(withEps.stages).toEqual(["embed", "eps", "validate", "commit"]);
+    expect(withEps.rebuild).toEqual({ svg: true, jpg: true, eps: true });
   });
 
   it("an optimize toggle re-optimizes and re-embeds, keeping the JPEG", () => {
@@ -231,6 +236,14 @@ describe("planStages — selective re-export (design §4.4)", () => {
     const legacy = record({ tools: { svgo: SVGO_OFF, eps: { enabled: true, writer: "builtin-subset-1" } as ExportRecord["tools"]["eps"] } });
     expect(planStages(legacy, input({ includeEps: true, epsConverter: "builtin", outputs: { svg: true, jpg: true, eps: true } })).stages).toEqual(["eps", "validate", "commit"]);
     expect(planStages(legacy, input({ includeEps: true, epsConverter: "inkscape", outputs: { svg: true, jpg: true, eps: true } })).rebuild.eps).toBe(true);
+  });
+
+  it("retries a failed EPS stage on the next requested export", () => {
+    const partial = record({ status: "partial", error: "the EPS stage failed" });
+    partial.tools.eps.enabled = true;
+    const retry = planStages(partial, input({ includeEps: true, outputs: { svg: true, jpg: true, eps: true } }));
+    expect(retry.stages).toEqual(["eps", "validate", "commit"]);
+    expect(retry.rebuild.eps).toBe(true);
   });
 
   it("nothing changed → no work at all", () => {

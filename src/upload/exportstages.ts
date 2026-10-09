@@ -16,6 +16,7 @@ import type { DirHandleLike } from "../lib/fs";
 import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
+import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { enforceExportSvg } from "../lib/upload/clean";
 import { readBytesAt } from "./runexport";
 
@@ -111,7 +112,7 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
-    art.epsText = eps.eps;
+    art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
     art.epsFixes = eps.fixes;
     art.epsWriter = eps.writer;
   } else art.epsFailure = describeFailure(eps); // honest: the EPS stage failed → partial

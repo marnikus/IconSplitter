@@ -565,12 +565,13 @@ opt-in class as Generate SVG → Requesty; design
   case, no period") for both lines; an answer that comes back as two sentences
   is kept as written, minus its final period.
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
-  — no AI, no render; a missing output rebuilds just that output; nothing
-  changed → no work). Every output validates before it commits (SVG parses +
-  metadata readback; JPEG decodes at the recorded dims + XMP readback; EPS
-  header + bounding box) and commits atomically (tmp → verify → overwrite →
-  cleanup, `export.json` LAST as the commit marker), so a crash mid-commit
-  leaves the last valid package in place. EPS is a genuine writer for a
+  without AI or raster render; when EPS is requested it also refreshes the EPS
+  and its metadata; a missing output rebuilds just that output; nothing changed
+  → no work). Every output validates before it commits (SVG parses + metadata
+  readback; JPEG decodes at the recorded dims + XMP readback; EPS header and
+  bounding box, plus accepted XMP readback) and commits atomically (tmp → verify
+  → overwrite → cleanup, `export.json` LAST as the commit marker), so a crash
+  mid-commit leaves the last valid package in place. EPS is a genuine writer for a
   documented subset; anything outside fails that stage honestly → `partial`
   (SVG/JPEG stay committed). A **rounded `<rect>`** is INSIDE the subset
   (2026-10-08, design `docs/archive/2026-10-08-eps-rounded-rect/design.md`):
@@ -611,9 +612,14 @@ opt-in class as Generate SVG → Requesty; design
   added because this writer emits EPS, not a page-structured PostScript document.
   The writer ID is `builtin-subset-2`; planning compares it as well as the
   converter so existing packages refresh the EPS only after this metadata change.
-  Every EPS — whoever wrote it — passes the SAME converter-neutral gate
-  before commit (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`,
-  a `%%BoundingBox`, `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are
+  After conversion, accepted metadata is embedded as the same Dublin Core XMP
+  packet used by JPEG (`dc:title`, `dc:description`, `dc:subject`), using
+  `%ADO_ContainsXMP: MainFirst` and an EPS pdfmark metadata stream with BDC/EMC
+  around the drawing. EPS metadata is read back before and during atomic commit;
+  a metadata edit refreshes requested EPS without rasterizing again. Every EPS
+  — whoever wrote it — passes the SAME converter-neutral gate before commit
+  (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`, a `%%BoundingBox`,
+  `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are
   the built-in writer's own contract — and since 2026-10-09 `verifyEps` also
   runs the subset stack checker (`lib/upload/epscheck`, I-61), which the
   built-in converter applies to its own output before it answers ok. A helper that is down / an Inkscape
