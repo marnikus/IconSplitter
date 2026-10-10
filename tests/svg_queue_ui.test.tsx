@@ -13,6 +13,13 @@ import { compositeLayout } from "../src/lib/svgcomposite";
 import { pairId } from "../src/lib/pairing";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { saveApiKey } from "../src/svg/keystore";
+import { savePresets } from "../src/svg/promptstore";
+import type { PromptPreset } from "../src/lib/promptpresets";
+
+const PRESETS: PromptPreset[] = [
+  { name: "Bolder", text: "Make bolder." },
+  { name: "Simpler", text: "Remove detail." },
+];
 import SvgPanel from "../src/svg/SvgPanel";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -170,6 +177,7 @@ beforeEach(async () => {
   await saveApiKey(KEY);
   window.localStorage.clear();
   stored.clear();
+  savePresets(PRESETS);
   resetAppStore();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -376,19 +384,35 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     await click("[data-testid=svg-regenerate-selected]");
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
-    const manifest = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+    // 2026-10-09: regeneration is 1 image per request
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("2 × 1 max");
+    expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
+    expect(q("[data-testid=svg-confirm-regen-preset]" )).not.toBeNull();
+    // 2026-10-09: regen is 1 per request, so first page shows 1 of 2
+    let manifestPage1 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
       .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
-    expect([...manifest].sort()).toEqual(["court_AI", "fog_AI"]);
-    expect(manifest.some((name) => name.includes("mist"))).toBe(false);
+    expect(manifestPage1).toHaveLength(1);
+    expect(["court_AI", "fog_AI"]).toContain(manifestPage1[0]);
+    // walk to next request
+    await click("[data-testid=svg-batch-next]");
+    let manifestPage2 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+      .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
+    expect(manifestPage2).toHaveLength(1);
+    const combined = [...manifestPage1, ...manifestPage2].sort();
+    expect(combined).toEqual(["court_AI", "fog_AI"]);
+    expect(combined.some((name) => name.includes("mist"))).toBe(false);
 
     await click("[data-testid=svg-confirm-generate]");
-    await waitFor(() => t.calls.length === 2, "the Regenerate batch to send");
-    const sent = (callsOf(t)[1] ?? []).map((name) => name ?? "");
-    expect([...sent].sort()).toEqual(["court_AI.png", "fog_AI.png"]);
-    expect(sent.map((name) => name.replace(/\.png$/, ""))).toEqual(manifest);
-    expect(sent).toHaveLength(2);
-    expect(sent.some((name) => name.includes("mist"))).toBe(false);
+    await waitFor(() => t.calls.length === 2, "the Regenerate first request to send (2×1)");
     await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+    await waitFor(() => t.calls.length === 3, "the Regenerate second request to send (2×1)");
+    const sent1 = (callsOf(t)[1] ?? []).map((name) => name ?? "");
+    const sent2 = (callsOf(t)[2] ?? []).map((name) => name ?? "");
+    const sentAll = [...sent1, ...sent2];
+    expect([...sentAll].sort()).toEqual(["court_AI.png", "fog_AI.png"]);
+    expect(sentAll).toHaveLength(2);
+    expect(sentAll.some((name) => name.includes("mist"))).toBe(false);
+    await act(async () => { t.streams[2].push(streamFrames(t.calls[2].items)); t.streams[2].close(); });
     await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the regeneration batch to finish");
 
     const arch = root.children.get("architecture") as FakeDir;
@@ -416,6 +440,7 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     await check(FOG);
     await click("[data-testid=svg-regenerate-selected]");
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
+    expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
     expect(q("[data-testid=svg-confirm-queue-note]")).not.toBeNull();
     expect(txt("[data-testid=svg-confirm-generate]")).toContain("Add to queue");
     await click("[data-testid=svg-confirm-generate]");

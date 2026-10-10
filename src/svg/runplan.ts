@@ -23,17 +23,18 @@ export interface PlanCtx {
  * the previewed sheet and the sent sheet are the same picture (see
  * lib/selectionorder).
  */
-export function planOf(c: PlanCtx, ids: string[]): BatchPlan[] {
+export function planOf(c: PlanCtx, ids: string[], regen: RegenPlan | null = null): BatchPlan[] {
   const picked = inIdOrder(c.rows, ids, (r) => r.source.id);
-  return planBatches(picked.map((r) => toBatchSource(r.source)), perRequestOf(c));
+  return planBatches(picked.map((r) => toBatchSource(r.source)), perRequestOf(c, regen));
 }
 
 /**
  * Icons one request carries: the user's configured size, nothing else. The
  * reasoning tier changes only how long silence is tolerated (2026-10-05 D1).
+ * When regen is current-svg, size is 1.
  */
-export function perRequestOf(c: PlanCtx): number {
-  return requestSizeFor(c.m.config.imagesPerRequest, plannedRegen());
+export function perRequestOf(c: PlanCtx, regen: RegenPlan | null = null): number {
+  return requestSizeFor(c.m.config.imagesPerRequest, regen ?? plannedRegen());
 }
 
 /**
@@ -47,10 +48,11 @@ function plannedRegen(): RegenPlan {
 }
 
 /** Why a run cannot start, or null when it can. Never a partial reason. */
-export function guard(c: SvgCtx, ids: string[]): string | null {
+export function guard(c: SvgCtx, ids: string[], regen: RegenPlan | null = null): string | null {
   if (ids.length === 0) return "Select at least one approved source";
   if (c.refs.root.current === null) return "Pick the source folder first";
   if (c.refs.key.current === null) return "Add your Requesty API key first — it stays on this device";
-  const regen = resolveRegen();
-  return regen.ok ? null : regen.problem;
+  if (regen !== null) return null;
+  const stored = resolveRegen();
+  return stored.ok ? null : stored.problem;
 }

@@ -12,13 +12,14 @@
 //   * a row's Regenerate while a run is in flight is the NEXT attempt: first in
 //     the queue, no dialog, and the same image leaves every later batch so one
 //     queue never generates it twice.
+// 2026-10-09: regeneration prompt is per-batch, chosen in popup.
 
 import type { DirHandleLike } from "../lib/fs";
 import { log } from "../log/logstore";
 import type { SvgAction } from "./statemodel";
 import { planOf } from "./runplan";
 import { resolveRegen } from "./regenstore";
-import { regenLabelOf } from "../lib/svgregen";
+import { MAIN_PLAN, regenLabelOf, regenPlanFromPresetName, type RegenPlan } from "../lib/svgregen";
 import { inIdOrder } from "../lib/selectionorder";
 import { runGeneration } from "./runner";
 import { withRunLog } from "./runlog";
@@ -68,14 +69,19 @@ export interface Queued {
 }
 
 /** Queues one confirmed batch — behind what waits, or first (a row's next attempt). */
-export function enqueueBatch(ctx: RunCtx, ids: string[], placement: Placement = "back"): Queued {
-  const item = queueItem(ids, requestsOf(ctx, ids), labelOf(ctx, ids));
+export function enqueueBatch(
+  ctx: RunCtx,
+  ids: string[],
+  placement: Placement = "back",
+  regen: RegenPlan | null = null,
+): Queued {
+  const item = queueItem(ids, requestsOf(ctx, ids, regen), labelOf(ctx, ids), regen);
   const { queue: base, removedFrom } = placement === "front" ? withoutIds(ctx, ids) : { queue: ctx.refs.queue.current, removedFrom: 0 };
   const queue = placement === "front" ? enqueueFront(base, item) : enqueue(base, item);
   setQueue(ctx, queue);
   log({
     feature: "svg", action: "batch-queued",
-    detail: `${ids.length} source(s) → ${item.requests} request(s)${placement === "front" ? " · first in the queue" : ""}`,
+    detail: `${ids.length} source(s) → ${item.requests} request(s)${regen ? ` · ${regenLabelOf(regen)}` : ""}${placement === "front" ? " · first in the queue" : ""}`,
     data: { sources: ids.length, requests: item.requests, waiting: queuedCount(queue), placement, removedFrom },
   });
   return { waiting: queuedCount(queue), removedFrom };
@@ -86,7 +92,7 @@ function withoutIds(ctx: RunCtx, ids: string[]): { queue: QueueItem[]; removedFr
   let queue = ctx.refs.queue.current;
   let removedFrom = 0;
   for (const id of ids) {
-    const dropped = dropIdFrom(queue, id, (rest) => ({ requests: requestsOf(ctx, [...rest]), label: labelOf(ctx, [...rest]) }));
+    const dropped = dropIdFrom(queue, id, (rest) => ({ requests: requestsOf(ctx, [...rest], null), label: labelOf(ctx, [...rest]) }));
     queue = dropped.queue;
     removedFrom += dropped.removedFrom;
   }
@@ -99,9 +105,21 @@ function withoutIds(ctx: RunCtx, ids: string[]): { queue: QueueItem[]; removedFr
  * the run in flight is never touched.
  */
 export function regenerateNext(ctx: RunCtx, ids: string[]): void {
-  const { waiting, removedFrom } = enqueueBatch(ctx, ids, "front");
+  // For front placement (no dialog), use global regen as fallback
+  const regen = resolveCurrentRegen(ctx);
+  const { waiting, removedFrom } = enqueueBatch(ctx, ids, "front", regen);
   const tail = removedFrom === 0 ? "" : ` · removed from ${removedFrom} waiting batch${removedFrom === 1 ? "" : "es"}`;
   ctx.say(`${labelOf(ctx, ids)} — next attempt, first in the queue (${waiting} queued)${tail}`);
+}
+
+function resolveCurrentRegen(ctx: RunCtx): RegenPlan | null {
+  const stored = resolveRegen();
+  if (stored.ok && stored.plan.kind !== "main") return stored.plan;
+  // If no stored regen or main, fallback to first preset if exists
+  const presets = ctx.m.presets;
+  if (presets.length === 0) return null;
+  const res = regenPlanFromPresetName(presets[0].name, presets);
+  return res.ok ? res.plan : null;
 }
 
 /** Drops one batch that is still waiting; the run in flight is untouched. */
@@ -129,13 +147,29 @@ export function busy(ctx: RunCtx): boolean {
  * One confirmation = one queued batch. It starts now when nothing is in flight,
  * and simply waits (in confirmation order) when something is: the user's added
  * work is never dropped, and the run in flight is never interrupted.
+ * 2026-10-09: regenPresetName null = first generation (main prompt), string = regeneration prompt.
  */
-export async function confirmRun(ctx: RunCtx): Promise<void> {
+export async function confirmRun(ctx: RunCtx, regenPresetName: string | null): Promise<void> {
   const dialog = ctx.m.dialog;
   if (dialog === null || dialog.kind !== "confirm") return;
   const ids = dialog.ids;
+  const operation = dialog.operation;
+  let regen: RegenPlan | null = null;
+  if (operation === "regenerate" && regenPresetName !== null) {
+    const res = regenPlanFromPresetName(regenPresetName, ctx.m.presets);
+    if (!res.ok) {
+      ctx.say(res.problem, true);
+      return;
+    }
+    regen = res.plan;
+  } else if (operation === "generate") {
+    regen = null;
+  } else if (operation === "regenerate" && regenPresetName === null) {
+    // Should not happen — regeneration must have a preset, but fallback to stored
+    regen = resolveCurrentRegen(ctx);
+  }
   ctx.dispatch({ type: "dialog", dialog: null });
-  const { waiting } = enqueueBatch(ctx, ids);
+  const { waiting } = enqueueBatch(ctx, ids, "back", regen);
   if (nextRun(ctx.refs.queue.current, busy(ctx)) === null) {
     log({ feature: "svg", action: "batch-waiting", detail: `${waiting} batch(es) waiting`, data: { waiting } });
     return ctx.say(`${ids.length} image(s) added — they wait for the run in flight (${waiting} queued)`);
@@ -164,29 +198,18 @@ async function drainQueue(ctx: RunCtx): Promise<void> {
 /** One batch leaves for the provider: exactly the path a first run always took. Returns its per-request record. */
 async function startRun(ctx: RunCtx, item: QueueItem): Promise<BatchOutcome[]> {
   const ids = item.ids;
-  // Resolved at the moment the run starts, so a saved prompt deleted while this
-  // batch waited is refused honestly instead of sent without its text.
-  const regen = resolveRegen();
-  if (!regen.ok) {
-    ctx.say(regen.problem, true);
-    return [];
-  }
-  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s) · ${regenLabelOf(regen.plan)}`, data: { sources: ids.length } });
+  const regen = item.regen ?? MAIN_PLAN;
+  log({ feature: "svg", action: "generate-confirmed", detail: `${ids.length} source(s) · ${regenLabelOf(regen)}`, data: { sources: ids.length } });
   const controller = beginRun(ctx, ids);
-  // The pick order, the same list the confirmation planned and previewed from:
-  // the contact sheet this request carries is drawn cell by cell in it, so the
-  // picture the user approved IS the picture that leaves (lib/selectionorder).
   const sources = inIdOrder(ctx.rows, ids, (r) => r.source.id).map((r) => r.source);
   const summary = await runGeneration({
     root: ctx.refs.root.current as DirHandleLike,
     apiKey: ctx.refs.key.current ?? "",
-    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, regen: regen.plan, sources,
+    config: ctx.m.config, caps: ctx.m.caps, params: ctx.m.params, prompt: ctx.m.prompt, regen, sources,
     metas: ctx.refs.metas, signal: controller.signal,
     onEvent: withRunLog((event) => onRunEvent(event, ctx)),
   });
   ctx.dispatch({ type: "running", running: false });
-  // The finished run stays visible: its per-request outcomes are the record of
-  // what was sent, what it cost and what failed (the batch strip shows it).
   ctx.refs.abort.current = null;
   await reloadSidecars(ctx.refs, sources, ctx);
   ctx.say(endLine(summary, controller.signal.reason), summary.saved === 0 && summary.problems.length > 0);
@@ -223,6 +246,6 @@ function labelOf(ctx: RunCtx, ids: string[]): string {
  * showed (RULE 10). Planned from the same splitter the runner uses, so a queued
  * line can say how many requests it really is.
  */
-function requestsOf(ctx: RunCtx, ids: string[]): number {
-  return Math.max(1, planOf(ctx, ids).length);
+function requestsOf(ctx: RunCtx, ids: string[], regen: RegenPlan | null): number {
+  return Math.max(1, planOf(ctx, ids, regen).length);
 }

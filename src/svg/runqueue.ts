@@ -9,6 +9,8 @@
 // in-flight journal's promise is to resend nothing without the user, so
 // restoring a queue from storage would send work on boot. Nothing here writes.
 
+import type { RegenPlan } from "../lib/svgregen";
+
 export interface QueueItem {
   /** Session-only id, stable while the batch waits (a drop names it). */
   id: string;
@@ -20,14 +22,21 @@ export interface QueueItem {
   requests: number;
   /** What it is, for the waiting list: the first source plus "+ N more". */
   label: string;
+  /** Regeneration plan for this batch: null = first generation (main prompt). */
+  regen: RegenPlan | null;
 }
 
 let seq = 0;
 
 /** One confirmed batch, ready to wait its turn. */
-export function queueItem(ids: readonly string[], requests: number, label: string): QueueItem {
+export function queueItem(
+  ids: readonly string[],
+  requests: number,
+  label: string,
+  regen: RegenPlan | null = null,
+): QueueItem {
   seq += 1;
-  return { id: `q${seq}`, ids: [...ids], count: ids.length, requests: Math.max(1, requests), label };
+  return { id: `q${seq}`, ids: [...ids], count: ids.length, requests: Math.max(1, requests), label, regen };
 }
 
 /** Appends: new work never interrupts or displaces what is already waiting. */

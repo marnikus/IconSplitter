@@ -29,6 +29,8 @@ import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
+import { MAIN_PLAN, type RegenPlan } from "../lib/svgregen";
+import { findPreset } from "../lib/promptpresets";
 
 /** Everything an action may touch. One object, passed everywhere. */
 export interface SvgCtx {
@@ -89,7 +91,7 @@ export interface SvgActions extends SvgPromptActions {
   /** Bulk Regenerate: only checked rows with a valid existing SVG enter confirmation. */
   regenerateSelected: (ids: string[]) => void;
   cancelRun: () => void;
-  confirmGenerate: () => void;
+  confirmGenerate: (regenPresetName: string | null) => void;
   dismissDialog: () => void;
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
@@ -149,7 +151,6 @@ function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPr
   const latest = useRef(ctx);
   latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
-  // validated on the way in as well as on the way out (RULE 13)
   const setPreviewBg = useCallback((bg: PreviewBackground) => latest.current.dispatch({ type: "bg", bg: parsePreviewBackground(bg) }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
@@ -187,7 +188,6 @@ async function refreshModelsNow(latest: { current: SvgCtx }): Promise<void> {
   const c = latest.current;
   try {
     const models = await refreshCatalog(c.m.config.baseUrl, c.refs.key.current);
-    // Storing the list is enough: the sync effect re-resolves the caps.
     c.dispatch({ type: "catalog", catalog: models });
     c.say(`Model list refreshed — ${models.length} models`);
   } catch (error) {
@@ -221,15 +221,15 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
   latest.current = ctx;
   const requestGenerate = useCallback((ids: string[], placement: Placement = "back", operation: SvgOperation = "generate") => {
     const c = latest.current;
-    const why = guard(c, ids);
+    const regenForGuard: RegenPlan | null = operation === "regenerate" ? dummyRegen(c) : null;
+    const why = guard(c, ids, regenForGuard);
     if (why !== null) return c.say(why, true);
-    // The plan the user confirms is the plan the runner will send (RULE 10):
-    // one splitter, one effective per-request size, validated before the dialog.
-    const problems = validateBatchPlan(planOf(c, ids), perRequestOf(c));
+    const perReq = perRequestOf(c, regenForGuard);
+    const problems = validateBatchPlan(planOf(c, ids, regenForGuard), perReq);
     if (problems.length > 0) return c.say(problems[0], true);
     if (placement === "front" && busy(c)) return regenerateNext(c, ids);
     const dialog: Dialog = { kind: "confirm", ids, operation };
-    log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s)`, data: { sources: ids.length } });
+    log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} source(s) · ${operation}`, data: { sources: ids.length, operation } });
     c.dispatch({ type: "dialog", dialog });
   }, []);
   const regenerateSelected = useCallback((ids: string[]) => {
@@ -251,16 +251,13 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
 function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "dropQueued"> {
   const latest = useRef(ctx);
   latest.current = ctx;
-  const confirmGenerate = useCallback(() => {
-    void confirmRun(latest.current);
+  const confirmGenerate = useCallback((regenPresetName: string | null) => {
+    void confirmRun(latest.current, regenPresetName);
   }, []);
   const cancelRun = useCallback(() => {
     const c = latest.current;
     log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "the user asked to cancel — finished results are kept" });
-    // One gesture, one honest sentence: the run in flight stops AND the queue
-    // goes — there is no "cancel" that would leave work waiting to be sent.
     const dropped = dropQueueForCancel(c);
-    // The count rides on the abort so the run's own final line can repeat it.
     c.refs.abort.current?.abort({ dropped } satisfies CancelNote);
     c.say(dropped === 0
       ? "Cancelling — finished results are kept"
@@ -280,7 +277,17 @@ function editChecked(c: SvgCtx, ids: string[], active: string | null): void {
   if (active !== null) patchSvg({ activeId: active });
   c.hist.push({
     type: "checked",
-    label: ids.length === 0 ? "Clear selection" : `Select ${ids.length} source${ids.length === 1 ? "" : "s"}`,
+    label: ids.length === 0 ? "Clear selection" : `Select ${ids.length} source${ids.length === 1 ? "s" : "s"}`,
     origin: getAppState().tab, ids, before: { ids: before }, after: { ids },
   });
+}
+
+/** Dummy regen plan for guard/plan validation when operation is regenerate — size 1. */
+function dummyRegen(c: SvgCtx): RegenPlan {
+  const presets = c.m.presets;
+  if (presets.length === 0) return MAIN_PLAN;
+  const first = presets[0];
+  const found = findPreset(presets, first.name);
+  if (found === null || found.text.trim() === "") return MAIN_PLAN;
+  return { kind: "current-svg", presetName: found.name, presetText: found.text };
 }

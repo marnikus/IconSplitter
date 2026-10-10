@@ -52,9 +52,18 @@ export function serializeRegen(setting: RegenSetting): string {
 export function regenPlanOf(setting: RegenSetting, presets: readonly PromptPreset[]): RegenResult {
   if (setting.mode === "main") return { ok: true, plan: { kind: "main" } };
   if (setting.presetName === "") return { ok: false, problem: NO_PRESET_PROBLEM };
-  const preset = findPreset(presets, setting.presetName);
-  if (preset === null) return { ok: false, problem: `The saved prompt “${setting.presetName}” is gone — pick another in Export settings` };
-  if (preset.text.trim() === "") return { ok: false, problem: `The saved prompt “${preset.name}” is empty — write it again in Export settings` };
+  return regenPlanFromPresetName(setting.presetName, presets);
+}
+
+export function regenPlanFromPresetName(name: string, presets: readonly PromptPreset[]): RegenResult {
+  const preset = findPreset(presets, name);
+  if (preset === null) return { ok: false, problem: `The saved prompt “${name}” is gone — pick another in the prompt window` };
+  return regenPlanFromPreset(preset);
+}
+
+export function regenPlanFromPreset(preset: PromptPreset | null): RegenResult {
+  if (preset === null) return { ok: false, problem: NO_PRESET_PROBLEM };
+  if (preset.text.trim() === "") return { ok: false, problem: `The saved prompt “${preset.name}” is empty — write it again in the prompt window` };
   return { ok: true, plan: { kind: "current-svg", presetName: preset.name, presetText: preset.text } };
 }
 

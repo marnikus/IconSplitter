@@ -1,16 +1,16 @@
-// SvgPromptZone.tsx — the left block of the Generate SVG control row (2026-10-09):
-// the "Regenerate SVG from" window, then directly beneath it the main prompt
-// window with its presets. The regen window sits above the prompt it refers to.
+// SvgPromptZone.tsx — the prompt window for Generate SVG (2026-10-09 revised):
+// first generation uses the main current loaded prompt shown here.
+// Regeneration prompt is now chosen per-batch in the confirmation popup
+// (2026-10-09), so the global "Regenerate SVG from" window is no longer in
+// the main toolbar — it stays as a module for the front-placement fallback.
 
 import { isDefaultPrompt } from "../lib/svgprompt";
 import PromptWindow, { type PromptWindowProps } from "../ui/PromptWindow";
-import RegenSettingWindow from "./RegenSetting";
 import type { SvgGenApi } from "./useSvgGen";
 
 export default function SvgPromptZone({ win }: { win: PromptWindowProps }) {
   return (
     <div className="svg-prompt-zone">
-      <RegenSettingWindow presets={win.presets} />
       <PromptWindow {...win} />
     </div>
   );
