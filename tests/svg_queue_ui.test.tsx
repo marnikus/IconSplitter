@@ -10,6 +10,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { compositeLayout } from "../src/lib/svgcomposite";
+import { serializePrompt } from "../src/lib/svgprompt";
 import { pairId } from "../src/lib/pairing";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { saveApiKey } from "../src/svg/keystore";
@@ -340,6 +341,8 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
   it("regenerates only checked rows with an existing SVG, in one confirmed batch", async () => {
     const t = transport({ mode: "silent" });
     vi.stubGlobal("fetch", t.fetch);
+    const currentPrompt = "Draw precise monochrome icons with clean, closed paths.";
+    window.localStorage.setItem("iconSplitter.svg.prompt.v1", serializePrompt(currentPrompt));
     const root = makeRegenerationRoot();
     await mount(root);
     const regenerate = () => q("[data-testid=svg-regenerate-selected]") as HTMLButtonElement;
@@ -360,6 +363,7 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     await click("[data-testid=svg-generate-selected]");
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG generation");
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
+    expect(txt("[data-testid=svg-confirm-prompt]")).toBe(currentPrompt);
     await click("[data-testid=svg-confirm-generate]");
     await waitFor(() => t.calls.length === 1, "Generate selected to send both checked rows");
     expect(callsOf(t)).toEqual([["court_AI.png", "fog_AI.png"]]);

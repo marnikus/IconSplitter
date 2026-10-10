@@ -46,7 +46,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
-      <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
+      <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} prompt={g.prompt} caps={g.caps} params={g.params}
         rootRef={rootRef} readCode={g.readCode}
         onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode}
         onUseVersion={g.preferVersion} running={g.running} />

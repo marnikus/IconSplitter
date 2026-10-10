@@ -55,6 +55,7 @@ interface MountOpts {
   perRequest?: number;
   effort?: SamplingParams["effort"];
   operation?: "generate" | "regenerate";
+  prompt?: string;
 }
 
 async function mount(opts: MountOpts): Promise<SvgRow[]> {
@@ -67,6 +68,7 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
         operation={opts.operation ?? "generate"}
         rows={all}
         config={{ ...DEFAULT_CONFIG, imagesPerRequest: opts.perRequest ?? 4 }}
+        prompt={opts.prompt ?? "Create crisp monochrome icons."}
         caps={capsFor(DEFAULT_CONFIG.model)}
         params={{ temperature: null, maxTokens: 8_000, effort: opts.effort ?? null }}
         rootRef={{ current: new FakeDir("split_root") }}
@@ -115,6 +117,12 @@ describe("SvgConfirm — the whole plan before any request", () => {
     await mount({ count: 2, operation: "regenerate" });
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
     expect(q("[data-testid=svg-confirm-generate]")?.textContent).toBe("Regenerate now");
+  });
+
+  it("shows the current generation prompt below the batch preview", async () => {
+    const prompt = "Draw crisp monochrome icons.\nKeep each silhouette readable at small sizes.";
+    await mount({ count: 2, prompt });
+    expect(q("[data-testid=svg-confirm-prompt]")?.textContent).toBe(prompt);
   });
 
   it("paginates every batch with its own composite and exact ordered filenames", async () => {
@@ -179,6 +187,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
       ui = createRoot(host);
       ui.render(
         <SvgConfirm ids={all.map((r) => r.source.id)} operation="generate" rows={all} config={DEFAULT_CONFIG}
+          prompt="Test generation prompt."
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
           rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={onConfirm} onDismiss={onDismiss} />,
       );
@@ -201,6 +210,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
       ui = createRoot(host);
       ui.render(
         <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+          prompt="Test generation prompt."
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
           rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />,
       );
@@ -217,6 +227,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
     const all = rows(4);
     const render = (ids: string[]) => (
       <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+        prompt="Test generation prompt."
         caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
         rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />
     );

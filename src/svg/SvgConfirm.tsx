@@ -1,8 +1,8 @@
 // SvgConfirm.tsx — the confirmation that must precede any send (prompt §2/§3/
-// §16): the selected count, the REQUEST count at the size the USER configured
-// (the reasoning level never shrinks it — 2026-10-05), the provider and
-// sampling facts, and one page per
-// batch with that page's own contact sheet, its ordered `position — name`
+// §16): the current local prompt, the selected count, the REQUEST count at
+// the size the USER configured (the reasoning level never shrinks it —
+// 2026-10-05), the provider and sampling facts, and one page per batch with
+// that page's own contact sheet, its ordered `position — name`
 // manifest and its empty cells. Opening it sends nothing; every page's
 // composite is built in memory when the page is first shown and cached for the
 // dialog's lifetime. A plan that cannot be mapped is refused here (RULE 15).
@@ -25,6 +25,7 @@ export interface SvgConfirmProps {
   operation: SvgOperation;
   rows: SvgRow[];
   config: SvgConfig;
+  prompt: string;
   caps: ModelCaps;
   params: SamplingParams;
   rootRef: { current: DirHandleLike | null };
@@ -54,6 +55,7 @@ export default function SvgConfirm(p: SvgConfirmProps) {
           )}
           <Facts plan={plan} p={p} />
           <PlanBody plan={plan} p={p} />
+          <PromptPreview prompt={p.prompt} />
           <PolicyNote />
           <Actions plan={plan} p={p} />
         </div>
@@ -223,6 +225,15 @@ function Composite({ state }: { state: CompositeState }) {
         {state.built.layout.empty.length} empty cell(s) · hash {state.built.hash.slice(0, 12)}
       </p>
     </>
+  );
+}
+
+function PromptPreview({ prompt }: { prompt: string }) {
+  return (
+    <section className="svg-confirm-prompt" aria-label="Current generation prompt">
+      <div className="svg-field-label">Current generation prompt · sent with every request</div>
+      <pre data-testid="svg-confirm-prompt">{prompt}</pre>
+    </section>
   );
 }
 

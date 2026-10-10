@@ -214,8 +214,10 @@ that makes a network call, only when the user asks it to):
   stall window, plus one page
   per request showing that request's own contact sheet, its ordered
   `position — name` manifest, its grid size and the empty cells of a partial
-  last request. Pages are built in memory as they are first shown and cached
-  for the dialog's lifetime; the last partial page keeps its square cells.
+  last request. The current saved generation prompt is shown read-only beneath
+  the batch preview. Pages are built in memory as they are first shown and
+  cached for the dialog's lifetime; the last partial page keeps its square
+  cells.
 * The selection is an ORDER, and the sheet is that order (2026-10-07): the icon
   order is the order the user picked, decided in ONE place
   (`lib/selectionorder.inIdOrder`) and read from it by the confirmation's plan
@@ -1692,7 +1694,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   (`svg-confirm`, `svg-confirm-title` ("Confirm SVG generation" or "Confirm SVG regeneration"),
   `svg-confirm-{count,requests,model,sampling,timeout,streaming}`,
   `svg-confirm-{close,cancel,generate}`, `svg-confirm-limit`,
-  `svg-confirm-problem`, one page per request: `svg-batch-page`,
+  `svg-confirm-problem` and the read-only `svg-confirm-prompt`; one page per
+  request: `svg-batch-page`,
   `svg-batch-prev` / `svg-batch-next`, `svg-batch-grid`, `svg-batch-empty`,
   `svg-batch-items`, `svg-composite-img` / `svg-composite-meta` /
   `svg-composite-building` / `svg-composite-error`), dialogs

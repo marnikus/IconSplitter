@@ -17,6 +17,7 @@ export interface SvgDialogsProps {
   dialog: Dialog | null;
   rows: SvgRow[];
   config: SvgConfig;
+  prompt: string;
   caps: ModelCaps;
   params: SamplingParams;
   rootRef: { current: DirHandleLike | null };
@@ -34,7 +35,8 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   const dialog = p.dialog;
   if (dialog === null) return null;
   if (dialog.kind === "confirm") {
-    return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
+    return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} prompt={p.prompt}
+      caps={p.caps} params={p.params}
       rootRef={p.rootRef} running={p.running} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);
