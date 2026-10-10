@@ -24,6 +24,7 @@ import type { SvgOperation, SvgRow } from "./types";
 import type { PromptPreset } from "../lib/promptpresets";
 import { regenPlanFromPresetName, type RegenPlan } from "../lib/svgregen";
 import { BatchPager } from "./SvgConfirmPager";
+import { FullPromptPreview } from "./SvgConfirmFullPrompt";
 
 export interface SvgConfirmProps {
   ids: string[];
@@ -53,6 +54,8 @@ export default function SvgConfirm(p: SvgConfirmProps) {
           <PromptChooser operation={p.operation} presets={p.presets} selected={selected} onSelect={setSelected} />
           <Facts plan={plan} p={p} selected={selected} />
           <PlanBody plan={plan} p={p} />
+          <FullPromptPreview operation={p.operation} prompt={p.prompt} presets={p.presets} selected={selected}
+            regen={plan.regen} active={plan.active} picked={plan.picked} rootRef={p.rootRef} />
           <PolicyNote operation={p.operation} />
           <Actions plan={plan} p={p} selected={selected} />
         </div>

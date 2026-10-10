@@ -462,6 +462,9 @@ Dialogs:
 | `svg-confirm-mode` | badge | "Generation batch now" vs "Regeneration now" — clearly says which prompt path this batch uses (2026-10-09) |
 | `svg-confirm-main-prompt` | note | generation only: "Uses the main currently loaded prompt" — main prompt not reloaded in popup |
 | `svg-confirm-regen-preset` / `svg-confirm-regen-note` / `svg-confirm-regen-label` | regeneration only: dropdown of saved prompts applied to full batch, plus note |
+| `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + main prompt), regeneration = `currentSvgPrompt(presetText, stem, code)` (preset + Icon name line for title detection + current SVG code verbatim). One per request; regeneration loads code via `readSvgText` |
+| `svg-confirm-full-prompt-note` | small | explains what full prompt contains |
+| `svg-confirm-full-prompt-loading` | note | shown while SVG code loads for regeneration preview |
 | `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |

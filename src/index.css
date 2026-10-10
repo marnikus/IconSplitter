@@ -1006,6 +1006,9 @@
 /* The paginated confirmation: one page per request. */
 .svg-modal.wide { width: min(760px, 94vw); }
 .svg-batch-pager { display: grid; gap: 7px; margin: 10px 0; }
+.svg-confirm-prompt { display: grid; gap: 6px; margin: 14px 0; padding: 10px; border: 1px solid var(--v2-line); border-radius: 7px; background: var(--v2-surface); }
+.svg-confirm-prompt .svg-field-label { font-size: 9px; color: var(--v2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.svg-confirm-prompt pre.svg-code { min-height: 120px; max-height: 340px; }
 .svg-pager-buttons { display: flex; gap: 6px; }
 .svg-batch-shape { display: flex; gap: 12px; color: var(--v2-muted); font-size: 9px; }
 .svg-batch-items {

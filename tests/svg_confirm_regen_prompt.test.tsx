@@ -10,8 +10,8 @@ import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
 import { toRow } from "../src/svg/rowmodel";
 import SvgConfirm from "../src/svg/SvgConfirm";
 import type { SvgRow } from "../src/svg/types";
-import { FakeDir } from "./helpers/fakefs";
-import { svgSource } from "./helpers/svgpair";
+import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import type { PromptPreset } from "../src/lib/promptpresets";
 
 vi.mock("../src/svg/composite", async (importOriginal) => {
@@ -214,5 +214,79 @@ describe("SvgConfirm — generation vs regeneration mode distinction", () => {
       (q("[data-testid=svg-confirm-generate]") as HTMLButtonElement).click();
     });
     expect(onConfirm).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("SvgConfirm — full prompt preview below in popup", () => {
+  it("generation shows full prompt with manifest and main prompt", async () => {
+    const all = rows(2);
+    const mainPrompt = "Create crisp icons with thick strokes.";
+    await act(async () => {
+      ui = createRoot(host);
+      ui.render(
+        <SvgConfirm
+          ids={all.map((r) => r.source.id)}
+          operation="generate"
+          rows={all}
+          config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
+          caps={capsFor(DEFAULT_CONFIG.model)}
+          params={{ temperature: null, maxTokens: 8000, effort: null } as SamplingParams}
+          rootRef={{ current: new FakeDir("root") }}
+          running={false}
+          presets={PRESETS}
+          prompt={mainPrompt}
+          onConfirm={() => undefined}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    await settle();
+    const full = q("[data-testid=svg-confirm-full-prompt]")?.textContent ?? "";
+    expect(full).toContain(mainPrompt);
+    expect(full).toContain("1 — icon-1_AI");
+    expect(full).toContain("2 — icon-2_AI");
+    expect(full.toLowerCase()).toContain("return the svgs in the same numeric order");
+  });
+
+  it("regeneration shows full prompt with preset + title detection + SVG code", async () => {
+    const id = "pair_1";
+    const source = svgSource(id, { name: "fog_AI.png", fingerprint: "1:100" });
+    const svgCode = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>';
+    const ver = svgVersion("architecture/fog_AI.svg", { version: 1 });
+    const meta = pairMetaFor(source, [ver], "approved");
+    const { toRow } = await import("../src/svg/rowmodel");
+    const row = toRow(source, meta, false);
+    const root = new FakeDir("root");
+    const arch = new FakeDir("architecture");
+    arch.children.set("fog_AI.svg", new FakeFile("fog_AI.svg", svgCode.length, 3200, svgCode));
+    root.children.set("architecture", arch);
+
+    await act(async () => {
+      ui = createRoot(host);
+      ui.render(
+        <SvgConfirm
+          ids={[row.source.id]}
+          operation="regenerate"
+          rows={[row]}
+          config={DEFAULT_CONFIG}
+          caps={capsFor(DEFAULT_CONFIG.model)}
+          params={{ temperature: null, maxTokens: 8000, effort: null } as SamplingParams}
+          rootRef={{ current: root }}
+          running={false}
+          presets={PRESETS}
+          prompt="main"
+          onConfirm={() => undefined}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    await settle();
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await settle();
+    const full = q("[data-testid=svg-confirm-full-prompt]")?.textContent ?? "";
+    expect(full).toContain("Make strokes bolder.");
+    expect(full).toContain("Icon name (use it as the SVG <title>)");
+    expect(full).toContain("<svg");
+    expect(full).toContain("Current SVG code of this icon");
   });
 });
