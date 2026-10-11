@@ -384,7 +384,8 @@
 .v2-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
 
 .v2-row.approved::after,
-.v2-row.declined::after {
+.v2-row.declined::after,
+.v2-row.needs-review::after {
   content: "";
   position: absolute;
   inset: 0 0 0 auto;
@@ -393,6 +394,7 @@
 }
 
 .v2-row.declined::after { background: var(--v2-red); }
+.v2-row.needs-review::after { background: var(--v2-yellow); }
 
 .v2-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
@@ -1118,7 +1120,8 @@
 .svg-row.corrupt { box-shadow: inset 3px 0 0 var(--v2-yellow); }
 
 .svg-row.approved::after,
-.svg-row.declined::after {
+.svg-row.declined::after,
+.svg-row.needs-review::after {
   content: "";
   position: absolute;
   inset: 0 0 0 auto;
@@ -1127,6 +1130,7 @@
 }
 
 .svg-row.declined::after { background: var(--v2-red); }
+.svg-row.needs-review::after { background: var(--v2-yellow); }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
 .svg-preview-frame {
