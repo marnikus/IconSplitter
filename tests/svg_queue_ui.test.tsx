@@ -558,7 +558,7 @@ describe("the run record (2026-10-08): the strip and the queue sit BELOW the lis
 
 describe("the run popup and the kept-alive panel (2026-10-08): the run outlives the tab, the numbers follow the user", () => {
   const rowIds = () => Array.from(host.querySelectorAll("[data-testid^=svg-row-pair_]")).map((el) => el.getAttribute("data-testid")!.replace("svg-row-", ""));
-  const popup = () => document.querySelector("[data-testid=svg-run-popup]") as HTMLElement | null;
+  const popup = () => document.querySelector("[data-testid=svg-progress-header]") as HTMLElement | null;
 
   it("shows the popup from the first request on, keeps the final line until dismissed, and comes back for a new run", async () => {
     const t = transport({ mode: "silent" });
@@ -572,16 +572,16 @@ describe("the run popup and the kept-alive panel (2026-10-08): the run outlives 
     await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
     await pick(COURT);
     await click("[data-testid=svg-confirm-generate]");
-    expect(popup()?.textContent).toContain("Generating · 0 done · 2 left · request 1 of 1");
+    expect(popup()?.textContent).toContain("Generating SVGs");
 
     await act(async () => { t.streams[0].push(streamFrames(["architecture/fog_AI.png"])); t.streams[0].close(); });
     await waitFor(() => t.calls.length === 2, "the queued batch to start");
-    expect(popup()?.textContent).toContain("1 done · 1 left");
+    expect(popup()?.textContent).toContain("completed");
     await act(async () => { t.streams[1].push(streamFrames(["architecture/court_AI.png"])); t.streams[1].close(); });
     await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the run to end");
-    expect(popup()?.textContent).toContain("Done · 2 done · 0 left"); // one count for the whole chain; the final line stays…
+    expect(popup()?.textContent).toContain("SVG batch complete"); // one count for the whole chain; the final line stays…
 
-    await act(async () => { (popup()!.querySelector("[data-testid=svg-run-popup-dismiss]") as HTMLButtonElement).click(); });
+    await act(async () => { (popup()!.querySelector("[data-testid=svg-progress-dismiss]") as HTMLButtonElement).click(); });
     expect(popup()).toBeNull(); // …until dismissed
     await pick(FOG);
     await click("[data-testid=svg-confirm-generate]");

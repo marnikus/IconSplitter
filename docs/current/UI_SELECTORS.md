@@ -435,11 +435,7 @@ exactly that batch — the run in flight is untouched). `svg-confirm-generate` r
 Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
 BELOW the list; absent when nothing ran and nothing waits.
 
-Run popup (I-57, on EVERY tab, portalled to `<body>`): `svg-run-popup` (class
-`running` while a request is in flight), `svg-run-popup-line` ("Generating · 7
-done · 13 left · 1 failed · request 2 of 5" / "Done · 20 done · 0 left" — one count
-for the whole queue chain), `svg-run-popup-dismiss` (×; the final line stays until
-it is pressed, a new run brings the popup back). Shell: `svg-shell` is the
+Persistent progress header (I-57, on EVERY tab, portalled to `#svg-progress-mount` above tab bar): `svg-progress-header` (class `complete` when done), `svg-progress-title` ("Generating SVGs · 24 images" / "SVG batch complete"), `svg-progress-file` (current filename or "24 results saved · ready for review"), `svg-progress-thumb` (current AI thumbnail), `svg-progress-track` + `svg-progress-fill`, `svg-progress-completed` / `svg-progress-remaining` / `svg-progress-percent`, `svg-progress-cancel` (opens cancel dialog), `svg-progress-review` (→ Review results), `svg-progress-dismiss` (×; final line stays until dismissed, new run brings it back), `svg-cancel-dialog` with `svg-cancel-current` (thumbnail + "Currently generating · image 9 of 24" + filename) and `svg-cancel-stats` (kept/stopped) and `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close`. Shell: `svg-shell` is the
 Generate SVG tab's parked wrapper (`hidden` on other tabs, never unmounted).
 
 Batch strip (`svg-batch`, the request in flight and every finished request;

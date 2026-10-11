@@ -14,7 +14,6 @@ import { setAppState } from "../state/appstore";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
 import RunRecord from "./RunRecord";
-import SvgRunPopup from "./SvgRunPopup";
 import SvgProgressHeader from "./SvgProgressHeader";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
@@ -44,7 +43,6 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
-      <SvgRunPopup progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} />
       <SvgProgressHeader progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} currentId={g.currentId} rows={g.rows} rootRef={rootRef}
         onCancel={g.cancelRun} onDismiss={() => g.dispatch({ type: "progress", progress: null })}
         onReview={() => setAppState({ tab: "generateSvg" })} />
