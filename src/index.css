@@ -964,6 +964,46 @@
 @keyframes svg-run-pulse { 50% { opacity: 0.35; } }
 .svg-run-popup-close { border: 0; background: transparent; color: var(--v2-muted); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
 .svg-run-popup-close:hover { color: var(--v2-text); }
+
+/* Persistent progress bar pinned above tab header (2026-10-11) */
+#svg-progress-mount { position: relative; z-index: 55; }
+.svg-progress-header {
+  display: grid;
+  grid-template-columns: 260px 1fr 180px;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: #0c1222;
+  border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-text);
+  font-size: 11px;
+}
+.svg-progress-header.complete { background: #0f172a; }
+.svg-progress-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.svg-progress-thumb { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--v2-line); background: #fff; flex: none; }
+.svg-progress-thumb.empty { display: grid; place-items: center; background: var(--v2-surface-2); color: var(--v2-muted); font-size: 10px; }
+.svg-progress-check { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; background: #12362d; color: var(--v2-green); font-weight: 800; flex: none; }
+.svg-progress-text { display: grid; gap: 2px; min-width: 0; }
+.svg-progress-text strong { font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svg-progress-text strong.success { color: #7ee3b6; }
+.svg-progress-file { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svg-progress-center { display: grid; gap: 4px; }
+.svg-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
+.svg-progress-fill { height: 100%; background: #745cff; transition: width 0.3s; }
+.svg-progress-header.complete .svg-progress-fill { background: #32d68b; }
+.svg-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+.svg-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
+.svg-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
+.svg-progress-close:hover { color: var(--v2-text); }
+.svg-cancel-current { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--v2-line); border-radius: 8px; background: var(--v2-surface); margin: 12px 0; }
+.svg-cancel-current small { display: block; color: var(--v2-purple-2); font-size: 9px; }
+.svg-cancel-current strong { display: block; margin-top: 2px; font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.svg-cancel-stats { display: flex; gap: 16px; margin: 10px 0; font-size: 11px; }
+.svg-cancel-stats .kept { color: var(--v2-green); }
+.svg-cancel-stats .stopped { color: var(--v2-muted); }
+.svg-modal.narrow { width: min(480px, 92vw); }
+
 /* The run record (2026-10-08): strip + queue, BELOW the list so a landing SVG never moves it. */
 .svg-run-record { display: grid; gap: 8px; margin-top: 10px; }
 .svg-batch {

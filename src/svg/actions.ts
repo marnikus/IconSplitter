@@ -59,12 +59,13 @@ export interface SvgCtx {
   setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void;
   setProgress: (p: RunProgress | null) => void;
   setProgressFn: (fn: (p: RunProgress | null) => RunProgress | null) => void;
+  setCurrent: (id: string | null) => void;
 }
 
 /** The write half of the context, wired by svg/ctx from the reducer. */
 export type SvgSetters = Pick<SvgCtx,
   "say" | "loadAll" | "refreshKey" | "setRootName" | "setDiscovery" | "setBusy"
-  | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn">;
+  | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn" | "setCurrent">;
 
 /** The public action surface of the tab, in the order the panel uses them. */
 export interface SvgActions extends SvgPromptActions {
@@ -259,6 +260,7 @@ function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "
     log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "the user asked to cancel — finished results are kept" });
     const dropped = dropQueueForCancel(c);
     c.refs.abort.current?.abort({ dropped } satisfies CancelNote);
+    c.dispatch({ type: "current", id: null });
     c.say(dropped === 0
       ? "Cancelling — finished results are kept"
       : `Cancelling — finished results are kept, ${dropped} queued batch${dropped === 1 ? "" : "es"} dropped`);

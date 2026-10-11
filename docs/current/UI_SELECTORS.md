@@ -682,6 +682,31 @@ Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
 settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
 (§O).
 
+## S1. Persistent progress header — `src/svg/SvgProgressHeader.tsx` (2026-10-11)
+
+Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visible on every tab while a run is in flight or completed until dismissed:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-progress-mount` | mount div in Workbench | above nav, `position:relative`, z-index 55 |
+| `svg-progress-header` | bar container | `complete` class when done |
+| `svg-progress-title` | strong | "Generating SVGs · N images" or "SVG batch complete" |
+| `svg-progress-file` | span | current filename while running, or "N results saved · ready for review" when complete |
+| `svg-progress-thumb` | img/span | current AI thumbnail (via `useSideThumbs`) |
+| `svg-progress-track` | div | progress bar track |
+| `svg-progress-completed` | span | "8 completed / 24" |
+| `svg-progress-remaining` | span | "16 remaining" or "0 remaining" |
+| `svg-progress-percent` | span | "33%" / "100%" |
+| `svg-progress-cancel` | button | "✕ Cancel batch" — opens confirmation |
+| `svg-progress-review` | button | "→ Review results" — switches tab to Generate SVG |
+| `svg-progress-dismiss` | button | X dismisses completed bar |
+| `svg-cancel-dialog` | backdrop dialog | cancel confirmation |
+| `svg-cancel-current` | div | currently generating image line: thumbnail + "Currently generating · image 9 of 24" + filename |
+| `svg-cancel-stats` | div | "8 completed · kept" / "16 remaining · stopped" |
+| `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close` | buttons | Keep running / Cancel batch / X close |
+
+Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops queue, aborts, keeps saved), `svg-cancel-keep` closes dialog (Esc also).
+
 ## S. Regenerate SVG — per-batch prompt in confirmation (2026-10-09 revised, `src/svg/SvgConfirm.tsx`)
 
 First-time generation uses the main currently loaded prompt shown in `svg-prompt-zone`.

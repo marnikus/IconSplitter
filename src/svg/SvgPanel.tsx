@@ -10,10 +10,12 @@ import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
+import { setAppState } from "../state/appstore";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import SvgBulkBar from "./SvgBulkBar";
 import RunRecord from "./RunRecord";
 import SvgRunPopup from "./SvgRunPopup";
+import SvgProgressHeader from "./SvgProgressHeader";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
 import SvgDialogs from "./SvgDialogs";
@@ -43,6 +45,9 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
       <SvgRunPopup progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} />
+      <SvgProgressHeader progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} currentId={g.currentId} rows={g.rows} rootRef={rootRef}
+        onCancel={g.cancelRun} onDismiss={() => g.dispatch({ type: "progress", progress: null })}
+        onReview={() => setAppState({ tab: "generateSvg" })} />
       <Controls g={g} root={rootRef.current} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
