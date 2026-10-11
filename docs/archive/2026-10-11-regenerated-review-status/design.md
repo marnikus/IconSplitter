@@ -132,3 +132,7 @@ Requirement:
 - Tests: tests/svg_review_status.test.tsx 6 passing, existing svg_ui 38 passing, confirm 15, regen 8, queue 14, versions 6
 - Quality gate: --changed --allow-legacy PASSED, tsc --noEmit clean
 - RULE 18: files under 300 lines, functions 4-20 ideal respected, no new large file
+
+## Update 2026-10-11 (yellow line)
+- Added yellow side line for needs-review rows, same as green (approved) and red (declined) via ::after pseudo.
+- CSS: `.svg-row.needs-review::after` and `.v2-row.needs-review::after` background var(--v2-yellow).
