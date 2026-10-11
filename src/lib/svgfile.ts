@@ -48,11 +48,15 @@ export interface ReviewTally {
   pending: number;
   approved: number;
   declined: number;
+  "needs-review": number;
 }
 
 export function tallyReviews(versions: readonly SvgVersion[]): ReviewTally {
-  const out: ReviewTally = { pending: 0, approved: 0, declined: 0 };
-  for (const v of versions) out[v.review]++;
+  const out: ReviewTally = { pending: 0, approved: 0, declined: 0, "needs-review": 0 };
+  for (const v of versions) {
+    const key = v.review as keyof ReviewTally;
+    if (key in out) out[key]++;
+  }
   return out;
 }
 

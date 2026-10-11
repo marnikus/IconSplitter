@@ -9,7 +9,7 @@ export const SIDECAR_VERSION = 1;
 export const SVG_EXT = ".svg";
 
 export type GenStatus = "generated" | "failed" | "interrupted";
-export type ReviewStatus = "pending" | "approved" | "declined";
+export type ReviewStatus = "pending" | "approved" | "declined" | "needs-review";
 
 export interface TokenUsage {
   input: number | null;
@@ -71,7 +71,7 @@ export function isGen(value: unknown): value is GenStatus {
 }
 
 export function isReview(value: unknown): value is ReviewStatus {
-  return value === "pending" || value === "approved" || value === "declined";
+  return value === "pending" || value === "approved" || value === "declined" || value === "needs-review";
 }
 
 /**

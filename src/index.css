@@ -242,6 +242,7 @@
 .v2-btn.success { background: #143a31; border-color: #245e4c; color: var(--v2-green); }
 .v2-btn.success.solid { background: #159361; border-color: #1ab274; color: #fff; }
 .v2-btn.danger { background: var(--v2-red-bg); border-color: #713249; color: var(--v2-red); }
+.v2-btn.warning { background: var(--v2-yellow-bg); border-color: #665129; color: var(--v2-yellow); }
 .v2-btn.tiny { min-height: 26px; padding: 5px 7px; font-size: 8px; }
 .v2-btn.armed { background: var(--v2-purple); border-color: var(--v2-purple-2); color: #fff; }
 
@@ -499,7 +500,7 @@
   font-weight: 750;
 }
 
-.v2-badge.pending { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.v2-badge.pending, .v2-badge.needs-review { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 .v2-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .v2-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
 .v2-badge.attention { color: var(--v2-yellow); background: #241c10; border-color: #5b4624; }
@@ -907,6 +908,7 @@
 .svg-btn.ghost { background: transparent; }
 .svg-btn.success { background: #143a31; border-color: #245e4c; color: var(--v2-green); }
 .svg-btn.danger { background: var(--v2-red-bg); border-color: #713249; color: var(--v2-red); }
+.svg-btn.warning { background: var(--v2-yellow-bg); border-color: #665129; color: var(--v2-yellow); }
 .svg-btn.tiny { min-height: 26px; padding: 5px 7px; font-size: 8px; }
 
 .svg-bulk {
@@ -1229,7 +1231,7 @@
 .svg-badge.generated, .svg-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
-.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted, .svg-badge.needs-review { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 /* Waiting in the queue (2026-10-08): grey — scheduled, nothing on disk changed yet. */
 .svg-badge.queued { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
 

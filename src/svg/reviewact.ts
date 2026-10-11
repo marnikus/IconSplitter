@@ -87,7 +87,7 @@ function pushEntry(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus, recs: S
   s.say(`${n} SVG${n === 1 ? "" : "s"} marked ${decision}`);
   s.hist.push({
     type: "svgReview",
-    label: `${decision === "approved" ? "Approve" : "Decline"} ${n} SVG${n === 1 ? "" : "s"}`,
+    label: `${decision === "approved" ? "Approve" : decision === "declined" ? "Decline" : "Needs review"} ${n} SVG${n === 1 ? "" : "s"}`,
     origin: getAppState().tab, ids: recs.map((r) => r.id),
     before: { recs: before }, after: { recs },
   });

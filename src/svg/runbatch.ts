@@ -142,10 +142,12 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   state.args.onEvent({ kind: "item-start", batchId: plan.id, position, sourceId: item.id });
   const meta = state.args.metas.get(item.id) ?? null;
   const usage = ctx.share ?? zeroUsage();
+  const isRegen = state.args.regen.kind === "current-svg";
   const args: SaveArgs = {
     root: state.args.root, source: item, code, prompt: ctx.recorded,
     provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
     usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
+    review: isRegen ? "needs-review" : "pending",
   };
   const out = await saveSvgVersion(args);
   if (!out.ok) return rejectOne(ctx, item, position, out.error);

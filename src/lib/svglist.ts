@@ -4,7 +4,7 @@
 // the logic stays testable without a DOM (RULE 3/8) and the UI keeps no rule.
 
 export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
-export type ReviewFilter = "all" | "pending" | "approved" | "declined";
+export type ReviewFilter = "all" | "pending" | "approved" | "declined" | "needs-review";
 export type SvgSort = "date" | "name" | "generation" | "review" | "cost";
 
 export interface SvgListFilter {
@@ -84,7 +84,7 @@ function compare(a: SvgListRow, b: SvgListRow, sort: SvgSort): number {
   return COMPARATORS[sort](a, b);
 }
 
-const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3 };
+const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3, "needs-review": 4 };
 const GEN_RANK: Record<GenFilter, number> = { all: 0, "not-generated": 1, generating: 2, generated: 3, failed: 4, unknown: 5 };
 
 function rank(value: string): number {

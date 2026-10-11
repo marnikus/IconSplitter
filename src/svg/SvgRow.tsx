@@ -83,15 +83,17 @@ function FileActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
   );
 }
 
-/** The row's own generate/regenerate and its approve/decline pair. */
+/** The row's own generate/regenerate and its approve/decline/needs-review. */
 function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
   const id = row.source.id;
-  const shown = shownVersion(row); // approve/decline act on what the row shows (I-54)
+  const shown = shownVersion(row);
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
     <div className="svg-decision-actions">
       <button type="button" className="svg-btn tiny primary" data-testid={`svg-generate-${id}`}
         onClick={click(() => a.generate([id], "front", row.newest ? "regenerate" : "generate"))}>{row.newest ? "Regenerate" : "Generate"}</button>
+      <button type="button" className="svg-btn tiny warning" data-testid={`svg-needs-review-${id}`} disabled={shown === null}
+        title="Regenerated — new review" onClick={click(() => a.decide([id], "needs-review"))}>⚠</button>
       <button type="button" className="svg-btn tiny success" data-testid={`svg-approve-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
@@ -183,7 +185,7 @@ function UsageCell({ row }: { row: SvgRow }) {
   );
 }
 
-/** "not-generated" -> "Not generated" for badges. */
 function label(value: string): string {
+  if (value === "needs-review") return "Regenerated — new review";
   return value.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }

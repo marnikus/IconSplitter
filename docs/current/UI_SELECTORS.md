@@ -377,7 +377,7 @@ Sampling (`SvgSampling.tsx`) — only what the selected model accepts is offered
 | `svg-refresh-models` | button | re-reads `GET /v1/models` (cached 24 h) and re-resolves the limits |
 
 Filters: `svg-filter-generation` (all / not generated / generating / generated
-/ failed), `svg-filter-review` (all / pending / approved / declined),
+/ failed), `svg-filter-review` (all / pending / approved / declined / needs-review),
 `svg-sort` (date / name / generation / review / cost), `svg-search` (matches the
 file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 
@@ -393,7 +393,7 @@ Bulk bar (`svg-bulk`):
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
 | `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration appends behind a run in flight (I-53) |
-| `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
+| `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
 Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
@@ -407,9 +407,9 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
-| `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate; an existing SVG uses regeneration wording in the idle confirmation; while running this row action queues first (I-53); approve/decline disabled until a version exists |
+| `svg-generate-{sourceId}` / `svg-needs-review-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate + review: needs-review (⚠ yellow, regenerated — new review) near approve/decline; approve/decline disabled until a version exists; regeneration automatically sets needs-review |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
-| `svg-review-{sourceId}` | badge | pending / approved / declined |
+| `svg-review-{sourceId}` | badge | pending / approved / declined / needs-review (regenerated — new review, yellow) |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the pair file's name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
 | `svg-persist-{sourceId}` | text | "Pair file saved" / "Not generated yet" / "Pair file unreadable — SVGs on disk are kept"; the `title` names the pair's own file ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it, I-41); `error` class on failure |
