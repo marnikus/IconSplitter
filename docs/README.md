@@ -61,6 +61,9 @@ doc itself, never in this map.
 | `archive/2026-10-08-upload-download-all/design.md` | SVG to upload — "Download all": the selection's committed SVG/JPG/EPS copied into one user-picked folder (planner, never-overwrite, verified copy, one result line) |
 | `archive/2026-10-08-svg-queue-keepalive/design.md` | Design (implemented the same day — I-53 rewrite, I-57, I-58): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
 | `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
+| `archive/2026-10-11-regenerated-review-status/design.md` | Regenerated SVG review status: which status a regenerated version reports and how the row survives a second look |
+| `archive/2026-10-12-batch-active-row-select/README.md` | Fix: `Q`/`E` affect only the ACTIVE row (deselect/select that row), bulk stays on the buttons — one shared `selectshortcuts` rule for Batch, Selection V2, SVG and Upload |
+| `archive/2026-10-12-batch-preview-splits/design.md` | **DESIGN (no code yet)**: Batch — one preset-saved merge slider with Auto reset (`preset.split.mergeFrac`), "Preview splits" beside "Split selected" (per-row strip + count, read-only), and the 1000-image performance architecture behind it (measured 4.3–8× faster radius series with a frozen-oracle equivalence gate, visible-first cooperative scheduler, byte-budgeted blob cache) — decisions D1–D10, I-66…I-69, TDD files T1–T10, steps P0–P6 |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 
