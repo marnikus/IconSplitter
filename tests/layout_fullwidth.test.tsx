@@ -107,41 +107,34 @@ describe("Selection V2 fills available space like Generate SVG", () => {
 
     for (const d of [v2Shell, svgShell, upShell]) {
       expect(d).toContain("width: 100%");
-      expect(d).toContain("flex: 1 1 auto");
-      expect(d).toContain("display: flex");
-      expect(d).toContain("flex-direction: column");
-      expect(d).toContain("min-width: 0");
+      expect(d).toContain("min-height: 100%");
     }
-    // Shells keep height 100% per I-27 band floor
-    expect(v2Shell).toContain("height: 100%");
-    expect(svgShell).toContain("height: 100%");
+    // Shells are floored at band (min-height 100%) and grow with content, so
+    // app-main scrolls — whole page scroll, not small high win (user request)
+    expect(v2Shell).not.toContain("height: 100%");
+    expect(svgShell).not.toContain("height: 100%");
   });
 
-  it("v2 and svg panels are width 100% flex 1 min-height 100% (not fixed height)", () => {
+  it("v2 and svg panels are width 100% min-height 100% (not fixed height) — whole page scrolls", () => {
     const sheet = css();
     const v2 = decls(sheet, ".v2");
     const svg = decls(sheet, ".svg");
 
     for (const d of [v2, svg]) {
       expect(d).toContain("width: 100%");
-      expect(d).toContain("flex: 1 1 auto");
       expect(d).toContain("display: flex");
       expect(d).toContain("flex-direction: column");
       expect(d).toContain("min-height: 100%");
-      expect(d).toContain("min-width: 0");
       // Must NOT be fixed height 100% — that would collapse list per log_layout test
       expect(d).not.toContain("height: 100%");
     }
   });
 
-  it("app-main is flex column with overflow auto for scrolling and dock I-27", () => {
+  it("app-main is flex with overflow auto for scrolling and dock I-27 — whole page scrolls", () => {
     const sheet = css();
     const main = decls(sheet, ".app-main");
     expect(main).toContain("flex: 1 1 auto");
-    expect(main).toContain("display: flex");
-    expect(main).toContain("flex-direction: column");
     expect(main).toContain("overflow: auto");
-    expect(main).toContain("min-width: 0");
   });
 
   it("v2-workspace flexes to fill remaining space", () => {
@@ -160,15 +153,22 @@ describe("Selection V2 fills available space like Generate SVG", () => {
     expect(fp).not.toContain("flex: 1 0 100%");
   });
 
-  it("list panels v2-panel and svg-panel flex to fill remaining space, not squeezed", () => {
+  it("list panels v2-panel and svg-panel are grid with min-height 0, not squeezed — svg-panel whole page scroll", () => {
     const sheet = css();
     const v2p = decls(sheet, ".v2-panel");
     const svgP = decls(sheet, ".svg-panel");
-    for (const d of [v2p, svgP]) {
-      expect(d).toContain("flex: 1 1 auto");
-      expect(d).toContain("min-height: 0");
-      expect(d).toContain("min-width: 0");
-    }
+    // v2-panel keeps original grid with 1fr for inner scroll (other tabs unchanged)
+    expect(v2p).toContain("display: grid");
+    expect(v2p).toContain("min-height: 0");
+    // svg-panel is whole page scroll: auto middle row, overflow visible, so page scrolls not small win
+    expect(svgP).toContain("display: grid");
+    expect(svgP).toContain("grid-template-rows: 42px auto 40px");
+    expect(svgP).toContain("overflow: visible");
+    expect(svgP).toContain("min-height: 0");
+    // svg-panel pair-table is whole page scroll with horizontal auto for 800px zoom
+    const svgPair = decls(sheet, ".svg-panel .pair-table");
+    expect(svgPair).toContain("overflow-x: auto");
+    expect(svgPair).toContain("overflow-y: visible");
   });
 
   it("live DOM: v2-shell fills width when tab is selectionV2", async () => {
@@ -210,11 +210,11 @@ describe("all tabs fill full window, no centered max-width card", () => {
     expect(wrapper?.className).toMatch(/\bw-full\b/);
   });
 
-  it("Generate SVG and Upload shells are full width and match V2 behavior", () => {
+  it("Generate SVG and Upload shells are full width and match V2 behavior — whole page scrolls", () => {
     const sheet = css();
-    // svg-shell already checked, but ensure up-shell also full width
+    // svg-shell already checked, but ensure up-shell also full width with min-height floor
     const upShell = decls(sheet, ".up-shell");
     expect(upShell).toContain("width: 100%");
-    expect(upShell).toContain("flex: 1 1 auto");
+    expect(upShell).toContain("min-height: 100%");
   });
 });
