@@ -56,6 +56,7 @@ function Columns() {
       <span />
       <span>AI Image</span>
       <span>File / path</span>
+      <span>Detection</span>
       <span>Preview splits</span>
       <span>Created</span>
       <span>Status</span>
@@ -141,12 +142,14 @@ function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
 }
 
 function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: { r: Row; globalFrac: number | null; rowMerges: RowMergeMap; setRowMerge?: ScanTableProps["setRowMerge"]; clearRowMerge?: ScanTableProps["clearRowMerge"] }) {
-  if (r.status === "missing" || r.status === "deleted") return null;
+  if (r.status === "missing" || r.status === "deleted") return <div className="svg-cell min-w-0 w-full text-xs text-slate-500">—</div>;
   const key = r.relPath.toLowerCase();
   const hasOv = Object.prototype.hasOwnProperty.call(rowMerges, key);
   const ov = hasOv ? rowMerges[key] : undefined;
   return (
-    <BatchRowMergeBar relPath={r.relPath} globalFrac={globalFrac} overrideFrac={ov} onApply={(rp, v) => setRowMerge?.(rp, v as number | null)} onReset={(rp) => clearRowMerge?.(rp)} />
+    <div className="min-w-0 w-full">
+      <BatchRowMergeBar relPath={r.relPath} globalFrac={globalFrac} overrideFrac={ov} onApply={(rp, v) => setRowMerge?.(rp, v as number | null)} onReset={(rp) => clearRowMerge?.(rp)} />
+    </div>
   );
 }
 
@@ -164,10 +167,8 @@ function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, pr
       <CheckCell r={r} toggle={toggle} />
       <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
       <ScanFileCell r={r} />
-      <div className="flex min-w-0 w-full flex-col gap-2">
-        <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
-        <PreviewCell entry={entry} />
-      </div>
+      <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
+      <PreviewCell entry={entry} />
       <DateCell mtime={r.mtime} />
       <ScanStatusCell r={r} />
       <OpenCell r={r} copyPath={copyPath} />
