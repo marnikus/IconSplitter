@@ -8,6 +8,7 @@ import type { SourceStatus } from "../lib/statefile";
 
 export interface ScanTableProps {
   rows: Row[];
+  thumb: number;
   toggle: (relPath: string) => void;
   selectAll: (on: boolean) => void;
   copyPath: (relPath: string) => void;
@@ -43,7 +44,7 @@ export default function ScanTable(props: ScanTableProps) {
   );
 }
 
-function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, copyPath, thumbFor, thumb }: { r: Row } & ScanTableProps) {
   const badge = BADGE[r.status];
   const disabled = r.status === "missing" || r.status === "deleted";
   return (
@@ -53,7 +54,7 @@ function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps)
         onChange={() => toggle(r.relPath)} className="h-4 w-4 accent-indigo-500"
         data-testid={`row-select-${r.relPath}`}
       />
-      <Thumb relPath={r.relPath} thumbFor={thumbFor} />
+      <Thumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
           {r.name}
@@ -72,16 +73,17 @@ function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps)
   );
 }
 
-function Thumb({ relPath, thumbFor }: { relPath: string; thumbFor: (r: string) => Promise<string> }) {
+function Thumb({ relPath, thumbFor, thumb }: { relPath: string; thumbFor: (r: string) => Promise<string>; thumb: number }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     void thumbFor(relPath).then((u) => alive && setSrc(u)).catch(() => {});
     return () => { alive = false; };
   }, [relPath, thumbFor]);
+  const size = Math.max(48, Math.min(800, thumb));
   return src
-    ? <img src={src} alt="" className="h-10 w-10 rounded-md bg-white object-contain" />
-    : <div className="h-10 w-10 animate-pulse rounded-md bg-white/10" />;
+    ? <img src={src} alt="" className="rounded-md bg-white object-contain" style={{ height: size, width: size }} />
+    : <div className="animate-pulse rounded-md bg-white/10" style={{ height: size, width: size }} />;
 }
 
 export function useThumbCache(getUrl: (relPath: string) => Promise<string>) {

@@ -105,13 +105,18 @@ function useViewActions(ctx: Ctx, setS: Setter) {
     setS((p) => ({ ...p, rows: p.rows.map((r) => (selectable(r) ? { ...r, selected: on } : r)) }));
   }, [setS]);
 
+  const setSelected = useCallback((relPaths: string[], on: boolean) => {
+    const set = new Set(relPaths.map((x) => x.toLowerCase()));
+    setS((p) => ({ ...p, rows: p.rows.map((r) => (set.has(r.relPath.toLowerCase()) ? { ...r, selected: on } : r)) }));
+  }, [setS]);
+
   const thumbUrl = useCallback(async (relPath: string) => {
     const root = ctx.root.current;
     if (!root) throw new Error("No folder selected");
     return URL.createObjectURL(await (await resolveFile(root, relPath)).getFile());
   }, [ctx]);
 
-  return { toggle, selectAll, thumbUrl };
+  return { toggle, selectAll, setSelected, thumbUrl };
 }
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
