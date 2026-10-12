@@ -4,6 +4,7 @@
 
 import { monthKey as reviewMonthKey } from "./reviewfilter";
 import type { SourceStatus } from "./statefile";
+import type { ReviewStatus } from "./reviewstatus";
 import { isRecord } from "./isrecord";
 
 export type DateFilter =
@@ -12,29 +13,33 @@ export type DateFilter =
   | { mode: "custom"; from: number; to: number }; // epoch ms inclusive
 
 export type BatchStatusFilter = "all" | SourceStatus;
+export type BatchReviewFilter = "all" | ReviewStatus;
 
 export interface BatchFilter {
   date: DateFilter;
   status: BatchStatusFilter;
+  review: BatchReviewFilter;
   search: string;
 }
 
 export const ALL_BATCH_FILTER: BatchFilter = {
   date: { mode: "all" },
   status: "all",
+  review: "all",
   search: "",
 };
 
 export interface BatchRowLike {
   mtime: number;
   status: SourceStatus;
+  review: ReviewStatus;
   name: string;
   relPath: string;
   dirPath: string;
 }
 
 export function applyBatchFilters<T extends BatchRowLike>(rows: T[], f: BatchFilter): T[] {
-  return rows.filter((r) => inDate(r, f.date) && inStatus(r, f.status) && inSearch(r, f.search));
+  return rows.filter((r) => inDate(r, f.date) && inStatus(r, f.status) && inReview(r, f.review) && inSearch(r, f.search));
 }
 
 function inDate(r: BatchRowLike, d: DateFilter): boolean {
@@ -45,6 +50,10 @@ function inDate(r: BatchRowLike, d: DateFilter): boolean {
 
 function inStatus(r: BatchRowLike, s: BatchStatusFilter): boolean {
   return s === "all" || r.status === s;
+}
+
+function inReview(r: BatchRowLike, s: BatchReviewFilter): boolean {
+  return s === "all" || r.review === s;
 }
 
 function inSearch(r: BatchRowLike, q: string): boolean {
@@ -58,12 +67,14 @@ export function monthKey(t: number): string {
 }
 
 const STATUSES: BatchStatusFilter[] = ["all", "unprocessed", "processed", "skipped", "missing", "changed", "deleted"];
+const REVIEWS: BatchReviewFilter[] = ["all", "pending", "approved", "declined", "needs-review"];
 
 export function parseBatchFilter(raw: unknown): BatchFilter {
   if (!isRecord(raw)) return ALL_BATCH_FILTER;
   return {
     date: parseDate(raw.date),
     status: pick(STATUSES, raw.status, "all"),
+    review: pick(REVIEWS, raw.review, "all"),
     search: typeof raw.search === "string" ? raw.search : "",
   };
 }

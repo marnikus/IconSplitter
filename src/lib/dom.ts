@@ -31,12 +31,9 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-/** Loads a File into an HTMLImageElement via a short-lived object URL. */
+/** Loads a File into an HTMLImageElement via a short-lived data URL. */
 export async function loadImageFile(file: File): Promise<HTMLImageElement> {
-  const url = URL.createObjectURL(file);
-  try {
-    return await loadImage(url);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  // A data URL, not an object URL: every browser fires load/error for it, so a
+  // blocked or unresolvable source can never leave a preview waiting forever.
+  return loadImage(await blobToDataUrl(file));
 }

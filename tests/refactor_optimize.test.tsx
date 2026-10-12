@@ -143,6 +143,7 @@ describe("refactor_optimize: BatchBulkBar still renders same features", () => {
         affectedCount={2}
         thumb={84}
         selectedCount={2}
+        approvedCheckedCount={2}
         onToggleAll={vi.fn()}
         onSelectVisible={vi.fn()}
         onDeselectAll={vi.fn()}
@@ -159,7 +160,9 @@ describe("refactor_optimize: BatchBulkBar still renders same features", () => {
     expect(q("[data-testid='batch-deselect']")).not.toBeNull();
     expect(q("[data-testid='batch-thumb']")).not.toBeNull();
     expect(q("[data-testid='batch-total']")?.textContent).toMatch(/5 total/);
-    expect(q("[data-testid='batch-process']")?.textContent).toMatch(/Split selected \(2\)/);
+    expect(q("[data-testid='batch-approve-selected']")).not.toBeNull();
+    expect(q("[data-testid='batch-decline-selected']")).not.toBeNull();
+    expect(q("[data-testid='batch-process']")?.textContent).toMatch(/Split approved \(2\)/);
   });
 });
 
@@ -183,22 +186,23 @@ describe("refactor_optimize: BatchFilterGrid still renders same features", () =>
 });
 
 describe("refactor_optimize: ScanTable still renders the batch table", () => {
-  it("renders 7 columns header and rows with required cells", async () => {
+  it("renders 8 columns header and rows with required cells", async () => {
     const rows = [
-      { relPath: "icon-a_AI_1.png", name: "icon-a_AI_1.png", mtime: Date.now(), status: "unprocessed", selected: true, refRelPath: "ref.png", dirPath: "a" },
-      { relPath: "icon-b_AI_2.png", name: "icon-b_AI_2.png", mtime: Date.now(), status: "processed", selected: false, refRelPath: null, dirPath: "b" },
+      { relPath: "icon-a_AI_1.png", name: "icon-a_AI_1.png", mtime: Date.now(), status: "unprocessed", review: "pending", selected: true, refRelPath: "ref.png", dirPath: "a" },
+      { relPath: "icon-b_AI_2.png", name: "icon-b_AI_2.png", mtime: Date.now(), status: "processed", review: "approved", selected: false, refRelPath: null, dirPath: "b" },
     ] as any;
     await mountReact(
       <ScanTable rows={rows} thumb={84} activeId="icon-a_AI_1.png" toggle={vi.fn()} selectRow={vi.fn()} selectActive={vi.fn()} copyPath={vi.fn()} thumbFor={async () => ""} />,
     );
     const cols = host.querySelectorAll(".batch-columns span");
-    expect(cols.length).toBe(7);
+    expect(cols.length).toBe(8);
     expect(cols[1].textContent).toBe("AI Image / File");
     expect(cols[2].textContent).toBe("Detection");
     expect(cols[3].textContent).toBe("Preview splits");
     expect(cols[4].textContent).toBe("Created");
-    expect(cols[5].textContent).toBe("Status");
-    expect(cols[6].textContent).toBe("Open");
+    expect(cols[5].textContent).toBe("Review");
+    expect(cols[6].textContent).toBe("Status");
+    expect(cols[7].textContent).toBe("Open");
     expect(q("[data-testid='batch-row-icon-a_AI_1.png']")).not.toBeNull();
     expect(q("[data-testid='row-select-icon-a_AI_1.png']")).not.toBeNull();
     expect(q("[data-testid='batch-status-icon-a_AI_1.png']")).not.toBeNull();

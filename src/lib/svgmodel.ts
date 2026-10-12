@@ -9,7 +9,12 @@ export const SIDECAR_VERSION = 1;
 export const SVG_EXT = ".svg";
 
 export type GenStatus = "generated" | "failed" | "interrupted";
-export type ReviewStatus = "pending" | "approved" | "declined" | "needs-review";
+
+// One review vocabulary for every tab (lib/reviewstatus): re-exported so all
+// existing svgmodel imports keep their exact names and meaning.
+export type { ReviewStatus } from "./reviewstatus";
+export { isReview } from "./reviewstatus";
+import { isReview, type ReviewStatus } from "./reviewstatus";
 
 export interface TokenUsage {
   input: number | null;
@@ -68,10 +73,6 @@ export interface SvgVersion {
 
 export function isGen(value: unknown): value is GenStatus {
   return value === "generated" || value === "failed" || value === "interrupted";
-}
-
-export function isReview(value: unknown): value is ReviewStatus {
-  return value === "pending" || value === "approved" || value === "declined" || value === "needs-review";
 }
 
 /**

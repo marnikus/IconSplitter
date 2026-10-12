@@ -421,9 +421,10 @@
 .batch-columns,
 .batch-row {
   display: grid;
-  /* 7-col flex: only checkbox fixed 34px, rest minmax fr to use full row space
-     thumb+info = 1fr min 160, detection min 380 1.2fr one-row, preview 2fr takes remaining */
-  grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
+  /* 8-col flex: only checkbox fixed 34px, rest minmax fr to use full row space
+     thumb+info = 1fr min 160, detection min 380 1.2fr one-row, preview 2fr takes
+     remaining; review joined 2026-10-12 between Created and Status */
+  grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(96px, 0.7fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -473,6 +474,21 @@
 
 .v2-row.declined::after { background: var(--v2-red); }
 .v2-row.needs-review::after { background: var(--v2-yellow); }
+
+/* Batch rows mirror the SVG tab's review side-lines (2026-10-12 split review):
+   green = approved, red = declined, yellow = pending (not yet previewed). */
+.batch-row.approved::after,
+.batch-row.declined::after,
+.batch-row.pending::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 2px;
+  background: var(--v2-green);
+}
+
+.batch-row.declined::after { background: var(--v2-red); }
+.batch-row.pending::after { background: var(--v2-yellow); }
 
 .v2-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 

@@ -154,8 +154,23 @@ Review window (scan table) — `scan-table` panel:
 | `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
 
-Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
-the data `relPath`, so tests should build handles from the scanned entry.
+Split review (2026-10-12, `docs/archive/2026-10-12-batch-split-review/`):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-row-{relPath}` | row `<div>` | carries the review class `approved` / `declined` / `pending`; 2px right side-line green/red/yellow |
+| `batch-review-badge-{relPath}` | `✓ Approved` / `✕ Declined` / `◔ Pending` badge | mirrors `svg-review-badge-{id}`; auto-set from Preview splits (exactly N icons → approved, else declined), manual override allowed |
+| `batch-review-approve-{relPath}` | per-row `✓` button | hand-approve; one undoable history entry |
+| `batch-review-decline-{relPath}` | per-row `✕` button | hand-decline; one undoable history entry |
+| `batch-approve-selected` | bulk `✓ Approve selected` | all checked decidable rows |
+| `batch-decline-selected` | bulk `✕ Decline selected` | all checked decidable rows |
+| `batch-approved-count` / `batch-declined-count` | footer counters | `{n} approved` / `{n} declined` |
+| `batch-expected-icons` | number input in the split panel | preset field `expectedIcons`, default 4, clamp 1–64 |
+| `batch-review-filter` | `<select>` in the filter grid | all/pending/approved/declined; combines with the other filters |
+
+Semantic fallbacks: button/select/input role + visible text; `row-*` and
+`batch-review-*` ids use the data `relPath`, so tests should build handles from
+the scanned entry.
 
 ## M. Selection review — `src/selection/*` (verified 2026-10-01)
 

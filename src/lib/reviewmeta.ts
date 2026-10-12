@@ -3,6 +3,7 @@
 // colour alone; hotkey mapping is pure so keyboard support is unit-tested.
 
 import type { Decision } from "./reviewfilter";
+import type { ReviewStatus } from "./reviewstatus";
 
 export interface StatusMeta {
   label: "Pending" | "Approved" | "Declined";
@@ -10,7 +11,8 @@ export interface StatusMeta {
   tone: "neutral" | "ok" | "bad";
 }
 
-export function statusInfo(d: Decision): StatusMeta {
+/** One display rule for every tab's review value (Batch passes a ReviewStatus). */
+export function statusInfo(d: Decision | ReviewStatus): StatusMeta {
   if (d === "approved") return { label: "Approved", glyph: "✓", tone: "ok" };
   if (d === "declined") return { label: "Declined", glyph: "✕", tone: "bad" };
   return { label: "Pending", glyph: "◔", tone: "neutral" };

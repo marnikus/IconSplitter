@@ -7,6 +7,7 @@ function row(over: Partial<BatchRowLike> & { mtime: number }): BatchRowLike {
     relPath: "a/a_AI.png",
     dirPath: "a",
     status: "unprocessed",
+    review: "pending",
     ...over,
   };
 }
@@ -53,7 +54,7 @@ describe("batchfilter", () => {
       row({ mtime: t, status: "processed", name: "a.png", relPath: "a/a.png", dirPath: "a" }),
       row({ mtime: t, status: "unprocessed", name: "a.png", relPath: "a/a.png", dirPath: "a" }),
     ];
-    const filtered = applyBatchFilters(rows, { date: { mode: "all" }, status: "processed", search: "" });
+    const filtered = applyBatchFilters(rows, { ...ALL_BATCH_FILTER, status: "processed" });
     expect(filtered).toHaveLength(1);
   });
 });

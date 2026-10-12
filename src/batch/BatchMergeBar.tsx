@@ -1,8 +1,9 @@
-// BatchMergeBar.tsx — global merge distance slider for Batch (preset-saved, Auto reset)
+// BatchMergeBar.tsx — global merge distance slider + expected-icons gate field for Batch (preset-saved, Auto reset)
 
 import { useCallback, useEffect, useState } from "react";
 import type { Preset } from "../lib/presets";
 import { clampMergeFrac } from "../lib/batchpreview";
+import { clampExpectedIcons, DEFAULT_EXPECTED_ICONS } from "../lib/batchreview";
 
 export interface BatchMergeBarProps {
   preset: Preset;
@@ -62,6 +63,32 @@ function ResetBtn({ frac, onReset }: { frac: number | null; onReset: () => void 
   );
 }
 
+function ExpectedField({ preset, setPreset }: BatchMergeBarProps) {
+  const [local, setLocal] = useState(String(preset.expectedIcons));
+  useEffect(() => { setLocal(String(preset.expectedIcons)); }, [preset.expectedIcons]);
+  const commit = useCallback((raw: string) => {
+    setLocal(raw);
+    const n = Number(raw);
+    if (raw !== "" && Number.isFinite(n)) setPreset({ expectedIcons: clampExpectedIcons(n) });
+  }, [setPreset]);
+  return (
+    <span className="flex items-center gap-1.5" title="A preview approves an image only when it splits into exactly this many icons">
+      <span className="text-sm font-medium">Expected icons</span>
+      <input
+        data-testid="batch-expected-icons"
+        type="number" min={1} max={64} value={local}
+        onChange={(e) => commit(e.target.value)}
+        className="w-16 rounded border border-white/10 bg-slate-800 px-2 py-1 text-xs"
+        aria-label="Expected icons per image"
+      />
+      {Number(local) !== preset.expectedIcons && Number.isFinite(Number(local)) && Number(local) !== 0 && (
+        <span className="text-[11px] text-slate-500">clamped to {preset.expectedIcons}</span>
+      )}
+      {local === String(DEFAULT_EXPECTED_ICONS) && <span className="text-[11px] text-slate-500">(default)</span>}
+    </span>
+  );
+}
+
 export default function BatchMergeBar({ preset, setPreset }: BatchMergeBarProps) {
   const frac = preset.split.mergeFrac;
   const onChange = useCallback(
@@ -81,6 +108,7 @@ export default function BatchMergeBar({ preset, setPreset }: BatchMergeBarProps)
       <Slider frac={frac} onChange={onChange} />
       <ResetBtn frac={frac} onReset={onReset} />
       <span className="text-[11px] text-slate-500">Lower = split, Higher = merge</span>
+      <ExpectedField preset={preset} setPreset={setPreset} />
     </div>
   );
 }

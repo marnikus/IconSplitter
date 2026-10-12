@@ -1,9 +1,19 @@
-# Batch folders — split review: approve / decline / warning gate before split
+# Batch folders — split review: approve / decline gate before split
 
 Date: 2026-10-12
 Area: Batch folders tab (`src/batch/`)
-Status: **PLAN — no code yet.** This doc is the implementation contract; append an
-"Implementation (final)" section here when the code lands (same commit, RULE 17).
+Status: **IMPLEMENTED 2026-10-12** (Batch folders tab: review badges, auto-status
+from Preview splits, approve-gate on the split run, `<base>.json` persistence).
+The plan below is kept as written; the one superseded decision is recorded here:
+
+> **REVISION 2026-10-12 (user, same day, after seeing the first UI):** the
+> three-tier `warning` auto-status is **superseded — there is no warning tier**.
+> After a preview: exactly N icons (preset field `expectedIcons`, default 4) →
+> **approved** + green row line; anything else, including preview errors →
+> **declined** + red row line; before any preview → **pending** + yellow row
+> line. Manual approve/decline overrides stay. Wherever the plan text below
+> still says "warning", read "declined" (the shared red `✕ Declined` badge
+> replaces the amber "⚠ Needs review" badge for this tab).
 
 Reuse source: the Generate SVG tab's review controls (`src/svg/`,
 `src/lib/svgmodel.ts`, `src/lib/reviewmeta.ts`, `src/svg/SvgRow.tsx`,

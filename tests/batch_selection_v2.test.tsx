@@ -213,13 +213,22 @@ describe("Batch V2 selection: active row separate from checked", () => {
     expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
   });
 
-  it("keeps missing/deleted ineligible and preserves Split selected", async () => {
-    // All our rows are unprocessed, selectable
+  it("gate: pending rows cannot split; only an approved checked set enables Split approved", async () => {
+    // All our rows are unprocessed, selectable — but PENDING: the gate is shut
     await click(q("[data-testid=batch-deselect]"));
     await click(q("[data-testid=batch-select-visible]"));
     const splitBtn = q("[data-testid=batch-process]") as HTMLButtonElement;
+    expect(splitBtn.disabled).toBe(true);
+    expect(splitBtn.textContent).toMatch(/Split approved \(0\)/);
+    // Previews run (this DOM cannot decode the fakes -> declined) — still shut
+    await click(q("[data-testid=batch-preview]"));
+    await settle(900);
+    expect((q("[data-testid='batch-review-badge-icon-a_AI_1.png']"))?.textContent).toMatch(/Declined/);
+    expect(splitBtn.disabled).toBe(true);
+    // A hand approves the checked row: the gate opens for exactly that row
+    await click(q("[data-testid='batch-review-approve-icon-a_AI_1.png']"));
     expect(splitBtn.disabled).toBe(false);
-    expect(splitBtn.textContent).toMatch(/Split selected \(3\)/);
+    expect(splitBtn.textContent).toMatch(/Split approved \(1\)/);
   });
 
   it("each selection gesture is one undo entry", async () => {

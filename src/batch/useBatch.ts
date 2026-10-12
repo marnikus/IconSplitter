@@ -8,6 +8,7 @@ import { pickFolderFor } from "../ui/pickroot";
 import { restoreKnownRoot } from "../lib/knownroots";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
 import type { DirHandleLike } from "../lib/fs";
+import type { ReviewStatus } from "../lib/reviewstatus";
 import type { BatchState, Ctx, Row, Setter } from "./useBatchTypes";
 import { scan as scanOp, batchProcess } from "./batchOps";
 
@@ -104,7 +105,17 @@ function useViewActions(ctx: Ctx, setS: Setter) {
     setS((p) => { const n = { ...p.rowMerges }; delete n[k]; return { ...p, rowMerges: n }; });
   }, [setS]);
   const clearAllRowMerges = useCallback(() => { setS((p) => ({ ...p, rowMerges: {} })); }, [setS]);
-  return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges };
+  const setReviews = useSetReviews(setS);
+  return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setReviews };
+}
+
+function useSetReviews(setS: Setter) {
+  return useCallback((patch: ReadonlyMap<string, ReviewStatus>) => {
+    setS((p) => ({ ...p, rows: p.rows.map((r) => {
+      const next = patch.get(r.relPath);
+      return next && next !== r.review ? { ...r, review: next } : r;
+    }) }));
+  }, [setS]);
 }
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {

@@ -3,6 +3,8 @@
 // mark-as-processed, and strict parse/serialize that rejects corrupt data.
 // Pure module: no IO. src/batch/store.ts reads/writes the file itself.
 
+import { isReview, type ReviewStatus } from "./reviewstatus";
+
 export type SourceStatus =
   | "unprocessed"
   | "processed"
@@ -18,6 +20,8 @@ export interface SourceRecord {
   mtime: number;
   hash?: string;
   status: SourceStatus;
+  /** The split-review decision; absent reads as pending (RULE 13). */
+  review?: ReviewStatus;
   updated: string; // ISO timestamp of last status change
 }
 
@@ -166,6 +170,7 @@ function recordFrom(r: Record<string, unknown>): SourceRecord {
     mtime: numOr(r.mtime),
     hash: typeof r.hash === "string" ? r.hash : undefined,
     status: validStatus(r.status),
+    review: isReview(r.review) ? r.review : undefined,
     updated: strOr(r.updated, ""),
   };
 }

@@ -7,9 +7,11 @@ import { selectIntent } from "../lib/reviewselect";
 import { fmtDate, fmtTime } from "../selection/fmt";
 import { useThumbCache } from "./ScanThumb";
 import ScanStatusCell from "./ScanStatusCell";
+import type { ReviewStatus } from "../lib/reviewstatus";
 import type { PreviewEntry } from "./useBatchPreview";
 import BatchRowMergeBar from "./BatchRowMergeBar";
 import BatchThumbInfoCell from "./BatchThumbInfoCell";
+import ReviewCell from "./ReviewCell";
 
 export interface ScanTableProps {
   rows: Row[];
@@ -25,6 +27,7 @@ export interface ScanTableProps {
   globalFrac?: number | null;
   setRowMerge?: (relPath: string, v: number | null) => void;
   clearRowMerge?: (relPath: string) => void;
+  onDecide?: (relPath: string, review: ReviewStatus) => void;
 }
 
 export { useThumbCache };
@@ -32,6 +35,8 @@ export { useThumbCache };
 function Header({ rows }: { rows: Row[] }) {
   const missing = rows.filter((r) => r.status === "missing" || r.status === "deleted").length;
   const refMissing = rows.filter((r) => r.refRelPath === null).length;
+  const approved = rows.filter((r) => r.review === "approved").length;
+  const declined = rows.filter((r) => r.review === "declined").length;
   return (
     <header className="svg-head">
       <div className="svg-title">
@@ -40,6 +45,8 @@ function Header({ rows }: { rows: Row[] }) {
         <span>one file per pair</span>
       </div>
       <div className="svg-attention">
+        <span className="running" data-testid="batch-approved-count">{approved} approved</span>
+        <span className="needs" data-testid="batch-declined-count">{declined} declined</span>
         <span className="running" data-testid="batch-missing-count">
           {missing} missing
         </span>
@@ -59,6 +66,7 @@ function Columns() {
       <span>Detection</span>
       <span>Preview splits</span>
       <span>Created</span>
+      <span>Review</span>
       <span>Status</span>
       <span>Open</span>
     </div>
@@ -153,7 +161,7 @@ function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: 
   );
 }
 
-function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, onDecide }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
@@ -163,12 +171,13 @@ function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb
   const merges = rowMerges ?? {};
   const gFrac = globalFrac ?? null;
   return (
-    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status}${active ? " active" : ""}${r.selected ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
+    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status} ${r.review}${active ? " active" : ""}${r.selected ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
       <CheckCell r={r} toggle={toggle} />
       <BatchThumbInfoCell r={r} thumbFor={thumbFor} thumb={thumb} />
       <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
       <PreviewCell entry={entry} />
       <DateCell mtime={r.mtime} />
+      <ReviewCell r={r} onDecide={onDecide} />
       <ScanStatusCell r={r} />
       <OpenCell r={r} copyPath={copyPath} />
     </div>

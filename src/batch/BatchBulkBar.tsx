@@ -1,7 +1,9 @@
 // BatchBulkBar.tsx — bulk bar for Batch folders, same visual as SVG output
-// Refactored to reuse ZoomSliderBase, adds Preview splits beside Split selected.
+// Refactored to reuse ZoomSliderBase, adds Preview splits beside Split approved,
+// and the split-review bulk decisions (approve/decline the checked rows).
 
 import type { CheckState } from "../lib/reviewselect";
+import type { ReviewStatus } from "../lib/reviewstatus";
 import ZoomSliderBase from "../ui/ZoomSliderBase";
 
 export interface BatchBulkBarProps {
@@ -13,12 +15,15 @@ export interface BatchBulkBarProps {
   affectedCount: number;
   thumb: number;
   selectedCount: number;
+  /** Checked rows the gate will actually split (checked AND approved). */
+  approvedCheckedCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onSplit: () => void;
   onPreview?: () => void;
+  onDecide?: (review: ReviewStatus) => void;
   canSplit: boolean;
   canPreview?: boolean;
   previewing?: boolean;
@@ -56,13 +61,31 @@ function Right(p: BatchBulkBarProps) {
         type="button"
         className="svg-btn"
         data-testid="batch-preview"
-        disabled={p.canPreview === false || !p.canSplit}
+        disabled={p.canPreview === false}
         onClick={p.onPreview}
       >
         {p.previewing ? "◍ Previewing…" : "◉ Preview splits"}
       </button>
-      <button type="button" className="svg-btn primary" data-testid="batch-process" disabled={!p.canSplit} onClick={p.onSplit}>
-        ▶ Split selected ({p.selectedCount})
+      <ReviewButtons p={p} />
+      <button type="button" className="svg-btn primary" data-testid="batch-process"
+        disabled={!p.canSplit} title={p.canSplit ? undefined : "Run Preview splits first — only approved images are split"}
+        onClick={p.onSplit}>
+        ▶ Split approved ({p.approvedCheckedCount})
+      </button>
+    </>
+  );
+}
+
+function ReviewButtons({ p }: { p: BatchBulkBarProps }) {
+  return (
+    <>
+      <button type="button" className="svg-btn success" data-testid="batch-approve-selected"
+        disabled={p.checkedCount === 0 || !p.onDecide} onClick={() => p.onDecide?.("approved")}>
+        ✓ Approve selected
+      </button>
+      <button type="button" className="svg-btn danger" data-testid="batch-decline-selected"
+        disabled={p.checkedCount === 0 || !p.onDecide} onClick={() => p.onDecide?.("declined")}>
+        ✕ Decline selected
       </button>
     </>
   );

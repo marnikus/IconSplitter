@@ -65,13 +65,13 @@ describe("Batch flex thumb+info layout", () => {
     expect(first.textContent).toMatch(/icon-a_AI/);
   });
 
-  it("removes File/path column, header has 7 cols (checkbox + 6)", async () => {
+  it("adds Review column, header has 8 cols (checkbox + 7)", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
     const cols = q(".batch-columns") as HTMLElement | null;
     expect(cols).not.toBeNull();
     const spans = cols!.querySelectorAll("span");
-    expect(spans.length).toBe(7); // checkbox + 6 columns
+    expect(spans.length).toBe(8); // checkbox + 7 columns
     const texts = Array.from(spans).map(s => s.textContent?.trim() || "");
     // No separate File/path
     expect(texts.join(" ")).not.toMatch(/File \/ path/);

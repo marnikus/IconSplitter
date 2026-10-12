@@ -5,7 +5,8 @@
 // (user-visible outputs still go through writeFileNew — RULE 23).
 
 import type { AiImageEntry } from "../lib/scan";
-import { blankState, mergeScan, parseState, serializeState, type SourceStatus } from "../lib/statefile";
+import { blankState, mergeScan, parseState, serializeState, type SourceRecord, type SourceStatus } from "../lib/statefile";
+import { isReview, type ReviewStatus } from "../lib/reviewstatus";
 import { probePath, tryGetFile, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 
 export interface StateKey {
@@ -15,6 +16,7 @@ export interface StateKey {
 
 export interface SyncResult {
   statuses: Map<string, SourceStatus>; // relPath (lowercase) -> status
+  reviews: Map<string, ReviewStatus>; // relPath (lowercase) -> review decision
   keys: StateKey[];
 }
 
@@ -39,7 +41,7 @@ export interface SyncArgs {
  * <base>.json, and reports the resulting status per image.
  */
 export async function syncAndCollect(args: SyncArgs): Promise<SyncResult> {
-  const ctx: SyncCtx = { ...args, result: { statuses: new Map(), keys: [] } };
+  const ctx: SyncCtx = { ...args, result: { statuses: new Map(), reviews: new Map(), keys: [] } };
   const groups = groupByState(args.images, args.prevKeys);
   for (const g of groups.values()) await syncOne(ctx, g);
   return ctx.result;
@@ -100,7 +102,10 @@ export interface Outcome {
   dirPath: string;
   base: string;
   relPath: string;
-  status: SourceStatus;
+  /** Processing outcome; undefined for a review-only write. */
+  status?: SourceStatus;
+  /** Review decision; undefined for a processing-only write. */
+  review?: ReviewStatus;
 }
 
 /**
@@ -126,19 +131,30 @@ async function writeOutcomes(root: DirHandleLike, list: Outcome[], now: string):
   if (!dir) return;
   const prev = await readPrev(dir, `${first.base}.json`);
   if (!prev) return; // no state file yet — a future scan will create it
-  const byPath = new Map(list.map((o) => [o.relPath.toLowerCase(), o.status]));
+  const byPath = new Map(list.map((o) => [o.relPath.toLowerCase(), o]));
   const next = {
     ...prev, updated: now,
-    sources: prev.sources.map((r) => {
-      const status = byPath.get(r.relPath.toLowerCase());
-      return status ? { ...r, status, updated: now } : r;
-    }),
+    sources: prev.sources.map((r) => withOutcome(r, byPath.get(r.relPath.toLowerCase()), now)),
   };
   await writeFileOverwrite(dir, `${first.base}.json`, jsonBlob(serializeState(next)));
 }
 
+/** Applies whatever the outcome carries — a status, a review, or both. */
+function withOutcome(r: SourceRecord, o: Outcome | undefined, now: string): SourceRecord {
+  if (!o || (o.status === undefined && o.review === undefined)) return r;
+  return {
+    ...r,
+    ...(o.status !== undefined ? { status: o.status } : {}),
+    ...(o.review !== undefined ? { review: o.review } : {}),
+    updated: now,
+  };
+}
+
 function recordStatuses(state: ReturnType<typeof mergeScan>, result: SyncResult): void {
-  for (const r of state.sources) result.statuses.set(r.relPath.toLowerCase(), r.status);
+  for (const r of state.sources) {
+    result.statuses.set(r.relPath.toLowerCase(), r.status);
+    result.reviews.set(r.relPath.toLowerCase(), isReview(r.review) ? r.review : "pending");
+  }
 }
 
 async function readPrev(dir: DirHandleLike, jsonName: string) {

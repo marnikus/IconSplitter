@@ -3,6 +3,7 @@
 import type { DirHandleLike } from "../lib/fs";
 import type { AiImageEntry } from "../lib/scan";
 import type { SourceStatus } from "../lib/statefile";
+import type { ReviewStatus } from "../lib/reviewstatus";
 import type { Preset } from "../lib/presets";
 import type { StateKey } from "./statewrite";
 import type { MutableRefObject } from "react";
@@ -11,6 +12,8 @@ export type RowMergeMap = Record<string, number | null>;
 
 export interface Row extends AiImageEntry {
   status: SourceStatus;
+  /** The split-review decision: pending until a preview (or a hand) decides. */
+  review: ReviewStatus;
   selected: boolean;
 }
 

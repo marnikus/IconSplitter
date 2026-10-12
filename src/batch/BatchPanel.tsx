@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo } from "react";
 import { copyFolderText } from "../lib/copypath";
+import type { ReviewStatus } from "../lib/reviewstatus";
+import { approvedChecked } from "../lib/batchreview";
 import { useBatchView } from "./useBatchView";
 import ScanTable, { useThumbCache } from "./ScanTable";
 import BatchFilterGrid from "./BatchFilterGrid";
@@ -10,29 +12,34 @@ import BatchSourceBar from "./BatchSourceBar";
 import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
+import { useReview } from "./useReview";
 import { useBatchPreview, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 
 export default function BatchPanel() {
   const v = useBatchView();
+  const review = useReview({ rows: v.core.s.rows, rootRef: v.core.rootRef, expected: v.core.s.preset.expectedIcons, setReviews: v.core.setReviews, say: v.core.say });
   const thumbFor = useThumbCache(v.core.thumbUrl);
-  const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges });
+  const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onEntry: review.classify });
   useBatchHotkeys(v as never, true);
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   const checkedRows = useCheckedRows(v);
+  const approvedChecked = useApprovedChecked(v);
   const onPreview = useOnPreview(checkedRows, preview);
   const onRowMergeApply = useRowMergeApply(v, preview);
   const onRowMergeReset = useRowMergeReset(v, preview);
+  const onDecide = useCallback((rel: string, dec: ReviewStatus) => review.decide([rel], dec), [review]);
+  const onBulkDecide = useCallback((dec: ReviewStatus) => review.decide(checkedRows.map((r) => r.relPath), dec), [review, checkedRows]);
   return (
     <div className="batch-shell w-full space-y-4">
       {!v.core.supported && <Unsupported />}
-      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} />
+      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} approvedChecked={approvedChecked} onBulkDecide={onBulkDecide} />
       <PresetAndDest v={v} />
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
       <RefWarnings count={v.core.s.refWarnings.length} />
-      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} />
+      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} onDecide={onDecide} />
       <Overlays v={v} />
     </div>
   );
@@ -43,6 +50,9 @@ type Preview = ReturnType<typeof useBatchPreview>;
 
 function useCheckedRows(v: View) {
   return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]);
+}
+function useApprovedChecked(v: View) {
+  return useMemo(() => approvedChecked(v.core.s.rows).length, [v.core.s.rows]);
 }
 function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: Preview) {
   return useCallback(() => {
@@ -67,12 +77,12 @@ function useRowMergeReset(v: View, preview: Preview) {
     }
   }, [v, preview]);
 }
-function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () => void; previewing: boolean }) {
+function BatchControls({ v, onPreview, previewing, approvedChecked, onBulkDecide }: { v: View; onPreview: () => void; previewing: boolean; approvedChecked: number; onBulkDecide: (d: ReviewStatus) => void }) {
   return (
     <div className="batch-controls-stack space-y-3">
       <div className="v2-controls"><BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} /></div>
       <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} canSplit={v.selectedCount > 0 && !v.core.s.busy} canPreview={v.selectedCount > 0 && !v.core.s.busy} previewing={previewing} />
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} approvedCheckedCount={approvedChecked} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onDecide={onBulkDecide} canSplit={approvedChecked > 0 && !v.core.s.busy} canPreview={v.checkedCount > 0 && !v.core.s.busy} previewing={previewing} />
     </div>
   );
 }
@@ -87,8 +97,8 @@ function PresetAndDest({ v }: { v: View }) {
     </div>
   );
 }
-function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} /></div>;
+function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset, onDecide }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void; onDecide: (relPath: string, d: ReviewStatus) => void }) {
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} onDecide={onDecide} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   if (!v.core.s.busy && !v.core.s.toast) return null;

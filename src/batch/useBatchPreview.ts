@@ -20,6 +20,8 @@ export interface PreviewEntry {
 }
 
 type LoadFile = (relPath: string) => Promise<File>;
+/** A finished preview entry (done or error), handed to the review classifier. */
+export type OnEntry = (entry: PreviewEntry) => void;
 const MAX_CONCURRENT = 3;
 const MAX_THUMBS = 20;
 const THUMB_OUT = 96;
@@ -131,7 +133,16 @@ function usePreviewOne(args: { split: SplitSettings; rowMerges: RowMergeMap; loa
 function markLoading(eligible: Row[], setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
   setPreviews((prev) => { const next = new Map(prev); for (const r of eligible) next.set(r.relPath, { relPath: r.relPath, count: 0, thumbs: [], boxes: [], status: "loading" }); return next; });
 }
-async function runWorkers(queue: Row[], ac: AbortController, previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
+function publish(entry: PreviewEntry, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onEntry: OnEntry | undefined): void {
+  setPreviews((prev) => { const next = new Map(prev); next.set(entry.relPath, entry); return next; });
+  if (entry.status === "done" || entry.status === "error") onEntry?.(entry);
+}
+interface WorkerEnv {
+  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
+  onEntry: OnEntry | undefined;
+}
+
+async function runWorkers(queue: Row[], ac: AbortController, previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>, env: WorkerEnv) {
   let idx = 0;
   const runNext = async () => {
     while (idx < queue.length) {
@@ -140,45 +151,52 @@ async function runWorkers(queue: Row[], ac: AbortController, previewOne: (row: R
       try {
         const entry = await previewOne(row, ac.signal);
         if (ac.signal.aborted) return;
-        setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
-      } catch { return; }
+        publish(entry, env.setPreviews, env.onEntry);
+      } catch (e) {
+        if (ac.signal.aborted) return;
+        // A dead worker never leaves the row at "Loading…" (RULE 2/5): the row
+        // lands as a visible failure, which the review classifies as declined.
+        publish({ relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "error", error: (e as Error).message }, env.setPreviews, env.onEntry);
+      }
       await new Promise((r) => setTimeout(r, 0));
     }
   };
   const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, () => runNext());
   await Promise.all(workers);
 }
-function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>; setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>; abortRef: React.MutableRefObject<AbortController | null>; }) {
-  const { previewOne, setPreviews, setIsPreviewing, abortRef } = args;
+function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>; setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>; abortRef: React.MutableRefObject<AbortController | null>; onEntry: OnEntry | undefined; }) {
+  const { previewOne, setPreviews, setIsPreviewing, abortRef, onEntry } = args;
   return useCallback(async (selected: Row[]) => {
     const eligible = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
     if (eligible.length === 0) return;
     abortRef.current?.abort();
     const ac = new AbortController(); abortRef.current = ac;
     setIsPreviewing(true); markLoading(eligible, setPreviews);
-    await runWorkers([...eligible], ac, previewOne, setPreviews);
+    await runWorkers([...eligible], ac, previewOne, { setPreviews, onEntry });
     if (!ac.signal.aborted) setIsPreviewing(false);
-  }, [previewOne, abortRef, setPreviews, setIsPreviewing]);
+  }, [previewOne, abortRef, setPreviews, setIsPreviewing, onEntry]);
 }
-function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFrac?: number | null) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
+function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFrac?: number | null) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onEntry: OnEntry | undefined) {
   return useCallback(async (row: Row, overrideFrac?: number | null) => {
     setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "loading" }); return next; });
     try {
       const ac = new AbortController();
       const entry = overrideFrac !== undefined ? await previewOne(row, ac.signal, overrideFrac) : await previewOne(row, ac.signal);
-      setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
-    } catch { /* ignore */ }
-  }, [previewOne, setPreviews]);
+      publish(entry, setPreviews, onEntry);
+    } catch (e) {
+      publish({ relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "error", error: (e as Error).message }, setPreviews, onEntry);
+    }
+  }, [previewOne, setPreviews, onEntry]);
 }
-export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; }) {
+export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; onEntry?: OnEntry; }) {
   const { root, split, rowMerges } = params;
   const merges = rowMerges ?? {};
   const { analysis, lru } = useCaches();
   const { previews, setPreviews, isPreviewing, setIsPreviewing, abortRef } = usePreviewState();
   const loadFile = useLoadFile(root, params.loadFile);
   const previewOne = usePreviewOne({ split, rowMerges: merges, loadFile, analysis, lru });
-  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef });
-  const previewSingle = usePreviewSingle(previewOne, setPreviews);
+  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef, onEntry: params.onEntry });
+  const previewSingle = usePreviewSingle(previewOne, setPreviews, params.onEntry);
   const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); }, [abortRef, setPreviews, setIsPreviewing]);
   useEffect(() => { clear(); }, [root, clear]);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);

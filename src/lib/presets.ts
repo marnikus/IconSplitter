@@ -3,6 +3,8 @@
 // and apply() which turns a preset into the split settings the pipeline uses.
 // Pure module: storage itself lives in src/batch/store.ts.
 
+import { clampExpectedIcons, DEFAULT_EXPECTED_ICONS } from "./batchreview";
+
 export interface SplitSettings {
   padding: number; // percent of largest icon side, 0..25
   size: number; // output px; 0 = native
@@ -18,6 +20,8 @@ export interface Preset {
   ignoreFolders: string[];
   destMode: DestMode;
   split: SplitSettings;
+  /** The split-review gate: a preview must find exactly this many icons (default 4). */
+  expectedIcons: number;
   selection: SelectionMode;
   useContentHash: boolean;
 }
@@ -28,6 +32,7 @@ export function defaultPreset(name: string): Preset {
     ignoreFolders: ["_split_output"],
     destMode: "auto",
     split: { padding: 6, size: 0, transparent: false, mergeFrac: null },
+    expectedIcons: DEFAULT_EXPECTED_ICONS,
     selection: "remember",
     useContentHash: false,
   };
@@ -44,6 +49,7 @@ export function validatePreset(x: unknown): Preset | null {
     ignoreFolders: validateIgnore(o.ignoreFolders, d.ignoreFolders),
     destMode: o.destMode === "custom" ? "custom" : "auto",
     split: validateSplit(o.split),
+    expectedIcons: clampExpectedIcons(o.expectedIcons),
     selection: validateSelection(o.selection),
     useContentHash: o.useContentHash === true,
   };

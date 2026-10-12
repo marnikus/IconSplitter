@@ -27,6 +27,12 @@ const STATUS_OPTS: [string, string][] = [
   ["missing", "Missing"],
   ["deleted", "Deleted"],
 ];
+const REVIEW_OPTS: [string, string][] = [
+  ["all", "All reviews"],
+  ["pending", "Pending"],
+  ["approved", "Approved"],
+  ["declined", "Declined"],
+];
 const SORT_OPTS: [string, string][] = [
   ["date", "Created date"],
   ["name", "Filename"],
@@ -53,6 +59,7 @@ function Filters({ p, range, setRange }: { p: BatchFilterGridProps; range: Range
       <FromField p={p} range={range} setRange={setRange} />
       <ToField p={p} range={range} setRange={setRange} />
       <SelectField label="Status" testid="batch-status" value={p.filter.status} onChange={(v) => p.setFilter({ ...p.filter, status: v as any })} options={STATUS_OPTS} />
+      <SelectField label="Review" testid="batch-review-filter" value={p.filter.review} onChange={(v) => p.setFilter({ ...p.filter, review: v as any })} options={REVIEW_OPTS} />
       <SelectField label="Sort by" testid="batch-sort" value={p.sort.by} onChange={(v) => p.setSort({ ...p.sort, by: v as any })} options={SORT_OPTS} />
       <SelectField label="Order" testid="batch-dir" value={p.sort.dir} onChange={(v) => p.setSort({ ...p.sort, dir: v as any })} options={DIR_OPTS} />
     </>

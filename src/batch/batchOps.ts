@@ -1,9 +1,11 @@
 // batchOps.ts — scan + process ops extracted to keep useBatch.ts <300 lines (RULE 18)
 import { readDirTree, ensureDirPath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { walkTree, collectAiImages, linkReferences, type AiImageEntry } from "../lib/scan";
-import { syncAndCollect, applyOutcomes } from "./statewrite";
+import { syncAndCollect, applyOutcomes, type SyncResult } from "./statewrite";
 import { toOutcomes } from "./outcomes";
 import type { SourceStatus } from "../lib/statefile";
+import type { ReviewStatus } from "../lib/reviewstatus";
+import { approvedChecked, classifySplitCount, isDecidableRow } from "../lib/batchreview";
 import { processItems, type BatchItem, type ItemResult } from "./process";
 import { OUTPUT_DIR } from "../lib/batchlayout";
 import type { Preset } from "../lib/presets";
@@ -19,7 +21,7 @@ async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageE
 
 export function finishScan(
   images: AiImageEntry[],
-  statuses: Map<string, SourceStatus>,
+  scan: SyncResult,
   setS: Setter,
   say: (m: string, e?: boolean) => void,
 ): void {
@@ -32,7 +34,7 @@ export function finishScan(
     return {
       ...p,
       busy: null,
-      rows: images.map((img) => toRow(img, statuses)),
+      rows: images.map((img) => toRow(img, scan.statuses, scan.reviews)),
       refWarnings: images.filter((i) => i.refRelPath === null).map((i) => i.relPath),
       rowMerges: nextMerges,
     };
@@ -40,9 +42,11 @@ export function finishScan(
   say(`Found ${images.length} AI image${images.length === 1 ? "" : "s"}`);
 }
 
-function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>): Row {
-  const status = statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";
-  return { ...img, status, selected: status !== "missing" && status !== "deleted" };
+function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>, reviews: Map<string, ReviewStatus>): Row {
+  const key = img.relPath.toLowerCase();
+  const status = statuses.get(key) ?? "unprocessed";
+  const review = reviews.get(key) ?? "pending";
+  return { ...img, status, review, selected: status !== "missing" && status !== "deleted" };
 }
 
 export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
@@ -59,22 +63,36 @@ export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean)
       now: new Date().toISOString(),
     });
     ctx.keys.current = res.keys;
-    finishScan(images, res.statuses, setS, say);
+    finishScan(images, res, setS, say);
   } catch (e) {
     setS((p) => ({ ...p, busy: null }));
     say((e as Error).message || "Scan failed", true);
   }
 }
 
+/** The gate (I-66): only checked AND approved rows reach the split run. */
+export function splittableRows(rows: Row[]): Row[] {
+  return approvedChecked(rows.filter(isDecidableRow));
+}
+
 export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
   ctx.stop.current = false;
-  const selected = ctx.state.current.rows.filter((r) => r.selected);
-  if (!selected.length) return setS((p) => ({ ...p, toast: { msg: "Nothing selected", err: true } }));
+  const selected = splittableRows(ctx.state.current.rows);
+  const checkedCount = ctx.state.current.rows.filter((r) => r.selected && isDecidableRow(r)).length;
+  if (checkedCount === 0) return setS((p) => ({ ...p, toast: { msg: "Nothing selected", err: true } }));
+  if (!selected.length) {
+    return setS((p) => ({ ...p, toast: { msg: "No approved images to split — run Preview splits first", err: true } }));
+  }
   setS((p) => ({ ...p, busy: "Preparing…" }));
   const report = await runBatch(ctx, root, selected, setS);
-  await finalize(root, report.results, selected, setS);
+  await finalize({
+    root, results: report.results, selected,
+    leftOut: checkedCount - selected.length,
+    expected: ctx.state.current.preset.expectedIcons,
+    setS,
+  });
 }
 
 async function runBatch(ctx: Ctx, root: DirHandleLike, selected: Row[], setS: Setter) {
@@ -167,25 +185,58 @@ function tally(results: ItemResult[]) {
   return { done, skipped, failed };
 }
 
-async function finalize(
-  root: DirHandleLike,
-  results: ItemResult[],
-  selected: Row[],
-  setS: Setter,
-): Promise<void> {
+/** A run is evidence: a processed item that did not produce exactly N icons is declined. */
+function reviewReclass(results: ItemResult[], expected: number): Map<string, ReviewStatus> {
+  const out = new Map<string, ReviewStatus>();
+  for (const r of results) {
+    if (r.outcome !== "processed") continue;
+    const review = classifySplitCount(r.splits, expected);
+    if (review === "declined") out.set(r.relPath.toLowerCase(), review);
+  }
+  return out;
+}
+
+function toastLine(c: { done: number; skipped: number; failed: number }, leftOut: number, reclass: number): { msg: string; err: boolean } {
+  const bits = [`Split ${c.done}`, `skipped ${c.skipped}`, `failed ${c.failed}`];
+  if (leftOut > 0) bits.push(`${leftOut} not approved left out`);
+  if (reclass > 0) bits.push(`${reclass} declined — wrong icon count`);
+  return { msg: bits.join(", "), err: c.failed > 0 };
+}
+
+interface FinalizeArgs {
+  root: DirHandleLike;
+  results: ItemResult[];
+  selected: Row[];
+  leftOut: number;
+  expected: number;
+  setS: Setter;
+}
+
+async function finalize(args: FinalizeArgs): Promise<void> {
+  const { root, results, selected, leftOut, expected, setS } = args;
   const dirs = new Map(selected.map((r) => [r.relPath.toLowerCase(), r.dirPath]));
   const outcomes = toOutcomes(results, dirs);
-  await applyOutcomes(root, outcomes, new Date().toISOString());
-  const byPath = new Map(outcomes.map((o) => [o.relPath.toLowerCase(), o.status]));
+  const reclass = reviewReclass(results, expected);
+  // One outcome per row carries BOTH its processing status and (when the run
+  // proved a wrong icon count) its review — never two competing writes.
+  const merged = outcomes.map((o) => {
+    const review = reclass.get(o.relPath.toLowerCase());
+    return review ? { ...o, review } : o;
+  });
+  await applyOutcomes(root, merged, new Date().toISOString());
+  const byPath = new Map(merged.map((o) => [o.relPath.toLowerCase(), o]));
   const c = tally(results);
   setS((p) => ({
     ...p,
     busy: null,
-    rows: p.rows.map((r) => ({
-      ...r,
-      status: byPath.get(r.relPath.toLowerCase()) ?? r.status,
-      selected: false,
-    })),
-    toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
+    rows: p.rows.map((r) => patchRow(r, byPath, reclass)),
+    toast: toastLine(c, leftOut, reclass.size),
   }));
+}
+
+function patchRow(r: Row, byPath: Map<string, ReturnType<typeof toOutcomes>[number]>, reclass: Map<string, ReviewStatus>): Row {
+  const key = r.relPath.toLowerCase();
+  const o = byPath.get(key);
+  const review = reclass.get(key) ?? r.review;
+  return { ...r, status: o ? (o.status as SourceStatus) : r.status, review, selected: false };
 }
