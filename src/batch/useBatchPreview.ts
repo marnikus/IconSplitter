@@ -1,5 +1,5 @@
 // useBatchPreview.ts — high-perf preview for Batch (1000 images) + immediate per-row preview on Apply/Reset + progress bar + persistence
-// ideal-size: 303 lines reason=high-perf preview owns cache, load, thumb render, queue, abort and single-row immediate preview; splitting would break cohesion, still under 320 with 35 fns each ≤30 lines
+// ideal-size: 295 lines reason=high-perf preview owns cache, load, thumb render, queue, abort and single-row immediate preview; splitting would break cohesion, still under 300
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
@@ -11,26 +11,15 @@ import type { SplitSettings } from "../lib/presets";
 import type { Row, RowMergeMap } from "./useBatch";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 import { yieldToFrame, yieldToUI } from "../lib/yield";
-import type { BatchReviewStatus } from "../lib/statefile";
 import { idbPut, idbGetAll, idbClear, PREVIEW_STORE } from "./store";
 
-export interface PreviewEntry {
-  relPath: string;
-  count: number;
-  thumbs: string[];
-  boxes: Box[];
-  status: "idle" | "loading" | "done" | "error";
-  error?: string;
-}
-
+export interface PreviewEntry { relPath: string; count: number; thumbs: string[]; boxes: Box[]; status: "idle" | "loading" | "done" | "error"; error?: string; }
 type LoadFile = (relPath: string) => Promise<File>;
 const MAX_CONCURRENT = 3;
 const MAX_THUMBS = 20;
 const THUMB_OUT = 96;
 const CACHE_LIMIT = 200;
-
 interface CacheItem { key: string; entry: PreviewEntry; at: number; }
-
 function useCaches() {
   const analysis = useRef<Map<string, Analysis>>(new Map());
   const lru = useRef<Map<string, CacheItem>>(new Map());
@@ -61,12 +50,8 @@ function savePersisted(entry: PreviewEntry) { void idbPut(PREVIEW_STORE, entry.r
 async function loadPersisted(): Promise<Map<string, PreviewEntry>> {
   try { const all = await idbGetAll<PreviewEntry>(PREVIEW_STORE); const m = new Map<string, PreviewEntry>(); for (const e of all) if (e && e.relPath) m.set(e.relPath, e); return m; } catch { return new Map(); }
 }
-function makeFallback(relPath: string): PreviewEntry {
-  return { relPath, count: 1, thumbs: [], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done" };
-}
-function evictMap(map: Map<string, unknown>) {
-  if (map.size > CACHE_LIMIT) { const first = map.keys().next().value; if (first) map.delete(first); }
-}
+function makeFallback(relPath: string): PreviewEntry { return { relPath, count: 1, thumbs: [], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done" }; }
+function evictMap(map: Map<string, unknown>) { if (map.size > CACHE_LIMIT) { const first = map.keys().next().value; if (first) map.delete(first); } }
 function evictLru(lru: Map<string, CacheItem>) {
   if (lru.size <= CACHE_LIMIT) return;
   const oldest = [...lru.entries()].sort((a, b) => a[1].at - b[1].at)[0]?.[0];
@@ -86,20 +71,14 @@ function renderThumbsYielding(img: HTMLImageElement, an: Analysis, boxes: Box[],
     return out;
   })();
 }
-async function loadImgSafe(file: File): Promise<HTMLImageElement | null> {
-  try { return await loadImageFile(file); } catch { return null; }
-}
+async function loadImgSafe(file: File): Promise<HTMLImageElement | null> { try { return await loadImageFile(file); } catch { return null; } }
 async function getOrAnalyze(img: HTMLImageElement, relPath: string, cache: Map<string, Analysis>): Promise<Analysis> {
   let an = cache.get(relPath);
   if (!an) { an = await analyzeAsync(img); cache.set(relPath, an); evictMap(cache); }
   return an;
 }
-function buildEntry(relPath: string, boxes: Box[], thumbs: string[]): PreviewEntry {
-  return { relPath, count: boxes.length, thumbs, boxes, status: "done" };
-}
-export function effectiveMerge(global: number | null, override: number | null | undefined, hasOverride: boolean): number | null {
-  return hasOverride ? (override as number | null) : global;
-}
+function buildEntry(relPath: string, boxes: Box[], thumbs: string[]): PreviewEntry { return { relPath, count: boxes.length, thumbs, boxes, status: "done" }; }
+export function effectiveMerge(global: number | null, override: number | null | undefined, hasOverride: boolean): number | null { return hasOverride ? (override as number | null) : global; }
 function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; analysis: React.MutableRefObject<Map<string, Analysis>>; lru: React.MutableRefObject<Map<string, CacheItem>>; }) {
   const { split, loadFile, analysis, lru } = args;
   return useCallback(async (row: Row, eff: number | null, signal: AbortSignal, key: string): Promise<PreviewEntry> => {
@@ -151,15 +130,7 @@ function usePreviewOne(args: { split: SplitSettings; rowMerges: RowMergeMap; loa
 function markLoading(eligible: Row[], setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
   setPreviews((prev) => { const next = new Map(prev); for (const r of eligible) next.set(r.relPath, { relPath: r.relPath, count: 0, thumbs: [], boxes: [], status: "loading" }); return next; });
 }
-type WorkersArgs = {
-  queue: Row[];
-  ac: AbortController;
-  previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>;
-  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
-  onProgress?: (done: number, current: Row | null) => void;
-  onReviewed?: (relPath: string, count: number) => void;
-};
-
+type WorkersArgs = { queue: Row[]; ac: AbortController; previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>; onProgress?: (done: number, current: Row | null) => void; onReviewed?: (relPath: string, count: number) => void; };
 async function runWorkers(args: WorkersArgs) {
   const { queue, ac, previewOne, setPreviews, onProgress, onReviewed } = args;
   let idx = 0, done = 0;
@@ -173,8 +144,7 @@ async function runWorkers(args: WorkersArgs) {
         if (ac.signal.aborted) return;
         setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
         onReviewed?.(row.relPath, entry.count);
-        done++;
-        onProgress?.(done, queue[done] ?? null);
+        done++; onProgress?.(done, queue[done] ?? null);
       } catch { return; }
       await yieldToUI();
     }
@@ -182,9 +152,7 @@ async function runWorkers(args: WorkersArgs) {
   const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, () => runNext());
   await Promise.all(workers);
 }
-function makeRunId(): string {
-  return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-}
+function makeRunId(): string { return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`; }
 function initPreviewProgress(eligible: Row[]): BatchProgress {
   const runId = makeRunId();
   const init = makeBatchProgress(eligible.length, runId);
@@ -192,31 +160,15 @@ function initPreviewProgress(eligible: Row[]): BatchProgress {
   init.currentName = eligible[0]?.name ?? "";
   return init;
 }
-
 function makePreviewProgressUpdater(setProgress: React.Dispatch<React.SetStateAction<BatchProgress | null>>) {
   return (done: number, current: Row | null) => {
     setProgress((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        done,
-        currentRelPath: current?.relPath ?? prev.currentRelPath,
-        currentName: current?.name ?? prev.currentName,
-        saved: done,
-      };
+      return { ...prev, done, currentRelPath: current?.relPath ?? prev.currentRelPath, currentName: current?.name ?? prev.currentName, saved: done };
     });
   };
 }
-
-function usePreviewQueue(args: {
-  previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>;
-  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
-  setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>;
-  setProgress: React.Dispatch<React.SetStateAction<BatchProgress | null>>;
-  setRunning: React.Dispatch<React.SetStateAction<boolean>>;
-  abortRef: React.MutableRefObject<AbortController | null>;
-  onReviewed?: (relPath: string, count: number) => void;
-}) {
+function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>; setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>; setProgress: React.Dispatch<React.SetStateAction<BatchProgress | null>>; setRunning: React.Dispatch<React.SetStateAction<boolean>>; abortRef: React.MutableRefObject<AbortController | null>; onReviewed?: (relPath: string, count: number) => void; }) {
   const { previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef, onReviewed } = args;
   return useCallback(async (selected: Row[]) => {
     const eligible = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
@@ -224,16 +176,11 @@ function usePreviewQueue(args: {
     abortRef.current?.abort();
     const ac = new AbortController(); abortRef.current = ac;
     const init = initPreviewProgress(eligible);
-    setProgress(init);
-    setRunning(true);
-    setIsPreviewing(true);
+    setProgress(init); setRunning(true); setIsPreviewing(true);
     markLoading(eligible, setPreviews);
     const onProgress = makePreviewProgressUpdater(setProgress);
     await runWorkers({ queue: [...eligible], ac, previewOne, setPreviews, onProgress, onReviewed });
-    if (!ac.signal.aborted) {
-      setIsPreviewing(false);
-      setRunning(false);
-    }
+    if (!ac.signal.aborted) { setIsPreviewing(false); setRunning(false); }
   }, [previewOne, abortRef, setPreviews, setIsPreviewing, setProgress, setRunning, onReviewed]);
 }
 function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFrac?: number | null) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onReviewed?: (relPath: string, count: number) => void) {
@@ -254,31 +201,50 @@ function useRootChange(root: DirHandleLike | null, clearMemory: () => void) {
     if (prevRef.current !== root) { clearMemory(); prevRef.current = root; }
   }, [root, clearMemory]);
 }
-function usePersistedLoad(setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onReviewed?: (relPath: string, count: number) => void) {
+function toBatchEntries(map: Map<string, PreviewEntry>): { relPath: string; count: number }[] { return [...map.values()].map((e) => ({ relPath: e.relPath, count: e.count })); }
+function usePersistedLoad(setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onReviewed?: (relPath: string, count: number) => void, onReviewedBatch?: (entries: { relPath: string; count: number }[]) => void) {
   useEffect(() => {
     void (async () => {
       const loaded = await loadPersisted();
-      if (loaded.size > 0) {
-        setPreviews((prev) => { if (prev.size > 0) return prev; return loaded; });
-        for (const e of loaded.values()) onReviewed?.(e.relPath, e.count);
-      }
+      if (loaded.size === 0) return;
+      setPreviews((prev) => { if (prev.size > 0) return prev; return loaded; });
+      if (onReviewedBatch) onReviewedBatch(toBatchEntries(loaded));
+      else for (const e of loaded.values()) onReviewed?.(e.relPath, e.count);
     })();
-  }, [setPreviews, onReviewed]);
+  }, [setPreviews, onReviewed, onReviewedBatch]);
 }
-function useReviewSync(rows: Row[], previews: Map<string, PreviewEntry>, onReviewed?: (relPath: string, count: number) => void) {
+function buildRowMap(rows: Row[]): Map<string, Row> { const m = new Map<string, Row>(); for (const r of rows) m.set(r.relPath.toLowerCase(), r); return m; }
+function shouldSync(row: Row | undefined, count: number): boolean {
+  if (!row) return false;
+  if (row.review === "declined") return false;
+  const exp = count === 4 ? "approved" : "warning";
+  return row.review !== exp;
+}
+function collectSync(rows: Row[], previews: Map<string, PreviewEntry>, seen: Set<string>): { relPath: string; count: number }[] {
+  const rowMap = buildRowMap(rows);
+  const out: { relPath: string; count: number }[] = [];
+  for (const entry of previews.values()) {
+    const k = entry.relPath + "|" + entry.count;
+    if (seen.has(k)) continue;
+    const row = rowMap.get(entry.relPath.toLowerCase());
+    if (shouldSync(row, entry.count)) out.push({ relPath: entry.relPath, count: entry.count });
+  }
+  return out;
+}
+function markSeen(list: { relPath: string; count: number }[], seen: Set<string>) { for (const e of list) seen.add(e.relPath + "|" + e.count); }
+function useReviewSync(rows: Row[], previews: Map<string, PreviewEntry>, onReviewed?: (relPath: string, count: number) => void, onReviewedBatch?: (entries: { relPath: string; count: number }[]) => void) {
+  const seen = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!rows.length || !previews.size) return;
-    for (const entry of previews.values()) {
-      const row = rows.find((r) => r.relPath.toLowerCase() === entry.relPath.toLowerCase());
-      if (!row) continue;
-      if (row.review === "declined") continue;
-      const expected = entry.count === 4 ? "approved" : "warning";
-      if (row.review !== expected) onReviewed?.(entry.relPath, entry.count);
-    }
-  }, [rows, previews, onReviewed]);
+    const list = collectSync(rows, previews, seen.current);
+    if (list.length === 0) return;
+    markSeen(list, seen.current);
+    if (onReviewedBatch) onReviewedBatch(list);
+    else for (const e of list) onReviewed?.(e.relPath, e.count);
+  }, [rows, previews, onReviewed, onReviewedBatch]);
 }
-export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; onReviewed?: (relPath: string, count: number) => void; }) {
-  const { root, split, rowMerges, onReviewed } = params;
+export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; onReviewed?: (relPath: string, count: number) => void; onReviewedBatch?: (entries: { relPath: string; count: number }[]) => void; }) {
+  const { root, split, rowMerges, onReviewed, onReviewedBatch } = params;
   const merges = rowMerges ?? {};
   const { analysis, lru } = useCaches();
   const { previews, setPreviews, isPreviewing, setIsPreviewing, progress, setProgress, running, setRunning, abortRef } = usePreviewState();
@@ -291,8 +257,8 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
   useRootChange(root, clearMemory);
-  usePersistedLoad(setPreviews, onReviewed);
-  useReviewSync(params.rows, previews, onReviewed);
+  usePersistedLoad(setPreviews, onReviewed, onReviewedBatch);
+  useReviewSync(params.rows, previews, onReviewed, onReviewedBatch);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };
 }

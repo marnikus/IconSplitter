@@ -158,7 +158,7 @@ function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: 
   const key = r.relPath.toLowerCase();
   const ov = Object.prototype.hasOwnProperty.call(rowMerges, key) ? rowMerges[key] : undefined;
   return (
-    <div className="flex min-w-0 w-full justify-center">
+    <div className="min-w-0 w-full">
       <BatchRowMergeBar relPath={r.relPath} globalFrac={globalFrac} overrideFrac={ov} onApply={(rp, v) => setRowMerge?.(rp, v as number | null)} onReset={(rp) => clearRowMerge?.(rp)} />
     </div>
   );

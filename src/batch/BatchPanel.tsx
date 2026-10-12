@@ -15,46 +15,25 @@ import { useBatchPreview, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 
-export default function BatchPanel() {
-  const v = useBatchView();
-  const thumbFor = useThumbCache(v.core.thumbUrl);
+type View = ReturnType<typeof useBatchView>;
+type Preview = ReturnType<typeof useBatchPreview>;
+
+function useReviewed(v: View) {
   const onReviewed = useCallback((relPath: string, count: number) => {
     const review = count === 4 ? "approved" : "warning";
     v.decide([relPath], review as any);
   }, [v]);
-  const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onReviewed });
-  useBatchHotkeys(v as never, true);
-  useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
-  const checkedRows = useCheckedRows(v);
-  const onPreview = useOnPreview(checkedRows, preview);
-  const onRowMergeApply = useRowMergeApply(v, preview);
-  const onRowMergeReset = useRowMergeReset(v, preview);
-  return (
-    <div className="batch-shell w-full space-y-4">
-      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => { /* stay on batch tab */ }} mode="split" />
-      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => { /* stay */ }} mode="preview" />
-      {!v.core.supported && <Unsupported />}
-      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} previewRunning={preview.running} />
-      <PresetAndDest v={v} />
-      <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
-      {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
-      <RefWarnings count={v.core.s.refWarnings.length} />
-      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} />
-      <Overlays v={v} />
-    </div>
-  );
+  const onReviewedBatch = useCallback((entries: { relPath: string; count: number }[]) => {
+    const approve = entries.filter((e) => e.count === 4).map((e) => e.relPath);
+    const warn = entries.filter((e) => e.count !== 4).map((e) => e.relPath);
+    if (approve.length) v.decide(approve, "approved" as any);
+    if (warn.length) v.decide(warn, "warning" as any);
+  }, [v]);
+  return { onReviewed, onReviewedBatch };
 }
-
-type View = ReturnType<typeof useBatchView>;
-type Preview = ReturnType<typeof useBatchPreview>;
-
-function useCheckedRows(v: View) {
-  return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]);
-}
+function useCheckedRows(v: View) { return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]); }
 function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: Preview) {
-  return useCallback(() => {
-    void preview.previewSelected(checkedRows);
-  }, [checkedRows, preview]);
+  return useCallback(() => { void preview.previewSelected(checkedRows); }, [checkedRows, preview]);
 }
 function useRowMergeApply(v: View, preview: Preview) {
   return useCallback((relPath: string, value: number | null) => {
@@ -67,13 +46,40 @@ function useRowMergeReset(v: View, preview: Preview) {
   return useCallback((relPath: string) => {
     v.clearRowMerge(relPath);
     const row = v.core.s.rows.find((r) => r.relPath.toLowerCase() === relPath.toLowerCase());
-    if (row) {
-      // Reset → use global merge (null means auto/global, so pass global or undefined to force recompute)
-      const global = v.core.s.preset.split.mergeFrac;
-      void preview.previewSingle(row, global);
-    }
+    if (row) { const global = v.core.s.preset.split.mergeFrac; void preview.previewSingle(row, global); }
   }, [v, preview]);
 }
+function usePreviewSetup(v: View, onReviewed: (relPath: string, count: number) => void, onReviewedBatch: (entries: { relPath: string; count: number }[]) => void) {
+  return useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onReviewed, onReviewedBatch });
+}
+
+export default function BatchPanel() {
+  const v = useBatchView();
+  const thumbFor = useThumbCache(v.core.thumbUrl);
+  const { onReviewed, onReviewedBatch } = useReviewed(v);
+  const preview = usePreviewSetup(v, onReviewed, onReviewedBatch);
+  useBatchHotkeys(v as never, true);
+  useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
+  const checkedRows = useCheckedRows(v);
+  const onPreview = useOnPreview(checkedRows, preview);
+  const onRowMergeApply = useRowMergeApply(v, preview);
+  const onRowMergeReset = useRowMergeReset(v, preview);
+  return (
+    <div className="batch-shell w-full space-y-4">
+      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => {}} mode="split" />
+      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => {}} mode="preview" />
+      {!v.core.supported && <Unsupported />}
+      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} previewRunning={preview.running} />
+      <PresetAndDest v={v} />
+      <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
+      {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
+      <RefWarnings count={v.core.s.refWarnings.length} />
+      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} />
+      <Overlays v={v} />
+    </div>
+  );
+}
+
 function BatchControls({ v, onPreview, previewing, previewRunning }: { v: View; onPreview: () => void; previewing: boolean; previewRunning: boolean }) {
   const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null) || (previewRunning ? "Previewing…" : null);
   return (
@@ -116,6 +122,4 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
     </div>
   );
 }
-function copyPath(v: View, relPath: string): void {
-  void copyFolderText(v.core.rootRef.current, relPath, v.core.say);
-}
+function copyPath(v: View, relPath: string): void { void copyFolderText(v.core.rootRef.current, relPath, v.core.say); }
