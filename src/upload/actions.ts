@@ -81,6 +81,8 @@ export interface UploadActions extends PromptActions {
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
   deselectAll: () => void;
+  checkActive: () => void;
+  uncheckActive: () => void;
   setActive: (id: string) => void;
   openSettings: (id: string | null) => void;
   dismissDialog: () => void;

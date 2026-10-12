@@ -26,7 +26,7 @@ import { useSelectShortcuts } from "../lib/selectshortcuts";
 export default function UploadPanel() {
   const g = useUpload();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
-  useSelectShortcuts({ selectVisible: g.selectVisible, deselectAll: g.deselectAll }, true);
+  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, true);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>

@@ -16,7 +16,7 @@ export default function BatchPanel() {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
   useBatchHotkeys(v as never, true);
-  useSelectShortcuts({ selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
+  useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   return (
     <div className="batch-shell w-full space-y-4">
       {!v.core.supported && <Unsupported />}

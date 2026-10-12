@@ -23,6 +23,7 @@ export interface BatchView {
   checkVisible: () => void; uncheckAll: () => void; toggleAllVisible: (on: boolean) => void;
   selectRow: (id: string, intent: SelectIntent) => void;
   moveActive: (step: 1 | -1) => void; selectActive: (id: string) => void;
+  checkActive: () => void; uncheckActive: () => void;
 }
 
 export function useBatchView(): BatchView {
@@ -43,6 +44,7 @@ function makeView(core: BatchApi, ps: ReturnType<typeof usePrefsState>, visible:
     toggle: sel.toggleCheck, toggleCheck: sel.toggleCheck, checkVisible: sel.checkVisible,
     uncheckAll: sel.uncheckAll, toggleAllVisible: sel.toggleAllVisible,
     selectRow: sel.selectRow, moveActive: sel.moveActive, selectActive: sel.selectActive,
+    checkActive: sel.checkActive, uncheckActive: sel.uncheckActive,
   };
 }
 

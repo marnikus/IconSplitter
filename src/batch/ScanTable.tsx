@@ -49,7 +49,7 @@ export default function ScanTable(props: ScanTableProps) {
       </div>
       <footer className="svg-list-footer">
         <span data-testid="batch-footer">Showing {props.rows.length} images</span>
-        <span className="svg-hints">↑↓ active row · E select all · Q deselect all · Click row, Shift range, Ctrl toggle · A approve · D decline</span>
+        <span className="svg-hints">↑↓ active row · E select active · Q deselect active · Click row, Shift range, Ctrl toggle · Bulk via buttons</span>
       </footer>
     </div>
   );

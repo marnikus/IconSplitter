@@ -2,7 +2,6 @@
 // Owns: root/dest picking, scan + selection state, preset application, and the
 // process run that keeps the per-reference JSON in sync. The adapters it calls
 // (fs, picker, process, statewrite, store) are separately tested.
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { linkReferences, collectAiImages, walkTree, type AiImageEntry } from "../lib/scan";
 import { readDirTree, ensureDirPath, probePath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
@@ -17,12 +16,10 @@ import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
 import type { SourceStatus } from "../lib/statefile";
-
 export interface Row extends AiImageEntry {
   status: SourceStatus;
   selected: boolean;
 }
-
 export interface BatchState {
   rootName: string;
   destName: string;
@@ -33,15 +30,12 @@ export interface BatchState {
   presetNames: string[];
   refWarnings: string[];
 }
-
 const OUTPUT_DIR = "_split_output";
 const initial: BatchState = {
   rootName: "", destName: "", rows: [], busy: null, toast: null,
   preset: defaultPreset("Default"), presetNames: [], refWarnings: [],
 };
-
 type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
-
 /** Mutable context shared by the orchestration functions (grouped, RULE 3). */
 interface Ctx {
   root: { current: DirHandleLike | null };
@@ -50,7 +44,6 @@ interface Ctx {
   stop: { current: boolean };
   state: { current: BatchState }; // render-mirror for async callbacks (RULE 24)
 }
-
 export function useBatch() {
   const [s, setS] = useState<BatchState>(initial);
   const ctx = useCtx(s);
@@ -66,13 +59,11 @@ export function useBatch() {
     rootRef: ctx.root,
   };
 }
-
 function useCtx(s: BatchState): Ctx {
   const stateRef = useRef(s);
   stateRef.current = s; // render-mirror so async callbacks read live state (RULE 24)
   return { root: useRef(null), dest: useRef(null), keys: useRef([]), stop: useRef(false), state: stateRef };
 }
-
 function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   const chooseRoot = useCallback(async () => {
     const picked = await pickFolderFor((h) => { ctx.root.current = h; });
@@ -83,7 +74,6 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     await scan(ctx, setS, say);
     if (picked.message !== null) say(picked.message);
   }, [ctx, setS, say]);
-
   // The destination is not a scan root: no copy action names it, so its path is
   // not captured (only the root's is — I-35).
   const chooseDest = useCallback(async () => {
@@ -95,81 +85,78 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     const presetName = ctx.state.current.preset.name;
     await saveHandles(presetName, { source: ctx.root.current ?? undefined, dest: h });
   }, [ctx, setS, say]);
-
   const refresh = useCallback(() => { void scan(ctx, setS, say); }, [ctx, setS, say]);
   const run = useCallback(() => { void process(ctx, setS); }, [ctx, setS]);
   const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
   return { chooseRoot, chooseDest, refresh, run, cancel };
 }
-
 function useViewActions(ctx: Ctx, setS: Setter) {
   const toggle = useCallback((relPath: string) => {
     setS((p) => ({ ...p, rows: p.rows.map((r) => (r.relPath === relPath ? { ...r, selected: !r.selected } : r)) }));
   }, [setS]);
-
   const selectAll = useCallback((on: boolean) => {
     setS((p) => ({ ...p, rows: p.rows.map((r) => (selectable(r) ? { ...r, selected: on } : r)) }));
   }, [setS]);
-
   const setSelected = useCallback((relPaths: string[], on: boolean) => {
     const set = new Set(relPaths.map((x) => x.toLowerCase()));
     setS((p) => ({ ...p, rows: p.rows.map((r) => (set.has(r.relPath.toLowerCase()) ? { ...r, selected: on } : r)) }));
   }, [setS]);
-
   const thumbUrl = useCallback(async (relPath: string) => {
     const root = ctx.root.current;
     if (!root) throw new Error("No folder selected");
     return URL.createObjectURL(await (await resolveFile(root, relPath)).getFile());
   }, [ctx]);
-
   return { toggle, selectAll, setSelected, thumbUrl };
 }
-
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
-  const setPreset = useCallback((patch: Partial<Preset>) => {
+  const setPreset = useSetPreset(setS);
+  const savePreset = useSavePreset(ctx, setS);
+  const loadPreset = useLoadPreset(ctx, setS, say);
+  const deletePreset = useDeletePreset(setS);
+  return { setPreset, savePreset, loadPreset, deletePreset };
+}
+function useSetPreset(setS: Setter) {
+  return useCallback((patch: Partial<Preset>) => {
     setS((p) => {
       const next = { ...p.preset, ...patch };
-      // Auto-save to last selected preset — no manual confirmation needed
       savePresets([...loadPresets().filter((x) => x.name !== next.name), next]);
       saveLastName(next.name);
       return { ...p, preset: next };
     });
   }, [setS]);
-
-  const savePreset = useCallback(async (name: string) => {
+}
+function useSavePreset(ctx: Ctx, setS: Setter) {
+  return useCallback(async (name: string) => {
     const named = { ...ctx.state.current.preset, name };
     savePresets([...loadPresets().filter((p) => p.name !== name), named]);
     saveLastName(name);
     await saveHandles(name, { source: ctx.root.current ?? undefined, dest: ctx.dest.current ?? undefined });
     setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset “${name}” saved` } }));
   }, [ctx, setS]);
-
-  const loadPreset = useCallback(async (name: string) => {
+}
+function useLoadPreset(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
+  return useCallback(async (name: string) => {
     const found = loadPresets().find((p) => p.name === name);
     if (!found) return say(`Preset “${name}” not found`, true);
     saveLastName(name);
     await applyHandles(ctx, setS, found);
   }, [ctx, setS, say]);
-
-  const deletePreset = useCallback((name: string) => {
+}
+function useDeletePreset(setS: Setter) {
+  return useCallback((name: string) => {
     savePresets(loadPresets().filter((p) => p.name !== name));
     setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset “${name}” deleted` } }));
   }, [setS]);
-
-  return { setPreset, savePreset, loadPreset, deletePreset };
 }
-
 function selectable(r: Row): boolean {
   return r.status !== "missing" && r.status !== "deleted";
 }
-
 function useToastClear(toast: BatchState["toast"], setS: Setter): void {
   useEffect(() => {
     const t = toast ? setTimeout(() => setS((p) => ({ ...p, toast: null })), 4000) : 0;
     return () => clearTimeout(t);
   }, [toast, setS]);
 }
-
 /** Restores the last-used preset + its saved folders on first open (spec §3). */
 async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   const presets = loadPresets();
@@ -177,7 +164,6 @@ async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   setS((p) => ({ ...p, presetNames: presets.map((x) => x.name) }));
   await applyHandles(ctx, setS, preset);
 }
-
 async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<void> {
   const stored = await loadHandles(preset.name);
   ctx.root.current = await grant(stored?.source);
@@ -188,11 +174,9 @@ async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<voi
     await scan(ctx, setS, () => {});
   }
 }
-
 async function grant(h: DirHandleLike | undefined): Promise<DirHandleLike | null> {
   return h && (await ensurePermission(h)) ? h : null;
 }
-
 async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
@@ -209,13 +193,11 @@ async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => voi
     say((e as Error).message || "Scan failed", true);
   }
 }
-
 async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
   const tree = await readDirTree(root, preset.ignoreFolders);
   const entries = walkTree(tree, preset.ignoreFolders);
   return linkReferences(collectAiImages(entries), entries);
 }
-
 function finishScan(
   images: AiImageEntry[], statuses: Map<string, SourceStatus>, setS: Setter, say: (m: string, e?: boolean) => void,
 ): void {
@@ -226,12 +208,10 @@ function finishScan(
   }));
   say(`Found ${images.length} AI image${images.length === 1 ? "" : "s"}`);
 }
-
 function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>): Row {
   const status = statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";
   return { ...img, status, selected: status !== "missing" && status !== "deleted" };
 }
-
 async function process(ctx: Ctx, setS: Setter): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
@@ -242,7 +222,6 @@ async function process(ctx: Ctx, setS: Setter): Promise<void> {
   const report = await runBatch(ctx, root, selected, setS);
   await finalize(root, report.results, selected, setS);
 }
-
 async function runBatch(ctx: Ctx, root: DirHandleLike, selected: Row[], setS: Setter) {
   const items = await buildItems(root, selected);
   const dest = ctx.dest.current ?? await ensureDirPath(root, OUTPUT_DIR);
@@ -252,17 +231,14 @@ async function runBatch(ctx: Ctx, root: DirHandleLike, selected: Row[], setS: Se
     onProgress: (d, t) => setS((p) => ({ ...p, busy: `Splitting ${d}/${t}…` })),
   });
 }
-
 async function splitOne(file: File, split: Parameters<typeof splitSheet>[1]): Promise<Blob[]> {
   return splitSheet(await loadImageFile(file), split);
 }
-
 async function buildItems(root: DirHandleLike, rows: Row[]): Promise<BatchItem[]> {
   const out: BatchItem[] = [];
   for (const r of rows) out.push(await toItem(root, r));
   return out;
 }
-
 async function toItem(root: DirHandleLike, r: Row): Promise<BatchItem> {
   return {
     source: { relPath: r.relPath, name: r.name, relDir: r.dirPath, refRelPath: r.refRelPath },
@@ -270,13 +246,11 @@ async function toItem(root: DirHandleLike, r: Row): Promise<BatchItem> {
     refFile: r.refRelPath ? await tryResolve(root, r.refRelPath) : null,
   };
 }
-
 async function resolveFile(root: DirHandleLike, relPath: string): Promise<FileHandleLike> {
   const idx = relPath.lastIndexOf("/");
   const dir = idx < 0 ? root : (await probePath(root, relPath.slice(0, idx)))!;
   return dir.getFileHandle(relPath.slice(idx + 1), { create: false });
 }
-
 async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHandleLike | null> {
   try {
     return await resolveFile(root, relPath);
@@ -284,7 +258,6 @@ async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHan
     return null;
   }
 }
-
 /** Persists outcomes into the state JSON and mirrors them into the UI (RULE 24). */
 async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter): Promise<void> {
   const dirs = new Map(selected.map((r) => [r.relPath.toLowerCase(), r.dirPath]));

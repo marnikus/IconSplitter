@@ -1,4 +1,4 @@
-// useBatchHotkeys.ts — Batch folders hotkeys: ↑/↓ moves active, E selects visible, Q deselects all
+// useBatchHotkeys.ts — Batch folders hotkeys: ↑/↓ moves active, E selects active row only, Q deselects active row only
 
 import { useEffect, useRef } from "react";
 import { isTextField } from "../selection/hotkeys";
@@ -13,11 +13,11 @@ export function useBatchHotkeys(sel: BatchSelection, enabled = true): void {
     const onKey = (e: KeyboardEvent) => {
       if (isTextField(e.target)) return;
       if (handleSelectShortcut(e, {
+        activeId: ref.current.activeId,
+        selectActive: () => ref.current.checkActive(),
+        deselectActive: () => ref.current.uncheckActive(),
         selectVisible: () => ref.current.checkVisible(),
         deselectAll: () => ref.current.uncheckAll(),
-        header: ref.current.header,
-        checkedCount: ref.current.checkedCount,
-        visibleCount: ref.current.visibleCount,
       })) {
         e.preventDefault();
         return;

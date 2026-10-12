@@ -23,6 +23,7 @@ export interface BatchSelection {
   checkVisible: () => void; uncheckAll: () => void;
   toggleAllVisible: (on: boolean) => void;
   moveActive: (step: 1 | -1) => void; selectActive: (id: string) => void;
+  checkActive: () => void; uncheckActive: () => void;
 }
 
 function selectableRows(rows: BatchRow[]): BatchRow[] {
@@ -154,6 +155,28 @@ function useSelectActive(push: PushFn) {
     patchBatch({ activeId: id });
   }, [push]);
 }
+function useCheckActive(push: PushFn) {
+  return useCallback(() => {
+    const b = getAppState().batch;
+    const id = b.activeId;
+    if (!id) return;
+    if (b.checked.some((x) => x.toLowerCase() === id.toLowerCase())) return;
+    const next = setChecked(b.checked, [id], true);
+    push("Select active row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, [id]);
+    patchBatch({ checked: next });
+  }, [push]);
+}
+function useUncheckActive(push: PushFn) {
+  return useCallback(() => {
+    const b = getAppState().batch;
+    const id = b.activeId;
+    if (!id) return;
+    if (!b.checked.some((x) => x.toLowerCase() === id.toLowerCase())) return;
+    const next = setChecked(b.checked, [id], false);
+    push("Deselect active row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, [id]);
+    patchBatch({ checked: next });
+  }, [push]);
+}
 
 export function useBatchSelection(core: BatchCore, visible: BatchRow[]): BatchSelection {
   const app = useAppState();
@@ -169,12 +192,14 @@ export function useBatchSelection(core: BatchCore, visible: BatchRow[]): BatchSe
   const toggleAllVisible = useToggleAllVisible(visible, push);
   const moveActive = useMoveActive(visible, push);
   const selectActive = useSelectActive(push);
+  const checkActive = useCheckActive(push);
+  const uncheckActive = useUncheckActive(push);
   return {
     checked, activeId, anchorId, visible, header,
     checkedCount: counts.checkedCount, visibleCount: counts.visibleCount,
     totalCount: counts.totalCount, hiddenCount: counts.hiddenCount,
     affectedCount: counts.affectedCount,
     selectRow, toggleCheck, checkVisible, uncheckAll,
-    toggleAllVisible, moveActive, selectActive,
+    toggleAllVisible, moveActive, selectActive, checkActive, uncheckActive,
   };
 }

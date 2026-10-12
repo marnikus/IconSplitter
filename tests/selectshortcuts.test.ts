@@ -1,4 +1,4 @@
-// selectshortcuts.test.ts — Q/E select/deselect all reusable across tabs, focus and modifier aware
+// selectshortcuts.test.ts — Q/E active-row only reusable across tabs, focus and modifier aware
 
 import { describe, expect, it, vi } from "vitest";
 import { handleSelectShortcut } from "../src/lib/selectshortcuts";
@@ -7,32 +7,67 @@ function makeEvent(key: string, target: EventTarget | null = null, ctrl = false,
   return { key, target, ctrlKey: ctrl, metaKey: meta, altKey: alt } as unknown as KeyboardEvent;
 }
 
-describe("selectshortcuts reusable Q/E", () => {
-  it("E selects visible", () => {
+describe("selectshortcuts reusable Q/E active-only", () => {
+  it("E selects only active row when activeId present", () => {
+    const selActive = vi.fn();
+    const deselActive = vi.fn();
+    const selVisible = vi.fn();
+    const deselAll = vi.fn();
+    const handled = handleSelectShortcut(makeEvent("e"), {
+      activeId: "a.png",
+      selectActive: selActive,
+      deselectActive: deselActive,
+      selectVisible: selVisible,
+      deselectAll: deselAll,
+    });
+    expect(handled).toBe(true);
+    expect(selActive).toHaveBeenCalled();
+    expect(selVisible).not.toHaveBeenCalled();
+    expect(deselActive).not.toHaveBeenCalled();
+    expect(deselAll).not.toHaveBeenCalled();
+  });
+
+  it("Q deselects only active row when activeId present", () => {
+    const selActive = vi.fn();
+    const deselActive = vi.fn();
+    const selVisible = vi.fn();
+    const deselAll = vi.fn();
+    const handled = handleSelectShortcut(makeEvent("q"), {
+      activeId: "b.png",
+      selectActive: selActive,
+      deselectActive: deselActive,
+      selectVisible: selVisible,
+      deselectAll: deselAll,
+    });
+    expect(handled).toBe(true);
+    expect(deselActive).toHaveBeenCalled();
+    expect(deselAll).not.toHaveBeenCalled();
+    expect(selActive).not.toHaveBeenCalled();
+  });
+
+  it("E fallback to selectVisible when no activeId", () => {
     const sel = vi.fn();
     const desel = vi.fn();
     const handled = handleSelectShortcut(makeEvent("e"), { selectVisible: sel, deselectAll: desel });
     expect(handled).toBe(true);
     expect(sel).toHaveBeenCalled();
-    expect(desel).not.toHaveBeenCalled();
   });
 
-  it("Q deselects all", () => {
+  it("Q fallback to deselectAll when no activeId", () => {
     const sel = vi.fn();
     const desel = vi.fn();
     const handled = handleSelectShortcut(makeEvent("q"), { selectVisible: sel, deselectAll: desel });
     expect(handled).toBe(true);
     expect(desel).toHaveBeenCalled();
-    expect(sel).not.toHaveBeenCalled();
   });
 
   it("uppercase Q/E also work", () => {
-    const sel = vi.fn();
-    const desel = vi.fn();
-    expect(handleSelectShortcut(makeEvent("E"), { selectVisible: sel, deselectAll: desel })).toBe(true);
-    expect(sel).toHaveBeenCalled();
-    expect(handleSelectShortcut(makeEvent("Q"), { selectVisible: sel, deselectAll: desel })).toBe(true);
-    expect(desel).toHaveBeenCalled();
+    const selActive = vi.fn();
+    const deselActive = vi.fn();
+    expect(handleSelectShortcut(makeEvent("E"), { activeId: "x", selectActive: selActive, deselectActive: deselActive })).toBe(true);
+    expect(selActive).toHaveBeenCalled();
+    expect(handleSelectShortcut(makeEvent("Q"), { activeId: "x", selectActive: selActive, deselectActive: deselActive })).toBe(true);
+    expect(deselActive).toHaveBeenCalled();
   });
 
   it("ignores Ctrl/Meta/Alt", () => {
