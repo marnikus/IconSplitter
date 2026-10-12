@@ -25,17 +25,10 @@ const BADGE: Record<SourceStatus, { label: string; cls: string }> = {
 };
 
 export default function ScanTable(props: ScanTableProps) {
-  const selectable = props.rows.filter((r) => r.status !== "missing" && r.status !== "deleted");
-  const allOn = selectable.length > 0 && selectable.every((r) => r.selected);
   return (
     <section className="panel" data-testid="scan-table">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h3 className="panel-title !mb-0">Images ({props.rows.length})</h3>
-        <div className="ml-auto flex gap-2">
-          <button data-testid="select-all" className="btn-ghost" onClick={() => props.selectAll(!allOn)}>
-            {allOn ? "Deselect All" : "Select All"}
-          </button>
-        </div>
       </div>
       {props.rows.length === 0
         ? <p className="rounded-xl border border-white/10 p-6 text-center text-slate-400">No _AI images found in this folder.</p>

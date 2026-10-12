@@ -79,12 +79,11 @@ function HeaderControls({ v }: { v: View }) {
         {v.core.s.rootName ? `Root: ${v.core.s.rootName}` : "Choose source folder…"}
       </button>
       <button data-testid="batch-refresh" className="btn-ghost" onClick={() => void v.core.refresh()}>↺ Rescan</button>
-      <div className="ml-auto flex items-center gap-2">
-        <span className="text-xs text-slate-400" data-testid="batch-selected-header">{v.selectedCount} selected</span>
-        {v.core.s.busy
-          ? <button data-testid="batch-cancel" className="btn-ghost" onClick={v.core.cancel}>✕ Stop</button>
-          : <button data-testid="batch-process-header" className="btn-primary" disabled={!v.selectedCount} onClick={() => void v.core.run()}>▶ Split selected</button>}
-      </div>
+      {v.core.s.busy && (
+        <div className="ml-auto">
+          <button data-testid="batch-cancel" className="btn-ghost" onClick={v.core.cancel}>✕ Stop</button>
+        </div>
+      )}
     </section>
   );
 }
