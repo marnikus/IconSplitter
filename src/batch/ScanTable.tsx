@@ -113,19 +113,19 @@ function OpenCell({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) 
 }
 
 function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
-  if (!entry) return <div className="svg-cell text-xs text-slate-500">—</div>;
+  if (!entry) return <div className="svg-cell min-w-0 text-xs text-slate-500">—</div>;
   if (entry.status === "loading") {
-    return <div className="svg-cell text-xs text-slate-400" data-testid={`batch-preview-count-${entry.relPath}`}>Loading…</div>;
+    return <div className="svg-cell min-w-0 text-xs text-slate-400" data-testid={`batch-preview-count-${entry.relPath}`}>Loading…</div>;
   }
   if (entry.status === "error") {
-    return <div className="svg-cell text-xs text-rose-400" data-testid={`batch-preview-count-${entry.relPath}`}>Failed</div>;
+    return <div className="svg-cell min-w-0 text-xs text-rose-400" data-testid={`batch-preview-count-${entry.relPath}`}>Failed</div>;
   }
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 w-full flex-col gap-1">
       <span className="text-xs font-medium text-slate-300" data-testid={`batch-preview-count-${entry.relPath}`}>
         {entry.count} icon{entry.count === 1 ? "" : "s"}
       </span>
-      <div className="flex gap-1.5 overflow-x-auto py-1" data-testid={`batch-preview-strip-${entry.relPath}`}>
+      <div className="flex min-w-0 w-full gap-1.5 overflow-x-auto py-1 scrollbar-thin" data-testid={`batch-preview-strip-${entry.relPath}`}>
         {entry.thumbs.map((src, i) => (
           <img
             key={i}
