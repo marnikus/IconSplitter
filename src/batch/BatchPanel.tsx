@@ -10,7 +10,8 @@ import BatchSourceBar from "./BatchSourceBar";
 import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
-import { useBatchPreview, type PreviewEntry } from "./useBatchPreview";
+import { useBatchPreview } from "./useBatchPreview";
+import type { PreviewEntry, Row } from "./useBatchTypes";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 
@@ -22,6 +23,7 @@ export default function BatchPanel() {
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   const checkedRows = useCheckedRows(v);
   const onPreview = useOnPreview(checkedRows, preview);
+  const merge = useRowMergeActions(v, preview);
   return (
     <div className="batch-shell w-full space-y-4">
       {!v.core.supported && <Unsupported />}
@@ -30,7 +32,7 @@ export default function BatchPanel() {
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
       <RefWarnings count={v.core.s.refWarnings.length} />
-      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} />
+      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} merge={merge} />
       <Overlays v={v} />
     </div>
   );
@@ -54,6 +56,27 @@ function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () =>
     </div>
   );
 }
+interface MergeActions {
+  apply: (row: Row, value: number) => void;
+  reset: (row: Row) => void;
+}
+
+/** Apply/Reset on a row's Detection bar: store it, then preview THAT row at the new distance. */
+function useRowMergeActions(v: View, preview: ReturnType<typeof useBatchPreview>): MergeActions {
+  const { setRowMerge, clearRowMerge } = v.core;
+  const globalFrac = v.core.s.preset.split.mergeFrac;
+  const { previewRow } = preview;
+  const apply = useCallback((row: Row, value: number) => {
+    setRowMerge(row.relPath, value);
+    void previewRow(row, value);
+  }, [setRowMerge, previewRow]);
+  const reset = useCallback((row: Row) => {
+    clearRowMerge(row.relPath);
+    void previewRow(row, globalFrac);
+  }, [clearRowMerge, previewRow, globalFrac]);
+  return { apply, reset };
+}
+
 function Unsupported() {
   return <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.</p>;
 }
@@ -65,8 +88,8 @@ function PresetAndDest({ v }: { v: View }) {
     </div>
   );
 }
-function FullWidthList({ v, thumbFor, previews }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry> }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={v.setRowMerge} clearRowMerge={v.clearRowMerge} /></div>;
+function FullWidthList({ v, thumbFor, previews, merge }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; merge: MergeActions }) {
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} applyRowMerge={merge.apply} resetRowMerge={merge.reset} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   if (!v.core.s.busy && !v.core.s.toast) return null;

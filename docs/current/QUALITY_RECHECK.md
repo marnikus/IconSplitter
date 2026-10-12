@@ -2657,3 +2657,46 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - RULE 16 gate (changed files): `node tools/quality.mjs --changed --allow-legacy --base HEAD` → GATE PASSED. Largest touched: `SvgPanel.tsx` 287, `actions.ts` 278, `SvgControls.tsx` 251, `statemodel.ts` 196. New files all under 90 lines. Functions ≤ 20 lines.
 - RULE 18 note: the new lib and UI files are below the 150-line floor on purpose (the shared pieces are small by design). `SvgPanel.tsx` (287) and `actions.ts` (278) are near the 300 limit; any further additions there must move code out first.
 - Lint: 0 errors, 10 warnings (all pre-existing). `npx tsc --noEmit` clean.
+
+## 2026-10-13 — fix(batch): Detection bar on one line, a live value, Apply previews its own row (RULE 24)
+
+Three user reports on the per-row merge bar shipped the same day: (1) the controls
+stacked instead of sitting on one line, (2) the number never moved while dragging the
+slider, (3) Apply showed nothing until a global "Preview splits" run.
+
+- Design: `docs/archive/2026-10-13-batch-detection-bar-live-preview/README.md` (D1–D4).
+  Root causes: a `max-content` Detection track is `minmax(auto, max-content)`, so a
+  squeezed row fell back to min-content and the bar's `flex flex-wrap` stacked the four
+  controls; the label rendered the *effective* value while the drag only moved the
+  slider's own state; the previews map was cleared by an effect keyed on `rowMerges`,
+  and only the queue could refill it.
+- Fix: `--batch-detect-col` (400 px `:root` token, used by the base rule and the
+  ≤1360 px rule) floors the track; `.batch-merge-bar` is a 4-lane grid and never wraps;
+  the label shows the slider's OWN value live (`0.0325 · not applied` → `auto` /
+  `0.0200` / `0.0500 · overridden`); Apply/Reset pass the clicked value explicitly
+  (`mergeForRow`, never a stale `rowMerges` closure) into a single-row preview.
+- New/changed: `src/batch/previewqueue.ts` (125 — multi-row run + the own-row referee),
+  `src/batch/useBatchPreview.ts` (256, ideal-size reason on the header — caches, source
+  loading, the single-row runner), `src/lib/batchpreview.ts` (`effectiveMerge`,
+  `mergeForRow`), `BatchRowMergeBar.tsx` (54), `ScanTable.tsx` (`applyRowMerge` /
+  `resetRowMerge`), `BatchPanel.tsx` (store write + row preview). Deleted dead
+  `src/batch/BatchPreviewPanel.tsx` (unimported since the merge-preview doc changed the
+  design to inline row cells).
+- TDD red first: `tests/batchpreview.test.ts` (explicit merge beats map and global, a
+  `null` entry means auto, case-insensitive keys), `tests/batch_row_merge.test.tsx`
+  (live label before any Apply, the CSS layout contract parsed from `src/index.css`,
+  Apply on a never-previewed row shows that row's split at once, other rows untouched,
+  Reset re-previews with the global, no `_split_output` writes),
+  `tests/batch_merge_preview.test.tsx` strengthened to assert real counts/thumbs.
+- RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` **0 errors** (21 pre-existing
+  warnings) — the session also cleared 14 pre-existing lint errors (`useBatch.ts`
+  useless escapes, `batchprefs.ts` empty catch, `batchselect.ts` + `svg_queue_ui.test.tsx`
+  `prefer-const`, four `@ts-ignore` on already-cast lines); `node tools/quality.mjs
+  --changed --allow-legacy` GATE PASSED (largest changed file 256 lines, every changed
+  function within the 30-line limit).
+- `npm run verify:fast` ALL LANES PASSED: 163 files / 1,810 tests; `src/lib` lines
+  97.77%, branches 89.37%; build `dist/index.html` 1,517.58 kB (445.55 kB gzip).
+- Accepted limit: no browser binary in this environment (CODE_VERIFICATION §9), so the
+  one-line contract is asserted from the CSS source; the 400 px floor makes the
+  pair-table scroll sideways on narrow windows, exactly as an 800 px zoom pair already
+  does (I-55).

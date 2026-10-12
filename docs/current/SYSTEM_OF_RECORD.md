@@ -80,6 +80,16 @@ Batch folders:
   subfolder. Missing reference → warning + user may skip or continue.
 * Review window: thumbnail, filename, relPath, status badge
   (unprocessed/processed/skipped/changed/missing/deleted), checkbox, Select/Deselect All.
+* **Detection column (2026-10-13):** every row carries its own merge bar —
+  the value shown is the slider's live value (`0.0325 · not applied`, then
+  `auto` / `0.0200` / `0.0500 · overridden` once it matches what the row
+  really uses). Apply stores the override and previews THAT row at once;
+  Reset drops it and previews the row with the global distance. Neither
+  touches another row's preview.
+* **Per-row preview:** each row shows its own icon count + thumb strip, from
+  the checked rows' `Preview splits` run or from that row's own Apply/Reset.
+  A row the user tuned on its own bar keeps its preview — a run that started
+  before that click never repaints it.
 * Presets store every configurable value (source/dest handles in IndexedDB,
   config in localStorage); last-used preset restores automatically.
 * Processing: rescan runs before each batch; per-item progress, per-item
@@ -1305,6 +1315,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, relative byte/text reads and non-creating presence probes, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
+| Batch preview | `src/lib/batchpreview.ts`, `src/batch/useBatchPreview.ts`, `src/batch/previewqueue.ts`, `src/batch/BatchRowMergeBar.tsx` | the per-row merge rule (`effectiveMerge`/`mergeForRow`), the preview entry (analysis cache, source loading, 20 thumbs), the abortable multi-row run with its own-row referee, and the row's Detection bar (live value, Apply, Reset) |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
 | Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52/I-59): `Rescan`'s one retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name (the pick's own rule: exact leaf, or the direct parent of a path one level inside the folder — I-35) |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
@@ -1673,7 +1684,11 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
 * Batch mode: header controls (`batch-root`, `batch-refresh`, `batch-process`,
   `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
   info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
-  reference warnings, busy overlay, toast.
+  the global merge bar (`batch-merge-bar` / `-label` / `-slider` / `-reset`),
+  the per-row Detection bar (`batch-row-merge-bar` / `-label` / `-slider` /
+  `-apply` / `-reset` + `{relPath}`), the inline preview cell
+  (`batch-preview-count` / `-strip` / `-thumb` + `{relPath}`, `batch-preview` /
+  `batch-preview-clear`), reference warnings, busy overlay, toast.
 * Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
   help), FilterBar (date modes + From/To, status, sort, order, clear), review
   list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,

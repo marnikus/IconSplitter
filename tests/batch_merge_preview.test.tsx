@@ -3,8 +3,9 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { stubPixelPipeline } from "./helpers/pixelsheet";
 import { dropDb } from "./helpers/idb";
 import { clearKnownRoots } from "../src/lib/knownroots";
 import BatchPanel from "../src/batch/BatchPanel";
@@ -70,8 +71,12 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
-  delete (window as any).showDirectoryPicker;
+  delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("Batch merge slider", () => {
@@ -133,6 +138,7 @@ describe("Batch preview splits", () => {
   });
 
   it("Preview shows count + strip per selected row inline same row with main thumbnail, no file writes", async () => {
+    stubPixelPipeline(); // the real pipeline runs; the auto distance merges the two blobs
     const dir = makeBatchRoot();
     await mount(dir);
     await settle(100);
@@ -148,36 +154,23 @@ describe("Batch preview splits", () => {
     await click(previewBtn!);
     await settle(800);
 
-    // Preview now inline inside batch rows, same row with main thumbnail
+    // Preview is inline inside batch rows, in the same row as the main thumbnail
     const rows = qAll("[data-testid^=batch-row-]");
     expect(rows.length).toBeGreaterThan(0);
-
-    // Allow time for async preview (fallback for fake files returns quickly but still async)
-    await settle(500);
     const counts = qAll("[data-testid^=batch-preview-count-]");
-    expect(counts.length).toBeGreaterThan(0);
-    // Initially may be Loading…, then becomes icon count after fallback
-    const firstText = counts[0].textContent || "";
-    expect(firstText).toMatch(/icon|Loading|Failed/);
+    expect(counts.length).toBe(3);
+    for (const c of Array.from(counts)) expect(c.textContent).toBe("1 icon");
+    expect(qAll("[data-testid^=batch-preview-thumb-]").length).toBe(3); // one thumb per icon
+    const firstRow = q("[data-testid=\"batch-row-icon-a_AI.png\"]");
+    expect(firstRow?.querySelector("[data-testid^=batch-preview-count-]")).not.toBeNull();
 
-    // Wait a bit more for done state
-    await settle(500);
-    const counts2 = qAll("[data-testid^=batch-preview-count-]");
-    if (counts2.length > 0 && counts2[0].textContent?.includes("icon")) {
-      const strips = qAll("[data-testid^=batch-preview-strip-]");
-      // Strips may be 0 for fake files (fallback has no thumbs), but count should exist
-      expect(counts2[0].textContent).toMatch(/icon/);
-      const firstRow = rows[0];
-      // Preview cell exists inside same row
-      expect(firstRow.textContent).toMatch(/icon|Loading|Failed/);
-    }
-
-    // No status change: still unprocessed
-    const statusCells = qAll("[data-testid^=batch-status-]");
-    expect(statusCells.length).toBeGreaterThan(0);
+    // No status change: still unprocessed, nothing written
+    expect(qAll("[data-testid^=batch-status-]").length).toBeGreaterThan(0);
+    expect(Array.from(dir.children.keys()).some((k) => k.includes("_split_output"))).toBe(false);
   });
 
   it("high perf: preview for many rows renders with limited thumbs per row", async () => {
+    stubPixelPipeline();
     const dir = new FakeDir("big_root");
     for (let i = 0; i < 50; i++) {
       dir.children.set(`icon-${i}_AI.png`, new FakeFile(`icon-${i}_AI.png`, 10, Date.now(), `a${i}`));
@@ -195,15 +188,12 @@ describe("Batch preview splits", () => {
 
     const previewBtn = q("[data-testid=batch-preview]") as HTMLButtonElement | null;
     await click(previewBtn!);
-    await settle(1200);
+    await settle(6000);
 
+    // Every row really finished its preview: one icon count and one thumb each
     const counts = qAll("[data-testid^=batch-preview-count-]");
-    expect(counts.length).toBeGreaterThan(0);
-
-    // Thumbs per row limited to 20 (MAX_THUMBS)
-    const thumbs = qAll("[data-testid^=batch-preview-thumb-]");
-    // For 50 rows, if each had 20 thumbs max, total <= 1000, but we have fallback 1 count so 0 thumbs in fake files
-    // At least check that preview doesn't crash and counts exist
-    expect(counts.length).toBeLessThanOrEqual(50);
-  });
+    expect(counts.length).toBe(50);
+    for (const c of Array.from(counts)) expect(c.textContent).toBe("1 icon");
+    expect(qAll("[data-testid^=batch-preview-thumb-]").length).toBe(50);
+  }, 30000);
 });

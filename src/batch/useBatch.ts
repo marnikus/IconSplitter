@@ -132,14 +132,14 @@ function useSavePreset(ctx: Ctx, setS: Setter) {
     savePresets([...loadPresets().filter((p) => p.name !== name), named]);
     saveLastName(name);
     await saveHandles(name, { source: ctx.root.current ?? undefined, dest: ctx.dest.current ?? undefined });
-    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset \"${name}\" saved` } }));
+    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset "${name}" saved` } }));
   }, [ctx, setS]);
 }
 
 function useLoadPreset(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   return useCallback(async (name: string) => {
     const found = loadPresets().find((p) => p.name === name);
-    if (!found) return say(`Preset \"${name}\" not found`, true);
+    if (!found) return say(`Preset "${name}" not found`, true);
     saveLastName(name);
     await applyHandles(ctx, setS, found);
   }, [ctx, setS, say]);
@@ -148,7 +148,7 @@ function useLoadPreset(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => 
 function useDeletePreset(setS: Setter) {
   return useCallback((name: string) => {
     savePresets(loadPresets().filter((p) => p.name !== name));
-    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset \"${name}\" deleted` } }));
+    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset "${name}" deleted` } }));
   }, [setS]);
 }
 

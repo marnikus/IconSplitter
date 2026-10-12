@@ -1,14 +1,15 @@
 // ScanTable.tsx — Batch folders list, same row preview + per-row merge override
 
 import { useCallback, useEffect, useRef } from "react";
-import type { Row, RowMergeMap } from "./useBatch";
+import type { Row } from "./useBatch";
+import type { RowMergeMap } from "./useBatchTypes";
 import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
 import { fmtDate, fmtTime } from "../selection/fmt";
 import ScanThumb, { useThumbCache } from "./ScanThumb";
 import ScanFileCell from "./ScanFileCell";
 import ScanStatusCell from "./ScanStatusCell";
-import type { PreviewEntry } from "./useBatchPreview";
+import type { PreviewEntry } from "./useBatchTypes";
 import BatchRowMergeBar from "./BatchRowMergeBar";
 
 export interface ScanTableProps {
@@ -22,8 +23,9 @@ export interface ScanTableProps {
   previews?: Map<string, PreviewEntry>;
   rowMerges?: RowMergeMap;
   globalFrac?: number | null;
-  setRowMerge?: (relPath: string, v: number | null) => void;
-  clearRowMerge?: (relPath: string) => void;
+  /** Apply on a row's Detection bar: store the override AND preview that row (2026-10-13). */
+  applyRowMerge?: (row: Row, value: number) => void;
+  resetRowMerge?: (row: Row) => void;
 }
 
 export { useThumbCache };
@@ -141,19 +143,35 @@ function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
   );
 }
 
-function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: { r: Row; globalFrac: number | null; rowMerges: RowMergeMap; setRowMerge?: ScanTableProps["setRowMerge"]; clearRowMerge?: ScanTableProps["clearRowMerge"] }) {
+interface MergeCellProps {
+  r: Row;
+  globalFrac: number | null;
+  rowMerges: RowMergeMap;
+  apply?: ScanTableProps["applyRowMerge"];
+  reset?: ScanTableProps["resetRowMerge"];
+}
+
+/** Stable per-row handlers: the bar is memoized, so a new lambda per render would undo it. */
+function useMergeHandlers(r: Row, apply?: MergeCellProps["apply"], reset?: MergeCellProps["reset"]) {
+  const onApply = useCallback((value: number) => apply?.(r, value), [r, apply]);
+  const onReset = useCallback(() => reset?.(r), [r, reset]);
+  return { onApply, onReset };
+}
+
+function RowMergeCell({ r, globalFrac, rowMerges, apply, reset }: MergeCellProps) {
+  const handlers = useMergeHandlers(r, apply, reset);
   if (r.status === "missing" || r.status === "deleted") return <div className="svg-cell min-w-0 w-full text-xs text-slate-500">—</div>;
   const key = r.relPath.toLowerCase();
   const hasOv = Object.prototype.hasOwnProperty.call(rowMerges, key);
   const ov = hasOv ? rowMerges[key] : undefined;
   return (
     <div className="min-w-0 w-full">
-      <BatchRowMergeBar relPath={r.relPath} globalFrac={globalFrac} overrideFrac={ov} onApply={(rp, v) => setRowMerge?.(rp, v as number | null)} onReset={(rp) => clearRowMerge?.(rp)} />
+      <BatchRowMergeBar relPath={r.relPath} globalFrac={globalFrac} overrideFrac={ov} onApply={handlers.onApply} onReset={handlers.onReset} />
     </div>
   );
 }
 
-function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, applyRowMerge, resetRowMerge }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
@@ -167,7 +185,7 @@ function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, pr
       <CheckCell r={r} toggle={toggle} />
       <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
       <ScanFileCell r={r} />
-      <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
+      <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} apply={applyRowMerge} reset={resetRowMerge} />
       <PreviewCell entry={entry} />
       <DateCell mtime={r.mtime} />
       <ScanStatusCell r={r} />

@@ -418,10 +418,19 @@
 .batch-row.selected:not(.active) { background: #111a31; }
 .batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
 
+/* The Detection column holds a row's merge bar — value · slider · Apply · Reset.
+   Its track needs a REAL floor: `max-content` alone is `minmax(auto, max-content)`,
+   so a squeezed row dropped it to min-content and the bar's flex-wrap stacked the
+   four controls. One token, used by this rule and the ≤1360 px rule below, is what
+   keeps them in one line — and what keeps the two rules from drifting (2026-10-13). */
+:root {
+  --batch-detect-col: 400px;
+}
+
 .batch-columns,
 .batch-row {
   display: grid;
-  grid-template-columns: 34px 140px max-content max-content minmax(300px, 1fr) 110px 90px 130px;
+  grid-template-columns: 34px 140px minmax(150px, max-content) minmax(var(--batch-detect-col), max-content) minmax(300px, 1fr) 110px 90px 130px;
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -457,6 +466,41 @@
 .batch-row > :nth-child(5) {
   justify-self: stretch;
   width: 100%;
+}
+
+/* Per-row merge bar — four lanes in a grid: the value, the slider (the lane that
+   takes the slack) and the two buttons. A grid never wraps its tracks, so the
+   controls stay on one line at any column width; the value lane keeps its own
+   width for the digits it has to show (2026-10-13). */
+.batch-merge-bar {
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) minmax(104px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: #0f1729;
+}
+
+.batch-merge-value {
+  color: var(--v2-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.batch-merge-slider {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--v2-purple-2);
+}
+
+.batch-merge-btn {
+  padding: 3px 8px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .v2-row.approved::after,
@@ -1570,7 +1614,8 @@
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .batch-columns,
-  .batch-row { grid-template-columns: 34px 140px max-content max-content minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
+  /* Same token as the base rule: the Detection floor travels with the breakpoint. */
+  .batch-row { grid-template-columns: 34px 140px minmax(150px, max-content) minmax(var(--batch-detect-col), max-content) minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

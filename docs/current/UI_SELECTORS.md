@@ -153,9 +153,30 @@ Review window (scan table) — `scan-table` panel:
 | `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
 | `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
+| `batch-row-{relPath}` | per-row `<div role="listitem">` | `active`/`selected` classes mirror row state |
 
-Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
-the data `relPath`, so tests should build handles from the scanned entry.
+Detection column — one bar per eligible row (`BatchRowMergeBar.tsx`, 2026-10-13):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-row-merge-bar-{relPath}` | the bar | 4-lane grid: value · slider · Apply · Reset; never wraps |
+| `batch-row-merge-label-{relPath}` | value text | the slider's OWN value, live (RULE 24): `0.0325 · not applied`, else `auto` / `0.0200` / `0.0500 · overridden` |
+| `batch-row-merge-slider-{relPath}` | `input[type=range]` | min 0, max 0.15, step 0.0025, `aria-label` names the row |
+| `batch-row-merge-apply-{relPath}` | `Apply` | disabled while the slider equals what the row already uses; stores the override **and** previews that row at once |
+| `batch-row-merge-reset-{relPath}` | `↺ Reset` | disabled while the row has no override; re-previews the row with the global distance |
+
+Preview splits — bulk bar + inline row cell:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-preview` | `Preview splits` button in the bulk bar | disabled when 0 selected |
+| `batch-preview-clear` | `Clear previews` | drops every entry |
+| `batch-preview-count-{relPath}` | row preview cell | `Loading…` / `Failed` / `N icon(s)` |
+| `batch-preview-strip-{relPath}` | thumb strip container | present only for a finished entry |
+| `batch-preview-thumb-{relPath}-{n}` | one thumbnail | at most 20 per row |
+
+Semantic fallbacks: button/select/input role + visible text; `row-*` / `batch-row-*`
+ids use the data `relPath`, so tests should build handles from the scanned entry.
 
 ## M. Selection review — `src/selection/*` (verified 2026-10-01)
 

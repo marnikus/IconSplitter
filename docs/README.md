@@ -62,6 +62,8 @@ doc itself, never in this map.
 | `archive/2026-10-08-svg-queue-keepalive/design.md` | Design (implemented the same day — I-53 rewrite, I-57, I-58): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
 | `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
 
+| `archive/2026-10-13-batch-detection-bar-live-preview/README.md` | Batch Detection column: the definite floor that keeps a row's merge bar on one line, the live slider value (RULE 24), and an Apply/Reset that previews that one row at once (D1–D4) |
+
 Archived docs are dated by the day they were written and never edited afterwards.
 
 ## Outside `docs/`

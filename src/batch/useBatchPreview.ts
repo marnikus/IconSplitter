@@ -1,31 +1,27 @@
-// useBatchPreview.ts — high-perf preview for Batch (1000 images)
-// ideal-size: 280 lines reason=high-perf preview owns cache, load, thumb render, queue and abort logic; splitting would break cohesion, still under 300 with 31 fns each ≤30 lines
-// Now supports per-row merge override: rowMerges map overrides global split.mergeFrac
+// useBatchPreview.ts — preview for Batch rows: caches, source loading and thumbnails,
+// plus the two ways in — the multi-row run (previewqueue.ts) and the single row the
+// user just tuned on its own Detection bar (Apply/Reset), which is previewed with the
+// distance that click carried, at once and without touching any other row (2026-10-13).
+// ideal-size: 250 lines reason=one preview entry (analysis cache, LRU, source load,
+// 20 thumbs) and its two callers; the multi-row run moved out to previewqueue.ts.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { analyze, detect, type Analysis, type Box } from "../lib/detect";
 import { renderIcon, squareInfo } from "../lib/render";
 import { loadImageFile } from "../lib/dom";
-import { previewKey } from "../lib/batchpreview";
+import { mergeForRow, previewKey } from "../lib/batchpreview";
 import type { SplitSettings } from "../lib/presets";
-import type { Row, RowMergeMap } from "./useBatch";
-
-export interface PreviewEntry {
-  relPath: string;
-  count: number;
-  thumbs: string[];
-  boxes: Box[];
-  status: "idle" | "loading" | "done" | "error";
-  error?: string;
-}
+import type { PreviewEntry, PreviewOne, PreviewSet, Row, RowMergeMap } from "./useBatchTypes";
+import { markLoading, runPreviewRows, setEntry, useOwnRows, usePreviewQueue, type OwnRows } from "./previewqueue";
 
 type LoadFile = (relPath: string) => Promise<File>;
 
-const MAX_CONCURRENT = 3;
 const MAX_THUMBS = 20;
 const THUMB_OUT = 96;
 const CACHE_LIMIT = 200;
+/** One identity for "no overrides at all" — a fresh `{}` per render would re-run effects. */
+const NO_OVERRIDES: RowMergeMap = {};
 
 interface CacheItem {
   key: string;
@@ -124,128 +120,104 @@ function buildEntry(relPath: string, boxes: Box[], thumbs: string[]): PreviewEnt
   return { relPath, count: boxes.length, thumbs, boxes, status: "done" };
 }
 
-export function effectiveMerge(global: number | null, override: number | null | undefined, hasOverride: boolean): number | null {
-  return hasOverride ? (override as number | null) : global;
+/** Stores the entry under the key it was computed with and answers it back. */
+function remember(lru: Map<string, CacheItem>, relPath: string, key: string, entry: PreviewEntry): PreviewEntry {
+  lru.set(relPath, { key, entry, at: Date.now() });
+  evictLru(lru);
+  return entry;
 }
 
-function useDoPreview(args: {
-  split: SplitSettings;
-  rowMerges: RowMergeMap;
-  loadFile: LoadFile;
-  analysis: React.MutableRefObject<Map<string, Analysis>>;
-  lru: React.MutableRefObject<Map<string, CacheItem>>;
-}) {
-  const { split, rowMerges, loadFile, analysis, lru } = args;
-  return useCallback(async (row: Row, signal: AbortSignal, key: string): Promise<PreviewEntry> => {
-    const file = await loadFile(row.relPath);
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    const img = await loadImgSafe(file);
-    if (!img) {
-      const fb = makeFallback(row.relPath);
-      lru.current.set(row.relPath, { key, entry: fb, at: Date.now() });
-      return fb;
-    }
-    const an = getOrAnalyze(img, row.relPath, analysis.current);
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    const lk = row.relPath.toLowerCase();
-    const hasOv = Object.prototype.hasOwnProperty.call(rowMerges, lk);
-    const eff = effectiveMerge(split.mergeFrac, rowMerges[lk], hasOv);
-    const boxes = detect(an, eff).boxes;
-    const thumbs = renderThumbs(img, an, boxes, { ...split, mergeFrac: eff });
-    const entry = buildEntry(row.relPath, boxes, thumbs);
-    lru.current.set(row.relPath, { key, entry, at: Date.now() });
-    evictLru(lru.current);
-    return entry;
-  }, [split, rowMerges, loadFile, analysis, lru]);
-}
-
-function usePreviewOne(args: {
-  split: SplitSettings;
-  rowMerges: RowMergeMap;
-  loadFile: LoadFile;
-  analysis: React.MutableRefObject<Map<string, Analysis>>;
-  lru: React.MutableRefObject<Map<string, CacheItem>>;
-}) {
-  const doPreview = useDoPreview(args);
-  const { split, rowMerges, lru } = args;
-  return useCallback(async (row: Row, signal: AbortSignal): Promise<PreviewEntry> => {
-    const lk = row.relPath.toLowerCase();
-    const hasOv = Object.prototype.hasOwnProperty.call(rowMerges, lk);
-    const eff = effectiveMerge(split.mergeFrac, rowMerges[lk], hasOv);
-    const key = previewKey({ relPath: row.relPath, mergeFrac: eff, padding: split.padding, size: split.size, transparent: split.transparent, mtime: row.mtime });
-    const cached = lru.current.get(row.relPath);
-    if (cached && cached.key === key) return cached.entry;
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    try {
-      return await doPreview(row, signal, key);
-    } catch (e) {
-      if ((e as Error).name === "AbortError") throw e;
-      return { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "error", error: (e as Error).message };
-    }
-  }, [split, rowMerges, lru, doPreview]);
-}
-
-function markLoading(
-  eligible: Row[],
-  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>,
-) {
-  setPreviews((prev) => {
-    const next = new Map(prev);
-    for (const r of eligible) next.set(r.relPath, { relPath: r.relPath, count: 0, thumbs: [], boxes: [], status: "loading" });
-    return next;
+function entryKey(row: Row, split: SplitSettings, mergeFrac: number | null): string {
+  return previewKey({
+    relPath: row.relPath,
+    mergeFrac,
+    padding: split.padding,
+    size: split.size,
+    transparent: split.transparent,
+    mtime: row.mtime,
   });
 }
 
-async function runWorkers(
-  queue: Row[],
-  ac: AbortController,
-  previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>,
-  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>,
-) {
-  let idx = 0;
-  const runNext = async () => {
-    while (idx < queue.length) {
-      if (ac.signal.aborted) return;
-      const row = queue[idx++];
-      try {
-        const entry = await previewOne(row, ac.signal);
-        if (ac.signal.aborted) return;
-        setPreviews((prev) => {
-          const next = new Map(prev);
-          next.set(row.relPath, entry);
-          return next;
-        });
-      } catch {
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 0));
-    }
-  };
-  const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, () => runNext());
-  await Promise.all(workers);
+interface PreviewArgs {
+  split: SplitSettings;
+  rowMerges: RowMergeMap;
+  loadFile: LoadFile;
+  analysis: React.MutableRefObject<Map<string, Analysis>>;
+  lru: React.MutableRefObject<Map<string, CacheItem>>;
 }
 
-function usePreviewQueue(args: {
-  previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>;
-  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
-  setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>;
-  abortRef: React.MutableRefObject<AbortController | null>;
-}) {
-  const { previewOne, setPreviews, setIsPreviewing, abortRef } = args;
+function useDoPreview(args: PreviewArgs) {
+  const { split, loadFile, analysis, lru } = args;
   return useCallback(
-    async (selected: Row[]) => {
-      const eligible = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
-      if (eligible.length === 0) return;
+    async (row: Row, signal: AbortSignal, mergeFrac: number | null, key: string): Promise<PreviewEntry> => {
+      const file = await loadFile(row.relPath);
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      const img = await loadImgSafe(file);
+      if (!img) return remember(lru.current, row.relPath, key, makeFallback(row.relPath));
+      const an = getOrAnalyze(img, row.relPath, analysis.current);
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      const boxes = detect(an, mergeFrac).boxes;
+      const thumbs = renderThumbs(img, an, boxes, { ...split, mergeFrac });
+      return remember(lru.current, row.relPath, key, buildEntry(row.relPath, boxes, thumbs));
+    },
+    [split, loadFile, analysis, lru],
+  );
+}
+
+function usePreviewOne(args: PreviewArgs) {
+  const doPreview = useDoPreview(args);
+  const { split, rowMerges, lru } = args;
+  return useCallback<PreviewOne>(
+    async (row, signal, explicitMerge) => {
+      const mergeFrac = mergeForRow(split.mergeFrac, rowMerges, row.relPath, explicitMerge);
+      const key = entryKey(row, split, mergeFrac);
+      const cached = lru.current.get(row.relPath);
+      if (cached && cached.key === key) return cached.entry;
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      try {
+        return await doPreview(row, signal, mergeFrac, key);
+      } catch (e) {
+        if ((e as Error).name === "AbortError") throw e;
+        return { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "error", error: (e as Error).message };
+      }
+    },
+    [split, rowMerges, lru, doPreview],
+  );
+}
+
+interface RowPreviewArgs {
+  previewOne: PreviewOne;
+  setPreviews: PreviewSet;
+  own: OwnRows;
+}
+
+/** Apply / Reset on a row's own bar: that row alone, at the distance the click carried. */
+function useRowPreview(args: RowPreviewArgs) {
+  const { previewOne, setPreviews, own } = args;
+  const abortRef = useRef<AbortController | null>(null);
+  const previewRow = useCallback(
+    (row: Row, mergeFrac: number | null) => {
+      own.claim(row.relPath); // the multi-row run must not repaint this row
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
-      setIsPreviewing(true);
-      markLoading(eligible, setPreviews);
-      await runWorkers([...eligible], ac, previewOne, setPreviews);
-      if (!ac.signal.aborted) setIsPreviewing(false);
+      markLoading([row], setPreviews);
+      const one = (r: Row, signal: AbortSignal) => previewOne(r, signal, mergeFrac);
+      const write = (entry: PreviewEntry) => setEntry(setPreviews, entry);
+      return runPreviewRows({ rows: [row], ac, previewOne: one, write });
     },
-    [previewOne, abortRef, setPreviews, setIsPreviewing],
+    [previewOne, setPreviews, own],
   );
+  const cancel = useCallback(() => abortRef.current?.abort(), []);
+  return { previewRow, cancel };
+}
+
+export interface BatchPreviewApi {
+  previews: Map<string, PreviewEntry>;
+  isPreviewing: boolean;
+  previewSelected: (rows: Row[]) => Promise<void>;
+  previewRow: (row: Row, mergeFrac: number | null) => Promise<void>;
+  clear: () => void;
 }
 
 export function useBatchPreview(params: {
@@ -254,26 +226,30 @@ export function useBatchPreview(params: {
   split: SplitSettings;
   rowMerges?: RowMergeMap;
   loadFile?: LoadFile;
-}) {
-  const { root, split, rowMerges } = params;
-  const merges = rowMerges ?? {};
+}): BatchPreviewApi {
+  const { root, split } = params;
+  const merges = params.rowMerges ?? NO_OVERRIDES;
+  const own = useOwnRows();
   const { analysis, lru } = useCaches();
   const { previews, setPreviews, isPreviewing, setIsPreviewing, abortRef } = usePreviewState();
   const loadFile = useLoadFile(root, params.loadFile);
   const previewOne = usePreviewOne({ split, rowMerges: merges, loadFile, analysis, lru });
-  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef });
+  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef, own });
+  const { previewRow, cancel } = useRowPreview({ previewOne, setPreviews, own });
   const clear = useCallback(() => {
     abortRef.current?.abort();
+    cancel();
     setPreviews(new Map());
     setIsPreviewing(false);
-  }, [abortRef, setPreviews, setIsPreviewing]);
+  }, [abortRef, cancel, setPreviews, setIsPreviewing]);
+  useClearOnChange(split, root, clear);
+  useEffect(() => () => cancel(), [cancel]);
+  return { previews, isPreviewing, previewSelected, previewRow, clear };
+}
+
+/** Export settings or the root moved: every preview is stale, the settings decide. */
+function useClearOnChange(split: SplitSettings, root: DirHandleLike | null, clear: () => void): void {
   useEffect(() => {
     clear();
-  }, [split.mergeFrac, split.padding, split.size, split.transparent, root, merges, clear]);
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, [abortRef]);
-  return { previews, isPreviewing, previewSelected, clear, previewOne };
+  }, [split.mergeFrac, split.padding, split.size, split.transparent, root, clear]);
 }
