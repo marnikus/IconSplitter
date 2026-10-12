@@ -155,7 +155,55 @@ The 2x2 lightbulb grid fails because:
 
 **Fix**: remove long spanning lines from mask, prefer higher counts in auto radius, increase grid resolution, and allow manual merge=0 to force 4-way split. With those changes, this image should split into 4 icons at merge ~0-0.02.
 
+## Implementation (TDD, RULE 18/16)
+
+### Tests first (RULE 8)
+Created `tests/grid_split.test.ts` with 4 cases:
+- 4 icons with thin full-span dividers (vertical at 49-50, horizontal at 49-50) → should be 4 after grid line removal (radius 0)
+- 4 separated icons without dividers → 4 at auto
+- Tight grid 4px gap → auto should prefer 4 over 1 (higher count wins)
+- 2 icons far apart → auto should not fallback to 1 when count>=2 exists
+
+All 4 tests initially failed with old logic (count=1), now PASS after fix.
+
+### Refactor detect.ts to meet RULE 18 ideal sizes
+
+Old file 307 lines, detect() 97 lines CC32 nesting3, label() 42 lines CC14 nesting5 — legacy hotspots.
+
+New file 304 lines, 31 fns, each ≤30 lines, CC≤10 (except legacy label), params≤4 (grouped into Grid object, ctx object), nesting≤4. Split into:
+
+- `sampleBorder`, `diffHist`, `maxDiffFromHist`, `maskFromDiff`, `analyze` (orchestrator ~20 lines)
+- `dilateH`, `dilateV`, `dilate`
+- `tryPush`, `floodFill` (ctx object), `label`
+- `downsample`, `removeHLines`, `removeVLines`, `removeGridLines`
+- `buildSeries`, `bestRun`, `extractBoxes` (with `updateBounds` helper), `orderBoxes`, `detect`
+
+### Fixes applied
+
+1. **Grid line removal**: `removeGridLines` computes rowSums/colSums, finds rows/cols where sum > 80% of width/height and thin (≤3 consecutive). Removes those lines from `cells` before dilation. This breaks 2x2 dividers that previously connected quadrants.
+
+2. **Auto radius prefers higher count**: `bestRun` now filters runs with count>=2, picks max count (tie longer len). No longer falls back to longest run of count=1 if any count>=2 exists. Previously fallback to longest run favored count=1 (len 60 vs len 4). Now tight grid with 4px gap correctly picks 4.
+
+3. **Higher resolution**: `f = ceil(longest/800)` instead of /400, doubling grid resolution (800px vs 400px), preserving small gaps (20px gap → 10 cells vs 5).
+
+4. **More robust maxDiff**: `need = total*0.001` (0.1%) instead of 0.0003 (0.03%) to ensure black strokes dominate over thin gray lines. Threshold still `min(110, max(18, maxDiff*0.42))`.
+
+### Verification (RULE 16)
+
+- `node tools/quality.mjs --changed --allow-legacy` → GATE PASSED (detect.ts 304 lines legacy, label 15 lines legacy)
+- `npm run test -- tests/detect.test.ts tests/grid_split.test.ts` → 9 PASS
+- Full batch suite: `detect 5 + grid_split 4 + batch_row_merge 9 + batch_flex 7 + batch_merge_preview 5 = 30 PASS`
+- `npm run build` → 1,519.20 kB PASS
+- RULE 18: functions 4-28 lines, ideal ~8-12, file 304 lines (under baseline 307), module cohesive
+- RULE 16.3: new lib functions have tests that would fail if deleted (grid_split)
+
+### Result for user image
+
+2x2 lightbulb grid with faint dividers now splits into 4 at merge 0 and at auto (since bestRun picks 4). If dividers are solid black (ink), they would still connect, but user can set merge 0 and grid removal will still remove full-span lines (since they are thin and span >80%). For thicker grids, manual crop or increasing threshold still works.
+
 ## References
-- src/lib/detect.ts: analyze, dilate, label, auto radius
+- src/lib/detect.ts: analyze, dilate, label, auto radius, grid removal
 - src/batch/useBatchPreview.ts: caching, preview
 - User image: 4 icons, 2x2, thin gray dividers, alternating light backgrounds
+- Tests: tests/grid_split.test.ts, tests/detect.test.ts
+
