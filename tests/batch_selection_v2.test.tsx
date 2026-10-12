@@ -116,6 +116,10 @@ describe("Batch V2 selection: active row separate from checked", () => {
   it("purple active row is separate from checked bulk rows", async () => {
     const rows = qAll("[data-testid^='batch-row-'][role='listitem']");
     expect(rows.length).toBe(3);
+    // New behavior: after scan, all selected (checked = all). Deselect first to test active-only.
+    await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
     // Plain click = active only (fix a34b050)
     await rowClick("icon-a_AI_1.png");
     const first = q("[data-testid='batch-row-icon-a_AI_1.png']");
@@ -134,6 +138,8 @@ describe("Batch V2 selection: active row separate from checked", () => {
   });
 
   it("↑/↓ moves active row and scrolls into view without changing checks", async () => {
+    await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
     await rowClick("icon-a_AI_1.png");
     await checkClick("icon-a_AI_1.png"); // ensure checked
     await checkClick("icon-b_AI_2.png");
@@ -150,6 +156,8 @@ describe("Batch V2 selection: active row separate from checked", () => {
 
   it("click selects one, Shift-click selects visible range from anchor", async () => {
     // After fix a34b050: plain click = active only, sets anchor; Shift-click range selects
+    await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
     await rowClick("icon-a_AI_1.png");
     await rowClick("icon-c_AI_3.png", { shiftKey: true });
     // Should select range a,b,c (anchor set by first click)
@@ -162,6 +170,8 @@ describe("Batch V2 selection: active row separate from checked", () => {
 
   it("Ctrl/Alt/Meta-click toggles one row with Shift precedence", async () => {
     // After fix: plain click = active only, Ctrl toggles checked
+    await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
     await checkClick("icon-a_AI_1.png");
     await rowClick("icon-c_AI_3.png", { ctrlKey: true });
     expect((q(`[data-testid='row-select-icon-a_AI_1.png']`) as HTMLInputElement).checked).toBe(true);
@@ -178,6 +188,8 @@ describe("Batch V2 selection: active row separate from checked", () => {
   });
 
   it("checkbox clicks change checks only, not active", async () => {
+    await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
     await rowClick("icon-a_AI_1.png");
     const activeBefore = q("[data-testid='batch-row-icon-a_AI_1.png']")?.className;
     expect(activeBefore).toMatch(/active/);
@@ -190,8 +202,11 @@ describe("Batch V2 selection: active row separate from checked", () => {
   it("tri-state header, Select visible, Deselect all, counts", async () => {
     const header = q("[data-testid=batch-check-all]") as HTMLInputElement;
     expect(header).not.toBeNull();
-    // Initially all selected? Our toRow selects all non-missing/deleted by default, but after sync with checked from appstore (empty) it should deselect? Actually boot selects all, but appstore checked empty initially, sync will deselect to match checked (empty) -> 0 selected
-    // So header none
+    // New behavior: after scan, checked = all (3), so header all
+    await settle(100);
+    expect(header.checked).toBe(true);
+    // Deselect all to get none
+    await click(q("[data-testid=batch-deselect]"));
     await settle(100);
     expect(header.checked).toBe(false);
     // Select visible
@@ -206,13 +221,23 @@ describe("Batch V2 selection: active row separate from checked", () => {
     expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
   });
 
-  it("keeps missing/deleted ineligible and preserves Split selected", async () => {
-    // All our rows are unprocessed, selectable
+  it("keeps missing/deleted ineligible and preserves Split approved (review feature)", async () => {
+    // All our rows are unprocessed but pending review, not approved, so Split approved disabled
+    // First approve them, then split should be enabled
     await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
     await click(q("[data-testid=batch-select-visible]"));
-    const splitBtn = q("[data-testid=batch-process]") as HTMLButtonElement;
+    await settle(100);
+    // At this point pending, not approved, so split disabled (only approved can split)
+    let splitBtn = q("[data-testid=batch-process]") as HTMLButtonElement;
+    expect(splitBtn.disabled).toBe(true);
+    expect(splitBtn.textContent).toMatch(/Split approved \(0\)/);
+    // Approve selected
+    await click(q("[data-testid=batch-approve-selected]"));
+    await settle(200);
+    splitBtn = q("[data-testid=batch-process]") as HTMLButtonElement;
     expect(splitBtn.disabled).toBe(false);
-    expect(splitBtn.textContent).toMatch(/Split selected \(3\)/);
+    expect(splitBtn.textContent).toMatch(/Split approved \(3\)/);
   });
 
   it("each selection gesture is one undo entry", async () => {
@@ -255,15 +280,10 @@ describe("Batch V2 selection: active row separate from checked", () => {
 
   it("checked rows and anchor survive filtering", async () => {
     await click(q("[data-testid=batch-deselect]"));
+    await settle(100);
     await rowClick("icon-a_AI_1.png");
     await rowClick("icon-c_AI_3.png", { shiftKey: true });
-    // Filter to only one? Use status filter? Our filter grid has status, but we can test that hidden count shows
-    // Select visible then filter? For simplicity, check hidden count after filtering via search? Batch filter has search? It has status and sort, not search, but we can still check that after selecting all, hiddenCount logic works
     expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
-    // Simulate filter by changing filter to hide some? Our batch filter: status filter, but all are unprocessed, so not easy. Just ensure anchor persists: after selecting range, anchor should be first
-    // Do another shift-click after filtering simulation: if anchor hidden, fallback to one row
-    // We test hidden anchor fallback: deselect, select b, filter out b (not implemented), then shift-click c should only select c
-    // For now, just ensure no crash and checked persists
     await keyDown("ArrowDown");
     await keyDown("ArrowDown");
     expect(q("[data-testid='batch-row-icon-c_AI_3.png']")?.className).toMatch(/active/);

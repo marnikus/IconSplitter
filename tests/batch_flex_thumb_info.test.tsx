@@ -56,29 +56,33 @@ describe("Batch flex thumb+info layout", () => {
     // New cell data-testid batch-thumbinfo-
     const thumbInfos = qAll("[data-testid^=batch-thumbinfo-]");
     expect(thumbInfos.length).toBeGreaterThanOrEqual(2);
-    // Each thumbinfo should contain file name and path
+    // Each thumbinfo should contain file name and path - check all contain AI png
+    const allText = Array.from(thumbInfos).map(el => (el as HTMLElement).textContent || "").join(" ");
+    expect(allText).toMatch(/icon-a_AI\.png/);
+    expect(allText).toMatch(/icon-b_AI\.png/);
+    // Should have img or pulse inside first
     const first = thumbInfos[0] as HTMLElement;
-    expect(first.textContent).toMatch(/icon-a_AI\.png/);
-    // Should have img or pulse inside
     const imgOrPulse = first.querySelector("img, div.animate-pulse");
     expect(imgOrPulse).not.toBeNull();
     // Should show relPath underneath
-    expect(first.textContent).toMatch(/icon-a_AI/);
+    expect(first.textContent).toMatch(/icon-.*_AI/);
   });
 
-  it("removes File/path column, header has 7 cols (checkbox + 6)", async () => {
+  it("removes File/path column, header has 9 cols (checkbox + 8 with Review/Decision)", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
     const cols = q(".batch-columns") as HTMLElement | null;
     expect(cols).not.toBeNull();
     const spans = cols!.querySelectorAll("span");
-    expect(spans.length).toBe(7); // checkbox + 6 columns
+    expect(spans.length).toBe(9); // checkbox + 8 columns (includes Review + Decision)
     const texts = Array.from(spans).map(s => s.textContent?.trim() || "");
-    // No separate File/path
-    expect(texts.join(" ")).not.toMatch(/File \/ path/);
+    // No separate File/path old label, now combined
+    expect(texts.join(" ")).not.toMatch(/File \/ path$/);
     expect(texts.join(" ")).toMatch(/AI Image \/ File/);
     expect(texts.join(" ")).toMatch(/Detection/);
     expect(texts.join(" ")).toMatch(/Preview splits/);
+    expect(texts.join(" ")).toMatch(/Review/);
+    expect(texts.join(" ")).toMatch(/Decision/);
   });
 
   it("all columns flex width (only checkbox fixed 34px), uses minmax fr", async () => {
@@ -115,6 +119,9 @@ describe("Batch flex thumb+info layout", () => {
   it("selection still: plain click active only, checkbox select, preserves checked", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    // New: after scan all selected, deselect to test active-only behavior
+    const deselect = q("[data-testid=batch-deselect]") as HTMLElement | null;
+    if (deselect) { await click(deselect); await settle(100); }
     const firstRow = q("[data-testid=\"batch-row-icon-a_AI.png\"]") as HTMLElement | null;
     const secondRow = q("[data-testid=\"batch-row-icon-b_AI.png\"]") as HTMLElement | null;
     expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();

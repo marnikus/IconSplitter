@@ -88,7 +88,6 @@ async function processOne(item: BatchItem, destRel: string, deps: ProcessDeps, f
   const base = { relPath: item.source.relPath, folder, splits: 0, refCopied: false };
   const file = await tryLoad(item.file);
   if (!file) return { ...base, outcome: "skipped", message: "Source file missing before processing" };
-  if (deps.shouldStop?.()) return { ...base, outcome: "skipped", message: "Cancelled" };
   const blobs = await trySplit(file, deps);
   if (blobs instanceof Error) return { ...base, outcome: "failed", message: blobs.message };
   if (blobs.length === 0) return { ...base, outcome: "skipped", message: "No icons detected" };

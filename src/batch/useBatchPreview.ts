@@ -11,6 +11,7 @@ import type { SplitSettings } from "../lib/presets";
 import type { Row, RowMergeMap } from "./useBatch";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 import { yieldToFrame, yieldToUI } from "../lib/yield";
+import type { BatchReviewStatus } from "../lib/statefile";
 
 export interface PreviewEntry {
   relPath: string;
@@ -156,10 +157,11 @@ type WorkersArgs = {
   previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>;
   setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
   onProgress?: (done: number, current: Row | null) => void;
+  onReviewed?: (relPath: string, count: number) => void;
 };
 
 async function runWorkers(args: WorkersArgs) {
-  const { queue, ac, previewOne, setPreviews, onProgress } = args;
+  const { queue, ac, previewOne, setPreviews, onProgress, onReviewed } = args;
   let idx = 0, done = 0;
   const runNext = async () => {
     while (idx < queue.length) {
@@ -170,6 +172,7 @@ async function runWorkers(args: WorkersArgs) {
         const entry = await previewOne(row, ac.signal);
         if (ac.signal.aborted) return;
         setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
+        onReviewed?.(row.relPath, entry.count);
         done++;
         onProgress?.(done, queue[done] ?? null);
       } catch { return; }
@@ -212,8 +215,9 @@ function usePreviewQueue(args: {
   setProgress: React.Dispatch<React.SetStateAction<BatchProgress | null>>;
   setRunning: React.Dispatch<React.SetStateAction<boolean>>;
   abortRef: React.MutableRefObject<AbortController | null>;
+  onReviewed?: (relPath: string, count: number) => void;
 }) {
-  const { previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef } = args;
+  const { previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef, onReviewed } = args;
   return useCallback(async (selected: Row[]) => {
     const eligible = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
     if (eligible.length === 0) return;
@@ -225,32 +229,33 @@ function usePreviewQueue(args: {
     setIsPreviewing(true);
     markLoading(eligible, setPreviews);
     const onProgress = makePreviewProgressUpdater(setProgress);
-    await runWorkers({ queue: [...eligible], ac, previewOne, setPreviews, onProgress });
+    await runWorkers({ queue: [...eligible], ac, previewOne, setPreviews, onProgress, onReviewed });
     if (!ac.signal.aborted) {
       setIsPreviewing(false);
       setRunning(false);
     }
-  }, [previewOne, abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
+  }, [previewOne, abortRef, setPreviews, setIsPreviewing, setProgress, setRunning, onReviewed]);
 }
-function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFrac?: number | null) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
+function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFrac?: number | null) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onReviewed?: (relPath: string, count: number) => void) {
   return useCallback(async (row: Row, overrideFrac?: number | null) => {
     setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "loading" }); return next; });
     try {
       const ac = new AbortController();
       const entry = overrideFrac !== undefined ? await previewOne(row, ac.signal, overrideFrac) : await previewOne(row, ac.signal);
       setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
+      onReviewed?.(row.relPath, entry.count);
     } catch { /* ignore */ }
-  }, [previewOne, setPreviews]);
+  }, [previewOne, setPreviews, onReviewed]);
 }
-export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; }) {
-  const { root, split, rowMerges } = params;
+export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; onReviewed?: (relPath: string, count: number) => void; }) {
+  const { root, split, rowMerges, onReviewed } = params;
   const merges = rowMerges ?? {};
   const { analysis, lru } = useCaches();
   const { previews, setPreviews, isPreviewing, setIsPreviewing, progress, setProgress, running, setRunning, abortRef } = usePreviewState();
   const loadFile = useLoadFile(root, params.loadFile);
   const previewOne = usePreviewOne({ split, rowMerges: merges, loadFile, analysis, lru });
-  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef });
-  const previewSingle = usePreviewSingle(previewOne, setPreviews);
+  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef, onReviewed });
+  const previewSingle = usePreviewSingle(previewOne, setPreviews, onReviewed);
   const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);

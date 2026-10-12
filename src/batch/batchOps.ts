@@ -1,11 +1,10 @@
-// batchOps.ts — scan + process ops extracted to keep useBatch.ts <300 lines (RULE 18)
-// Yields between heavy steps to keep UI responsive (RULE 5/7)
+// batchOps.ts — scan + process ops (RULE 18), yields to keep UI responsive
 
 import { readDirTree, ensureDirPath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { walkTree, collectAiImages, linkReferences, type AiImageEntry } from "../lib/scan";
-import { syncAndCollect, applyOutcomes } from "./statewrite";
+import { syncAndCollect, applyOutcomes, applyReviewOutcomes, type ReviewOutcome } from "./statewrite";
 import { toOutcomes } from "./outcomes";
-import type { SourceStatus } from "../lib/statefile";
+import type { SourceStatus, BatchReviewStatus } from "../lib/statefile";
 import { processItems, type BatchItem, type ItemResult } from "./process";
 import { OUTPUT_DIR } from "../lib/batchlayout";
 import type { Preset } from "../lib/presets";
@@ -24,38 +23,25 @@ async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageE
   return linkReferences(collectAiImages(entries), entries);
 }
 
-export function finishScan(
-  images: AiImageEntry[],
-  statuses: Map<string, SourceStatus>,
-  setS: Setter,
-  say: (m: string, e?: boolean) => void,
-): void {
-  const rows = images.map((img) => toRow(img, statuses));
+type FinishArgs = { images: AiImageEntry[]; statuses: Map<string, SourceStatus>; reviews: Map<string, BatchReviewStatus>; setS: Setter; say: (m: string, e?: boolean) => void };
+
+export function finishScan(a: FinishArgs): void {
+  const rows = a.images.map((img) => toRow(img, a.statuses, a.reviews));
   const checked = rows.filter((r) => r.selected).map((r) => r.relPath);
-  setS((p) => {
-    const existing = new Set(images.map((i) => i.relPath.toLowerCase()));
+  a.setS((p) => {
+    const existing = new Set(a.images.map((i) => i.relPath.toLowerCase()));
     const nextMerges: RowMergeMap = {};
-    for (const [k, v] of Object.entries(p.rowMerges)) {
-      if (existing.has(k)) nextMerges[k] = v;
-    }
-    return {
-      ...p,
-      busy: null,
-      rows,
-      refWarnings: images.filter((i) => i.refRelPath === null).map((i) => i.relPath),
-      rowMerges: nextMerges,
-    };
+    for (const [k, v] of Object.entries(p.rowMerges)) if (existing.has(k)) nextMerges[k] = v;
+    return { ...p, busy: null, rows, refWarnings: a.images.filter((i) => i.refRelPath === null).map((i) => i.relPath), rowMerges: nextMerges };
   });
-  // Sync V2 checked state so useBatchSelection doesn't immediately uncheck
-  try {
-    patchBatch({ checked });
-  } catch {}
-  say(`Found ${images.length} AI image${images.length === 1 ? "" : "s"}`);
+  try { patchBatch({ checked }); } catch {}
+  a.say(`Found ${a.images.length} AI image${a.images.length === 1 ? "" : "s"}`);
 }
 
-function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>): Row {
+function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>, reviews: Map<string, BatchReviewStatus>): Row {
   const status = statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";
-  return { ...img, status, selected: status !== "missing" && status !== "deleted" };
+  const review = reviews.get(img.relPath.toLowerCase()) ?? "pending";
+  return { ...img, status, review, selected: status !== "missing" && status !== "deleted" };
 }
 
 export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
@@ -64,15 +50,9 @@ export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean)
   setS((p) => ({ ...p, busy: "Scanning…", rootName: root.name }));
   try {
     const images = await scanImages(root, ctx.state.current.preset);
-    const res = await syncAndCollect({
-      root,
-      images,
-      prevKeys: ctx.keys.current,
-      overrides: new Map(),
-      now: new Date().toISOString(),
-    });
+    const res = await syncAndCollect({ root, images, prevKeys: ctx.keys.current, overrides: new Map(), reviewOverrides: new Map(), now: new Date().toISOString() });
     ctx.keys.current = res.keys;
-    finishScan(images, res.statuses, setS, say);
+    finishScan({ images, statuses: res.statuses, reviews: res.reviews, setS, say });
   } catch (e) {
     setS((p) => ({ ...p, busy: null }));
     say((e as Error).message || "Scan failed", true);
@@ -83,13 +63,18 @@ export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
   ctx.stop.current = false;
-  const selected = ctx.state.current.rows.filter((r) => r.selected);
-  if (!selected.length) return setS((p) => ({ ...p, toast: { msg: "Nothing selected", err: true } }));
+  const allRows = ctx.state.current.rows;
+  const selected = allRows.filter((r) => r.selected && r.review === "approved");
+  const skipped = allRows.filter((r) => r.selected && r.review !== "approved").length;
+  if (!selected.length) {
+    if (skipped > 0) return setS((p) => ({ ...p, toast: { msg: `${skipped} selected not approved — only approved can be split`, err: true } }));
+    return setS((p) => ({ ...p, toast: { msg: "Nothing approved selected", err: true } }));
+  }
+  if (skipped > 0) setS((p) => ({ ...p, toast: { msg: `${skipped} not approved skipped, splitting ${selected.length} approved`, err: false } }));
   const runId = makeRunId();
   const init = makeBatchProgress(selected.length, runId);
   init.currentRelPath = selected[0]?.relPath ?? null;
   init.currentName = selected[0]?.name ?? "";
-  // Do not clear busy here — scanning may be in progress concurrently and should stay visible (non-blocking)
   setS((p) => ({ ...p, running: true, progress: init }));
   await yieldToFrame();
   const report = await runBatch({ ctx, root, selected, setS, init });
@@ -111,12 +96,9 @@ async function runBatch(args: RunArgs) {
   const counters = { saved: 0, failed: 0, skipped: 0, results: [] as ItemResult[] };
   const onProgress = makeProgressUpdater(setS, selected, counters);
   const report = await processItems(items, {
-    dest,
-    split,
+    dest, split,
     splitImage: (file, s) => splitWithOverride(file, s, { merges, items, shouldStop: () => ctx.stop.current }),
-    now: new Date(),
-    shouldStop: () => ctx.stop.current,
-    onProgress,
+    now: new Date(), shouldStop: () => ctx.stop.current, onProgress,
   });
   tallyExtra(report, counters);
   return report;
@@ -129,18 +111,7 @@ function makeProgressUpdater(setS: Setter, selected: Row[], counters: { saved: n
     setS((p) => {
       const prev = p.progress;
       if (!prev) return p;
-      return {
-        ...p,
-        progress: {
-          ...prev,
-          done,
-          currentRelPath: next?.relPath ?? relPath,
-          currentName: next?.name ?? prev.currentName,
-          saved: counters.saved,
-          failed: counters.failed,
-          skipped: counters.skipped,
-        },
-      };
+      return { ...p, progress: { ...prev, done, currentRelPath: next?.relPath ?? relPath, currentName: next?.name ?? prev.currentName, saved: counters.saved, failed: counters.failed, skipped: counters.skipped } };
     });
   };
 }
@@ -166,11 +137,7 @@ async function resolveDest(ctx: Ctx, root: DirHandleLike): Promise<DirHandleLike
   return ctx.dest.current ?? (await ensureDirPath(root, OUTPUT_DIR));
 }
 
-export function splitWithOverride(
-  file: File,
-  globalSplit: Preset["split"],
-  ctx: { merges: RowMergeMap; items: BatchItem[]; shouldStop?: () => boolean },
-): Promise<Blob[]> {
+export function splitWithOverride(file: File, globalSplit: Preset["split"], ctx: { merges: RowMergeMap; items: BatchItem[]; shouldStop?: () => boolean }): Promise<Blob[]> {
   const { merges, items, shouldStop } = ctx;
   const name = file.name.toLowerCase();
   for (const it of items) {
@@ -214,21 +181,13 @@ async function resolveFile(root: DirHandleLike, relPath: string): Promise<FileHa
 }
 
 async function tryResolve(root: DirHandleLike, relPath: string): Promise<FileHandleLike | null> {
-  try {
-    return await resolveFile(root, relPath);
-  } catch {
-    return null;
-  }
+  try { return await resolveFile(root, relPath); } catch { return null; }
 }
 
 async function probePathLocal(root: DirHandleLike, dirPath: string): Promise<DirHandleLike | null> {
   let cur: DirHandleLike = root;
   for (const part of dirPath.split("/").filter(Boolean)) {
-    try {
-      cur = await cur.getDirectoryHandle(part, { create: false });
-    } catch {
-      return null;
-    }
+    try { cur = await cur.getDirectoryHandle(part, { create: false }); } catch { return null; }
   }
   return cur;
 }
@@ -243,28 +202,34 @@ function tally(results: ItemResult[]) {
   return { done, skipped, failed };
 }
 
-async function finalize(
-  root: DirHandleLike,
-  results: ItemResult[],
-  selected: Row[],
-  setS: Setter,
-): Promise<void> {
+async function finalize(root: DirHandleLike, results: ItemResult[], selected: Row[], setS: Setter): Promise<void> {
   const dirs = new Map(selected.map((r) => [r.relPath.toLowerCase(), r.dirPath]));
   const outcomes = toOutcomes(results, dirs);
   await applyOutcomes(root, outcomes, new Date().toISOString());
   const byPath = new Map(outcomes.map((o) => [o.relPath.toLowerCase(), o.status]));
   const c = tally(results);
   setS((p) => ({
-    ...p,
-    running: false,
-    rows: p.rows.map((r) => ({
-      ...r,
-      status: byPath.get(r.relPath.toLowerCase()) ?? r.status,
-      selected: false,
-    })),
+    ...p, running: false,
+    rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, selected: false })),
     toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
-  try {
-    patchBatch({ checked: [] });
-  } catch {}
+  try { patchBatch({ checked: [] }); } catch {}
+}
+
+type DecideArgs = { ctx: Ctx; relPaths: string[]; review: BatchReviewStatus; setS: Setter };
+
+export async function decideReview(a: DecideArgs): Promise<void> {
+  const root = a.ctx.root.current;
+  if (!root) return;
+  const now = new Date().toISOString();
+  const lowerSet = new Set(a.relPaths.map((p) => p.toLowerCase()));
+  a.setS((p) => ({ ...p, rows: p.rows.map((r) => (lowerSet.has(r.relPath.toLowerCase()) ? { ...r, review: a.review } : r)) }));
+  const grouped: ReviewOutcome[] = [];
+  for (const rel of a.relPaths) {
+    const row = a.ctx.state.current.rows.find((r) => r.relPath.toLowerCase() === rel.toLowerCase());
+    if (!row) continue;
+    const base = (row as any).ai?.base ?? row.name.replace(/_AI\..*$/, "").replace(/\..*$/, "");
+    grouped.push({ dirPath: row.dirPath, base, relPath: row.relPath, review: a.review });
+  }
+  if (grouped.length > 0) await applyReviewOutcomes(root, grouped, now);
 }

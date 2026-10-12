@@ -1,4 +1,4 @@
-// BatchFilterGrid.tsx — V2-style filter bar for Batch folders, refactored into small components
+// BatchFilterGrid.tsx — V2-style filter bar for Batch folders + review filter (approved/declined/warning/pending)
 
 import { useState } from "react";
 import { ALL_BATCH_FILTER, type BatchFilter } from "../lib/batchfilter";
@@ -27,11 +27,19 @@ const STATUS_OPTS: [string, string][] = [
   ["missing", "Missing"],
   ["deleted", "Deleted"],
 ];
+const REVIEW_OPTS: [string, string][] = [
+  ["all", "All reviews"],
+  ["approved", "Approved"],
+  ["declined", "Declined"],
+  ["warning", "Warning (not 4)"],
+  ["pending", "Pending"],
+];
 const SORT_OPTS: [string, string][] = [
   ["date", "Created date"],
   ["name", "Filename"],
   ["path", "Folder / path"],
   ["status", "Review status"],
+  ["review", "Approval"],
 ];
 const DIR_OPTS: [string, string][] = [
   ["desc", "Newest first"],
@@ -53,6 +61,7 @@ function Filters({ p, range, setRange }: { p: BatchFilterGridProps; range: Range
       <FromField p={p} range={range} setRange={setRange} />
       <ToField p={p} range={range} setRange={setRange} />
       <SelectField label="Status" testid="batch-status" value={p.filter.status} onChange={(v) => p.setFilter({ ...p.filter, status: v as any })} options={STATUS_OPTS} />
+      <SelectField label="Review" testid="batch-review-filter" value={p.filter.review ?? "all"} onChange={(v) => p.setFilter({ ...p.filter, review: v as any })} options={REVIEW_OPTS} />
       <SelectField label="Sort by" testid="batch-sort" value={p.sort.by} onChange={(v) => p.setSort({ ...p.sort, by: v as any })} options={SORT_OPTS} />
       <SelectField label="Order" testid="batch-dir" value={p.sort.dir} onChange={(v) => p.setSort({ ...p.sort, dir: v as any })} options={DIR_OPTS} />
     </>

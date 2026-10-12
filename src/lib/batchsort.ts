@@ -1,11 +1,11 @@
-// batchsort.ts — pure ordering for Batch folders (RULE 3/8)
-// Sort modes: date / name / path / status, both directions; ties break on relPath.
+// batchsort.ts — pure ordering for Batch folders + review (RULE 3/8)
+// Sort modes: date / name / path / status / review, both directions; ties break on relPath.
 
-import type { SourceStatus } from "./statefile";
+import type { SourceStatus, BatchReviewStatus } from "./statefile";
 import { isRecord } from "./isrecord";
 
 export interface BatchSort {
-  by: "date" | "name" | "path" | "status";
+  by: "date" | "name" | "path" | "status" | "review";
   dir: "asc" | "desc";
 }
 
@@ -20,12 +20,20 @@ const STATUS_RANK: Record<SourceStatus, number> = {
   deleted: 5,
 };
 
+const REVIEW_RANK: Record<BatchReviewStatus, number> = {
+  approved: 0,
+  warning: 1,
+  pending: 2,
+  declined: 3,
+};
+
 export interface BatchSortable {
   mtime: number;
   name: string;
   relPath: string;
   dirPath: string;
   status: SourceStatus;
+  review?: BatchReviewStatus;
 }
 
 export function sortBatchRows<T extends BatchSortable>(rows: T[], s: BatchSort): T[] {
@@ -36,7 +44,7 @@ export function sortBatchRows<T extends BatchSortable>(rows: T[], s: BatchSort):
 function cmp(a: BatchSortable, b: BatchSortable, by: BatchSort["by"], sign: number): number {
   const primary = primaryCmp(a, b, by);
   if (primary !== 0) return sign * primary;
-  if (by === "status") {
+  if (by === "status" || by === "review") {
     const tie = b.mtime - a.mtime;
     if (tie !== 0) return tie;
   }
@@ -49,6 +57,7 @@ function primaryCmp(a: BatchSortable, b: BatchSortable, by: BatchSort["by"]): nu
     case "name": return ci(a.name, b.name);
     case "path": return ci(`${a.dirPath}/${a.name}`, `${b.dirPath}/${b.name}`);
     case "status": return STATUS_RANK[a.status] - STATUS_RANK[b.status];
+    case "review": return REVIEW_RANK[a.review ?? "pending"] - REVIEW_RANK[b.review ?? "pending"];
   }
 }
 
@@ -58,7 +67,7 @@ function ci(x: string, y: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-const SORT_KEYS: BatchSort["by"][] = ["date", "name", "path", "status"];
+const SORT_KEYS: BatchSort["by"][] = ["date", "name", "path", "status", "review"];
 
 export function parseBatchSort(raw: unknown): BatchSort {
   if (!isRecord(raw)) return DEFAULT_BATCH_SORT;

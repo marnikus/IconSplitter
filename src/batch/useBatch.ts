@@ -9,20 +9,13 @@ import { restoreKnownRoot } from "../lib/knownroots";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
 import type { DirHandleLike } from "../lib/fs";
 import type { BatchState, Ctx, Row, Setter } from "./useBatchTypes";
-import { scan as scanOp, batchProcess } from "./batchOps";
+import { scan as scanOp, batchProcess, decideReview } from "./batchOps";
+import type { BatchReviewStatus } from "../lib/statefile";
 
 const initial: BatchState = {
-  rootName: "",
-  destName: "",
-  rows: [],
-  busy: null,
-  toast: null,
-  preset: defaultPreset("Default"),
-  presetNames: [],
-  refWarnings: [],
-  rowMerges: {},
-  progress: null,
-  running: false,
+  rootName: "", destName: "", rows: [], busy: null, toast: null,
+  preset: defaultPreset("Default"), presetNames: [], refWarnings: [],
+  rowMerges: {}, progress: null, running: false,
 };
 
 export type { Row, RowMergeMap, BatchState } from "./useBatchTypes";
@@ -30,14 +23,11 @@ export type { Row, RowMergeMap, BatchState } from "./useBatchTypes";
 export function useBatch() {
   const [s, setS] = useState<BatchState>(initial);
   const ctx = useCtx(s);
-  useEffect(() => {
-    void boot(ctx, setS);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void boot(ctx, setS); }, []);
   useToastClear(s.toast, setS);
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
   return {
-    s,
-    say,
+    s, say,
     ...useCoreActions(ctx, setS, say),
     ...useViewActions(ctx, setS),
     ...usePresetActions(ctx, setS, say),
@@ -52,44 +42,39 @@ function useCtx(s: BatchState): Ctx {
   return { root: useRef(null), dest: useRef(null), keys: useRef([]), stop: useRef(false), state: stateRef };
 }
 
-function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
-  const chooseRoot = useCallback(async () => {
-    const picked = await pickFolderFor((h) => {
-      ctx.root.current = h;
-    });
+function makeChooseRoot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
+  return async () => {
+    const picked = await pickFolderFor((h) => { ctx.root.current = h; });
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
-    const presetName = ctx.state.current.preset.name;
-    await saveHandles(presetName, { source: picked.handle, dest: ctx.dest.current ?? undefined });
+    await saveHandles(ctx.state.current.preset.name, { source: picked.handle, dest: ctx.dest.current ?? undefined });
     await scanOp(ctx, setS, say);
     if (picked.message !== null) say(picked.message);
-  }, [ctx, setS, say]);
-  const chooseDest = useCallback(async () => {
+  };
+}
+
+function makeChooseDest(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
+  return async () => {
     const h = await pickDirectory();
     if (!h) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     ctx.dest.current = h;
     setS((p) => ({ ...p, destName: h.name, preset: { ...p.preset, destMode: "custom" } }));
-    const presetName = ctx.state.current.preset.name;
-    await saveHandles(presetName, { source: ctx.root.current ?? undefined, dest: h });
-  }, [ctx, setS, say]);
-  const refresh = useCallback(() => {
-    void scanOp(ctx, setS, say);
-  }, [ctx, setS, say]);
-  const run = useCallback(() => {
-    void batchProcess(ctx, setS);
-  }, [ctx, setS]);
-  const cancel = useCallback(() => {
-    ctx.stop.current = true;
-  }, [ctx]);
-  return { chooseRoot, chooseDest, refresh, run, cancel };
+    await saveHandles(ctx.state.current.preset.name, { source: ctx.root.current ?? undefined, dest: h });
+  };
+}
+
+function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
+  const chooseRoot = useCallback(makeChooseRoot(ctx, setS, say), [ctx, setS, say]);
+  const chooseDest = useCallback(makeChooseDest(ctx, setS, say), [ctx, setS, say]);
+  const refresh = useCallback(() => { void scanOp(ctx, setS, say); }, [ctx, setS, say]);
+  const run = useCallback(() => { void batchProcess(ctx, setS); }, [ctx, setS]);
+  const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
+  const decide = useCallback((relPaths: string[], review: BatchReviewStatus) => { void decideReview({ ctx, relPaths, review, setS }); }, [ctx, setS]);
+  return { chooseRoot, chooseDest, refresh, run, cancel, decide };
 }
 
 function useViewActions(ctx: Ctx, setS: Setter) {
-  const toggle = useCallback((relPath: string) => {
-    setS((p) => ({ ...p, rows: p.rows.map((r) => (r.relPath === relPath ? { ...r, selected: !r.selected } : r)) }));
-  }, [setS]);
-  const selectAll = useCallback((on: boolean) => {
-    setS((p) => ({ ...p, rows: p.rows.map((r) => (selectable(r) ? { ...r, selected: on } : r)) }));
-  }, [setS]);
+  const toggle = useCallback((relPath: string) => { setS((p) => ({ ...p, rows: p.rows.map((r) => (r.relPath === relPath ? { ...r, selected: !r.selected } : r)) })); }, [setS]);
+  const selectAll = useCallback((on: boolean) => { setS((p) => ({ ...p, rows: p.rows.map((r) => (selectable(r) ? { ...r, selected: on } : r)) })); }, [setS]);
   const setSelected = useCallback((relPaths: string[], on: boolean) => {
     const set = new Set(relPaths.map((x) => x.toLowerCase()));
     setS((p) => ({ ...p, rows: p.rows.map((r) => (set.has(r.relPath.toLowerCase()) ? { ...r, selected: on } : r)) }));
@@ -98,17 +83,13 @@ function useViewActions(ctx: Ctx, setS: Setter) {
     if (!ctx.root.current) throw new Error("No folder selected");
     return URL.createObjectURL(await (await resolveFile(ctx.root.current, relPath)).getFile());
   }, [ctx]);
-  const setRowMerge = useCallback((relPath: string, value: number | null) => {
-    setS((p) => ({ ...p, rowMerges: { ...p.rowMerges, [relPath.toLowerCase()]: value } }));
-  }, [setS]);
+  const setRowMerge = useCallback((relPath: string, value: number | null) => { setS((p) => ({ ...p, rowMerges: { ...p.rowMerges, [relPath.toLowerCase()]: value } })); }, [setS]);
   const clearRowMerge = useCallback((relPath: string) => {
     const k = relPath.toLowerCase();
     setS((p) => { const n = { ...p.rowMerges }; delete n[k]; return { ...p, rowMerges: n }; });
   }, [setS]);
   const clearAllRowMerges = useCallback(() => { setS((p) => ({ ...p, rowMerges: {} })); }, [setS]);
-  const setProgress = useCallback((progress: BatchState["progress"]) => {
-    setS((p) => ({ ...p, progress }));
-  }, [setS]);
+  const setProgress = useCallback((progress: BatchState["progress"]) => { setS((p) => ({ ...p, progress })); }, [setS]);
   return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress };
 }
 
@@ -196,9 +177,7 @@ async function resolveFile(root: DirHandleLike, relPath: string) {
   const fileName = idx < 0 ? relPath : relPath.slice(idx + 1);
   let cur: DirHandleLike = root;
   if (dirPath) {
-    for (const part of dirPath.split("/")) {
-      cur = await cur.getDirectoryHandle(part, { create: false });
-    }
+    for (const part of dirPath.split("/")) cur = await cur.getDirectoryHandle(part, { create: false });
   }
   return cur.getFileHandle(fileName, { create: false });
 }

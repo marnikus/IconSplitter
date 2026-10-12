@@ -5,7 +5,7 @@
 // (user-visible outputs still go through writeFileNew — RULE 23).
 
 import type { AiImageEntry } from "../lib/scan";
-import { blankState, mergeScan, parseState, serializeState, type SourceStatus } from "../lib/statefile";
+import { blankState, mergeScan, parseState, serializeState, type SourceStatus, type BatchReviewStatus } from "../lib/statefile";
 import { probePath, tryGetFile, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 
 export interface StateKey {
@@ -15,6 +15,7 @@ export interface StateKey {
 
 export interface SyncResult {
   statuses: Map<string, SourceStatus>; // relPath (lowercase) -> status
+  reviews: Map<string, BatchReviewStatus>; // relPath -> review
   keys: StateKey[];
 }
 
@@ -22,7 +23,7 @@ export interface SyncResult {
 export async function syncStateFiles(
   root: DirHandleLike, images: AiImageEntry[], prevKeys: StateKey[], now: string,
 ): Promise<void> {
-  await syncAndCollect({ root, images, prevKeys, overrides: new Map(), now });
+  await syncAndCollect({ root, images, prevKeys, overrides: new Map(), reviewOverrides: new Map(), now });
 }
 
 export interface SyncArgs {
@@ -30,6 +31,7 @@ export interface SyncArgs {
   images: AiImageEntry[];
   prevKeys: StateKey[];
   overrides: Map<string, SourceStatus>;
+  reviewOverrides?: Map<string, BatchReviewStatus>;
   now: string;
 }
 
@@ -39,7 +41,7 @@ export interface SyncArgs {
  * <base>.json, and reports the resulting status per image.
  */
 export async function syncAndCollect(args: SyncArgs): Promise<SyncResult> {
-  const ctx: SyncCtx = { ...args, result: { statuses: new Map(), keys: [] } };
+  const ctx: SyncCtx = { ...args, result: { statuses: new Map(), reviews: new Map(), keys: [] } };
   const groups = groupByState(args.images, args.prevKeys);
   for (const g of groups.values()) await syncOne(ctx, g);
   return ctx.result;
@@ -79,10 +81,12 @@ async function syncOne(ctx: SyncCtx, g: Group): Promise<void> {
   const dir = g.dirPath === "" ? ctx.root : await probePath(ctx.root, g.dirPath);
   if (!dir) return; // source folder vanished since the scan — nothing to update
   const prev = await readPrev(dir, `${g.base}.json`);
-  const next = applyOverrides(mergeScan(prev ?? blankState(g.base), g.items, ctx.now), ctx.overrides);
-  recordStatuses(next, ctx.result);
+  const merged = mergeScan(prev ?? blankState(g.base), g.items, ctx.now);
+  const withStatus = applyOverrides(merged, ctx.overrides);
+  const withReview = applyReviewOverrides(withStatus, ctx.reviewOverrides ?? new Map(), ctx.now);
+  recordStatuses(withReview, ctx.result);
   ctx.result.keys.push({ dirPath: g.dirPath, base: g.base });
-  await writeFileOverwrite(dir, `${g.base}.json`, jsonBlob(serializeState(next)));
+  await writeFileOverwrite(dir, `${g.base}.json`, jsonBlob(serializeState(withReview)));
 }
 
 function applyOverrides(state: ReturnType<typeof mergeScan>, overrides: Map<string, SourceStatus>) {
@@ -96,11 +100,29 @@ function applyOverrides(state: ReturnType<typeof mergeScan>, overrides: Map<stri
   };
 }
 
+function applyReviewOverrides(state: ReturnType<typeof mergeScan>, overrides: Map<string, BatchReviewStatus>, now: string) {
+  if (overrides.size === 0) return state;
+  return {
+    ...state,
+    sources: state.sources.map((r) => {
+      const review = overrides.get(r.relPath.toLowerCase());
+      return review ? { ...r, review, reviewUpdated: now, updated: now } : r;
+    }),
+  };
+}
+
 export interface Outcome {
   dirPath: string;
   base: string;
   relPath: string;
   status: SourceStatus;
+}
+
+export interface ReviewOutcome {
+  dirPath: string;
+  base: string;
+  relPath: string;
+  review: BatchReviewStatus;
 }
 
 /**
@@ -113,7 +135,20 @@ export async function applyOutcomes(root: DirHandleLike, outcomes: Outcome[], no
   for (const list of groups.values()) await writeOutcomes(root, list, now);
 }
 
+export async function applyReviewOutcomes(root: DirHandleLike, outcomes: ReviewOutcome[], now: string): Promise<void> {
+  const groups = new Map<string, ReviewOutcome[]>();
+  for (const o of outcomes) pushReviewOutcome(groups, o);
+  for (const list of groups.values()) await writeReviewOutcomes(root, list, now);
+}
+
 function pushOutcome(groups: Map<string, Outcome[]>, o: Outcome): void {
+  const key = `${o.dirPath}\u0000${o.base}`;
+  const list = groups.get(key) ?? [];
+  list.push(o);
+  groups.set(key, list);
+}
+
+function pushReviewOutcome(groups: Map<string, ReviewOutcome[]>, o: ReviewOutcome): void {
   const key = `${o.dirPath}\u0000${o.base}`;
   const list = groups.get(key) ?? [];
   list.push(o);
@@ -137,8 +172,28 @@ async function writeOutcomes(root: DirHandleLike, list: Outcome[], now: string):
   await writeFileOverwrite(dir, `${first.base}.json`, jsonBlob(serializeState(next)));
 }
 
+async function writeReviewOutcomes(root: DirHandleLike, list: ReviewOutcome[], now: string): Promise<void> {
+  const first = list[0];
+  const dir = first.dirPath === "" ? root : await probePath(root, first.dirPath);
+  if (!dir) return;
+  const prev = await readPrev(dir, `${first.base}.json`);
+  if (!prev) return;
+  const byPath = new Map(list.map((o) => [o.relPath.toLowerCase(), o.review]));
+  const next = {
+    ...prev, updated: now,
+    sources: prev.sources.map((r) => {
+      const review = byPath.get(r.relPath.toLowerCase());
+      return review ? { ...r, review, reviewUpdated: now, updated: now } : r;
+    }),
+  };
+  await writeFileOverwrite(dir, `${first.base}.json`, jsonBlob(serializeState(next)));
+}
+
 function recordStatuses(state: ReturnType<typeof mergeScan>, result: SyncResult): void {
-  for (const r of state.sources) result.statuses.set(r.relPath.toLowerCase(), r.status);
+  for (const r of state.sources) {
+    result.statuses.set(r.relPath.toLowerCase(), r.status);
+    result.reviews.set(r.relPath.toLowerCase(), r.review ?? "pending");
+  }
 }
 
 async function readPrev(dir: DirHandleLike, jsonName: string) {

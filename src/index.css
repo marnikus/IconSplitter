@@ -417,13 +417,16 @@
 .batch-row:hover { background: #10182b; }
 .batch-row.selected:not(.active) { background: #111a31; }
 .batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
+.batch-row.warning-row { box-shadow: inset 3px 0 0 #facc15; }
+.batch-row.warning { box-shadow: inset 3px 0 0 #facc15; }
+
 
 .batch-columns,
 .batch-row {
   display: grid;
-  /* 7-col flex: only checkbox fixed 34px, rest minmax fr to use full row space
-     thumb+info = 1fr min 160, detection min 380 1.2fr one-row, preview 2fr takes remaining */
-  grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
+  /* 9-col flex: only checkbox fixed 34px, rest minmax fr to use full row space
+     thumb+info = 1fr min 160, detection min 380 1.2fr one-row, preview 2fr, review 0.6fr, decision 0.7fr, created 0.6fr, status 0.5fr, open 0.7fr */
+  grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(100px, 0.7fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -1384,7 +1387,7 @@
 .svg-badge.generated, .svg-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
-.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted, .svg-badge.needs-review { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted, .svg-badge.needs-review, .svg-badge.warning { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 /* Waiting in the queue (2026-10-08): grey — scheduled, nothing on disk changed yet. */
 .svg-badge.queued { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
 
@@ -1602,7 +1605,7 @@
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .batch-columns,
-  .batch-row { grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr) !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
+  .batch-row { grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(100px, 0.7fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr) !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

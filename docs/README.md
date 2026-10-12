@@ -61,6 +61,25 @@ doc itself, never in this map.
 | `archive/2026-10-08-upload-download-all/design.md` | SVG to upload — "Download all": the selection's committed SVG/JPG/EPS copied into one user-picked folder (planner, never-overwrite, verified copy, one result line) |
 | `archive/2026-10-08-svg-queue-keepalive/design.md` | Design (implemented the same day — I-53 rewrite, I-57, I-58): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
 | `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
+| `archive/2026-10-09-regen-prompt-popup/design.md` | Regeneration prompt per batch in popup — first generation uses main prompt |
+| `archive/2026-10-11-regenerated-review-status/design.md` | New review status: regenerated — yellow warning |
+| `archive/2026-10-12-batch-active-row-select/README.md` | Fix Q/E to affect only active row, not all rows |
+| `archive/2026-10-12-batch-nonblocking/README.md` | Batch non-blocking — folder search not blocked by split progress |
+| `archive/2026-10-12-batch-v2-controls/README.md` | Batch folders — V2 controls: zoom, date filters, filtered multi-select |
+| `archive/2026-10-12-batch-v2-selection/README.md` | Batch V2 selection + A/E shortcuts |
+| `archive/2026-10-12-full-refactor-optimize/README.md` | Full refactor & optimize all new code — batch reuse, quality gates |
+| `archive/2026-10-12-svg-upload-scroll-fix/README.md` | SVG to upload / Generate SVG blank areas and clipped list fix |
+| `archive/2026-10-13-algo-efficiency/README.md` | Algo time process — 80% faster redesign (merged mask+downsample, fast count, rMax cap) |
+| `archive/2026-10-13-algo-efficiency-v2/README.md` | Algo v2 — UF labeling, ink-cell limited extract, sampled hist, buffer reuse, early exit |
+| `archive/2026-10-13-batch-flex-thumb-info/README.md` | Batch flex layout — file info under thumbnail, no fixed widths, full-width list |
+| `archive/2026-10-13-batch-freeze/README.md` | Batch processing freezes UI — research & fix plan |
+| `archive/2026-10-13-batch-freeze-v2/README.md` | Batch UI still freezes during progress — deep dive v2 |
+| `archive/2026-10-13-batch-merge-preview/README.md` | Batch merge slider + Preview splits inline |
+| `archive/2026-10-13-batch-preview-layout-fix/README.md` | Batch Preview layout fix — doc & plan |
+| `archive/2026-10-13-batch-progress-bar/README.md` | Batch Split Selected — persistent progress bar same as Generate SVG |
+| `archive/2026-10-13-batch-review/README.md` | Batch folders review — approve/decline/warning + 4-icon rule |
+| `archive/2026-10-13-batch-row-merge-override/README.md` | Batch per-row merge override — design doc |
+| `archive/2026-10-13-grid-split-failure/README.md` | Grid image fails to split — 2x2 lightbulb icons |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

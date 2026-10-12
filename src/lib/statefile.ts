@@ -1,6 +1,6 @@
 // statefile.ts — per-reference JSON state model (spec §2, §6; RULE 13).
-// Owns: SourceRecord statuses, merge of a fresh scan into prior state,
-// mark-as-processed, and strict parse/serialize that rejects corrupt data.
+// Owns: SourceRecord statuses + batch review (approved/declined/warning/pending), merge of a fresh scan into prior state,
+// mark-as-processed, mark-as-reviewed, and strict parse/serialize that rejects corrupt data.
 // Pure module: no IO. src/batch/store.ts reads/writes the file itself.
 
 export type SourceStatus =
@@ -11,6 +11,8 @@ export type SourceStatus =
   | "changed"
   | "deleted";
 
+export type BatchReviewStatus = "pending" | "approved" | "declined" | "warning";
+
 export interface SourceRecord {
   relPath: string;
   name: string;
@@ -19,6 +21,8 @@ export interface SourceRecord {
   hash?: string;
   status: SourceStatus;
   updated: string; // ISO timestamp of last status change
+  review?: BatchReviewStatus;
+  reviewUpdated?: string;
 }
 
 export interface StateFile {
@@ -79,6 +83,7 @@ function newRecord(item: ScanItem, now: string): SourceRecord {
   return {
     relPath: item.relPath, name: item.name, size: item.size, mtime: item.mtime,
     hash: item.hash, status: "unprocessed", updated: now,
+    review: "pending", reviewUpdated: now,
   };
 }
 
@@ -89,6 +94,8 @@ function refreshRecord(prev: SourceRecord, item: ScanItem, now: string): SourceR
     size: item.size, mtime: item.mtime, hash: item.hash ?? prev.hash,
     status: changed ? "changed" : revive(prev.status),
     updated: changed || prev.status === "missing" ? now : prev.updated,
+    review: changed ? "pending" : (prev.review ?? "pending"),
+    reviewUpdated: changed ? now : (prev.reviewUpdated ?? prev.updated),
   };
 }
 
@@ -121,6 +128,15 @@ export function markProcessed(state: StateFile, relPath: string, now: string, st
   };
 }
 
+export function markReviewed(state: StateFile, relPath: string, now: string, review: BatchReviewStatus): StateFile {
+  return {
+    ...state,
+    updated: now,
+    sources: state.sources.map((r) =>
+      r.relPath.toLowerCase() === relPath.toLowerCase() ? { ...r, review, reviewUpdated: now } : r),
+  };
+}
+
 export function serializeState(s: StateFile): string {
   return JSON.stringify(s, null, 2);
 }
@@ -135,6 +151,7 @@ export function parseState(text: string): StateFile | null {
 }
 
 const STATUSES: SourceStatus[] = ["unprocessed", "processed", "skipped", "missing", "changed", "deleted"];
+const REVIEWS: BatchReviewStatus[] = ["pending", "approved", "declined", "warning"];
 
 function validateState(x: unknown): StateFile | null {
   if (typeof x !== "object" || x === null) return null;
@@ -167,6 +184,8 @@ function recordFrom(r: Record<string, unknown>): SourceRecord {
     hash: typeof r.hash === "string" ? r.hash : undefined,
     status: validStatus(r.status),
     updated: strOr(r.updated, ""),
+    review: validReview(r.review),
+    reviewUpdated: strOr(r.reviewUpdated, ""),
   };
 }
 
@@ -180,4 +199,8 @@ function numOr(x: unknown): number {
 
 function validStatus(x: unknown): SourceStatus {
   return STATUSES.includes(x as SourceStatus) ? (x as SourceStatus) : "unprocessed";
+}
+
+function validReview(x: unknown): BatchReviewStatus {
+  return REVIEWS.includes(x as BatchReviewStatus) ? (x as BatchReviewStatus) : "pending";
 }

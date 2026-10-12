@@ -1,9 +1,9 @@
-// batchfilter.ts — pure list filtering for Batch folders (RULE 3/8)
-// Owns: date modes (all/month/custom), status filter, search. Anchors on mtime.
+// batchfilter.ts — pure list filtering for Batch folders + review (RULE 3/8)
+// Owns: date modes (all/month/custom), status filter, review filter, search. Anchors on mtime.
 // Shared shape with reviewfilter so V2 controls can be reused as reference.
 
 import { monthKey as reviewMonthKey } from "./reviewfilter";
-import type { SourceStatus } from "./statefile";
+import type { SourceStatus, BatchReviewStatus } from "./statefile";
 import { isRecord } from "./isrecord";
 
 export type DateFilter =
@@ -12,29 +12,33 @@ export type DateFilter =
   | { mode: "custom"; from: number; to: number }; // epoch ms inclusive
 
 export type BatchStatusFilter = "all" | SourceStatus;
+export type BatchReviewFilter = "all" | BatchReviewStatus;
 
 export interface BatchFilter {
   date: DateFilter;
   status: BatchStatusFilter;
+  review: BatchReviewFilter;
   search: string;
 }
 
 export const ALL_BATCH_FILTER: BatchFilter = {
   date: { mode: "all" },
   status: "all",
+  review: "all",
   search: "",
 };
 
 export interface BatchRowLike {
   mtime: number;
   status: SourceStatus;
+  review?: BatchReviewStatus;
   name: string;
   relPath: string;
   dirPath: string;
 }
 
-export function applyBatchFilters<T extends BatchRowLike>(rows: T[], f: BatchFilter): T[] {
-  return rows.filter((r) => inDate(r, f.date) && inStatus(r, f.status) && inSearch(r, f.search));
+export function applyBatchFilters<T extends BatchRowLike>(rows: T[], f: BatchFilter & { review?: BatchReviewFilter }): T[] {
+  return rows.filter((r) => inDate(r, f.date) && inStatus(r, f.status) && inReview(r, (f as any).review) && inSearch(r, f.search));
 }
 
 function inDate(r: BatchRowLike, d: DateFilter): boolean {
@@ -45,6 +49,11 @@ function inDate(r: BatchRowLike, d: DateFilter): boolean {
 
 function inStatus(r: BatchRowLike, s: BatchStatusFilter): boolean {
   return s === "all" || r.status === s;
+}
+
+function inReview(r: BatchRowLike, review: BatchReviewFilter | undefined): boolean {
+  if (!review || review === "all") return true;
+  return (r.review ?? "pending") === review;
 }
 
 function inSearch(r: BatchRowLike, q: string): boolean {
@@ -58,12 +67,14 @@ export function monthKey(t: number): string {
 }
 
 const STATUSES: BatchStatusFilter[] = ["all", "unprocessed", "processed", "skipped", "missing", "changed", "deleted"];
+const REVIEWS: BatchReviewFilter[] = ["all", "pending", "approved", "declined", "warning"];
 
 export function parseBatchFilter(raw: unknown): BatchFilter {
   if (!isRecord(raw)) return ALL_BATCH_FILTER;
   return {
     date: parseDate(raw.date),
     status: pick(STATUSES, raw.status, "all"),
+    review: pick(REVIEWS, (raw as any).review, "all"),
     search: typeof raw.search === "string" ? raw.search : "",
   };
 }
@@ -86,6 +97,7 @@ function pick<T extends string>(allowed: T[], raw: unknown, fallback: T): T {
 export function batchFilterLabel(f: BatchFilter): string {
   const bits: string[] = [];
   if (f.status !== "all") bits.push(`status ${f.status}`);
+  if (f.review !== "all") bits.push(`review ${f.review}`);
   if (f.search !== "") bits.push(`“${f.search}”`);
   if (f.date.mode === "month") bits.push(f.date.month);
   if (f.date.mode === "custom") bits.push("custom range");

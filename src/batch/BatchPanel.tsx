@@ -1,4 +1,4 @@
-// BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview inline + per-row override
+// BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview inline + per-row override + review (approved/declined/warning)
 
 import { useCallback, useMemo } from "react";
 import { copyFolderText } from "../lib/copypath";
@@ -18,7 +18,11 @@ import { useSelectShortcuts } from "../lib/selectshortcuts";
 export default function BatchPanel() {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
-  const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges });
+  const onReviewed = useCallback((relPath: string, count: number) => {
+    const review = count === 4 ? "approved" : "warning";
+    v.decide([relPath], review as any);
+  }, [v]);
+  const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onReviewed });
   useBatchHotkeys(v as never, true);
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   const checkedRows = useCheckedRows(v);
@@ -76,7 +80,7 @@ function BatchControls({ v, onPreview, previewing, previewRunning }: { v: View; 
     <div className="batch-controls-stack space-y-3">
       <div className="v2-controls"><BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} /></div>
       <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} canSplit={v.selectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} previewing={previewing} />
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} previewing={previewing} />
     </div>
   );
 }
@@ -92,7 +96,7 @@ function PresetAndDest({ v }: { v: View }) {
   );
 }
 function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} /></div>;
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   const showBusy = !!v.core.s.busy;

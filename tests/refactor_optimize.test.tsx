@@ -183,21 +183,25 @@ describe("refactor_optimize: BatchFilterGrid still renders same features", () =>
 });
 
 describe("refactor_optimize: ScanTable still 6-col same visual", () => {
-  it("renders 6 columns header and rows with required cells", async () => {
+  it("renders 9 columns header (with review) and rows with required cells", async () => {
     const rows = [
-      { relPath: "icon-a_AI_1.png", name: "icon-a_AI_1.png", mtime: Date.now(), status: "unprocessed", selected: true, refRelPath: "ref.png", dirPath: "a" },
-      { relPath: "icon-b_AI_2.png", name: "icon-b_AI_2.png", mtime: Date.now(), status: "processed", selected: false, refRelPath: null, dirPath: "b" },
+      { relPath: "icon-a_AI_1.png", name: "icon-a_AI_1.png", mtime: Date.now(), status: "unprocessed", review: "pending", selected: true, refRelPath: "ref.png", dirPath: "a" },
+      { relPath: "icon-b_AI_2.png", name: "icon-b_AI_2.png", mtime: Date.now(), status: "processed", review: "approved", selected: false, refRelPath: null, dirPath: "b" },
     ] as any;
     await mountReact(
-      <ScanTable rows={rows} thumb={84} activeId="icon-a_AI_1.png" toggle={vi.fn()} selectRow={vi.fn()} copyPath={vi.fn()} thumbFor={async () => ""} />,
+      <ScanTable rows={rows} thumb={84} activeId="icon-a_AI_1.png" toggle={vi.fn()} selectRow={vi.fn()} selectActive={vi.fn()} copyPath={vi.fn()} thumbFor={async () => ""} />,
     );
     const cols = host.querySelectorAll(".batch-columns span");
-    expect(cols.length).toBe(6);
-    expect(cols[1].textContent).toBe("AI Image");
-    expect(cols[2].textContent).toBe("File / path");
-    expect(cols[3].textContent).toBe("Created");
-    expect(cols[4].textContent).toBe("Status");
-    expect(cols[5].textContent).toBe("Open");
+    // Now 9 cols: checkbox + AI Image/File + Detection + Preview splits + Review + Decision + Created + Status + Open
+    expect(cols.length).toBe(9);
+    expect(cols[1].textContent).toBe("AI Image / File");
+    expect(cols[2].textContent).toBe("Detection");
+    expect(cols[3].textContent).toBe("Preview splits");
+    expect(cols[4].textContent).toBe("Review");
+    expect(cols[5].textContent).toBe("Decision");
+    expect(cols[6].textContent).toBe("Created");
+    expect(cols[7].textContent).toBe("Status");
+    expect(cols[8].textContent).toBe("Open");
     expect(q("[data-testid='batch-row-icon-a_AI_1.png']")).not.toBeNull();
     expect(q("[data-testid='row-select-icon-a_AI_1.png']")).not.toBeNull();
     expect(q("[data-testid='batch-status-icon-a_AI_1.png']")).not.toBeNull();
