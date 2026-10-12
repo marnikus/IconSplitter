@@ -1,7 +1,7 @@
-// ScanTable.tsx — Batch folders list, same row preview strip with main thumbnail
+// ScanTable.tsx — Batch folders list, same row preview + per-row merge override
 
 import { useCallback, useEffect, useRef } from "react";
-import type { Row } from "./useBatch";
+import type { Row, RowMergeMap } from "./useBatch";
 import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
 import { fmtDate, fmtTime } from "../selection/fmt";
@@ -9,6 +9,7 @@ import ScanThumb, { useThumbCache } from "./ScanThumb";
 import ScanFileCell from "./ScanFileCell";
 import ScanStatusCell from "./ScanStatusCell";
 import type { PreviewEntry } from "./useBatchPreview";
+import BatchRowMergeBar from "./BatchRowMergeBar";
 
 export interface ScanTableProps {
   rows: Row[];
@@ -19,6 +20,10 @@ export interface ScanTableProps {
   copyPath: (relPath: string) => void;
   thumbFor: (relPath: string) => Promise<string>;
   previews?: Map<string, PreviewEntry>;
+  rowMerges?: RowMergeMap;
+  globalFrac?: number | null;
+  setRowMerge?: (relPath: string, v: number | null) => void;
+  clearRowMerge?: (relPath: string) => void;
 }
 
 export { useThumbCache };
@@ -127,14 +132,7 @@ function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
       </span>
       <div className="flex min-w-0 w-full flex-wrap gap-1.5 py-1" data-testid={`batch-preview-strip-${entry.relPath}`}>
         {entry.thumbs.map((src, i) => (
-          <img
-            key={i}
-            src={src}
-            alt=""
-            className="h-12 w-12 rounded border border-white/10 bg-white object-contain"
-            data-testid={`batch-preview-thumb-${entry.relPath}-${i}`}
-            style={{ flex: "none" }}
-          />
+          <img key={i} src={src} alt="" className="h-12 w-12 rounded border border-white/10 bg-white object-contain" data-testid={`batch-preview-thumb-${entry.relPath}-${i}`} style={{ flex: "none" }} />
         ))}
         {entry.thumbs.length === 0 && entry.count > 0 && <span className="text-[11px] text-slate-500">count {entry.count}</span>}
       </div>
@@ -142,19 +140,34 @@ function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
   );
 }
 
-function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, previews }: { r: Row } & ScanTableProps) {
+function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: { r: Row; globalFrac: number | null; rowMerges: RowMergeMap; setRowMerge?: ScanTableProps["setRowMerge"]; clearRowMerge?: ScanTableProps["clearRowMerge"] }) {
+  if (r.status === "missing" || r.status === "deleted") return null;
+  const key = r.relPath.toLowerCase();
+  const hasOv = Object.prototype.hasOwnProperty.call(rowMerges, key);
+  const ov = hasOv ? rowMerges[key] : undefined;
+  return (
+    <BatchRowMergeBar relPath={r.relPath} globalFrac={globalFrac} overrideFrac={ov} onApply={(rp, v) => setRowMerge?.(rp, v as number | null)} onReset={(rp) => clearRowMerge?.(rp)} />
+  );
+}
+
+function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
   const onRowClick = useRowClick(r, disabled, selectRow);
   const onKeyDown = useRowKey(r, disabled, selectRow);
   const entry = previews?.get(r.relPath);
+  const merges = rowMerges ?? {};
+  const gFrac = globalFrac ?? null;
   return (
     <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status}${active ? " active" : ""}${r.selected ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
       <CheckCell r={r} toggle={toggle} />
       <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
       <ScanFileCell r={r} />
-      <PreviewCell entry={entry} />
+      <div className="flex min-w-0 w-full flex-col gap-2">
+        <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
+        <PreviewCell entry={entry} />
+      </div>
       <DateCell mtime={r.mtime} />
       <ScanStatusCell r={r} />
       <OpenCell r={r} copyPath={copyPath} />

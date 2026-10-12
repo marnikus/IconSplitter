@@ -1,4 +1,4 @@
-// useBatchView.ts — view layer for Batch folders (filter, sort, zoom, V2 selection)
+// useBatchView.ts — view layer for Batch folders (filter, sort, zoom, V2 selection + per-row merge overrides)
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBatch } from "./useBatch";
@@ -8,7 +8,7 @@ import { loadBatchPrefs, saveBatchPrefs, type BatchPrefs } from "../lib/batchpre
 import { clampZoom } from "../lib/zoom";
 import { useBatchSelection, type BatchSelection } from "./useBatchSelection";
 import type { CheckState, SelectIntent } from "../lib/reviewselect";
-import type { Row } from "./useBatch";
+import type { Row, RowMergeMap } from "./useBatch";
 
 type BatchApi = ReturnType<typeof useBatch>;
 
@@ -27,6 +27,7 @@ export interface BatchView {
   affectedCount: number;
   activeId: string | null;
   anchorId: string | null;
+  rowMerges: RowMergeMap;
   setFilter: (f: BatchFilter) => void;
   setSort: (s: BatchSort) => void;
   setThumb: (px: number) => void;
@@ -40,6 +41,8 @@ export interface BatchView {
   selectActive: (id: string) => void;
   checkActive: () => void;
   uncheckActive: () => void;
+  setRowMerge: (relPath: string, v: number | null) => void;
+  clearRowMerge: (relPath: string) => void;
 }
 
 export function useBatchView(): BatchView {
@@ -58,10 +61,12 @@ function makeView(core: BatchApi, ps: PrefsState, visible: Row[], sel: BatchSele
     header: sel.header, checkedCount: sel.checkedCount, visibleCount: sel.visibleCount,
     totalCount: sel.totalCount, selectedCount: sel.checkedCount, hiddenCount: sel.hiddenCount,
     affectedCount: sel.affectedCount, activeId: sel.activeId, anchorId: sel.anchorId,
+    rowMerges: core.s.rowMerges,
     setFilter: ps.setFilter, setSort: ps.setSort, setThumb: ps.setThumb,
     toggle: sel.toggleCheck, toggleCheck: sel.toggleCheck, checkVisible: sel.checkVisible,
     uncheckAll: sel.uncheckAll, toggleAllVisible: sel.toggleAllVisible, selectRow: sel.selectRow,
     moveActive: sel.moveActive, selectActive: sel.selectActive, checkActive: sel.checkActive, uncheckActive: sel.uncheckActive,
+    setRowMerge: core.setRowMerge, clearRowMerge: core.clearRowMerge,
   };
 }
 
