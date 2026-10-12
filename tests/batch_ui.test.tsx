@@ -80,11 +80,12 @@ describe("Batch folders V2 controls", () => {
     const dir = makeBatchRoot();
     await mount(dir);
     await settle(100);
-    const rootBtn = q("[data-testid=batch-root]") as HTMLElement | null;
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null;
     expect(rootBtn).not.toBeNull();
     await click(rootBtn!);
     await settle(500);
 
+    expect(q("[data-testid=batch-folder-path]")).not.toBeNull();
     expect(q("[data-testid=batch-filters]")).not.toBeNull();
     expect(q("[data-testid=batch-date-all]")).not.toBeNull();
     expect(q("[data-testid=batch-date-month]")).not.toBeNull();
@@ -112,7 +113,7 @@ describe("Batch folders V2 controls", () => {
     const dir = makeBatchRoot();
     await mount(dir);
     await settle(100);
-    const rootBtn = q("[data-testid=batch-root]") as HTMLElement | null;
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null;
     await click(rootBtn!);
     await settle(500);
 
@@ -135,7 +136,7 @@ describe("Batch folders V2 controls", () => {
     const dir = makeBatchRoot();
     await mount(dir);
     await settle(100);
-    const rootBtn = q("[data-testid=batch-root]") as HTMLElement | null;
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null;
     await click(rootBtn!);
     await settle(500);
 
@@ -160,9 +161,25 @@ describe("Batch folders V2 controls", () => {
     // PresetBar should still show square size control
     expect(q("[data-testid=preset-size]") || q("select")).not.toBeNull();
     // Zoom is separate
-    const rootBtn = q("[data-testid=batch-root]") as HTMLElement | null;
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null;
     await click(rootBtn!);
     await settle(500);
     expect(q("[data-testid=batch-thumb]")).not.toBeNull();
+  });
+
+  it("reuses V2 folder visuals: Open folder green button and FULL PATH row with persistence", async () => {
+    const dir = makeBatchRoot();
+    await mount(dir);
+    await settle(100);
+    const openBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null;
+    expect(openBtn).not.toBeNull();
+    expect(openBtn?.className).toMatch(/folder-open/);
+    expect(openBtn?.textContent).toMatch(/Open folder/);
+    await click(openBtn!);
+    await settle(500);
+    const pathRow = q("[data-testid=batch-folder-path]") as HTMLElement | null;
+    expect(pathRow).not.toBeNull();
+    expect(pathRow?.className).toMatch(/folder-path/);
+    expect(pathRow?.textContent).toMatch(/Full path/i);
   });
 });

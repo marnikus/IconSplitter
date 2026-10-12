@@ -8,29 +8,48 @@ import PresetBar from "./PresetBar";
 import ScanTable, { useThumbCache } from "./ScanTable";
 import BatchFilterGrid from "./BatchFilterGrid";
 import BatchBulkBar from "./BatchBulkBar";
+import BatchSourceBar from "./BatchSourceBar";
 
 export default function BatchPanel() {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
   return (
     <div className="space-y-4">
-      {!v.core.supported && (
-        <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">
-          Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.
-        </p>
-      )}
-      <div className="batch-sticky-stack">
-        <HeaderControls v={v} />
-        <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-        <BatchBulkBar
-          header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
-          thumb={v.thumb} selectedCount={v.selectedCount}
-          onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
-          onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
-        />
-      </div>
+      {!v.core.supported && <Unsupported />}
+      <StickyControls v={v} />
       <MainGrid v={v} thumbFor={thumbFor} />
       <Overlays v={v} />
+    </div>
+  );
+}
+
+function Unsupported() {
+  return (
+    <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">
+      Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.
+    </p>
+  );
+}
+
+function StickyControls({ v }: { v: View }) {
+  return (
+    <div className="batch-sticky-stack">
+      <div className="v2-controls">
+        <BatchSourceBar
+          rootName={v.core.s.rootName}
+          root={v.core.rootRef.current}
+          rows={v.core.s.rows}
+          chooseRoot={() => void v.core.chooseRoot()}
+          rescan={() => void v.core.refresh()}
+        />
+      </div>
+      <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
+      <BatchBulkBar
+        header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
+        thumb={v.thumb} selectedCount={v.selectedCount}
+        onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
+        onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
+      />
     </div>
   );
 }
@@ -69,22 +88,6 @@ function Overlays({ v }: { v: View }) {
         </div>
       )}
     </>
-  );
-}
-
-function HeaderControls({ v }: { v: View }) {
-  return (
-    <section className="panel flex flex-wrap items-center gap-2">
-      <button data-testid="batch-root" className="btn-primary" onClick={() => void v.core.chooseRoot()}>
-        {v.core.s.rootName ? `Root: ${v.core.s.rootName}` : "Choose source folder…"}
-      </button>
-      <button data-testid="batch-refresh" className="btn-ghost" onClick={() => void v.core.refresh()}>↺ Rescan</button>
-      {v.core.s.busy && (
-        <div className="ml-auto">
-          <button data-testid="batch-cancel" className="btn-ghost" onClick={v.core.cancel}>✕ Stop</button>
-        </div>
-      )}
-    </section>
   );
 }
 
