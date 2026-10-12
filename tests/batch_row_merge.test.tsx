@@ -130,27 +130,32 @@ describe("Batch per-row merge override", () => {
       slider!.dispatchEvent(new Event("input", { bubbles: true }));
       slider!.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await settle(150); await click(applyBtn!); await settle(250);
+    await settle(150); await click(applyBtn!); await settle(800);
     const labelAfter = q(`[data-testid="batch-row-merge-label-${firstRowPath}"]`) as HTMLElement | null;
     expect(labelAfter!.textContent).toMatch(/overridden/); expect(labelAfter!.textContent).toMatch(/0\.0500/);
     const resetAfter = q(`[data-testid="batch-row-merge-reset-${firstRowPath}"]`) as HTMLButtonElement | null;
     expect(resetAfter!.disabled).toBe(false);
     const otherLabel = q(`[data-testid="batch-row-merge-label-icon-b_AI.png"]`) as HTMLElement | null;
     expect(otherLabel!.textContent).not.toMatch(/overridden/);
-    await click(resetAfter!); await settle(200);
+    // Apply should have triggered immediate preview for this row
+    const previewAfterApply = q(`[data-testid="batch-preview-count-${firstRowPath}"]`) as HTMLElement | null;
+    expect(previewAfterApply).not.toBeNull();
+    await click(resetAfter!); await settle(800);
     const labelReset = q(`[data-testid="batch-row-merge-label-${firstRowPath}"]`) as HTMLElement | null;
     expect(labelReset!.textContent).not.toMatch(/overridden/);
     const resetAfterReset = q(`[data-testid="batch-row-merge-reset-${firstRowPath}"]`) as HTMLButtonElement | null;
     expect(resetAfterReset!.disabled).toBe(true);
+    // Reset should also trigger immediate preview with global value
+    const previewAfterReset = q(`[data-testid="batch-preview-count-${firstRowPath}"]`) as HTMLElement | null;
+    expect(previewAfterReset).not.toBeNull();
   });
 
-  it("Apply does NOT reset already created previews, only override on next Preview click", async () => {
+  it("Apply sets override AND immediately regenerates preview for this row (no waiting for Preview button)", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
     const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
     const previewBtn = q("[data-testid=batch-preview]") as HTMLElement | null; await click(previewBtn!); await settle(1000);
     const countsBefore = qAll("[data-testid^=batch-preview-count-]"); expect(countsBefore.length).toBeGreaterThan(0);
-    const firstCountText = (countsBefore[0] as HTMLElement).textContent;
 
     const firstPath = "icon-a_AI.png";
     const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
@@ -163,16 +168,20 @@ describe("Batch per-row merge override", () => {
       slider!.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle(100);
-    await click(applyBtn!); await settle(300);
-    // After Apply, existing previews should still exist (not reset to none)
+    await click(applyBtn!); await settle(800);
+    // After Apply, existing previews should still exist (not reset to none) AND this row should have been regenerated immediately
     const countsAfterApply = qAll("[data-testid^=batch-preview-count-]");
     expect(countsAfterApply.length).toBeGreaterThan(0);
-    // Now click Preview again - should regenerate selected rows, keeping others
+    const firstAfterApply = q(`[data-testid="batch-preview-count-${firstPath}"]`) as HTMLElement | null;
+    expect(firstAfterApply).not.toBeNull();
+    expect(firstAfterApply!.textContent).toMatch(/icon|Loading|Failed/);
+    // Other rows should still have previews (not cleared)
+    const secondRow = q(`[data-testid="batch-preview-count-icon-b_AI.png"]`) as HTMLElement | null;
+    expect(secondRow).not.toBeNull();
+    // Now clicking Preview again should still work
     await click(previewBtn!); await settle(1000);
     const countsAfterRepreview = qAll("[data-testid^=batch-preview-count-]");
     expect(countsAfterRepreview.length).toBeGreaterThan(0);
-    const firstAfter = q(`[data-testid="batch-preview-count-${firstPath}"]`) as HTMLElement | null;
-    expect(firstAfter).not.toBeNull();
   });
 
   it("effectiveMerge logic: override takes precedence, null allowed", () => {

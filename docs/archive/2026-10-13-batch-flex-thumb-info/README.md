@@ -112,24 +112,40 @@ Keep `ScanThumb` as is, but wrap with info.
 - Updated nth-child stretch from 4,5 to 3,4 (Detection+Preview)
 
 ### Tests
-- Created tests/batch_flex_thumb_info.test.tsx — 6 tests PASS:
+- Created tests/batch_flex_thumb_info.test.tsx — 7 tests PASS:
   - combines thumbnail and file info into one cell under thumbnail
   - removes File/path column, header has 7 cols
   - all columns flex width (only checkbox fixed 34px), uses minmax fr, no 140px fixed
   - Detection bar stays one-row flex-nowrap min 360 and real-time
   - selection still: plain click active only, checkbox select, preserves checked
-  - previews persist on local detection change
-- Existing batch_row_merge 9 tests PASS, batch_merge_preview 5 tests PASS (total 20 batch tests)
-- quality:changed PASS (Batch files OK, 1 fn 27 lines for new cell, ScanTable 26 fns 232 lines)
-- build PASS 1,516.99 kB gzip 446.87 kB
+  - previews persist on local detection change (drag does not clear)
+  - Apply sets override and immediately regenerates preview for this row
+- Existing batch_row_merge 9 tests PASS (now includes Apply immediate preview, Reset immediate preview), batch_merge_preview 5 tests PASS (total 21 batch tests)
+- quality:changed PASS (Batch files OK, 1 fn 27 lines for new cell, ScanTable 26 fns 232 lines, useBatchPreview 38 fns 187 lines)
+- build PASS 1,517.66 kB gzip 447.03 kB
 
 ### RULE 18/16 compliance
 - BatchThumbInfoCell: 1 fn, 27 lines, CC 1, nesting 1 — OK
 - ScanTable: 26 fns, 232 lines (<300), CC low — OK
 - BatchRowMergeBar: 8 fns, 42 lines — OK
+- useBatchPreview: 38 fns, 187 lines (<300), added core preview with explicit override, previewSingle now accepts overrideFrac
 - No fixed widths except checkbox 34px, all flex minmax fr
 - Memo used for thumb info to keep 1000-row perf
 - Selection bug fix preserved (plain click active only)
-- Previews persist on local change preserved
+- Previews persist on local drag, Apply/Reset immediately regenerate that row only
 - Detection real-time value preserved
+
+## Update 2026-10-13 — Apply immediate preview (user request)
+> apply - set override value to local + run and generated preview split for this row again immediate. Now it not run generate preview or run new regenerate preview. But i should
+
+### Change
+- `useBatchPreview.ts`: added `useDoPreviewCore` that takes explicit `eff` merge value, `usePreviewOne` now accepts optional `overrideFrac` to bypass rowMerges map and compute key with that eff, cache check with new key, `previewSingle` accepts optional override
+- `BatchPanel.tsx`: `useRowMergeApply` now sets row merge AND calls `previewSingle(row, value)` to immediately regenerate preview for that row; new `useRowMergeReset` sets clear AND calls `previewSingle(row, global)` to regenerate with global merge; FullWidthList passes both
+- Tests updated: batch_row_merge now expects Apply triggers immediate preview (checks preview count after Apply), Reset also triggers immediate preview, other previews not cleared
+
+### Verification
+- All batch tests PASS: flex 7, row_merge 9, merge_preview 5 = 21
+- Drag alone does NOT clear previews, only Apply/Reset regenerates that row immediately
+- quality:changed PASS, build PASS
+
 

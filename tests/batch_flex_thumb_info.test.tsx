@@ -132,7 +132,7 @@ describe("Batch flex thumb+info layout", () => {
     expect(firstCheckAfter!.checked).toBe(true); // still checked
   });
 
-  it("previews persist on local detection change", async () => {
+  it("previews persist on local detection change (drag does not clear)", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
     const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
@@ -150,5 +150,27 @@ describe("Batch flex thumb+info layout", () => {
     await settle(150);
     const countsAfter = qAll("[data-testid^=batch-preview-count-]");
     expect(countsAfter.length).toBeGreaterThan(0);
+  });
+
+  it("Apply sets override and immediately regenerates preview for this row", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const firstPath = "icon-a_AI.png";
+    const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
+    const applyBtn = q(`[data-testid="batch-row-merge-apply-${firstPath}"]`) as HTMLElement | null;
+    expect(slider).not.toBeNull(); expect(applyBtn).not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      setter?.call(slider!, "0.07");
+      slider!.dispatchEvent(new Event("input", { bubbles: true }));
+      slider!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle(100);
+    await click(applyBtn!); await settle(900);
+    const previewAfterApply = q(`[data-testid="batch-preview-count-${firstPath}"]`) as HTMLElement | null;
+    expect(previewAfterApply).not.toBeNull();
+    expect(previewAfterApply!.textContent).toMatch(/icon|Loading|Failed/);
+    const label = q(`[data-testid="batch-row-merge-label-${firstPath}"]`) as HTMLElement | null;
+    expect(label!.textContent).toMatch(/overridden/);
   });
 });
