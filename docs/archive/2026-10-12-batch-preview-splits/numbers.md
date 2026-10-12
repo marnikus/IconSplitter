@@ -91,3 +91,28 @@ Equivalence evidence for the shipped code:
 Files: `src/lib/grid.ts` (new, 56 lines), `src/lib/mergeseries.ts` (new, 167), `src/lib/livesets.ts`
 (new, 142), `src/lib/detect.ts` (306 → **295** lines: the grid build moved out, the box pass and
 the final dilate+label are untouched).
+
+## 5. After P3-P5 — what the preview machinery costs (no pixels)
+
+`tests/batch_preview_ui.test.tsx` drives the real session/queue/cache/state machine
+over 1000 selected rows with a trivial per-row work function. That isolates the
+machinery from the pixels and gives the design's "without lag" claim a number:
+
+| Quantity | Measured |
+|---|---|
+| Rows planned for 1000 selected | 1000, in the user's list order (D4) |
+| Rows started in the first 150 ms | ~45 (machinery only, no decode/detect/render) |
+| Rows in flight | exactly 1 (asserted) |
+| Re-renders per row finished | 0 for the list, 1 for that row's strip; counter ≤ 4 Hz |
+| Write attempts during a session (guarded fake root) | 0 |
+| Cached bytes for 1000 strips of ≤ 4 KB | ~4 MB of the 32 MB budget |
+
+Per-row cost with real pixels is dominated by what §4 measures (`detect` 13-57 ms
+per sheet) plus image decode, one 64 px `renderIcon` per icon and one PNG encode
+per ≤ 128-icon chunk. Strip rendering and encoding cannot be measured in this
+sandbox (happy-dom has no canvas), and this document does not pretend otherwise —
+the caps (512 icons/row, 8192 px/chunk, 32 MB) are what bound them.
+
+Invariants touched: I-66 (one merge control, in the preset), I-67 (a preview
+writes nothing), I-68 (interruptible, per-row failures isolated, no stale paint),
+I-69 (pixels from `renderIcon` with the preset's own opts; URLs revoked).

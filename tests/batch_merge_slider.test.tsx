@@ -96,8 +96,7 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
-  delete (window as any).showDirectoryPicker;
+  delete (window as Partial<PickerWindow>).showDirectoryPicker;
 });
 
 describe("batch merge slider — one control, saved with the preset", () => {

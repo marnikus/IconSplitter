@@ -7,6 +7,8 @@ import { sortBatchRows, type BatchSort } from "../lib/batchsort";
 import { loadBatchPrefs, saveBatchPrefs, type BatchPrefs } from "../lib/batchprefs";
 import { clampZoom } from "../lib/zoom";
 import { useBatchSelection, type BatchSelection } from "./useBatchSelection";
+import { useSplitPreview, type SplitPreview } from "./preview/useSplitPreview";
+import { livePreviewDeps, type PreviewDeps } from "./preview/previewdeps";
 import type { CheckState, SelectIntent } from "../lib/reviewselect";
 import type { Row } from "./useBatch";
 
@@ -40,19 +42,36 @@ export interface BatchView {
   selectActive: (id: string) => void;
   checkActive: () => void;
   uncheckActive: () => void;
+  preview: SplitPreview;
 }
 
-export function useBatchView(): BatchView {
+export function useBatchView(previewDeps?: PreviewDeps): BatchView {
   const core = useBatch();
   const ps = usePrefsState();
   const visible = useVisibleRows(core.s.rows, ps.prefs.filter, ps.prefs.sort);
   const sel = useBatchSelection(core, visible);
-  return makeView(core, ps, visible, sel);
+  const preview = useSplitPreview({
+    rows: visible,
+    checked: sel.checked,
+    root: core.rootRef.current,
+    split: core.s.preset.split,
+    deps: previewDeps ?? livePreviewDeps(),
+  });
+  return makeView({ core, ps, visible, sel, preview });
 }
 
 type PrefsState = ReturnType<typeof usePrefsState>;
 
-function makeView(core: BatchApi, ps: PrefsState, visible: Row[], sel: BatchSelection): BatchView {
+/** The view is one object by design (RULE 3: grouped domain, not five parameters). */
+interface ViewParts {
+  core: BatchApi;
+  ps: PrefsState;
+  visible: Row[];
+  sel: BatchSelection;
+  preview: SplitPreview;
+}
+
+function makeView({ core, ps, visible, sel, preview }: ViewParts): BatchView {
   return {
     core, filter: ps.prefs.filter, sort: ps.prefs.sort, thumb: ps.prefs.thumb, visible,
     header: sel.header, checkedCount: sel.checkedCount, visibleCount: sel.visibleCount,
@@ -62,6 +81,7 @@ function makeView(core: BatchApi, ps: PrefsState, visible: Row[], sel: BatchSele
     toggle: sel.toggleCheck, toggleCheck: sel.toggleCheck, checkVisible: sel.checkVisible,
     uncheckAll: sel.uncheckAll, toggleAllVisible: sel.toggleAllVisible, selectRow: sel.selectRow,
     moveActive: sel.moveActive, selectActive: sel.selectActive, checkActive: sel.checkActive, uncheckActive: sel.uncheckActive,
+    preview,
   };
 }
 

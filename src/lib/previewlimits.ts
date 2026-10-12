@@ -24,3 +24,7 @@ export const REPLAN_MS = 250;
 
 /** Rows this far outside the viewport are still planned first (D4). */
 export const OVERSCAN_PX = 300;
+
+/** Progress text refreshes at most this often: a 1000-row run must not re-render
+ *  the list per finished row (D6 — the counter is for a human, not for the loop). */
+export const PROGRESS_MS = 250;

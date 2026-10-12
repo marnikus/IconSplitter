@@ -3,6 +3,8 @@
 
 import type { CheckState } from "../lib/reviewselect";
 import ZoomSliderBase from "../ui/ZoomSliderBase";
+import BatchPreviewBar from "./preview/BatchPreviewBar";
+import type { SplitPreview } from "./preview/useSplitPreview";
 
 export interface BatchBulkBarProps {
   header: CheckState;
@@ -19,6 +21,7 @@ export interface BatchBulkBarProps {
   onThumb: (px: number) => void;
   onSplit: () => void;
   canSplit: boolean;
+  preview: SplitPreview;
 }
 
 function Left(p: BatchBulkBarProps) {
@@ -49,6 +52,14 @@ function Right(p: BatchBulkBarProps) {
       <span className="text-xs text-slate-400" data-testid="batch-total">
         {p.totalCount} total
       </span>
+      <BatchPreviewBar
+        selected={p.selectedCount}
+        running={p.preview.running}
+        open={p.preview.open}
+        progress={p.preview.progress}
+        onStart={p.preview.start}
+        onStop={p.preview.stop}
+      />
       <button type="button" className="svg-btn primary" data-testid="batch-process" disabled={!p.canSplit} onClick={p.onSplit}>
         ▶ Split selected ({p.selectedCount})
       </button>

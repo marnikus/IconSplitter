@@ -1,6 +1,6 @@
 // ScanTable.tsx — Batch folders list, 6-col, same visual as SVG/V2
 
-import { useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import type { Row } from "./useBatch";
 import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
@@ -8,6 +8,8 @@ import { fmtDate, fmtTime } from "../selection/fmt";
 import ScanThumb, { useThumbCache } from "./ScanThumb";
 import ScanFileCell from "./ScanFileCell";
 import ScanStatusCell from "./ScanStatusCell";
+import PreviewStrip from "./preview/PreviewStrip";
+import type { RowStates } from "../lib/previewstate";
 
 export interface ScanTableProps {
   rows: Row[];
@@ -17,6 +19,8 @@ export interface ScanTableProps {
   selectRow: (id: string, intent: ReturnType<typeof selectIntent>) => void;
   copyPath: (relPath: string) => void;
   thumbFor: (relPath: string) => Promise<string>;
+  /** Present while a preview session is open: the row's strip renders from here. */
+  preview?: { states: RowStates; planned: Set<string> };
 }
 
 export { useThumbCache };
@@ -109,7 +113,7 @@ function OpenCell({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) 
   );
 }
 
-function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, preview }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
@@ -123,11 +127,18 @@ function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId }: 
       <DateCell mtime={r.mtime} />
       <ScanStatusCell r={r} />
       <OpenCell r={r} copyPath={copyPath} />
+      {preview?.planned.has(r.relPath.toLowerCase()) && <PreviewStrip row={r} states={preview.states} />}
     </div>
   );
 }
 
-export default function ScanTable(props: ScanTableProps) {
+/**
+ * Memoized on purpose (design D9): a preview session updates its counter every few
+ * hundred ms, and re-rendering 1000 rows for a counter text would make the tab the
+ * bottleneck. Every prop here is either stable across such a render or carries the
+ * data that really changed.
+ */
+function ScanTable(props: ScanTableProps) {
   return (
     <div className="svg-panel" data-testid="scan-table">
       <Header rows={props.rows} />
@@ -141,6 +152,8 @@ export default function ScanTable(props: ScanTableProps) {
     </div>
   );
 }
+
+export default memo(ScanTable);
 
 function isActive(relPath: string, activeId: string | null): boolean {
   return activeId !== null && relPath.toLowerCase() === activeId.toLowerCase();

@@ -1,5 +1,6 @@
 // BatchPanel.tsx — batch folders, full-width list, V2 selection behaviors
 
+import { useCallback, useMemo } from "react";
 import { copyFolderText } from "../lib/copypath";
 import { useBatchView } from "./useBatchView";
 import ScanTable, { useThumbCache } from "./ScanTable";
@@ -10,9 +11,12 @@ import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import type { PreviewDeps } from "./preview/previewdeps";
 
-export default function BatchPanel() {
-  const v = useBatchView();
+/** `preview` is the session's test seam (design RULE 8): the app passes nothing,
+ *  and the tests inject deterministic per-row work into the REAL machinery. */
+export default function BatchPanel({ preview }: { preview?: PreviewDeps }) {
+  const v = useBatchView(preview);
   const thumbFor = useThumbCache(v.core.thumbUrl);
   useBatchHotkeys(v as never, true);
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
@@ -37,7 +41,7 @@ function BatchControls({ v }: { v: View }) {
         <BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} />
       </div>
       <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy} />
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy} preview={v.preview} />
     </div>
   );
 }
@@ -56,7 +60,14 @@ function PresetAndDest({ v }: { v: View }) {
 }
 
 function FullWidthList({ v, thumbFor }: { v: View; thumbFor: (r: string) => Promise<string> }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} /></div>;
+  // Stable identity while the session runs: the memoized list must not re-render
+  // 1000 rows for a counter text (design D9).
+  const preview = useMemo(
+    () => (v.preview.open ? { states: v.preview.states, planned: v.preview.planned } : undefined),
+    [v.preview.open, v.preview.states, v.preview.planned],
+  );
+  const copyPath = useCallback((rel: string) => copyPathOf(v, rel), [v]);
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={copyPath} thumbFor={thumbFor} preview={preview} /></div>;
 }
 
 function Overlays({ v }: { v: View }) {
@@ -73,6 +84,6 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
   return <div data-testid="batch-busy" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm"><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl"><span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" /><span className="text-sm">{msg}</span><button className="btn-mini" onClick={cancel}>Stop</button></div></div>;
 }
 
-function copyPath(v: View, relPath: string): void {
+function copyPathOf(v: View, relPath: string): void {
   void copyFolderText(v.core.rootRef.current, relPath, v.core.say);
 }

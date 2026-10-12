@@ -35,6 +35,8 @@ export interface PreviewCache {
   drop(key: string): void;
   clear(): void;
   stats(): { items: number; bytes: number };
+  /** Told when a strip leaves the cache, so nobody keeps showing a revoked URL. */
+  onDrop(listener: (key: string) => void): () => void;
 }
 
 export interface CacheDeps {
@@ -50,6 +52,7 @@ interface CacheState {
   frames: Map<string, Frame>;
   bytes: number;
   clock: number;
+  dropped: Set<(key: string) => void>;
 }
 
 export function createPreviewCache(deps: CacheDeps = {}): PreviewCache {
@@ -60,6 +63,7 @@ export function createPreviewCache(deps: CacheDeps = {}): PreviewCache {
     frames: new Map(),
     bytes: 0,
     clock: 0,
+    dropped: new Set(),
   };
   return {
     get: (key) => readFrame(st, key),
@@ -69,6 +73,10 @@ export function createPreviewCache(deps: CacheDeps = {}): PreviewCache {
     drop: (key) => dropFrame(st, key),
     clear: () => clearFrames(st),
     stats: () => ({ items: st.frames.size, bytes: st.bytes }),
+    onDrop(listener) {
+      st.dropped.add(listener);
+      return () => st.dropped.delete(listener);
+    },
   };
 }
 
@@ -120,6 +128,7 @@ function dropFrame(st: CacheState, key: string): void {
   st.frames.delete(key);
   st.bytes -= f.bytes;
   for (const u of f.urls) st.revokeUrl(u);
+  for (const l of st.dropped) l(key);
 }
 
 function clearFrames(st: CacheState): void {

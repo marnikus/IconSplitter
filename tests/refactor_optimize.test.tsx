@@ -131,6 +131,22 @@ describe("refactor_optimize: ZoomSliderBase reuse", () => {
   });
 });
 
+/** The bulk bar only reads the session; a stub keeps this test about the bar. */
+const PREVIEW_STUB = {
+  open: false,
+  running: false,
+  progress: { done: 0, total: 0, icons: 0 },
+  states: {
+    get: () => ({ state: "pending" as const, urls: [], count: 0, icons: 0, capped: false, message: "" }),
+    set: () => {},
+    subscribe: () => () => {},
+    clear: () => {},
+  },
+  planned: new Set<string>(),
+  start: () => {},
+  stop: () => {},
+};
+
 describe("refactor_optimize: BatchBulkBar still renders same features", () => {
   it("renders checkbox, counts, hidden warning, buttons, zoom, total, split", async () => {
     await mountReact(
@@ -149,6 +165,7 @@ describe("refactor_optimize: BatchBulkBar still renders same features", () => {
         onThumb={vi.fn()}
         onSplit={vi.fn()}
         canSplit={true}
+        preview={PREVIEW_STUB}
       />,
     );
     expect(q("[data-testid='batch-check-all']")).not.toBeNull();

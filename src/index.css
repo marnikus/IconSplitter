@@ -1783,3 +1783,37 @@
 .up-preview-card figcaption { color: var(--v2-muted); font-size: 9px; line-height: 1.45; text-align: center; word-break: break-word; }
 
 .up-overridden { color: var(--v2-purple-2); }
+
+/* Preview splits (design D7/D8): a strip is a 7th grid child of the row, spans the
+   whole row, scrolls sideways, and never changes the row's own height. */
+.batch-preview-strip {
+  grid-column: 1 / -1;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 2px;
+}
+.batch-preview-strip[data-state="pending"] .batch-preview-count,
+.batch-preview-strip[data-state="reading"] .batch-preview-count,
+.batch-preview-strip[data-state="stopped"] .batch-preview-count {
+  opacity: 0.7;
+}
+.batch-preview-thumb {
+  height: 64px;
+  width: auto;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.batch-preview-count {
+  font-size: 12px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.batch-preview-strip[data-state="error"] .batch-preview-count {
+  color: #fda4af;
+}

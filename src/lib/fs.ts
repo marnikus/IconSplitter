@@ -134,6 +134,16 @@ export async function tryGetFile(parent: DirHandleLike, name: string): Promise<F
 }
 
 /** Navigates a relative dir path without creating; null if any segment absent. */
+/**
+ * One file handle under the root. Read-only by construction (`create: false`):
+ * every caller of this helper is reading, and a missing file stays missing.
+ */
+export async function resolveFileAt(root: DirHandleLike, relPath: string): Promise<FileHandleLike> {
+  const cut = relPath.lastIndexOf("/");
+  const dir = cut < 0 ? root : (await probePath(root, relPath.slice(0, cut)))!;
+  return dir.getFileHandle(relPath.slice(cut + 1), { create: false });
+}
+
 export async function probePath(root: DirHandleLike, relPath: string): Promise<DirHandleLike | null> {
   let cur = root;
   for (const seg of relPath.split("/").filter(Boolean)) {

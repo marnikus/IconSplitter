@@ -91,6 +91,26 @@ Batch folders:
   scan and batch; corrupt payloads are rejected and rebuilt (RULE 13).
 * "Open in File Explorer" is impossible from a browser — the action copies the
   path and says so honestly (RULE 4/9).
+* **One merge control, saved with the preset (2026-10-12, I-66):** the preset row
+  carries `Merge` (`batch-merge`, 0–0.15 step 0.0025, muted while auto), a read-out
+  that says `Auto — each image picks its own` or the value, and `↺ Auto`
+  (`batch-merge-reset`, disabled while already auto). It writes
+  `preset.split.mergeFrac` (`null` = auto), so save/load/restart carry it, and the
+  **same** value drives the preview and the split. There is no per-row merge slider.
+* **Preview splits (2026-10-12, I-67…I-69):** `👁 Preview splits (N)` sits beside
+  `▶ Split selected` in the bulk bar (`batch-preview`), with `✕ Stop preview`
+  (`batch-preview-stop`) and a live counter (`batch-preview-progress`,
+  `Previewed 137/1000 rows · 412 icons`). Every selected eligible row gets a
+  horizontal strip of its produced icons with a count
+  (`batch-preview-strip-<relPath>`, `batch-preview-count-…`,
+  `batch-preview-img-…`); rows that cannot be processed get nothing. A preview
+  **writes nothing** — no file, no state JSON, no status change, no undo entry —
+  and its results are never reused by a split. Rows are planned near-viewport
+  first, one at a time; a settings or selection change cancels the old generation
+  at once and replans after 250 ms; leaving the tab closes the session and revokes
+  every strip URL. Caps are stated in text, never applied silently: at most 512
+  icons per row ("first 512 of 913 icons"), at most 8192 px per strip canvas, at
+  most 32 MB of cached strips.
 
 Selection:
 
@@ -1221,6 +1241,24 @@ Batch:
   keeps its own key (`iconSplitter.upload.prompts.v1`, `iconSplitter.svg.prompts.v1`),
   so a preset never crosses between tabs. Delete never clears the editor; Save as
   stores a snapshot of exactly the text in the editor; a blank name is refused.
+* **I-66 (batch, RULE 10/24 — 2026-10-12):** Batch has exactly one merge-distance
+  control, stored in the preset (`preset.split.mergeFrac`, `null` = auto, RULE 13
+  validation already maps a corrupt value back to auto). The preview and the split
+  read the same `SplitSettings`, so the strip a user sees is the split that would
+  run.
+* **I-67 (batch, RULE 14/15 — 2026-10-12):** a preview is a view, never output: it
+  writes no file, no state JSON, no status, no undo entry, and its results are never
+  fed to a split (what is written must come from the bytes read at split time).
+  Tested with a write-guarded fake root.
+* **I-68 (batch, RULE 5/7 — 2026-10-12):** a preview session is interruptible at row
+  granularity and at phase granularity (Stop, uncheck, settings change, tab change);
+  a per-row failure is reported on that row and never stops the session; a stale
+  generation never paints.
+* **I-69 (batch, RULE 1/20 — 2026-10-12):** preview pixels come from
+  `lib/render.renderIcon` with the preset's own `ExportOpts` (`maxOut = 64 px`), and
+  the preview shares `batchsplit.planSplit` with the split, so preview and split
+  cannot drift (asserted by `tests/batch_preview_parity.test.ts`). Decoded images are
+  transient (one row at a time) and every cached strip URL is revoked on eviction.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -1303,7 +1341,8 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | State JSON | `src/lib/statefile.ts`, `src/batch/statewrite.ts` | model + merge + validation; file sync + outcomes |
 | Output plan | `src/lib/output.ts` | month/timestamp layout, `_vNN` allocation |
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, relative byte/text reads and non-creating presence probes, tree read, folder picking |
-| Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
+| Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | `planSplit` = analyze+detect+squareInfo (the ONE plan a split and a preview both use, I-69); `splitSheet` = plan + render; image loading |
+| Batch preview (2026-10-12, I-66…I-69) | `src/lib/{previewsession,previewqueue,previewcache,previewstate,previewstrip,previewlimits,rowwindow}.ts`, `src/batch/preview/{useSplitPreview,useRowWindow,previewdeps,PreviewStrip,BatchPreviewBar}` | the session (generation, cancel, per-row states), the scheduler (near-viewport first, one row in flight), the byte-budgeted strip cache with pinning + revoke, per-row state that stays out of React's render path, the strip renderer and its caps, the viewport window math, the live row reader (`planSplit` → `renderIcon` → chunks), and the two controls |
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
 | Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52/I-59): `Rescan`'s one retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name (the pick's own rule: exact leaf, or the direct parent of a path one level inside the folder — I-35) |
@@ -1329,7 +1368,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 163 files / 1807 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 172 files / 1879 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2, Generate SVG and SVG to upload panels and drives them
 with hotkeys and `data-testid` handles):
@@ -1337,6 +1376,7 @@ with hotkeys and `data-testid` handles):
 * `prompt_presets_shared.test.ts` — the one preset rule (pick, Quick load refusal, Save as snapshot and blank refusal, Delete keeps the editor) and the store round-trip per key (2026-10-09, I-65); `svg_prompt_presets.test.ts` — the same rule through the real Generate SVG reducer, the SVG list separate from the metadata list; `svg_regen_ui.test.tsx` — the regen window over its real storage (main by default, drop-down of SVG presets, live list update, no row in Export settings, regen above the prompt window).
 * `svg_regen.test.ts`, `svg_regenprompt.test.ts`, and the Regenerate-from-SVG block of `svg_runner.test.ts` (2026-10-09) — the stored choice and its refusals, the main prompt + first image (locked), the saved prompt + newest valid code + same image (one icon per request, the record without the code), the row and its global-only scope
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
+* Batch preview (2026-10-12) — `previewstrip.test.ts` (chunk math incl. the 8192 px cap and the 512-icon cap, one `renderIcon` per icon at 64 px, blob delivery), `previewcache.test.ts` (byte budget, LRU, pinning, revoke exactly once, honest refusal), `previewqueue.test.ts` (visible first, one in flight, generation handover, stale never painted, a throwing row does not stop the session, no-op replan), `preview_viewport.test.ts` (window + overscan, exact binary search vs a linear scan, zero rects ⇒ all near), `previewstate.test.ts`, `previewsession.test.ts` (session-level: caps reported, empty/stops, URL revocation on close), `batch_preview_parity.test.ts` (preview count == `splitSheet` count, auto and manual), `batch_merge_slider.test.tsx` (bounds/step, auto default, save/load round trip, corrupt → auto, the split receives the slider's value), `batch_preview_ui.test.tsx` (the cluster, per-row strips and counts, ineligible rows untouched, failing row reported, Stop, unchecking, slider replan, unmount revokes, 1000 rows with a write-guarded root)
 * `detect_equivalence.test.ts` + `tests/helpers/detect_oracle.ts` (2026-10-12) — the shipped `detect` against a frozen verbatim copy of the pre-change dilate/label/detect: identical `boxes`, `usedFrac`, `autoFrac` on curated fixtures × fractions, seeded masks, a scaled analysis and a blank sheet. The gate that lets `mergeseries.ts` replace the per-radius loop.
 * `mergeseries.test.ts` — the one-sweep series against an independent BFS oracle (distances, buckets, counts, the 1.5 % ink rule, no-ink = all zeros, merge radius where two clusters join); `grid.test.ts` — `cellSize` and `buildGridMap` (ink accounting, column map, f = 1 identity)
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
@@ -1673,9 +1713,13 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   (padding/size/transparent), Detection (merge slider + reset), Boundary
   overlay, Result grid, busy overlay, toast.
 * Batch mode: header controls (`batch-root`, `batch-refresh`, `batch-process`,
-  `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
-  info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
-  reference warnings, busy overlay, toast.
+  `batch-cancel`), PresetBar (name/save/list/delete + split settings **incl. the
+  one merge slider** `batch-merge` / `batch-merge-value` / `batch-merge-reset`,
+  I-66), Dest info, review window (`scan-table`, `select-all`, per-row
+  checkbox/actions), reference warnings, busy overlay, toast, and the preview
+  cluster beside `batch-process` (`batch-preview`, `batch-preview-stop`,
+  `batch-preview-progress`, per-row `batch-preview-strip-<relPath>` /
+  `batch-preview-count-…` / `batch-preview-img-…`, I-67…I-69).
 * Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
   help), FilterBar (date modes + From/To, status, sort, order, clear), review
   list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,

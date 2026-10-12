@@ -121,6 +121,9 @@ Primary header controls:
 | `batch-root` | `Choose source folder…` → `Root: {name}` | opens directory picker (`picker.ts`); Chrome/Edge File System Access; label mirrors state (RULE 24) |
 | `batch-refresh` | `↺ Rescan` | re-walks root; gated on handle + permission |
 | `batch-process` | `▶ Split selected` | disabled when 0 selected (RULE 4) |
+| `batch-preview` | `👁 Preview splits (N)` | beside `batch-process`; disabled with 0 selected or while a preview runs (I-67) |
+| `batch-preview-stop` | `✕ Stop preview` | visible only while a preview session is running (I-68) |
+| `batch-preview-progress` | text, `aria-live="polite"` | `Previewed 137/1000 rows · 412 icons`; shown while a session is open |
 | `batch-cancel` | `✕ Stop` | shown only while busy; sets the stop signal |
 | `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output` |
 
@@ -132,6 +135,15 @@ Status + warning surfaces:
 | `ref-warnings` | amber paragraph | references missing for one or more sources |
 | `batch-busy` | fixed overlay | present only while a batch runs; message inside (RULE 5) |
 | `batch-toast` | bottom toast | green/rose; text is the assertion target (RULE 2, RULE 4) |
+
+Per-row preview strip (2026-10-12, I-67…I-69) — rendered as a 7th grid child of
+the row while a session is open, and only for rows the session plans:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-preview-strip-<relPath>` | strip container | `data-state` = `pending` \| `reading` \| `ready` \| `capped` \| `empty` \| `error` \| `stopped` |
+| `batch-preview-count-<relPath>` | text | `12 icons` · `first 512 of 913 icons` · `No icons at this merge distance` · `Preview failed: …` · `Queued` · `Not previewed` |
+| `batch-preview-img-<relPath>` | first chunk `<img>` | `alt="Preview of 12 icons from <name>"`, `decoding="async"`; further chunks carry no test id |
 
 PresetBar — `preset-bar` panel:
 
@@ -145,6 +157,9 @@ PresetBar — `preset-bar` panel:
 | `batch-size` | select | 0 (auto) / 128 / 256 / 512 / 1024 / 2048 |
 | `batch-transparent` | checkbox | transparent background on/off |
 | `batch-ignore` | comma list | directories/files skipped by the walk |
+| `batch-merge` | range 0–0.15 step 0.0025 | the ONE Batch merge control (I-66); muted while auto; writes `preset.split.mergeFrac` |
+| `batch-merge-value` | text | `Auto — each image picks its own` or the value (`0.0475`) |
+| `batch-merge-reset` | button `↺ Auto` | writes `null`; disabled while already auto |
 
 Review window (scan table) — `scan-table` panel:
 
