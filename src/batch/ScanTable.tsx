@@ -17,6 +17,7 @@ export interface ScanTableProps {
   activeId: string | null;
   toggle: (relPath: string) => void;
   selectRow: (id: string, intent: ReturnType<typeof selectIntent>) => void;
+  selectActive: (id: string) => void;
   copyPath: (relPath: string) => void;
   thumbFor: (relPath: string) => Promise<string>;
   previews?: Map<string, PreviewEntry>;
@@ -69,7 +70,7 @@ function Footer({ count }: { count: number }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="batch-footer">Showing {count} images</span>
-      <span className="svg-hints">↑↓ active row · E select active · Q deselect active · Click row, Shift range, Ctrl toggle · Bulk via buttons</span>
+      <span className="svg-hints">↑↓ active row · E select active · Q deselect active · Click = active only · Checkbox = select · Shift range · Ctrl toggle</span>
     </footer>
   );
 }
@@ -153,12 +154,12 @@ function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: 
   );
 }
 
-function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
-  const onRowClick = useRowClick(r, disabled, selectRow);
-  const onKeyDown = useRowKey(r, disabled, selectRow);
+  const onRowClick = useRowClick(r, disabled, selectRow, selectActive);
+  const onKeyDown = useRowKey(r, disabled, selectActive);
   const entry = previews?.get(r.relPath);
   const merges = rowMerges ?? {};
   const gFrac = globalFrac ?? null;
@@ -195,29 +196,31 @@ function isActive(relPath: string, activeId: string | null): boolean {
   return activeId !== null && relPath.toLowerCase() === activeId.toLowerCase();
 }
 
-function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"]) {
+function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"], selectActive: ScanTableProps["selectActive"]) {
   return useCallback(
     (e: React.MouseEvent) => {
       if (disabled) return;
       const t = e.target as HTMLElement;
-      if (t.closest('input[type="checkbox"]') || t.closest("button")) return;
+      if (t.closest('input[type="checkbox"]') || t.closest("button") || t.closest("input[type=range]")) return;
       const mods: RowMods = { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey };
-      selectRow(r.relPath, selectIntent(mods));
+      const intent = selectIntent(mods);
+      if (intent === "replace") selectActive(r.relPath);
+      else selectRow(r.relPath, intent);
     },
-    [r, disabled, selectRow],
+    [r, disabled, selectRow, selectActive],
   );
 }
 
-function useRowKey(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"]) {
+function useRowKey(r: Row, disabled: boolean, selectActive: ScanTableProps["selectActive"]) {
   return useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         if (disabled) return;
-        selectRow(r.relPath, "replace");
+        selectActive(r.relPath);
       }
     },
-    [r, disabled, selectRow],
+    [r, disabled, selectActive],
   );
 }
 
