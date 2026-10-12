@@ -1,3 +1,6 @@
+import { componentCountSeries } from "./mergeseries";
+import { buildGridMap, cellSize } from "./grid";
+
 export interface Box {
   x: number;
   y: number;
@@ -210,29 +213,15 @@ function label(
 export function detect(a: Analysis, radiusFrac: number | null): DetectResult {
   const { w, h, mask } = a;
   const longest = Math.max(w, h);
-  const f = Math.max(1, Math.ceil(longest / 400));
-  const gw = Math.ceil(w / f);
-  const gh = Math.ceil(h / f);
-  const cells = new Uint8Array(gw * gh);
-  const counts = new Uint32Array(gw * gh);
-  for (let y = 0; y < h; y++) {
-    const row = y * w;
-    const cy = ((y / f) | 0) * gw;
-    for (let x = 0; x < w; x++) {
-      if (mask[row + x]) {
-        const c = cy + ((x / f) | 0);
-        cells[c] = 1;
-        counts[c]++;
-      }
-    }
-  }
+  const f = cellSize(longest);
+  const grid = buildGridMap(mask, w, h, f);
+  const { gw, gh, col, cells, counts } = grid;
 
   const run = (r: number) => label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
 
   // ---- automatic radius ----
   const rMax = Math.max(3, Math.floor(Math.max(gw, gh) * 0.2));
-  const series: number[] = [];
-  for (let r = 1; r <= rMax; r++) series.push(run(r).count);
+  const series = componentCountSeries(grid, rMax);
   type Run = { start: number; end: number; count: number };
   const runs: Run[] = [];
   for (let i = 0; i < series.length; i++) {
@@ -268,7 +257,7 @@ export function detect(a: Analysis, radiusFrac: number | null): DetectResult {
     const cy = ((y / f) | 0) * gw;
     for (let x = 0; x < w; x++) {
       if (!mask[row + x]) continue;
-      const l = lab.labels[cy + ((x / f) | 0)];
+      const l = lab.labels[cy + col[x]];
       if (l < 0 || !lab.valid[l]) continue;
       if (x < minX[l]) minX[l] = x;
       if (x > maxX[l]) maxX[l] = x;

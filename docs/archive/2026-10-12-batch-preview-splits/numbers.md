@@ -64,7 +64,30 @@ Speed (`prototype/equivalence.mjs --bench`, measured before this change):
 | 2048² / 12 icons | 317 ms | 41 ms | 7.7× |
 | 4000² / 40 icons | 668 ms | 94 ms | 7.1× |
 
-## 4. After P1 (filled in the P1 commit)
+## 4. After P1 — the shipped detector (`node tools/bench_detect.mjs --reps 4`)
 
-<!-- P1 replaces the measured table above with `node tools/bench_detect.mjs --reps 4` output
-     for the shipped `mergeseries.ts`, plus the equivalence test's runtime. -->
+| Sheet | icons | grid | auto | manual | 1000 rows, auto |
+|---|---:|---:|---:|---:|---:|
+| 512² | 1 | 256² | 13 ms | 5 ms | 13 s |
+| 1024² | 1 | 342² | 15 ms | 9 ms | 15 s |
+| 1024² | 4 | 342² | 18 ms | 19 ms | 18 s |
+| 2048² | 12 | 342² | 26 ms | 23 ms | 26 s |
+| 4000² | 40 | 400² | 57 ms | 65 ms | 57 s |
+
+Speed-up against §1 (same tool, same sheets): **6.5× / 11.0× / 13.1× / 11.1× / 9.5×**.
+1000 rows: 84–543 s down to 13–57 s of main-thread work, per row 13–57 ms — small enough to
+slice at phase boundaries and to cache, which is what the preview design needs (D4–D6).
+
+Equivalence evidence for the shipped code:
+
+* `tests/detect_equivalence.test.ts` (vs the frozen pre-change oracle) — 3 tests, **1.4 s**:
+  identical `boxes`, `usedFrac`, `autoFrac` on 8 fixtures × [null, 0, 0.05] (every fraction for
+  the small ones) + 4 seeds × {1:1, `scale: 4.5`} × [null, 0.05] + a blank-sheet case.
+* `tests/mergeseries.test.ts` — 12 tests against an independent BFS oracle; `tests/grid.test.ts`
+  — 5 tests on the downscale/cell contract.
+* Whole suite: **163 files / 1807 tests**, 1805 green (the 2 failures are the sandbox-only
+  `secret_hygiene` pair described under Environment).
+
+Files: `src/lib/grid.ts` (new, 56 lines), `src/lib/mergeseries.ts` (new, 167), `src/lib/livesets.ts`
+(new, 142), `src/lib/detect.ts` (306 → **295** lines: the grid build moved out, the box pass and
+the final dilate+label are untouched).

@@ -1296,7 +1296,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 |---|---|---|
 | Mode shell | `src/ui/Workbench.tsx`, `src/main.tsx` | Sheets/Batch tab switch |
 | Sheets UI | `src/App.tsx`, `src/utils/cn.ts` | sheet state, controls, export paths |
-| Detection | `src/lib/detect.ts` | `analyze` (mask), `detect` (boxes, auto radius, reading order) |
+| Detection | `src/lib/detect.ts`, `grid.ts`, `mergeseries.ts`, `livesets.ts` | `analyze` (mask), the coarse grid (`grid.ts`: downscale step, pixel→cell column map, per-cell ink counts — one definition of "a cell" for both consumers), `detect` (boxes, reading order, the final dilate+label at the chosen radius), the radius→component-count series in ONE sweep (`mergeseries.ts`: exact chessboard distance to ink + ascending buckets + the increasing-radius walk; `livesets.ts`: the union-find it walks with) — the series is bit-identical to the old per-radius dilate+label loop, gated by `tests/detect_equivalence.test.ts` (2026-10-12, design D1) |
 | Rendering | `src/lib/render.ts` | `squareInfo`, `cropRect`, `renderIcon`, `canvasToBlob` |
 | Naming (batch) | `src/lib/naming.ts` | `_AI` parse, split names, variations, batch path |
 | Scan (batch) | `src/lib/scan.ts` | tree walk, eligibility, ref linking, diff |
@@ -1329,7 +1329,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 144 files / 1620 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 163 files / 1807 tests; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2, Generate SVG and SVG to upload panels and drives them
 with hotkeys and `data-testid` handles):
@@ -1337,6 +1337,8 @@ with hotkeys and `data-testid` handles):
 * `prompt_presets_shared.test.ts` — the one preset rule (pick, Quick load refusal, Save as snapshot and blank refusal, Delete keeps the editor) and the store round-trip per key (2026-10-09, I-65); `svg_prompt_presets.test.ts` — the same rule through the real Generate SVG reducer, the SVG list separate from the metadata list; `svg_regen_ui.test.tsx` — the regen window over its real storage (main by default, drop-down of SVG presets, live list update, no row in Export settings, regen above the prompt window).
 * `svg_regen.test.ts`, `svg_regenprompt.test.ts`, and the Regenerate-from-SVG block of `svg_runner.test.ts` (2026-10-09) — the stored choice and its refusals, the main prompt + first image (locked), the saved prompt + newest valid code + same image (one icon per request, the record without the code), the row and its global-only scope
 * `detect.test.ts` — box count, margins, radius merge/split, dust filter, reading order
+* `detect_equivalence.test.ts` + `tests/helpers/detect_oracle.ts` (2026-10-12) — the shipped `detect` against a frozen verbatim copy of the pre-change dilate/label/detect: identical `boxes`, `usedFrac`, `autoFrac` on curated fixtures × fractions, seeded masks, a scaled analysis and a blank sheet. The gate that lets `mergeseries.ts` replace the per-radius loop.
+* `mergeseries.test.ts` — the one-sweep series against an independent BFS oracle (distances, buckets, counts, the 1.5 % ink rule, no-ink = all zeros, merge radius where two clusters join); `grid.test.ts` — `cellSize` and `buildGridMap` (ink accounting, column map, f = 1 identity)
 * `analyze.test.ts` — background/threshold/mask/ink, transparency-as-white, downscale, analyze→detect end-to-end
 * `render.test.ts` — squareInfo/cropRect geometry
 * `render_icon.test.ts` — sizing/clamps, bg fill + neighbour wipe + restore, transparent pass, blob gate
