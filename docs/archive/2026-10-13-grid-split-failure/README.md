@@ -201,9 +201,47 @@ New file 304 lines, 31 fns, each ≤30 lines, CC≤10 (except legacy label), par
 
 2x2 lightbulb grid with faint dividers now splits into 4 at merge 0 and at auto (since bestRun picks 4). If dividers are solid black (ink), they would still connect, but user can set merge 0 and grid removal will still remove full-span lines (since they are thin and span >80%). For thicker grids, manual crop or increasing threshold still works.
 
+## Second fix — exact user image `61e06fee-142a-450e-ad33-7fb48fa905f0.png` still failed (2026-10-13 round 2)
+
+### New evidence
+- Exact image 1254x1254, border color dark gray (138-179), interior white 253.
+- `sampleBorder` median → bg=176,176,176 (gray). Then white diff=77, black diff=176, threshold=106 → white (diff 77) below, but mask still 1.5M pixels because many interior pixels not pure white? Actually debug showed bg=176 → white diff 77 <106 → should be 0, but mask 1.5M → indicates background estimation wrong: interior white should be bg.
+- Bright mode detection: histogram of bright pixels (brightness>=200, quantized 10) → most frequent is 250,250,250 count 57106 → true bg is white, not border gray.
+- After fixing bg to mode white: bg=253,253,253 maxDiff=253 thr=106 mask=93870 (only icons). Auto → 4 boxes PASS. R=0 → 10 boxes (internal details) → need filtering.
+
+### Root causes round 2
+1. **Border median fails on images with gray frame**: exact image has thick gray border (maybe screenshot). Border sampling returns gray, not white. Solution: estimate bg by mode of bright pixels across whole image, fallback to border median.
+2. **Internal details create extra boxes at R=0**: lightbulb filament details inside icon produce 2-3 boxes per icon → 10 total. Need `filterContained` + `filterBySize` to keep only outer boxes for counting.
+3. **Size filtering needed for series counting**: previously series used raw label count → 10 at R=0, 4 at auto, but bestRun would pick 10 over 4 (higher count). Fix: countAtRadius uses filtered count (contained + size).
+4. **Huge box rejection**: boxes covering >85% both dimensions or >90% one dimension with >50% area are artifacts (merged vertical strips). Reject via `filterBySize`.
+
+### Fixes applied round 2
+- `backgroundByMode(data,w,h)`: samples every min(w,h)/200, keeps brightness>=200, quantizes to 10, finds most frequent bright color. Returns null if <10 samples.
+- `estimateBackground`: tries mode first, fallback to border median.
+- `analyzeFromRgba` (tool) and `analyze` (src) use new estimator.
+- `filterContained`: removes boxes inside larger box with <50% ink.
+- `filterBySize`: rejects w<8% or h<8%, w>85%&&h>85%, w>90%||h>90% with area>50%.
+- `countAtRadius(ctx,f,a,r)`: now returns size-filtered count, params grouped to ≤4 (ctx object).
+- `buildSeries(ctx,rMax,f,a)`: uses countAtRadius, params ≤4.
+- `bestRun`: longest len among count>=2, tie higher count (stable).
+- `detect` final: prefers size-filtered boxes, fallback to contained.
+
+### Verification round 2
+- `tools/test_grid_image.mjs` exact image: bg 253,253,253 mask 93870 auto 4 PASS, R0 4 PASS (after filtering)
+- `tests/real_grid_image.test.ts` new: loads exact image via pngjs, 3 tests → all PASS (auto >=4, r0 >=4, no huge box)
+- `tests/detect.test.ts` + `grid_split.test.ts` → 9 PASS still
+- `quality.mjs --files detect.ts --allow-legacy` → GATE PASSED (legacy label only)
+- `npm run build` → 1520 kB PASS
+- RULE 18: 39 fns, 261 lines (ideal 150-300), each fn ≤28 lines
+- RULE 16: params ≤4 after ctx grouping, CC≤10, nesting≤4
+
+### Result
+Exact user image now splits into 4 at auto: boxes (163,89 301x450), (790,89 300x451), (113,702 402x463), (793,729 293x435). Generated mimic still 2 at auto but 4 at R=0; acceptable since user said use exact image only.
+
 ## References
-- src/lib/detect.ts: analyze, dilate, label, auto radius, grid removal
+- src/lib/detect.ts: analyze, backgroundByMode, estimateBackground, dilate, label, auto radius, grid removal, filterContained, filterBySize
 - src/batch/useBatchPreview.ts: caching, preview
-- User image: 4 icons, 2x2, thin gray dividers, alternating light backgrounds
-- Tests: tests/grid_split.test.ts, tests/detect.test.ts
+- User images: synthetic grid-lightbulb, exact 61e06fee...png 1254x1254
+- Tests: tests/grid_split.test.ts, tests/detect.test.ts, tests/real_grid_image.test.ts, tools/test_grid_image.mjs
+- Debug tools: tools/debug_border.mjs, tools/debug_hist.mjs
 

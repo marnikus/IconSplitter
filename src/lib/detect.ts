@@ -14,6 +14,37 @@ function sampleBorder(d: Uint8ClampedArray, w: number, h: number) {
   for (let y = 0; y < h; y += sy) { push(0, y); push(w - 1, y); }
   return { rs, gs, bs };
 }
+
+function backgroundByMode(d: Uint8ClampedArray, w: number, h: number): [number, number, number] | null {
+  const hist = new Map<string, { count: number; r: number; g: number; b: number }>();
+  const step = Math.max(1, Math.floor(Math.min(w, h) / 200));
+  for (let y = 0; y < h; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      const a = d[i + 3] / 255;
+      const r = Math.round(d[i] * a + 255 * (1 - a));
+      const g = Math.round(d[i + 1] * a + 255 * (1 - a));
+      const b = Math.round(d[i + 2] * a + 255 * (1 - a));
+      const brightness = (r + g + b) / 3;
+      if (brightness < 200) continue;
+      const q = `${(r / 10) | 0},${(g / 10) | 0},${(b / 10) | 0}`;
+      const ex = hist.get(q);
+      if (ex) { ex.count++; ex.r += r; ex.g += g; ex.b += b; }
+      else hist.set(q, { count: 1, r, g, b });
+    }
+  }
+  let best: { count: number; r: number; g: number; b: number } | null = null;
+  for (const v of hist.values()) if (!best || v.count > best.count) best = v;
+  if (!best || best.count < 10) return null;
+  return [Math.round(best.r / best.count), Math.round(best.g / best.count), Math.round(best.b / best.count)];
+}
+
+function estimateBackground(d: Uint8ClampedArray, w: number, h: number): [number, number, number] {
+  const mode = backgroundByMode(d, w, h);
+  if (mode) return mode;
+  const { rs, gs, bs } = sampleBorder(d, w, h);
+  return [median(rs), median(gs), median(bs)];
+}
 function diffHist(d: Uint8ClampedArray, bg: [number, number, number], w: number, h: number) {
   const diff = new Uint8Array(w * h), hist = new Uint32Array(256);
   for (let p = 0, i = 0; p < w * h; p++, i += 4) {
@@ -43,8 +74,7 @@ export function analyze(img: HTMLImageElement): Analysis {
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const ctx = c.getContext("2d", { willReadFrequently: true })!; ctx.drawImage(img, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
-  const { rs, gs, bs } = sampleBorder(data, w, h);
-  const bg: [number, number, number] = [median(rs), median(gs), median(bs)];
+  const bg = estimateBackground(data, w, h);
   const { diff, hist } = diffHist(data, bg, w, h);
   const maxD = maxDiffFromHist(hist, w * h);
   const thr = Math.min(110, Math.max(18, maxD * 0.42));
@@ -127,18 +157,31 @@ function removeGridLines(cells: Uint8Array, gw: number, gh: number): Uint8Array 
   return tmp;
 }
 type Run = { start: number; end: number; count: number };
-function buildSeries(cells: Uint8Array, counts: Uint32Array, g: { gw: number; gh: number }, rMax: number) {
-  const { gw, gh } = g, series: number[] = [];
-  for (let r = 1; r <= rMax; r++) series.push(label(dilate(cells, gw, gh, r), cells, counts, gw, gh).count);
+function countAtRadius(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, f: number, a: Analysis, r: number): number {
+  const { cells, counts, gw, gh } = ctx;
+  const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
+  const raw = extractBoxes(a, lab, f, gw);
+  const contained = filterContained(raw);
+  const sized = filterBySize(contained, a.w, a.h);
+  return sized.length;
+}
+
+function buildSeries(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, rMax: number, f: number, a: Analysis) {
+  const series: number[] = [];
+  for (let r = 1; r <= rMax; r++) series.push(countAtRadius(ctx, f, a, r));
   const runs: Run[] = [];
   for (let i = 0; i < series.length; i++) { const last = runs[runs.length - 1]; if (last && last.count === series[i]) last.end = i; else runs.push({ start: i, end: i, count: series[i] }); }
   return runs;
 }
 function bestRun(runs: Run[]): Run {
   const cand = runs.filter((r) => r.count >= 2);
-  if (cand.length === 0) return runs.reduce((p, c) => (c.end - c.start > p.end - p.start ? c : p), runs[0]);
-  let best = cand[0];
-  for (const r of cand) { if (r.count > best.count) best = r; else if (r.count === best.count && r.end - r.start > best.end - best.start) best = r; }
+  const pool = cand.length ? cand : runs;
+  let best = pool[0];
+  for (const r of pool) {
+    const len = r.end - r.start, bestLen = best.end - best.start;
+    if (len > bestLen) best = r;
+    else if (len === bestLen && r.count > best.count) best = r;
+  }
   return best;
 }
 function updateBounds(x: number, y: number, l: number, b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; }) {
@@ -178,6 +221,17 @@ function filterContained(boxes: Box[]): Box[] {
   }
   return keep;
 }
+
+function filterBySize(boxes: Box[], imgW: number, imgH: number): Box[] {
+  return boxes.filter((b) => {
+    if (b.w < imgW * 0.08 || b.h < imgH * 0.08) return false;
+    if (b.w > imgW * 0.85 && b.h > imgH * 0.85) return false;
+    if (b.w > imgW * 0.9 || b.h > imgH * 0.9) {
+      if (b.w * b.h > imgW * imgH * 0.5) return false;
+    }
+    return true;
+  });
+}
 function orderBoxes(boxes: Box[]): Box[] {
   boxes.sort((p, q) => p.y + p.h / 2 - (q.y + q.h / 2));
   const rows: Box[][] = [];
@@ -193,13 +247,14 @@ export function detect(a: Analysis, radiusFrac: number | null): DetectResult {
   const { cells: raw, counts, gw, gh } = downsample(a.mask, w, h, f);
   const cells = removeGridLines(raw, gw, gh);
   const rMax = Math.max(3, Math.floor(Math.max(gw, gh) * 0.2));
-  const runs = buildSeries(cells, counts, { gw, gh }, rMax);
+  const runs = buildSeries({ cells, counts, gw, gh }, rMax, f, a);
   const best = bestRun(runs);
   const autoR = Math.round((best.start + best.end) / 2) + 1;
   const autoFrac = (autoR * f) / longest, usedFrac = radiusFrac ?? autoFrac;
   const r = radiusFrac == null ? autoR : Math.max(0, Math.round((radiusFrac * longest) / f));
   const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
   const rawBoxes = extractBoxes(a, lab, f, gw);
-  const filtered = filterContained(rawBoxes);
-  return { boxes: orderBoxes(filtered), usedFrac, autoFrac };
+  const contained = filterContained(rawBoxes);
+  const sized = filterBySize(contained, w, h);
+  return { boxes: orderBoxes(sized.length ? sized : contained), usedFrac, autoFrac };
 }
