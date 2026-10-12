@@ -77,6 +77,9 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   const chooseRoot = useCallback(async () => {
     const picked = await pickFolderFor((h) => { ctx.root.current = h; });
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
+    // Persist handle immediately so it survives restart, like Selection V2 (I-44/I-63)
+    const presetName = ctx.state.current.preset.name;
+    await saveHandles(presetName, { source: picked.handle, dest: ctx.dest.current ?? undefined });
     await scan(ctx, setS, say);
     if (picked.message !== null) say(picked.message);
   }, [ctx, setS, say]);
@@ -88,6 +91,9 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     if (!h) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     ctx.dest.current = h;
     setS((p) => ({ ...p, destName: h.name, preset: { ...p.preset, destMode: "custom" } }));
+    // Persist dest handle too, so output folder survives restart
+    const presetName = ctx.state.current.preset.name;
+    await saveHandles(presetName, { source: ctx.root.current ?? undefined, dest: h });
   }, [ctx, setS, say]);
 
   const refresh = useCallback(() => { void scan(ctx, setS, say); }, [ctx, setS, say]);
