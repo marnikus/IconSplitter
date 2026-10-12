@@ -389,13 +389,13 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
     expect(q("[data-testid=svg-confirm-regen-preset]" )).not.toBeNull();
     // 2026-10-09: regen is 1 per request, so first page shows 1 of 2
-    let manifestPage1 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+    const manifestPage1 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
       .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
     expect(manifestPage1).toHaveLength(1);
     expect(["court_AI", "fog_AI"]).toContain(manifestPage1[0]);
     // walk to next request
     await click("[data-testid=svg-batch-next]");
-    let manifestPage2 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+    const manifestPage2 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
       .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
     expect(manifestPage2).toHaveLength(1);
     const combined = [...manifestPage1, ...manifestPage2].sort();

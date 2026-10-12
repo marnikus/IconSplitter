@@ -43,7 +43,6 @@ beforeEach(async () => {
   localStorage.clear(); sessionStorage.clear(); localStorage.removeItem(BATCH_PREFS_KEY);
   await dropDb(); clearKnownRoots(); vi.restoreAllMocks();
   if (host) { await act(async () => root.unmount()); host.remove(); }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });
 

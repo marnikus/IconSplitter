@@ -107,7 +107,6 @@ beforeEach(async () => {
     await act(async () => ui.unmount());
     host.remove();
   }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
   await mountPanel();
 });
@@ -116,18 +115,19 @@ describe("Batch V2 selection: active row separate from checked", () => {
   it("purple active row is separate from checked bulk rows", async () => {
     const rows = qAll("[data-testid^='batch-row-'][role='listitem']");
     expect(rows.length).toBe(3);
-    // Initially no active? Click first row
+    // A plain click activates the row only (Click = active only), never checks
     await rowClick("icon-a_AI_1.png");
     const first = q("[data-testid='batch-row-icon-a_AI_1.png']");
     expect(first?.className).toMatch(/active/);
-    expect(first?.className).toMatch(/selected/);
+    expect(first?.className).not.toMatch(/selected/);
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
     // Checkbox toggles checked but active stays
     await checkClick("icon-b_AI_2.png");
     const second = q("[data-testid='batch-row-icon-b_AI_2.png']");
     expect(second?.className).toMatch(/selected/);
     expect(first?.className).toMatch(/active/);
-    // Active still first, checked includes both
-    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/2 selected/);
+    // Active still first, checked is only b
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/1 selected/);
   });
 
   it("↑/↓ moves active row and scrolls into view without changing checks", async () => {
@@ -145,8 +145,18 @@ describe("Batch V2 selection: active row separate from checked", () => {
     expect(first?.className).toMatch(/active/);
   });
 
-  it("click selects one, Shift-click selects visible range from anchor", async () => {
+  it("plain click activates only, Shift-click selects a visible range from its anchor", async () => {
     await rowClick("icon-a_AI_1.png");
+    // The plain click checked nothing
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
+    // Shift-click with no anchor degrades to the clicked row and sets the anchor
+    await rowClick("icon-a_AI_1.png", { shiftKey: true });
+    expect((q(`[data-testid='row-select-icon-a_AI_1.png']`) as HTMLInputElement).checked).toBe(true);
+    // A plain click between still only moves the active row
+    await rowClick("icon-b_AI_2.png");
+    expect((q(`[data-testid='row-select-icon-a_AI_1.png']`) as HTMLInputElement).checked).toBe(true);
+    expect((q(`[data-testid='row-select-icon-b_AI_2.png']`) as HTMLInputElement).checked).toBe(false);
+    // Shift-click extends the range from the anchor a through c
     await rowClick("icon-c_AI_3.png", { shiftKey: true });
     // Should select range a,b,c
     expect(qAll("[data-testid^='batch-row-'][role='listitem']").length).toBe(3);
@@ -157,15 +167,17 @@ describe("Batch V2 selection: active row separate from checked", () => {
   });
 
   it("Ctrl/Alt/Meta-click toggles one row with Shift precedence", async () => {
-    await rowClick("icon-a_AI_1.png");
-    await rowClick("icon-c_AI_3.png", { ctrlKey: true });
+    // Ctrl toggles exactly one row, on and off
+    await rowClick("icon-a_AI_1.png", { ctrlKey: true });
     expect((q(`[data-testid='row-select-icon-a_AI_1.png']`) as HTMLInputElement).checked).toBe(true);
-    expect((q(`[data-testid='row-select-icon-c_AI_3.png']`) as HTMLInputElement).checked).toBe(true);
-    // Toggle off a
     await rowClick("icon-a_AI_1.png", { ctrlKey: true });
     expect((q(`[data-testid='row-select-icon-a_AI_1.png']`) as HTMLInputElement).checked).toBe(false);
-    // Shift takes precedence over Ctrl
-    await rowClick("icon-a_AI_1.png");
+    await rowClick("icon-c_AI_3.png", { ctrlKey: true });
+    expect((q(`[data-testid='row-select-icon-c_AI_3.png']`) as HTMLInputElement).checked).toBe(true);
+    await rowClick("icon-c_AI_3.png", { ctrlKey: true });
+    expect((q(`[data-testid='row-select-icon-c_AI_3.png']`) as HTMLInputElement).checked).toBe(false);
+    // Shift takes precedence over Ctrl: the gesture is a range from the anchor
+    await rowClick("icon-a_AI_1.png", { shiftKey: true });
     await rowClick("icon-c_AI_3.png", { shiftKey: true, ctrlKey: true });
     for (const rel of ["icon-a_AI_1.png", "icon-b_AI_2.png", "icon-c_AI_3.png"]) {
       expect((q(`[data-testid='row-select-${rel}']`) as HTMLInputElement).checked).toBe(true);
@@ -250,15 +262,13 @@ describe("Batch V2 selection: active row separate from checked", () => {
 
   it("checked rows and anchor survive filtering", async () => {
     await click(q("[data-testid=batch-deselect]"));
-    await rowClick("icon-a_AI_1.png");
+    // Shift-click sets the anchor at a, then extends the range a..c (3 checked)
+    await rowClick("icon-a_AI_1.png", { shiftKey: true });
     await rowClick("icon-c_AI_3.png", { shiftKey: true });
-    // Filter to only one? Use status filter? Our filter grid has status, but we can test that hidden count shows
-    // Select visible then filter? For simplicity, check hidden count after filtering via search? Batch filter has search? It has status and sort, not search, but we can still check that after selecting all, hiddenCount logic works
+    // The batch filter grid has status/sort/date and every row here is
+    // unprocessed, so nothing can hide them in this fixture — what is locked
+    // is that the checked set survives moving the active row around.
     expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
-    // Simulate filter by changing filter to hide some? Our batch filter: status filter, but all are unprocessed, so not easy. Just ensure anchor persists: after selecting range, anchor should be first
-    // Do another shift-click after filtering simulation: if anchor hidden, fallback to one row
-    // We test hidden anchor fallback: deselect, select b, filter out b (not implemented), then shift-click c should only select c
-    // For now, just ensure no crash and checked persists
     await keyDown("ArrowDown");
     await keyDown("ArrowDown");
     expect(q("[data-testid='batch-row-icon-c_AI_3.png']")?.className).toMatch(/active/);

@@ -6,7 +6,7 @@ function median(arr) {
   return s[Math.floor(s.length/2)] ?? 255;
 }
 
-function analyzeFromPixels(data, w, h, nw, nh) {
+function analyzeFromPixels(data, w, h, nw) {
   // data is Uint8Array or Buffer RGBA
   const rs=[], gs=[], bs=[];
   const push = (x,y) => {
@@ -69,7 +69,7 @@ function dilate(src,gw,gh,r){
   return out;
 }
 function floodFill(s,id,ctx){
-  const {dil,cells,counts,labels,gw,gh,stack}=ctx;
+  const {cells,counts,labels,gw,gh,stack}=ctx;
   let ink=0;
   labels[s]=id; stack.push(s);
   while(stack.length){

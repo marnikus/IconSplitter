@@ -2,7 +2,7 @@
 // Must split into at least 4 icons, otherwise incorrect
 // Uses pngjs to decode real PNG without canvas (happy-dom has no canvas)
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { PNG } from "pngjs";
@@ -55,19 +55,26 @@ function loadPngAnalysis(path: string): Analysis {
 }
 
 describe("real grid image — must split into at least 4", () => {
-  it("generated grid-lightbulb.png should split into at least 4 (proxy for user image)", () => {
+  // One decode + one analysis for both tests: the per-pixel pass over the real
+  // PNG is the expensive part and is identical for the two (coverage lane).
+  let a: Analysis;
+  beforeAll(() => {
     const filePath = join(__dirname, "assets", "grid-lightbulb.png");
-    const a = loadPngAnalysis(filePath);
+    a = loadPngAnalysis(filePath);
+  });
+
+  // The analysis is pure CPU over ~1M pixels; under the instrumented coverage
+  // lane on a loaded machine it can exceed the 5 s default (2026-10-12), so
+  // both tests carry an explicit budget. The assertions are unchanged.
+  it("generated grid-lightbulb.png should split into at least 4 (proxy for user image)", () => {
     const resAuto = detect(a, null);
     const res0 = detect(a, 0);
     console.log(`auto boxes=${resAuto.boxes.length}, r0 boxes=${res0.boxes.length}`);
     expect(resAuto.boxes.length).toBeGreaterThanOrEqual(4);
     expect(res0.boxes.length).toBeGreaterThanOrEqual(4);
-  });
+  }, 20000);
 
   it("exact user condition: 2x2 grid must be at least 4, otherwise incorrect", () => {
-    const filePath = join(__dirname, "assets", "grid-lightbulb.png");
-    const a = loadPngAnalysis(filePath);
     const res = detect(a, null);
     expect(res.boxes.length).toBeGreaterThanOrEqual(4);
     // No single box should cover >80% of image (would mean failed to split)
@@ -76,5 +83,5 @@ describe("real grid image — must split into at least 4", () => {
     // Each box should be at least 15% of width/height (not dust)
     const meaningful = res.boxes.filter(b => b.w > a.w * 0.15 && b.h > a.h * 0.15);
     expect(meaningful.length).toBeGreaterThanOrEqual(4);
-  });
+  }, 20000);
 });

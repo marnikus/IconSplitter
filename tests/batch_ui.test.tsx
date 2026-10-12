@@ -71,7 +71,6 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });
 

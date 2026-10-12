@@ -410,9 +410,14 @@ describe("the tab", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, "200");
       el.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await settle();
+    // Poll, don't assume one macrotask: under the coverage lane the re-render
+    // can land after settle() would have given up (2026-10-12 flake).
+    await waitFor(
+      () => (q(`[data-testid=upload-prev-${FOG}-frame]`) as HTMLElement).style.width !== before,
+      "zoom width to apply to the frame",
+    );
+    await waitFor(() => text("[data-testid=upload-thumb-value]") === "200 px", "zoom readout to say 200 px");
     expect((q(`[data-testid=upload-prev-${FOG}-frame]`) as HTMLElement).style.width).not.toBe(before);
-    expect(text("[data-testid=upload-thumb-value]")).toBe("200 px");
   });
 
   it("filters and searches the list, and clears both", async () => {

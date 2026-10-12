@@ -33,7 +33,9 @@ export function loadBatchPrefs(): BatchPrefs {
 export function saveBatchPrefs(p: BatchPrefs): void {
   try {
     localStorage.setItem(BATCH_PREFS_KEY, JSON.stringify(p));
-  } catch {}
+  } catch {
+    /* storage full or blocked — prefs stay in memory for this session (RULE 13) */
+  }
 }
 
 export function parseBatchPrefs(raw: unknown): BatchPrefs {

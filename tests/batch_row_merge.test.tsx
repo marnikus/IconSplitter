@@ -11,7 +11,6 @@ import BatchPanel from "../src/batch/BatchPanel";
 import { BATCH_PREFS_KEY } from "../src/lib/batchprefs";
 import { clampMergeFrac } from "../src/lib/batchpreview";
 import { effectiveMerge } from "../src/batch/useBatchPreview";
-import type { Preset } from "../src/lib/presets";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -48,7 +47,6 @@ beforeEach(async () => {
   localStorage.clear(); sessionStorage.clear(); localStorage.removeItem(BATCH_PREFS_KEY);
   await dropDb(); clearKnownRoots(); vi.restoreAllMocks();
   if (host) { await act(async () => root.unmount()); host.remove(); }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });
 
@@ -82,9 +80,6 @@ describe("Batch per-row merge override", () => {
     // Check CSS grid has 520px for Detection column (wider)
     const columns = q(".batch-columns") as HTMLElement | null;
     expect(columns).not.toBeNull();
-    const style = window.getComputedStyle(columns!);
-    // gridTemplateColumns should contain 520px (or at least wider than 300)
-    const grid = style.gridTemplateColumns || (columns as any).style.gridTemplateColumns || "";
     // In happy-dom computed style may be empty, so check our CSS file directly via class
     expect(document.documentElement.innerHTML || "").toBeDefined();
   });
