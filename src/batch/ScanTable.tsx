@@ -170,8 +170,8 @@ function rowClass(r: Row, active: boolean): string {
   return `svg-row batch-row ${r.status} ${review}${active ? " active" : ""}${r.selected ? " selected" : ""}${isWarning ? " warning-row" : ""}`;
 }
 
-function rowStyle(review: BatchReviewStatus): React.CSSProperties | undefined {
-  return review === "warning" ? { borderLeft: "3px solid #facc15" } : undefined;
+function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
+  return undefined;
 }
 
 function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide }: { r: Row } & ScanTableProps) {

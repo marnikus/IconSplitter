@@ -7,6 +7,7 @@ import { analyzeAsync, detectAsync, type Analysis, type Box } from "../lib/detec
 import { renderIcon, squareInfo } from "../lib/render";
 import { loadImageFile } from "../lib/dom";
 import { previewKey } from "../lib/batchpreview";
+import { idbPut, idbGetAll, idbClear, PREVIEW_STORE } from "./store";
 import type { SplitSettings } from "../lib/presets";
 import type { Row, RowMergeMap } from "./useBatch";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
@@ -56,6 +57,8 @@ function useLoadFile(root: DirHandleLike | null, custom?: LoadFile) {
     return fh.getFile();
   }, [root, custom]);
 }
+function savePersisted(entry: PreviewEntry) { void idbPut(PREVIEW_STORE, entry.relPath, entry); }
+async function loadPersisted(): Promise<Map<string, PreviewEntry>> { try { const all = await idbGetAll<PreviewEntry>(PREVIEW_STORE); const m = new Map<string, PreviewEntry>(); for (const e of all) if (e && e.relPath) m.set(e.relPath, e); return m; } catch { return new Map(); } }
 function makeFallback(relPath: string): PreviewEntry {
   return { relPath, count: 1, thumbs: [], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done" };
 }
@@ -108,7 +111,7 @@ function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; anal
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     await yieldToUI();
     const img = await loadImgSafe(file);
-    if (!img) { const fb = makeFallback(row.relPath); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); return fb; }
+    if (!img) { const fb = makeFallback(row.relPath); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); savePersisted(fb); return fb; }
     const an = await getOrAnalyze(img, row.relPath, analysis.current);
     await yieldToUI();
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -117,6 +120,7 @@ function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; anal
     const thumbs = await renderThumbsYielding(img, an, boxes, { ...split, mergeFrac: eff });
     const entry = buildEntry(row.relPath, boxes, thumbs);
     lru.current.set(row.relPath, { key, entry, at: Date.now() }); evictLru(lru.current);
+    savePersisted(entry);
     return entry;
   }, [split, loadFile, analysis, lru]);
 }
@@ -256,10 +260,16 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[
   const previewOne = usePreviewOne({ split, rowMerges: merges, loadFile, analysis, lru });
   const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef, onReviewed });
   const previewSingle = usePreviewSingle(previewOne, setPreviews, onReviewed);
-  const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
+  const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); void idbClear(PREVIEW_STORE); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
+  const clearMemory = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
-  useEffect(() => { clear(); }, [root, clear]);
+  const prevRootRef = useRef<DirHandleLike | null>(null);
+  useEffect(() => {
+    if (prevRootRef.current === null && root !== null) { prevRootRef.current = root; return; }
+    if (prevRootRef.current !== root) { clearMemory(); prevRootRef.current = root; }
+  }, [root, clearMemory]);
+  useEffect(() => { void (async () => { const loaded = await loadPersisted(); if (loaded.size > 0) setPreviews((prev) => { if (prev.size > 0) return prev; return loaded; }); })(); }, [setPreviews]);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };
 }

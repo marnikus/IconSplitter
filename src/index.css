@@ -417,8 +417,11 @@
 .batch-row:hover { background: #10182b; }
 .batch-row.selected:not(.active) { background: #111a31; }
 .batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
-.batch-row.warning-row { box-shadow: inset 3px 0 0 #facc15; }
-.batch-row.warning { box-shadow: inset 3px 0 0 #facc15; }
+.batch-row.warning-row { box-shadow: inset -3px 0 0 #facc15; }
+.batch-row.warning { box-shadow: inset -3px 0 0 #facc15; }
+.svg-row.warning::after,
+.svg-row.batch-row.warning::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 3px; background: #facc15; }
+.svg-row.warning-row::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 3px; background: #facc15; }
 
 
 .batch-columns,
