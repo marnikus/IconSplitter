@@ -151,6 +151,26 @@ describe("Selection V2 fills available space like Generate SVG", () => {
     expect(ws).toContain("min-height: 0");
   });
 
+  it("folder-path row does not grow with flex:1 0 100% (was blank area bug)", () => {
+    const sheet = css();
+    const fp = decls(sheet, ".folder-path");
+    // Must be flex 0 0 auto width 100%, not flex 1 0 100% which made it 100% tall in column layout
+    expect(fp).toContain("flex: 0 0 auto");
+    expect(fp).toContain("width: 100%");
+    expect(fp).not.toContain("flex: 1 0 100%");
+  });
+
+  it("list panels v2-panel and svg-panel flex to fill remaining space, not squeezed", () => {
+    const sheet = css();
+    const v2p = decls(sheet, ".v2-panel");
+    const svgP = decls(sheet, ".svg-panel");
+    for (const d of [v2p, svgP]) {
+      expect(d).toContain("flex: 1 1 auto");
+      expect(d).toContain("min-height: 0");
+      expect(d).toContain("min-width: 0");
+    }
+  });
+
   it("live DOM: v2-shell fills width when tab is selectionV2", async () => {
     act(() => setAppState({ tab: "selectionV2" }));
     await settle();
