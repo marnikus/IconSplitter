@@ -5,7 +5,7 @@ import { syncAndCollect, applyOutcomes } from "./statewrite";
 import { toOutcomes } from "./outcomes";
 import type { SourceStatus } from "../lib/statefile";
 import { processItems, type BatchItem, type ItemResult } from "./process";
-import { OUTPUT_DIR } from "../lib/presets";
+import { OUTPUT_DIR } from "../lib/batchlayout";
 import type { Preset } from "../lib/presets";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
