@@ -4,7 +4,7 @@
 // tab, happy-dom) mean "everything is near": the honest fallback, never a silently
 // empty preview (RULE 4). Owned here, not in the hook, so it is testable as math.
 
-import { OVERSCAN_PX } from "./previewlimits";
+import { NEAR_PROBE_MAX, OVERSCAN_PX } from "./previewlimits";
 
 export interface RowWindow {
   /** First and last near row, inclusive; both -1 when nothing is near. */
@@ -26,6 +26,58 @@ export function nearRange(tops: number[], viewTop: number, viewH: number, oversc
   const last = topOf(tops, bottom); // last row whose top is inside the band
   if (first < 0 || last < 0 || first > last) return { first: -1, last: -1, all: false };
   return { first, last, all: false };
+}
+
+export interface Rect {
+  top: number;
+  bottom: number;
+}
+
+/** What "nothing is known about the layout" means: every row is near (RULE 4). */
+export const NEAR_ALL: RowWindow = { first: -1, last: -1, all: true };
+
+/**
+ * The same band as `nearRange`, found without measuring every row: the row height is
+ * estimated from the first and last rect, the band is turned into an index guess, and
+ * the guess is walked outwards — at most `NEAR_PROBE_MAX` rows each way — until the
+ * band is covered. Measuring 1000 rects on every scroll frame is what made scrolling
+ * stutter during a preview, so the work has to be bounded by the viewport, not by the
+ * list. Rows with mixed heights are why the walk exists: the estimate alone would miss.
+ */
+export function nearWindow(probe: (index: number) => Rect, count: number, band: Rect, overscan: number = OVERSCAN_PX): RowWindow {
+  if (count <= 0) return NEAR_ALL;
+  const span: Rect = { top: probe(0).top, bottom: probe(count - 1).top };
+  if (span.top === span.bottom) return NEAR_ALL; // no vertical order to search: no layout at all
+  const scan: Rect = { top: band.top - overscan, bottom: band.bottom + overscan };
+  const guess = estimate(span, count, scan);
+  return { first: walkLeft(probe, guess.first, scan.top), last: walkRight(probe, guess.last, count, scan.bottom), all: false };
+}
+
+/** The index guess: uniform rows make it exact, mixed heights leave it to the walk. */
+function estimate(span: Rect, count: number, scan: Rect): { first: number; last: number } {
+  const perRow = (span.bottom - span.top) / (count - 1);
+  const at = (y: number) => Math.max(0, Math.min(count - 1, Math.round((y - span.top) / perRow)));
+  return { first: at(scan.top), last: at(scan.bottom) };
+}
+
+/** How far left the band reaches; bounded, because the list is not. */
+function walkLeft(probe: (index: number) => Rect, from: number, top: number): number {
+  let i = from;
+  for (let step = 0; step < NEAR_PROBE_MAX && i > 0; step++) {
+    if (probe(i - 1).bottom < top) break;
+    i--;
+  }
+  return i;
+}
+
+/** How far right it reaches; bounded for the same reason. */
+function walkRight(probe: (index: number) => Rect, from: number, count: number, bottom: number): number {
+  let i = from;
+  for (let step = 0; step < NEAR_PROBE_MAX && i < count - 1; step++) {
+    if (probe(i + 1).top > bottom) break;
+    i++;
+  }
+  return i;
 }
 
 export function isNear(win: RowWindow, index: number): boolean {

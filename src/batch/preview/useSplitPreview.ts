@@ -50,8 +50,9 @@ const IDLE: Progress = { done: 0, total: 0, icons: 0 };
 export function useSplitPreview(input: PreviewInput): SplitPreview {
   const { rows, checked, root, split, deps } = input;
   const [open, setOpen] = useState(false);
+  const [runSeq, setRunSeq] = useState(0);
   const [snap, setSnap] = useState<{ running: boolean; progress: Progress }>({ running: false, progress: IDLE });
-  const session = useMemo(() => createPreviewSession(deps), [deps]);
+  const session = useStableSession(deps);
   const isNear = useRowWindow(open);
   const selected = useMemo(() => rows.filter((r) => isEligible(r) && isChecked(checked, r)), [rows, checked]);
   const spec = useRef<SessionSpec>({ rows: selected, root, split, near: isNear });
@@ -61,31 +62,60 @@ export function useSplitPreview(input: PreviewInput): SplitPreview {
   useSnapshot(session, setSnap);
   useLeaving(session);
   usePins(open, session, isNear);
-  usePlan(open, planKey, session, spec);
+  usePlan({ open, runSeq, key: planKey }, session, spec);
   return {
     open,
     running: snap.running,
     progress: snap.progress,
     states: session.states,
     planned: useMemo(() => new Set(selected.map((r) => r.relPath.toLowerCase())), [selected]),
-    start: useCallback(() => setOpen(true), []),
+    start: useCallback(() => {
+      setOpen(true);
+      setRunSeq((n) => n + 1); // a press is a run, even when the plan did not change
+    }, []),
     stop: useCallback(() => session.stop(), [session]),
   };
 }
 
+/**
+ * ONE session for the component's lifetime, reading today's deps through a ref.
+ * The deps object is a seam for tests, not a lifecycle: keying the session on it
+ * rebuilt it whenever the app or a test passed a fresh object, which closed the
+ * running session (revoking every URL), restarted the plan and turned Stop into a
+ * no-op against a session that was already gone (2026-10-12).
+ */
+function useStableSession(deps: PreviewDeps): Session {
+  const latest = useRef(deps);
+  latest.current = deps;
+  const [session] = useState(() =>
+    createPreviewSession({
+      work: (job) => latest.current.work(job),
+      pause: () => (latest.current.pause ? latest.current.pause() : new Promise((r) => setTimeout(r, 0))),
+    }),
+  );
+  return session;
+}
+
 type Session = ReturnType<typeof createPreviewSession>;
 
-/** Progress updates are throttled: a 1000-row run must not re-render per row. */
+/**
+ * Progress updates are throttled (a 1000-row run must not re-render per row) and
+ * dropped when nothing changed: an idle session that keeps announcing the same
+ * numbers would otherwise re-render the whole panel forever.
+ */
 function useSnapshot(session: Session, setSnap: (s: { running: boolean; progress: Progress }) => void): void {
   useEffect(() => {
-    let last = 0;
+    const last = { at: 0, snap: { running: false, progress: IDLE } };
     let timer = 0;
     const push = () => {
-      last = Date.now();
-      setSnap({ running: session.isRunning(), progress: session.progress() });
+      last.at = Date.now();
+      const next = { running: session.isRunning(), progress: session.progress() };
+      if (sameSnap(last.snap, next)) return;
+      last.snap = next;
+      setSnap(next);
     };
     const off = session.onChange(() => {
-      const wait = PROGRESS_MS - (Date.now() - last);
+      const wait = PROGRESS_MS - (Date.now() - last.at);
       if (wait <= 0) return push();
       if (!timer) timer = window.setTimeout(() => ((timer = 0), push()), wait);
     });
@@ -96,36 +126,53 @@ function useSnapshot(session: Session, setSnap: (s: { running: boolean; progress
   }, [session, setSnap]);
 }
 
+function sameSnap(a: { running: boolean; progress: Progress }, b: { running: boolean; progress: Progress }): boolean {
+  return a.running === b.running && a.progress.done === b.progress.done && a.progress.total === b.progress.total && a.progress.icons === b.progress.icons;
+}
+
 /** Leaving the tab (or the panel) closes the session: strips die with their URLs. */
 function useLeaving(session: Session): void {
   useEffect(() => () => session.close(), [session]);
 }
 
 /** The viewport moved: only pinning changes, so the results already drawn survive. */
-function usePins(open: boolean, session: Session, isNear: (index: number) => boolean): void {
+function usePins(open: boolean, session: Session, isNear: (relPath: string) => boolean): void {
   useEffect(() => {
     if (open) session.setNear(isNear);
   }, [open, session, isNear]);
 }
 
-/** A plan change stops the old generation at once and replans after a short pause. */
-function usePlan(open: boolean, planKey: string, session: Session, spec: { current: SessionSpec }): void {
-  const started = useRef(false);
+/**
+ * When a run starts, and when a changed plan replans.
+ *
+ * A press starts immediately (that is what the button promised). A changed plan —
+ * rows selected or deselected, settings moved — stops the old generation at once
+ * (so no stale result can paint) and starts the new one after a short pause, which
+ * keeps a dragged slider or a fast selection from restarting a 1000-row run per
+ * keystroke. Rendering alone never starts anything: the effect only re-runs on a
+ * press, on a plan change, or on open/close.
+ */
+function usePlan(plan: { open: boolean; runSeq: number; key: string }, session: Session, spec: { current: SessionSpec }): void {
+  const started = useRef(0);
+  const { open, runSeq, key } = plan;
   useEffect(() => {
     if (!open) {
-      started.current = false;
+      started.current = 0;
       return;
     }
-    if (!started.current) {
-      started.current = true;
+    if (started.current !== runSeq) {
+      started.current = runSeq;
       session.start(spec.current);
       return;
     }
     const timer = window.setTimeout(() => session.start(spec.current), REPLAN_MS);
-    return () => window.clearTimeout(timer);
-    // planKey carries rows + settings + root; spec is a live mirror on purpose.
+    return () => {
+      window.clearTimeout(timer);
+      session.stop(); // the old generation must not paint while the new one waits
+    };
+    // the plan key carries rows + settings + root; spec is a live mirror on purpose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planKey, session]);
+  }, [open, runSeq, key, session]);
 }
 
 function fingerprintOf(split: SplitSettings): string {

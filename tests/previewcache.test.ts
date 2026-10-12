@@ -17,9 +17,33 @@ function harness(budget = 1000) {
   return { cache, revoked };
 }
 
-function entry(key: string, bytes: number, blobs = 1): PreviewEntry {
-  return { key, blobs: Array.from({ length: blobs }, () => new Blob([new Uint8Array(bytes)])), count: 3, usedFrac: 0.05 };
+function entry(key: string, bytes: number, blobs = 1, icons = 3): PreviewEntry {
+  return { key, blobs: Array.from({ length: blobs }, () => new Blob([new Uint8Array(bytes)])), icons, count: Math.min(icons, 512), usedFrac: 0.05 };
 }
+
+describe("previewcache — keepWhere: a settings change keeps what is still valid", () => {
+  it("keeps the frames of the current settings and revokes the rest, once each", () => {
+    const { cache, revoked } = harness();
+    cache.put(entry("a\u0000auto", 100));
+    cache.put(entry("b\u0000auto", 100));
+    cache.put(entry("a\u00000.05", 100));
+    cache.keepWhere((key) => key.endsWith("\u0000auto"));
+    expect(revoked).toEqual(["blob:url-3"]); // only the other settings' strip died
+    expect(cache.has("a\u0000auto")).toBe(true);
+    expect(cache.has("b\u0000auto")).toBe(true);
+    expect(cache.has("a\u00000.05")).toBe(false);
+    expect(cache.stats().bytes).toBe(200);
+  });
+
+  it("clear() is keepWhere of nothing, so every URL dies exactly once", () => {
+    const { cache, revoked } = harness();
+    cache.put(entry("a", 100, 2));
+    cache.put(entry("b", 100, 1));
+    cache.clear();
+    expect(revoked).toEqual(["blob:url-1", "blob:url-2", "blob:url-3"]);
+    expect(cache.stats()).toEqual({ items: 0, bytes: 0 });
+  });
+});
 
 describe("previewcache — bounded, honest about what it drops", () => {
   it("returns what was put and counts its real bytes", () => {

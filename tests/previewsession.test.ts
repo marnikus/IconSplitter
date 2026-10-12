@@ -84,15 +84,17 @@ describe("previewsession — one session, one generation, honest rows", () => {
     expect(session.isRunning()).toBe(false);
   });
 
-  it("a replan drops the old generation's strips and gives their URLs back (RULE 20)", async () => {
+  it("never leaves a revoked URL on a row, whatever the replan dropped (RULE 20)", async () => {
     const { session, revoked } = harness(() => ok(2));
-    session.start(spec(["a.png"]));
+    session.start(spec(["a.png", "b.png"]));
     await session.settled();
-    expect(session.states.get("a.png").urls).toEqual(["blob:s-1"]);
-    session.start(spec(["a.png"])); // same row, new settings downstream: new generation
+    session.start({ ...spec(["a.png", "b.png"]), split: { ...SPLIT, padding: 20 } });
     await session.settled();
-    expect(revoked).toEqual(["blob:s-1"]);
-    expect(session.states.get("a.png").urls).toEqual(["blob:s-2"]);
+    // The old settings' strips died; nothing on screen may still point at them.
+    const shown = ["a.png", "b.png"].flatMap((rel) => session.states.get(rel).urls);
+    expect(revoked).toEqual(["blob:s-1", "blob:s-2"]);
+    expect(shown).toEqual(["blob:s-3", "blob:s-4"]);
+    for (const url of revoked) expect(shown).not.toContain(url);
   });
 
   it("close() takes every URL with it — nothing is left to leak (D9)", async () => {
@@ -115,5 +117,64 @@ describe("previewsession — one session, one generation, honest rows", () => {
     expect(calls).toBe(0);
     expect(session.progress()).toEqual({ done: 0, total: 0, icons: 0 });
     expect(session.isRunning()).toBe(false);
+  });
+});
+
+describe("previewsession — a replan keeps what the same settings already produced", () => {
+  it("replays finished rows from the cache instead of reading them again", async () => {
+    let calls = 0;
+    const { session } = harness(() => {
+      calls++;
+      return ok(3, 40);
+    });
+    session.start(spec(["a.png", "b.png"]));
+    await session.settled();
+    expect(calls).toBe(2);
+    const images = session.states.get("a.png").urls;
+    expect(images).toHaveLength(1);
+    session.start(spec(["a.png", "b.png"])); // the button pressed again: same rows, same settings
+    await session.settled();
+    expect(calls, "a re-run read the files again").toBe(2);
+    expect(session.states.get("a.png").urls).toEqual(images); // the very same strips, still alive
+    expect(session.states.get("a.png").message).toBe("3 icons");
+    expect(session.progress()).toEqual({ done: 2, total: 2, icons: 6 });
+  });
+
+  it("reads only the rows the new plan added", async () => {
+    const calls: string[] = [];
+    const { session } = harness((rel) => {
+      calls.push(rel);
+      return ok(2);
+    });
+    session.start(spec(["a.png", "b.png", "c.png"]));
+    await session.settled();
+    session.start(spec(["a.png", "b.png", "c.png", "d.png"])); // one more row selected
+    await session.settled();
+    expect(calls).toEqual(["a.png", "b.png", "c.png", "d.png"]); // only d.png was read again
+    expect(session.progress()).toEqual({ done: 4, total: 4, icons: 8 });
+  });
+
+  it("does NOT reuse strips when the settings changed (D8: the preview may not lie)", async () => {
+    let calls = 0;
+    const { session } = harness(() => {
+      calls++;
+      return ok(2);
+    });
+    session.start(spec(["a.png"]));
+    await session.settled();
+    session.start({ ...spec(["a.png"]), split: { ...SPLIT, mergeFrac: 0.05 } });
+    await session.settled();
+    expect(calls, "the old merge distance was reused for a new one").toBe(2);
+  });
+
+  it("lets go of the strips whose settings are gone (RULE 20: URL revoked)", async () => {
+    const { session, revoked } = harness(() => ok(2));
+    session.start(spec(["a.png"]));
+    await session.settled();
+    expect(session.states.get("a.png").urls).toHaveLength(1);
+    session.start({ ...spec(["a.png"]), split: { ...SPLIT, padding: 12 } });
+    await session.settled();
+    expect(revoked).toEqual(["blob:s-1"]); // the old setting's strip is gone, exactly once
+    expect(session.states.get("a.png").urls).toEqual(["blob:s-2"]);
   });
 });

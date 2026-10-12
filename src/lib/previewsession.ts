@@ -18,8 +18,9 @@ export interface SessionSpec {
   rows: { relPath: string }[];
   root: DirHandleLike | null;
   split: SplitSettings;
-  /** Near-viewport test by list position (D4); those rows are planned first. */
-  near: (index: number) => boolean;
+  /** Is this row near the viewport (D4)? Those rows are planned first. Asked by row
+   *  identity, because the list order is not the DOM order once a filter hides rows. */
+  near: (relPath: string) => boolean;
 }
 
 export interface PreviewSession {
@@ -31,7 +32,7 @@ export interface PreviewSession {
   /** Stop and release everything — the caller is leaving (URLs revoked, RULE 20). */
   close(): void;
   /** The viewport moved: pin what is visible, unpin the rest (D6). */
-  setNear(near: (index: number) => boolean): void;
+  setNear(near: (relPath: string) => boolean): void;
   progress(): Progress;
   isRunning(): boolean;
   /** Resolves when the queue has drained (tests, and the "session finished" toast). */
@@ -51,10 +52,12 @@ interface Ctx {
   listeners: Set<() => void>;
   generation: number;
   icons: number;
+  /** Rows this plan already had a strip for: counted as done, never read again. */
+  replayed: number;
   running: boolean;
   fingerprint: string;
   planned: string[];
-  near: (index: number) => boolean;
+  near: (relPath: string) => boolean;
 }
 
 export function createPreviewSession(deps: PreviewDeps, cacheDeps?: CacheDeps): PreviewSession {
@@ -73,6 +76,7 @@ function freshCtx(deps: PreviewDeps, cacheDeps?: CacheDeps): Ctx {
     listeners: new Set(),
     generation: 0,
     icons: 0,
+    replayed: 0,
     running: false,
     fingerprint: "",
     planned: [],
@@ -93,7 +97,10 @@ function apiOf(ctx: Ctx): PreviewSession {
       ctx.near = near;
       applyPins(ctx);
     },
-    progress: () => ({ ...ctx.queue.progress(), icons: ctx.icons }),
+    progress: () => {
+      const ran = ctx.queue.progress();
+      return { done: ran.done + ctx.replayed, total: ctx.planned.length, icons: ctx.icons };
+    },
     isRunning: () => ctx.running,
     settled: () => ctx.queue.settled(),
     onChange(listener) {
@@ -114,23 +121,39 @@ function startSession(ctx: Ctx, spec: SessionSpec): void {
   ctx.generation += 1;
   ctx.fingerprint = fingerprintOf(spec.split);
   ctx.planned = spec.rows.map((r) => r.relPath);
-  ctx.icons = 0;
   ctx.near = spec.near;
-  ctx.running = spec.rows.length > 0;
   ctx.states.clear();
-  ctx.cache.clear(); // one generation in memory at a time (D6)
-  ctx.queue.setRows(spec.rows.map((row, index) => planRow(ctx, spec, row.relPath, index)), ctx.generation);
+  ctx.icons = 0;
+  ctx.replayed = 0;
+  // Strips drawn at another merge distance are not this plan's strips: they go now
+  // (URLs revoked once). Strips of the SAME settings stay — re-pressing Preview, or
+  // adding one row to a thousand, must not redo work the user can already see (D3/D8).
+  ctx.cache.keepWhere((key) => settingsOfKey(key) === ctx.fingerprint);
+  const todo = spec.rows.map((row) => row.relPath).filter((relPath) => !replayRow(ctx, relPath));
+  ctx.running = todo.length > 0;
+  ctx.queue.setRows(todo.map((relPath) => planRow(ctx, spec, relPath)), ctx.generation);
   notify(ctx);
 }
 
-function planRow(ctx: Ctx, spec: SessionSpec, relPath: string, index: number): PreviewRow<StripResult> {
+/** A row this plan already has a strip for: shown at once, never read again. */
+function replayRow(ctx: Ctx, relPath: string): boolean {
+  const entry = ctx.cache.get(cacheKeyOf(relPath, ctx.fingerprint));
+  if (!entry) return false;
+  ctx.cache.pin(entry.key, ctx.near(relPath));
+  ctx.states.set(relPath, rowPreview(entry.icons, entry.urls));
+  ctx.icons += entry.icons;
+  ctx.replayed += 1;
+  return true;
+}
+
+function planRow(ctx: Ctx, spec: SessionSpec, relPath: string): PreviewRow<StripResult> {
   return {
     key: relPath,
-    near: spec.near(index),
+    near: spec.near(relPath),
     work: async (token) => {
       ctx.states.set(relPath, READING);
       const result = await ctx.deps.work({ root: spec.root, relPath, split: spec.split, token });
-      if (result.kind === "ok") ctx.cache.pin(cacheKeyOf(relPath, ctx.fingerprint), ctx.near(index));
+      if (result.kind === "ok") ctx.cache.pin(cacheKeyOf(relPath, ctx.fingerprint), ctx.near(relPath));
       return result;
     },
   };
@@ -177,29 +200,34 @@ function stateFor(event: QueueEvent<StripResult>): RowPreview {
 }
 
 function finishRow(ctx: Ctx, relPath: string, value: StripResult): void {
-  const chunks = stripChunks(value.count);
-  ctx.icons += value.count;
   const key = cacheKeyOf(relPath, ctx.fingerprint);
-  const cached = ctx.cache.put({ key, blobs: value.blobs, count: chunks.shown, usedFrac: value.usedFrac });
+  const cached = ctx.cache.put({ key, blobs: value.blobs, count: stripChunks(value.count).shown, icons: value.count, usedFrac: value.usedFrac });
   if (cached !== "ok") {
     ctx.states.set(relPath, { ...PENDING, state: "error", message: "Preview is larger than the memory budget" });
     return;
   }
-  ctx.states.set(relPath, {
+  ctx.icons += value.count;
+  ctx.states.set(relPath, rowPreview(value.count, ctx.cache.get(key)?.urls ?? []));
+}
+
+/** What a row says once its strip exists — the same words whether it was just drawn or replayed. */
+function rowPreview(icons: number, urls: string[]): RowPreview {
+  const chunks = stripChunks(icons);
+  return {
     state: chunks.capped ? "capped" : "ready",
-    urls: ctx.cache.get(key)?.urls ?? [],
+    urls,
     count: chunks.shown,
-    icons: value.count,
+    icons,
     capped: chunks.capped,
-    message: chunks.capped ? `first ${chunks.shown} of ${value.count} icons` : `${value.count} icons`,
-  });
+    message: chunks.capped ? `first ${chunks.shown} of ${icons} icons` : `${icons} icons`,
+  };
 }
 
 // ---- small helpers -------------------------------------------------------------
 
 /** Which of the planned rows are visible right now (D6: visible rows are pinned). */
 function applyPins(ctx: Ctx): void {
-  ctx.planned.forEach((relPath, index) => ctx.cache.pin(cacheKeyOf(relPath, ctx.fingerprint), ctx.near(index)));
+  for (const relPath of ctx.planned) ctx.cache.pin(cacheKeyOf(relPath, ctx.fingerprint), ctx.near(relPath));
 }
 
 function fingerprintOf(split: SplitSettings): string {
@@ -212,4 +240,9 @@ function cacheKeyOf(relPath: string, fingerprint: string): string {
 
 function relPathOf(key: string): string {
   return key.split("\u0000")[0];
+}
+
+/** The settings part of a cache key (D8): strips of other settings are not this plan's. */
+function settingsOfKey(key: string): string {
+  return key.split("\u0000")[1] ?? "";
 }

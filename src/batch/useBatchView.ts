@@ -8,7 +8,7 @@ import { loadBatchPrefs, saveBatchPrefs, type BatchPrefs } from "../lib/batchpre
 import { clampZoom } from "../lib/zoom";
 import { useBatchSelection, type BatchSelection } from "./useBatchSelection";
 import { useSplitPreview, type SplitPreview } from "./preview/useSplitPreview";
-import { livePreviewDeps, type PreviewDeps } from "./preview/previewdeps";
+import { LIVE_PREVIEW_DEPS, type PreviewDeps } from "./preview/previewdeps";
 import type { CheckState, SelectIntent } from "../lib/reviewselect";
 import type { Row } from "./useBatch";
 
@@ -55,7 +55,7 @@ export function useBatchView(previewDeps?: PreviewDeps): BatchView {
     checked: sel.checked,
     root: core.rootRef.current,
     split: core.s.preset.split,
-    deps: previewDeps ?? livePreviewDeps(),
+    deps: previewDeps ?? LIVE_PREVIEW_DEPS,
   });
   return makeView({ core, ps, visible, sel, preview });
 }

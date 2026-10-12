@@ -112,6 +112,19 @@ beforeEach(async () => {
 });
 
 describe("Batch V2 selection: active row separate from checked", () => {
+  it("a bare row click flips that row only — no other row is touched (the control the tab had before the preview work)", async () => {
+    const on = (rel: string) => (q(`[data-testid='row-select-${rel}']`) as HTMLInputElement).checked;
+    await rowClick("icon-a_AI_1.png");
+    expect(on("icon-a_AI_1.png")).toBe(true);
+    await rowClick("icon-b_AI_2.png");
+    expect(on("icon-b_AI_2.png"), "the clicked row was not selected").toBe(true);
+    expect(on("icon-a_AI_1.png"), "clicking one row deselected another").toBe(true);
+    await rowClick("icon-b_AI_2.png"); // clicking the same row again takes it back
+    expect(on("icon-b_AI_2.png")).toBe(false);
+    expect(on("icon-a_AI_1.png")).toBe(true);
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/1 selected/);
+  });
+
   it("purple active row is separate from checked bulk rows", async () => {
     const rows = qAll("[data-testid^='batch-row-'][role='listitem']");
     expect(rows.length).toBe(3);

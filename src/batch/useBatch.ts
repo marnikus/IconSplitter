@@ -62,7 +62,13 @@ export function useBatch() {
 function useCtx(s: BatchState): Ctx {
   const stateRef = useRef(s);
   stateRef.current = s; // render-mirror so async callbacks read live state (RULE 24)
-  return { root: useRef(null), dest: useRef(null), keys: useRef([]), stop: useRef(false), state: stateRef };
+  const ref = useRef<Ctx | null>(null);
+  // ONE object for the component's lifetime: every read goes through `.current`, so a
+  // stable identity costs nothing — while a fresh object per render made every
+  // `useCallback([ctx])` (thumbUrl, and through it the list's memo) new on every render,
+  // which re-rendered all rows and re-ran their thumbnail effects (2026-10-12).
+  ref.current ??= { root: { current: null }, dest: { current: null }, keys: { current: [] }, stop: { current: false }, state: stateRef };
+  return ref.current;
 }
 function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   const chooseRoot = useCallback(async () => {

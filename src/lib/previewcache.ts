@@ -10,6 +10,9 @@ export interface PreviewEntry {
   key: string;
   /** One PNG per chunk canvas, left to right. */
   blobs: Blob[];
+  /** Icons the row HAS at this merge distance (the honest total). */
+  icons: number;
+  /** Icons this strip shows — `icons` capped at the per-row limit (RULE 4). */
   count: number;
   usedFrac: number;
 }
@@ -33,6 +36,8 @@ export interface PreviewCache {
   put(entry: PreviewEntry): "ok" | "too-big";
   pin(key: string, pinned: boolean): void;
   drop(key: string): void;
+  /** Keeps the frames `keep` accepts and revokes the rest, exactly once each. */
+  keepWhere(keep: (key: string) => boolean): void;
   clear(): void;
   stats(): { items: number; bytes: number };
   /** Told when a strip leaves the cache, so nobody keeps showing a revoked URL. */
@@ -71,7 +76,8 @@ export function createPreviewCache(deps: CacheDeps = {}): PreviewCache {
     put: (entry) => insertFrame(st, entry),
     pin: (key, pinned) => pinFrame(st, key, pinned),
     drop: (key) => dropFrame(st, key),
-    clear: () => clearFrames(st),
+    keepWhere: (keep) => keepFrames(st, keep),
+    clear: () => keepFrames(st, () => false),
     stats: () => ({ items: st.frames.size, bytes: st.bytes }),
     onDrop(listener) {
       st.dropped.add(listener);
@@ -84,7 +90,7 @@ function readFrame(st: CacheState, key: string): CachedStrip | undefined {
   const f = st.frames.get(key);
   if (!f) return undefined;
   f.used = ++st.clock; // reading is using, and using is what LRU evicts last
-  return { key, blobs: f.blobs, urls: f.urls, count: f.count, usedFrac: f.usedFrac, bytes: f.bytes };
+  return { key, blobs: f.blobs, urls: f.urls, icons: f.icons, count: f.count, usedFrac: f.usedFrac, bytes: f.bytes };
 }
 
 function insertFrame(st: CacheState, entry: PreviewEntry): "ok" | "too-big" {
@@ -131,6 +137,12 @@ function dropFrame(st: CacheState, key: string): void {
   for (const l of st.dropped) l(key);
 }
 
-function clearFrames(st: CacheState): void {
-  for (const key of [...st.frames.keys()]) dropFrame(st, key);
+/**
+ * The one way a whole set of frames leaves: everything the predicate rejects.
+ * A replan after a settings change keeps only the frames of the new settings, so
+ * re-previewing the same rows with the same settings costs nothing, while a strip
+ * drawn at another merge distance can never be mistaken for the new one (D8).
+ */
+function keepFrames(st: CacheState, keep: (key: string) => boolean): void {
+  for (const key of [...st.frames.keys()]) if (!keep(key)) dropFrame(st, key);
 }

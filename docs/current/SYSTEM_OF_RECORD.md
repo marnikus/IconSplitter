@@ -111,6 +111,20 @@ Batch folders:
   every strip URL. Caps are stated in text, never applied silently: at most 512
   icons per row ("first 512 of 913 icons"), at most 8192 px per strip canvas, at
   most 32 MB of cached strips.
+* **A preview is press-and-go, and pressing it again is cheap (2026-10-12, I-70).**
+  The session lives as long as the tab does (one session per visit, never rebuilt by
+  a render — that bug revoked every strip the moment it was drawn, restarted the plan
+  four times a second and made Stop meaningless). A strip is reused only when BOTH the
+  row and the preset settings it was drawn with are the ones being planned: pressing
+  Preview again, or adding one row to a thousand, reads only what is genuinely new;
+  changing merge/padding/size/transparency drops the previous strips (URLs revoked
+  once) and re-plans every row. Stop ends the run, keeps the strips already drawn,
+  and the button starts a new run.
+* **Scrolling never measures the whole list (2026-10-12, I-70).** The near-viewport
+  band is found by estimate plus a bounded walk (`NEAR_PROBE_MAX = 24` rows each way),
+  so a 1000-row list costs a few dozen rects per frame instead of a thousand, and the
+  band is returned as row identities — an index into the filtered list would plan the
+  wrong rows whenever a filter, a sort or a single unchecked box changed the plan.
 
 Selection:
 
@@ -133,6 +147,10 @@ Selection:
   that resolves later commits nothing, and an unchanged snapshot commits
   nothing at all (no row replacement, no churn). A completed scan is committed
   in one block, after which only the best-effort id→path cache write is left.
+* **A bare row click flips that row and nothing else (2026-10-12).** The checkbox and
+  the row do the same thing — add this row, or take it back — and Shift still selects
+  the range from the last clicked row (Ctrl/Alt/Meta flips one row). Selection V2 keeps
+  its own "click replaces the selection" rule; the Batch list is not a V2 list.
 * Review list: thumbnail, filename, relative folder, creation date, status
   chip with text + glyph; search, month / custom-range date filters, status
   filter, sorting by date/status/name/path in both directions, counters.
@@ -1259,6 +1277,12 @@ Batch:
   the preview shares `batchsplit.planSplit` with the split, so preview and split
   cannot drift (asserted by `tests/batch_preview_parity.test.ts`). Decoded images are
   transient (one row at a time) and every cached strip URL is revoked on eviction.
+* **I-70 (batch preview, RULE 20/24 — 2026-10-12):** a preview result is reused only
+  when the row AND the preset settings it was drawn with match the current plan; the
+  session is one per tab visit (a render must never rebuild it), and every URL of a
+  result that is no longer usable is revoked exactly once. Reuse is what makes
+  "Preview again" and "add one more row" cheap on a 1000-row selection; the
+  fingerprint check is what keeps it honest (D8: the preview may not lie).
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /

@@ -45,7 +45,13 @@ export async function readStrip(job: StripJob): Promise<RowResult<StripResult>> 
   return { kind: "ok", value: { blobs, count: plan.boxes.length, usedFrac: plan.usedFrac } };
 }
 
-/** The deps the Batch tab runs with in the app (tests inject their own). */
-export function livePreviewDeps(): PreviewDeps {
-  return { work: readStrip };
-}
+/**
+ * The deps the Batch tab runs with in the app (tests inject their own).
+ *
+ * ONE frozen object for the whole app on purpose: the session hook keys its session
+ * on this value, so handing it a fresh object per render used to rebuild (and close)
+ * the session on every render — every strip URL revoked before it could paint, the
+ * plan restarted four times a second, and Stop only ever stopping a session that was
+ * already being replaced (2026-10-12). Stable identity is part of the contract.
+ */
+export const LIVE_PREVIEW_DEPS: PreviewDeps = Object.freeze({ work: readStrip }) as PreviewDeps;

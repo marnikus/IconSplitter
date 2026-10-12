@@ -116,3 +116,24 @@ the caps (512 icons/row, 8192 px/chunk, 32 MB) are what bound them.
 Invariants touched: I-66 (one merge control, in the preset), I-67 (a preview
 writes nothing), I-68 (interruptible, per-row failures isolated, no stale paint),
 I-69 (pixels from `renderIcon` with the preset's own opts; URLs revoked).
+
+## 6. The tab that froze — measured before and after (2026-10-12, second pass)
+
+`tests/batch_preview_live.test.tsx` drives the LIVE path (no injected deps) over a
+3-row fake root with a counting `loadImageFile`. Every line below was a failure
+before the fix:
+
+| Symptom the user saw | Measurement | Before | After |
+|---|---|---|---|
+| "no previews show up" | rows with a painted strip | 0 of 3 (the session was rebuilt on every render, closing it and revoking every URL) | 3 of 3 |
+| "frozen after run preview" | `loadImageFile` calls after 1.2 s idle | grew without bound (a 250 ms restart loop, each restart re-reading from row 1) | exactly 3, one per row |
+| "stop preview not stop" | calls after Stop + 1.5 s | 7 (kept reading) | 0 (the in-flight row is the last) |
+| "click btn after" (press again) | calls on a second press | re-read everything | 0 — cached rows are replayed (`keepWhere` + replay in `startSession`) |
+
+Cost of the viewport search, by construction: `NEAR_PROBE_MAX = 24` rows probed per
+direction per frame (~50 rects worst case) instead of one `getBoundingClientRect()`
+per mounted row, and the band is returned as row identities so it stays correct when
+filters/sort/selection change which rows are planned. `lib/rowwindow.nearWindow`
+is covered by `preview_viewport.test.ts` against the linear-scan oracle
+(`nearRange`), including mixed row heights and a layout-free DOM (which reads as
+"everything is near" rather than an empty preview, RULE 4).

@@ -25,6 +25,11 @@ export const REPLAN_MS = 250;
 /** Rows this far outside the viewport are still planned first (D4). */
 export const OVERSCAN_PX = 300;
 
+/** Rows the viewport search is allowed to measure per direction, per frame. The
+ *  band is found by estimate + a bounded walk, so scrolling never reads 1000 rects
+ *  (which is what made the list stutter while a preview ran, D4). */
+export const NEAR_PROBE_MAX = 24;
+
 /** Progress text refreshes at most this often: a 1000-row run must not re-render
  *  the list per finished row (D6 — the counter is for a human, not for the loop). */
 export const PROGRESS_MS = 250;

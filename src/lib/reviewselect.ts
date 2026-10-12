@@ -32,11 +32,20 @@ export function checkedInView(visibleIds: readonly string[], checked: readonly s
 
 export type SelectIntent = "replace" | "range" | "toggle";
 
-/** File-Explorer modifiers: shift extends a range, ctrl/alt/meta toggles one row. */
-export function selectIntent(mods: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }): SelectIntent {
+/**
+ * File-Explorer modifiers: shift extends a range, ctrl/alt/meta toggles one row.
+ * `plain` is what a bare click means for THIS list — Selection review replaces the
+ * selection with the clicked row, while the Batch list treats a click like its own
+ * checkbox and only flips that one row (2026-10-12). A modifier always wins, so a
+ * bare click can never be mistaken for a range.
+ */
+export function selectIntent(
+  mods: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean },
+  plain: SelectIntent = "replace",
+): SelectIntent {
   if (mods.shiftKey) return "range";
   if (mods.ctrlKey || mods.altKey || mods.metaKey) return "toggle";
-  return "replace";
+  return plain;
 }
 
 /** A plain click: this row alone. */

@@ -122,7 +122,7 @@ Primary header controls:
 | `batch-refresh` | `↺ Rescan` | re-walks root; gated on handle + permission |
 | `batch-process` | `▶ Split selected` | disabled when 0 selected (RULE 4) |
 | `batch-preview` | `👁 Preview splits (N)` | beside `batch-process`; disabled with 0 selected or while a preview runs (I-67) |
-| `batch-preview-stop` | `✕ Stop preview` | visible only while a preview session is running (I-68) |
+| `batch-preview-stop` | `✕ Stop preview` | visible only while a preview session is running (I-68); stopping keeps the strips already drawn and the same button starts a new run (I-70) |
 | `batch-preview-progress` | text, `aria-live="polite"` | `Previewed 137/1000 rows · 412 icons`; shown while a session is open |
 | `batch-cancel` | `✕ Stop` | shown only while busy; sets the stop signal |
 | `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output` |

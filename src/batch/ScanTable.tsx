@@ -166,7 +166,9 @@ function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selec
       const t = e.target as HTMLElement;
       if (t.closest('input[type="checkbox"]') || t.closest("button")) return;
       const mods: RowMods = { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey };
-      selectRow(r.relPath, selectIntent(mods));
+      // A bare click in this list does what the row's own checkbox does — flips it —
+      // and never touches another row (2026-10-12).
+      selectRow(r.relPath, selectIntent(mods, "toggle"));
     },
     [r, disabled, selectRow],
   );

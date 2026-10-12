@@ -88,7 +88,7 @@ function useApplySelect(visible: BatchRow[], push: PushFn) {
       const vIds = selectableIds(visible);
       if (vIds.length === 0) return;
       const nextIds = intent === "range" ? selectRange(vIds, before.anchorId, id) : intent === "toggle" ? toggleChecked(before.checked, id) : selectOne(id);
-      const nextAnchor = intent === "toggle" ? before.anchorId : id;
+      const nextAnchor = id; // the last row you clicked is the anchor Shift extends from
       const changed = intent === "range" ? nextIds : [id];
       push(selectionLabel(nextIds), { ids: before.checked, anchor: before.anchorId, active: before.activeId }, { ids: nextIds, anchor: nextAnchor, active: id }, changed);
       patchBatch({ checked: nextIds, anchorId: nextAnchor, activeId: id });
