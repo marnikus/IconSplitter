@@ -2123,8 +2123,8 @@
     }
   },
   "src/lib/detect.ts": {
-    "file_lines": 387,
-    "func_count": 49,
+    "file_lines": 386,
+    "func_count": 56,
     "funcs": {
       "median": {
         "loc": 1,
@@ -2133,7 +2133,7 @@
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 8,
+        "loc": 6,
         "params": 2,
         "cc": 8,
         "nesting": 2
@@ -2151,13 +2151,13 @@
         "nesting": 0
       },
       "backgroundByMode": {
-        "loc": 23,
+        "loc": 17,
         "params": 3,
         "cc": 10,
         "nesting": 3
       },
       "estimateBackground": {
-        "loc": 6,
+        "loc": 4,
         "params": 3,
         "cc": 2,
         "nesting": 1
@@ -2169,7 +2169,7 @@
         "nesting": 1
       },
       "diffHistAsync": {
-        "loc": 11,
+        "loc": 10,
         "params": 4,
         "cc": 5,
         "nesting": 2
@@ -2180,26 +2180,32 @@
         "cc": 3,
         "nesting": 2
       },
-      "maskFromDiffSync": {
-        "loc": 9,
-        "params": 4,
-        "cc": 5,
-        "nesting": 2
+      "makeDownsample": {
+        "loc": 4,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
       },
-      "maskFromDiffAsync": {
-        "loc": 11,
-        "params": 4,
-        "cc": 7,
-        "nesting": 2
+      "maskDownsampleSync": {
+        "loc": 15,
+        "params": 3,
+        "cc": 6,
+        "nesting": 3
+      },
+      "maskDownsampleAsync": {
+        "loc": 16,
+        "params": 3,
+        "cc": 8,
+        "nesting": 3
       },
       "analyze": {
-        "loc": 13,
+        "loc": 12,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "analyzeAsync": {
-        "loc": 14,
+        "loc": 13,
         "params": 1,
         "cc": 1,
         "nesting": 0
@@ -2228,15 +2234,27 @@
         "cc": 3,
         "nesting": 1
       },
-      "floodFill": {
+      "updateBounds": {
+        "loc": 4,
+        "params": 4,
+        "cc": 1,
+        "nesting": 0
+      },
+      "pushNeighbors": {
+        "loc": 12,
+        "params": 4,
+        "cc": 9,
+        "nesting": 3
+      },
+      "floodFillBounds": {
         "loc": 12,
         "params": 3,
-        "cc": 9,
-        "nesting": 4
+        "cc": 3,
+        "nesting": 2
       },
-      "label": {
-        "loc": 7,
-        "params": 5,
+      "labelWithBounds": {
+        "loc": 10,
+        "params": 2,
         "cc": 4,
         "nesting": 2
       },
@@ -2265,61 +2283,67 @@
         "nesting": 4
       },
       "removeGridLines": {
-        "loc": 7,
+        "loc": 5,
         "params": 3,
         "cc": 4,
         "nesting": 3
       },
-      "countAtRadiusSync": {
-        "loc": 8,
+      "filterBySizeGrid": {
+        "loc": 12,
         "params": 4,
-        "cc": 1,
-        "nesting": 0
-      },
-      "countAtRadiusAsync": {
-        "loc": 8,
-        "params": 4,
-        "cc": 1,
-        "nesting": 0
-      },
-      "buildSeriesSync": {
-        "loc": 7,
-        "params": 4,
-        "cc": 5,
+        "cc": 10,
         "nesting": 2
       },
-      "buildSeriesAsync": {
+      "countAtRadiusFastSync": {
+        "loc": 4,
+        "params": 4,
+        "cc": 1,
+        "nesting": 0
+      },
+      "nextR": {
+        "loc": 1,
+        "params": 1,
+        "cc": 2,
+        "nesting": 0
+      },
+      "buildSeriesFastSync": {
         "loc": 10,
         "params": 4,
-        "cc": 6,
-        "nesting": 2
+        "cc": 7,
+        "nesting": 3
+      },
+      "buildSeriesFastAsync": {
+        "loc": 11,
+        "params": 4,
+        "cc": 8,
+        "nesting": 3
       },
       "bestRun": {
-        "loc": 11,
+        "loc": 8,
         "params": 1,
         "cc": 6,
         "nesting": 2
       },
-      "updateBounds": {
+      "updateBoundsPx": {
         "loc": 4,
         "params": 4,
         "cc": 5,
         "nesting": 1
       },
       "extractBoxesSync": {
-        "loc": 20,
+        "loc": 15,
         "params": 4,
         "cc": 9,
         "nesting": 3
       },
       "extractBoxesAsync": {
-        "loc": 10,
+        "loc": 7,
         "params": 4,
         "cc": 4,
         "nesting": 2
       },
       "scanRowSync": {
-        "loc": 11,
+        "loc": 4,
         "params": 2,
         "cc": 5,
         "nesting": 2
@@ -2331,37 +2355,55 @@
         "nesting": 2
       },
       "isInside": {
-        "loc": 3,
+        "loc": 1,
         "params": 2,
         "cc": 4,
         "nesting": 0
       },
       "filterContained": {
-        "loc": 10,
+        "loc": 5,
         "params": 1,
         "cc": 4,
         "nesting": 2
       },
       "filterBySize": {
-        "loc": 10,
+        "loc": 8,
         "params": 3,
         "cc": 1,
         "nesting": 0
       },
       "orderBoxes": {
-        "loc": 10,
+        "loc": 8,
         "params": 1,
         "cc": 3,
         "nesting": 2
       },
+      "getDownsample": {
+        "loc": 6,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
+      },
+      "getDownsampleAsync": {
+        "loc": 6,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
+      },
+      "fastRMax": {
+        "loc": 1,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
       "detect": {
-        "loc": 16,
+        "loc": 15,
         "params": 2,
         "cc": 4,
         "nesting": 0
       },
       "detectAsync": {
-        "loc": 19,
+        "loc": 18,
         "params": 2,
         "cc": 4,
         "nesting": 0
