@@ -95,7 +95,7 @@ function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset
   return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} /></div>;
 }
 function Overlays({ v }: { v: View }) {
-  const showBusy = v.core.s.busy && !v.core.s.running;
+  const showBusy = !!v.core.s.busy;
   if (!showBusy && !v.core.s.toast) return null;
   return <>{showBusy && <BusyOverlay msg={v.core.s.busy!} cancel={v.core.cancel} />}{v.core.s.toast && <div data-testid="batch-toast" className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${v.core.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>{v.core.s.toast.msg}</div>}</>;
 }
@@ -104,7 +104,13 @@ function RefWarnings({ count }: { count: number }) {
   return <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="ref-warnings">⚠ {count} image{count === 1 ? " has" : "s have"} no reference file. You can deselect {count === 1 ? "it" : "them"} to skip, or continue — exports will simply omit the reference copy.</p>;
 }
 function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
-  return <div data-testid="batch-busy" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm"><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl"><span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" /><span className="text-sm">{msg}</span><button className="btn-mini" onClick={cancel}>Stop</button></div></div>;
+  return (
+    <div data-testid="batch-busy" className="fixed left-1/2 z-40 toast-above-dock -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900 px-4 py-2 text-sm shadow-xl">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+      <span>{msg}</span>
+      <button className="btn-mini ml-1" onClick={cancel}>Stop</button>
+    </div>
+  );
 }
 function copyPath(v: View, relPath: string): void {
   void copyFolderText(v.core.rootRef.current, relPath, v.core.say);

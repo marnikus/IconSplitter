@@ -17,7 +17,9 @@ import { yieldToFrame } from "../lib/yield";
 
 async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
   const tree = await readDirTree(root, preset.ignoreFolders);
+  await yieldToFrame();
   const entries = walkTree(tree, preset.ignoreFolders);
+  await yieldToFrame();
   return linkReferences(collectAiImages(entries), entries);
 }
 
@@ -80,7 +82,8 @@ export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   const init = makeBatchProgress(selected.length, runId);
   init.currentRelPath = selected[0]?.relPath ?? null;
   init.currentName = selected[0]?.name ?? "";
-  setS((p) => ({ ...p, busy: null, running: true, progress: init }));
+  // Do not clear busy here — scanning may be in progress concurrently and should stay visible (non-blocking)
+  setS((p) => ({ ...p, running: true, progress: init }));
   await yieldToFrame();
   const report = await runBatch({ ctx, root, selected, setS, init });
   await finalize(root, report.results, selected, setS);
@@ -183,7 +186,7 @@ async function splitSheetWithMerge(file: File, split: Preset["split"], shouldSto
 async function buildItems(root: DirHandleLike, rows: Row[]): Promise<BatchItem[]> {
   const out: BatchItem[] = [];
   for (const r of rows) {
-    if (rows.length > 50 && out.length % 10 === 0) await yieldToFrame();
+    if (rows.length > 20 && out.length % 5 === 0) await yieldToFrame();
     out.push(await toItem(root, r));
   }
   return out;
@@ -246,7 +249,6 @@ async function finalize(
   const c = tally(results);
   setS((p) => ({
     ...p,
-    busy: null,
     running: false,
     rows: p.rows.map((r) => ({
       ...r,

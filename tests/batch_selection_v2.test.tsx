@@ -116,12 +116,15 @@ describe("Batch V2 selection: active row separate from checked", () => {
   it("purple active row is separate from checked bulk rows", async () => {
     const rows = qAll("[data-testid^='batch-row-'][role='listitem']");
     expect(rows.length).toBe(3);
-    // Initially no active? Click first row
+    // Plain click = active only (fix a34b050)
     await rowClick("icon-a_AI_1.png");
     const first = q("[data-testid='batch-row-icon-a_AI_1.png']");
     expect(first?.className).toMatch(/active/);
-    expect(first?.className).toMatch(/selected/);
+    expect(first?.className).not.toMatch(/selected/);
     // Checkbox toggles checked but active stays
+    await checkClick("icon-a_AI_1.png");
+    expect(first?.className).toMatch(/active/);
+    expect(first?.className).toMatch(/selected/);
     await checkClick("icon-b_AI_2.png");
     const second = q("[data-testid='batch-row-icon-b_AI_2.png']");
     expect(second?.className).toMatch(/selected/);
@@ -146,9 +149,10 @@ describe("Batch V2 selection: active row separate from checked", () => {
   });
 
   it("click selects one, Shift-click selects visible range from anchor", async () => {
+    // After fix a34b050: plain click = active only, sets anchor; Shift-click range selects
     await rowClick("icon-a_AI_1.png");
     await rowClick("icon-c_AI_3.png", { shiftKey: true });
-    // Should select range a,b,c
+    // Should select range a,b,c (anchor set by first click)
     expect(qAll("[data-testid^='batch-row-'][role='listitem']").length).toBe(3);
     for (const rel of ["icon-a_AI_1.png", "icon-b_AI_2.png", "icon-c_AI_3.png"]) {
       const cb = q(`[data-testid='row-select-${rel}']`) as HTMLInputElement;
@@ -157,7 +161,8 @@ describe("Batch V2 selection: active row separate from checked", () => {
   });
 
   it("Ctrl/Alt/Meta-click toggles one row with Shift precedence", async () => {
-    await rowClick("icon-a_AI_1.png");
+    // After fix: plain click = active only, Ctrl toggles checked
+    await checkClick("icon-a_AI_1.png");
     await rowClick("icon-c_AI_3.png", { ctrlKey: true });
     expect((q(`[data-testid='row-select-icon-a_AI_1.png']`) as HTMLInputElement).checked).toBe(true);
     expect((q(`[data-testid='row-select-icon-c_AI_3.png']`) as HTMLInputElement).checked).toBe(true);

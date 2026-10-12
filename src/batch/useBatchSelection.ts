@@ -164,9 +164,9 @@ function useSelectActive(push: PushFn) {
   return useCallback(
     (id: string) => {
       const b = getAppState().batch;
-      if (b.activeId === id) return;
-      push("Select row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: b.checked, anchor: b.anchorId, active: id }, [id]);
-      patchBatch({ activeId: id });
+      if (b.activeId === id && b.anchorId === id) return;
+      push("Select row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: b.checked, anchor: id, active: id }, [id]);
+      patchBatch({ activeId: id, anchorId: id });
     },
     [push],
   );

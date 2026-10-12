@@ -5,7 +5,7 @@ export interface DetectResult { boxes: Box[]; usedFrac: number; autoFrac: number
 export interface Downsample { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number; f: number; }
 const MAX_DIM = 4000;
 const CHUNK_PIXELS = 500_000;
-const CHUNK_ROWS = 100;
+const CHUNK_ROWS = 50;
 const FAST_RMAX_CAP = 35;
 const FAST_RMAX_FRAC = 0.08;
 import { yieldToUI } from "./yield";
@@ -258,11 +258,11 @@ function buildSeriesFastSync(ctx: Grid, rMax: number, f: number, a: Analysis) {
   return runs;
 }
 async function buildSeriesFastAsync(ctx: Grid, rMax: number, f: number, a: Analysis) {
-  const series: number[] = []; let ones = 0; let iter = 0;
+  const series: number[] = []; let ones = 0;
   for (let r = 1; r <= rMax; r = nextR(r)) {
     const c = countAtRadiusFastSync(ctx, f, a, r); series.push(c);
     if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0;
-    iter++; if (iter % 5 === 0) await yieldToUI();
+    await yieldToUI();
   }
   const runs: Run[] = [];
   for (let i = 0; i < series.length; i++) { const last = runs[runs.length - 1]; if (last && last.count === series[i]) last.end = i; else runs.push({ start: i, end: i, count: series[i] }); }

@@ -51,19 +51,24 @@ export async function processItems(items: BatchItem[], deps: ProcessDeps): Promi
   for (let i = 0; i < items.length; i++) {
     if (deps.shouldStop?.()) { stopped = true; break; }
     await yieldToFrame();
+    await yieldToUI();
     const res = await processOne(items[i], plan.items[i].relFolder, deps, plan.items[i].folder);
     results.push(res);
     deps.onProgress?.(i + 1, items.length, items[i].source.relPath, res); // RULE 5 live progress
     await yieldToUI();
+    await yieldToFrame();
   }
   return { relBase, results, stopped };
 }
 
 async function existingLookup(dest: DirHandleLike, relBase: string, items: BatchItem[]): Promise<(d: string) => string[]> {
   const cache = new Map<string, string[]>();
-  for (const rd of uniqueDirs(items)) {
+  const dirs = uniqueDirs(items);
+  for (let i = 0; i < dirs.length; i++) {
+    const rd = dirs[i];
     const dir = await probePath(dest, rd === "" ? relBase : `${relBase}/${rd}`);
     cache.set(rd, dir ? await listChildNames(dir) : []);
+    if (i % 5 === 0) await yieldToUI();
   }
   return (rd) => cache.get(rd) ?? [];
 }
@@ -121,7 +126,7 @@ async function writeSplits(root: DirHandleLike, folder: string, blobs: Blob[]): 
   for (let j = 0; j < blobs.length; j++) {
     const splitDir = await ensureDirPath(root, `split_${pad2(j + 1)}`);
     await writeFileNew(splitDir, splitImageName(folder, j + 1), blobs[j]);
-    if (j % 3 === 0) await yieldToUI();
+    await yieldToUI();
     dirs.push(splitDir);
   }
   return dirs;
