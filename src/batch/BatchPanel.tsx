@@ -19,7 +19,24 @@ export default function BatchPanel() {
   return (
     <div className="batch-shell w-full space-y-4">
       {!v.core.supported && <Unsupported />}
-      <StickyControls v={v} />
+      <div className="batch-controls-stack space-y-3">
+        <div className="v2-controls">
+          <BatchSourceBar
+            rootName={v.core.s.rootName}
+            root={v.core.rootRef.current}
+            rows={v.core.s.rows}
+            chooseRoot={() => void v.core.chooseRoot()}
+            rescan={() => void v.core.refresh()}
+          />
+        </div>
+        <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
+        <BatchBulkBar
+          header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
+          thumb={v.thumb} selectedCount={v.selectedCount}
+          onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
+          onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
+        />
+      </div>
       <PresetAndDest v={v} />
       <RefWarnings count={v.core.s.refWarnings.length} />
       <FullWidthList v={v} thumbFor={thumbFor} />
@@ -28,6 +45,8 @@ export default function BatchPanel() {
   );
 }
 
+type View = ReturnType<typeof useBatchView>;
+
 function Unsupported() {
   return (
     <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">
@@ -35,31 +54,6 @@ function Unsupported() {
     </p>
   );
 }
-
-function StickyControls({ v }: { v: View }) {
-  return (
-    <div className="batch-sticky-stack">
-      <div className="v2-controls">
-        <BatchSourceBar
-          rootName={v.core.s.rootName}
-          root={v.core.rootRef.current}
-          rows={v.core.s.rows}
-          chooseRoot={() => void v.core.chooseRoot()}
-          rescan={() => void v.core.refresh()}
-        />
-      </div>
-      <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar
-        header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
-        thumb={v.thumb} selectedCount={v.selectedCount}
-        onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
-        onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
-      />
-    </div>
-  );
-}
-
-type View = ReturnType<typeof useBatchView>;
 
 function PresetAndDest({ v }: { v: View }) {
   return (

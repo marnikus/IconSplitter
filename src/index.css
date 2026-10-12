@@ -311,16 +311,18 @@
   text-align: center;
 }
 
-/* Batch folders — sticky controls so filter + bulk + zoom stay visible while scrolling (user: make all controls visible always) */
-.batch-sticky-stack {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+/* Batch folders — controls scroll with page, only header tabs bar pinned (app-shell flex column) */
+.batch-controls-stack {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--v2-bg);
-  padding-bottom: 8px;
+}
+
+/* Legacy sticky class kept for compatibility but no longer sticky — only header tabs bar pins */
+.batch-sticky-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ── list panel ────────────────────────────────────────────────────────── */
