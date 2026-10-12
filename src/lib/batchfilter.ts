@@ -33,7 +33,7 @@ export interface BatchRowLike {
   dirPath: string;
 }
 
-export function applyBatchFilters(rows: BatchRowLike[], f: BatchFilter): BatchRowLike[] {
+export function applyBatchFilters<T extends BatchRowLike>(rows: T[], f: BatchFilter): T[] {
   return rows.filter((r) => inDate(r, f.date) && inStatus(r, f.status) && inSearch(r, f.search));
 }
 

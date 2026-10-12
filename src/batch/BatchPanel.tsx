@@ -10,7 +10,6 @@ import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
-import type { BatchView } from "./useBatchView";
 
 export default function BatchPanel() {
   const v = useBatchView();

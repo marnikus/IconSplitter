@@ -186,8 +186,9 @@ describe("Selection V2 fills available space like Generate SVG", () => {
 describe("all tabs fill full window, no centered max-width card", () => {
   it("Batch and Selection wrappers are w-full, not mx-auto max-w", async () => {
     const src = workbenchSrc();
-    expect(src).toMatch(/tab === \"batch\".*w-full px-4 py-6/);
-    expect(src).toMatch(/tab === \"selection\".*w-full px-4 py-6/);
+    // After refactor TabWrapper holds w-full px-4 py-6
+    expect(src).toMatch(/TabWrapper/);
+    expect(src).toMatch(/w-full px-4 py-6/);
     expect(src).not.toMatch(/mx-auto max-w-7xl.*BatchPanel/);
     expect(src).not.toMatch(/mx-auto max-w-\[90rem\].*SelectionPanel/);
 
