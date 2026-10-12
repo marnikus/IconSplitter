@@ -165,7 +165,7 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[
   const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef });
   const previewSingle = usePreviewSingle(previewOne, setPreviews);
   const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); }, [abortRef, setPreviews, setIsPreviewing]);
-  useEffect(() => { clear(); }, [split.mergeFrac, split.padding, split.size, split.transparent, root, clear]);
+  useEffect(() => { clear(); }, [root, clear]);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle };
 }

@@ -89,15 +89,18 @@ describe("Batch per-row merge override", () => {
     expect(document.documentElement.innerHTML || "").toBeDefined();
   });
 
-  it("Bar shows correct actual value as drag drop in real time", async () => {
+  it("Bar shows correct actual value as drag drop in real time and does NOT reset previews", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
+    const previewBtn = q("[data-testid=batch-preview]") as HTMLElement | null; await click(previewBtn!); await settle(800);
+    const countsBefore = qAll("[data-testid^=batch-preview-count-]"); expect(countsBefore.length).toBeGreaterThan(0);
+
     const firstPath = "icon-a_AI.png";
     const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
     const label = q(`[data-testid="batch-row-merge-label-${firstPath}"]`) as HTMLElement | null;
     expect(slider).not.toBeNull(); expect(label).not.toBeNull();
     const initialText = label!.textContent || "";
-    // Change slider to 0.075 and check label updates immediately WITHOUT Apply
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
       setter?.call(slider!, "0.075");
@@ -108,6 +111,9 @@ describe("Batch per-row merge override", () => {
     const afterDrag = q(`[data-testid="batch-row-merge-label-${firstPath}"]`) as HTMLElement | null;
     expect(afterDrag!.textContent).toMatch(/0\.0750/);
     expect(afterDrag!.textContent).not.toBe(initialText);
+    // Previews should still exist after drag (not reset to none)
+    const countsAfterDrag = qAll("[data-testid^=batch-preview-count-]");
+    expect(countsAfterDrag.length).toBeGreaterThan(0);
   });
 
   it("Apply overrides only that row, Reset fallback to global", async () => {
@@ -138,9 +144,14 @@ describe("Batch per-row merge override", () => {
     expect(resetAfterReset!.disabled).toBe(true);
   });
 
-  it("Apply shows preview Icons split for this row immediately", async () => {
+  it("Apply does NOT reset already created previews, only override on next Preview click", async () => {
     const dir = makeBatchRoot(); await mount(dir); await settle(100);
     const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
+    const previewBtn = q("[data-testid=batch-preview]") as HTMLElement | null; await click(previewBtn!); await settle(1000);
+    const countsBefore = qAll("[data-testid^=batch-preview-count-]"); expect(countsBefore.length).toBeGreaterThan(0);
+    const firstCountText = (countsBefore[0] as HTMLElement).textContent;
+
     const firstPath = "icon-a_AI.png";
     const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
     const applyBtn = q(`[data-testid="batch-row-merge-apply-${firstPath}"]`) as HTMLElement | null;
@@ -152,12 +163,16 @@ describe("Batch per-row merge override", () => {
       slider!.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle(100);
-    await click(applyBtn!);
-    await settle(800);
-    // After Apply, preview for this row should appear immediately without global Preview button
-    const count = q(`[data-testid="batch-preview-count-${firstPath}"]`) as HTMLElement | null;
-    expect(count).not.toBeNull();
-    expect(count!.textContent).toMatch(/icon|Loading/);
+    await click(applyBtn!); await settle(300);
+    // After Apply, existing previews should still exist (not reset to none)
+    const countsAfterApply = qAll("[data-testid^=batch-preview-count-]");
+    expect(countsAfterApply.length).toBeGreaterThan(0);
+    // Now click Preview again - should regenerate selected rows, keeping others
+    await click(previewBtn!); await settle(1000);
+    const countsAfterRepreview = qAll("[data-testid^=batch-preview-count-]");
+    expect(countsAfterRepreview.length).toBeGreaterThan(0);
+    const firstAfter = q(`[data-testid="batch-preview-count-${firstPath}"]`) as HTMLElement | null;
+    expect(firstAfter).not.toBeNull();
   });
 
   it("effectiveMerge logic: override takes precedence, null allowed", () => {

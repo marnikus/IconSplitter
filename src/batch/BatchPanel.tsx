@@ -48,12 +48,10 @@ function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: Preview) 
     void preview.previewSelected(checkedRows);
   }, [checkedRows, preview]);
 }
-function useRowMergeApply(v: View, preview: Preview) {
+function useRowMergeApply(v: View, _preview: Preview) {
   return useCallback((relPath: string, value: number | null) => {
     v.setRowMerge(relPath, value);
-    const row = v.core.s.rows.find((r) => r.relPath === relPath);
-    if (row) void preview.previewSingle(row);
-  }, [v, preview]);
+  }, [v]);
 }
 function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () => void; previewing: boolean }) {
   return (
