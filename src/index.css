@@ -416,6 +416,32 @@
 .batch-row.selected:not(.active) { background: #111a31; }
 .batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
 
+.batch-columns,
+.batch-row {
+  display: grid;
+  grid-template-columns: 34px max-content minmax(280px, 1fr) 122px 118px 160px;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.batch-columns {
+  padding: 0 12px;
+  border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-muted-2);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.batch-row {
+  position: relative;
+  min-height: calc(var(--svg-thumb, 84px) + 22px);
+  padding: 9px 12px;
+  border-bottom: 1px solid #192138;
+  transition: background 0.15s, min-height 0.15s;
+}
+
 .v2-row.approved::after,
 .v2-row.declined::after,
 .v2-row.needs-review::after {

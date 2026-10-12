@@ -1,5 +1,5 @@
-// ScanTable.tsx — Batch folders list, exact same UI design as SVG output (fonts, text size, win header, titles)
-// Uses svg-panel, svg-head, svg-columns, svg-row, svg-file-main, svg-cell, svg-badge, etc.
+// ScanTable.tsx — Batch folders list, same visual as SVG/V2 but only relevant columns
+// Keeps: checkbox, thumbnail, file/path, created, status, open. Removes SVG-specific VERSION/TOKENS/COST etc.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Row } from "./useBatch";
@@ -49,7 +49,7 @@ export default function ScanTable(props: ScanTableProps) {
       </div>
       <footer className="svg-list-footer">
         <span data-testid="batch-footer">Showing {props.rows.length} images</span>
-        <span className="svg-hints">↑↓ active row · Space select · E select visible · Q deselect · Click row, Shift range, Ctrl toggle · A approve · D decline</span>
+        <span className="svg-hints">↑↓ active row · E select all · Q deselect all · Click row, Shift range, Ctrl toggle · A approve · D decline</span>
       </footer>
     </div>
   );
@@ -57,15 +57,13 @@ export default function ScanTable(props: ScanTableProps) {
 
 function Columns() {
   return (
-    <div className="svg-columns" aria-hidden="true">
+    <div className="svg-columns batch-columns" aria-hidden="true">
       <span />
-      <span>AI Image / Reference</span>
-      <span>File / path / persistence</span>
-      <span>Generation</span>
-      <span>Review</span>
-      <span>Version / tokens / cost</span>
-      <span>Files / code / history</span>
-      <span>Generate / decision</span>
+      <span>AI Image</span>
+      <span>File / path</span>
+      <span>Created</span>
+      <span>Status</span>
+      <span>Open</span>
     </div>
   );
 }
@@ -78,15 +76,13 @@ function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId }: 
   const onRowClick = useRowClick(r, disabled, selectRow);
   const onKeyDown = useRowKey(r, disabled, selectRow);
   return (
-    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row ${r.status}${active ? " active" : ""}${checked ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
+    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status}${active ? " active" : ""}${checked ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
       <input type="checkbox" className="svg-check" data-testid={`row-select-${r.relPath}`} checked={checked} disabled={disabled} aria-label={`Select ${r.name}`} title="Checkbox changes checks only" onClick={(e) => e.stopPropagation()} onChange={() => toggle(r.relPath)} />
       <Thumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
       <FileCell r={r} />
+      <div className="svg-cell"><span>{fmtDate(r.mtime)}</span><small>{fmtTime(r.mtime)} local</small></div>
       <StatusCell r={r} />
-      <ReviewCell r={r} />
-      <UsageCell r={r} />
-      <FileActions r={r} copyPath={copyPath} />
-      <DecisionCell r={r} />
+      <div className="svg-file-actions"><button type="button" className="svg-btn tiny" data-testid={`row-open-${r.relPath}`} onClick={(e) => { e.stopPropagation(); copyPath(r.relPath); }}>Open in File Explorer</button></div>
     </div>
   );
 }
@@ -108,10 +104,6 @@ function useRowKey(r: Row, disabled: boolean, selectRow: ScanTableProps["selectR
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       if (disabled) return;
-      if (e.key === " ") {
-        // Space toggles check only (like SVG Space select)
-        return;
-      }
       selectRow(r.relPath, "replace");
     }
   }, [r, disabled, selectRow]);
@@ -126,26 +118,12 @@ function FileCell({ r }: { r: Row }) {
     <div className="svg-file-main">
       <div className="svg-file-name" title={r.name}>{r.name}</div>
       <div className="svg-file-sub" title={r.relPath}>{r.relPath}{r.refRelPath === null ? " · ⚠ ref missing" : ""}</div>
-      <div className="svg-persist" title={r.relPath}>{r.status === "missing" ? "Missing" : r.status === "deleted" ? "Deleted" : "Pair file saved"}</div>
     </div>
   );
 }
 function StatusCell({ r }: { r: Row }) {
   const b = BADGE[r.status];
-  return <div className="svg-cell" data-testid={`batch-status-${r.relPath}`}><span className={`svg-badge ${r.status}`}>{b.label}</span></div>;
-}
-function ReviewCell({ r }: { r: Row }) {
-  return <div className="svg-cell"><span className={`svg-badge ${r.status}`}>{r.refRelPath === null ? "Ref missing" : "Complete"}</span></div>;
-}
-function UsageCell({ r }: { r: Row }) {
-  return <div className="svg-cell svg-usage"><strong>{r.name.split(".").pop()?.toUpperCase() ?? "PNG"}</strong><small>{fmtDate(r.mtime)} {fmtTime(r.mtime)}</small><small>{r.status}</small></div>;
-}
-function FileActions({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) {
-  const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
-  return <div className="svg-file-actions"><button type="button" className="svg-btn tiny" data-testid={`row-open-${r.relPath}`} onClick={click(() => copyPath(r.relPath))}>Location</button><button type="button" className="svg-btn tiny" disabled>Copy</button><button type="button" className="svg-btn tiny" disabled>Code</button><button type="button" className="svg-btn tiny" disabled>Versions</button></div>;
-}
-function DecisionCell({ r }: { r: Row }) {
-  return <div className="svg-decision-actions"><span className="svg-badge" data-testid={`batch-decision-${r.relPath}`}>{r.selected ? "Selected" : "—"}</span></div>;
+  return <div className="svg-cell" data-testid={`batch-status-${r.relPath}`}><span className={`svg-badge ${r.status}`}>{b.label}</span>{r.refRelPath === null && <small className="svg-error">ref missing</small>}</div>;
 }
 function Thumb({ relPath, thumbFor, thumb }: { relPath: string; thumbFor: (r: string) => Promise<string>; thumb: number }) {
   const [src, setSrc] = useState<string | null>(null);
