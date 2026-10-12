@@ -251,7 +251,7 @@ export default function App() {
     >
       {/* header */}
       <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/85 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
+        <div className="flex w-full flex-wrap items-center gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/30">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
@@ -296,7 +296,7 @@ export default function App() {
         }}
       />
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="w-full px-4 py-6">
         {!sheets.length ? (
           <div
             data-testid="dropzone"

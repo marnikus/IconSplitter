@@ -76,8 +76,8 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
   return (
     <>
       {tab === "sheets" && <App />}
-      {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
-      {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
+      {tab === "batch" && <div className="w-full px-4 py-6"><BatchPanel /></div>}
+      {tab === "selection" && <div className="w-full px-4 py-6"><SelectionPanel /></div>}
       {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
       <div className="svg-shell px-4 py-3" data-testid="svg-shell" hidden={tab !== "generateSvg"}>
         <SvgPanel active={tab === "generateSvg"} />
