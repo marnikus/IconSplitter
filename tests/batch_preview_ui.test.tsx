@@ -269,7 +269,10 @@ describe("Preview splits — a view that never writes", () => {
     expect(revoked.length).toBeGreaterThanOrEqual(urls);
   });
 
-  it("plans 1000 rows in list order, keeps the counter live, and writes nothing", async () => {
+  // A thousand rows is the requirement, not an accident: this test is slow by
+  // design (the scan alone walks 1000 files), and coverage instrumentation
+  // roughly doubles it — hence the explicit budget rather than the 5 s default.
+  it("plans 1000 rows in list order, keeps the counter live, and writes nothing", { timeout: 60_000 }, async () => {
     const names = Array.from({ length: 1000 }, (_, i) => `icon-${String(i).padStart(4, "0")}_AI_1.png`);
     const dir = makeRoot(names);
     await mount(dir);
