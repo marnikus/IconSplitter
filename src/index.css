@@ -304,6 +304,18 @@
   text-align: center;
 }
 
+/* Batch folders — sticky controls so filter + bulk + zoom stay visible while scrolling (user: make all controls visible always) */
+.batch-sticky-stack {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--v2-bg);
+  padding-bottom: 8px;
+}
+
 /* ── list panel ────────────────────────────────────────────────────────── */
 
 .v2-panel {

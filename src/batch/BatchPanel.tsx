@@ -19,14 +19,16 @@ export default function BatchPanel() {
           Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.
         </p>
       )}
-      <HeaderControls v={v} />
-      <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar
-        header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
-        thumb={v.thumb} selectedCount={v.selectedCount}
-        onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
-        onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
-      />
+      <div className="batch-sticky-stack">
+        <HeaderControls v={v} />
+        <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
+        <BatchBulkBar
+          header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
+          thumb={v.thumb} selectedCount={v.selectedCount}
+          onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
+          onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
+        />
+      </div>
       <MainGrid v={v} thumbFor={thumbFor} />
       <Overlays v={v} />
     </div>
