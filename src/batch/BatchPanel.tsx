@@ -27,9 +27,10 @@ export default function BatchPanel() {
   const onRowMergeReset = useRowMergeReset(v, preview);
   return (
     <div className="batch-shell w-full space-y-4">
-      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => { /* stay on batch tab */ }} />
+      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => { /* stay on batch tab */ }} mode="split" />
+      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => { /* stay */ }} mode="preview" />
       {!v.core.supported && <Unsupported />}
-      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} />
+      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} previewRunning={preview.running} />
       <PresetAndDest v={v} />
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
@@ -69,8 +70,8 @@ function useRowMergeReset(v: View, preview: Preview) {
     }
   }, [v, preview]);
 }
-function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () => void; previewing: boolean }) {
-  const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null);
+function BatchControls({ v, onPreview, previewing, previewRunning }: { v: View; onPreview: () => void; previewing: boolean; previewRunning: boolean }) {
+  const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null) || (previewRunning ? "Previewing…" : null);
   return (
     <div className="batch-controls-stack space-y-3">
       <div className="v2-controls"><BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} /></div>

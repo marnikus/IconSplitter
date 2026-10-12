@@ -38,7 +38,17 @@ let host: HTMLDivElement;
 let mountDiv: HTMLDivElement;
 let root: Root;
 
-async function mount(progress: BatchProgress | null, running: boolean, rows: Row[], thumbFor: (p: string) => Promise<string>, onCancel: () => void, onDismiss: () => void, onReview: () => void) {
+type Mode = "split" | "preview";
+async function mount(
+  progress: BatchProgress | null,
+  running: boolean,
+  rows: Row[],
+  thumbFor: (p: string) => Promise<string>,
+  onCancel: () => void,
+  onDismiss: () => void,
+  onReview: () => void,
+  mode: Mode = "split",
+) {
   host = document.createElement("div");
   mountDiv = document.createElement("div");
   mountDiv.id = "batch-progress-mount";
@@ -48,7 +58,7 @@ async function mount(progress: BatchProgress | null, running: boolean, rows: Row
   root = createRoot(host);
   await act(async () => {
     root.render(
-      <BatchProgressHeader progress={progress} running={running} rows={rows} thumbFor={thumbFor} onCancel={onCancel} onDismiss={onDismiss} onReview={onReview} />,
+      <BatchProgressHeader progress={progress} running={running} rows={rows} thumbFor={thumbFor} onCancel={onCancel} onDismiss={onDismiss} onReview={onReview} mode={mode} />,
     );
   });
   // wait for portal and thumb effects
@@ -158,5 +168,24 @@ describe("batch progress bar — persistent across tabs", () => {
     document.body.appendChild(fakeOuter);
     expect(mountDiv.querySelector("[data-testid=batch-progress-header]")).not.toBeNull();
     fakeOuter.remove();
+  });
+
+  it("preview mode shows Previewing splits title and separate testids", async () => {
+    const progress = makeProgress({ done: 1, total: 2, currentName: "b.png", currentRelPath: "b.png" });
+    await mount(progress, true, [makeRow("b.png", "b.png")], async () => "", () => {}, () => {}, () => {}, "preview");
+
+    expect(q("[data-testid=batch-preview-progress-header]")).not.toBeNull();
+    expect(q("[data-testid=batch-preview-progress-title]")?.textContent).toContain("Previewing splits");
+    expect(q("[data-testid=batch-preview-progress-file]")?.textContent).toContain("b.png");
+    expect(q("[data-testid=batch-preview-progress-cancel]")).not.toBeNull();
+  });
+
+  it("preview complete bar shows Preview complete", async () => {
+    const progress = makeProgress({ done: 2, total: 2, saved: 2 });
+    await mount(progress, false, [], async () => "", () => {}, () => {}, () => {}, "preview");
+
+    expect(q("[data-testid=batch-preview-progress-header]")).not.toBeNull();
+    expect(q("[data-testid=batch-preview-progress-title]")?.textContent).toContain("Preview complete");
+    expect(q("[data-testid=batch-preview-progress-review]")).not.toBeNull();
   });
 });

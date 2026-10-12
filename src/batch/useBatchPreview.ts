@@ -1,4 +1,4 @@
-// useBatchPreview.ts — high-perf preview for Batch (1000 images) + immediate per-row preview on Apply/Reset
+// useBatchPreview.ts — high-perf preview for Batch (1000 images) + immediate per-row preview on Apply/Reset + progress bar
 // ideal-size: 303 lines reason=high-perf preview owns cache, load, thumb render, queue, abort and single-row immediate preview; splitting would break cohesion, still under 320 with 35 fns each ≤30 lines
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { loadImageFile } from "../lib/dom";
 import { previewKey } from "../lib/batchpreview";
 import type { SplitSettings } from "../lib/presets";
 import type { Row, RowMergeMap } from "./useBatch";
+import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 
 export interface PreviewEntry {
   relPath: string;
@@ -35,8 +36,10 @@ function useCaches() {
 function usePreviewState() {
   const [previews, setPreviews] = useState<Map<string, PreviewEntry>>(new Map());
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [progress, setProgress] = useState<BatchProgress | null>(null);
+  const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  return { previews, setPreviews, isPreviewing, setIsPreviewing, abortRef };
+  return { previews, setPreviews, isPreviewing, setIsPreviewing, progress, setProgress, running, setRunning, abortRef };
 }
 function useLoadFile(root: DirHandleLike | null, custom?: LoadFile) {
   return useCallback(async (relPath: string): Promise<File> => {
@@ -131,8 +134,17 @@ function usePreviewOne(args: { split: SplitSettings; rowMerges: RowMergeMap; loa
 function markLoading(eligible: Row[], setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
   setPreviews((prev) => { const next = new Map(prev); for (const r of eligible) next.set(r.relPath, { relPath: r.relPath, count: 0, thumbs: [], boxes: [], status: "loading" }); return next; });
 }
-async function runWorkers(queue: Row[], ac: AbortController, previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
-  let idx = 0;
+type WorkersArgs = {
+  queue: Row[];
+  ac: AbortController;
+  previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>;
+  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
+  onProgress?: (done: number, current: Row | null) => void;
+};
+
+async function runWorkers(args: WorkersArgs) {
+  const { queue, ac, previewOne, setPreviews, onProgress } = args;
+  let idx = 0, done = 0;
   const runNext = async () => {
     while (idx < queue.length) {
       if (ac.signal.aborted) return;
@@ -141,6 +153,8 @@ async function runWorkers(queue: Row[], ac: AbortController, previewOne: (row: R
         const entry = await previewOne(row, ac.signal);
         if (ac.signal.aborted) return;
         setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
+        done++;
+        onProgress?.(done, queue[done] ?? null);
       } catch { return; }
       await new Promise((r) => setTimeout(r, 0));
     }
@@ -148,17 +162,58 @@ async function runWorkers(queue: Row[], ac: AbortController, previewOne: (row: R
   const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, () => runNext());
   await Promise.all(workers);
 }
-function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>; setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>; abortRef: React.MutableRefObject<AbortController | null>; }) {
-  const { previewOne, setPreviews, setIsPreviewing, abortRef } = args;
+function makeRunId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+function initPreviewProgress(eligible: Row[]): BatchProgress {
+  const runId = makeRunId();
+  const init = makeBatchProgress(eligible.length, runId);
+  init.currentRelPath = eligible[0]?.relPath ?? null;
+  init.currentName = eligible[0]?.name ?? "";
+  return init;
+}
+
+function makePreviewProgressUpdater(setProgress: React.Dispatch<React.SetStateAction<BatchProgress | null>>) {
+  return (done: number, current: Row | null) => {
+    setProgress((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        done,
+        currentRelPath: current?.relPath ?? prev.currentRelPath,
+        currentName: current?.name ?? prev.currentName,
+        saved: done,
+      };
+    });
+  };
+}
+
+function usePreviewQueue(args: {
+  previewOne: (row: Row, signal: AbortSignal) => Promise<PreviewEntry>;
+  setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>;
+  setIsPreviewing: React.Dispatch<React.SetStateAction<boolean>>;
+  setProgress: React.Dispatch<React.SetStateAction<BatchProgress | null>>;
+  setRunning: React.Dispatch<React.SetStateAction<boolean>>;
+  abortRef: React.MutableRefObject<AbortController | null>;
+}) {
+  const { previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef } = args;
   return useCallback(async (selected: Row[]) => {
     const eligible = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
     if (eligible.length === 0) return;
     abortRef.current?.abort();
     const ac = new AbortController(); abortRef.current = ac;
-    setIsPreviewing(true); markLoading(eligible, setPreviews);
-    await runWorkers([...eligible], ac, previewOne, setPreviews);
-    if (!ac.signal.aborted) setIsPreviewing(false);
-  }, [previewOne, abortRef, setPreviews, setIsPreviewing]);
+    const init = initPreviewProgress(eligible);
+    setProgress(init);
+    setRunning(true);
+    setIsPreviewing(true);
+    markLoading(eligible, setPreviews);
+    const onProgress = makePreviewProgressUpdater(setProgress);
+    await runWorkers({ queue: [...eligible], ac, previewOne, setPreviews, onProgress });
+    if (!ac.signal.aborted) {
+      setIsPreviewing(false);
+      setRunning(false);
+    }
+  }, [previewOne, abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
 }
 function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFrac?: number | null) => Promise<PreviewEntry>, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
   return useCallback(async (row: Row, overrideFrac?: number | null) => {
@@ -174,13 +229,15 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[
   const { root, split, rowMerges } = params;
   const merges = rowMerges ?? {};
   const { analysis, lru } = useCaches();
-  const { previews, setPreviews, isPreviewing, setIsPreviewing, abortRef } = usePreviewState();
+  const { previews, setPreviews, isPreviewing, setIsPreviewing, progress, setProgress, running, setRunning, abortRef } = usePreviewState();
   const loadFile = useLoadFile(root, params.loadFile);
   const previewOne = usePreviewOne({ split, rowMerges: merges, loadFile, analysis, lru });
-  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef });
+  const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef });
   const previewSingle = usePreviewSingle(previewOne, setPreviews);
-  const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); }, [abortRef, setPreviews, setIsPreviewing]);
+  const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
+  const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
+  const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
   useEffect(() => { clear(); }, [root, clear]);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
-  return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle };
+  return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };
 }
