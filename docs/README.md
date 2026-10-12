@@ -61,6 +61,9 @@ doc itself, never in this map.
 | `archive/2026-10-08-upload-download-all/design.md` | SVG to upload — "Download all": the selection's committed SVG/JPG/EPS copied into one user-picked folder (planner, never-overwrite, verified copy, one result line) |
 | `archive/2026-10-08-svg-queue-keepalive/design.md` | Design (implemented the same day — I-53 rewrite, I-57, I-58): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
 | `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
+| `archive/2026-10-13-batch-merge-preview/README.md` | Batch merge slider + Preview splits: one preset-saved global merge distance, and per-selected-row icon count + thumbnail strip rendered by the existing detect/render pipeline with zero writes |
+| `archive/2026-10-13-batch-preview-layout-fix/README.md` | First layout pass at the Preview splits column (thumbnails wrapping instead of scrolling, widths for the batch grid) — the column stayed narrow; the real cause is in `2026-10-12-batch-preview-column` |
+| `archive/2026-10-12-batch-preview-column/README.md` | Batch Preview splits column, second round: a batch row carries `.svg-row` too, so at equal specificity the SVG tab's later 8-track grid won (File / path `1fr`, preview 122 px, a dead 210 px track scrolling the list) — the compound selector, the seven real tracks, and the cascade test that pins them |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

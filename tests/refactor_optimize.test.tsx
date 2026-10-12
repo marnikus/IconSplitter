@@ -182,8 +182,8 @@ describe("refactor_optimize: BatchFilterGrid still renders same features", () =>
   });
 });
 
-describe("refactor_optimize: ScanTable still 6-col same visual", () => {
-  it("renders 6 columns header and rows with required cells", async () => {
+describe("refactor_optimize: ScanTable still one row per image, same visual", () => {
+  it("renders the 7 column header and rows with required cells", async () => {
     const rows = [
       { relPath: "icon-a_AI_1.png", name: "icon-a_AI_1.png", mtime: Date.now(), status: "unprocessed", selected: true, refRelPath: "ref.png", dirPath: "a" },
       { relPath: "icon-b_AI_2.png", name: "icon-b_AI_2.png", mtime: Date.now(), status: "processed", selected: false, refRelPath: null, dirPath: "b" },
@@ -192,12 +192,14 @@ describe("refactor_optimize: ScanTable still 6-col same visual", () => {
       <ScanTable rows={rows} thumb={84} activeId="icon-a_AI_1.png" toggle={vi.fn()} selectRow={vi.fn()} copyPath={vi.fn()} thumbFor={async () => ""} />,
     );
     const cols = host.querySelectorAll(".batch-columns span");
-    expect(cols.length).toBe(6);
+    // 7 = check | AI Image | File / path | Preview splits | Created | Status | Open
+    expect(cols.length).toBe(7);
     expect(cols[1].textContent).toBe("AI Image");
     expect(cols[2].textContent).toBe("File / path");
-    expect(cols[3].textContent).toBe("Created");
-    expect(cols[4].textContent).toBe("Status");
-    expect(cols[5].textContent).toBe("Open");
+    expect(cols[3].textContent).toBe("Preview splits");
+    expect(cols[4].textContent).toBe("Created");
+    expect(cols[5].textContent).toBe("Status");
+    expect(cols[6].textContent).toBe("Open");
     expect(q("[data-testid='batch-row-icon-a_AI_1.png']")).not.toBeNull();
     expect(q("[data-testid='row-select-icon-a_AI_1.png']")).not.toBeNull();
     expect(q("[data-testid='batch-status-icon-a_AI_1.png']")).not.toBeNull();

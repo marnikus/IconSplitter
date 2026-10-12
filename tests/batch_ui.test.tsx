@@ -71,8 +71,7 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
-  delete (window as any).showDirectoryPicker;
+  delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
 });
 
 describe("Batch folders V2 controls", () => {

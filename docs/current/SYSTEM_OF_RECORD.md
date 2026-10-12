@@ -78,8 +78,29 @@ Batch folders:
   `name_AI_9_01.ext` — the shapes batch outputs use) are eligible; the reference
   `name.ext` is linked, never processed, and copied into every `split_NN`
   subfolder. Missing reference → warning + user may skip or continue.
-* Review window: thumbnail, filename, relPath, status badge
-  (unprocessed/processed/skipped/changed/missing/deleted), checkbox, Select/Deselect All.
+* Review window (`scan-table`): one row per AI image, in seven columns —
+  checkbox | AI thumbnail | filename + relPath | Preview splits | Created |
+  status badge (unprocessed/processed/skipped/changed/missing/deleted) | Open —
+  with Select/Deselect All and the footer's shown-count.
+* The row is laid out by `.svg-row.batch-row` (and the header by
+  `.svg-columns.batch-columns`) — the **compound** selector, because a batch row
+  reuses the Generate SVG row grammar and the shared `.svg-row` rule sits later
+  in `src/index.css`: at equal specificity that later rule would win and give
+  the row the SVG tab's eight tracks (2026-10-12). Tracks:
+  `34px max-content minmax(170px, 220px) minmax(240px, 1fr) 110px 90px 130px`,
+  tighter at ≤1360 px. The thumbnail column stays `max-content` so an 800 px
+  zoom is honoured, not clipped (I-55); File / path is bounded and a longer path
+  ellipsises into the `title` both its lines carry; Preview splits takes every
+  free pixel up to Created, its floor holding four 48 px icons in one row.
+* Preview splits (`batch-preview`, beside Split selected): for every checked
+  eligible row, the resulting icon count plus one thumbnail per icon
+  (`batch-preview-count-*`, `batch-preview-strip-*`, `batch-preview-thumb-*`,
+  ≤ 20 per row) rendered by the same detect/render pipeline and the same preset
+  output settings as processing — through the shared merge distance of the
+  preset's `split.mergeFrac` (`batch-merge-slider`, 0–0.15 step 0.0025, `Auto`
+  = null). A preview writes nothing: no file, no state JSON, no status change.
+  The strip wraps (`flex-wrap`, thumbnails `flex: none`) so an icon is either
+  fully visible or on the next line — never half-cut behind a scrollbar.
 * Presets store every configurable value (source/dest handles in IndexedDB,
   config in localStorage); last-used preset restores automatically.
 * Processing: rescan runs before each batch; per-item progress, per-item
@@ -1329,7 +1350,7 @@ Direction: UI → batch/selection → lib, never upwards (RULE 1, RULE 3).
 
 ## 8. Tests — what exists and what must exist (RULE 8)
 
-Exists (`tests/`, 144 files / 1620 tests; canvas shims serve synthetic pixels,
+Exists (`tests/`, 163 files / 1804 tests, measured 2026-10-12; canvas shims serve synthetic pixels,
 in-memory fakes implement the FS handle interfaces, happy-dom mounts the
 Selection, Selection V2, Generate SVG and SVG to upload panels and drives them
 with hotkeys and `data-testid` handles):
@@ -1350,6 +1371,22 @@ with hotkeys and `data-testid` handles):
 * `process.test.ts` — full output tree, deleted/failed isolation, stop, ref copy
 * `statewrite.test.ts` — per-reference JSON write, missing retention, corrupt replace
 * `store.test.ts` — preset persistence, corrupt rejection, last-used name
+* `batch_ui.test.tsx`, `batch_selection_v2.test.tsx`,
+  `refactor_optimize.test.tsx` — the Batch panel's DOM: folder pick → rows, V2
+  checkbox vs active-row selection, hotkeys, filters/sort, and the review
+  window's seven columns (check | AI image | File / path | Preview splits |
+  Created | Status | Open)
+* `batch_merge_preview.test.tsx` — the preset-saved global merge slider
+  (0–0.15, step 0.0025, Auto) and Preview splits: the button beside Split
+  selected and its disabled states, one count + strip per checked row, the
+  per-row thumbnail cap, and no write during a preview
+* `batch_preview_column.test.tsx` — the Preview splits column itself: the batch
+  grid resolved through the real cascade (`.svg-row.batch-row` must
+  out-specify the later shared `.svg-row` rule), seven tracks at every
+  breakpoint, the thumbnail column `max-content` (I-55), File / path bounded
+  (never `1fr`), Preview splits `minmax(240px, 1fr)` with nothing after Open,
+  the other tabs' own rows untouched, and the strip as the row's fourth cell
+  wrapping every icon instead of scrolling it
 * `pairing.test.ts` — nested pairing, variants, duplicates, unpaired sides, ids
 * `reviewfilter.test.ts` — month/custom ranges (inclusive, either anchor), status+search
 * `reviewsort.test.ts` — all sort modes × directions, status meta, hotkeys
@@ -1670,10 +1707,16 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
 * Sheets mode: header (upload + 3 export buttons), Sheets, Export settings
   (padding/size/transparent), Detection (merge slider + reset), Boundary
   overlay, Result grid, busy overlay, toast.
-* Batch mode: header controls (`batch-root`, `batch-refresh`, `batch-process`,
-  `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
-  info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
-  reference warnings, busy overlay, toast.
+* Batch mode: header controls (`batch-open-folder` + `batch-folder-path`,
+  `batch-rescan`, `batch-process`, `batch-preview`), PresetBar (name/save/list/
+  delete + split settings), Dest info, the global merge distance
+  (`batch-merge-slider` / `batch-merge-reset`), filters (`batch-filters`,
+  `batch-shown`, `batch-clear`), bulk bar (`batch-bulk`, `batch-check-all`,
+  `batch-select-visible`, `batch-deselect`, `batch-thumb` zoom, the counters),
+  review window (`scan-table`, `batch-rows`, `batch-row-*`, per-row
+  checkbox/status/Open, the inline preview `batch-preview-count-*` /
+  `batch-preview-strip-*` / `batch-preview-thumb-*`), reference warnings, busy
+  overlay, toast. Full table: `UI_SELECTORS.md` §L.
 * Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
   help), FilterBar (date modes + From/To, status, sort, order, clear), review
   list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,

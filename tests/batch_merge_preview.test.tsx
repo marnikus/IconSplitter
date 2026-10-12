@@ -70,8 +70,7 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
-  delete (window as any).showDirectoryPicker;
+  delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
 });
 
 describe("Batch merge slider", () => {
@@ -164,8 +163,10 @@ describe("Batch preview splits", () => {
     await settle(500);
     const counts2 = qAll("[data-testid^=batch-preview-count-]");
     if (counts2.length > 0 && counts2[0].textContent?.includes("icon")) {
+      // A strip only ever exists where a count does; fake files fall back to a
+      // count with no thumbs, so 0 strips is honest, a strip without a count is not.
       const strips = qAll("[data-testid^=batch-preview-strip-]");
-      // Strips may be 0 for fake files (fallback has no thumbs), but count should exist
+      expect(strips.length).toBeLessThanOrEqual(counts2.length);
       expect(counts2[0].textContent).toMatch(/icon/);
       const firstRow = rows[0];
       // Preview cell exists inside same row
@@ -200,10 +201,11 @@ describe("Batch preview splits", () => {
     const counts = qAll("[data-testid^=batch-preview-count-]");
     expect(counts.length).toBeGreaterThan(0);
 
-    // Thumbs per row limited to 20 (MAX_THUMBS)
+    // Thumbs per row are capped at MAX_THUMBS (20) in useBatchPreview: with 50
+    // rows the DOM can never hold more than 50 × 20 thumbnails, and a fake file
+    // that falls back to a count of 1 holds none at all.
     const thumbs = qAll("[data-testid^=batch-preview-thumb-]");
-    // For 50 rows, if each had 20 thumbs max, total <= 1000, but we have fallback 1 count so 0 thumbs in fake files
-    // At least check that preview doesn't crash and counts exist
+    expect(thumbs.length).toBeLessThanOrEqual(counts.length * 20);
     expect(counts.length).toBeLessThanOrEqual(50);
   });
 });

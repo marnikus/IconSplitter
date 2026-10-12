@@ -118,11 +118,16 @@ Primary header controls:
 
 | Test id | Visible text | Notes |
 |---|---|---|
-| `batch-root` | `Choose source folder…` → `Root: {name}` | opens directory picker (`picker.ts`); Chrome/Edge File System Access; label mirrors state (RULE 24) |
-| `batch-refresh` | `↺ Rescan` | re-walks root; gated on handle + permission |
+| `batch-open-folder` | `Choose source folder…` → `Root: {name}` | the ONE folder control (I-44/I-46), `src/ui/FolderBar.tsx`; Chrome/Edge File System Access; label mirrors state (RULE 24) |
+| `batch-folder-path` | read-only path row | the full path captured at pick time (I-35); empty when no capture succeeded |
+| `batch-rescan` | `↺ Rescan` | re-walks root; gated on handle + permission |
+| `batch-scan-scope` | scope line | which folder the scan read |
 | `batch-process` | `▶ Split selected` | disabled when 0 selected (RULE 4) |
-| `batch-cancel` | `✕ Stop` | shown only while busy; sets the stop signal |
-| `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output` |
+| `batch-preview` | `◉ Preview splits` / `◍ Previewing…` | beside Split selected in `batch-bulk`; disabled when nothing checked or while busy; label mirrors the run (RULE 24) |
+| Stop | button `Stop` inside `batch-busy` | **semantic only** (no test id): sets the stop signal, honoured between items (RULE 7) |
+| `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output`; the row itself is `batch-dest-row` |
+| `batch-merge-slider` | range 0–0.15, step 0.0025 | the preset's global merge distance (`split.mergeFrac`), used by every preview AND every split; `batch-merge-label` reads it, `batch-merge-bar` wraps it |
+| `batch-merge-reset` | `↺ Reset to auto` | returns `mergeFrac` to null (auto); disabled while already auto |
 
 Status + warning surfaces:
 
@@ -146,13 +151,31 @@ PresetBar — `preset-bar` panel:
 | `batch-transparent` | checkbox | transparent background on/off |
 | `batch-ignore` | comma list | directories/files skipped by the walk |
 
-Review window (scan table) — `scan-table` panel:
+Review window (scan table) — `scan-table` panel, one row per AI image:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
-| `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
-| `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
+| `batch-row-count` / `batch-missing-count` / `batch-refmissing-count` | header counters | rows scanned, `missing`+`deleted`, references not found |
+| `batch-rows` | the `role="list"` | holds every `batch-row-*` |
+| `batch-row-{relPath}` | `role="listitem"` row | `aria-current="true"` on the active row; class carries status + `active`/`selected`; laid out by `.svg-row.batch-row` (compound selector — see SOR §2 Batch folders) |
+| `row-select-{relPath}` | per-row checkbox | checks only; disabled for missing/deleted (RULE 9) |
+| `row-open-{relPath}` | per-row `Open in File Explorer` button | copies the folder path and says so (a browser cannot open Explorer — honest, RULE 2/4) |
+| `batch-status-{relPath}` | status cell | badge text + `ref missing` when the reference is gone |
+| `batch-preview-count-{relPath}` | 4th cell, line 1 | `N icon(s)` / `Loading…` / `Failed` — the honest empty-vs-broken split (RULE 4) |
+| `batch-preview-strip-{relPath}` | 4th cell, line 2 | the icon thumbnails, `flex-wrap` — one row when they fit, a second when they do not, never a scrollbar |
+| `batch-preview-thumb-{relPath}-{i}` | one rendered icon | ≤ 20 per row (`MAX_THUMBS`), `flex: none` — never squeezed |
+| `batch-preview-clear` | `Clear previews` | above the list, only while a preview is held; a preview itself writes nothing |
+| `batch-footer` | `Showing {n} images` | visible-row count after filters |
+
+Bulk bar (`batch-bulk`) and filters (`batch-filters`):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `batch-check-all` | header checkbox | toggles every **visible eligible** row; checked/unchecked/indeterminate mirrors state (RULE 24) |
+| `batch-select-visible` / `batch-deselect` | buttons | check the visible list / clear every check |
+| `batch-selected-count` / `batch-scope` / `batch-hidden` / `batch-total` | counters | `N selected`, `across N visible images`, `N checked but hidden by filters` (only when > 0), `N total` |
+| `batch-thumb` (+ `batch-thumb-value`, `batch-zoom`) | zoom range 48–800 | the shared zoom control (`src/lib/zoom.ts`, I-55); the AI thumbnail column is `max-content`, so a large zoom is honoured and the list scrolls sideways |
+| `batch-shown` / `batch-clear` | filter line | `Showing N images` and `× Clear filters` (also resets the sort) |
 
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.

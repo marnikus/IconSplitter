@@ -418,10 +418,22 @@
 .batch-row.selected:not(.active) { background: #111a31; }
 .batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
 
-.batch-columns,
-.batch-row {
+/* A batch row (and its header) carries BOTH the shared `.svg-row` /
+   `.svg-columns` class and its own — and the shared rule sits later in this
+   file, so at equal specificity IT won: the row was laid out in the SVG tab's
+   eight tracks, with File / path as the `1fr` (the wide gap after a short name)
+   and Preview splits squeezed into 122px — two icons and a scrollbar — plus a
+   dead eighth track that scrolled the whole list sideways. The compound
+   selector out-specifies the shared rule, so these seven tracks are the ones a
+   batch row really gets: check | AI thumbnail at its own zoomed box (I-55) |
+   File / path bounded (a longer path ellipsises into its own `title`) |
+   Preview splits, which takes EVERY free pixel between the file name and
+   Created, so a split's icons sit in one row and wrap to a second rather than
+   scroll | created | status | open. */
+.svg-columns.batch-columns,
+.svg-row.batch-row {
   display: grid;
-  grid-template-columns: 34px 140px max-content minmax(300px, 1fr) 110px 90px 130px;
+  grid-template-columns: 34px max-content minmax(170px, 220px) minmax(240px, 1fr) 110px 90px 130px;
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -1568,8 +1580,11 @@
   .svg-columns,
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
-  .batch-columns,
-  .batch-row { grid-template-columns: 34px 140px max-content minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
+  /* The same seven tracks, with the fixed ones tightened: the preview's floor
+     (four 48px icons + three 6px gaps = 210px) still fits beside a bounded
+     File / path, so nothing scrolls sideways and no icon hides. */
+  .svg-columns.batch-columns,
+  .svg-row.batch-row { grid-template-columns: 34px max-content minmax(150px, 190px) minmax(240px, 1fr) 96px 84px 118px; column-gap: 12px; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }
