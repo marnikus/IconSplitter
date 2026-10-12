@@ -421,7 +421,9 @@
 .batch-columns,
 .batch-row {
   display: grid;
-  grid-template-columns: 34px 140px minmax(180px, 280px) minmax(380px, 560px) minmax(300px, 1fr) 110px 90px 130px;
+  /* 7-col flex: only checkbox fixed 34px, rest minmax fr to use full row space
+     thumb+info = 1fr min 160, detection min 380 1.2fr one-row, preview 2fr takes remaining */
+  grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -453,8 +455,8 @@
   min-width: 0;
 }
 
-.batch-row > :nth-child(4),
-.batch-row > :nth-child(5) {
+.batch-row > :nth-child(3),
+.batch-row > :nth-child(4) {
   justify-self: stretch;
   width: 100%;
 }
@@ -1570,7 +1572,7 @@
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .batch-columns,
-  .batch-row { grid-template-columns: 34px 140px minmax(180px, 280px) minmax(380px, 560px) minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
+  .batch-row { grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr) !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

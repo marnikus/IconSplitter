@@ -5,11 +5,11 @@ import type { Row, RowMergeMap } from "./useBatch";
 import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
 import { fmtDate, fmtTime } from "../selection/fmt";
-import ScanThumb, { useThumbCache } from "./ScanThumb";
-import ScanFileCell from "./ScanFileCell";
+import { useThumbCache } from "./ScanThumb";
 import ScanStatusCell from "./ScanStatusCell";
 import type { PreviewEntry } from "./useBatchPreview";
 import BatchRowMergeBar from "./BatchRowMergeBar";
+import BatchThumbInfoCell from "./BatchThumbInfoCell";
 
 export interface ScanTableProps {
   rows: Row[];
@@ -55,8 +55,7 @@ function Columns() {
   return (
     <div className="svg-columns batch-columns" aria-hidden="true">
       <span />
-      <span>AI Image</span>
-      <span>File / path</span>
+      <span>AI Image / File</span>
       <span>Detection</span>
       <span>Preview splits</span>
       <span>Created</span>
@@ -166,8 +165,7 @@ function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb
   return (
     <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status}${active ? " active" : ""}${r.selected ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
       <CheckCell r={r} toggle={toggle} />
-      <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
-      <ScanFileCell r={r} />
+      <BatchThumbInfoCell r={r} thumbFor={thumbFor} thumb={thumb} />
       <RowMergeCell r={r} globalFrac={gFrac} rowMerges={merges} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
       <PreviewCell entry={entry} />
       <DateCell mtime={r.mtime} />
