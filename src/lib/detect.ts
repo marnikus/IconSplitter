@@ -1,59 +1,35 @@
 export interface Box { x: number; y: number; w: number; h: number; ink: number; }
 export interface Analysis { w: number; h: number; scale: number; mask: Uint8Array; bg: [number, number, number]; ink: [number, number, number]; inkDiff: number; threshold: number; }
 export interface DetectResult { boxes: Box[]; usedFrac: number; autoFrac: number; }
-
 const MAX_DIM = 4000;
-
-function median(a: number[]) {
-  const s = [...a].sort((x, y) => x - y);
-  return s[Math.floor(s.length / 2)] ?? 255;
-}
-
+function median(a: number[]) { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)] ?? 255; }
 function sampleBorder(d: Uint8ClampedArray, w: number, h: number) {
   const rs: number[] = [], gs: number[] = [], bs: number[] = [];
   const push = (x: number, y: number) => {
-    const i = (y * w + x) * 4;
-    const a = d[i + 3] / 255;
-    rs.push(d[i] * a + 255 * (1 - a));
-    gs.push(d[i + 1] * a + 255 * (1 - a));
-    bs.push(d[i + 2] * a + 255 * (1 - a));
+    const i = (y * w + x) * 4, a = d[i + 3] / 255;
+    rs.push(d[i] * a + 255 * (1 - a)); gs.push(d[i + 1] * a + 255 * (1 - a)); bs.push(d[i + 2] * a + 255 * (1 - a));
   };
-  const sx = Math.max(1, Math.floor(w / 600));
-  const sy = Math.max(1, Math.floor(h / 600));
+  const sx = Math.max(1, Math.floor(w / 600)), sy = Math.max(1, Math.floor(h / 600));
   for (let x = 0; x < w; x += sx) { push(x, 0); push(x, h - 1); }
   for (let y = 0; y < h; y += sy) { push(0, y); push(w - 1, y); }
   return { rs, gs, bs };
 }
-
 function diffHist(d: Uint8ClampedArray, bg: [number, number, number], w: number, h: number) {
-  const diff = new Uint8Array(w * h);
-  const hist = new Uint32Array(256);
+  const diff = new Uint8Array(w * h), hist = new Uint32Array(256);
   for (let p = 0, i = 0; p < w * h; p++, i += 4) {
-    const a = d[i + 3] / 255;
-    const r = d[i] * a + 255 * (1 - a);
-    const g = d[i + 1] * a + 255 * (1 - a);
-    const b = d[i + 2] * a + 255 * (1 - a);
+    const a = d[i + 3] / 255, r = d[i] * a + 255 * (1 - a), g = d[i + 1] * a + 255 * (1 - a), b = d[i + 2] * a + 255 * (1 - a);
     const v = Math.max(Math.abs(r - bg[0]), Math.abs(g - bg[1]), Math.abs(b - bg[2])) | 0;
-    const cl = v > 255 ? 255 : v;
-    diff[p] = cl;
-    hist[cl]++;
+    const cl = v > 255 ? 255 : v; diff[p] = cl; hist[cl]++;
   }
   return { diff, hist };
 }
-
 function maxDiffFromHist(hist: Uint32Array, total: number) {
-  let acc = 0;
-  const need = total * 0.001;
-  for (let v = 255; v >= 0; v--) {
-    acc += hist[v];
-    if (acc >= need) return Math.max(v, 30);
-  }
+  let acc = 0; const need = total * 0.001;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= need) return Math.max(v, 30); }
   return 30;
 }
-
 function maskFromDiff(diff: Uint8Array, data: Uint8ClampedArray, maxD: number, thr: number) {
-  const mask = new Uint8Array(diff.length);
-  let sr = 0, sg = 0, sb = 0, sn = 0;
+  const mask = new Uint8Array(diff.length); let sr = 0, sg = 0, sb = 0, sn = 0;
   for (let p = 0, i = 0; p < diff.length; p++, i += 4) {
     if (diff[p] > thr) mask[p] = 1;
     if (diff[p] >= maxD * 0.85) { sr += data[i]; sg += data[i + 1]; sb += data[i + 2]; sn++; }
@@ -61,15 +37,11 @@ function maskFromDiff(diff: Uint8Array, data: Uint8ClampedArray, maxD: number, t
   const ink: [number, number, number] = sn ? [Math.round(sr / sn), Math.round(sg / sn), Math.round(sb / sn)] : [0, 0, 0];
   return { mask, ink };
 }
-
 export function analyze(img: HTMLImageElement): Analysis {
-  const nw = img.naturalWidth, nh = img.naturalHeight;
-  const k = Math.min(1, MAX_DIM / Math.max(nw, nh));
+  const nw = img.naturalWidth, nh = img.naturalHeight, k = Math.min(1, MAX_DIM / Math.max(nw, nh));
   const w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
-  const c = document.createElement("canvas");
-  c.width = w; c.height = h;
-  const ctx = c.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(img, 0, 0, w, h);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!; ctx.drawImage(img, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
   const { rs, gs, bs } = sampleBorder(data, w, h);
   const bg: [number, number, number] = [median(rs), median(gs), median(bs)];
@@ -79,129 +51,74 @@ export function analyze(img: HTMLImageElement): Analysis {
   const { mask, ink } = maskFromDiff(diff, data, maxD, thr);
   return { w, h, scale: nw / w, mask, bg: bg.map(Math.round) as [number, number, number], ink, inkDiff: maxD, threshold: thr };
 }
-
-function dilateH(src: Uint8Array, tmp: Uint8Array, g: Grid, r: number) {
-  const { gw, gh } = g;
-  const pre = new Int32Array(gw + 1);
+function dilateH(src: Uint8Array, tmp: Uint8Array, g: { gw: number; gh: number }, r: number) {
+  const { gw, gh } = g, pre = new Int32Array(gw + 1);
   for (let y = 0; y < gh; y++) {
-    const row = y * gw;
-    pre[0] = 0;
+    const row = y * gw; pre[0] = 0;
     for (let x = 0; x < gw; x++) pre[x + 1] = pre[x] + src[row + x];
-    for (let x = 0; x < gw; x++) {
-      const a = Math.max(0, x - r), b = Math.min(gw, x + r + 1);
-      tmp[row + x] = pre[b] - pre[a] > 0 ? 1 : 0;
-    }
+    for (let x = 0; x < gw; x++) { const a = Math.max(0, x - r), b = Math.min(gw, x + r + 1); tmp[row + x] = pre[b] - pre[a] > 0 ? 1 : 0; }
   }
 }
-
-function dilateV(tmp: Uint8Array, out: Uint8Array, g: Grid, r: number) {
-  const { gw, gh } = g;
-  const pre = new Int32Array(gh + 1);
+function dilateV(tmp: Uint8Array, out: Uint8Array, g: { gw: number; gh: number }, r: number) {
+  const { gw, gh } = g, pre = new Int32Array(gh + 1);
   for (let x = 0; x < gw; x++) {
-    pre[0] = 0;
-    for (let y = 0; y < gh; y++) pre[y + 1] = pre[y] + tmp[y * gw + x];
-    for (let y = 0; y < gh; y++) {
-      const a = Math.max(0, y - r), b = Math.min(gh, y + r + 1);
-      out[y * gw + x] = pre[b] - pre[a] > 0 ? 1 : 0;
-    }
+    pre[0] = 0; for (let y = 0; y < gh; y++) pre[y + 1] = pre[y] + tmp[y * gw + x];
+    for (let y = 0; y < gh; y++) { const a = Math.max(0, y - r), b = Math.min(gh, y + r + 1); out[y * gw + x] = pre[b] - pre[a] > 0 ? 1 : 0; }
   }
 }
-
 function dilate(src: Uint8Array, gw: number, gh: number, r: number): Uint8Array {
   if (r <= 0) return src.slice();
-  const tmp = new Uint8Array(gw * gh), out = new Uint8Array(gw * gh);
-  const g = { gw, gh };
-  dilateH(src, tmp, g, r);
-  dilateV(tmp, out, g, r);
-  return out;
+  const tmp = new Uint8Array(gw * gh), out = new Uint8Array(gw * gh), g = { gw, gh };
+  dilateH(src, tmp, g, r); dilateV(tmp, out, g, r); return out;
 }
-
 interface Labeling { labels: Int32Array; valid: boolean[]; count: number; }
-interface Grid { gw: number; gh: number; }
-
 function tryPush(q: number, id: number, ctx: { dil: Uint8Array; labels: Int32Array; stack: number[]; }) {
   if (ctx.dil[q] && ctx.labels[q] === -1) { ctx.labels[q] = id; ctx.stack.push(q); }
 }
-
 function floodFill(s: number, id: number, ctx: { dil: Uint8Array; cells: Uint8Array; counts: Uint32Array; labels: Int32Array; gw: number; gh: number; stack: number[]; }) {
-  const { cells, counts, labels, gw, gh, stack } = ctx;
-  let ink = 0;
-  labels[s] = id;
-  stack.push(s);
+  const { cells, counts, labels, gw, gh, stack } = ctx; let ink = 0; labels[s] = id; stack.push(s);
   while (stack.length) {
-    const p = stack.pop()!;
-    if (cells[p]) ink += counts[p];
+    const p = stack.pop()!; if (cells[p]) ink += counts[p];
     const px = p % gw, py = (p / gw) | 0;
     for (let dy = -1; dy <= 1; dy++) {
-      const ny = py + dy;
-      if (ny < 0 || ny >= gh) continue;
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = px + dx;
-        if (nx < 0 || nx >= gw) continue;
-        tryPush(ny * gw + nx, id, ctx);
-      }
+      const ny = py + dy; if (ny < 0 || ny >= gh) continue;
+      for (let dx = -1; dx <= 1; dx++) { const nx = px + dx; if (nx < 0 || nx >= gw) continue; tryPush(ny * gw + nx, id, ctx); }
     }
   }
   return ink;
 }
-
 function label(dil: Uint8Array, cells: Uint8Array, counts: Uint32Array, gw: number, gh: number): Labeling {
-  const labels = new Int32Array(gw * gh).fill(-1);
-  const inks: number[] = [];
-  const stack: number[] = [];
-  const ctx = { dil, cells, counts, labels, gw, gh, stack };
+  const labels = new Int32Array(gw * gh).fill(-1), inks: number[] = [], stack: number[] = [], ctx = { dil, cells, counts, labels, gw, gh, stack };
   let n = 0;
-  for (let s = 0; s < gw * gh; s++) {
-    if (!dil[s] || labels[s] !== -1) continue;
-    inks.push(floodFill(s, n, ctx));
-    n++;
-  }
-  const maxInk = Math.max(0, ...inks);
-  const valid = inks.map((v) => v >= maxInk * 0.015 && v > 0);
+  for (let s = 0; s < gw * gh; s++) { if (!dil[s] || labels[s] !== -1) continue; inks.push(floodFill(s, n, ctx)); n++; }
+  const maxInk = Math.max(0, ...inks), valid = inks.map((v) => v >= maxInk * 0.015 && v > 0);
   return { labels, valid, count: valid.filter(Boolean).length };
 }
-
 function downsample(mask: Uint8Array, w: number, h: number, f: number) {
-  const gw = Math.ceil(w / f), gh = Math.ceil(h / f);
-  const cells = new Uint8Array(gw * gh), counts = new Uint32Array(gw * gh);
-  for (let y = 0; y < h; y++) {
-    const row = y * w, cy = ((y / f) | 0) * gw;
-    for (let x = 0; x < w; x++) if (mask[row + x]) {
-      const c = cy + ((x / f) | 0);
-      cells[c] = 1; counts[c]++;
-    }
-  }
+  const gw = Math.ceil(w / f), gh = Math.ceil(h / f), cells = new Uint8Array(gw * gh), counts = new Uint32Array(gw * gh);
+  for (let y = 0; y < h; y++) { const row = y * w, cy = ((y / f) | 0) * gw; for (let x = 0; x < w; x++) if (mask[row + x]) { const c = cy + ((x / f) | 0); cells[c] = 1; counts[c]++; } }
   return { cells, counts, gw, gh };
 }
-
 function removeHLines(cells: Uint8Array, gw: number, gh: number, rowSums: number[]) {
-  const out = cells.slice();
-  const thr = gw * 0.8;
-  let y = 0;
+  const out = cells.slice(), thr = gw * 0.8; let y = 0;
   while (y < gh) {
     if (rowSums[y] <= thr) { y++; continue; }
-    let y2 = y;
-    while (y2 + 1 < gh && rowSums[y2 + 1] > thr) y2++;
+    let y2 = y; while (y2 + 1 < gh && rowSums[y2 + 1] > thr) y2++;
     if (y2 - y + 1 <= 3) for (let yy = y; yy <= y2; yy++) for (let x = 0; x < gw; x++) out[yy * gw + x] = 0;
     y = y2 + 1;
   }
   return out;
 }
-
 function removeVLines(cells: Uint8Array, gw: number, gh: number, colSums: number[]) {
-  const out = cells.slice();
-  const thr = gh * 0.8;
-  let x = 0;
+  const out = cells.slice(), thr = gh * 0.8; let x = 0;
   while (x < gw) {
     if (colSums[x] <= thr) { x++; continue; }
-    let x2 = x;
-    while (x2 + 1 < gw && colSums[x2 + 1] > thr) x2++;
+    let x2 = x; while (x2 + 1 < gw && colSums[x2 + 1] > thr) x2++;
     if (x2 - x + 1 <= 3) for (let xx = x; xx <= x2; xx++) for (let yy = 0; yy < gh; yy++) out[yy * gw + xx] = 0;
     x = x2 + 1;
   }
   return out;
 }
-
 function removeGridLines(cells: Uint8Array, gw: number, gh: number): Uint8Array {
   const rowSums = new Array(gh).fill(0), colSums = new Array(gw).fill(0);
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) if (cells[y * gw + x]) { rowSums[y]++; colSums[x]++; }
@@ -209,95 +126,80 @@ function removeGridLines(cells: Uint8Array, gw: number, gh: number): Uint8Array 
   tmp = removeVLines(tmp, gw, gh, colSums);
   return tmp;
 }
-
 type Run = { start: number; end: number; count: number };
-
-function buildSeries(cells: Uint8Array, counts: Uint32Array, g: Grid, rMax: number) {
-  const { gw, gh } = g;
-  const series: number[] = [];
+function buildSeries(cells: Uint8Array, counts: Uint32Array, g: { gw: number; gh: number }, rMax: number) {
+  const { gw, gh } = g, series: number[] = [];
   for (let r = 1; r <= rMax; r++) series.push(label(dilate(cells, gw, gh, r), cells, counts, gw, gh).count);
   const runs: Run[] = [];
-  for (let i = 0; i < series.length; i++) {
-    const last = runs[runs.length - 1];
-    if (last && last.count === series[i]) last.end = i;
-    else runs.push({ start: i, end: i, count: series[i] });
-  }
+  for (let i = 0; i < series.length; i++) { const last = runs[runs.length - 1]; if (last && last.count === series[i]) last.end = i; else runs.push({ start: i, end: i, count: series[i] }); }
   return runs;
 }
-
 function bestRun(runs: Run[]): Run {
   const cand = runs.filter((r) => r.count >= 2);
   if (cand.length === 0) return runs.reduce((p, c) => (c.end - c.start > p.end - p.start ? c : p), runs[0]);
   let best = cand[0];
-  for (const r of cand) {
-    if (r.count > best.count) best = r;
-    else if (r.count === best.count && r.end - r.start > best.end - best.start) best = r;
-  }
+  for (const r of cand) { if (r.count > best.count) best = r; else if (r.count === best.count && r.end - r.start > best.end - best.start) best = r; }
   return best;
 }
-
 function updateBounds(x: number, y: number, l: number, b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; }) {
-  if (x < b.minX[l]) b.minX[l] = x;
-  if (x > b.maxX[l]) b.maxX[l] = x;
-  if (y < b.minY[l]) b.minY[l] = y;
-  if (y > b.maxY[l]) b.maxY[l] = y;
-  b.ink[l]++;
+  if (x < b.minX[l]) b.minX[l] = x; if (x > b.maxX[l]) b.maxX[l] = x;
+  if (y < b.minY[l]) b.minY[l] = y; if (y > b.maxY[l]) b.maxY[l] = y; b.ink[l]++;
 }
-
 function extractBoxes(a: Analysis, lab: Labeling, f: number, gw: number) {
-  const { w, h, mask, scale } = a;
-  const n = lab.valid.length;
-  const bounds = {
-    minX: new Array(n).fill(Infinity),
-    minY: new Array(n).fill(Infinity),
-    maxX: new Array(n).fill(-Infinity),
-    maxY: new Array(n).fill(-Infinity),
-    ink: new Array(n).fill(0),
-  };
+  const { w, h, mask, scale } = a, n = lab.valid.length;
+  const b = { minX: new Array(n).fill(Infinity), minY: new Array(n).fill(Infinity), maxX: new Array(n).fill(-Infinity), maxY: new Array(n).fill(-Infinity), ink: new Array(n).fill(0) };
   for (let y = 0; y < h; y++) {
     const row = y * w, cy = ((y / f) | 0) * gw;
     for (let x = 0; x < w; x++) {
       if (!mask[row + x]) continue;
       const l = lab.labels[cy + ((x / f) | 0)];
       if (l < 0 || !lab.valid[l]) continue;
-      updateBounds(x, y, l, bounds);
+      updateBounds(x, y, l, b);
     }
   }
   const boxes: Box[] = [];
   for (let i = 0; i < n; i++) {
-    if (!lab.valid[i] || !isFinite(bounds.minX[i])) continue;
-    const x0 = Math.max(0, (bounds.minX[i] - 1) * scale);
-    const y0 = Math.max(0, (bounds.minY[i] - 1) * scale);
-    boxes.push({ x: x0, y: y0, w: (bounds.maxX[i] + 2) * scale - x0, h: (bounds.maxY[i] + 2) * scale - y0, ink: bounds.ink[i] });
+    if (!lab.valid[i] || !isFinite(b.minX[i])) continue;
+    const x0 = Math.max(0, (b.minX[i] - 1) * scale), y0 = Math.max(0, (b.minY[i] - 1) * scale);
+    boxes.push({ x: x0, y: y0, w: (b.maxX[i] + 2) * scale - x0, h: (b.maxY[i] + 2) * scale - y0, ink: b.ink[i] });
   }
   return boxes;
 }
-
+function isInside(inner: Box, outer: Box) {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
+}
+function filterContained(boxes: Box[]): Box[] {
+  if (boxes.length <= 1) return boxes;
+  const sorted = [...boxes].sort((a, b) => b.w * b.h - a.w * a.h);
+  const keep: Box[] = [];
+  for (const b of sorted) {
+    const container = keep.find((o) => isInside(b, o) && b.ink < o.ink * 0.5);
+    if (!container) keep.push(b);
+  }
+  return keep;
+}
 function orderBoxes(boxes: Box[]): Box[] {
   boxes.sort((p, q) => p.y + p.h / 2 - (q.y + q.h / 2));
   const rows: Box[][] = [];
   for (const b of boxes) {
     const cy = b.y + b.h / 2;
     const row = rows.find((rw) => Math.abs(rw[0].y + rw[0].h / 2 - cy) < Math.min(rw[0].h, b.h) * 0.5);
-    if (row) row.push(b);
-    else rows.push([b]);
+    if (row) row.push(b); else rows.push([b]);
   }
   return rows.flatMap((rw) => rw.sort((p, q) => p.x - q.x));
 }
-
 export function detect(a: Analysis, radiusFrac: number | null): DetectResult {
-  const { w, h } = a;
-  const longest = Math.max(w, h);
-  const f = Math.max(1, Math.ceil(longest / 800));
+  const { w, h } = a, longest = Math.max(w, h), f = Math.max(1, Math.ceil(longest / 800));
   const { cells: raw, counts, gw, gh } = downsample(a.mask, w, h, f);
   const cells = removeGridLines(raw, gw, gh);
   const rMax = Math.max(3, Math.floor(Math.max(gw, gh) * 0.2));
   const runs = buildSeries(cells, counts, { gw, gh }, rMax);
   const best = bestRun(runs);
   const autoR = Math.round((best.start + best.end) / 2) + 1;
-  const autoFrac = (autoR * f) / longest;
-  const usedFrac = radiusFrac ?? autoFrac;
+  const autoFrac = (autoR * f) / longest, usedFrac = radiusFrac ?? autoFrac;
   const r = radiusFrac == null ? autoR : Math.max(0, Math.round((radiusFrac * longest) / f));
   const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
-  return { boxes: orderBoxes(extractBoxes(a, lab, f, gw)), usedFrac, autoFrac };
+  const rawBoxes = extractBoxes(a, lab, f, gw);
+  const filtered = filterContained(rawBoxes);
+  return { boxes: orderBoxes(filtered), usedFrac, autoFrac };
 }
