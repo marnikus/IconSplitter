@@ -14,6 +14,13 @@ The plan below is kept as written; the one superseded decision is recorded here:
 > line. Manual approve/decline overrides stay. Wherever the plan text below
 > still says "warning", read "declined" (the shared red `✕ Declined` badge
 > replaces the amber "⚠ Needs review" badge for this tab).
+>
+> **HOTKEYS (2026-10-12):** `A` approves and `D` declines the **active** row —
+> the same keys and scope as the Generate SVG tab (`SvgHotkeys.ts`), wired in
+> `useBatchHotkeys.ts` through the same `useReview.decide` path as the row
+> buttons (badge + row side-line + one undoable entry). Chords and text-field
+> keystrokes are ignored; an undecidable (missing/deleted) active row is a
+> silent no-op.
 
 Reuse source: the Generate SVG tab's review controls (`src/svg/`,
 `src/lib/svgmodel.ts`, `src/lib/reviewmeta.ts`, `src/svg/SvgRow.tsx`,

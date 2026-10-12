@@ -77,7 +77,7 @@ function Footer({ count }: { count: number }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="batch-footer">Showing {count} images</span>
-      <span className="svg-hints">↑↓ active row · E select active · Q deselect active · Click = active only · Checkbox = select · Shift range · Ctrl toggle</span>
+      <span className="svg-hints">↑↓ active row · E select active · Q deselect active · A approve active · D decline active · Click = active only · Checkbox = select · Shift range · Ctrl toggle</span>
     </footer>
   );
 }

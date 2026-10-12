@@ -129,4 +129,19 @@ describe("batch split-review flow", () => {
     const rec = state.sources.find((s: { relPath: string }) => s.relPath === "icon-a_AI_1.png");
     expect(rec.review).toBe("approved");
   });
+
+  it("A/D hotkeys review the ACTIVE row — badge and row line change like a hand click", async () => {
+    await click(q("[data-testid='batch-row-icon-a_AI_1.png']")); // click = active row
+    const press = async (key: string) => {
+      await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key })); });
+      await settle(60);
+    };
+    await press("a"); // approve active
+    expect(q("[data-testid='batch-review-badge-icon-a_AI_1.png']")?.textContent).toMatch(/✓ Approved/);
+    expect(q("[data-testid='batch-row-icon-a_AI_1.png']")?.className).toContain("approved");
+    expect(q("[data-testid='batch-row-icon-b_AI_2.png']")?.className).toContain("pending"); // neighbours untouched
+    await press("d"); // decline active
+    expect(q("[data-testid='batch-review-badge-icon-a_AI_1.png']")?.textContent).toMatch(/✕ Declined/);
+    expect(q("[data-testid='batch-row-icon-a_AI_1.png']")?.className).toContain("declined");
+  });
 });

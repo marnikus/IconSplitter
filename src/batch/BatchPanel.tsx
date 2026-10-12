@@ -22,7 +22,7 @@ export default function BatchPanel() {
   const review = useReview({ rows: v.core.s.rows, rootRef: v.core.rootRef, expected: v.core.s.preset.expectedIcons, setReviews: v.core.setReviews, say: v.core.say });
   const thumbFor = useThumbCache(v.core.thumbUrl);
   const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onEntry: review.classify });
-  useBatchHotkeys(v as never, true);
+  useBatchHotkeys(v as never, true, { rows: v.core.s.rows, activeId: v.activeId, decide: review.decide });
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   const checkedRows = useCheckedRows(v);
   const approvedChecked = useApprovedChecked(v);
