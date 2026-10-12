@@ -426,6 +426,7 @@
   column-gap: 12px;
   width: 100%;
   min-width: 0;
+  justify-items: start;
 }
 
 .batch-columns {
@@ -446,6 +447,15 @@
   transition: background 0.15s, min-height 0.15s;
   width: 100%;
   min-width: 0;
+}
+
+.batch-row > * {
+  min-width: 0;
+}
+
+.batch-row > :nth-child(4) {
+  justify-self: stretch;
+  width: 100%;
 }
 
 .v2-row.approved::after,
@@ -1125,6 +1135,8 @@
   display: grid;
   grid-template-rows: 42px auto 40px;
   min-height: 0;
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--v2-line);
   border-radius: 0 0 var(--v2-radius) var(--v2-radius);
   background: var(--v2-surface);
@@ -1135,6 +1147,8 @@
   display: grid;
   grid-template-rows: 30px auto;
   min-height: 0;
+  width: 100%;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: visible;
   scrollbar-color: #313b58 #0c1222;
@@ -1555,7 +1569,7 @@
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .batch-columns,
-  .batch-row { grid-template-columns: 34px 140px max-content minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; }
+  .batch-row { grid-template-columns: 34px 140px max-content minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }
