@@ -20,9 +20,13 @@ export default function BatchPanel() {
         </p>
       )}
       <HeaderControls v={v} />
-      {v.core.s.rootName !== "" && (
-        <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      )}
+      <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
+      <BatchBulkBar
+        header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
+        thumb={v.thumb} selectedCount={v.selectedCount}
+        onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
+        onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
+      />
       <MainGrid v={v} thumbFor={thumbFor} />
       <Overlays v={v} />
     </div>
@@ -43,14 +47,6 @@ function MainGrid({ v, thumbFor }: { v: View; thumbFor: (r: string) => Promise<s
       </div>
       <div className="space-y-4">
         <RefWarnings count={v.core.s.refWarnings.length} />
-        {v.core.s.rows.length > 0 && (
-          <BatchBulkBar
-            header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount}
-            thumb={v.thumb} selectedCount={v.selectedCount}
-            onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll}
-            onThumb={v.setThumb} onSplit={() => void v.core.run()} canSplit={v.selectedCount > 0 && !v.core.s.busy}
-          />
-        )}
         <ScanTable
           rows={v.visible} thumb={v.thumb} toggle={v.toggle} selectAll={(on) => v.toggleAllVisible(on)}
           copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor}
