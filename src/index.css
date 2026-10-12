@@ -421,7 +421,7 @@
 .batch-columns,
 .batch-row {
   display: grid;
-  grid-template-columns: 34px 140px minmax(180px, 280px) minmax(380px, 560px) minmax(300px, 1fr) 110px 90px 130px;
+  grid-template-columns: 34px 130px minmax(160px, 220px) minmax(360px, 440px) minmax(380px, 1fr) 110px 90px 130px;
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -1570,7 +1570,7 @@
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .batch-columns,
-  .batch-row { grid-template-columns: 34px 140px minmax(180px, 280px) minmax(380px, 560px) minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
+  .batch-row { grid-template-columns: 34px 130px minmax(160px, 220px) minmax(360px, 440px) minmax(380px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }

@@ -153,6 +153,16 @@ Review window (scan table) — `scan-table` panel:
 | `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
 | `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
+| `batch-preview` | button `Preview splits` | beside `Split selected`; disabled when 0 selected; renders selected rows' previews inline (`previewSelected`) |
+| `batch-preview-clear` | button `Clear previews` | clears `previews` map, shown only when `previews.size>0` |
+| `batch-preview-count-{relPath}` | span `N icon(s)` | count badge per row; also `Loading…` / `Failed` states |
+| `batch-preview-strip-{relPath}` | flex-wrap strip `gap-1.5` | holds up to `MAX_THUMBS` 20 thumbs, `h-12 w-12`, 2 rows no scrollbar |
+| `batch-preview-thumb-{relPath}-{i}` | `img` thumb | `h-12 w-12` white bg, `flex:none` |
+| `batch-row-merge-bar-{relPath}` | div `flex-nowrap` | Detection bar one-row: label + live value + slider + Apply/Reset |
+| `batch-row-merge-slider-{relPath}` | range `0–0.15` step `0.0025` | per-row merge distance, live `local.toFixed(4)` |
+| `batch-row-merge-label-{relPath}` | span `Merge 0.0000` | shows live value + `• overridden` or ` (auto)` |
+| `batch-row-merge-apply-{relPath}` | button `Apply` | stores per-row `mergeFrac` in `rowMerges` and instantly shows that row's preview via `previewSingleExplicit` (I-66) |
+| `batch-row-merge-reset-{relPath}` | button `↺ Reset` | clears per-row override, re-previews row with global `mergeFrac`, disabled when no override |
 
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.

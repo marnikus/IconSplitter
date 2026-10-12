@@ -2657,3 +2657,13 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - RULE 16 gate (changed files): `node tools/quality.mjs --changed --allow-legacy --base HEAD` → GATE PASSED. Largest touched: `SvgPanel.tsx` 287, `actions.ts` 278, `SvgControls.tsx` 251, `statemodel.ts` 196. New files all under 90 lines. Functions ≤ 20 lines.
 - RULE 18 note: the new lib and UI files are below the 150-line floor on purpose (the shared pieces are small by design). `SvgPanel.tsx` (287) and `actions.ts` (278) are near the 300 limit; any further additions there must move code out first.
 - Lint: 0 errors, 10 warnings (all pre-existing). `npx tsc --noEmit` clean.
+
+## 2026-10-13 — fix(batch): preview column to red line + per-row Apply immediate (I-66)
+
+- Problem: preview narrow (2 of 4 icons with scrollbar) despite gap left of Preview; Apply required global Preview click.
+- Fix: grid `34px 130px minmax(160px,220px) minmax(360px,440px) minmax(380px,1fr) 110px 90px 130px` (preview +190px, left edge 1062→852, 4 icons one row, 10 wrap 2 rows, no scrollbar); `PreviewCell` flex-wrap already, no overflow-x-auto; `useBatchPreview` added `previewSingleExplicit` via `ExplicitPreviewArgs` (1 param) + `doExplicitPreview` (1 param object, CC 4) and `BatchPanel` `useRowMergeApply`/`useRowMergeReset` call it instantly.
+- TDD: `tests/batch_preview_layout_fix.test.tsx` 5 tests red→green (CSS mins, flex-wrap, 4-icon fit, Apply immediate, Reset refresh); `tests/refactor_optimize.test.tsx` 6→8 cols; existing `batch_row_merge` 9 + `batch_merge_preview` 5 still green.
+- RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors 22 warnings; `node tools/quality.mjs --changed --allow-legacy` GATE PASSED (10 files: BatchPanel 27 fns/103 lines, BatchRowMergeBar 8/42, ScanTable 26/231, batchOps 33/192, useBatch 64/200, useBatchPreview 42/211, useBatchTypes 0/38, useBatchView 13/90, batchprefs 3/47, batchselect 10/50; every new fn ≤13 lines, CC≤4, params≤4 via domain object, nesting≤1).
+- RULE 18: no new file >300, largest touched `useBatchPreview` 211 (<303 ideal-size), `ScanTable` 231; all new helpers 4–13 lines, ideal-size reason=single-row explicit preview owns cache key + load/detect/render.
+- Lint/type fixes: `useBatchTypes` AiImageEntry→`scan`, SourceStatus→`statefile`, Ctx.keys `StateKey[]`, `useBatch` escapes, `batchprefs` empty catch, tests `@ts-ignore`→eslint-disable, `refactor_optimize` 8-col.
+- `npm run verify:fast` ALL LANES PASSED: Types PASS, Lint PASS (0 errors 22 warnings), Quality GATE PASSED, Tests+coverage PASS (164 files 1809 tests, `src/lib` 96%+ lines, branches 90%+), Build PASS (`dist/index.html` 1,518.22 kB, 447.23 kB gzip). Network ECONNRESET for requesty.ai logged but not failed.

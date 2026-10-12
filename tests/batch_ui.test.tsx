@@ -71,6 +71,7 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });

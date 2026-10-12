@@ -155,6 +155,44 @@ function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal) => Promise
     try { const ac = new AbortController(); const entry = await previewOne(row, ac.signal); setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; }); } catch { /* ignore */ }
   }, [previewOne, setPreviews]);
 }
+function usePreviewSingleExplicit(args: { split: SplitSettings; loadFile: LoadFile; analysis: React.MutableRefObject<Map<string, Analysis>>; lru: React.MutableRefObject<Map<string, CacheItem>>; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>> }) {
+  const { split, loadFile, analysis, lru, setPreviews } = args;
+  return useCallback(async (row: Row, eff: number | null) => {
+    setPreviews((p) => { const n = new Map(p); n.set(row.relPath, { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "loading" }); return n; });
+    try {
+      const key = previewKey({ relPath: row.relPath, mergeFrac: eff, padding: split.padding, size: split.size, transparent: split.transparent, mtime: row.mtime });
+      const hit = lru.current.get(row.relPath);
+      if (hit && hit.key === key) { setPreviews((p) => { const n = new Map(p); n.set(row.relPath, hit.entry); return n; }); return; }
+      const ac = new AbortController();
+      const entry = await doExplicitPreview({ row, eff, split, loadFile, analysis, lru, signal: ac.signal, key });
+      setPreviews((p) => { const n = new Map(p); n.set(row.relPath, entry); return n; });
+    } catch { /* ignore */ }
+  }, [split, loadFile, analysis, lru, setPreviews]);
+}
+interface ExplicitPreviewArgs {
+  row: Row;
+  eff: number | null;
+  split: SplitSettings;
+  loadFile: LoadFile;
+  analysis: React.MutableRefObject<Map<string, Analysis>>;
+  lru: React.MutableRefObject<Map<string, CacheItem>>;
+  signal: AbortSignal;
+  key: string;
+}
+async function doExplicitPreview(args: ExplicitPreviewArgs): Promise<PreviewEntry> {
+  const { row, eff, split, loadFile, analysis, lru, signal, key } = args;
+  const file = await loadFile(row.relPath);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  const img = await loadImgSafe(file);
+  if (!img) { const fb = makeFallback(row.relPath); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); return fb; }
+  const an = getOrAnalyze(img, row.relPath, analysis.current);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  const boxes = detect(an, eff).boxes;
+  const thumbs = renderThumbs(img, an, boxes, { ...split, mergeFrac: eff });
+  const entry = buildEntry(row.relPath, boxes, thumbs);
+  lru.current.set(row.relPath, { key, entry, at: Date.now() }); evictLru(lru.current);
+  return entry;
+}
 export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; }) {
   const { root, split, rowMerges } = params;
   const merges = rowMerges ?? {};
@@ -164,8 +202,9 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[
   const previewOne = usePreviewOne({ split, rowMerges: merges, loadFile, analysis, lru });
   const previewSelected = usePreviewQueue({ previewOne, setPreviews, setIsPreviewing, abortRef });
   const previewSingle = usePreviewSingle(previewOne, setPreviews);
+  const previewSingleExplicit = usePreviewSingleExplicit({ split, loadFile, analysis, lru, setPreviews });
   const clear = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); }, [abortRef, setPreviews, setIsPreviewing]);
   useEffect(() => { clear(); }, [root, clear]);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
-  return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle };
+  return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, previewSingleExplicit };
 }

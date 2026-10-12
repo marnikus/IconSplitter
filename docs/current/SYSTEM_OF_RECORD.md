@@ -864,6 +864,7 @@ Batch:
   persists statuses → UI mirrors (RULE 24). Stop is honoured between items.
 * **Presets:** save/load/delete in localStorage; directory handles persisted
   in IndexedDB per preset name; last-used preset auto-restores on open.
+* **Preview:** `BatchRowMergeBar` per-row slider 0–0.15 step 0.0025 with live `0.0000` value and one-row `flex-nowrap`; `Apply` stores per-row `mergeFrac` in `rowMerges` and instantly shows that row's `Preview splits` (`previewSingleExplicit` with `MAX_THUMBS` 20, `THUMB_OUT` 96, LRU 200, `flex-wrap` 2 rows, no scrollbar); global `Preview splits` renders selected rows with concurrency 3; table grid `34px 130px minmax(160px,220px) minmax(360px,440px) minmax(380px,1fr) 110px 90px 130px` keeps preview at the red line.
 
 ## 5. Invariants
 
@@ -1221,6 +1222,7 @@ Batch:
   keeps its own key (`iconSplitter.upload.prompts.v1`, `iconSplitter.svg.prompts.v1`),
   so a preset never crosses between tabs. Delete never clears the editor; Save as
   stores a snapshot of exactly the text in the editor; a blank name is refused.
+* **I-66 (batch preview immediate, RULE 24 — 2026-10-13):** the Batch `PREVIEW SPLITS` column starts at the red line (grid `34px 130px minmax(160px,220px) minmax(360px,440px) minmax(380px,1fr) 110px 90px 130px`, so 4 icons always fit one row, 10 wrap to 2 rows, no `overflow-x-auto` scrollbar) and `Apply` in a row's `Detection` bar (`BatchRowMergeBar`) immediately renders that row's preview with the new `mergeFrac` via `previewSingleExplicit` (explicit `previewKey` with `mergeFrac`, LRU 200, `MAX_THUMBS` 20); `Reset` does the same with the global `mergeFrac`. No global `Preview splits` click is required and no file is written.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /

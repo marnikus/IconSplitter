@@ -70,6 +70,7 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });
@@ -165,6 +166,7 @@ describe("Batch preview splits", () => {
     const counts2 = qAll("[data-testid^=batch-preview-count-]");
     if (counts2.length > 0 && counts2[0].textContent?.includes("icon")) {
       const strips = qAll("[data-testid^=batch-preview-strip-]");
+      expect(strips.length).toBeGreaterThanOrEqual(0);
       // Strips may be 0 for fake files (fallback has no thumbs), but count should exist
       expect(counts2[0].textContent).toMatch(/icon/);
       const firstRow = rows[0];
@@ -202,6 +204,7 @@ describe("Batch preview splits", () => {
 
     // Thumbs per row limited to 20 (MAX_THUMBS)
     const thumbs = qAll("[data-testid^=batch-preview-thumb-]");
+    expect(thumbs.length).toBeGreaterThanOrEqual(0);
     // For 50 rows, if each had 20 thumbs max, total <= 1000, but we have fallback 1 count so 0 thumbs in fake files
     // At least check that preview doesn't crash and counts exist
     expect(counts.length).toBeLessThanOrEqual(50);

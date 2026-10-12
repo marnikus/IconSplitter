@@ -1,10 +1,11 @@
 // useBatchTypes.ts — shared types for batch orchestration (split to keep files <300 lines)
 
 import type { DirHandleLike } from "../lib/fs";
-import type { AiImageEntry } from "../lib/fs";
-import type { SourceStatus } from "../lib/status";
+import type { AiImageEntry } from "../lib/scan";
+import type { SourceStatus } from "../lib/statefile";
 import type { Preset } from "../lib/presets";
 import type { MutableRefObject } from "react";
+import type { StateKey } from "./statewrite";
 
 export type RowMergeMap = Record<string, number | null>;
 
@@ -30,7 +31,7 @@ export type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
 export interface Ctx {
   root: MutableRefObject<DirHandleLike | null>;
   dest: MutableRefObject<DirHandleLike | null>;
-  keys: MutableRefObject<string[]>;
+  keys: MutableRefObject<StateKey[]>;
   stop: MutableRefObject<boolean>;
   state: MutableRefObject<BatchState>;
 }
