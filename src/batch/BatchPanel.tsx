@@ -9,12 +9,14 @@ import BatchSourceBar from "./BatchSourceBar";
 import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import { useBatchHotkeys } from "./useBatchHotkeys";
+import { useSelectShortcuts } from "../lib/selectshortcuts";
 import type { BatchView } from "./useBatchView";
 
 export default function BatchPanel() {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
   useBatchHotkeys(v as never, true);
+  useSelectShortcuts({ selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   return (
     <div className="batch-shell w-full space-y-4">
       {!v.core.supported && <Unsupported />}

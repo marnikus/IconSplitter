@@ -92,9 +92,17 @@
 
 .batch-shell {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-height: 100%;
   background: var(--v2-bg);
   color: var(--v2-text);
+}
+
+.batch-shell :where(button, input, select):focus-visible {
+  outline: 2px solid var(--v2-purple-2);
+  outline-offset: 2px;
 }
 
 /* Flex column, not a fixed-row grid: the write/corrupt banners are conditional

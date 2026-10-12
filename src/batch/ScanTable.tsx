@@ -1,10 +1,12 @@
-// ScanTable.tsx — V2 selection: purple active separate from checked, arrow moves active, gestures
+// ScanTable.tsx — Batch folders list, exact same UI design as SVG output (fonts, text size, win header, titles)
+// Uses svg-panel, svg-head, svg-columns, svg-row, svg-file-main, svg-cell, svg-badge, etc.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Row } from "./useBatch";
 import type { SourceStatus } from "../lib/statefile";
 import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
+import { fmtDate, fmtTime } from "../selection/fmt";
 
 export interface ScanTableProps {
   rows: Row[]; thumb: number; activeId: string | null;
@@ -24,35 +26,74 @@ const BADGE: Record<SourceStatus, { label: string; cls: string }> = {
 };
 
 export default function ScanTable(props: ScanTableProps) {
+  const missing = props.rows.filter((r) => r.status === "missing" || r.status === "deleted").length;
+  const refMissing = props.rows.filter((r) => r.refRelPath === null).length;
   return (
-    <section className="panel w-full" data-testid="scan-table">
-      <div className="mb-3 flex flex-wrap items-center gap-2"><h3 className="panel-title !mb-0">Images ({props.rows.length})</h3></div>
-      {props.rows.length === 0 ? <p className="rounded-xl border border-white/10 p-6 text-center text-slate-400">No _AI images found in this folder.</p> : <ul className="w-full space-y-1" role="list" aria-label="Batch images" data-testid="batch-rows">{props.rows.map((r) => <RowView key={r.relPath} r={r} {...props} />)}</ul>}
-    </section>
+    <div className="svg-panel" data-testid="scan-table">
+      <header className="svg-head">
+        <div className="svg-title">
+          <h1>BATCH FOLDERS / IMAGES</h1>
+          <span data-testid="batch-row-count">{props.rows.length}</span>
+          <span>one file per pair</span>
+        </div>
+        <div className="svg-attention">
+          <span className="running" data-testid="batch-missing-count">{missing} missing</span>
+          <span className="needs" data-testid="batch-refmissing-count">{refMissing} ref missing</span>
+        </div>
+      </header>
+      <div className="pair-table">
+        <Columns />
+        <div className="svg-rows" role="list" aria-label="Batch images" data-testid="batch-rows">
+          {props.rows.length === 0 ? <p className="svg-empty">No _AI images found in this folder.</p> : props.rows.map((r) => <RowView key={r.relPath} r={r} {...props} />)}
+        </div>
+      </div>
+      <footer className="svg-list-footer">
+        <span data-testid="batch-footer">Showing {props.rows.length} images</span>
+        <span className="svg-hints">↑↓ active row · Space select · A select visible · E deselect · Click row, Shift range, Ctrl toggle</span>
+      </footer>
+    </div>
+  );
+}
+
+function Columns() {
+  return (
+    <div className="svg-columns" aria-hidden="true">
+      <span />
+      <span>AI Image / Reference</span>
+      <span>File / path / persistence</span>
+      <span>Generation</span>
+      <span>Review</span>
+      <span>Version / tokens / cost</span>
+      <span>Files / code / history</span>
+      <span>Generate / decision</span>
+    </div>
   );
 }
 
 function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
+  const checked = r.selected;
   const ref = useActiveScroll(active);
   const onRowClick = useRowClick(r, disabled, selectRow);
   const onKeyDown = useRowKey(r, disabled, selectRow);
   return (
-    <li ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-selected={active} data-testid={`batch-row-${r.relPath}`} className={rowClass(active, r.selected, disabled)} onClick={onRowClick} onKeyDown={onKeyDown}>
-      <RowCheck r={r} disabled={disabled} toggle={toggle} />
+    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row ${r.status}${active ? " active" : ""}${checked ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
+      <input type="checkbox" className="svg-check" data-testid={`row-select-${r.relPath}`} checked={checked} disabled={disabled} aria-label={`Select ${r.name}`} title="Checkbox changes checks only" onClick={(e) => e.stopPropagation()} onChange={() => toggle(r.relPath)} />
       <Thumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
-      <RowInfo r={r} />
-      <RowBadge status={r.status} />
-      <button className="btn-mini" title="Copy path" onClick={(e) => { e.stopPropagation(); copyPath(r.relPath); }} data-testid={`row-open-${r.relPath}`}>Open in File Explorer</button>
-    </li>
+      <FileCell r={r} />
+      <StatusCell r={r} />
+      <ReviewCell r={r} />
+      <UsageCell r={r} />
+      <FileActions r={r} copyPath={copyPath} />
+      <DecisionCell r={r} />
+    </div>
   );
 }
 
 function isActive(relPath: string, activeId: string | null): boolean {
   return activeId !== null && relPath.toLowerCase() === activeId.toLowerCase();
 }
-
 function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"]) {
   return useCallback((e: React.MouseEvent) => {
     if (disabled) return;
@@ -62,48 +103,56 @@ function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selec
     selectRow(r.relPath, selectIntent(mods));
   }, [r, disabled, selectRow]);
 }
-
 function useRowKey(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"]) {
   return useCallback((e: React.KeyboardEvent) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    if (disabled) return;
-    selectRow(r.relPath, "replace");
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (disabled) return;
+      if (e.key === " ") {
+        // Space toggles check only (like SVG Space select)
+        return;
+      }
+      selectRow(r.relPath, "replace");
+    }
   }, [r, disabled, selectRow]);
 }
-
-function RowCheck({ r, disabled, toggle }: { r: Row; disabled: boolean; toggle: (rel: string) => void }) {
-  return <input type="checkbox" checked={r.selected} disabled={disabled} onChange={() => toggle(r.relPath)} className="h-4 w-4 accent-indigo-500" data-testid={`row-select-${r.relPath}`} aria-label={`Select ${r.name}`} title="Checkbox changes checks only" onClick={(e) => e.stopPropagation()} />;
-}
-
-function RowInfo({ r }: { r: Row }) {
-  return <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{r.name}{r.refRelPath === null && <span className="ml-2 text-amber-300" title="Reference image missing">⚠ ref missing</span>}</p><p className="truncate text-xs text-slate-400">{r.relPath}</p></div>;
-}
-
-function RowBadge({ status }: { status: SourceStatus }) {
-  const b = BADGE[status];
-  return <span className={`rounded-full px-2 py-0.5 text-xs ${b.cls}`}>{b.label}</span>;
-}
-
-function rowClass(active: boolean, checked: boolean, disabled: boolean): string {
-  const base = "batch-row flex items-center gap-3 rounded-lg border px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500";
-  const state = disabled ? " opacity-50 cursor-not-allowed border-white/5 bg-white/[0.02]" : " border-white/5 bg-white/[0.03] hover:bg-white/[0.05]";
-  return `${base}${state}${checked ? " selected" : ""}${active ? " active" : ""}`;
-}
-
 function useActiveScroll(active: boolean) {
-  const ref = useRef<HTMLLIElement>(null);
-  useEffect(() => { if (!active) return; ref.current?.scrollIntoView({ block: "nearest", behavior: "auto" }); }, [active]);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { if (active) ref.current?.scrollIntoView?.({ block: "nearest" }); }, [active]);
   return ref;
 }
-
+function FileCell({ r }: { r: Row }) {
+  return (
+    <div className="svg-file-main">
+      <div className="svg-file-name" title={r.name}>{r.name}</div>
+      <div className="svg-file-sub" title={r.relPath}>{r.relPath}{r.refRelPath === null ? " · ⚠ ref missing" : ""}</div>
+      <div className="svg-persist" title={r.relPath}>{r.status === "missing" ? "Missing" : r.status === "deleted" ? "Deleted" : "Pair file saved"}</div>
+    </div>
+  );
+}
+function StatusCell({ r }: { r: Row }) {
+  const b = BADGE[r.status];
+  return <div className="svg-cell" data-testid={`batch-status-${r.relPath}`}><span className={`svg-badge ${r.status}`}>{b.label}</span></div>;
+}
+function ReviewCell({ r }: { r: Row }) {
+  return <div className="svg-cell"><span className={`svg-badge ${r.status}`}>{r.refRelPath === null ? "Ref missing" : "Complete"}</span></div>;
+}
+function UsageCell({ r }: { r: Row }) {
+  return <div className="svg-cell svg-usage"><strong>{r.name.split(".").pop()?.toUpperCase() ?? "PNG"}</strong><small>{fmtDate(r.mtime)} {fmtTime(r.mtime)}</small><small>{r.status}</small></div>;
+}
+function FileActions({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) {
+  const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
+  return <div className="svg-file-actions"><button type="button" className="svg-btn tiny" data-testid={`row-open-${r.relPath}`} onClick={click(() => copyPath(r.relPath))}>Location</button><button type="button" className="svg-btn tiny" disabled>Copy</button><button type="button" className="svg-btn tiny" disabled>Code</button><button type="button" className="svg-btn tiny" disabled>Versions</button></div>;
+}
+function DecisionCell({ r }: { r: Row }) {
+  return <div className="svg-decision-actions"><span className="svg-badge" data-testid={`batch-decision-${r.relPath}`}>{r.selected ? "Selected" : "—"}</span></div>;
+}
 function Thumb({ relPath, thumbFor, thumb }: { relPath: string; thumbFor: (r: string) => Promise<string>; thumb: number }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => { let alive = true; void thumbFor(relPath).then((u) => alive && setSrc(u)).catch(() => {}); return () => { alive = false; }; }, [relPath, thumbFor]);
   const size = Math.max(48, Math.min(800, thumb));
   return src ? <img src={src} alt="" className="rounded-md bg-white object-contain" style={{ height: size, width: size }} /> : <div className="animate-pulse rounded-md bg-white/10" style={{ height: size, width: size }} />;
 }
-
 export function useThumbCache(getUrl: (relPath: string) => Promise<string>) {
   const [cache] = useState(() => new Map<string, string>());
   return useCallback((relPath: string) => {

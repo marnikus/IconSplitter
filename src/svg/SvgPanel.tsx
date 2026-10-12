@@ -19,6 +19,7 @@ import SvgControls, { type SvgCounts } from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
 import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
+import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { idsWithGeneratedSvg, shownVersion } from "./rowmodel";
 import SvgList from "./SvgList";
 import type { SvgRowActions } from "./SvgRow";
@@ -34,6 +35,7 @@ import { exclusionSummary } from "./sourcelist";
 export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
+  useSelectShortcuts({ selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active);
   useSvgHotkeys({
     visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null,
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,

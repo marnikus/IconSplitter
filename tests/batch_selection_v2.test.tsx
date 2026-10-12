@@ -114,7 +114,7 @@ beforeEach(async () => {
 
 describe("Batch V2 selection: active row separate from checked", () => {
   it("purple active row is separate from checked bulk rows", async () => {
-    const rows = qAll("[data-testid^='batch-row-']");
+    const rows = qAll("[data-testid^='batch-row-'][role='listitem']");
     expect(rows.length).toBe(3);
     // Initially no active? Click first row
     await rowClick("icon-a_AI_1.png");
@@ -149,7 +149,7 @@ describe("Batch V2 selection: active row separate from checked", () => {
     await rowClick("icon-a_AI_1.png");
     await rowClick("icon-c_AI_3.png", { shiftKey: true });
     // Should select range a,b,c
-    expect(qAll("[data-testid^='batch-row-']").length).toBe(3);
+    expect(qAll("[data-testid^='batch-row-'][role='listitem']").length).toBe(3);
     for (const rel of ["icon-a_AI_1.png", "icon-b_AI_2.png", "icon-c_AI_3.png"]) {
       const cb = q(`[data-testid='row-select-${rel}']`) as HTMLInputElement;
       expect(cb.checked).toBe(true);
