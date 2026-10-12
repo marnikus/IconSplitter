@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
-import { analyze, detect, type Analysis, type Box } from "./lib/detect";
-import { canvasToBlob, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
+import { analyzeAsync, detectAsync, type Analysis, type Box } from "./lib/detect";
+import { canvasToBlob, renderIcon, renderIconAsync, squareInfo, type ExportOpts } from "./lib/render";
 import { download, loadImage } from "./lib/dom";
 import { useSheetsEdit } from "./ui/useSheetsEdit";
 import SheetsHeader from "./sheets/SheetsHeader";
@@ -12,6 +12,7 @@ import DetectionPanel from "./sheets/DetectionPanel";
 import BoundaryPreview from "./sheets/BoundaryPreview";
 import ResultGrid from "./sheets/ResultGrid";
 import { BusyOverlay, DragOverlay, ToastOverlay } from "./sheets/Overlays";
+import { yieldToUI } from "./lib/yield";
 
 interface Sheet {
   id: string;
@@ -65,8 +66,9 @@ export default function App() {
         try {
           const url = URL.createObjectURL(f);
           const img = await loadImage(url);
-          const an = analyze(img);
-          const det = detect(an, null);
+          const an = await analyzeAsync(img);
+          await yieldToUI();
+          const det = await detectAsync(an, null);
           const id = crypto.randomUUID();
           const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_") || "sheet";
           const sheet: Sheet = { id, name: f.name, base, url, img, an, boxes: det.boxes, autoFrac: det.autoFrac, usedFrac: det.usedFrac, manual: false, excluded: [] };
@@ -75,6 +77,7 @@ export default function App() {
         } catch (e) {
           say(`${f.name}: ${(e as Error).message}`, true);
         }
+        await yieldToUI();
       }
       setBusy(null);
       if (lastId) setActiveId(lastId);
@@ -83,14 +86,16 @@ export default function App() {
   );
 
   const redetect = useCallback(async (id: string, frac: number | null) => {
+    const sheet = sheets.find((s) => s.id === id);
+    if (!sheet) return;
+    const d = await detectAsync(sheet.an, frac);
     setSheets((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s;
-        const d = detect(s.an, frac);
         return { ...s, boxes: d.boxes, usedFrac: d.usedFrac, autoFrac: d.autoFrac, manual: frac != null, excluded: [] };
       }),
     );
-  }, []);
+  }, [sheets]);
 
   const toggleBox = (id: string, idx: number) =>
     setSheets((prev) => prev.map((s) => (s.id !== id ? s : { ...s, excluded: s.excluded.includes(idx) ? s.excluded.filter((i) => i !== idx) : [...s.excluded, idx] })));
@@ -115,7 +120,7 @@ export default function App() {
     return activeItems.map((it) => renderIcon(active.img, active.an, active.boxes, it.b, it.sq, opts, 260).toDataURL("image/png"));
   }, [active, activeItems, opts]);
 
-  const renderBlob = async (s: Sheet, box: Box, sq: ReturnType<typeof squareInfo>) => canvasToBlob(renderIcon(s.img, s.an, s.boxes, box, sq, opts));
+  const renderBlob = async (s: Sheet, box: Box, sq: ReturnType<typeof squareInfo>) => canvasToBlob(await renderIconAsync(s.img, s.an, s.boxes, box, sq, opts));
   const fileName = (s: Sheet, n: number) => `${s.base}-icon-${pad2(n + 1)}.png`;
 
   const copyIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {

@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import { analyze, detect, type Analysis, type Box } from "../lib/detect";
+import { analyzeAsync, detectAsync, type Analysis, type Box } from "../lib/detect";
 import { renderIcon, squareInfo } from "../lib/render";
 import { loadImageFile } from "../lib/dom";
 import { previewKey } from "../lib/batchpreview";
@@ -89,9 +89,9 @@ async function renderThumbsYielding(img: HTMLImageElement, an: Analysis, boxes: 
 async function loadImgSafe(file: File): Promise<HTMLImageElement | null> {
   try { return await loadImageFile(file); } catch { return null; }
 }
-function getOrAnalyze(img: HTMLImageElement, relPath: string, cache: Map<string, Analysis>): Analysis {
+async function getOrAnalyze(img: HTMLImageElement, relPath: string, cache: Map<string, Analysis>): Promise<Analysis> {
   let an = cache.get(relPath);
-  if (!an) { an = analyze(img); cache.set(relPath, an); evictMap(cache); }
+  if (!an) { an = await analyzeAsync(img); cache.set(relPath, an); evictMap(cache); }
   return an;
 }
 function buildEntry(relPath: string, boxes: Box[], thumbs: string[]): PreviewEntry {
@@ -108,10 +108,10 @@ function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; anal
     await yieldToUI();
     const img = await loadImgSafe(file);
     if (!img) { const fb = makeFallback(row.relPath); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); return fb; }
-    const an = getOrAnalyze(img, row.relPath, analysis.current);
+    const an = await getOrAnalyze(img, row.relPath, analysis.current);
     await yieldToUI();
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    const boxes = detect(an, eff).boxes;
+    const boxes = (await detectAsync(an, eff)).boxes;
     await yieldToUI();
     const thumbs = await renderThumbsYielding(img, an, boxes, { ...split, mergeFrac: eff });
     const entry = buildEntry(row.relPath, boxes, thumbs);

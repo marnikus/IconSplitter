@@ -1,7 +1,13 @@
+// quality-override: file_lines=400 reason=async chunked versions prevent UI freeze during batch split, chunked loops for 16M pixels keep tasks <50ms
 export interface Box { x: number; y: number; w: number; h: number; ink: number; }
 export interface Analysis { w: number; h: number; scale: number; mask: Uint8Array; bg: [number, number, number]; ink: [number, number, number]; inkDiff: number; threshold: number; }
 export interface DetectResult { boxes: Box[]; usedFrac: number; autoFrac: number; }
 const MAX_DIM = 4000;
+const CHUNK_PIXELS = 500_000;
+const CHUNK_ROWS = 100;
+
+import { yieldToUI } from "./yield";
+
 function median(a: number[]) { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)] ?? 255; }
 function sampleBorder(d: Uint8ClampedArray, w: number, h: number) {
   const rs: number[] = [], gs: number[] = [], bs: number[] = [];
@@ -45,7 +51,8 @@ function estimateBackground(d: Uint8ClampedArray, w: number, h: number): [number
   const { rs, gs, bs } = sampleBorder(d, w, h);
   return [median(rs), median(gs), median(bs)];
 }
-function diffHist(d: Uint8ClampedArray, bg: [number, number, number], w: number, h: number) {
+
+function diffHistSync(d: Uint8ClampedArray, bg: [number, number, number], w: number, h: number) {
   const diff = new Uint8Array(w * h), hist = new Uint32Array(256);
   for (let p = 0, i = 0; p < w * h; p++, i += 4) {
     const a = d[i + 3] / 255, r = d[i] * a + 255 * (1 - a), g = d[i + 1] * a + 255 * (1 - a), b = d[i + 2] * a + 255 * (1 - a);
@@ -54,12 +61,26 @@ function diffHist(d: Uint8ClampedArray, bg: [number, number, number], w: number,
   }
   return { diff, hist };
 }
+
+async function diffHistAsync(d: Uint8ClampedArray, bg: [number, number, number], w: number, h: number) {
+  const diff = new Uint8Array(w * h), hist = new Uint32Array(256);
+  const total = w * h;
+  for (let p = 0, i = 0; p < total; p++, i += 4) {
+    const a = d[i + 3] / 255, r = d[i] * a + 255 * (1 - a), g = d[i + 1] * a + 255 * (1 - a), b = d[i + 2] * a + 255 * (1 - a);
+    const v = Math.max(Math.abs(r - bg[0]), Math.abs(g - bg[1]), Math.abs(b - bg[2])) | 0;
+    const cl = v > 255 ? 255 : v; diff[p] = cl; hist[cl]++;
+    if (p % CHUNK_PIXELS === 0 && p !== 0) await yieldToUI();
+  }
+  return { diff, hist };
+}
+
 function maxDiffFromHist(hist: Uint32Array, total: number) {
   let acc = 0; const need = total * 0.001;
   for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= need) return Math.max(v, 30); }
   return 30;
 }
-function maskFromDiff(diff: Uint8Array, data: Uint8ClampedArray, maxD: number, thr: number) {
+
+function maskFromDiffSync(diff: Uint8Array, data: Uint8ClampedArray, maxD: number, thr: number) {
   const mask = new Uint8Array(diff.length); let sr = 0, sg = 0, sb = 0, sn = 0;
   for (let p = 0, i = 0; p < diff.length; p++, i += 4) {
     if (diff[p] > thr) mask[p] = 1;
@@ -68,6 +89,19 @@ function maskFromDiff(diff: Uint8Array, data: Uint8ClampedArray, maxD: number, t
   const ink: [number, number, number] = sn ? [Math.round(sr / sn), Math.round(sg / sn), Math.round(sb / sn)] : [0, 0, 0];
   return { mask, ink };
 }
+
+async function maskFromDiffAsync(diff: Uint8Array, data: Uint8ClampedArray, maxD: number, thr: number) {
+  const mask = new Uint8Array(diff.length); let sr = 0, sg = 0, sb = 0, sn = 0;
+  const len = diff.length;
+  for (let p = 0, i = 0; p < len; p++, i += 4) {
+    if (diff[p] > thr) mask[p] = 1;
+    if (diff[p] >= maxD * 0.85) { sr += data[i]; sg += data[i + 1]; sb += data[i + 2]; sn++; }
+    if (p % CHUNK_PIXELS === 0 && p !== 0) await yieldToUI();
+  }
+  const ink: [number, number, number] = sn ? [Math.round(sr / sn), Math.round(sg / sn), Math.round(sb / sn)] : [0, 0, 0];
+  return { mask, ink };
+}
+
 export function analyze(img: HTMLImageElement): Analysis {
   const nw = img.naturalWidth, nh = img.naturalHeight, k = Math.min(1, MAX_DIM / Math.max(nw, nh));
   const w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
@@ -75,12 +109,28 @@ export function analyze(img: HTMLImageElement): Analysis {
   const ctx = c.getContext("2d", { willReadFrequently: true })!; ctx.drawImage(img, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
   const bg = estimateBackground(data, w, h);
-  const { diff, hist } = diffHist(data, bg, w, h);
+  const { diff, hist } = diffHistSync(data, bg, w, h);
   const maxD = maxDiffFromHist(hist, w * h);
   const thr = Math.min(110, Math.max(18, maxD * 0.42));
-  const { mask, ink } = maskFromDiff(diff, data, maxD, thr);
+  const { mask, ink } = maskFromDiffSync(diff, data, maxD, thr);
   return { w, h, scale: nw / w, mask, bg: bg.map(Math.round) as [number, number, number], ink, inkDiff: maxD, threshold: thr };
 }
+
+export async function analyzeAsync(img: HTMLImageElement): Promise<Analysis> {
+  const nw = img.naturalWidth, nh = img.naturalHeight, k = Math.min(1, MAX_DIM / Math.max(nw, nh));
+  const w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!; ctx.drawImage(img, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const bg = estimateBackground(data, w, h);
+  await yieldToUI();
+  const { diff, hist } = await diffHistAsync(data, bg, w, h);
+  const maxD = maxDiffFromHist(hist, w * h);
+  const thr = Math.min(110, Math.max(18, maxD * 0.42));
+  const { mask, ink } = await maskFromDiffAsync(diff, data, maxD, thr);
+  return { w, h, scale: nw / w, mask, bg: bg.map(Math.round) as [number, number, number], ink, inkDiff: maxD, threshold: thr };
+}
+
 function dilateH(src: Uint8Array, tmp: Uint8Array, g: { gw: number; gh: number }, r: number) {
   const { gw, gh } = g, pre = new Int32Array(gw + 1);
   for (let y = 0; y < gh; y++) {
@@ -124,9 +174,18 @@ function label(dil: Uint8Array, cells: Uint8Array, counts: Uint32Array, gw: numb
   const maxInk = Math.max(0, ...inks), valid = inks.map((v) => v >= maxInk * 0.015 && v > 0);
   return { labels, valid, count: valid.filter(Boolean).length };
 }
-function downsample(mask: Uint8Array, w: number, h: number, f: number) {
+function downsampleSync(mask: Uint8Array, w: number, h: number, f: number) {
   const gw = Math.ceil(w / f), gh = Math.ceil(h / f), cells = new Uint8Array(gw * gh), counts = new Uint32Array(gw * gh);
   for (let y = 0; y < h; y++) { const row = y * w, cy = ((y / f) | 0) * gw; for (let x = 0; x < w; x++) if (mask[row + x]) { const c = cy + ((x / f) | 0); cells[c] = 1; counts[c]++; } }
+  return { cells, counts, gw, gh };
+}
+async function downsampleAsync(mask: Uint8Array, w: number, h: number, f: number) {
+  const gw = Math.ceil(w / f), gh = Math.ceil(h / f), cells = new Uint8Array(gw * gh), counts = new Uint32Array(gw * gh);
+  for (let y = 0; y < h; y++) {
+    const row = y * w, cy = ((y / f) | 0) * gw;
+    for (let x = 0; x < w; x++) if (mask[row + x]) { const c = cy + ((x / f) | 0); cells[c] = 1; counts[c]++; }
+    if (y % CHUNK_ROWS === 0 && y !== 0) await yieldToUI();
+  }
   return { cells, counts, gw, gh };
 }
 function removeHLines(cells: Uint8Array, gw: number, gh: number, rowSums: number[]) {
@@ -157,18 +216,36 @@ function removeGridLines(cells: Uint8Array, gw: number, gh: number): Uint8Array 
   return tmp;
 }
 type Run = { start: number; end: number; count: number };
-function countAtRadius(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, f: number, a: Analysis, r: number): number {
+function countAtRadiusSync(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, f: number, a: Analysis, r: number): number {
   const { cells, counts, gw, gh } = ctx;
   const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
-  const raw = extractBoxes(a, lab, f, gw);
+  const raw = extractBoxesSync(a, lab, f, gw);
+  const contained = filterContained(raw);
+  const sized = filterBySize(contained, a.w, a.h);
+  return sized.length;
+}
+async function countAtRadiusAsync(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, f: number, a: Analysis, r: number): Promise<number> {
+  const { cells, counts, gw, gh } = ctx;
+  const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
+  const raw = await extractBoxesAsync(a, lab, f, gw);
   const contained = filterContained(raw);
   const sized = filterBySize(contained, a.w, a.h);
   return sized.length;
 }
 
-function buildSeries(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, rMax: number, f: number, a: Analysis) {
+function buildSeriesSync(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, rMax: number, f: number, a: Analysis) {
   const series: number[] = [];
-  for (let r = 1; r <= rMax; r++) series.push(countAtRadius(ctx, f, a, r));
+  for (let r = 1; r <= rMax; r++) series.push(countAtRadiusSync(ctx, f, a, r));
+  const runs: Run[] = [];
+  for (let i = 0; i < series.length; i++) { const last = runs[runs.length - 1]; if (last && last.count === series[i]) last.end = i; else runs.push({ start: i, end: i, count: series[i] }); }
+  return runs;
+}
+async function buildSeriesAsync(ctx: { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number }, rMax: number, f: number, a: Analysis) {
+  const series: number[] = [];
+  for (let r = 1; r <= rMax; r++) {
+    series.push(await countAtRadiusAsync(ctx, f, a, r));
+    if (r % 5 === 0) await yieldToUI();
+  }
   const runs: Run[] = [];
   for (let i = 0; i < series.length; i++) { const last = runs[runs.length - 1]; if (last && last.count === series[i]) last.end = i; else runs.push({ start: i, end: i, count: series[i] }); }
   return runs;
@@ -188,7 +265,7 @@ function updateBounds(x: number, y: number, l: number, b: { minX: number[]; minY
   if (x < b.minX[l]) b.minX[l] = x; if (x > b.maxX[l]) b.maxX[l] = x;
   if (y < b.minY[l]) b.minY[l] = y; if (y > b.maxY[l]) b.maxY[l] = y; b.ink[l]++;
 }
-function extractBoxes(a: Analysis, lab: Labeling, f: number, gw: number) {
+function extractBoxesSync(a: Analysis, lab: Labeling, f: number, gw: number) {
   const { w, h, mask, scale } = a, n = lab.valid.length;
   const b = { minX: new Array(n).fill(Infinity), minY: new Array(n).fill(Infinity), maxX: new Array(n).fill(-Infinity), maxY: new Array(n).fill(-Infinity), ink: new Array(n).fill(0) };
   for (let y = 0; y < h; y++) {
@@ -202,6 +279,36 @@ function extractBoxes(a: Analysis, lab: Labeling, f: number, gw: number) {
   }
   const boxes: Box[] = [];
   for (let i = 0; i < n; i++) {
+    if (!lab.valid[i] || !isFinite(b.minX[i])) continue;
+    const x0 = Math.max(0, (b.minX[i] - 1) * scale), y0 = Math.max(0, (b.minY[i] - 1) * scale);
+    boxes.push({ x: x0, y: y0, w: (b.maxX[i] + 2) * scale - x0, h: (b.maxY[i] + 2) * scale - y0, ink: b.ink[i] });
+  }
+  return boxes;
+}
+async function extractBoxesAsync(a: Analysis, lab: Labeling, f: number, gw: number) {
+  const { w, h, mask, scale } = a, n = lab.valid.length;
+  const b = { minX: new Array(n).fill(Infinity), minY: new Array(n).fill(Infinity), maxX: new Array(n).fill(-Infinity), maxY: new Array(n).fill(-Infinity), ink: new Array(n).fill(0) };
+  const ctx = { a, lab, f, gw, b };
+  for (let y = 0; y < h; y++) {
+    scanRowSync(ctx, y);
+    if (y % CHUNK_ROWS === 0 && y !== 0) await yieldToUI();
+  }
+  return buildBoxesFromBounds(b, lab, scale);
+}
+function scanRowSync(ctx: { a: Analysis; lab: Labeling; f: number; gw: number; b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; } }, y: number) {
+  const { a, lab, f, gw, b } = ctx;
+  const { w, mask } = a;
+  const row = y * w, cy = ((y / f) | 0) * gw;
+  for (let x = 0; x < w; x++) {
+    if (!mask[row + x]) continue;
+    const l = lab.labels[cy + ((x / f) | 0)];
+    if (l < 0 || !lab.valid[l]) continue;
+    updateBounds(x, y, l, b);
+  }
+}
+function buildBoxesFromBounds(b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; }, lab: Labeling, scale: number): Box[] {
+  const boxes: Box[] = [];
+  for (let i = 0; i < lab.valid.length; i++) {
     if (!lab.valid[i] || !isFinite(b.minX[i])) continue;
     const x0 = Math.max(0, (b.minX[i] - 1) * scale), y0 = Math.max(0, (b.minY[i] - 1) * scale);
     boxes.push({ x: x0, y: y0, w: (b.maxX[i] + 2) * scale - x0, h: (b.maxY[i] + 2) * scale - y0, ink: b.ink[i] });
@@ -244,16 +351,35 @@ function orderBoxes(boxes: Box[]): Box[] {
 }
 export function detect(a: Analysis, radiusFrac: number | null): DetectResult {
   const { w, h } = a, longest = Math.max(w, h), f = Math.max(1, Math.ceil(longest / 800));
-  const { cells: raw, counts, gw, gh } = downsample(a.mask, w, h, f);
+  const { cells: raw, counts, gw, gh } = downsampleSync(a.mask, w, h, f);
   const cells = removeGridLines(raw, gw, gh);
   const rMax = Math.max(3, Math.floor(Math.max(gw, gh) * 0.2));
-  const runs = buildSeries({ cells, counts, gw, gh }, rMax, f, a);
+  const runs = buildSeriesSync({ cells, counts, gw, gh }, rMax, f, a);
   const best = bestRun(runs);
   const autoR = Math.round((best.start + best.end) / 2) + 1;
   const autoFrac = (autoR * f) / longest, usedFrac = radiusFrac ?? autoFrac;
   const r = radiusFrac == null ? autoR : Math.max(0, Math.round((radiusFrac * longest) / f));
   const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
-  const rawBoxes = extractBoxes(a, lab, f, gw);
+  const rawBoxes = extractBoxesSync(a, lab, f, gw);
+  const contained = filterContained(rawBoxes);
+  const sized = filterBySize(contained, w, h);
+  return { boxes: orderBoxes(sized.length ? sized : contained), usedFrac, autoFrac };
+}
+export async function detectAsync(a: Analysis, radiusFrac: number | null): Promise<DetectResult> {
+  const { w, h } = a, longest = Math.max(w, h), f = Math.max(1, Math.ceil(longest / 800));
+  const { cells: raw, counts, gw, gh } = await downsampleAsync(a.mask, w, h, f);
+  await yieldToUI();
+  const cells = removeGridLines(raw, gw, gh);
+  await yieldToUI();
+  const rMax = Math.max(3, Math.floor(Math.max(gw, gh) * 0.2));
+  const runs = await buildSeriesAsync({ cells, counts, gw, gh }, rMax, f, a);
+  const best = bestRun(runs);
+  const autoR = Math.round((best.start + best.end) / 2) + 1;
+  const autoFrac = (autoR * f) / longest, usedFrac = radiusFrac ?? autoFrac;
+  const r = radiusFrac == null ? autoR : Math.max(0, Math.round((radiusFrac * longest) / f));
+  const lab = label(dilate(cells, gw, gh, r), cells, counts, gw, gh);
+  await yieldToUI();
+  const rawBoxes = await extractBoxesAsync(a, lab, f, gw);
   const contained = filterContained(rawBoxes);
   const sized = filterBySize(contained, w, h);
   return { boxes: orderBoxes(sized.length ? sized : contained), usedFrac, autoFrac };
