@@ -1,4 +1,4 @@
-// BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview
+// BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview inline same row
 
 import { useCallback, useMemo } from "react";
 import { copyFolderText } from "../lib/copypath";
@@ -10,8 +10,7 @@ import BatchSourceBar from "./BatchSourceBar";
 import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
-import BatchPreviewPanel from "./BatchPreviewPanel";
-import { useBatchPreview } from "./useBatchPreview";
+import { useBatchPreview, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 
@@ -29,9 +28,15 @@ export default function BatchPanel() {
       <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} />
       <PresetAndDest v={v} />
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
-      <PreviewSection rows={checkedRows} previews={preview.previews} onClear={preview.clear} />
+      {preview.previews.size > 0 && (
+        <div className="flex justify-end">
+          <button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>
+            Clear previews
+          </button>
+        </div>
+      )}
       <RefWarnings count={v.core.s.refWarnings.length} />
-      <FullWidthList v={v} thumbFor={thumbFor} />
+      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} />
       <Overlays v={v} />
     </div>
   );
@@ -43,15 +48,10 @@ function useCheckedRows(v: View) {
   return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]);
 }
 
-function useOnPreview(checkedRows: View[ "core" ][ "s" ][ "rows" ], preview: ReturnType<typeof useBatchPreview>) {
+function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: ReturnType<typeof useBatchPreview>) {
   return useCallback(() => {
     void preview.previewSelected(checkedRows);
   }, [checkedRows, preview]);
-}
-
-function PreviewSection({ rows, previews, onClear }: { rows: View[ "core" ][ "s" ][ "rows" ]; previews: Map<string, import("./useBatchPreview").PreviewEntry>; onClear: () => void }) {
-  if (previews.size === 0) return null;
-  return <BatchPreviewPanel selectedRows={rows} previews={previews} onClear={onClear} />;
 }
 
 function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () => void; previewing: boolean }) {
@@ -97,8 +97,12 @@ function PresetAndDest({ v }: { v: View }) {
   );
 }
 
-function FullWidthList({ v, thumbFor }: { v: View; thumbFor: (r: string) => Promise<string> }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} /></div>;
+function FullWidthList({ v, thumbFor, previews }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry> }) {
+  return (
+    <div className="batch-list w-full">
+      <ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} />
+    </div>
+  );
 }
 
 function Overlays({ v }: { v: View }) {

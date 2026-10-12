@@ -1,4 +1,4 @@
-// ScanTable.tsx — Batch folders list, 6-col, same visual as SVG/V2
+// ScanTable.tsx — Batch folders list, same row preview strip with main thumbnail
 
 import { useCallback, useEffect, useRef } from "react";
 import type { Row } from "./useBatch";
@@ -8,6 +8,7 @@ import { fmtDate, fmtTime } from "../selection/fmt";
 import ScanThumb, { useThumbCache } from "./ScanThumb";
 import ScanFileCell from "./ScanFileCell";
 import ScanStatusCell from "./ScanStatusCell";
+import type { PreviewEntry } from "./useBatchPreview";
 
 export interface ScanTableProps {
   rows: Row[];
@@ -17,6 +18,7 @@ export interface ScanTableProps {
   selectRow: (id: string, intent: ReturnType<typeof selectIntent>) => void;
   copyPath: (relPath: string) => void;
   thumbFor: (relPath: string) => Promise<string>;
+  previews?: Map<string, PreviewEntry>;
 }
 
 export { useThumbCache };
@@ -49,6 +51,7 @@ function Columns() {
       <span />
       <span>AI Image</span>
       <span>File / path</span>
+      <span>Preview splits</span>
       <span>Created</span>
       <span>Status</span>
       <span>Open</span>
@@ -109,17 +112,49 @@ function OpenCell({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) 
   );
 }
 
-function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId }: { r: Row } & ScanTableProps) {
+function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
+  if (!entry) return <div className="svg-cell text-xs text-slate-500">—</div>;
+  if (entry.status === "loading") {
+    return <div className="svg-cell text-xs text-slate-400" data-testid={`batch-preview-count-${entry.relPath}`}>Loading…</div>;
+  }
+  if (entry.status === "error") {
+    return <div className="svg-cell text-xs text-rose-400" data-testid={`batch-preview-count-${entry.relPath}`}>Failed</div>;
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-slate-300" data-testid={`batch-preview-count-${entry.relPath}`}>
+        {entry.count} icon{entry.count === 1 ? "" : "s"}
+      </span>
+      <div className="flex gap-1.5 overflow-x-auto py-1" data-testid={`batch-preview-strip-${entry.relPath}`}>
+        {entry.thumbs.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt=""
+            className="h-12 w-12 rounded border border-white/10 bg-white object-contain"
+            data-testid={`batch-preview-thumb-${entry.relPath}-${i}`}
+            style={{ flex: "none" }}
+          />
+        ))}
+        {entry.thumbs.length === 0 && entry.count > 0 && <span className="text-[11px] text-slate-500">count {entry.count}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId, previews }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
   const onRowClick = useRowClick(r, disabled, selectRow);
   const onKeyDown = useRowKey(r, disabled, selectRow);
+  const entry = previews?.get(r.relPath);
   return (
     <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status}${active ? " active" : ""}${r.selected ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
       <CheckCell r={r} toggle={toggle} />
       <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
       <ScanFileCell r={r} />
+      <PreviewCell entry={entry} />
       <DateCell mtime={r.mtime} />
       <ScanStatusCell r={r} />
       <OpenCell r={r} copyPath={copyPath} />
