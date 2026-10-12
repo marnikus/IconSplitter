@@ -1548,6 +1548,9 @@
   .svg-columns,
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
+  .batch-columns,
+  .batch-row { grid-template-columns: 34px max-content minmax(180px, 260px) minmax(320px, 1fr) 110px 100px 140px !important; column-gap: 12px; }
+
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
   .svg-provider { flex-basis: 380px; }
 }
