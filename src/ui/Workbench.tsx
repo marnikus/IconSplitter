@@ -48,7 +48,7 @@ function Shell() {
     <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell">
       <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
       <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3">
           <div className="flex gap-2" data-testid="tabbar">
             {TABS.map((t) => (
               <TabBtn key={t.id} active={tab === t.id} onClick={() => openTab(t.id)} testid={t.testid} label={t.label} />
