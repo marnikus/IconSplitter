@@ -26,17 +26,26 @@ async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageE
 type FinishArgs = { images: AiImageEntry[]; statuses: Map<string, SourceStatus>; reviews: Map<string, BatchReviewStatus>; setS: Setter; say: (m: string, e?: boolean) => void };
 
 export function finishScan(a: FinishArgs): void {
-  const rows = a.images.map((img) => toRow(img, a.statuses, a.reviews));
-  const checked = rows.filter((r) => r.selected).map((r) => r.relPath);
   a.setS((p) => {
+    const prevReview = new Map(p.rows.map((r) => [r.relPath.toLowerCase(), r.review]));
+    const rows = a.images.map((img) => {
+      const status = a.statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";
+      const diskReview = a.reviews.get(img.relPath.toLowerCase()) ?? "pending";
+      const prev = prevReview.get(img.relPath.toLowerCase());
+      const review = prev && prev !== "pending" ? prev : diskReview;
+      return { ...img, status, review, selected: status !== "missing" && status !== "deleted" };
+    });
+    const checked = rows.filter((r) => r.selected).map((r) => r.relPath);
+    try { patchBatch({ checked }); } catch {}
     const existing = new Set(a.images.map((i) => i.relPath.toLowerCase()));
     const nextMerges: RowMergeMap = {};
     for (const [k, v] of Object.entries(p.rowMerges)) if (existing.has(k)) nextMerges[k] = v;
     return { ...p, busy: null, rows, refWarnings: a.images.filter((i) => i.refRelPath === null).map((i) => i.relPath), rowMerges: nextMerges };
   });
-  try { patchBatch({ checked }); } catch {}
   a.say(`Found ${a.images.length} AI image${a.images.length === 1 ? "" : "s"}`);
 }
+
+
 
 function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>, reviews: Map<string, BatchReviewStatus>): Row {
   const status = statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";

@@ -1,4 +1,4 @@
-// useBatchPreview.ts — high-perf preview for Batch (1000 images) + immediate per-row preview on Apply/Reset + progress bar
+// useBatchPreview.ts — high-perf preview for Batch (1000 images) + immediate per-row preview on Apply/Reset + progress bar + persistence
 // ideal-size: 303 lines reason=high-perf preview owns cache, load, thumb render, queue, abort and single-row immediate preview; splitting would break cohesion, still under 320 with 35 fns each ≤30 lines
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -7,12 +7,12 @@ import { analyzeAsync, detectAsync, type Analysis, type Box } from "../lib/detec
 import { renderIcon, squareInfo } from "../lib/render";
 import { loadImageFile } from "../lib/dom";
 import { previewKey } from "../lib/batchpreview";
-import { idbPut, idbGetAll, idbClear, PREVIEW_STORE } from "./store";
 import type { SplitSettings } from "../lib/presets";
 import type { Row, RowMergeMap } from "./useBatch";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 import { yieldToFrame, yieldToUI } from "../lib/yield";
 import type { BatchReviewStatus } from "../lib/statefile";
+import { idbPut, idbGetAll, idbClear, PREVIEW_STORE } from "./store";
 
 export interface PreviewEntry {
   relPath: string;
@@ -58,7 +58,9 @@ function useLoadFile(root: DirHandleLike | null, custom?: LoadFile) {
   }, [root, custom]);
 }
 function savePersisted(entry: PreviewEntry) { void idbPut(PREVIEW_STORE, entry.relPath, entry); }
-async function loadPersisted(): Promise<Map<string, PreviewEntry>> { try { const all = await idbGetAll<PreviewEntry>(PREVIEW_STORE); const m = new Map<string, PreviewEntry>(); for (const e of all) if (e && e.relPath) m.set(e.relPath, e); return m; } catch { return new Map(); } }
+async function loadPersisted(): Promise<Map<string, PreviewEntry>> {
+  try { const all = await idbGetAll<PreviewEntry>(PREVIEW_STORE); const m = new Map<string, PreviewEntry>(); for (const e of all) if (e && e.relPath) m.set(e.relPath, e); return m; } catch { return new Map(); }
+}
 function makeFallback(relPath: string): PreviewEntry {
   return { relPath, count: 1, thumbs: [], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done" };
 }
@@ -70,25 +72,19 @@ function evictLru(lru: Map<string, CacheItem>) {
   const oldest = [...lru.entries()].sort((a, b) => a[1].at - b[1].at)[0]?.[0];
   if (oldest) lru.delete(oldest);
 }
-function renderThumbs(img: HTMLImageElement, an: Analysis, boxes: Box[], split: SplitSettings): string[] {
-  const sq = squareInfo(boxes, split.padding);
-  const opts = { padding: split.padding, size: split.size, transparent: split.transparent };
-  const out: string[] = [];
-  const limit = Math.min(boxes.length, MAX_THUMBS);
-  for (let i = 0; i < limit; i++) { const canvas = renderIcon(img, an, boxes, boxes[i], sq, opts, THUMB_OUT); out.push(canvas.toDataURL("image/png")); }
-  return out;
-}
-async function renderThumbsYielding(img: HTMLImageElement, an: Analysis, boxes: Box[], split: SplitSettings): Promise<string[]> {
-  const sq = squareInfo(boxes, split.padding);
-  const opts = { padding: split.padding, size: split.size, transparent: split.transparent };
-  const out: string[] = [];
-  const limit = Math.min(boxes.length, MAX_THUMBS);
-  for (let i = 0; i < limit; i++) {
-    const canvas = renderIcon(img, an, boxes, boxes[i], sq, opts, THUMB_OUT);
-    out.push(canvas.toDataURL("image/png"));
-    if (i % 2 === 0) await yieldToUI();
-  }
-  return out;
+function renderThumbsYielding(img: HTMLImageElement, an: Analysis, boxes: Box[], split: SplitSettings): Promise<string[]> {
+  return (async () => {
+    const sq = squareInfo(boxes, split.padding);
+    const opts = { padding: split.padding, size: split.size, transparent: split.transparent };
+    const out: string[] = [];
+    const limit = Math.min(boxes.length, MAX_THUMBS);
+    for (let i = 0; i < limit; i++) {
+      const canvas = renderIcon(img, an, boxes, boxes[i], sq, opts, THUMB_OUT);
+      out.push(canvas.toDataURL("image/png"));
+      if (i % 2 === 0) await yieldToUI();
+    }
+    return out;
+  })();
 }
 async function loadImgSafe(file: File): Promise<HTMLImageElement | null> {
   try { return await loadImageFile(file); } catch { return null; }
@@ -251,6 +247,36 @@ function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFr
     } catch { /* ignore */ }
   }, [previewOne, setPreviews, onReviewed]);
 }
+function useRootChange(root: DirHandleLike | null, clearMemory: () => void) {
+  const prevRef = useRef<DirHandleLike | null>(null);
+  useEffect(() => {
+    if (prevRef.current === null && root !== null) { prevRef.current = root; return; }
+    if (prevRef.current !== root) { clearMemory(); prevRef.current = root; }
+  }, [root, clearMemory]);
+}
+function usePersistedLoad(setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onReviewed?: (relPath: string, count: number) => void) {
+  useEffect(() => {
+    void (async () => {
+      const loaded = await loadPersisted();
+      if (loaded.size > 0) {
+        setPreviews((prev) => { if (prev.size > 0) return prev; return loaded; });
+        for (const e of loaded.values()) onReviewed?.(e.relPath, e.count);
+      }
+    })();
+  }, [setPreviews, onReviewed]);
+}
+function useReviewSync(rows: Row[], previews: Map<string, PreviewEntry>, onReviewed?: (relPath: string, count: number) => void) {
+  useEffect(() => {
+    if (!rows.length || !previews.size) return;
+    for (const entry of previews.values()) {
+      const row = rows.find((r) => r.relPath.toLowerCase() === entry.relPath.toLowerCase());
+      if (!row) continue;
+      if (row.review === "declined") continue;
+      const expected = entry.count === 4 ? "approved" : "warning";
+      if (row.review !== expected) onReviewed?.(entry.relPath, entry.count);
+    }
+  }, [rows, previews, onReviewed]);
+}
 export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[]; split: SplitSettings; rowMerges?: RowMergeMap; loadFile?: LoadFile; onReviewed?: (relPath: string, count: number) => void; }) {
   const { root, split, rowMerges, onReviewed } = params;
   const merges = rowMerges ?? {};
@@ -264,12 +290,9 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rows: Row[
   const clearMemory = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
-  const prevRootRef = useRef<DirHandleLike | null>(null);
-  useEffect(() => {
-    if (prevRootRef.current === null && root !== null) { prevRootRef.current = root; return; }
-    if (prevRootRef.current !== root) { clearMemory(); prevRootRef.current = root; }
-  }, [root, clearMemory]);
-  useEffect(() => { void (async () => { const loaded = await loadPersisted(); if (loaded.size > 0) setPreviews((prev) => { if (prev.size > 0) return prev; return loaded; }); })(); }, [setPreviews]);
+  useRootChange(root, clearMemory);
+  usePersistedLoad(setPreviews, onReviewed);
+  useReviewSync(params.rows, previews, onReviewed);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };
 }
