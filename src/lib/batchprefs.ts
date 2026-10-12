@@ -33,7 +33,11 @@ export function loadBatchPrefs(): BatchPrefs {
 export function saveBatchPrefs(p: BatchPrefs): void {
   try {
     localStorage.setItem(BATCH_PREFS_KEY, JSON.stringify(p));
-  } catch {}
+  } catch {
+    // deliberately empty: a full/blocked localStorage (private mode, quota) must
+    // never break the tab — the preference is remembered when the browser allows
+    // it and silently forgotten when it does not.
+  }
 }
 
 export function parseBatchPrefs(raw: unknown): BatchPrefs {
