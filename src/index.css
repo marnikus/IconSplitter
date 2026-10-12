@@ -84,20 +84,35 @@
 }
 
 .v2-shell {
-  height: 100%; /* the band: the panel may floor itself at it (min-height) */
+  width: 100%;
+  min-height: 100%;
   background: var(--v2-bg);
   color: var(--v2-text);
+}
+
+.batch-shell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+  background: var(--v2-bg);
+  color: var(--v2-text);
+}
+
+.batch-shell :where(button, input, select):focus-visible {
+  outline: 2px solid var(--v2-purple-2);
+  outline-offset: 2px;
 }
 
 /* Flex column, not a fixed-row grid: the write/corrupt banners are conditional
    children, so a fixed grid-template-rows would push the workspace off its 1fr
    row the moment a banner appears. */
 .v2 {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  /* At least the visible band; taller when the content is: `.app-main` scrolls
-     (the dock is a separate row, so nothing is ever painted under it). */
   min-height: 100%;
 }
 
@@ -242,6 +257,7 @@
 .v2-btn.success { background: #143a31; border-color: #245e4c; color: var(--v2-green); }
 .v2-btn.success.solid { background: #159361; border-color: #1ab274; color: #fff; }
 .v2-btn.danger { background: var(--v2-red-bg); border-color: #713249; color: var(--v2-red); }
+.v2-btn.warning { background: var(--v2-yellow-bg); border-color: #665129; color: var(--v2-yellow); }
 .v2-btn.tiny { min-height: 26px; padding: 5px 7px; font-size: 8px; }
 .v2-btn.armed { background: var(--v2-purple); border-color: var(--v2-purple-2); color: #fff; }
 
@@ -301,6 +317,20 @@
   color: #fff;
   font-weight: 800;
   text-align: center;
+}
+
+/* Batch folders — controls scroll with page, only header tabs bar pinned (app-shell flex column) */
+.batch-controls-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Legacy sticky class kept for compatibility but no longer sticky — only header tabs bar pins */
+.batch-sticky-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ── list panel ────────────────────────────────────────────────────────── */
@@ -382,8 +412,39 @@
 .v2-row.selected:not(.active) { background: #111a31; }
 .v2-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
 
+.batch-row:hover { background: #10182b; }
+.batch-row.selected:not(.active) { background: #111a31; }
+.batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
+
+.batch-columns,
+.batch-row {
+  display: grid;
+  grid-template-columns: 34px max-content minmax(280px, 1fr) 122px 118px 160px;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.batch-columns {
+  padding: 0 12px;
+  border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-muted-2);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.batch-row {
+  position: relative;
+  min-height: calc(var(--svg-thumb, 84px) + 22px);
+  padding: 9px 12px;
+  border-bottom: 1px solid #192138;
+  transition: background 0.15s, min-height 0.15s;
+}
+
 .v2-row.approved::after,
-.v2-row.declined::after {
+.v2-row.declined::after,
+.v2-row.needs-review::after {
   content: "";
   position: absolute;
   inset: 0 0 0 auto;
@@ -392,6 +453,7 @@
 }
 
 .v2-row.declined::after { background: var(--v2-red); }
+.v2-row.needs-review::after { background: var(--v2-yellow); }
 
 .v2-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
@@ -499,7 +561,7 @@
   font-weight: 750;
 }
 
-.v2-badge.pending { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.v2-badge.pending, .v2-badge.needs-review { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 .v2-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .v2-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
 .v2-badge.attention { color: var(--v2-yellow); background: #241c10; border-color: #5b4624; }
@@ -572,12 +634,14 @@
 
 .svg-shell[hidden] { display: none; } /* parked on another tab (2026-10-08): mounted, not shown */
 .svg-shell {
-  height: 100%; /* the band: the panel may floor itself at it (min-height) */
+  width: 100%;
+  min-height: 100%;
   background: var(--v2-bg);
   color: var(--v2-text);
 }
 
 .svg {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -642,7 +706,7 @@
   display: flex;
   align-items: baseline;
   gap: 9px;
-  flex: 1 0 100%;
+  flex: 0 0 auto;
   width: 100%;
   min-width: 0;
   margin-top: 10px;
@@ -907,6 +971,7 @@
 .svg-btn.ghost { background: transparent; }
 .svg-btn.success { background: #143a31; border-color: #245e4c; color: var(--v2-green); }
 .svg-btn.danger { background: var(--v2-red-bg); border-color: #713249; color: var(--v2-red); }
+.svg-btn.warning { background: var(--v2-yellow-bg); border-color: #665129; color: var(--v2-yellow); }
 .svg-btn.tiny { min-height: 26px; padding: 5px 7px; font-size: 8px; }
 
 .svg-bulk {
@@ -946,20 +1011,46 @@
 
 /* batch strip ──────────────────────────────────────────────────────────── */
 
-/* The run popup (2026-10-08): the run's numbers on every tab, fixed top-right, above the dock. */
-.svg-run-popup {
-  position: fixed; top: 10px; right: 14px; z-index: 60;
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 8px 6px 10px; border-radius: 8px;
-  font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
-  color: var(--v2-text); background: var(--v2-surface); border: 1px solid var(--v2-line);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+
+/* Persistent progress bar pinned above tab header (2026-10-11) */
+#svg-progress-mount { position: relative; z-index: 55; }
+.svg-progress-header {
+  display: grid;
+  grid-template-columns: 260px 1fr 180px;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: #0c1222;
+  border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-text);
+  font-size: 11px;
 }
-.svg-run-popup-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--v2-muted); }
-.svg-run-popup.running .svg-run-popup-dot { background: var(--v2-green); animation: svg-run-pulse 1.2s ease-in-out infinite; }
-@keyframes svg-run-pulse { 50% { opacity: 0.35; } }
-.svg-run-popup-close { border: 0; background: transparent; color: var(--v2-muted); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
-.svg-run-popup-close:hover { color: var(--v2-text); }
+.svg-progress-header.complete { background: #0f172a; }
+.svg-progress-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.svg-progress-thumb { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--v2-line); background: #fff; flex: none; }
+.svg-progress-thumb.empty { display: grid; place-items: center; background: var(--v2-surface-2); color: var(--v2-muted); font-size: 10px; }
+.svg-progress-check { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; background: #12362d; color: var(--v2-green); font-weight: 800; flex: none; }
+.svg-progress-text { display: grid; gap: 2px; min-width: 0; }
+.svg-progress-text strong { font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svg-progress-text strong.success { color: #7ee3b6; }
+.svg-progress-file { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svg-progress-center { display: grid; gap: 4px; }
+.svg-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
+.svg-progress-fill { height: 100%; background: #745cff; transition: width 0.3s; }
+.svg-progress-header.complete .svg-progress-fill { background: #32d68b; }
+.svg-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+.svg-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
+.svg-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
+.svg-progress-close:hover { color: var(--v2-text); }
+.svg-cancel-current { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--v2-line); border-radius: 8px; background: var(--v2-surface); margin: 12px 0; }
+.svg-cancel-current small { display: block; color: var(--v2-purple-2); font-size: 9px; }
+.svg-cancel-current strong { display: block; margin-top: 2px; font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.svg-cancel-stats { display: flex; gap: 16px; margin: 10px 0; font-size: 11px; }
+.svg-cancel-stats .kept { color: var(--v2-green); }
+.svg-cancel-stats .stopped { color: var(--v2-muted); }
+.svg-modal.narrow { width: min(480px, 92vw); }
+
 /* The run record (2026-10-08): strip + queue, BELOW the list so a landing SVG never moves it. */
 .svg-run-record { display: grid; gap: 8px; margin-top: 10px; }
 .svg-batch {
@@ -1006,6 +1097,9 @@
 /* The paginated confirmation: one page per request. */
 .svg-modal.wide { width: min(760px, 94vw); }
 .svg-batch-pager { display: grid; gap: 7px; margin: 10px 0; }
+.svg-confirm-prompt { display: grid; gap: 6px; margin: 14px 0; padding: 10px; border: 1px solid var(--v2-line); border-radius: 7px; background: var(--v2-surface); }
+.svg-confirm-prompt .svg-field-label { font-size: 9px; color: var(--v2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.svg-confirm-prompt pre.svg-code { min-height: 120px; max-height: 340px; }
 .svg-pager-buttons { display: flex; gap: 6px; }
 .svg-batch-shape { display: flex; gap: 12px; color: var(--v2-muted); font-size: 9px; }
 .svg-batch-items {
@@ -1023,12 +1117,21 @@
 
 .svg-panel {
   display: grid;
-  grid-template-rows: 42px minmax(0, 1fr) 40px;
+  grid-template-rows: 42px auto 40px;
   min-height: 0;
   border: 1px solid var(--v2-line);
   border-radius: 0 0 var(--v2-radius) var(--v2-radius);
   background: var(--v2-surface);
-  overflow: hidden;
+  overflow: visible;
+}
+
+.svg-panel .pair-table {
+  display: grid;
+  grid-template-rows: 30px auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-color: #313b58 #0c1222;
 }
 
 .svg-head {
@@ -1113,7 +1216,8 @@
 .svg-row.corrupt { box-shadow: inset 3px 0 0 var(--v2-yellow); }
 
 .svg-row.approved::after,
-.svg-row.declined::after {
+.svg-row.declined::after,
+.svg-row.needs-review::after {
   content: "";
   position: absolute;
   inset: 0 0 0 auto;
@@ -1122,6 +1226,7 @@
 }
 
 .svg-row.declined::after { background: var(--v2-red); }
+.svg-row.needs-review::after { background: var(--v2-yellow); }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
 .svg-preview-frame {
@@ -1226,7 +1331,7 @@
 .svg-badge.generated, .svg-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
-.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted, .svg-badge.needs-review { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 /* Waiting in the queue (2026-10-08): grey — scheduled, nothing on disk changed yet. */
 .svg-badge.queued { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
 
@@ -1533,7 +1638,8 @@
    Generate SVG above (RULE 10). ══ */
 
 .up-shell {
-  height: 100%;
+  width: 100%;
+  min-height: 100%;
   background: var(--v2-bg);
   color: var(--v2-text);
 }

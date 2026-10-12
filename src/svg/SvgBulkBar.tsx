@@ -36,7 +36,7 @@ export interface SvgBulkBarProps {
   onBg: (bg: PreviewBackground) => void;
   onGenerate: () => void;
   onRegenerate: () => void;
-  onDecide: (decision: "approved" | "declined") => void;
+  onDecide: (decision: "approved" | "declined" | "needs-review") => void;
   onCancel: () => void;
 }
 
@@ -92,6 +92,8 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
       <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />
+      <button type="button" className="svg-btn warning" data-testid="svg-needs-review-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("needs-review")}>⚠ Needs review selected</button>
       <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
       <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"

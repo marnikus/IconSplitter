@@ -15,6 +15,7 @@ import type { SvgRow } from "../src/svg/types";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir } from "./helpers/fakefs";
 import { svgSource } from "./helpers/svgpair";
+import type { PromptPreset } from "../src/lib/promptpresets";
 
 vi.mock("../src/svg/composite", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/svg/composite")>();
@@ -55,7 +56,13 @@ interface MountOpts {
   perRequest?: number;
   effort?: SamplingParams["effort"];
   operation?: "generate" | "regenerate";
+  presets?: PromptPreset[];
 }
+
+const PRESETS: PromptPreset[] = [
+  { name: "Bolder", text: "Make bolder." },
+  { name: "Simpler", text: "Remove detail." },
+];
 
 async function mount(opts: MountOpts): Promise<SvgRow[]> {
   const all = rows(opts.count);
@@ -71,6 +78,8 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
         params={{ temperature: null, maxTokens: 8_000, effort: opts.effort ?? null }}
         rootRef={{ current: new FakeDir("split_root") }}
         running={false}
+        presets={opts.presets ?? []}
+        prompt="main prompt"
         onConfirm={() => undefined}
         onDismiss={() => undefined}
       />,
@@ -101,20 +110,24 @@ describe("SvgConfirm — the whole plan before any request", () => {
   it("shows the request count at the size the user configured — even at medium effort", async () => {
     await mount({ count: 8, perRequest: 4, effort: "medium" });
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("8");
-    // 8 images at the configured 4 stay TWO requests of 4 at every tier: the
-    // reasoning level widens the stall window, it never shrinks the batch.
     expect(q("[data-testid=svg-confirm-requests]")?.textContent).toBe("2 × 4 max");
     expect(q("[data-testid=svg-confirm-limit]")?.textContent).toContain("medium");
     expect(q("[data-testid=svg-confirm-limit]")?.textContent).toContain("stall window");
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 2");
-    // ...and the dialog says the answer is streamed with no total limit
     expect(q("[data-testid=svg-confirm-streaming]")?.textContent).toContain("never cut");
   });
 
   it("names regeneration explicitly and keeps the confirm action separate from generation", async () => {
-    await mount({ count: 2, operation: "regenerate" });
+    await mount({ count: 2, operation: "regenerate", presets: PRESETS });
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
     expect(q("[data-testid=svg-confirm-generate]")?.textContent).toBe("Regenerate now");
+    expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
+  });
+
+  it("generation shows Generation batch now and main prompt note", async () => {
+    await mount({ count: 2, operation: "generate" });
+    expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Generation batch now");
+    expect(q("[data-testid=svg-confirm-main-prompt]")?.textContent).toContain("main prompt");
   });
 
   it("paginates every batch with its own composite and exact ordered filenames", async () => {
@@ -129,7 +142,6 @@ describe("SvgConfirm — the whole plan before any request", () => {
     expect(items()).toEqual(["1 — icon-5_AI"]);
     expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src).toContain(all[4].source.relPath);
 
-    // one composite built per visited page — going back does not rebuild
     await click("[data-testid=svg-batch-prev]");
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 2");
     expect(compositeCalls).toHaveBeenCalledTimes(2);
@@ -143,16 +155,12 @@ describe("SvgConfirm — the whole plan before any request", () => {
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain(`Request 1 of ${pages}`);
     expect(items()).toHaveLength(Math.min(4, count));
 
-    // walk to the last page: it holds exactly the remaining images, in order
     for (let i = 1; i < pages; i += 1) await click("[data-testid=svg-batch-next]");
     const shown = items();
     expect(shown).toHaveLength(count - (pages - 1) * 4);
-    // positions restart at 1 inside EVERY request (they name the contact
-    // sheet's cells), while the file names carry on with the real image
     const first = (pages - 1) * 4 + 1;
     expect(shown[0]).toBe(`1 — icon-${first}_AI`);
     expect(shown[shown.length - 1]).toBe(`${shown.length} — icon-${first + shown.length - 1}_AI`);
-    // a partial page keeps a square grid with the cells it could not fill
     const shape = q("[data-testid=svg-batch-grid]")?.textContent ?? "";
     const cells = (() => { const m = /(\d+)×(\d+) grid/.exec(shape); return m ? Number(m[1]) * Number(m[2]) : 0; })();
     expect(cells).toBeGreaterThanOrEqual(shown.length);
@@ -180,13 +188,14 @@ describe("SvgConfirm — the whole plan before any request", () => {
       ui.render(
         <SvgConfirm ids={all.map((r) => r.source.id)} operation="generate" rows={all} config={DEFAULT_CONFIG}
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-          rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={onConfirm} onDismiss={onDismiss} />,
+          rootRef={{ current: new FakeDir("split_root") }} running={false} presets={[]} prompt="main" onConfirm={onConfirm} onDismiss={onDismiss} />,
       );
     });
     await settle();
     expect(onConfirm).not.toHaveBeenCalled();
     await click("[data-testid=svg-confirm-generate]");
     expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith(null);
     await click("[data-testid=svg-confirm-cancel]");
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(compositeCalls).toHaveBeenCalledTimes(1);
@@ -194,7 +203,6 @@ describe("SvgConfirm — the whole plan before any request", () => {
 
   it("keeps the pick order: the manifest and the sheet follow the order icons were checked", async () => {
     const all = rows(5);
-    // the user checked icon-3, then icon-1, then icon-2 — the row order is not it
     const ids = ["pair_3", "pair_1", "pair_2"];
     const shown = ids.map((id) => all.find((r) => r.source.id === id)!);
     await act(async () => {
@@ -202,13 +210,11 @@ describe("SvgConfirm — the whole plan before any request", () => {
       ui.render(
         <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
           caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-          rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />,
+          rootRef={{ current: new FakeDir("split_root") }} running={false} presets={[]} prompt="main" onConfirm={() => undefined} onDismiss={() => undefined} />,
       );
     });
     await settle();
     expect(items()).toEqual(["1 — icon-3_AI", "2 — icon-1_AI", "3 — icon-2_AI"]);
-    // the sheet is drawn in that same order: the image the preview shows is the
-    // one the runner will send, cell for cell
     expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src)
       .toContain(shown.map((r) => r.source.relPath).join("|"));
   });
@@ -218,17 +224,13 @@ describe("SvgConfirm — the whole plan before any request", () => {
     const render = (ids: string[]) => (
       <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
         caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-        rootRef={{ current: new FakeDir("split_root") }} running={false} onConfirm={() => undefined} onDismiss={() => undefined} />
+        rootRef={{ current: new FakeDir("split_root") }} running={false} presets={[]} prompt="main" onConfirm={() => undefined} onDismiss={() => undefined} />
     );
-    // selection A: one icon → its page is batch_1_1
     await act(async () => { ui = createRoot(host); ui.render(render(["pair_1"])); });
     await settle();
     expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src).toContain(all[0].source.relPath);
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("batch_1_1");
 
-    // the SAME dialog instance is re-planned for selection B (the hotkeys can do
-    // exactly this while the dialog is open): its page label is again batch_1_1,
-    // and the sheet must be B's, never the first selection's
     await act(async () => { ui.render(render(["pair_2"])); });
     await settle();
     const img = (q("[data-testid=svg-composite-img]") as HTMLImageElement).src;

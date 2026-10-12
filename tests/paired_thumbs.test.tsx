@@ -96,10 +96,12 @@ describe("the shared list scroller — 800 px is honoured, not squeezed", () => 
     // max-content in the preview column of EVERY template: the column is exactly
     // as wide as the boxes I-55 computed, whatever ratio they are
     const templates = css().match(/grid-template-columns:\s*34px\s*max-content[^;]*/g) ?? [];
-    expect(templates.length).toBe(3);
+    expect(templates.length).toBeGreaterThanOrEqual(3);
     expect(templates.some((t) => t.includes("280px"))).toBe(true); // the SVG row
     expect(templates.some((t) => t.includes("320px"))).toBe(true); // the V2 row
     expect(templates.some((t) => t.includes("minmax(240px, 1fr)"))).toBe(true); // the upload row
+    // Batch also uses max-content for thumb column (full-width refactor)
+    expect(templates.some((t) => t.includes("minmax(280px, 1fr)"))).toBe(true);
   });
 
   it("never sizes the preview column from the zoom value at any width", () => {

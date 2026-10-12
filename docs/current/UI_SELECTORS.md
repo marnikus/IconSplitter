@@ -377,7 +377,7 @@ Sampling (`SvgSampling.tsx`) — only what the selected model accepts is offered
 | `svg-refresh-models` | button | re-reads `GET /v1/models` (cached 24 h) and re-resolves the limits |
 
 Filters: `svg-filter-generation` (all / not generated / generating / generated
-/ failed), `svg-filter-review` (all / pending / approved / declined),
+/ failed), `svg-filter-review` (all / pending / approved / declined / needs-review),
 `svg-sort` (date / name / generation / review / cost), `svg-search` (matches the
 file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 
@@ -393,7 +393,7 @@ Bulk bar (`svg-bulk`):
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
 | `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration appends behind a run in flight (I-53) |
-| `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection; disabled at 0 |
+| `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
 Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
@@ -407,9 +407,9 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
-| `svg-generate-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate; an existing SVG uses regeneration wording in the idle confirmation; while running this row action queues first (I-53); approve/decline disabled until a version exists |
+| `svg-generate-{sourceId}` / `svg-needs-review-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate + review: needs-review (⚠ yellow, regenerated — new review) near approve/decline; approve/decline disabled until a version exists; regeneration automatically sets needs-review |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
-| `svg-review-{sourceId}` | badge | pending / approved / declined |
+| `svg-review-{sourceId}` | badge | pending / approved / declined / needs-review (regenerated — new review, yellow) |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the pair file's name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
 | `svg-persist-{sourceId}` | text | "Pair file saved" / "Not generated yet" / "Pair file unreadable — SVGs on disk are kept"; the `title` names the pair's own file ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it, I-41); `error` class on failure |
@@ -435,11 +435,7 @@ exactly that batch — the run in flight is untouched). `svg-confirm-generate` r
 Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
 BELOW the list; absent when nothing ran and nothing waits.
 
-Run popup (I-57, on EVERY tab, portalled to `<body>`): `svg-run-popup` (class
-`running` while a request is in flight), `svg-run-popup-line` ("Generating · 7
-done · 13 left · 1 failed · request 2 of 5" / "Done · 20 done · 0 left" — one count
-for the whole queue chain), `svg-run-popup-dismiss` (×; the final line stays until
-it is pressed, a new run brings the popup back). Shell: `svg-shell` is the
+Persistent progress header (I-57, on EVERY tab, portalled to `#svg-progress-mount` above tab bar): `svg-progress-header` (class `complete` when done), `svg-progress-title` ("Generating SVGs · 24 images" / "SVG batch complete"), `svg-progress-file` (current filename or "24 results saved · ready for review"), `svg-progress-thumb` (current AI thumbnail), `svg-progress-track` + `svg-progress-fill`, `svg-progress-completed` / `svg-progress-remaining` / `svg-progress-percent`, `svg-progress-cancel` (opens cancel dialog), `svg-progress-review` (→ Review results), `svg-progress-dismiss` (×; final line stays until dismissed, new run brings it back), `svg-cancel-dialog` with `svg-cancel-current` (thumbnail + "Currently generating · image 9 of 24" + filename) and `svg-cancel-stats` (kept/stopped) and `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close`. Shell: `svg-shell` is the
 Generate SVG tab's parked wrapper (`hidden` on other tabs, never unmounted).
 
 Batch strip (`svg-batch`, the request in flight and every finished request;
@@ -459,11 +455,17 @@ Dialogs:
 | Test id | Notes |
 |---|---|
 | `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-title` is "Confirm SVG generation" or "Confirm SVG regeneration"; `svg-confirm-generate` says "Generate now" / "Regenerate now" while idle and "Add to queue" during a run, with `svg-confirm-cancel` / `svg-confirm-close` |
-| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier) |
+| `svg-confirm-mode` | badge | "Generation batch now" vs "Regeneration now" — clearly says which prompt path this batch uses (2026-10-09) |
+| `svg-confirm-main-prompt` | note | generation only: "Uses the main currently loaded prompt" — main prompt not reloaded in popup |
+| `svg-confirm-regen-preset` / `svg-confirm-regen-note` / `svg-confirm-regen-label` | regeneration only: dropdown of saved prompts applied to full batch, plus note |
+| `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + main prompt), regeneration = `currentSvgPrompt(presetText, stem, code)` (preset + Icon name line for title detection + current SVG code verbatim). One per request; regeneration loads code via `readSvgText` |
+| `svg-confirm-full-prompt-note` | small | explains what full prompt contains |
+| `svg-confirm-full-prompt-loading` | note | shown while SVG code loads for regeneration preview |
+| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
 | `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
-| `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent |
+| `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent; regeneration with no saved prompts shows problem and disables confirm |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
 | `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
@@ -676,16 +678,62 @@ Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
 settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
 (§O).
 
-## S. Regenerate SVG from — window above the Generate SVG prompt (2026-10-09, `src/svg/RegenSetting.tsx`)
+## S1. Persistent progress header — `src/svg/SvgProgressHeader.tsx` (2026-10-11)
 
-Moved here from Export settings on 2026-10-09; it is no longer in the Export settings dialog.
-It sits directly above the prompt window (`svg-prompt-zone`). Its drop-down lists the SVG
-prompt presets (`iconSplitter.svg.prompts.v1`), not the metadata presets. Choice and saved
-prompt are written at the moment of change (RULE 24).
+Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visible on every tab while a run is in flight or completed until dismissed:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-progress-mount` | mount div in Workbench | above nav, `position:relative`, z-index 55 |
+| `svg-progress-header` | bar container | `complete` class when done |
+| `svg-progress-title` | strong | "Generating SVGs · N images" or "SVG batch complete" |
+| `svg-progress-file` | span | current filename while running, or "N results saved · ready for review" when complete |
+| `svg-progress-thumb` | img/span | current AI thumbnail (via `useSideThumbs`) |
+| `svg-progress-track` | div | progress bar track |
+| `svg-progress-completed` | span | "8 completed / 24" |
+| `svg-progress-remaining` | span | "16 remaining" or "0 remaining" |
+| `svg-progress-percent` | span | "33%" / "100%" |
+| `svg-progress-cancel` | button | "✕ Cancel batch" — opens confirmation |
+| `svg-progress-review` | button | "→ Review results" — switches tab to Generate SVG |
+| `svg-progress-dismiss` | button | X dismisses completed bar |
+| `svg-cancel-dialog` | backdrop dialog | cancel confirmation |
+| `svg-cancel-current` | div | currently generating image line: thumbnail + "Currently generating · image 9 of 24" + filename |
+| `svg-cancel-stats` | div | "8 completed · kept" / "16 remaining · stopped" |
+| `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close` | buttons | Keep running / Cancel batch / X close |
+
+Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops queue, aborts, keeps saved), `svg-cancel-keep` closes dialog (Esc also).
+
+## S. Regenerate SVG — per-batch prompt in confirmation (2026-10-09 revised, `src/svg/SvgConfirm.tsx`)
+
+First-time generation uses the main currently loaded prompt shown in `svg-prompt-zone`.
+Regeneration no longer has a global window in the main toolbar. The prompt is chosen
+**per-batch in the confirmation popup** before anything is sent.
+
+`RegenSettingWindow` (`src/svg/RegenSetting.tsx`) remains as fallback for the front-placement
+path (a row's Regenerate while a run is in flight — no dialog, first in queue) and its
+storage (`iconSplitter.svg.regen.v1`) is still honoured there.
+
+Confirmation popup handles (regeneration mode):
 
 | Handle | Kind | Notes |
 |---|---|---|
-| `svg-regen` | container | the whole row, label "Regenerate SVG from" |
-| `svg-regen-mode` | `select` (aria-label "Regenerate SVG from") | `main` = "Main prompt + first image" (default), `current-svg` = "Regenerate from current SVG" |
-| `svg-regen-preset` | `select` (aria-label "Saved prompt for regeneration") | shown only in the current-SVG mode; first option "— choose a saved prompt —", then the saved prompt presets by name |
-| `svg-regen-note` | `small` | says what the choice will do, or why it cannot run yet (no pick, a gone or blank prompt, no saved prompts) |
+| `svg-confirm-mode` | badge | "Generation batch now" (first generation, uses main prompt) vs "Regeneration now" (regeneration, uses chosen preset) |
+| `svg-confirm-main-prompt` | small note | shown only for generation — names that main prompt is used, not reloaded |
+| `svg-confirm-regen-preset` | `select` | shown only for regeneration — dropdown of saved SVG prompts (`iconSplitter.svg.prompts.v1`), applies selected prompt to full batch |
+| `svg-confirm-regen-note` | small | regeneration note: what chosen preset does, or "No saved prompts yet — save one in the prompt window" |
+| `svg-confirm-regen-label` | label | "Regeneration prompt" (aria for the select) |
+| `svg-confirm-problem` | p | when no presets, says why confirm is disabled |
+
+Generation popup shows `svg-confirm-main-prompt` and no preset dropdown.
+Regeneration popup shows `svg-confirm-regen-preset` + `svg-confirm-regen-note` and hides main-prompt note.
+`onConfirm` receives the selected preset name (`string`) for regeneration, `null` for generation.
+
+Legacy global window handles (still rendered only when `RegenSettingWindow` is used directly, not in main prompt zone):
+
+| Handle | Kind | Notes |
+|---|---|---|
+| `svg-regen` | container | the whole row, label "Regenerate SVG from" — now only in fallback contexts |
+| `svg-regen-mode` | `select` | main / current-svg — fallback only |
+| `svg-regen-preset` | `select` | saved prompt list — fallback only |
+| `svg-regen-note` | `small` | fallback note |
+

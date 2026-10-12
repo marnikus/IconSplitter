@@ -75,6 +75,8 @@ export interface SvgModel {
   running: boolean;
   /** Batches waiting for their turn (I-53); the ref is the authority. */
   queue: QueueItem[];
+  /** Currently generating source id, for persistent progress header. */
+  currentId: string | null;
 }
 
 export type SvgAction =
@@ -105,7 +107,8 @@ export type SvgAction =
   | { type: "chain"; chain: Chain }
   | { type: "progress-fn"; fn: (p: RunProgress | null) => RunProgress | null }
   | { type: "running"; running: boolean }
-  | { type: "queue"; queue: QueueItem[] };
+  | { type: "queue"; queue: QueueItem[] }
+  | { type: "current"; id: string | null };
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
@@ -137,6 +140,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   "progress-fn": (m, a) => ({ ...m, progress: (a as { fn: (p: RunProgress | null) => RunProgress | null }).fn(m.progress) }),
   running: (m, a) => ({ ...m, running: (a as { running: boolean }).running }),
   queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
+  current: (m, a) => ({ ...m, currentId: (a as { id: string | null }).id }),
 };
 
 export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
@@ -185,7 +189,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
     prompt, presets, presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
-    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [],
+    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null,
   };
 }
 

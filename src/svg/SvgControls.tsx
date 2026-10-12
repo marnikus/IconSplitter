@@ -203,7 +203,7 @@ function FilterLine({ filter, sort, shown, total, onFilter, onSort, onClear }: {
         options={[["all", "All states"], ["not-generated", "Not generated"], ["generating", "Generating"], ["generated", "Generated"], ["failed", "Failed"]]}
         onChange={(v) => onFilter({ generation: v as SvgListFilter["generation"] })} />
       <Select label="Review" testid="svg-filter-review" value={filter.review}
-        options={[["all", "All reviews"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"]]}
+        options={[["all", "All reviews"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"], ["needs-review", "Regenerated — new review"]]}
         onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
       <Select label="Sort by" testid="svg-sort" value={sort}
         options={[["date", "Newest generated"], ["name", "Filename"], ["generation", "Generation status"], ["review", "Review status"], ["cost", "Cost"]]}

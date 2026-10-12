@@ -18,39 +18,36 @@ import type { SvgSource } from "./sources";
 
 /** Runner events -> row/progress state. One source of truth per row (RULE 24). */
 export function onRunEvent(event: RunEvent, s: RunSetters): void {
-  if (event.kind === "run-start") {
-    s.setProgress(null);
-  } else if (event.kind === "batch-start") {
-    // A new request is in flight: its own counters at zero, the finished
-    // requests' outcomes kept so the whole run stays visible (RULE 24).
-    s.setProgressFn((prev) => ({
-      runId: event.runId, batchId: event.batchId, index: event.index, batches: event.batches, count: event.count, cols: event.cols,
-      rows: event.rows, composite: event.composite, hash: event.hash, saved: 0, failed: 0, missing: 0,
-      perRequest: event.perRequest, startedAt: event.startedAt, images: event.images, outcomes: prev?.outcomes ?? [],
-    }));
-  } else if (event.kind === "batch-done") {
-    s.setProgressFn((prev) => (prev
-      ? { ...prev, saved: event.report.saved, failed: event.report.failed, missing: event.report.missing, outcomes: [...prev.outcomes, event.report] }
-      : prev));
-  } else if (event.kind === "item-saved") {
-    s.setRowsFn((rows) => rows.map((r) => (r.source.id === event.sourceId
-      ? { ...r, meta: event.meta, newest: newestValid(event.meta?.versions ?? []), status: "generated", running: false, error: null }
-      : r)));
-  } else if (event.kind === "item-failed") {
-    // A stalled request is NOT a failure: the provider may still be generating
-    // it, so the row says "unknown" and keeps the reason (with its id).
-    const status = event.failure === "stalled" ? "unknown" : "failed";
-    s.setRowsFn((rows) => rows.map((r) => (r.source.id === event.sourceId
-      ? { ...r, status, running: false, error: redact(event.error) }
-      : r)));
-  }
+  const h = HANDLERS[event.kind];
+  if (h) h(event as any, s);
 }
+
+type Handler = (e: any, s: RunSetters) => void;
+
+const HANDLERS: Record<string, Handler> = {
+  "run-start": (_, s) => { s.setProgress(null); s.setCurrent(null); },
+  "item-start": (e, s) => s.setCurrent(e.sourceId),
+  "batch-start": (e, s) => s.setProgressFn((prev) => ({
+    runId: e.runId, batchId: e.batchId, index: e.index, batches: e.batches, count: e.count, cols: e.cols,
+    rows: e.rows, composite: e.composite, hash: e.hash, saved: 0, failed: 0, missing: 0,
+    perRequest: e.perRequest, startedAt: e.startedAt, images: e.images, outcomes: prev?.outcomes ?? [],
+  })),
+  "batch-done": (e, s) => s.setProgressFn((prev) => prev ? { ...prev, saved: e.report.saved, failed: e.report.failed, missing: e.report.missing, outcomes: [...prev.outcomes, e.report] } : prev),
+  "item-saved": (e, s) => s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? { ...r, meta: e.meta, newest: newestValid(e.meta?.versions ?? []), status: "generated", running: false, error: null } : r)),
+  "item-failed": (e, s) => {
+    const status = e.failure === "stalled" ? "unknown" : "failed";
+    s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? { ...r, status, running: false, error: redact(e.error) } : r));
+  },
+  "cancelled": (_, s) => s.setCurrent(null),
+};
+
 
 /** Functional setters, so a late event never clobbers a concurrent one. */
 export interface RunSetters {
   setProgress: (p: RunProgress | null) => void;
   setProgressFn: (fn: (p: RunProgress | null) => RunProgress | null) => void;
   setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void;
+  setCurrent: (id: string | null) => void;
 }
 
 /** Re-reads the pair files after a run so history, versions and review are exact. */

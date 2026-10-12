@@ -1,12 +1,5 @@
-// Workbench.tsx — top-level shell: the mode switch, the global undo/redo bar,
-// the session autosave and the global activity log. The providers sit ABOVE the
-// panels, which is what makes an undo pressed on one tab able to reverse an
-// action made on another (RULE 12).
-//
-// The shell is ONE viewport column: the nav, the scrolling tab area (`app-main`)
-// and the log dock last. The dock is a layout row, never an overlay — a fixed
-// dock painted over the rows it covered and swallowed their clicks, checkboxes
-// included (design 2026-10-05-global-log §1/§2, invariant I-27).
+// Workbench.tsx — top-level shell: mode switch, undo/redo bar, session autosave, activity log
+// Shell is ONE viewport column: nav, scrolling tab area (app-main), log dock last (not overlay).
 
 import App from "../App";
 import LogDock from "../log/LogDock";
@@ -46,18 +39,8 @@ function Shell() {
   usePrefsAutosave();
   return (
     <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell">
-      <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
-          <div className="flex gap-2" data-testid="tabbar">
-            {TABS.map((t) => (
-              <TabBtn key={t.id} active={tab === t.id} onClick={() => openTab(t.id)} testid={t.testid} label={t.label} />
-            ))}
-          </div>
-          <div className="ml-auto">
-            <HistoryBar />
-          </div>
-        </div>
-      </nav>
+      <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
+      <Nav tab={tab} />
       <main className="app-main" data-testid="app-main">
         <Panels tab={tab} />
       </main>
@@ -66,27 +49,64 @@ function Shell() {
   );
 }
 
-/**
- * The tab area. Every panel mounts when its tab opens — except Generate SVG,
- * which is kept alive (2026-10-08): a run in flight must survive a tab switch,
- * so that panel is parked `hidden`, never unmounted.
- */
+function Nav({ tab }: { tab: AppState["tab"] }) {
+  return (
+    <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
+      <div className="flex w-full flex-wrap items-center gap-3">
+        <TabBar tab={tab} />
+        <div className="ml-auto">
+          <HistoryBar />
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function TabBar({ tab }: { tab: AppState["tab"] }) {
+  return (
+    <div className="flex gap-2" data-testid="tabbar">
+      {TABS.map((t) => (
+        <TabBtn key={t.id} active={tab === t.id} onClick={() => openTab(t.id)} testid={t.testid} label={t.label} />
+      ))}
+    </div>
+  );
+}
+
 function Panels({ tab }: { tab: AppState["tab"] }) {
   return (
     <>
       {tab === "sheets" && <App />}
-      {tab === "batch" && <div className="mx-auto max-w-7xl px-4 py-6"><BatchPanel /></div>}
-      {tab === "selection" && <div className="mx-auto max-w-[90rem] px-4 py-6"><SelectionPanel /></div>}
-      {tab === "selectionV2" && <div className="v2-shell px-4 py-3"><SelectionV2Panel /></div>}
+      {tab === "batch" && (
+        <TabWrapper>
+          <BatchPanel />
+        </TabWrapper>
+      )}
+      {tab === "selection" && (
+        <TabWrapper>
+          <SelectionPanel />
+        </TabWrapper>
+      )}
+      {tab === "selectionV2" && (
+        <div className="v2-shell px-4 py-3">
+          <SelectionV2Panel />
+        </div>
+      )}
       <div className="svg-shell px-4 py-3" data-testid="svg-shell" hidden={tab !== "generateSvg"}>
         <SvgPanel active={tab === "generateSvg"} />
       </div>
-      {tab === "upload" && <div className="up-shell px-4 py-3"><UploadPanel /></div>}
+      {tab === "upload" && (
+        <div className="up-shell px-4 py-3">
+          <UploadPanel />
+        </div>
+      )}
     </>
   );
 }
 
-/** Switching tabs is navigation, not an edit — it is restored, but not undoable. */
+function TabWrapper({ children }: { children: React.ReactNode }) {
+  return <div className="w-full px-4 py-6">{children}</div>;
+}
+
 function openTab(tab: AppState["tab"]): void {
   log({ feature: "app", action: "open-tab", detail: `tab=${tab}`, data: { tab } });
   setAppState({ tab });
@@ -95,10 +115,9 @@ function openTab(tab: AppState["tab"]): void {
 function TabBtn({ active, onClick, label, testid }: { active: boolean; onClick: () => void; label: string; testid: string }) {
   return (
     <button
-      data-testid={testid} onClick={onClick}
-      className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-        active ? "bg-indigo-500 text-white" : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
-      }`}
+      data-testid={testid}
+      onClick={onClick}
+      className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${active ? "bg-indigo-500 text-white" : "text-slate-400 hover:bg-white/10 hover:text-slate-200"}`}
     >
       {label}
     </button>

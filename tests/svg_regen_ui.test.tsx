@@ -1,8 +1,8 @@
-// svg_regen_ui.test.tsx — the "Regenerate SVG from" window in the Generate SVG
-// tab (2026-10-09, moved from Export settings). The drop-down lists the SVG
-// prompt presets; a missing pick is said out loud; a preset list that changes
-// while the window is open is shown at once (RULE 24); the window sits above
-// the main prompt window and the Export settings dialog no longer carries it.
+// svg_regen_ui.test.tsx — regeneration prompt handling after 2026-10-09 redesign:
+// - first generation uses main current loaded prompt (main window)
+// - regeneration asks in confirmation popup via dropdown (per-batch)
+// RegenSettingWindow remains as fallback for front-placement (no dialog) and
+// its own unit tests still apply. The prompt zone no longer shows regen window.
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -50,7 +50,7 @@ afterEach(async () => {
   host.remove();
 });
 
-describe("RegenSetting — the choice and the SVG prompt presets", () => {
+describe("RegenSetting — fallback for front-placement (still stores choice)", () => {
   it("starts on the main prompt + first image, with no drop-down", async () => {
     await render(<RegenSettingWindow presets={PRESETS} />);
     expect((q("[data-testid=svg-regen-mode]") as HTMLSelectElement).value).toBe("main");
@@ -89,19 +89,17 @@ describe("RegenSetting — the choice and the SVG prompt presets", () => {
   });
 });
 
-describe("the Generate SVG prompt zone", () => {
+describe("the Generate SVG prompt zone — now only main prompt (regen in popup)", () => {
   const win = {
     testId: "svg", label: "Generation prompt", text: "Generate.", isDefault: true, presets: PRESETS, picked: "",
     onText: () => undefined, onReset: () => undefined, onPick: () => undefined,
     onQuickLoad: () => undefined, onDelete: () => undefined, onSaveAs: () => undefined,
   };
 
-  it("shows the regen window above the main prompt window", async () => {
+  it("does NOT show the regen window — first generation uses main prompt", async () => {
     await render(<SvgPromptZone win={win} />);
-    const regen = q("[data-testid=svg-regen]") as HTMLElement;
-    const prompt = q("[data-testid=svg-prompt]") as HTMLElement;
-    expect(regen).not.toBeNull();
-    expect(regen.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(q("[data-testid=svg-regen]")).toBeNull();
+    expect(q("[data-testid=svg-prompt]")).not.toBeNull();
   });
 
   it("gives the prompt window the same preset controls as the metadata prompt", async () => {

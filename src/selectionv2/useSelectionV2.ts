@@ -35,6 +35,26 @@ export interface SelectionV2Api {
   toggleCheck: (id: string) => void;
   checkVisible: () => void;
   uncheckAll: () => void;
+  checkActive: () => void;
+  uncheckActive: () => void;
+}
+
+function makeCheckActive(hist: HistoryApi) {
+  return () => {
+    const a = getAppState().view.selectedId;
+    if (!a) return;
+    const cur = getAppState().v2;
+    editSelection(hist, setChecked(cur.checked, [a], true), cur.anchorId);
+  };
+}
+
+function makeUncheckActive(hist: HistoryApi) {
+  return () => {
+    const a = getAppState().view.selectedId;
+    if (!a) return;
+    const cur = getAppState().v2;
+    editSelection(hist, setChecked(cur.checked, [a], false), cur.anchorId);
+  };
 }
 
 export function useSelectionV2(): SelectionV2Api {
@@ -57,6 +77,8 @@ export function useSelectionV2(): SelectionV2Api {
     toggleCheck: (id) => editSelection(hist, toggleChecked(checked, id), anchorId),
     checkVisible: () => editSelection(hist, setChecked(checked, visibleIds, true), anchorId),
     uncheckAll: () => editSelection(hist, [], null),
+    checkActive: makeCheckActive(hist),
+    uncheckActive: makeUncheckActive(hist),
   };
 }
 

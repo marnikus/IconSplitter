@@ -90,13 +90,11 @@ describe("the dock is a layout row, not an overlay (I-27)", () => {
     expect(sheet).toMatch(/\.app-shell\s*\{[^}]*height:\s*100dvh/);
     expect(sheet).toMatch(/\.app-main\s*\{[^}]*overflow:\s*auto/);
     // The panels stop deriving their height from the viewport: they take the
-    // row the shell gives them, so their inner list scrolls above the dock.
-    expect(sheet).toMatch(/\.v2-shell\s*\{[^}]*height:\s*100%/);
-    expect(sheet).toMatch(/\.svg-shell\s*\{[^}]*height:\s*100%/);
-    // …and the panel is FLOORED at that band, never squeezed into it: with a
-    // fixed height the SVG tab's list collapsed to zero rows (measured in the
-    // browser at 1440x900), because its control block alone is taller than the
-    // band. `min-height` lets a panel grow, and `.app-main` scrolls instead.
+    // row the shell gives them, floored at the band (min-height 100%) and grow
+    // with content, so app-main — not a small inner win — is what scrolls (I-27).
+    // Whole page scroll down, not small high win.
+    expect(sheet).toMatch(/\.v2-shell\s*\{[^}]*min-height:\s*100%/);
+    expect(sheet).toMatch(/\.svg-shell\s*\{[^}]*min-height:\s*100%/);
     expect(decls(sheet, ".v2")).toContain("min-height: 100%");
     expect(decls(sheet, ".svg")).toContain("min-height: 100%");
     expect(decls(sheet, ".v2")).not.toContain("height: 100%");

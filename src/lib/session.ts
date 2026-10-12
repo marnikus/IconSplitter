@@ -56,6 +56,15 @@ export interface SessionUpload {
   activeId: string | null;
 }
 
+/** What only the Batch folders tab adds: its own selection, active row and anchor. */
+export interface SessionBatch {
+  checked: string[];
+  /** Stable relPath of the active row — never a list index. */
+  activeId: string | null;
+  /** Shift+click anchor — the row the next range starts from. */
+  anchorId: string | null;
+}
+
 export interface SessionState {
   tab: TabId;
   sheets: SheetOpts;
@@ -63,6 +72,7 @@ export interface SessionState {
   selectionV2: SessionV2;
   svg: SessionSvg;
   upload: SessionUpload;
+  batch: SessionBatch;
 }
 
 export const DEFAULT_SELECTION: SessionSelection = {
@@ -74,10 +84,12 @@ export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null };
 
 export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null };
 
+export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchorId: null };
+
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
-  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD,
+  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, batch: DEFAULT_BATCH,
 };
 
 /**
@@ -117,6 +129,16 @@ function toSession(raw: unknown): SessionState {
     selectionV2: parseV2(raw.selectionV2),
     svg: parseSvgSlice(raw.svg),
     upload: parseUploadSlice(raw.upload),
+    batch: parseBatchSlice(raw.batch),
+  };
+}
+
+function parseBatchSlice(raw: unknown): SessionBatch {
+  if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_BATCH;
+  return {
+    checked: raw.checked.filter((id): id is string => typeof id === "string"),
+    activeId: typeof raw.activeId === "string" ? raw.activeId : null,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
 }
 

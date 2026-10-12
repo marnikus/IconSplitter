@@ -21,10 +21,12 @@ import UploadSettingsDialog from "./UploadSettingsDialog";
 import type { UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadRowActions } from "./UploadRow";
 import type { UploadDiscovery, UploadExclusion } from "./discovery";
+import { useSelectShortcuts } from "../lib/selectshortcuts";
 
 export default function UploadPanel() {
   const g = useUpload();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
+  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, true);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>

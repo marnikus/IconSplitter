@@ -10,7 +10,7 @@ import { probePath, writeFileNew, type DirHandleLike } from "../lib/fs";
 import { countIcons } from "../lib/svgicons";
 import { parseSvg, validateSvg } from "../lib/svgvalidate";
 import { nextVersion, svgFileName } from "../lib/svgfile";
-import type { BatchRef, SvgVersion } from "../lib/svgmodel";
+import type { BatchRef, ReviewStatus, SvgVersion } from "../lib/svgmodel";
 import { withVersion, type PairMeta } from "../lib/pairmeta";
 import { NO_USAGE, type Usage } from "../lib/svgrequest";
 import { costInfoFor } from "../lib/svgpricing";
@@ -30,6 +30,8 @@ export interface SaveArgs {
   requestId: string | null;
   /** The pair's own file content as read on this scan; null when there is none. */
   meta: PairMeta | null;
+  /** Review status for this version: pending for generation, needs-review for regeneration. */
+  review?: ReviewStatus;
 }
 
 export type SaveOut =
@@ -76,7 +78,7 @@ function toRecord(args: SaveArgs, saved: { version: number; svgPath: string; ico
     version: saved.version,
     svgPath: saved.svgPath,
     status: "generated",
-    review: "pending",
+    review: args.review ?? "pending",
     prompt: args.prompt,
     provider: args.provider,
     model: args.model,

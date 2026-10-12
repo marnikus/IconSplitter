@@ -44,6 +44,7 @@ export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCt
     setDiscovery: bridge.setDiscovery, setBusy: bridge.setBusy, setRootToken: bridge.setRootToken,
     setRows: bridge.setRows, setRowsFn: bridge.setRowsFn,
     setProgress: bridge.setProgress, setProgressFn: bridge.setProgressFn,
+    setCurrent: bridge.setCurrent,
     ...derived,
   };
 }
@@ -89,10 +90,11 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
   const setRowsFn = useCallback((fn: (rows: SvgRow[]) => SvgRow[]) => dispatch({ type: "rows-fn", fn }), [dispatch]);
   const setProgress = useCallback((progress: RunProgress | null) => dispatch({ type: "progress", progress }), [dispatch]);
   const setProgressFn = useCallback((fn: (p: RunProgress | null) => RunProgress | null) => dispatch({ type: "progress-fn", fn }), [dispatch]);
-  setters.current = { setRootName, setRows, setDiscovery, setBusy, setRootToken, say };
+  const setCurrent = useCallback((id: string | null) => dispatch({ type: "current", id }), [dispatch]);
+  setters.current = { setRootName, setRows, setDiscovery, setBusy, setRootToken, say, setCurrent } as any;
   return {
     loadAll, refreshKey, say, setRootName, setDiscovery, setBusy, setRootToken,
-    setRows, setRowsFn, setProgress, setProgressFn,
+    setRows, setRowsFn, setProgress, setProgressFn, setCurrent,
   };
 }
 

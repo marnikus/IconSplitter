@@ -1,94 +1,181 @@
-// ScanTable.tsx — review window (spec §2): thumbnail, filename, status,
-// relative path, per-row selection, select all / deselect all, and the
-// "Open in File Explorer" action (browser-safe substitute, RULE 9).
+// ScanTable.tsx — Batch folders list, 6-col, same visual as SVG/V2
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Row } from "./useBatch";
-import type { SourceStatus } from "../lib/statefile";
+import type { RowMods } from "../selectionv2/ReviewList";
+import { selectIntent } from "../lib/reviewselect";
+import { fmtDate, fmtTime } from "../selection/fmt";
+import ScanThumb, { useThumbCache } from "./ScanThumb";
+import ScanFileCell from "./ScanFileCell";
+import ScanStatusCell from "./ScanStatusCell";
 
 export interface ScanTableProps {
   rows: Row[];
+  thumb: number;
+  activeId: string | null;
   toggle: (relPath: string) => void;
-  selectAll: (on: boolean) => void;
+  selectRow: (id: string, intent: ReturnType<typeof selectIntent>) => void;
   copyPath: (relPath: string) => void;
   thumbFor: (relPath: string) => Promise<string>;
 }
 
-const BADGE: Record<SourceStatus, { label: string; cls: string }> = {
-  unprocessed: { label: "unprocessed", cls: "bg-slate-500/20 text-slate-300" },
-  processed: { label: "processed", cls: "bg-emerald-500/20 text-emerald-300" },
-  skipped: { label: "skipped", cls: "bg-amber-500/20 text-amber-300" },
-  changed: { label: "changed", cls: "bg-sky-500/20 text-sky-300" },
-  missing: { label: "missing", cls: "bg-rose-500/20 text-rose-300" },
-  deleted: { label: "deleted", cls: "bg-rose-500/20 text-rose-300" },
-};
+export { useThumbCache };
 
-export default function ScanTable(props: ScanTableProps) {
-  const selectable = props.rows.filter((r) => r.status !== "missing" && r.status !== "deleted");
-  const allOn = selectable.length > 0 && selectable.every((r) => r.selected);
+function Header({ rows }: { rows: Row[] }) {
+  const missing = rows.filter((r) => r.status === "missing" || r.status === "deleted").length;
+  const refMissing = rows.filter((r) => r.refRelPath === null).length;
   return (
-    <section className="panel" data-testid="scan-table">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h3 className="panel-title !mb-0">Images ({props.rows.length})</h3>
-        <div className="ml-auto flex gap-2">
-          <button data-testid="select-all" className="btn-ghost" onClick={() => props.selectAll(!allOn)}>
-            {allOn ? "Deselect All" : "Select All"}
-          </button>
-        </div>
+    <header className="svg-head">
+      <div className="svg-title">
+        <h1>BATCH FOLDERS / IMAGES</h1>
+        <span data-testid="batch-row-count">{rows.length}</span>
+        <span>one file per pair</span>
       </div>
-      {props.rows.length === 0
-        ? <p className="rounded-xl border border-white/10 p-6 text-center text-slate-400">No _AI images found in this folder.</p>
-        : <ul className="max-h-[28rem] space-y-1 overflow-y-auto pr-1">{props.rows.map((r) => <RowView key={r.relPath} r={r} {...props} />)}</ul>}
-    </section>
+      <div className="svg-attention">
+        <span className="running" data-testid="batch-missing-count">
+          {missing} missing
+        </span>
+        <span className="needs" data-testid="batch-refmissing-count">
+          {refMissing} ref missing
+        </span>
+      </div>
+    </header>
   );
 }
 
-function RowView({ r, toggle, copyPath, thumbFor }: { r: Row } & ScanTableProps) {
-  const badge = BADGE[r.status];
+function Columns() {
+  return (
+    <div className="svg-columns batch-columns" aria-hidden="true">
+      <span />
+      <span>AI Image</span>
+      <span>File / path</span>
+      <span>Created</span>
+      <span>Status</span>
+      <span>Open</span>
+    </div>
+  );
+}
+
+function Footer({ count }: { count: number }) {
+  return (
+    <footer className="svg-list-footer">
+      <span data-testid="batch-footer">Showing {count} images</span>
+      <span className="svg-hints">↑↓ active row · E select active · Q deselect active · Click row, Shift range, Ctrl toggle · Bulk via buttons</span>
+    </footer>
+  );
+}
+
+function CheckCell({ r, toggle }: { r: Row; toggle: (rel: string) => void }) {
   const disabled = r.status === "missing" || r.status === "deleted";
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] px-2 py-1.5">
-      <input
-        type="checkbox" checked={r.selected} disabled={disabled}
-        onChange={() => toggle(r.relPath)} className="h-4 w-4 accent-indigo-500"
-        data-testid={`row-select-${r.relPath}`}
-      />
-      <Thumb relPath={r.relPath} thumbFor={thumbFor} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
-          {r.name}
-          {r.refRelPath === null && <span className="ml-2 text-amber-300" title="Reference image missing">⚠ ref missing</span>}
-        </p>
-        <p className="truncate text-xs text-slate-400">{r.relPath}</p>
-      </div>
-      <span className={`rounded-full px-2 py-0.5 text-xs ${badge.cls}`}>{badge.label}</span>
+    <input
+      type="checkbox"
+      className="svg-check"
+      data-testid={`row-select-${r.relPath}`}
+      checked={r.selected}
+      disabled={disabled}
+      aria-label={`Select ${r.name}`}
+      title="Checkbox changes checks only"
+      onClick={(e) => e.stopPropagation()}
+      onChange={() => toggle(r.relPath)}
+    />
+  );
+}
+
+function DateCell({ mtime }: { mtime: number }) {
+  return (
+    <div className="svg-cell">
+      <span>{fmtDate(mtime)}</span>
+      <small>{fmtTime(mtime)} local</small>
+    </div>
+  );
+}
+
+function OpenCell({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) {
+  return (
+    <div className="svg-file-actions">
       <button
-        className="btn-mini" title="Copy path (opening Explorer is not possible in a browser app)"
-        onClick={() => copyPath(r.relPath)} data-testid={`row-open-${r.relPath}`}
+        type="button"
+        className="svg-btn tiny"
+        data-testid={`row-open-${r.relPath}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          copyPath(r.relPath);
+        }}
       >
         Open in File Explorer
       </button>
-    </li>
+    </div>
   );
 }
 
-function Thumb({ relPath, thumbFor }: { relPath: string; thumbFor: (r: string) => Promise<string> }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void thumbFor(relPath).then((u) => alive && setSrc(u)).catch(() => {});
-    return () => { alive = false; };
-  }, [relPath, thumbFor]);
-  return src
-    ? <img src={src} alt="" className="h-10 w-10 rounded-md bg-white object-contain" />
-    : <div className="h-10 w-10 animate-pulse rounded-md bg-white/10" />;
+function RowView({ r, toggle, selectRow, copyPath, thumbFor, thumb, activeId }: { r: Row } & ScanTableProps) {
+  const disabled = r.status === "missing" || r.status === "deleted";
+  const active = isActive(r.relPath, activeId);
+  const ref = useActiveScroll(active);
+  const onRowClick = useRowClick(r, disabled, selectRow);
+  const onKeyDown = useRowKey(r, disabled, selectRow);
+  return (
+    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={`svg-row batch-row ${r.status}${active ? " active" : ""}${r.selected ? " selected" : ""}`} onClick={onRowClick} onKeyDown={onKeyDown}>
+      <CheckCell r={r} toggle={toggle} />
+      <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
+      <ScanFileCell r={r} />
+      <DateCell mtime={r.mtime} />
+      <ScanStatusCell r={r} />
+      <OpenCell r={r} copyPath={copyPath} />
+    </div>
+  );
 }
 
-export function useThumbCache(getUrl: (relPath: string) => Promise<string>) {
-  const [cache] = useState(() => new Map<string, string>());
-  return useCallback((relPath: string) => {
-    const hit = cache.get(relPath);
-    if (hit) return Promise.resolve(hit);
-    return getUrl(relPath).then((u) => { cache.set(relPath, u); return u; });
-  }, [cache, getUrl]);
+export default function ScanTable(props: ScanTableProps) {
+  return (
+    <div className="svg-panel" data-testid="scan-table">
+      <Header rows={props.rows} />
+      <div className="pair-table">
+        <Columns />
+        <div className="svg-rows" role="list" aria-label="Batch images" data-testid="batch-rows">
+          {props.rows.length === 0 ? <p className="svg-empty">No _AI images found in this folder.</p> : props.rows.map((r) => <RowView key={r.relPath} r={r} {...props} />)}
+        </div>
+      </div>
+      <Footer count={props.rows.length} />
+    </div>
+  );
+}
+
+function isActive(relPath: string, activeId: string | null): boolean {
+  return activeId !== null && relPath.toLowerCase() === activeId.toLowerCase();
+}
+
+function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"]) {
+  return useCallback(
+    (e: React.MouseEvent) => {
+      if (disabled) return;
+      const t = e.target as HTMLElement;
+      if (t.closest('input[type="checkbox"]') || t.closest("button")) return;
+      const mods: RowMods = { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey };
+      selectRow(r.relPath, selectIntent(mods));
+    },
+    [r, disabled, selectRow],
+  );
+}
+
+function useRowKey(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"]) {
+  return useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (disabled) return;
+        selectRow(r.relPath, "replace");
+      }
+    },
+    [r, disabled, selectRow],
+  );
+}
+
+function useActiveScroll(active: boolean) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView?.({ block: "nearest" });
+  }, [active]);
+  return ref;
 }

@@ -551,6 +551,7 @@ describe("runner events and the review decision", () => {
       setProgress: (p) => { written.push(`progress:${p === null ? "null" : "set"}`); },
       setProgressFn: (fn) => { written.push(`progressFn:${fn(null) === null ? "null" : "set"}`); },
       setRowsFn: (fn) => { rows.splice(0, rows.length, ...fn(rows)); },
+      setCurrent: () => {},
     };
     onRunEvent({ kind: "run-start", batches: 1, perRequest: 4, images: 1 }, api);
     // a new run clears whatever progress the last one left behind...

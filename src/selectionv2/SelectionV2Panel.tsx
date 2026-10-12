@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import { keyToAction } from "../lib/reviewmeta";
+import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { attentionInfo } from "../lib/pairing";
 import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
 import { selectIntent } from "../lib/reviewselect";
@@ -25,6 +26,7 @@ export default function SelectionV2Panel() {
   const v = useSelectionV2();
   const thumbFor = useSideThumbs(v.core.rootRef);
   useHotkeys(v);
+  useSelectShortcuts({ activeId: v.core.s.selectedId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   if (!v.core.supported) return <UnsupportedNote onPick={v.core.chooseRoot} />;
   return (
     <div className="v2" data-testid="v2-panel">

@@ -198,7 +198,7 @@ describe("svgfile", () => {
     const s = withVersion(withVersion(file(), rec(1, { review: "approved" })), rec(2));
     expect(newestValid(s.versions)?.version).toBe(2);
     expect(approvedVersion(s.versions)?.version).toBe(1);
-    expect(tallyReviews(s.versions)).toEqual({ pending: 1, approved: 1, declined: 0 });
+    expect(tallyReviews(s.versions)).toEqual({ pending: 1, approved: 1, declined: 0, "needs-review": 0 });
     const failed = withVersion(s, rec(3, { status: "failed", validation: { ok: false, errors: ["x"], warnings: [], icons: 0 } }));
     expect(newestValid(failed.versions)?.version).toBe(2);
     expect(newestValid([])).toBeNull();

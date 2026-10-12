@@ -50,6 +50,10 @@ export function useHistory(): HistoryApi {
   return api;
 }
 
+export function useOptionalHistory(): HistoryApi | null {
+  return useContext(Ctx);
+}
+
 export function HistoryProvider({ children }: { children: ReactNode }) {
   const store = useTimeline();
   const { undo, redo } = useApply(store.ref, store.commit, store.setError);

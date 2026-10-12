@@ -1,124 +1,120 @@
-// BatchPanel.tsx — batch feature layout (spec §1–§6): folder pickers, preset
-// bar, review window, process controls, honest status surfaces (RULE 2/4).
+// BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview
 
+import { useCallback, useMemo } from "react";
 import { copyFolderText } from "../lib/copypath";
-import { useBatch } from "./useBatch";
-import PresetBar from "./PresetBar";
+import { useBatchView } from "./useBatchView";
 import ScanTable, { useThumbCache } from "./ScanTable";
+import BatchFilterGrid from "./BatchFilterGrid";
+import BatchBulkBar from "./BatchBulkBar";
+import BatchSourceBar from "./BatchSourceBar";
+import BatchPresetRow from "./BatchPresetRow";
+import BatchDestRow from "./BatchDestRow";
+import BatchMergeBar from "./BatchMergeBar";
+import BatchPreviewPanel from "./BatchPreviewPanel";
+import { useBatchPreview } from "./useBatchPreview";
+import { useBatchHotkeys } from "./useBatchHotkeys";
+import { useSelectShortcuts } from "../lib/selectshortcuts";
 
 export default function BatchPanel() {
-  const b = useBatch();
-  const thumbFor = useThumbCache(b.thumbUrl);
+  const v = useBatchView();
+  const thumbFor = useThumbCache(v.core.thumbUrl);
+  const preview = useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split });
+  useBatchHotkeys(v as never, true);
+  useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
+  const checkedRows = useCheckedRows(v);
+  const onPreview = useOnPreview(checkedRows, preview);
   return (
-    <div className="space-y-4">
-      {!b.supported && (
-        <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">
-          Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.
-        </p>
-      )}
-      <HeaderControls b={b} />
-      <MainGrid b={b} thumbFor={thumbFor} />
-      <Overlays b={b} />
+    <div className="batch-shell w-full space-y-4">
+      {!v.core.supported && <Unsupported />}
+      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} />
+      <PresetAndDest v={v} />
+      <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
+      <PreviewSection rows={checkedRows} previews={preview.previews} onClear={preview.clear} />
+      <RefWarnings count={v.core.s.refWarnings.length} />
+      <FullWidthList v={v} thumbFor={thumbFor} />
+      <Overlays v={v} />
     </div>
   );
 }
 
-function MainGrid({ b, thumbFor }: { b: Batch; thumbFor: (r: string) => Promise<string> }) {
+type View = ReturnType<typeof useBatchView>;
+
+function useCheckedRows(v: View) {
+  return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]);
+}
+
+function useOnPreview(checkedRows: View[ "core" ][ "s" ][ "rows" ], preview: ReturnType<typeof useBatchPreview>) {
+  return useCallback(() => {
+    void preview.previewSelected(checkedRows);
+  }, [checkedRows, preview]);
+}
+
+function PreviewSection({ rows, previews, onClear }: { rows: View[ "core" ][ "s" ][ "rows" ]; previews: Map<string, import("./useBatchPreview").PreviewEntry>; onClear: () => void }) {
+  if (previews.size === 0) return null;
+  return <BatchPreviewPanel selectedRows={rows} previews={previews} onClear={onClear} />;
+}
+
+function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () => void; previewing: boolean }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <div className="space-y-4">
-        <PresetBar
-          preset={b.s.preset} presetNames={b.s.presetNames} setPreset={b.setPreset}
-          savePreset={(n) => void b.savePreset(n)} loadPreset={(n) => void b.loadPreset(n)} deletePreset={b.deletePreset}
-        />
-        <DestInfo b={b} />
+    <div className="batch-controls-stack space-y-3">
+      <div className="v2-controls">
+        <BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} />
       </div>
-      <div className="space-y-4">
-        <RefWarnings count={b.s.refWarnings.length} />
-        <ScanTable
-          rows={b.s.rows} toggle={b.toggle} selectAll={b.selectAll}
-          copyPath={(rel) => copyPath(b, rel)} thumbFor={thumbFor}
-        />
-      </div>
+      <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
+      <BatchBulkBar
+        header={v.header}
+        checkedCount={v.checkedCount}
+        visibleCount={v.visibleCount}
+        totalCount={v.totalCount}
+        hiddenCount={v.hiddenCount}
+        affectedCount={v.affectedCount}
+        thumb={v.thumb}
+        selectedCount={v.selectedCount}
+        onToggleAll={v.toggleAllVisible}
+        onSelectVisible={v.checkVisible}
+        onDeselectAll={v.uncheckAll}
+        onThumb={v.setThumb}
+        onSplit={() => void v.core.run()}
+        onPreview={onPreview}
+        canSplit={v.selectedCount > 0 && !v.core.s.busy}
+        canPreview={v.selectedCount > 0 && !v.core.s.busy}
+        previewing={previewing}
+      />
     </div>
   );
 }
 
-function Overlays({ b }: { b: Batch }) {
-  if (!b.s.busy && !b.s.toast) return null;
+function Unsupported() {
+  return <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.</p>;
+}
+
+function PresetAndDest({ v }: { v: View }) {
   return (
-    <>
-      {b.s.busy && <BusyOverlay msg={b.s.busy} cancel={b.cancel} />}
-      {b.s.toast && (
-        <div data-testid="batch-toast" className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${b.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>
-          {b.s.toast.msg}
-        </div>
-      )}
-    </>
+    <div className="space-y-3">
+      <BatchPresetRow preset={v.core.s.preset} presetNames={v.core.s.presetNames} setPreset={v.core.setPreset} savePreset={(n) => void v.core.savePreset(n)} loadPreset={(n) => void v.core.loadPreset(n)} deletePreset={v.core.deletePreset} />
+      <BatchDestRow rootName={v.core.s.rootName} destName={v.core.s.destName} destMode={v.core.s.preset.destMode} chooseDest={() => void v.core.chooseDest()} />
+    </div>
   );
 }
 
-type Batch = ReturnType<typeof useBatch>;
-
-function HeaderControls({ b }: { b: Batch }) {
-  const selected = b.s.rows.filter((r) => r.selected).length;
-  return (
-    <section className="panel flex flex-wrap items-center gap-2">
-      <button data-testid="batch-root" className="btn-primary" onClick={() => void b.chooseRoot()}>
-        {b.s.rootName ? `Root: ${b.s.rootName}` : "Choose source folder…"}
-      </button>
-      <button data-testid="batch-refresh" className="btn-ghost" onClick={() => void b.refresh()}>↺ Rescan</button>
-      <div className="ml-auto flex items-center gap-2">
-        <span className="text-xs text-slate-400">{selected} selected</span>
-        {b.s.busy
-          ? <button data-testid="batch-cancel" className="btn-ghost" onClick={b.cancel}>✕ Stop</button>
-          : <button data-testid="batch-process" className="btn-primary" disabled={!selected} onClick={() => void b.run()}>▶ Split selected</button>}
-      </div>
-    </section>
-  );
+function FullWidthList({ v, thumbFor }: { v: View; thumbFor: (r: string) => Promise<string> }) {
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} /></div>;
 }
 
-function DestInfo({ b }: { b: Batch }) {
-  const custom = b.s.preset.destMode === "custom" && b.s.destName;
-  return (
-    <section className="panel space-y-2">
-      <h3 className="panel-title">Output</h3>
-      <p className="text-sm text-slate-400">
-        {custom
-          ? <>Custom destination: <b className="text-slate-200">{b.s.destName}</b></>
-          : <>Auto: <b className="text-slate-200">{b.s.rootName || "<folder>"}/_split_output</b></>}
-      </p>
-      <p className="text-xs text-slate-500">Grouped as YYYY-MM / YYYY-MM-DD_HH-mm-ss, source hierarchy preserved, never overwritten.</p>
-      <div className="flex gap-2">
-        <button data-testid="batch-dest" className="btn-ghost" onClick={() => void b.chooseDest()}>Choose destination…</button>
-      </div>
-    </section>
-  );
+function Overlays({ v }: { v: View }) {
+  if (!v.core.s.busy && !v.core.s.toast) return null;
+  return <>{v.core.s.busy && <BusyOverlay msg={v.core.s.busy} cancel={v.core.cancel} />}{v.core.s.toast && <div data-testid="batch-toast" className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${v.core.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>{v.core.s.toast.msg}</div>}</>;
 }
 
 function RefWarnings({ count }: { count: number }) {
   if (count === 0) return null;
-  return (
-    <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="ref-warnings">
-      ⚠ {count} image{count === 1 ? " has" : "s have"} no reference file. You can deselect {count === 1 ? "it" : "them"} to skip,
-      or continue — exports will simply omit the reference copy.
-    </p>
-  );
+  return <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="ref-warnings">⚠ {count} image{count === 1 ? " has" : "s have"} no reference file. You can deselect {count === 1 ? "it" : "them"} to skip, or continue — exports will simply omit the reference copy.</p>;
 }
 
 function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
-  return (
-    <div data-testid="batch-busy" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-        <span className="text-sm">{msg}</span>
-        <button className="btn-mini" onClick={cancel}>Stop</button>
-      </div>
-    </div>
-  );
+  return <div data-testid="batch-busy" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm"><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 shadow-2xl"><span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" /><span className="text-sm">{msg}</span><button className="btn-mini" onClick={cancel}>Stop</button></div></div>;
 }
 
-/** Honest substitute for "Open in File Explorer": the folder, never the file. */
-function copyPath(b: Batch, relPath: string): void {
-  void copyFolderText(b.rootRef.current, relPath, b.say);
+function copyPath(v: View, relPath: string): void {
+  void copyFolderText(v.core.rootRef.current, relPath, v.core.say);
 }

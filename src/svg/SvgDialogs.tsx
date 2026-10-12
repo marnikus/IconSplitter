@@ -12,6 +12,7 @@ import SvgPreviewBox from "./SvgPreview";
 import SvgConfirm from "./SvgConfirm";
 import VersionsDialog from "./VersionsDialog";
 import type { Dialog, SvgRow } from "./types";
+import type { PromptPreset } from "../lib/promptpresets";
 
 export interface SvgDialogsProps {
   dialog: Dialog | null;
@@ -21,7 +22,9 @@ export interface SvgDialogsProps {
   params: SamplingParams;
   rootRef: { current: DirHandleLike | null };
   readCode: (id: string, version: number) => Promise<string | null>;
-  onConfirm: () => void;
+  presets: PromptPreset[];
+  prompt: string;
+  onConfirm: (regenPresetName: string | null) => void;
   onDismiss: () => void;
   onShowCode: (id: string, version: number) => void;
   /** Chooses which version the row shows (I-54); resolves why it failed, or null. */
@@ -35,7 +38,7 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   if (dialog === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
-      rootRef={p.rootRef} running={p.running} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
+      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);
   if (!row) return null;
