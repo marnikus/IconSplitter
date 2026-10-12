@@ -26,7 +26,7 @@ export default function SelectionV2Panel() {
   const v = useSelectionV2();
   const thumbFor = useSideThumbs(v.core.rootRef);
   useHotkeys(v);
-  useSelectShortcuts({ selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
+  useSelectShortcuts({ selectVisible: v.checkVisible, deselectAll: v.uncheckAll, header: v.header, checkedCount: v.checked.length, visibleCount: v.core.visible.length }, true);
   if (!v.core.supported) return <UnsupportedNote onPick={v.core.chooseRoot} />;
   return (
     <div className="v2" data-testid="v2-panel">

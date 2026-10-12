@@ -226,16 +226,16 @@ describe("Batch V2 selection: active row separate from checked", () => {
     expect((q(`[data-testid='row-select-icon-b_AI_2.png']`) as HTMLInputElement).checked).toBe(false);
   });
 
-  it("A/E shortcuts select visible and deselect all (reusable)", async () => {
+  it("Q/E shortcuts select visible and deselect all (reusable)", async () => {
     await click(q("[data-testid=batch-deselect]"));
-    await keyDown("a");
-    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
     await keyDown("e");
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
+    await keyDown("q");
     expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
     // Uppercase should also work
-    await keyDown("A");
-    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
     await keyDown("E");
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
+    await keyDown("Q");
     expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/0 selected/);
   });
 
