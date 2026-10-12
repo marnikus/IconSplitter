@@ -1,4 +1,4 @@
-// BatchRowMergeBar.tsx — per-row merge distance with Apply/Reset override
+// BatchRowMergeBar.tsx — per-row merge distance with Apply/Reset + immediate preview + real-time value
 
 import { memo, useCallback, useEffect, useState } from "react";
 
@@ -22,12 +22,12 @@ function Inner({ relPath, globalFrac, overrideFrac, onApply, onReset }: BatchRow
   const doApply = useCallback(() => onApply(relPath, local), [relPath, local, onApply]);
   const doReset = useCallback(() => onReset(relPath), [relPath, onReset]);
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-2 py-1" data-testid={`batch-row-merge-bar-${relPath}`}>
-      <span className="text-[11px] font-medium">Detection</span>
-      <span className="text-[11px] text-slate-400" data-testid={`batch-row-merge-label-${relPath}`}>Merge {eff == null ? "auto" : eff.toFixed(4)}{hasOv ? " • overridden" : ""}</span>
-      <input type="range" min={0} max={0.15} step={0.0025} value={local} onChange={onSlider} onInput={onSlider as never} className="w-24 accent-indigo-500" data-testid={`batch-row-merge-slider-${relPath}`} />
-      <button type="button" className="btn-mini text-[11px]" data-testid={`batch-row-merge-apply-${relPath}`} onClick={doApply}>Apply</button>
-      <button type="button" className="btn-ghost text-[11px] disabled:opacity-40" data-testid={`batch-row-merge-reset-${relPath}`} disabled={!hasOv} onClick={doReset}>↺ Reset</button>
+    <div className="flex flex-nowrap items-center gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-2 py-1.5" data-testid={`batch-row-merge-bar-${relPath}`}>
+      <span className="whitespace-nowrap text-[11px] font-medium">Detection</span>
+      <span className="whitespace-nowrap text-[11px] text-slate-400" data-testid={`batch-row-merge-label-${relPath}`}>Merge {local.toFixed(4)}{hasOv ? " • overridden" : eff == null ? " (auto)" : ""}</span>
+      <input type="range" min={0} max={0.15} step={0.0025} value={local} onChange={onSlider} onInput={onSlider as never} className="w-28 accent-indigo-500" data-testid={`batch-row-merge-slider-${relPath}`} />
+      <button type="button" className="btn-mini whitespace-nowrap text-[11px]" data-testid={`batch-row-merge-apply-${relPath}`} onClick={doApply}>Apply</button>
+      <button type="button" className="btn-ghost whitespace-nowrap text-[11px] disabled:opacity-40" data-testid={`batch-row-merge-reset-${relPath}`} disabled={!hasOv} onClick={doReset}>↺ Reset</button>
     </div>
   );
 }
