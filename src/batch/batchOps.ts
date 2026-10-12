@@ -14,6 +14,7 @@ import { loadImageFile } from "../lib/dom";
 import type { Ctx, Row, RowMergeMap, Setter } from "./useBatchTypes";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 import { yieldToFrame } from "../lib/yield";
+import { patchBatch } from "../state/appstore";
 
 async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
   const tree = await readDirTree(root, preset.ignoreFolders);
@@ -29,6 +30,8 @@ export function finishScan(
   setS: Setter,
   say: (m: string, e?: boolean) => void,
 ): void {
+  const rows = images.map((img) => toRow(img, statuses));
+  const checked = rows.filter((r) => r.selected).map((r) => r.relPath);
   setS((p) => {
     const existing = new Set(images.map((i) => i.relPath.toLowerCase()));
     const nextMerges: RowMergeMap = {};
@@ -38,11 +41,15 @@ export function finishScan(
     return {
       ...p,
       busy: null,
-      rows: images.map((img) => toRow(img, statuses)),
+      rows,
       refWarnings: images.filter((i) => i.refRelPath === null).map((i) => i.relPath),
       rowMerges: nextMerges,
     };
   });
+  // Sync V2 checked state so useBatchSelection doesn't immediately uncheck
+  try {
+    patchBatch({ checked });
+  } catch {}
   say(`Found ${images.length} AI image${images.length === 1 ? "" : "s"}`);
 }
 
@@ -257,4 +264,7 @@ async function finalize(
     })),
     toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
+  try {
+    patchBatch({ checked: [] });
+  } catch {}
 }

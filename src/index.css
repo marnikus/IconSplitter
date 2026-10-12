@@ -1032,7 +1032,7 @@
 
 
 /* Persistent progress bars pinned above tab header (2026-10-11 svg, 2026-10-13 batch) */
-#svg-progress-mount, #batch-progress-mount { position: relative; z-index: 55; }
+#svg-progress-mount, #batch-progress-mount { position: relative; z-index: 55; flex: none; }
 .progress-mounts { display: flex; flex-direction: column; gap: 1px; }
 .svg-progress-header {
   display: grid;

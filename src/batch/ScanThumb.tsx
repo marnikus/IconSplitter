@@ -28,7 +28,7 @@ export default function ScanThumb({ relPath, thumbFor, thumb }: { relPath: strin
       alive = false;
     };
   }, [relPath, thumbFor]);
-  const size = Math.max(48, Math.min(800, thumb));
+  const size = Math.max(48, Math.min(200, thumb));
   return src ? (
     <img src={src} alt="" className="rounded-md bg-white object-contain" style={{ height: size, width: size }} />
   ) : (

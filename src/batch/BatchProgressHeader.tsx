@@ -203,10 +203,10 @@ function ProgressThumb({ thumbFor, relPath, name, mode }: { thumbFor: Props["thu
     return () => { live = false; };
   }, [relPath, thumbFor]);
 
-  if (!relPath) return <span className="batch-progress-thumb empty" data-testid={testId(mode, "progress-thumb")}>◍</span>;
+  if (!relPath) return <span className="batch-progress-thumb empty" data-testid={testId(mode, "progress-thumb")} style={{ width: 32, height: 32 }}>◍</span>;
   return url ? (
-    <img className="batch-progress-thumb" data-testid={testId(mode, "progress-thumb")} src={url} alt={name} />
+    <img className="batch-progress-thumb" data-testid={testId(mode, "progress-thumb")} src={url} alt={name} style={{ width: 32, height: 32, objectFit: 'cover' }} />
   ) : (
-    <span className="batch-progress-thumb empty" data-testid={testId(mode, "progress-thumb")}>{name.slice(0, 2)}</span>
+    <span className="batch-progress-thumb empty" data-testid={testId(mode, "progress-thumb")} style={{ width: 32, height: 32 }}>{name.slice(0, 2)}</span>
   );
 }
