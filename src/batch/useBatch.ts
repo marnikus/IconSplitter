@@ -127,7 +127,13 @@ function useViewActions(ctx: Ctx, setS: Setter) {
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   const setPreset = useCallback((patch: Partial<Preset>) => {
-    setS((p) => ({ ...p, preset: { ...p.preset, ...patch } }));
+    setS((p) => {
+      const next = { ...p.preset, ...patch };
+      // Auto-save to last selected preset — no manual confirmation needed
+      savePresets([...loadPresets().filter((x) => x.name !== next.name), next]);
+      saveLastName(next.name);
+      return { ...p, preset: next };
+    });
   }, [setS]);
 
   const savePreset = useCallback(async (name: string) => {
