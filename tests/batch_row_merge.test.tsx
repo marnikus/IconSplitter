@@ -139,8 +139,7 @@ describe("Batch per-row merge override", () => {
 
     const labelAfter = q(`[data-testid="batch-row-merge-label-${firstRowPath}"]`) as HTMLElement | null;
     expect(labelAfter!.textContent).toMatch(/overridden/);
-    // If slider change succeeded, label should show 0.05, otherwise auto (still overridden) – accept either
-    expect(labelAfter!.textContent).toMatch(/0\.0500|auto/);
+    expect(labelAfter!.textContent).toMatch(/0\.0500/);
     const resetAfter = q(`[data-testid="batch-row-merge-reset-${firstRowPath}"]`) as HTMLButtonElement | null;
     expect(resetAfter!.disabled).toBe(false);
 
