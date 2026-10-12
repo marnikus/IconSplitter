@@ -47,6 +47,7 @@ function SplitControls({ preset, setPreset }: { preset: Preset; setPreset: Batch
       <PaddingMini value={preset.split.padding} onChange={(v) => setPreset({ split: { ...preset.split, padding: v } })} />
       <SizeMini value={preset.split.size} onChange={(v) => setPreset({ split: { ...preset.split, size: v } })} />
       <TransparentMini value={preset.split.transparent} onChange={(v) => setPreset({ split: { ...preset.split, transparent: v } })} />
+      <MergeMini value={preset.split.mergeFrac} onChange={(v) => setPreset({ split: { ...preset.split, mergeFrac: v } })} />
       <IgnoreMini value={preset.ignoreFolders} onChange={(v) => setPreset({ ignoreFolders: v })} />
     </>
   );
@@ -62,4 +63,37 @@ function TransparentMini({ value, onChange }: { value: boolean; onChange: (v: bo
 }
 function IgnoreMini({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   return <label className="flex items-center gap-2 text-sm"><span className="text-xs text-slate-400">Ignore</span><input data-testid="batch-ignore" value={value.join(", ")} onChange={(e) => onChange(e.target.value.split(",").map((x) => x.trim()).filter(Boolean))} placeholder="_split_output" className="w-32 rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-sm" /></label>;
+}
+
+const MERGE_HINT = "Merge distance: how close two icons may be before they count as one. Auto = each image picks its own.";
+
+/** The ONE merge control in Batch (D2/I-66): writes preset.split.mergeFrac, null = auto. */
+function MergeMini({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const auto = value === null;
+  return (
+    <span className="flex items-center gap-2 text-sm" title={MERGE_HINT}>
+      <span className="text-xs text-slate-400">Merge</span>
+      <input
+        data-testid="batch-merge"
+        type="range"
+        min={0}
+        max={0.15}
+        step={0.0025}
+        aria-label="Merge distance"
+        value={auto ? 0 : value}
+        onChange={(e) => onChange(+e.target.value)}
+        className={`w-24 accent-indigo-500 ${auto ? "opacity-50" : ""}`}
+      />
+      <span data-testid="batch-merge-value" className="text-xs text-slate-300">{mergeText(value)}</span>
+      <button type="button" data-testid="batch-merge-reset" className="btn-mini" disabled={auto} onClick={() => onChange(null)}>
+        ↺ Auto
+      </button>
+    </span>
+  );
+}
+
+/** What the control says it is doing, in words (RULE 24: the visible value is the state). */
+function mergeText(value: number | null): string {
+  if (value === null) return "Auto — each image picks its own";
+  return String(Math.round(value * 10000) / 10000);
 }
