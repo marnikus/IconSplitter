@@ -21,6 +21,8 @@ const initial: BatchState = {
   presetNames: [],
   refWarnings: [],
   rowMerges: {},
+  progress: null,
+  running: false,
 };
 
 export type { Row, RowMergeMap, BatchState } from "./useBatchTypes";
@@ -104,7 +106,10 @@ function useViewActions(ctx: Ctx, setS: Setter) {
     setS((p) => { const n = { ...p.rowMerges }; delete n[k]; return { ...p, rowMerges: n }; });
   }, [setS]);
   const clearAllRowMerges = useCallback(() => { setS((p) => ({ ...p, rowMerges: {} })); }, [setS]);
-  return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges };
+  const setProgress = useCallback((progress: BatchState["progress"]) => {
+    setS((p) => ({ ...p, progress }));
+  }, [setS]);
+  return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress };
 }
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {

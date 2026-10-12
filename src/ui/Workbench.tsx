@@ -39,7 +39,10 @@ function Shell() {
   usePrefsAutosave();
   return (
     <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell">
-      <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
+      <div className="progress-mounts flex flex-col gap-1">
+        <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
+        <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
+      </div>
       <Nav tab={tab} />
       <main className="app-main" data-testid="app-main">
         <Panels tab={tab} />
@@ -76,11 +79,11 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
   return (
     <>
       {tab === "sheets" && <App />}
-      {tab === "batch" && (
+      <div className="batch-shell-outer w-full" data-testid="batch-shell-outer" hidden={tab !== "batch"}>
         <TabWrapper>
           <BatchPanel />
         </TabWrapper>
-      )}
+      </div>
       {tab === "selection" && (
         <TabWrapper>
           <SelectionPanel />

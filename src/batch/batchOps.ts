@@ -10,6 +10,7 @@ import type { Preset } from "../lib/presets";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import type { Ctx, Row, RowMergeMap, Setter } from "./useBatchTypes";
+import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 
 async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
   const tree = await readDirTree(root, preset.ignoreFolders);
@@ -72,24 +73,83 @@ export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   ctx.stop.current = false;
   const selected = ctx.state.current.rows.filter((r) => r.selected);
   if (!selected.length) return setS((p) => ({ ...p, toast: { msg: "Nothing selected", err: true } }));
-  setS((p) => ({ ...p, busy: "Preparing…" }));
-  const report = await runBatch(ctx, root, selected, setS);
+  const runId = makeRunId();
+  const init = makeBatchProgress(selected.length, runId);
+  init.currentRelPath = selected[0]?.relPath ?? null;
+  init.currentName = selected[0]?.name ?? "";
+  setS((p) => ({ ...p, busy: null, running: true, progress: init }));
+  const report = await runBatch({ ctx, root, selected, setS, init });
   await finalize(root, report.results, selected, setS);
 }
 
-async function runBatch(ctx: Ctx, root: DirHandleLike, selected: Row[], setS: Setter) {
+function makeRunId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+type RunArgs = { ctx: Ctx; root: DirHandleLike; selected: Row[]; setS: Setter; init: BatchProgress };
+
+async function runBatch(args: RunArgs) {
+  const { ctx, root, selected, setS } = args;
   const items = await buildItems(root, selected);
-  const dest = ctx.dest.current ?? (await ensureDirPath(root, OUTPUT_DIR));
+  const dest = await resolveDest(ctx, root);
   const merges = ctx.state.current.rowMerges;
-  const globalSplit = ctx.state.current.preset.split;
-  return processItems(items, {
+  const split = ctx.state.current.preset.split;
+  const counters = { saved: 0, failed: 0, skipped: 0, results: [] as ItemResult[] };
+  const onProgress = makeProgressUpdater(setS, selected, counters);
+  const report = await processItems(items, {
     dest,
-    split: globalSplit,
-    splitImage: (file, split) => splitWithOverride(file, split, merges, items),
+    split,
+    splitImage: (file, s) => splitWithOverride(file, s, merges, items),
     now: new Date(),
     shouldStop: () => ctx.stop.current,
-    onProgress: (d, t) => setS((p) => ({ ...p, busy: `Splitting ${d}/${t}…` })),
+    onProgress,
   });
+  tallyExtra(report, counters);
+  return report;
+}
+
+function makeProgressUpdater(setS: Setter, selected: Row[], counters: { saved: number; failed: number; skipped: number; results: ItemResult[] }) {
+  return (done: number, _total: number, relPath: string, result?: ItemResult) => {
+    if (result) pushResult(result, counters);
+    const next = selected[done] ?? null;
+    setS((p) => {
+      const prev = p.progress;
+      if (!prev) return p;
+      return {
+        ...p,
+        progress: {
+          ...prev,
+          done,
+          currentRelPath: next?.relPath ?? relPath,
+          currentName: next?.name ?? prev.currentName,
+          saved: counters.saved,
+          failed: counters.failed,
+          skipped: counters.skipped,
+        },
+      };
+    });
+  };
+}
+
+function pushResult(r: ItemResult, c: { saved: number; failed: number; skipped: number; results: ItemResult[] }) {
+  c.results.push(r);
+  if (r.outcome === "processed") c.saved++;
+  else if (r.outcome === "failed") c.failed++;
+  else c.skipped++;
+}
+
+function tallyExtra(report: { results: ItemResult[] }, c: { saved: number; failed: number; skipped: number; results: ItemResult[] }) {
+  if (report.results.length <= c.results.length) return;
+  for (let i = c.results.length; i < report.results.length; i++) {
+    const r = report.results[i];
+    if (r.outcome === "processed") c.saved++;
+    else if (r.outcome === "failed") c.failed++;
+    else c.skipped++;
+  }
+}
+
+async function resolveDest(ctx: Ctx, root: DirHandleLike): Promise<DirHandleLike> {
+  return ctx.dest.current ?? (await ensureDirPath(root, OUTPUT_DIR));
 }
 
 export function splitWithOverride(
@@ -156,9 +216,7 @@ async function probePathLocal(root: DirHandleLike, dirPath: string): Promise<Dir
 }
 
 function tally(results: ItemResult[]) {
-  let done = 0,
-    skipped = 0,
-    failed = 0;
+  let done = 0, skipped = 0, failed = 0;
   for (const r of results) {
     if (r.outcome === "processed") done++;
     else if (r.outcome === "skipped") skipped++;
@@ -181,6 +239,7 @@ async function finalize(
   setS((p) => ({
     ...p,
     busy: null,
+    running: false,
     rows: p.rows.map((r) => ({
       ...r,
       status: byPath.get(r.relPath.toLowerCase()) ?? r.status,

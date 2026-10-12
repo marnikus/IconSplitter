@@ -10,6 +10,7 @@ import BatchSourceBar from "./BatchSourceBar";
 import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
+import BatchProgressHeader from "./BatchProgressHeader";
 import { useBatchPreview, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
@@ -26,6 +27,7 @@ export default function BatchPanel() {
   const onRowMergeReset = useRowMergeReset(v, preview);
   return (
     <div className="batch-shell w-full space-y-4">
+      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => { /* stay on batch tab */ }} />
       {!v.core.supported && <Unsupported />}
       <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} />
       <PresetAndDest v={v} />
@@ -68,11 +70,12 @@ function useRowMergeReset(v: View, preview: Preview) {
   }, [v, preview]);
 }
 function BatchControls({ v, onPreview, previewing }: { v: View; onPreview: () => void; previewing: boolean }) {
+  const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null);
   return (
     <div className="batch-controls-stack space-y-3">
       <div className="v2-controls"><BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} /></div>
       <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} canSplit={v.selectedCount > 0 && !v.core.s.busy} canPreview={v.selectedCount > 0 && !v.core.s.busy} previewing={previewing} />
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} canSplit={v.selectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} previewing={previewing} />
     </div>
   );
 }
@@ -91,8 +94,9 @@ function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset
   return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} /></div>;
 }
 function Overlays({ v }: { v: View }) {
-  if (!v.core.s.busy && !v.core.s.toast) return null;
-  return <>{v.core.s.busy && <BusyOverlay msg={v.core.s.busy} cancel={v.core.cancel} />}{v.core.s.toast && <div data-testid="batch-toast" className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${v.core.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>{v.core.s.toast.msg}</div>}</>;
+  const showBusy = v.core.s.busy && !v.core.s.running;
+  if (!showBusy && !v.core.s.toast) return null;
+  return <>{showBusy && <BusyOverlay msg={v.core.s.busy!} cancel={v.core.cancel} />}{v.core.s.toast && <div data-testid="batch-toast" className={`fixed left-1/2 z-50 toast-above-dock -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl ${v.core.s.toast.err ? "bg-rose-600" : "bg-emerald-600"}`}>{v.core.s.toast.msg}</div>}</>;
 }
 function RefWarnings({ count }: { count: number }) {
   if (count === 0) return null;

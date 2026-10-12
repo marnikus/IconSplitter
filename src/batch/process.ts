@@ -20,7 +20,7 @@ export interface ProcessDeps {
   splitImage: (file: File, split: SplitSettings) => Promise<Blob[]>;
   now?: Date;
   shouldStop?: () => boolean;
-  onProgress?: (done: number, total: number, relPath: string) => void;
+  onProgress?: (done: number, total: number, relPath: string, result?: ItemResult) => void;
 }
 
 export type Outcome = "processed" | "skipped" | "failed";
@@ -48,8 +48,9 @@ export async function processItems(items: BatchItem[], deps: ProcessDeps): Promi
   let stopped = false;
   for (let i = 0; i < items.length; i++) {
     if (deps.shouldStop?.()) { stopped = true; break; }
-    results.push(await processOne(items[i], plan.items[i].relFolder, deps, plan.items[i].folder));
-    deps.onProgress?.(i + 1, items.length, items[i].source.relPath); // RULE 5 live progress
+    const res = await processOne(items[i], plan.items[i].relFolder, deps, plan.items[i].folder);
+    results.push(res);
+    deps.onProgress?.(i + 1, items.length, items[i].source.relPath, res); // RULE 5 live progress
   }
   return { relBase, results, stopped };
 }

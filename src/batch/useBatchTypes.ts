@@ -5,6 +5,7 @@ import type { AiImageEntry } from "../lib/fs";
 import type { SourceStatus } from "../lib/status";
 import type { Preset } from "../lib/presets";
 import type { MutableRefObject } from "react";
+import type { BatchProgress } from "./BatchProgress";
 
 export type RowMergeMap = Record<string, number | null>;
 
@@ -23,6 +24,8 @@ export interface BatchState {
   toast: { msg: string; err?: boolean } | null;
   refWarnings: string[];
   rowMerges: RowMergeMap;
+  progress: BatchProgress | null;
+  running: boolean;
 }
 
 export type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
