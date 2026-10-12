@@ -2,11 +2,13 @@
 // Owns: planning the output tree, then per-item split + write with no-overwrite,
 // reference copy, and isolated per-item failures + stop. Pure-ish: IO via the
 // injected handle interfaces and the injected splitImage function (RULE 8).
+// Yields between items to keep UI responsive.
 
 import { planBatch, type BatchSource } from "../lib/output";
 import { probePath, ensureDirPath, listChildNames, writeFileNew, copyFileTo, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { splitImageName, batchPath, pad2 } from "../lib/naming";
 import type { SplitSettings } from "../lib/presets";
+import { yieldToFrame, yieldToUI } from "../lib/yield";
 
 export interface BatchItem {
   source: BatchSource;
@@ -48,9 +50,11 @@ export async function processItems(items: BatchItem[], deps: ProcessDeps): Promi
   let stopped = false;
   for (let i = 0; i < items.length; i++) {
     if (deps.shouldStop?.()) { stopped = true; break; }
+    await yieldToFrame();
     const res = await processOne(items[i], plan.items[i].relFolder, deps, plan.items[i].folder);
     results.push(res);
     deps.onProgress?.(i + 1, items.length, items[i].source.relPath, res); // RULE 5 live progress
+    await yieldToUI();
   }
   return { relBase, results, stopped };
 }
@@ -79,6 +83,7 @@ async function processOne(item: BatchItem, destRel: string, deps: ProcessDeps, f
   const base = { relPath: item.source.relPath, folder, splits: 0, refCopied: false };
   const file = await tryLoad(item.file);
   if (!file) return { ...base, outcome: "skipped", message: "Source file missing before processing" };
+  if (deps.shouldStop?.()) return { ...base, outcome: "skipped", message: "Cancelled" };
   const blobs = await trySplit(file, deps);
   if (blobs instanceof Error) return { ...base, outcome: "failed", message: blobs.message };
   if (blobs.length === 0) return { ...base, outcome: "skipped", message: "No icons detected" };
@@ -116,6 +121,7 @@ async function writeSplits(root: DirHandleLike, folder: string, blobs: Blob[]): 
   for (let j = 0; j < blobs.length; j++) {
     const splitDir = await ensureDirPath(root, `split_${pad2(j + 1)}`);
     await writeFileNew(splitDir, splitImageName(folder, j + 1), blobs[j]);
+    if (j % 3 === 0) await yieldToUI();
     dirs.push(splitDir);
   }
   return dirs;

@@ -10,6 +10,7 @@ import { previewKey } from "../lib/batchpreview";
 import type { SplitSettings } from "../lib/presets";
 import type { Row, RowMergeMap } from "./useBatch";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
+import { yieldToFrame, yieldToUI } from "../lib/yield";
 
 export interface PreviewEntry {
   relPath: string;
@@ -73,6 +74,18 @@ function renderThumbs(img: HTMLImageElement, an: Analysis, boxes: Box[], split: 
   for (let i = 0; i < limit; i++) { const canvas = renderIcon(img, an, boxes, boxes[i], sq, opts, THUMB_OUT); out.push(canvas.toDataURL("image/png")); }
   return out;
 }
+async function renderThumbsYielding(img: HTMLImageElement, an: Analysis, boxes: Box[], split: SplitSettings): Promise<string[]> {
+  const sq = squareInfo(boxes, split.padding);
+  const opts = { padding: split.padding, size: split.size, transparent: split.transparent };
+  const out: string[] = [];
+  const limit = Math.min(boxes.length, MAX_THUMBS);
+  for (let i = 0; i < limit; i++) {
+    const canvas = renderIcon(img, an, boxes, boxes[i], sq, opts, THUMB_OUT);
+    out.push(canvas.toDataURL("image/png"));
+    if (i % 2 === 0) await yieldToUI();
+  }
+  return out;
+}
 async function loadImgSafe(file: File): Promise<HTMLImageElement | null> {
   try { return await loadImageFile(file); } catch { return null; }
 }
@@ -92,12 +105,15 @@ function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; anal
   return useCallback(async (row: Row, eff: number | null, signal: AbortSignal, key: string): Promise<PreviewEntry> => {
     const file = await loadFile(row.relPath);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    await yieldToUI();
     const img = await loadImgSafe(file);
     if (!img) { const fb = makeFallback(row.relPath); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); return fb; }
     const an = getOrAnalyze(img, row.relPath, analysis.current);
+    await yieldToUI();
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     const boxes = detect(an, eff).boxes;
-    const thumbs = renderThumbs(img, an, boxes, { ...split, mergeFrac: eff });
+    await yieldToUI();
+    const thumbs = await renderThumbsYielding(img, an, boxes, { ...split, mergeFrac: eff });
     const entry = buildEntry(row.relPath, boxes, thumbs);
     lru.current.set(row.relPath, { key, entry, at: Date.now() }); evictLru(lru.current);
     return entry;
@@ -148,6 +164,7 @@ async function runWorkers(args: WorkersArgs) {
   const runNext = async () => {
     while (idx < queue.length) {
       if (ac.signal.aborted) return;
+      await yieldToFrame();
       const row = queue[idx++];
       try {
         const entry = await previewOne(row, ac.signal);
@@ -156,7 +173,7 @@ async function runWorkers(args: WorkersArgs) {
         done++;
         onProgress?.(done, queue[done] ?? null);
       } catch { return; }
-      await new Promise((r) => setTimeout(r, 0));
+      await yieldToUI();
     }
   };
   const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, () => runNext());

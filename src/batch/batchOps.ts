@@ -1,4 +1,6 @@
 // batchOps.ts — scan + process ops extracted to keep useBatch.ts <300 lines (RULE 18)
+// Yields between heavy steps to keep UI responsive (RULE 5/7)
+
 import { readDirTree, ensureDirPath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { walkTree, collectAiImages, linkReferences, type AiImageEntry } from "../lib/scan";
 import { syncAndCollect, applyOutcomes } from "./statewrite";
@@ -11,6 +13,7 @@ import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import type { Ctx, Row, RowMergeMap, Setter } from "./useBatchTypes";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
+import { yieldToFrame } from "../lib/yield";
 
 async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
   const tree = await readDirTree(root, preset.ignoreFolders);
@@ -78,6 +81,7 @@ export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   init.currentRelPath = selected[0]?.relPath ?? null;
   init.currentName = selected[0]?.name ?? "";
   setS((p) => ({ ...p, busy: null, running: true, progress: init }));
+  await yieldToFrame();
   const report = await runBatch({ ctx, root, selected, setS, init });
   await finalize(root, report.results, selected, setS);
 }
@@ -99,7 +103,7 @@ async function runBatch(args: RunArgs) {
   const report = await processItems(items, {
     dest,
     split,
-    splitImage: (file, s) => splitWithOverride(file, s, merges, items),
+    splitImage: (file, s) => splitWithOverride(file, s, { merges, items, shouldStop: () => ctx.stop.current }),
     now: new Date(),
     shouldStop: () => ctx.stop.current,
     onProgress,
@@ -155,29 +159,33 @@ async function resolveDest(ctx: Ctx, root: DirHandleLike): Promise<DirHandleLike
 export function splitWithOverride(
   file: File,
   globalSplit: Preset["split"],
-  merges: RowMergeMap,
-  items: BatchItem[],
+  ctx: { merges: RowMergeMap; items: BatchItem[]; shouldStop?: () => boolean },
 ): Promise<Blob[]> {
+  const { merges, items, shouldStop } = ctx;
   const name = file.name.toLowerCase();
   for (const it of items) {
     if (it.source.name.toLowerCase() === name || it.source.relPath.toLowerCase().endsWith(name)) {
       const key = it.source.relPath.toLowerCase();
       if (Object.prototype.hasOwnProperty.call(merges, key)) {
         const mf = merges[key];
-        return splitSheetWithMerge(file, { ...globalSplit, mergeFrac: mf });
+        return splitSheetWithMerge(file, { ...globalSplit, mergeFrac: mf }, shouldStop);
       }
     }
   }
-  return splitSheetWithMerge(file, globalSplit);
+  return splitSheetWithMerge(file, globalSplit, shouldStop);
 }
 
-async function splitSheetWithMerge(file: File, split: Preset["split"]): Promise<Blob[]> {
-  return splitSheet(await loadImageFile(file), split);
+async function splitSheetWithMerge(file: File, split: Preset["split"], shouldStop?: () => boolean): Promise<Blob[]> {
+  const img = await loadImageFile(file);
+  return splitSheet(img, split, { shouldStop });
 }
 
 async function buildItems(root: DirHandleLike, rows: Row[]): Promise<BatchItem[]> {
   const out: BatchItem[] = [];
-  for (const r of rows) out.push(await toItem(root, r));
+  for (const r of rows) {
+    if (rows.length > 50 && out.length % 10 === 0) await yieldToFrame();
+    out.push(await toItem(root, r));
+  }
   return out;
 }
 
