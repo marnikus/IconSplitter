@@ -16,16 +16,17 @@ import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
-import { patchV2, patchView, setAppState } from "./appstore";
+import { patchBatch, patchV2, patchView, setAppState } from "./appstore";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
   switch (entry.type) {
     case "decisions": return applyDecisions(entry.ids, value);
     case "checked": return applyChecked(value);
+    case "batchChecked": return applyBatchChecked(value);
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
@@ -68,6 +69,13 @@ function applyChecked(value: unknown): boolean {
   if (!sel) return false;
   patchV2({ checked: sel.ids, anchorId: sel.anchor });
   patchView({ selectedId: sel.active }); // a row click carries its active row
+  return true;
+}
+
+function applyBatchChecked(value: unknown): boolean {
+  const sel = toSelection(value);
+  if (!sel) return false;
+  patchBatch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
 }
 

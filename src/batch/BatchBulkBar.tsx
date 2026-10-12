@@ -9,6 +9,8 @@ export interface BatchBulkBarProps {
   checkedCount: number;
   visibleCount: number;
   totalCount: number;
+  hiddenCount: number;
+  affectedCount: number;
   thumb: number;
   selectedCount: number;
   onToggleAll: (on: boolean) => void;
@@ -28,6 +30,9 @@ export default function BatchBulkBar(p: BatchBulkBarProps) {
           ref={(el) => { if (el) el.indeterminate = p.header === "some"; }} />
         <span className="v2-selected-copy" data-testid="batch-selected-count">{p.checkedCount} selected</span>
         <span className="v2-scope-copy" data-testid="batch-scope">across {p.visibleCount} visible images</span>
+        {p.hiddenCount > 0 && (
+          <span className="v2-scope-copy warn" data-testid="batch-hidden">{p.hiddenCount} checked but hidden by filters</span>
+        )}
         <span className="v2-divider" aria-hidden="true" />
         <button type="button" className="v2-btn" data-testid="batch-select-visible" onClick={p.onSelectVisible}>Select visible</button>
         <button type="button" className="v2-btn" data-testid="batch-deselect" onClick={p.onDeselectAll}>Deselect all</button>

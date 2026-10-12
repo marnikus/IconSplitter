@@ -404,6 +404,10 @@
 .v2-row.selected:not(.active) { background: #111a31; }
 .v2-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
 
+.batch-row:hover { background: #10182b; }
+.batch-row.selected:not(.active) { background: #111a31; }
+.batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
+
 .v2-row.approved::after,
 .v2-row.declined::after,
 .v2-row.needs-review::after {
