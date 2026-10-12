@@ -90,6 +90,13 @@
   color: var(--v2-text);
 }
 
+.batch-shell {
+  width: 100%;
+  min-height: 100%;
+  background: var(--v2-bg);
+  color: var(--v2-text);
+}
+
 /* Flex column, not a fixed-row grid: the write/corrupt banners are conditional
    children, so a fixed grid-template-rows would push the workspace off its 1fr
    row the moment a banner appears. */

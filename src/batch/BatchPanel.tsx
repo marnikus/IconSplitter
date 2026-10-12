@@ -1,23 +1,28 @@
-// BatchPanel.tsx — batch feature with V2 controls reference (zoom, date filters, filtered multi-select)
-// Keeps split/export size separate (PresetBar), uses lib/zoom.ts shared 48-800 for thumbnails.
-// Reuses preset-based folder-handle restore and per-image JSON/rescan (useBatch boot).
+// BatchPanel.tsx — batch folders, full-width list like Generate SVG (user request)
+// Presets moved to compact responsive row above Images, Images uses full Batch width,
+// list is full scrollable down (no limited max-h), reuses SVG list patterns: filters, sorting,
+// selection/bulk, zoomed previews, status. Batch-specific Split + JSON status kept.
+// App shell and log dock preserved, scope limited to Batch tab.
 
 import { copyFolderText } from "../lib/copypath";
 import { useBatchView } from "./useBatchView";
-import PresetBar from "./PresetBar";
 import ScanTable, { useThumbCache } from "./ScanTable";
 import BatchFilterGrid from "./BatchFilterGrid";
 import BatchBulkBar from "./BatchBulkBar";
 import BatchSourceBar from "./BatchSourceBar";
+import BatchPresetRow from "./BatchPresetRow";
+import BatchDestRow from "./BatchDestRow";
 
 export default function BatchPanel() {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
   return (
-    <div className="space-y-4">
+    <div className="batch-shell w-full space-y-4">
       {!v.core.supported && <Unsupported />}
       <StickyControls v={v} />
-      <MainGrid v={v} thumbFor={thumbFor} />
+      <PresetAndDest v={v} />
+      <RefWarnings count={v.core.s.refWarnings.length} />
+      <FullWidthList v={v} thumbFor={thumbFor} />
       <Overlays v={v} />
     </div>
   );
@@ -56,23 +61,28 @@ function StickyControls({ v }: { v: View }) {
 
 type View = ReturnType<typeof useBatchView>;
 
-function MainGrid({ v, thumbFor }: { v: View; thumbFor: (r: string) => Promise<string> }) {
+function PresetAndDest({ v }: { v: View }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <div className="space-y-4">
-        <PresetBar
-          preset={v.core.s.preset} presetNames={v.core.s.presetNames} setPreset={v.core.setPreset}
-          savePreset={(n) => void v.core.savePreset(n)} loadPreset={(n) => void v.core.loadPreset(n)} deletePreset={v.core.deletePreset}
-        />
-        <DestInfo v={v} />
-      </div>
-      <div className="space-y-4">
-        <RefWarnings count={v.core.s.refWarnings.length} />
-        <ScanTable
-          rows={v.visible} thumb={v.thumb} toggle={v.toggle} selectAll={(on) => v.toggleAllVisible(on)}
-          copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor}
-        />
-      </div>
+    <div className="space-y-3">
+      <BatchPresetRow
+        preset={v.core.s.preset} presetNames={v.core.s.presetNames} setPreset={v.core.setPreset}
+        savePreset={(n) => void v.core.savePreset(n)} loadPreset={(n) => void v.core.loadPreset(n)} deletePreset={v.core.deletePreset}
+      />
+      <BatchDestRow
+        rootName={v.core.s.rootName} destName={v.core.s.destName} destMode={v.core.s.preset.destMode}
+        chooseDest={() => void v.core.chooseDest()}
+      />
+    </div>
+  );
+}
+
+function FullWidthList({ v, thumbFor }: { v: View; thumbFor: (r: string) => Promise<string> }) {
+  return (
+    <div className="batch-list w-full">
+      <ScanTable
+        rows={v.visible} thumb={v.thumb} toggle={v.toggle} selectAll={(on) => v.toggleAllVisible(on)}
+        copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor}
+      />
     </div>
   );
 }
@@ -88,24 +98,6 @@ function Overlays({ v }: { v: View }) {
         </div>
       )}
     </>
-  );
-}
-
-function DestInfo({ v }: { v: View }) {
-  const custom = v.core.s.preset.destMode === "custom" && v.core.s.destName;
-  return (
-    <section className="panel space-y-2">
-      <h3 className="panel-title">Output</h3>
-      <p className="text-sm text-slate-400">
-        {custom
-          ? <>Custom destination: <b className="text-slate-200">{v.core.s.destName}</b></>
-          : <>Auto: <b className="text-slate-200">{v.core.s.rootName || "<folder>"}/_split_output</b></>}
-      </p>
-      <p className="text-xs text-slate-500">Grouped as YYYY-MM / YYYY-MM-DD_HH-mm-ss, source hierarchy preserved, never overwritten.</p>
-      <div className="flex gap-2">
-        <button data-testid="batch-dest" className="btn-ghost" onClick={() => void v.core.chooseDest()}>Choose destination…</button>
-      </div>
-    </section>
   );
 }
 
