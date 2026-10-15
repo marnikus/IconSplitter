@@ -28,6 +28,7 @@ export interface ScanTableProps {
   setRowMerge?: (relPath: string, v: number | null) => void;
   clearRowMerge?: (relPath: string) => void;
   decide?: (ids: string[], review: BatchReviewStatus) => void;
+  previewSingle?: (row: Row) => void;
 }
 
 export { useThumbCache };
@@ -174,16 +175,41 @@ function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
   return undefined;
 }
 
-function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide }: { r: Row } & ScanTableProps) {
+function useInView(onVisible: () => void) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) onVisible();
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [onVisible]);
+  return ref;
+}
+function useRowRefs(active: boolean, entry: any, previewSingle: any, r: Row) {
+  const scrollRef = useActiveScroll(active);
+  const onVisible = useCallback(() => {
+    if (entry && entry.count > 0 && entry.thumbs.length === 0 && entry.status === "done" && previewSingle) previewSingle(r);
+  }, [entry, previewSingle, r]);
+  const visRef = useInView(onVisible);
+  const setRefs = useCallback((el: HTMLDivElement | null) => {
+    (scrollRef as any).current = el;
+    (visRef as any).current = el;
+  }, [scrollRef, visRef]);
+  return { scrollRef, setRefs };
+}
+function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, previewSingle }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
-  const ref = useActiveScroll(active);
-  const onRowClick = useRowClick(r, disabled, selectRow, selectActive);
-  const onKeyDown = useRowKey(r, disabled, selectActive);
   const entry = previews?.get(r.relPath);
   const review = r.review ?? "pending";
+  const { setRefs } = useRowRefs(active, entry, previewSingle, r);
+  const onRowClick = useRowClick(r, disabled, selectRow, selectActive);
+  const onKeyDown = useRowKey(r, disabled, selectActive);
   return (
-    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={rowClass(r, active)} onClick={onRowClick} onKeyDown={onKeyDown} style={rowStyle(review)}>
+    <div ref={setRefs} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={rowClass(r, active)} onClick={onRowClick} onKeyDown={onKeyDown} style={rowStyle(review)}>
       <CheckCell r={r} toggle={toggle} />
       <BatchThumbInfoCell r={r} thumbFor={thumbFor} thumb={thumb} />
       <RowMergeCell r={r} globalFrac={globalFrac ?? null} rowMerges={rowMerges ?? {}} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />

@@ -78,7 +78,7 @@ export default function BatchPanel() {
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
       <RefWarnings count={v.core.s.refWarnings.length} />
-      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} />
+      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} previewSingle={preview.previewSingle} />
       <Overlays v={v} />
     </div>
   );
@@ -105,8 +105,8 @@ function PresetAndDest({ v }: { v: View }) {
     </div>
   );
 }
-function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
+function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset, previewSingle }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void; previewSingle?: (row: any) => void }) {
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} previewSingle={previewSingle} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   const showBusy = !!v.core.s.busy;

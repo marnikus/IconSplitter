@@ -46,7 +46,8 @@ function useLoadFile(root: DirHandleLike | null, custom?: LoadFile) {
 }
 function savePersisted(rootName: string, entry: PreviewEntry) {
   const key = `${rootName || "default"}::${entry.relPath}`;
-  void idbPut(PREVIEW_STORE, key, { ...entry, rootName });
+  const meta = { relPath: entry.relPath, count: entry.count, boxes: entry.boxes, status: entry.status, rootName, thumbs: [] as string[] };
+  void idbPut(PREVIEW_STORE, key, meta);
 }
 function matchesRoot(key: string, entry: PreviewEntry, rootName: string): boolean {
   if (key.startsWith(`${rootName}::`)) return true;
@@ -228,18 +229,15 @@ function useRootChange(root: DirHandleLike | null, clearMemory: () => void) {
     if (prevRef.current !== root) { clearMemory(); prevRef.current = root; }
   }, [root, clearMemory]);
 }
-function usePersistedLoad(rootName: string, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>, onReviewed?: (relPath: string, count: number) => void, onReviewedBatch?: (entries: { relPath: string; count: number }[]) => void) {
+function usePersistedLoad(rootName: string, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
   useEffect(() => {
     if (!rootName) return;
     void (async () => {
       const loaded = await loadPersisted(rootName);
       if (loaded.size === 0) return;
       setPreviews((prev) => { if (prev.size > 0) { const merged = new Map(prev); for (const [k, v] of loaded) if (!merged.has(k)) merged.set(k, v); return merged; } return loaded; });
-      const batch = [...loaded.values()].map((e) => ({ relPath: e.relPath, count: e.count }));
-      if (onReviewedBatch) onReviewedBatch(batch);
-      else for (const e of loaded.values()) onReviewed?.(e.relPath, e.count);
     })();
-  }, [rootName, setPreviews, onReviewed, onReviewedBatch]);
+  }, [rootName, setPreviews]);
 }
 function buildRowMap(rows: Row[]): Map<string, Row> { const m = new Map<string, Row>(); for (const r of rows) m.set(r.relPath.toLowerCase(), r); return m; }
 function shouldSync(row: Row | undefined, count: number): boolean {
@@ -286,7 +284,7 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rootName?:
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
   useRootChange(root, clearMemory);
-  usePersistedLoad(rName, setPreviews, onReviewed, onReviewedBatch);
+  usePersistedLoad(rName, setPreviews);
   useReviewSync(params.rows, previews, onReviewed, onReviewedBatch);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };
