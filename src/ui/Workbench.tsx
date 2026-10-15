@@ -1,6 +1,7 @@
 // Workbench.tsx — top-level shell: mode switch, undo/redo bar, session autosave, activity log
 // Shell is ONE viewport column: nav, scrolling tab area (app-main), log dock last (not overlay).
 
+import { useRef } from "react";
 import App from "../App";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
@@ -15,6 +16,7 @@ import { useAppState } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
 import { useSessionAutosave } from "../state/useSessionAutosave";
 import HistoryBar from "./HistoryBar";
+import ScrollTopButton from "./ScrollTopButton";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
@@ -35,6 +37,7 @@ export default function Workbench() {
 
 function Shell() {
   const tab = useAppState().tab;
+  const mainRef = useRef<HTMLElement | null>(null);
   useSessionAutosave();
   usePrefsAutosave();
   return (
@@ -44,10 +47,12 @@ function Shell() {
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
       </div>
       <Nav tab={tab} />
-      <main className="app-main" data-testid="app-main">
+      <main ref={mainRef} className="app-main" data-testid="app-main">
         <Panels tab={tab} />
       </main>
       <LogDock />
+      {/* Fixed float — kept after the layout rows so main and the dock stay adjacent (I-27). */}
+      <ScrollTopButton target={mainRef} />
     </div>
   );
 }

@@ -1,6 +1,10 @@
 # Research — stored split previews lost on reload; per-item split decisions not persisted
 
-2026-10-15 · status: **research only, no fix yet** · reported by the user the same day.
+2026-10-15 · status: **IMPLEMENTED the same day** — F1–F4 below are done, verified in
+`docs/current/QUALITY_RECHECK.md` (2026-10-15 entry), rules I-66/67/68 now in
+`SYSTEM_OF_RECORD.md` §5. The two open decisions resolved to the defaults: the
+merges live in a dedicated `iconSplitter.batch.merges.v1` store; the state JSON
+format is unchanged.
 
 ## 1. The report, structured
 

@@ -11,7 +11,7 @@ import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
 import BatchProgressHeader from "./BatchProgressHeader";
-import { useBatchPreview, type PreviewEntry } from "./useBatchPreview";
+import { useBatchPreview, isStaleEntry, expectedKeyFor, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 
@@ -19,16 +19,18 @@ type View = ReturnType<typeof useBatchView>;
 type Preview = ReturnType<typeof useBatchPreview>;
 
 function useReviewed(v: View) {
+  // `decide` is referentially stable (the ctx bag is memoised), so these two
+  // stay stable too — the restore effect must not re-run on every render.
+  const decide = v.core.decide;
   const onReviewed = useCallback((relPath: string, count: number) => {
-    const review = count === 4 ? "approved" : "warning";
-    v.decide([relPath], review as any);
-  }, [v]);
+    decide([relPath], count === 4 ? "approved" : "warning");
+  }, [decide]);
   const onReviewedBatch = useCallback((entries: { relPath: string; count: number }[]) => {
     const approve = entries.filter((e) => e.count === 4).map((e) => e.relPath);
     const warn = entries.filter((e) => e.count !== 4).map((e) => e.relPath);
-    if (approve.length) v.decide(approve, "approved" as any);
-    if (warn.length) v.decide(warn, "warning" as any);
-  }, [v]);
+    if (approve.length) decide(approve, "approved");
+    if (warn.length) decide(warn, "warning");
+  }, [decide]);
   return { onReviewed, onReviewedBatch };
 }
 function useCheckedRows(v: View) { return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]); }
@@ -56,6 +58,16 @@ function usePreviewSetup(v: View, onReviewed: (relPath: string, count: number) =
   return useBatchPreview({ root: v.core.rootRef.current, rootName: v.core.s.rootName, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onReviewed, onReviewedBatch });
 }
 
+/** I-68: a stored preview is stale when it was rendered under other settings. */
+function useRowStale(v: View, preview: Preview) {
+  return useCallback((relPath: string) => {
+    const e = preview.previews.get(relPath);
+    if (!e) return false;
+    const row = v.core.s.rows.find((r) => r.relPath === relPath);
+    return isStaleEntry(e, expectedKeyFor(row, v.core.s.preset.split, v.rowMerges));
+  }, [v, preview]);
+}
+
 export default function BatchPanel() {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
@@ -65,6 +77,7 @@ export default function BatchPanel() {
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   const checkedRows = useCheckedRows(v);
   const onPreview = useOnPreview(checkedRows, preview);
+  const rowStale = useRowStale(v, preview);
   const onRegenerate = useOnRegenerate(checkedRows, preview);
   const onRowMergeApply = useRowMergeApply(v, preview);
   const onRowMergeReset = useRowMergeReset(v, preview);
@@ -73,12 +86,13 @@ export default function BatchPanel() {
       <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => {}} mode="split" />
       <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => {}} mode="preview" />
       {!v.core.supported && <Unsupported />}
+      <GrantBar v={v} />
       <BatchControls v={v} onPreview={onPreview} onRegenerate={onRegenerate} previewing={preview.isPreviewing} previewRunning={preview.running} />
       <PresetAndDest v={v} />
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
       <RefWarnings count={v.core.s.refWarnings.length} />
-      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} />
+      <FullWidthList v={v} thumbFor={thumbFor} previews={preview.previews} rowStale={rowStale} onRowMergeApply={onRowMergeApply} onRowMergeReset={onRowMergeReset} />
       <Overlays v={v} />
     </div>
   );
@@ -94,6 +108,16 @@ function BatchControls({ v, onPreview, onRegenerate, previewing, previewRunning 
     </div>
   );
 }
+/** I-66: the one gesture a restart may ask for — re-grant the remembered root. */
+function GrantBar({ v }: { v: View }) {
+  if (!v.core.s.needsGrant) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-400/40 bg-indigo-500/10 p-3 text-sm text-indigo-100" data-testid="batch-grant-bar">
+      <span>The browser needs your OK to re-open “{v.core.rootRef.current?.name}” — previews are already restored.</span>
+      <button type="button" className="v2-btn primary" data-testid="batch-grant" onClick={() => void v.core.grantAccess()}>Restore access</button>
+    </div>
+  );
+}
 function Unsupported() {
   return <p className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200" data-testid="fs-warning">Batch mode needs Chrome or Edge (File System Access API). The single-sheet tool above works everywhere.</p>;
 }
@@ -105,8 +129,8 @@ function PresetAndDest({ v }: { v: View }) {
     </div>
   );
 }
-function FullWidthList({ v, thumbFor, previews, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
+function FullWidthList({ v, thumbFor, previews, rowStale, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; rowStale: (relPath: string) => boolean; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowStale={rowStale} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   const showBusy = !!v.core.s.busy;

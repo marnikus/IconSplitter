@@ -1,13 +1,15 @@
 // useBatch.ts — UI orchestration for batch (RULE 2/4/5/7/24)
 // Owns root/dest picking, scan + selection, preset, rowMerges, process run
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultPreset, type Preset } from "../lib/presets";
-import { pickDirectory, fsSupported, ensurePermission } from "./picker";
+import { pickDirectory, fsSupported, ensurePermission, peekPermission } from "./picker";
 import { pickFolderFor } from "../ui/pickroot";
 import { restoreKnownRoot } from "../lib/knownroots";
 import { loadPresets, savePresets, loadLastName, saveLastName, loadHandles, saveHandles } from "./store";
+import { loadRowMerges, saveRowMerges, deleteRowMerges } from "../lib/batchmerges";
 import type { DirHandleLike } from "../lib/fs";
+import type { StateKey } from "./statewrite";
 import type { BatchState, Ctx, Row, Setter } from "./useBatchTypes";
 import { scan as scanOp, batchProcess, decideReview } from "./batchOps";
 import type { BatchReviewStatus } from "../lib/statefile";
@@ -15,7 +17,7 @@ import type { BatchReviewStatus } from "../lib/statefile";
 const initial: BatchState = {
   rootName: "", destName: "", rows: [], busy: null, toast: null,
   preset: defaultPreset("Default"), presetNames: [], refWarnings: [],
-  rowMerges: {}, progress: null, running: false,
+  rowMerges: {}, progress: null, running: false, needsGrant: false,
 };
 
 export type { Row, RowMergeMap, BatchState } from "./useBatchTypes";
@@ -23,9 +25,17 @@ export type { Row, RowMergeMap, BatchState } from "./useBatchTypes";
 export function useBatch() {
   const [s, setS] = useState<BatchState>(initial);
   const ctx = useCtx(s);
-  useEffect(() => { void boot(ctx, setS); }, []);
+  const mergesLive = useRef(false);
+  // ONE write path for per-item decisions (I-67): every rowMerges change lands
+  // in the per-preset store. The first run is the mount-time empty map and must
+  // not clobber what boot is about to load.
+  useEffect(() => {
+    if (!mergesLive.current) { mergesLive.current = true; return; }
+    saveRowMerges(s.preset.name, s.rowMerges);
+  }, [s.rowMerges, s.preset.name]);
   useToastClear(s.toast, setS);
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
+  useEffect(() => { void boot(ctx, setS, say); }, [ctx, say]); // ctx and say are stable, so this still runs once
   return {
     s, say,
     ...useCoreActions(ctx, setS, say),
@@ -37,15 +47,22 @@ export function useBatch() {
 }
 
 function useCtx(s: BatchState): Ctx {
+  // Refs at the TOP level — hooks called inside a useMemo factory would vanish
+  // from the hook list after the first render and break reconciliation.
   const stateRef = useRef(s);
+  const root = useRef<DirHandleLike | null>(null);
+  const dest = useRef<DirHandleLike | null>(null);
+  const keys = useRef<StateKey[]>([]);
+  const stop = useRef(false);
   stateRef.current = s;
-  return { root: useRef(null), dest: useRef(null), keys: useRef([]), stop: useRef(false), state: stateRef };
+  return useMemo<Ctx>(() => ({ root, dest, keys, stop, state: stateRef }), [root, dest, keys, stop, stateRef]);
 }
 
 function makeChooseRoot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   return async () => {
     const picked = await pickFolderFor((h) => { ctx.root.current = h; });
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
+    setS((p) => ({ ...p, needsGrant: false })); // a fresh pick carries its own grant
     await saveHandles(ctx.state.current.preset.name, { source: picked.handle, dest: ctx.dest.current ?? undefined });
     await scanOp(ctx, setS, say);
     if (picked.message !== null) say(picked.message);
@@ -67,9 +84,17 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   const chooseDest = useCallback(makeChooseDest(ctx, setS, say), [ctx, setS, say]);
   const refresh = useCallback(() => { void scanOp(ctx, setS, say); }, [ctx, setS, say]);
   const run = useCallback(() => { void batchProcess(ctx, setS); }, [ctx, setS]);
+  // The one gesture a restart may ask for: re-grant the remembered root, then scan.
+  const grantAccess = useCallback(async () => {
+    const h = ctx.root.current;
+    if (!h) return;
+    if (!(await ensurePermission(h))) return say(`Access to "${h.name}" was refused — rows stay hidden until the browser grants it`, true);
+    setS((p) => ({ ...p, needsGrant: false }));
+    await scanOp(ctx, setS, say);
+  }, [ctx, setS, say]);
   const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
   const decide = useCallback((relPaths: string[], review: BatchReviewStatus) => { void decideReview({ ctx, relPaths, review, setS }); }, [ctx, setS]);
-  return { chooseRoot, chooseDest, refresh, run, cancel, decide };
+  return { chooseRoot, chooseDest, refresh, run, grantAccess, cancel, decide };
 }
 
 function useViewActions(ctx: Ctx, setS: Setter) {
@@ -117,24 +142,26 @@ function useSavePreset(ctx: Ctx, setS: Setter) {
     const named = { ...ctx.state.current.preset, name };
     savePresets([...loadPresets().filter((p) => p.name !== name), named]);
     saveLastName(name);
+    saveRowMerges(name, ctx.state.current.rowMerges); // Save-as duplicates the decisions
     await saveHandles(name, { source: ctx.root.current ?? undefined, dest: ctx.dest.current ?? undefined });
-    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset \"${name}\" saved` } }));
+    setS((p) => ({ ...p, preset: named, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset "${name}" saved` } }));
   }, [ctx, setS]);
 }
 
 function useLoadPreset(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   return useCallback(async (name: string) => {
     const found = loadPresets().find((p) => p.name === name);
-    if (!found) return say(`Preset \"${name}\" not found`, true);
+    if (!found) return say(`Preset "${name}" not found`, true);
     saveLastName(name);
-    await applyHandles(ctx, setS, found);
+    await applyHandles(ctx, setS, found, say);
   }, [ctx, setS, say]);
 }
 
 function useDeletePreset(setS: Setter) {
   return useCallback((name: string) => {
     savePresets(loadPresets().filter((p) => p.name !== name));
-    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset \"${name}\" deleted` } }));
+    deleteRowMerges(name);
+    setS((p) => ({ ...p, presetNames: loadPresets().map((x) => x.name), toast: { msg: `Preset "${name}" deleted` } }));
   }, [setS]);
 }
 
@@ -149,26 +176,34 @@ function useToastClear(toast: BatchState["toast"], setS: Setter): void {
   }, [toast, setS]);
 }
 
-async function boot(ctx: Ctx, setS: Setter): Promise<void> {
+async function boot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const presets = loadPresets();
   const preset = presets.find((p) => p.name === loadLastName()) ?? defaultPreset("Default");
   setS((p) => ({ ...p, presetNames: presets.map((x) => x.name) }));
-  await applyHandles(ctx, setS, preset);
+  await applyHandles(ctx, setS, preset, say);
 }
 
-async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<void> {
-  const stored = await loadHandles(preset.name);
-  ctx.root.current = await grant(stored?.source);
-  ctx.dest.current = await grant(stored?.dest);
-  setS((p) => ({ ...p, preset, destName: ctx.dest.current?.name ?? "" }));
-  if (ctx.root.current) {
-    await restoreKnownRoot(ctx.root.current);
-    await scanOp(ctx, setS, () => {});
+/** Quiet boot decision: keep both handles, ask the browser nothing (I-66). */
+async function quietHandles(stored: { source?: DirHandleLike; dest?: DirHandleLike } | null): Promise<{ source: DirHandleLike | null; dest: DirHandleLike | null; sourceOk: boolean; destOk: boolean }> {
+  const source = stored?.source ?? null;
+  const dest = stored?.dest ?? null;
+  return {
+    source, dest,
+    sourceOk: source ? (await peekPermission(source)) === "granted" : false,
+    destOk: dest ? (await peekPermission(dest)) === "granted" : false,
+  };
+}
+
+async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset, say: (m: string, e?: boolean) => void): Promise<void> {
+  const h = await quietHandles(await loadHandles(preset.name));
+  ctx.root.current = h.source;
+  ctx.dest.current = h.dest;
+  const merges = loadRowMerges(preset.name); // the preset's saved decisions ride along (I-67)
+  setS((p) => ({ ...p, preset, destName: h.destOk ? h.dest?.name ?? "" : "", rowMerges: merges, needsGrant: Boolean(h.source) && !h.sourceOk }));
+  if (h.source && h.sourceOk) {
+    await restoreKnownRoot(h.source);
+    await scanOp(ctx, setS, say); // a failed boot scan is spoken, never silent (RULE 4)
   }
-}
-
-async function grant(h: DirHandleLike | undefined): Promise<DirHandleLike | null> {
-  return h && (await ensurePermission(h)) ? h : null;
 }
 
 async function resolveFile(root: DirHandleLike, relPath: string) {

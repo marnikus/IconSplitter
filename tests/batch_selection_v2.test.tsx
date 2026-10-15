@@ -107,7 +107,6 @@ beforeEach(async () => {
     await act(async () => ui.unmount());
     host.remove();
   }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
   await mountPanel();
 });

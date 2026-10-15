@@ -11,6 +11,7 @@ import type { Preset } from "../lib/presets";
 import { splitSheet } from "../lib/batchsplit";
 import { loadImageFile } from "../lib/dom";
 import type { Ctx, Row, RowMergeMap, Setter } from "./useBatchTypes";
+import { ensurePermission } from "./picker";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 import { yieldToFrame } from "../lib/yield";
 import { patchBatch } from "../state/appstore";
@@ -36,7 +37,7 @@ export function finishScan(a: FinishArgs): void {
       return { ...img, status, review, selected: status !== "missing" && status !== "deleted" };
     });
     const checked = rows.filter((r) => r.selected).map((r) => r.relPath);
-    try { patchBatch({ checked }); } catch {}
+    try { patchBatch({ checked }); } catch { /* best-effort select-all */ }
     const existing = new Set(a.images.map((i) => i.relPath.toLowerCase()));
     const nextMerges: RowMergeMap = {};
     for (const [k, v] of Object.entries(p.rowMerges)) if (existing.has(k)) nextMerges[k] = v;
@@ -46,12 +47,6 @@ export function finishScan(a: FinishArgs): void {
 }
 
 
-
-function toRow(img: AiImageEntry, statuses: Map<string, SourceStatus>, reviews: Map<string, BatchReviewStatus>): Row {
-  const status = statuses.get(img.relPath.toLowerCase()) ?? "unprocessed";
-  const review = reviews.get(img.relPath.toLowerCase()) ?? "pending";
-  return { ...img, status, review, selected: status !== "missing" && status !== "deleted" };
-}
 
 export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
   const root = ctx.root.current;
@@ -68,10 +63,16 @@ export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean)
   }
 }
 
+/** A remembered custom dest re-grants inside the click's activation; refused → auto dest this run. */
+async function regrantDest(ctx: Ctx): Promise<void> {
+  if (ctx.dest.current && !(await ensurePermission(ctx.dest.current))) ctx.dest.current = null;
+}
+
 export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
   ctx.stop.current = false;
+  await regrantDest(ctx);
   const allRows = ctx.state.current.rows;
   const selected = allRows.filter((r) => r.selected && r.review === "approved");
   const skipped = allRows.filter((r) => r.selected && r.review !== "approved").length;
@@ -222,7 +223,7 @@ async function finalize(root: DirHandleLike, results: ItemResult[], selected: Ro
     rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, selected: false })),
     toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
-  try { patchBatch({ checked: [] }); } catch {}
+  try { patchBatch({ checked: [] }); } catch { /* best-effort clear */ }
 }
 
 type DecideArgs = { ctx: Ctx; relPaths: string[]; review: BatchReviewStatus; setS: Setter };

@@ -178,7 +178,6 @@ async function buildSeriesFastAsync(ctx: Grid, rMax: number, f: number, a: Analy
   return buildRuns(series);
 }
 function updateBoundsPx(x: number, y: number, l: number, b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; }) { if (x < b.minX[l]) b.minX[l] = x; if (x > b.maxX[l]) b.maxX[l] = x; if (y < b.minY[l]) b.minY[l] = y; if (y > b.maxY[l]) b.maxY[l] = y; b.ink[l]++; }
-type ExtractArgs = { a: Analysis; lab: Labeling; grid: Grid; f: number };
 function makeBounds(n: number) { return { minX: new Array(n).fill(Infinity), minY: new Array(n).fill(Infinity), maxX: new Array(n).fill(-Infinity), maxY: new Array(n).fill(-Infinity), ink: new Array(n).fill(0) }; }
 function scanCellBlock(args: { mask: Uint8Array; w: number; b: ReturnType<typeof makeBounds>; l: number; y0: number; y1: number; x0: number; x1: number }) {
   const { mask, w, b, l, y0, y1, x0, x1 } = args; for (let y = y0; y < y1; y++) { const row = y * w; for (let x = x0; x < x1; x++) { if (!mask[row + x]) continue; updateBoundsPx(x, y, l, b); } }

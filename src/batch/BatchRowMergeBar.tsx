@@ -28,7 +28,7 @@ function Inner({ relPath, globalFrac, overrideFrac, onApply, onReset }: BatchRow
   const doReset = useCallback(() => onReset(relPath), [relPath, onReset]);
 
   return (
-    <div className="flex w-fit min-w-[300px] max-w-full flex-nowrap items-center justify-center gap-2 mx-auto rounded-lg border border-white/10 bg-slate-900/40 px-2 py-1.5" data-testid={`batch-row-merge-bar-${relPath}`}>
+    <div className="flex w-fit min-w-[360px] max-w-full flex-nowrap items-center justify-center gap-2 mx-auto rounded-lg border border-white/10 bg-slate-900/40 px-2 py-1.5" data-testid={`batch-row-merge-bar-${relPath}`}>
       <span className="shrink-0 whitespace-nowrap text-[11px] font-medium">Detection</span>
       <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-400" data-testid={`batch-row-merge-label-${relPath}`}>Merge {local.toFixed(4)}{hasOv ? " • overridden" : eff == null ? " (auto)" : ""}</span>
       <input type="range" min={0} max={0.15} step={0.0025} value={local} onChange={onChange} onInput={onInput} className="w-32 shrink-0 accent-indigo-500" data-testid={`batch-row-merge-slider-${relPath}`} />

@@ -1,5 +1,5 @@
 // batch_freeze.test.ts — ensures batch processing yields to UI (no freeze)
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { yieldToUI, yieldToFrame, sleep } from "../src/lib/yield";
 import { processItems, type BatchItem, type ProcessDeps } from "../src/batch/process";
 import type { DirHandleLike } from "../src/lib/fs";

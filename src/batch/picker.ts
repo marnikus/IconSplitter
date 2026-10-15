@@ -24,6 +24,17 @@ export async function pickDirectory(): Promise<DirHandleLike | null> {
 }
 
 /** Re-asks permission after a handle was restored from storage. */
+/** Permission state WITHOUT prompting — a boot has no gesture to spend (I-66). */
+export async function peekPermission(handle: DirHandleLike): Promise<"granted" | "prompt" | "denied"> {
+  const q = (handle as { queryPermission?: (d: { mode: string }) => Promise<string> }).queryPermission;
+  if (typeof q !== "function") return "granted"; // handles that cannot answer are usable (test fakes)
+  try {
+    return (await q.call(handle, { mode: "readwrite" })) as "granted" | "prompt" | "denied";
+  } catch {
+    return "denied";
+  }
+}
+
 export async function ensurePermission(handle: DirHandleLike): Promise<boolean> {
   const h = handle as unknown as {
     queryPermission?(d: { mode: string }): Promise<string>;

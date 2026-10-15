@@ -30,7 +30,8 @@ function lanePlan() {
     { name: "Lint", cmd: "npx", args: ["eslint", "src", "tests", "tools", "--max-warnings", "1000"] },
     { name: "Quality gate (changed)", cmd: "node", args: ["tools/quality.mjs", "--changed", "--allow-legacy", ...baseArgs()] },
     ...(full ? [{ name: "Tests", cmd: "npx", args: ["vitest", "run"] }] : []),
-    { name: "Tests + coverage", cmd: "npx", args: ["vitest", "run", "--coverage"] },
+    // PERF_BUDGETS tells wall-clock alarms (algo_efficiency) that instrumentation inflates every run.
+    { name: "Tests + coverage", cmd: "npx", args: ["vitest", "run", "--coverage"], env: { PERF_BUDGETS: "coverage" } },
     { name: "Build", cmd: "npm", args: ["run", "build"] },
   ];
 }
@@ -43,7 +44,7 @@ function printPlan(lanes) {
 function runLane(lane, i, total) {
   console.log(`\n=== ${i + 1}/${total} ${lane.name} (${lane.cmd} ${lane.args.join(" ")}) ===`);
   const started = Date.now();
-  const r = spawnSync(lane.cmd, lane.args, { stdio: "inherit", cwd: ROOT, shell: process.platform === "win32" });
+  const r = spawnSync(lane.cmd, lane.args, { stdio: "inherit", cwd: ROOT, shell: process.platform === "win32", env: { ...process.env, ...lane.env } });
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`=== ${lane.name}: ${r.status === 0 ? "PASS" : "FAIL"} (${secs}s) ===`);
   return r.status === 0;

@@ -30,7 +30,7 @@ function estimateBackground(data,w,h){
   const {rs,gs,bs}=sampleBorder(data,w,h);
   return [median(rs),median(gs),median(bs)];
 }
-function analyzeFromPixels(data,w,h,nw,nh){
+function analyzeFromPixels(data,w,h,nw){
   const bg=estimateBackground(data,w,h);
   const diff=new Uint8Array(w*h), hist=new Uint32Array(256);
   for(let p=0,i=0;p<w*h;p++,i+=4){
@@ -60,7 +60,7 @@ function dilate(src,gw,gh,r){
   dilateH(src,tmp,gw,gh,r); dilateV(tmp,out,gw,gh,r); return out;
 }
 function floodFill(s,id,ctx){
-  const {dil,cells,counts,labels,gw,gh,stack}=ctx; let ink=0; labels[s]=id; stack.push(s);
+  const {cells,counts,labels,gw,gh,stack}=ctx; let ink=0; labels[s]=id; stack.push(s);
   while(stack.length){
     const p=stack.pop(); if(cells[p]) ink+=counts[p];
     const px=p%gw, py=(p/gw)|0;

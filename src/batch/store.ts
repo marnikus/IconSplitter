@@ -49,12 +49,13 @@ export async function loadHandles(presetName: string): Promise<StoredHandles | n
 
 /**
  * Version 2 added the `secrets` object store (RULE 20). Version 3 adds
- * `rootpaths` (I-63): captured folder paths travel with their handle. Anyone
- * who used an older build never gets the new store without a version bump —
+ * `rootpaths` (I-63): captured folder paths travel with their handle. Version 4
+ * adds `batchPreviews`: rendered split previews survive a restart. Anyone who
+ * used an older build never gets a new store without a version bump —
  * opening at the same version never runs `onupgradeneeded`, so every write
  * would fail. Bumping the version is what creates the store for them.
  */
-const DB_VERSION = 4;
+export const DB_VERSION = 4;
 
 /**
  * The page's ONE connection. Opening a fresh connection per read and per write

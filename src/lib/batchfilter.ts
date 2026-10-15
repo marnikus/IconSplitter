@@ -17,7 +17,7 @@ export type BatchReviewFilter = "all" | BatchReviewStatus;
 export interface BatchFilter {
   date: DateFilter;
   status: BatchStatusFilter;
-  review: BatchReviewFilter;
+  review?: BatchReviewFilter;
   search: string;
 }
 

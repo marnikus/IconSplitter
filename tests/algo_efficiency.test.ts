@@ -83,6 +83,14 @@ function loadPngAnalysis(path: string): Analysis {
 }
 
 describe("algo efficiency — 80% faster per-image", () => {
+  // Coverage instrumentation inflates every run ~3–9x (verified 2026-10-15:
+  // exact 1283ms, synthetic 1791ms, sparse 508ms under `--coverage` at HEAD too),
+  // so the lane runner flags coverage and these budgets widen — still tripwires
+  // against the old ~1500ms/1000ms/2000ms implementations.
+  const coverageRun = process.env.PERF_BUDGETS === "coverage";
+  const exactBudget = coverageRun ? 2_500 : 400;
+  const syntheticBudget = coverageRun ? 4_000 : 200;
+  const sparseBudget = coverageRun ? 1_500 : 300;
   const exactPath = join(__dirname, "..", "design temp", "image_to_split", "61e06fee-142a-450e-ad33-7fb48fa905f0.png");
 
   it("detect on exact 1254px image finishes <400ms and finds >=4 boxes (80% faster than old ~1500ms)", () => {
@@ -93,7 +101,7 @@ describe("algo efficiency — 80% faster per-image", () => {
     console.log(`efficiency: exact image detect ${dt.toFixed(1)}ms boxes=${res.boxes.length}`);
     expect(res.boxes.length).toBeGreaterThanOrEqual(4);
     // Target: 80% faster than old ~1500ms => <300ms ideal, <400ms allowed in CI
-    expect(dt).toBeLessThan(400);
+    expect(dt).toBeLessThan(exactBudget);
   });
 
   it("synthetic 1000px 4-icon grid detects <200ms (old ~1000ms)", () => {
@@ -112,7 +120,7 @@ describe("algo efficiency — 80% faster per-image", () => {
     const dt = performance.now() - t0;
     console.log(`efficiency: synthetic 1000px detect ${dt.toFixed(1)}ms boxes=${res.boxes.length}`);
     expect(res.boxes).toHaveLength(4);
-    expect(dt).toBeLessThan(200);
+    expect(dt).toBeLessThan(syntheticBudget);
   });
 
   it("fast count matches exact count for small radii", () => {
@@ -139,7 +147,7 @@ describe("algo efficiency — 80% faster per-image", () => {
     const res = detect(a, null);
     const dt = performance.now() - t0;
     // Should be fast even for sparse mask: old ~2000ms, new <300ms
-    expect(dt).toBeLessThan(300);
+    expect(dt).toBeLessThan(sparseBudget);
     expect(res.boxes.length).toBeGreaterThanOrEqual(1);
   });
 });

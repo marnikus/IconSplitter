@@ -14,6 +14,8 @@ import BatchThumbInfoCell from "./BatchThumbInfoCell";
 import type { BatchReviewStatus } from "../lib/statefile";
 
 export interface ScanTableProps {
+  /** I-68: answers whether this row's stored preview was made under other settings. */
+  rowStale?: (relPath: string) => boolean;
   rows: Row[];
   thumb: number;
   activeId: string | null;
@@ -84,9 +86,18 @@ function OpenCell({ r, copyPath }: { r: Row; copyPath: (rel: string) => void }) 
   );
 }
 
-function PreviewCount({ entry }: { entry: PreviewEntry }) {
+function PreviewCount({ entry, stale }: { entry: PreviewEntry; stale: boolean }) {
   const isWarning = entry.count !== 4;
-  return <span className={`text-xs font-medium ${isWarning ? "text-amber-300" : "text-emerald-300"}`} data-testid={`batch-preview-count-${entry.relPath}`}>{entry.count} icon{entry.count === 1 ? "" : "s"}{isWarning ? " ⚠ not 4" : " ✓"}</span>;
+  return (
+    <span
+      className={`text-xs font-medium ${isWarning ? "text-amber-300" : "text-emerald-300"}`}
+      data-testid={`batch-preview-count-${entry.relPath}`}
+      data-stale={stale ? "true" : "false"}
+      title={stale ? "Rendered with other settings — Preview splits will re-render this row" : undefined}
+    >
+      {entry.count} icon{entry.count === 1 ? "" : "s"}{isWarning ? " ⚠ not 4" : " ✓"}{stale ? " ⟳" : ""}
+    </span>
+  );
 }
 
 function PreviewThumbs({ entry }: { entry: PreviewEntry }) {
@@ -98,14 +109,14 @@ function PreviewThumbs({ entry }: { entry: PreviewEntry }) {
   );
 }
 
-function PreviewCell({ entry }: { entry: PreviewEntry | undefined }) {
+function PreviewCell({ entry, stale }: { entry: PreviewEntry | undefined; stale: boolean }) {
   if (!entry) return <div className="svg-cell min-w-0 w-full text-xs text-slate-500">—</div>;
   if (entry.status === "loading") return <div className="svg-cell min-w-0 w-full text-xs text-slate-400" data-testid={`batch-preview-count-${entry.relPath}`}>Loading…</div>;
   if (entry.status === "error") return <div className="svg-cell min-w-0 w-full text-xs text-rose-400" data-testid={`batch-preview-count-${entry.relPath}`}>Failed</div>;
   const isWarning = entry.count !== 4;
   return (
     <div className="flex min-w-0 w-full flex-col gap-1">
-      <PreviewCount entry={entry} />
+      <PreviewCount entry={entry} stale={stale} />
       <PreviewThumbs entry={entry} />
       {isWarning && <small className="text-[10px] text-amber-300" data-testid={`batch-preview-warning-${entry.relPath}`}>⚠ Expected 4, got {entry.count}</small>}
     </div>
@@ -174,7 +185,7 @@ function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
   return undefined;
 }
 
-function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide }: { r: Row } & ScanTableProps) {
+function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, rowStale }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
@@ -187,7 +198,7 @@ function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb
       <CheckCell r={r} toggle={toggle} />
       <BatchThumbInfoCell r={r} thumbFor={thumbFor} thumb={thumb} />
       <RowMergeCell r={r} globalFrac={globalFrac ?? null} rowMerges={rowMerges ?? {}} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
-      <PreviewCell entry={entry} />
+      <PreviewCell entry={entry} stale={rowStale?.(r.relPath) ?? false} />
       <ReviewCell review={review} />
       <DecisionActions r={r} decide={decide} />
       <DateCell mtime={r.mtime} />

@@ -4,6 +4,7 @@ import type { DirHandleLike } from "../lib/fs";
 import type { AiImageEntry } from "../lib/scan";
 import type { SourceStatus, BatchReviewStatus } from "../lib/statefile";
 import type { Preset } from "../lib/presets";
+import type { StateKey } from "./statewrite";
 import type { MutableRefObject } from "react";
 import type { BatchProgress } from "./BatchProgress";
 
@@ -27,6 +28,8 @@ export interface BatchState {
   rowMerges: RowMergeMap;
   progress: BatchProgress | null;
   running: boolean;
+  /** The restored root needs one user click to re-grant (permission "prompt" at boot). */
+  needsGrant: boolean;
 }
 
 export type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
@@ -34,7 +37,7 @@ export type Setter = React.Dispatch<React.SetStateAction<BatchState>>;
 export interface Ctx {
   root: MutableRefObject<DirHandleLike | null>;
   dest: MutableRefObject<DirHandleLike | null>;
-  keys: MutableRefObject<string[]>;
+  keys: MutableRefObject<StateKey[]>;
   stop: MutableRefObject<boolean>;
   state: MutableRefObject<BatchState>;
 }

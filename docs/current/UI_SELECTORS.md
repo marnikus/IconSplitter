@@ -119,7 +119,7 @@ Primary header controls:
 | Test id | Visible text | Notes |
 |---|---|---|
 | `batch-root` | `Choose source folder…` → `Root: {name}` | opens directory picker (`picker.ts`); Chrome/Edge File System Access; label mirrors state (RULE 24) |
-| `batch-refresh` | `↺ Rescan` | re-walks root; gated on handle + permission |
+| `batch-rescan` | `↻ Rescan` | re-walks root; gated on handle + permission (the row testid changed from the old `batch-refresh` — verified in `BatchSourceBar.tsx` 2026-10-15) |
 | `batch-process` | `▶ Split selected` | disabled when 0 selected (RULE 4) |
 | `batch-cancel` | `✕ Stop` | shown only while busy; sets the stop signal |
 | `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output` |
@@ -153,6 +153,17 @@ Review window (scan table) — `scan-table` panel:
 | `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
 | `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
+
+Restart access (I-66) — `BatchPanel.tsx` `GrantBar` (verified 2026-10-15):
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `batch-grant-bar` | `The browser needs your OK to re-open "<name>" — previews are already restored.` | shown only while the restored root's permission is `"prompt"`; boot itself never prompts |
+| `batch-grant` | `Restore access` | the one click; spends the user gesture on `requestPermission`, then scans; a refusal stays honest (toast + bar stays) |
+
+Preview staleness (I-68): `batch-preview-count-{relPath}` carries
+`data-stale="true"` plus a `⟳` marker while the stored record was rendered
+under other settings; Preview re-renders stale rows, Regenerate overwrites them.
 
 Bulk bar (selection actions) — `BatchBulkBar.tsx` (verified 2026-10-15):
 

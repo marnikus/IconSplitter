@@ -274,11 +274,11 @@ describe("the IndexedDB connection is owned, not leaked", () => {
 
   it("lets another tab upgrade by closing on versionchange", async () => {
     const { saveGeminiKey } = await import("../src/upload/keystore");
-    const { loadHandles } = await import("../src/batch/store");
+    const { loadHandles, DB_VERSION } = await import("../src/batch/store");
     await saveGeminiKey(KEY); // takes the connection
     await loadHandles("__upload__");
     const upgraded = await new Promise<boolean>((resolve) => {
-      const req = fakeIndexedDb.indexedDB.open("iconSplitter", 3); // someone else's newer version
+      const req = fakeIndexedDb.indexedDB.open("iconSplitter", DB_VERSION + 1); // someone else's newer version
       req.onsuccess = () => { req.result.close(); resolve(true); };
       req.onerror = () => resolve(false);
       req.onblocked = () => resolve(false);

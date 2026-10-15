@@ -1,7 +1,5 @@
 // batch_nonblocking.test.tsx — TDD for non-blocking batch + scan
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -93,24 +91,6 @@ describe("batch process yields — allows concurrent scan", () => {
 
 // DOM test for BatchPanel Overlays non-blocking
 describe("BatchPanel Overlays DOM — non-blocking", () => {
-  let host: HTMLDivElement;
-  let root: Root;
-
-  async function mountBatchPanelWithState(busy: string | null, running: boolean) {
-    const React = await import("react");
-    const BatchPanelModule = await import("../src/batch/BatchPanel");
-    // We cannot easily mount full BatchPanel without context, so test Overlays directly
-    // Import Overlays is internal, so we test via checking the file content
-    return { React, BatchPanelModule };
-  }
-
-  beforeEach(async () => {
-    vi.restoreAllMocks();
-    if (host) {
-      await act(async () => root.unmount());
-      host.remove();
-    }
-  });
 
   it("BatchPanel file should not have fixed inset-0 blocking overlay when running", async () => {
     const fs = await import("fs");
@@ -141,7 +121,6 @@ describe("BatchPanel Overlays DOM — non-blocking", () => {
     const hasFixedInset = content.includes('fixed inset-0') && content.includes('sel-busy');
     if (hasFixedInset) {
       // Before fix, full-screen — we want non-blocking
-      const hasNonBlocking = content.includes('toast-above-dock') || content.includes('fixed left-1/2');
       // Before fix, second part may be false for busy, so test fails
       // We expect after fix, busy is bottom pill
       // For now, allow either: if it still has fixed inset-0, it should at least not have backdrop-blur blocking?
