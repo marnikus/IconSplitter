@@ -13,6 +13,8 @@ export interface SplitSettings {
 export type DestMode = "auto" | "custom";
 export type SelectionMode = "all" | "none" | "remember";
 
+export type RowMergeOverrideMap = Record<string, number | null>;
+
 export interface Preset {
   name: string;
   ignoreFolders: string[];
@@ -20,6 +22,7 @@ export interface Preset {
   split: SplitSettings;
   selection: SelectionMode;
   useContentHash: boolean;
+  rowMerges?: RowMergeOverrideMap;
 }
 
 export function defaultPreset(name: string): Preset {
@@ -30,6 +33,7 @@ export function defaultPreset(name: string): Preset {
     split: { padding: 6, size: 0, transparent: false, mergeFrac: null },
     selection: "remember",
     useContentHash: false,
+    rowMerges: {},
   };
 }
 
@@ -46,6 +50,7 @@ export function validatePreset(x: unknown): Preset | null {
     split: validateSplit(o.split),
     selection: validateSelection(o.selection),
     useContentHash: o.useContentHash === true,
+    rowMerges: validateRowMerges((o as any).rowMerges),
   };
 }
 
@@ -84,6 +89,38 @@ function validSize(v: number): number {
 function validFrac(x: unknown): number | null {
   if (typeof x !== "number" || !Number.isFinite(x)) return null;
   return x >= 0 && x <= 0.15 ? x : null; // out-of-range is corrupt -> auto
+}
+
+function validateRowMerges(x: unknown): RowMergeOverrideMap {
+  if (!isRecord(x)) return {};
+  const out: RowMergeOverrideMap = {};
+  for (const [k, v] of Object.entries(x)) addMerge(out, k, v);
+  return out;
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
+}
+
+function addMerge(out: RowMergeOverrideMap, k: string, v: unknown): void {
+  if (!isNonEmptyString(k)) return;
+  const lk = k.toLowerCase();
+  const parsed = parseMergeValue(v);
+  if (parsed !== undefined) out[lk] = parsed;
+}
+
+function isNonEmptyString(s: unknown): s is string {
+  return typeof s === "string" && s.trim() !== "";
+}
+
+function parseMergeValue(v: unknown): number | null | undefined {
+  if (v === null) return null;
+  if (isValidFracNumber(v)) return v;
+  return undefined;
+}
+
+function isValidFracNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 0.15;
 }
 
 export function serializePresetList(list: Preset[]): string {

@@ -14,6 +14,7 @@ import type { Ctx, Row, RowMergeMap, Setter } from "./useBatchTypes";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
 import { yieldToFrame } from "../lib/yield";
 import { patchBatch } from "../state/appstore";
+import { loadPresets, savePresets } from "./store";
 
 async function scanImages(root: DirHandleLike, preset: Preset): Promise<AiImageEntry[]> {
   const tree = await readDirTree(root, preset.ignoreFolders);
@@ -40,7 +41,10 @@ export function finishScan(a: FinishArgs): void {
     const existing = new Set(a.images.map((i) => i.relPath.toLowerCase()));
     const nextMerges: RowMergeMap = {};
     for (const [k, v] of Object.entries(p.rowMerges)) if (existing.has(k)) nextMerges[k] = v;
-    return { ...p, busy: null, rows, refWarnings: a.images.filter((i) => i.refRelPath === null).map((i) => i.relPath), rowMerges: nextMerges };
+    // Also sync filtered merges into preset and persist (I-66)
+    const nextPreset = { ...p.preset, rowMerges: nextMerges };
+    try { savePresets([...loadPresets().filter((x) => x.name !== nextPreset.name), nextPreset]); } catch {}
+    return { ...p, busy: null, rows, refWarnings: a.images.filter((i) => i.refRelPath === null).map((i) => i.relPath), rowMerges: nextMerges, preset: nextPreset };
   });
   a.say(`Found ${a.images.length} AI image${a.images.length === 1 ? "" : "s"}`);
 }

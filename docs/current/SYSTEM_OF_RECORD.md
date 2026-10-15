@@ -1221,6 +1221,15 @@ Batch:
   keeps its own key (`iconSplitter.upload.prompts.v1`, `iconSplitter.svg.prompts.v1`),
   so a preset never crosses between tabs. Delete never clears the editor; Save as
   stores a snapshot of exactly the text in the editor; a blank name is refused.
+* **I-66 (batch per-row merge overrides, RULE 13/24 — 2026-10-11):**
+  per-row `mergeFrac` overrides are part of the batch preset (`Preset.rowMerges`,
+  `Record<lowerRelPath, number|null>`, validated 0..0.15 or null, default `{}`),
+  auto-saved to `iconSplitter.presets.v1` whenever a row's Detection bar is
+  Applied/Reset or cleared, survive restart via the last preset, are restored on
+  boot into `BatchState.rowMerges`, filtered on scan to existing rows, and are
+  used during split of approved items: effective merge = row override ?? global
+  `split.mergeFrac` ?? auto (null). `splitWithOverride` in `batchOps.ts` implements
+  the override, `useBatch.ts` persists it, `presets.ts` validates it.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -1254,7 +1263,7 @@ Batch:
 
 | Where | What | Rules |
 |---|---|---|
-| localStorage `iconSplitter.presets.v1` | preset list (JSON) | validated on read (RULE 13) |
+| localStorage `iconSplitter.presets.v1` | preset list (JSON) including `split` and `rowMerges` per-row overrides (I-66) | validated on read (RULE 13), rowMerges clamped 0..0.15 or null |
 | localStorage `iconSplitter.lastPreset.v1` | last-used preset name | restores on boot |
 | IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |

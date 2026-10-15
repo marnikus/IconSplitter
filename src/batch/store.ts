@@ -6,8 +6,9 @@
 import { parsePresetList, serializePresetList, type Preset } from "../lib/presets";
 import type { DirHandleLike } from "../lib/fs";
 
-const PRESETS_KEY = "iconSplitter.presets.v1";
-const LAST_KEY = "iconSplitter.lastPreset.v1";
+export const PRESETS_KEY = "iconSplitter.presets.v1";
+export const LAST_KEY = "iconSplitter.lastPreset.v1";
+export const LAST_NAME_KEY = LAST_KEY;
 const DB_NAME = "iconSplitter";
 const DB_STORE = "handles";
 const SECRET_STORE = "secrets";

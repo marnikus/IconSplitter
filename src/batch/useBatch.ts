@@ -71,25 +71,51 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   return useMemo(() => ({ chooseRoot, chooseDest, refresh, run, cancel, decide }), [chooseRoot, chooseDest, refresh, run, cancel, decide]);
 }
 
-function useViewActions(ctx: Ctx, setS: Setter) {
+function savePresetMerges(preset: Preset, merges: Record<string, number | null>): Preset {
+  const next = { ...preset, rowMerges: merges };
+  try { savePresets([...loadPresets().filter((x) => x.name !== next.name), next]); saveLastName(next.name); } catch {}
+  return next;
+}
+
+function useSelectionToggles(setS: Setter) {
   const toggle = useCallback((relPath: string) => { setS((p) => ({ ...p, rows: p.rows.map((r) => (r.relPath === relPath ? { ...r, selected: !r.selected } : r)) })); }, [setS]);
   const selectAll = useCallback((on: boolean) => { setS((p) => ({ ...p, rows: p.rows.map((r) => (selectable(r) ? { ...r, selected: on } : r)) })); }, [setS]);
   const setSelected = useCallback((relPaths: string[], on: boolean) => {
     const set = new Set(relPaths.map((x) => x.toLowerCase()));
     setS((p) => ({ ...p, rows: p.rows.map((r) => (set.has(r.relPath.toLowerCase()) ? { ...r, selected: on } : r)) }));
   }, [setS]);
+  return { toggle, selectAll, setSelected };
+}
+
+function useRowMergeActions(setS: Setter) {
+  const setRowMerge = useCallback((relPath: string, value: number | null) => {
+    setS((p) => {
+      const nextMerges = { ...p.rowMerges, [relPath.toLowerCase()]: value };
+      return { ...p, rowMerges: nextMerges, preset: savePresetMerges(p.preset, nextMerges) };
+    });
+  }, [setS]);
+  const clearRowMerge = useCallback((relPath: string) => {
+    const k = relPath.toLowerCase();
+    setS((p) => {
+      const n = { ...p.rowMerges }; delete n[k];
+      return { ...p, rowMerges: n, preset: savePresetMerges(p.preset, n) };
+    });
+  }, [setS]);
+  const clearAllRowMerges = useCallback(() => {
+    setS((p) => ({ ...p, rowMerges: {}, preset: savePresetMerges(p.preset, {}) }));
+  }, [setS]);
+  return { setRowMerge, clearRowMerge, clearAllRowMerges };
+}
+
+function useViewActions(ctx: Ctx, setS: Setter) {
+  const sel = useSelectionToggles(setS);
+  const merges = useRowMergeActions(setS);
   const thumbUrl = useCallback(async (relPath: string) => {
     if (!ctx.root.current) throw new Error("No folder selected");
     return URL.createObjectURL(await (await resolveFile(ctx.root.current, relPath)).getFile());
   }, [ctx]);
-  const setRowMerge = useCallback((relPath: string, value: number | null) => { setS((p) => ({ ...p, rowMerges: { ...p.rowMerges, [relPath.toLowerCase()]: value } })); }, [setS]);
-  const clearRowMerge = useCallback((relPath: string) => {
-    const k = relPath.toLowerCase();
-    setS((p) => { const n = { ...p.rowMerges }; delete n[k]; return { ...p, rowMerges: n }; });
-  }, [setS]);
-  const clearAllRowMerges = useCallback(() => { setS((p) => ({ ...p, rowMerges: {} })); }, [setS]);
   const setProgress = useCallback((progress: BatchState["progress"]) => { setS((p) => ({ ...p, progress })); }, [setS]);
-  return useMemo(() => ({ toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress }), [toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress]);
+  return useMemo(() => ({ ...sel, thumbUrl, ...merges, setProgress }), [sel, thumbUrl, merges, setProgress]);
 }
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
@@ -150,7 +176,8 @@ function useToastClear(toast: BatchState["toast"], setS: Setter): void {
 
 async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   const presets = loadPresets();
-  const preset = presets.find((p) => p.name === loadLastName()) ?? defaultPreset("Default");
+  const last = loadLastName();
+  const preset = (last ? presets.find((p) => p.name === last) : null) ?? presets.find((p) => p.name === "Default") ?? presets[0] ?? defaultPreset("Default");
   setS((p) => ({ ...p, presetNames: presets.map((x) => x.name) }));
   await applyHandles(ctx, setS, preset);
 }
@@ -159,7 +186,8 @@ async function applyHandles(ctx: Ctx, setS: Setter, preset: Preset): Promise<voi
   const stored = await loadHandles(preset.name);
   ctx.root.current = await grant(stored?.source);
   ctx.dest.current = await grant(stored?.dest);
-  setS((p) => ({ ...p, preset, destName: ctx.dest.current?.name ?? "" }));
+  const merges = preset.rowMerges ?? {};
+  setS((p) => ({ ...p, preset, rowMerges: merges, destName: ctx.dest.current?.name ?? "" }));
   if (ctx.root.current) {
     await restoreKnownRoot(ctx.root.current);
     await scanOp(ctx, setS, () => {});
