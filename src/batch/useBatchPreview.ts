@@ -63,7 +63,11 @@ export function expectedKeyFor(row: Pick<Row, "relPath" | "mtime"> | undefined, 
 export function isStaleEntry(e: PreviewEntry, expectedKey: string): boolean {
   return e.status === "done" && typeof e.key === "string" && e.key !== expectedKey;
 }
-function makeFallback(relPath: string, rootName?: string): PreviewEntry { return { relPath, count: 1, thumbs: [], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done", rootName }; }
+/** A 1px placeholder so an undecodable file still shows an honest tile (and never re-queues). */
+function makeFallback(relPath: string, rootName?: string): PreviewEntry {
+  const px = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+  return { relPath, count: 1, thumbs: [px], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done", rootName };
+}
 function evictMap(map: Map<string, unknown>) { if (map.size > CACHE_LIMIT) { const first = map.keys().next().value; if (first) map.delete(first); } }
 function evictLru(lru: Map<string, CacheItem>) {
   if (lru.size <= CACHE_LIMIT) return;
@@ -175,7 +179,7 @@ function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal, ove
   const { previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef, onReviewed, previews, split, rowMerges } = args;
   return useCallback(async (selected: Row[], force = false) => {
     const base = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
-    const eligible = force ? base : base.filter((r) => { const e = previews.get(r.relPath); return !e || e.status !== "done" || isStaleEntry(e, expectedKeyFor(r, split, rowMerges)); });
+    const eligible = force ? base : base.filter((r) => { const e = previews.get(r.relPath); return !e || e.status !== "done" || e.thumbs.length === 0 || isStaleEntry(e, expectedKeyFor(r, split, rowMerges)); });
     if (eligible.length === 0) return;
     abortRef.current?.abort();
     const ac = new AbortController(); abortRef.current = ac;
@@ -211,7 +215,7 @@ function useRootChange(root: DirHandleLike | null, clearMemory: () => void) {
  * the effect cannot loop; `alive` guards a root that changed mid-read.
  */
 function useRestoreOnRoot(args: { root: DirHandleLike | null; rootName: string; setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>; onReviewed?: ReviewReport; onReviewedBatch?: ReviewReportBatch; }) {
-  const { root, rootName, setPreviews, onReviewed, onReviewedBatch } = args;
+  const { root, rootName, setPreviews } = args;
   useEffect(() => {
     if (!root || !rootName) return;
     let alive = true;
@@ -222,12 +226,11 @@ function useRestoreOnRoot(args: { root: DirHandleLike | null; rootName: string; 
         if (prev.size > 0) { const merged = new Map(prev); for (const [k, v] of loaded) if (!merged.has(k)) merged.set(k, v); return merged; }
         return loaded;
       });
-      const batch = [...loaded.values()].map((e) => ({ relPath: e.relPath, count: e.count }));
-      if (onReviewedBatch) onReviewedBatch(batch);
-      else for (const e of loaded.values()) onReviewed?.(e.relPath, e.count);
+      // No review firing here: useReviewSync owns it, so a restore cannot
+      // double-write every row (the O(n·writes) churn behind the CPU spike).
     })();
     return () => { alive = false; };
-  }, [root, rootName, setPreviews, onReviewed, onReviewedBatch]);
+  }, [root, rootName, setPreviews]);
 }
 function buildRowMap(rows: Row[]): Map<string, Row> { const m = new Map<string, Row>(); for (const r of rows) m.set(r.relPath.toLowerCase(), r); return m; }
 function shouldSync(row: Row | undefined, count: number): boolean {
@@ -274,7 +277,7 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rootName?:
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
   useRootChange(root, clearMemory);
-  useRestoreOnRoot({ root, rootName: rName, setPreviews, onReviewed, onReviewedBatch });
+  useRestoreOnRoot({ root, rootName: rName, setPreviews });
   useReviewSync(params.rows, previews, onReviewed, onReviewedBatch);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };

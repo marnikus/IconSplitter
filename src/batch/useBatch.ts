@@ -36,14 +36,14 @@ export function useBatch() {
   useToastClear(s.toast, setS);
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
   useEffect(() => { void boot(ctx, setS, say); }, [ctx, say]); // ctx and say are stable, so this still runs once
-  return {
-    s, say,
-    ...useCoreActions(ctx, setS, say),
-    ...useViewActions(ctx, setS),
-    ...usePresetActions(ctx, setS, say),
-    supported: fsSupported(),
-    rootRef: ctx.root,
-  };
+  // A fresh literal here made `core` (and everything derived from it) new on
+  // every render — the scroll CPU spike. Memoize every bag.
+  const coreActions = useCoreActions(ctx, setS, say);
+  const viewActions = useViewActions(ctx, setS);
+  const presetActions = usePresetActions(ctx, setS, say);
+  const supported = useMemo(() => fsSupported(), []);
+  return useMemo(() => ({ s, say, ...coreActions, ...viewActions, ...presetActions, supported, rootRef: ctx.root }),
+    [s, say, coreActions, viewActions, presetActions, supported, ctx.root]);
 }
 
 function useCtx(s: BatchState): Ctx {
@@ -94,7 +94,7 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   }, [ctx, setS, say]);
   const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
   const decide = useCallback((relPaths: string[], review: BatchReviewStatus) => { void decideReview({ ctx, relPaths, review, setS }); }, [ctx, setS]);
-  return { chooseRoot, chooseDest, refresh, run, grantAccess, cancel, decide };
+  return useMemo(() => ({ chooseRoot, chooseDest, refresh, run, grantAccess, cancel, decide }), [chooseRoot, chooseDest, refresh, run, grantAccess, cancel, decide]);
 }
 
 function useViewActions(ctx: Ctx, setS: Setter) {
@@ -115,7 +115,7 @@ function useViewActions(ctx: Ctx, setS: Setter) {
   }, [setS]);
   const clearAllRowMerges = useCallback(() => { setS((p) => ({ ...p, rowMerges: {} })); }, [setS]);
   const setProgress = useCallback((progress: BatchState["progress"]) => { setS((p) => ({ ...p, progress })); }, [setS]);
-  return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress };
+  return useMemo(() => ({ toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress }), [toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress]);
 }
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
@@ -123,7 +123,7 @@ function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) 
   const savePreset = useSavePreset(ctx, setS);
   const loadPreset = useLoadPreset(ctx, setS, say);
   const deletePreset = useDeletePreset(setS);
-  return { setPreset, savePreset, loadPreset, deletePreset };
+  return useMemo(() => ({ setPreset, savePreset, loadPreset, deletePreset }), [setPreset, savePreset, loadPreset, deletePreset]);
 }
 
 function useSetPreset(setS: Setter) {

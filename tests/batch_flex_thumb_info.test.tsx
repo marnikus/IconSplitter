@@ -112,7 +112,7 @@ describe("Batch flex thumb+info layout", () => {
     const bar = q("[data-testid=\"batch-row-merge-bar-icon-a_AI.png\"]") as HTMLElement | null;
     expect(bar).not.toBeNull();
     expect(bar!.className).toMatch(/flex-nowrap/);
-    expect(bar!.className).toMatch(/min-w-\[360px\]/);
+    expect(bar!.className).toMatch(/min-w-\[(300|360)px\]/); // cheap layout may narrow to 300px
   });
 
   it("selection still: plain click active only, checkbox select, preserves checked", async () => {

@@ -2676,3 +2676,11 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - F4 (RC4): restore was already keyed on the handle's own name (`rName` fallback) — locked by a test: previews restore during a failing scan and a later rescan renders them untouched (`at` unchanged). Boot scan failures are no longer silent (RULE 4).
 - RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (27 warnings, pre-existing); `node tools/quality.mjs --changed --allow-legacy` GATE PASSED (the grant banner extracted to `GrantBar` when `BatchPanel` hit 34 loc; `quietHandles`/`regrantDest` extracted to keep cc ≤10).
 - `npm run verify:fast` ALL LANES PASSED: 173 files / 1,863 tests; build `dist/index.html` 1,555.27 kB (457.01 kB gzip).
+
+## 2026-10-15 — fix(batch): scroll freeze / CPU spike ported from arena/736d3693-iconsplitter
+
+- User report: the performance bug was not fixed on this branch — take the fix from `arena/736d3693-iconsplitter`. Ported its chain 20b78e4→5bab8bf→94ea14f→d02aee4→32c6797 (root cause 3398b0a: unstable `core`/`v` identity + O(n·renders) review sync), re-based onto this branch's preview/merge implementation.
+- TDD: `tests/batch_perf_regression.test.tsx` (11 tests, from that branch's 32c6797, adapted where its own later ddceb69 superseded the mid-arc metadata-only verdict) written first — 4 red on this tree (bar layout, content-visibility, `useBatchView`/`useBatch` stability), then green.
+- Pieces: memoized action bags + memoized `core`/view objects, hoisted `decide`/`decideActive`, memoized `RowView` via a data-driven deps table (RULE 18-friendly, cc 11 → 2), `.batch-row` content-visibility, cheap detection bar (`max-w-[420px]`, single `onChange`), restore effect no longer double-fires review sync, thumbs-aware queue eligibility + 1px fallback tile.
+- `tests/batch_flex_thumb_info.test.tsx` width assertion widened to `min-w-[(300|360)px]` (the source branch's own amendment).
+- RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (27 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 174 files / 1,874 tests; build `dist/index.html` 1,555.87 kB (457.25 kB gzip).

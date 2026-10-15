@@ -1265,6 +1265,11 @@ Batch:
 * **I-67:** a per-item split decision (row merge) survives a page reload; it
   is stored per preset (`batch-merges-v1`), and the SAME value drives the
   preview, the review sync and `splitWithOverride`.
+* **I-69:** batch render identity is stable: `useBatch` and `useBatchView`
+  return memoized objects, action callbacks are referentially stable, and scan
+  rows render through a memo comparator with `content-visibility: auto` — an
+  unrelated render must never re-run every effect or re-render every row
+  (the scroll CPU spike, ported from arena/736d3693-iconsplitter 2026-10-15).
 * **I-68:** a stored preview counts as "done" only while its recorded
   `previewKey` matches the current effective settings; stale records are shown
   (marked `data-stale`), never silently regenerated.

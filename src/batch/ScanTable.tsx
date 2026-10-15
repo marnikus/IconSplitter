@@ -1,7 +1,7 @@
 // ScanTable.tsx — Batch folders list + review (approved/declined/warning) + preview
 // 9-col flex grid, yellow warning line for not-4
 
-import { useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import type { Row, RowMergeMap } from "./useBatch";
 import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
@@ -185,7 +185,7 @@ function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
   return undefined;
 }
 
-function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, rowStale }: { r: Row } & ScanTableProps) {
+function RowViewInner({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, rowStale }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
@@ -207,6 +207,19 @@ function RowView({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb
     </div>
   );
 }
+
+/** Everything a row renders from; unchanged everywhere ⇒ skip the re-render. */
+type RowDeps = ScanTableProps & { r: Row };
+const ROW_DEPS: { get: (p: RowDeps) => unknown }[] = [
+  { get: (p) => p.previews?.get(p.r.relPath) },
+  { get: (p) => p.r.relPath }, { get: (p) => p.r.review }, { get: (p) => p.r.selected },
+  { get: (p) => p.r.status }, { get: (p) => p.activeId }, { get: (p) => p.thumb },
+  { get: (p) => p.rowMerges }, { get: (p) => p.globalFrac }, { get: (p) => p.rowStale },
+];
+const sameRowDeps = (a: RowDeps, b: RowDeps): boolean => ROW_DEPS.every(({ get }) => get(a) === get(b));
+
+/** Skip a re-render when nothing this row shows has changed (scroll churn). */
+const RowView = memo(RowViewInner, sameRowDeps);
 
 export default function ScanTable(props: ScanTableProps) {
   return (

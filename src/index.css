@@ -455,6 +455,8 @@
   transition: background 0.15s, min-height 0.15s;
   width: 100%;
   min-width: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 110px;
 }
 
 .batch-row > * {

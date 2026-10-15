@@ -59,13 +59,21 @@ export function useBatchView(): BatchView {
   const reviewCounts = useReviewCounts(core.s.rows);
   const decidableCount = useDecidableCount(core, sel);
   const approvedSelectedCount = useApprovedSelectedCount(core, sel);
-  return makeView({ core, ps, visible, sel, reviewCounts, decidableCount, approvedSelectedCount });
+  // Stable callbacks: closures rebuilt per render made `v.decide` new on every
+  // render, which re-ran every downstream effect (the scroll CPU spike).
+  const decide = useCallback((ids: string[], review: BatchReviewStatus) => core.decide(ids, review), [core.decide]);
+  const decideActive = useCallback((review: BatchReviewStatus) => {
+    const active = sel.activeId;
+    if (active) core.decide([active], review);
+  }, [sel.activeId, core.decide]);
+  return useMemo(() => makeView({ core, ps, visible, sel, reviewCounts, decidableCount, approvedSelectedCount, decide, decideActive }),
+    [core, ps, visible, sel, reviewCounts, decidableCount, approvedSelectedCount, decide, decideActive]);
 }
 
-type ViewArgs = { core: BatchApi; ps: ReturnType<typeof usePrefsState>; visible: Row[]; sel: BatchSelection; reviewCounts: BatchView["reviewCounts"]; decidableCount: number; approvedSelectedCount: number };
+type ViewArgs = { core: BatchApi; ps: ReturnType<typeof usePrefsState>; visible: Row[]; sel: BatchSelection; reviewCounts: BatchView["reviewCounts"]; decidableCount: number; approvedSelectedCount: number; decide: BatchView["decide"]; decideActive: BatchView["decideActive"] };
 
 function makeView(a: ViewArgs): BatchView {
-  const { core, ps, visible, sel } = a;
+  const { core, ps, visible, sel, decide, decideActive } = a;
   return {
     core, filter: ps.prefs.filter, sort: ps.prefs.sort, thumb: ps.prefs.thumb, visible,
     header: sel.header, checkedCount: sel.checkedCount, visibleCount: sel.visibleCount,
@@ -78,8 +86,7 @@ function makeView(a: ViewArgs): BatchView {
     uncheckAll: sel.uncheckAll, toggleAllVisible: sel.toggleAllVisible, selectRow: sel.selectRow,
     moveActive: sel.moveActive, selectActive: sel.selectActive, checkActive: sel.checkActive, uncheckActive: sel.uncheckActive,
     setRowMerge: core.setRowMerge, clearRowMerge: core.clearRowMerge,
-    decide: (ids, review) => core.decide(ids, review),
-    decideActive: (review) => { const active = sel.activeId; if (active) core.decide([active], review); },
+    decide, decideActive,
   };
 }
 
@@ -89,7 +96,7 @@ function usePrefsState() {
   const setFilter = useCallback((f: BatchFilter) => setPrefs((p) => ({ ...p, filter: f })), []);
   const setSort = useCallback((s: BatchSort) => setPrefs((p) => ({ ...p, sort: s })), []);
   const setThumb = useCallback((px: number) => setPrefs((p) => ({ ...p, thumb: clampZoom(px) })), []);
-  return { prefs, setFilter, setSort, setThumb };
+  return useMemo(() => ({ prefs, setFilter, setSort, setThumb }), [prefs, setFilter, setSort, setThumb]);
 }
 
 function useVisibleRows(rows: Row[], filter: BatchFilter, sort: BatchSort) {
