@@ -44,10 +44,10 @@ function useLoadFile(root: DirHandleLike | null, custom?: LoadFile) {
     return fh.getFile();
   }, [root, custom]);
 }
-function savePersisted(rootName: string, entry: PreviewEntry) {
+async function savePersisted(rootName: string, entry: PreviewEntry): Promise<void> {
   const key = `${rootName || "default"}::${entry.relPath}`;
   const meta = { relPath: entry.relPath, count: entry.count, boxes: entry.boxes, status: entry.status, rootName, thumbs: [] as string[] };
-  void idbPut(PREVIEW_STORE, key, meta);
+  try { await idbPut(PREVIEW_STORE, key, meta); } catch {}
 }
 function matchesRoot(key: string, entry: PreviewEntry, rootName: string): boolean {
   if (key.startsWith(`${rootName}::`)) return true;
@@ -100,7 +100,13 @@ function renderThumbsYielding(img: HTMLImageElement, an: Analysis, boxes: Box[],
     return out;
   })();
 }
-async function loadImgSafe(file: File): Promise<HTMLImageElement | null> { try { return await loadImageFile(file); } catch { return null; } }
+async function loadImgSafe(file: File): Promise<HTMLImageElement | null> {
+  try {
+    const timeout = new Promise<null>((res) => setTimeout(() => res(null), 800));
+    const loaded = loadImageFile(file).then((img) => img as HTMLImageElement | null).catch(() => null);
+    return (await Promise.race([loaded, timeout])) as HTMLImageElement | null;
+  } catch { return null; }
+}
 async function getOrAnalyze(img: HTMLImageElement, relPath: string, cache: Map<string, Analysis>): Promise<Analysis> {
   let an = cache.get(relPath);
   if (!an) { an = await analyzeAsync(img); cache.set(relPath, an); evictMap(cache); }
@@ -115,7 +121,7 @@ function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; anal
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     await yieldToUI();
     const img = await loadImgSafe(file);
-    if (!img) { const fb = makeFallback(row.relPath, rootName); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); savePersisted(rootName, fb); return fb; }
+    if (!img) { const fb = makeFallback(row.relPath, rootName); lru.current.set(row.relPath, { key, entry: fb, at: Date.now() }); await savePersisted(rootName, fb); return fb; }
     const an = await getOrAnalyze(img, row.relPath, analysis.current);
     await yieldToUI();
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -124,7 +130,7 @@ function useDoPreviewCore(args: { split: SplitSettings; loadFile: LoadFile; anal
     const thumbs = await renderThumbsYielding(img, an, boxes, { ...split, mergeFrac: eff });
     const entry = buildEntry(row.relPath, boxes, thumbs, rootName);
     lru.current.set(row.relPath, { key, entry, at: Date.now() }); evictLru(lru.current);
-    savePersisted(rootName, entry);
+    await savePersisted(rootName, entry);
     return entry;
   }, [split, loadFile, analysis, lru, rootName]);
 }
@@ -153,7 +159,12 @@ function usePreviewOne(args: { split: SplitSettings; rowMerges: RowMergeMap; loa
     try {
       if (overrideFrac !== undefined) return await core(row, eff, signal, key);
       return await doPreview(row, signal, key);
-    } catch (e) { if ((e as Error).name === "AbortError") throw e; return { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "error", error: (e as Error).message }; }
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      const errEntry = { relPath: row.relPath, count: 0, thumbs: [], boxes: [], status: "error" as const, error: (e as Error).message, rootName: args.rootName };
+      await savePersisted(args.rootName, errEntry);
+      return errEntry;
+    }
   }, [split, rowMerges, lru, doPreview, core]);
 }
 function markLoading(eligible: Row[], setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
@@ -168,6 +179,7 @@ async function runWorkers(args: WorkersArgs) {
       if (ac.signal.aborted) return;
       await yieldToFrame();
       const row = queue[idx++];
+      if (!row) return;
       try {
         const entry = await previewOne(row, ac.signal);
         if (ac.signal.aborted) return;

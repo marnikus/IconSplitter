@@ -96,32 +96,62 @@
     }
   },
   "src/batch/BatchBulkBar.tsx": {
-    "file_lines": 100,
-    "func_count": 5,
+    "file_lines": 127,
+    "func_count": 13,
     "funcs": {
       "Left": {
-        "loc": 17,
-        "params": 1,
-        "cc": 2,
-        "nesting": 0
-      },
-      "Right": {
-        "loc": 25,
+        "loc": 11,
         "params": 1,
         "cc": 3,
         "nesting": 0
       },
-      "BatchBulkBar": {
-        "loc": 29,
+      "ReviewCounts": {
+        "loc": 10,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
-      "(anonymous)": {
+      "splitLabel": {
         "loc": 3,
+        "params": 2,
+        "cc": 2,
+        "nesting": 0
+      },
+      "PreviewBtns": {
+        "loc": 16,
+        "params": 1,
+        "cc": 4,
+        "nesting": 0
+      },
+      "ReviewBtns": {
+        "loc": 10,
         "params": 1,
         "cc": 2,
         "nesting": 1
+      },
+      "(anonymous)": {
+        "loc": 1,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
+      },
+      "ZoomAndTotal": {
+        "loc": 9,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "Right": {
+        "loc": 13,
+        "params": 1,
+        "cc": 5,
+        "nesting": 0
+      },
+      "BatchBulkBar": {
+        "loc": 14,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
       }
     }
   },
@@ -138,8 +168,8 @@
     }
   },
   "src/batch/BatchFilterGrid.tsx": {
-    "file_lines": 81,
-    "func_count": 8,
+    "file_lines": 90,
+    "func_count": 9,
     "funcs": {
       "useRangeState": {
         "loc": 5,
@@ -154,9 +184,9 @@
         "nesting": 0
       },
       "Filters": {
-        "loc": 14,
+        "loc": 15,
         "params": 1,
-        "cc": 1,
+        "cc": 2,
         "nesting": 0
       },
       "(anonymous)": {
@@ -222,29 +252,35 @@
     }
   },
   "src/batch/BatchPanel.tsx": {
-    "file_lines": 112,
-    "func_count": 30,
+    "file_lines": 130,
+    "func_count": 43,
     "funcs": {
-      "BatchPanel": {
-        "loc": 25,
-        "params": 0,
-        "cc": 3,
+      "useReviewed": {
+        "loc": 13,
+        "params": 1,
+        "cc": 1,
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 9,
+        "loc": 6,
         "params": 2,
-        "cc": 2,
+        "cc": 3,
         "nesting": 1
       },
       "useCheckedRows": {
-        "loc": 3,
+        "loc": 1,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "useOnPreview": {
-        "loc": 5,
+        "loc": 3,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useOnRegenerate": {
+        "loc": 3,
         "params": 2,
         "cc": 1,
         "nesting": 0
@@ -256,15 +292,27 @@
         "nesting": 0
       },
       "useRowMergeReset": {
-        "loc": 11,
+        "loc": 7,
         "params": 2,
         "cc": 1,
+        "nesting": 0
+      },
+      "usePreviewSetup": {
+        "loc": 3,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "BatchPanel": {
+        "loc": 27,
+        "params": 0,
+        "cc": 3,
         "nesting": 0
       },
       "BatchControls": {
         "loc": 10,
         "params": 1,
-        "cc": 7,
+        "cc": 8,
         "nesting": 0
       },
       "Unsupported": {
@@ -288,7 +336,7 @@
       "Overlays": {
         "loc": 5,
         "params": 1,
-        "cc": 7,
+        "cc": 6,
         "nesting": 1
       },
       "RefWarnings": {
@@ -298,13 +346,13 @@
         "nesting": 1
       },
       "BusyOverlay": {
-        "loc": 3,
+        "loc": 9,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "copyPath": {
-        "loc": 3,
+        "loc": 1,
         "params": 2,
         "cc": 1,
         "nesting": 0
@@ -546,11 +594,11 @@
     }
   },
   "src/batch/BatchRowMergeBar.tsx": {
-    "file_lines": 42,
-    "func_count": 8,
+    "file_lines": 41,
+    "func_count": 7,
     "funcs": {
       "Inner": {
-        "loc": 27,
+        "loc": 26,
         "params": 1,
         "cc": 4,
         "nesting": 0
@@ -702,23 +750,23 @@
     }
   },
   "src/batch/ScanTable.tsx": {
-    "file_lines": 232,
-    "func_count": 26,
+    "file_lines": 269,
+    "func_count": 42,
     "funcs": {
       "Header": {
-        "loc": 21,
+        "loc": 15,
         "params": 1,
-        "cc": 1,
+        "cc": 2,
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 9,
+        "loc": 14,
         "params": 2,
-        "cc": 6,
+        "cc": 10,
         "nesting": 2
       },
       "Columns": {
-        "loc": 13,
+        "loc": 7,
         "params": 0,
         "cc": 1,
         "nesting": 0
@@ -730,39 +778,99 @@
         "nesting": 0
       },
       "CheckCell": {
-        "loc": 16,
+        "loc": 6,
         "params": 1,
         "cc": 2,
         "nesting": 0
       },
       "DateCell": {
-        "loc": 8,
+        "loc": 3,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "OpenCell": {
-        "loc": 17,
+        "loc": 7,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
-      "PreviewCell": {
-        "loc": 22,
+      "PreviewCount": {
+        "loc": 4,
         "params": 1,
-        "cc": 7,
+        "cc": 4,
+        "nesting": 0
+      },
+      "PreviewThumbs": {
+        "loc": 8,
+        "params": 1,
+        "cc": 3,
+        "nesting": 0
+      },
+      "PreviewCell": {
+        "loc": 13,
+        "params": 1,
+        "cc": 5,
         "nesting": 1
       },
-      "RowMergeCell": {
-        "loc": 11,
+      "reviewLabel": {
+        "loc": 6,
         "params": 1,
         "cc": 4,
         "nesting": 1
       },
-      "RowView": {
-        "loc": 21,
+      "reviewCls": {
+        "loc": 6,
         "params": 1,
-        "cc": 8,
+        "cc": 4,
+        "nesting": 1
+      },
+      "reviewIcon": {
+        "loc": 6,
+        "params": 1,
+        "cc": 4,
+        "nesting": 1
+      },
+      "ReviewCell": {
+        "loc": 7,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "DecisionActions": {
+        "loc": 11,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
+      },
+      "click": {
+        "loc": 1,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "RowMergeCell": {
+        "loc": 10,
+        "params": 1,
+        "cc": 4,
+        "nesting": 1
+      },
+      "rowClass": {
+        "loc": 5,
+        "params": 2,
+        "cc": 5,
+        "nesting": 0
+      },
+      "rowStyle": {
+        "loc": 3,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "RowViewInner": {
+        "loc": 22,
+        "params": 1,
+        "cc": 7,
         "nesting": 0
       },
       "ScanTable": {
@@ -822,44 +930,44 @@
     }
   },
   "src/batch/batchOps.ts": {
-    "file_lines": 259,
-    "func_count": 39,
+    "file_lines": 249,
+    "func_count": 51,
     "funcs": {
       "scanImages": {
-        "loc": 5,
+        "loc": 7,
         "params": 2,
         "cc": 1,
         "nesting": 0
       },
       "finishScan": {
         "loc": 22,
-        "params": 4,
+        "params": 1,
         "cc": 2,
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 20,
+        "loc": 19,
         "params": 4,
-        "cc": 4,
+        "cc": 6,
         "nesting": 2
       },
       "toRow": {
-        "loc": 4,
-        "params": 2,
-        "cc": 3,
+        "loc": 5,
+        "params": 3,
+        "cc": 4,
         "nesting": 0
       },
       "scan": {
-        "loc": 20,
+        "loc": 14,
         "params": 3,
         "cc": 4,
         "nesting": 1
       },
       "batchProcess": {
-        "loc": 15,
+        "loc": 21,
         "params": 2,
-        "cc": 5,
-        "nesting": 1
+        "cc": 7,
+        "nesting": 2
       },
       "makeRunId": {
         "loc": 3,
@@ -868,7 +976,7 @@
         "nesting": 0
       },
       "runBatch": {
-        "loc": 19,
+        "loc": 16,
         "params": 1,
         "cc": 1,
         "nesting": 0
@@ -886,7 +994,7 @@
         "nesting": 0
       },
       "makeProgressUpdater": {
-        "loc": 22,
+        "loc": 11,
         "params": 3,
         "cc": 1,
         "nesting": 0
@@ -910,7 +1018,7 @@
         "nesting": 0
       },
       "splitWithOverride": {
-        "loc": 18,
+        "loc": 14,
         "params": 3,
         "cc": 5,
         "nesting": 3
@@ -940,13 +1048,13 @@
         "nesting": 0
       },
       "tryResolve": {
-        "loc": 7,
+        "loc": 3,
         "params": 2,
         "cc": 2,
         "nesting": 1
       },
       "probePathLocal": {
-        "loc": 11,
+        "loc": 7,
         "params": 2,
         "cc": 3,
         "nesting": 2
@@ -958,10 +1066,16 @@
         "nesting": 2
       },
       "finalize": {
-        "loc": 23,
+        "loc": 13,
         "params": 4,
-        "cc": 1,
-        "nesting": 0
+        "cc": 2,
+        "nesting": 1
+      },
+      "decideReview": {
+        "loc": 15,
+        "params": 1,
+        "cc": 6,
+        "nesting": 2
       }
     }
   },
@@ -1134,11 +1248,11 @@
     }
   },
   "src/batch/process.ts": {
-    "file_lines": 135,
+    "file_lines": 139,
     "func_count": 12,
     "funcs": {
       "processItems": {
-        "loc": 16,
+        "loc": 18,
         "params": 2,
         "cc": 4,
         "nesting": 2
@@ -1150,10 +1264,10 @@
         "nesting": 0
       },
       "existingLookup": {
-        "loc": 8,
+        "loc": 11,
         "params": 3,
-        "cc": 4,
-        "nesting": 1
+        "cc": 5,
+        "nesting": 2
       },
       "uniqueDirs": {
         "loc": 3,
@@ -1162,9 +1276,9 @@
         "nesting": 0
       },
       "processOne": {
-        "loc": 10,
+        "loc": 9,
         "params": 4,
-        "cc": 5,
+        "cc": 4,
         "nesting": 1
       },
       "tryLoad": {
@@ -1188,8 +1302,8 @@
       "writeSplits": {
         "loc": 10,
         "params": 3,
-        "cc": 3,
-        "nesting": 2
+        "cc": 2,
+        "nesting": 1
       },
       "copyRefs": {
         "loc": 5,
@@ -1200,8 +1314,8 @@
     }
   },
   "src/batch/statewrite.ts": {
-    "file_lines": 157,
-    "func_count": 15,
+    "file_lines": 212,
+    "func_count": 22,
     "funcs": {
       "syncStateFiles": {
         "loc": 5,
@@ -1228,9 +1342,9 @@
         "nesting": 1
       },
       "syncOne": {
-        "loc": 9,
+        "loc": 11,
         "params": 2,
-        "cc": 4,
+        "cc": 5,
         "nesting": 1
       },
       "applyOverrides": {
@@ -1245,7 +1359,19 @@
         "cc": 2,
         "nesting": 0
       },
+      "applyReviewOverrides": {
+        "loc": 10,
+        "params": 3,
+        "cc": 2,
+        "nesting": 1
+      },
       "applyOutcomes": {
+        "loc": 5,
+        "params": 3,
+        "cc": 3,
+        "nesting": 1
+      },
+      "applyReviewOutcomes": {
         "loc": 5,
         "params": 3,
         "cc": 3,
@@ -1257,16 +1383,28 @@
         "cc": 2,
         "nesting": 0
       },
+      "pushReviewOutcome": {
+        "loc": 6,
+        "params": 2,
+        "cc": 2,
+        "nesting": 0
+      },
       "writeOutcomes": {
         "loc": 16,
         "params": 3,
         "cc": 4,
         "nesting": 1
       },
+      "writeReviewOutcomes": {
+        "loc": 16,
+        "params": 3,
+        "cc": 4,
+        "nesting": 1
+      },
       "recordStatuses": {
-        "loc": 3,
+        "loc": 6,
         "params": 2,
-        "cc": 2,
+        "cc": 3,
         "nesting": 1
       },
       "readPrev": {
@@ -1284,8 +1422,8 @@
     }
   },
   "src/batch/store.ts": {
-    "file_lines": 170,
-    "func_count": 30,
+    "file_lines": 221,
+    "func_count": 45,
     "funcs": {
       "loadPresets": {
         "loc": 4,
@@ -1342,9 +1480,9 @@
         "nesting": 1
       },
       "upgrade": {
-        "loc": 6,
+        "loc": 7,
         "params": 1,
-        "cc": 4,
+        "cc": 5,
         "nesting": 1
       },
       "adopt": {
@@ -1358,6 +1496,12 @@
         "params": 0,
         "cc": 1,
         "nesting": 0
+      },
+      "__resetDbForTests": {
+        "loc": 12,
+        "params": 0,
+        "cc": 5,
+        "nesting": 4
       },
       "tx": {
         "loc": 19,
@@ -1382,21 +1526,39 @@
         "params": 2,
         "cc": 2,
         "nesting": 1
+      },
+      "idbGetAll": {
+        "loc": 13,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
+      },
+      "idbClear": {
+        "loc": 6,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
+      },
+      "idbGetAllKeys": {
+        "loc": 13,
+        "params": 1,
+        "cc": 2,
+        "nesting": 1
       }
     }
   },
   "src/batch/useBatch.ts": {
-    "file_lines": 205,
-    "func_count": 66,
+    "file_lines": 211,
+    "func_count": 78,
     "funcs": {
       "useBatch": {
-        "loc": 18,
+        "loc": 14,
         "params": 0,
         "cc": 1,
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 10,
+        "loc": 8,
         "params": 2,
         "cc": 4,
         "nesting": 1
@@ -1407,14 +1569,44 @@
         "cc": 1,
         "nesting": 0
       },
-      "useCoreActions": {
-        "loc": 30,
+      "makeChooseRoot": {
+        "loc": 9,
         "params": 3,
         "cc": 1,
         "nesting": 0
       },
+      "makeChooseDest": {
+        "loc": 9,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useCoreActions": {
+        "loc": 9,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "savePresetMerges": {
+        "loc": 5,
+        "params": 2,
+        "cc": 2,
+        "nesting": 1
+      },
+      "useSelectionToggles": {
+        "loc": 9,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useRowMergeActions": {
+        "loc": 19,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
       "useViewActions": {
-        "loc": 28,
+        "loc": 10,
         "params": 2,
         "cc": 1,
         "nesting": 0
@@ -1462,15 +1654,15 @@
         "nesting": 0
       },
       "boot": {
-        "loc": 6,
+        "loc": 7,
         "params": 2,
-        "cc": 2,
+        "cc": 5,
         "nesting": 0
       },
       "applyHandles": {
-        "loc": 10,
+        "loc": 11,
         "params": 3,
-        "cc": 2,
+        "cc": 3,
         "nesting": 1
       },
       "grant": {
@@ -1480,7 +1672,7 @@
         "nesting": 0
       },
       "resolveFile": {
-        "loc": 12,
+        "loc": 10,
         "params": 2,
         "cc": 5,
         "nesting": 2
@@ -1488,23 +1680,29 @@
     }
   },
   "src/batch/useBatchHotkeys.ts": {
-    "file_lines": 38,
-    "func_count": 8,
+    "file_lines": 56,
+    "func_count": 11,
     "funcs": {
-      "useBatchHotkeys": {
-        "loc": 30,
+      "handleReview": {
+        "loc": 6,
         "params": 2,
+        "cc": 4,
+        "nesting": 1
+      },
+      "handleArrow": {
+        "loc": 5,
+        "params": 2,
+        "cc": 3,
+        "nesting": 1
+      },
+      "makeOnKey": {
+        "loc": 21,
+        "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 26,
-        "params": 0,
-        "cc": 2,
-        "nesting": 1
-      },
-      "onKey": {
-        "loc": 21,
+        "loc": 19,
         "params": 1,
         "cc": 8,
         "nesting": 1
@@ -1532,12 +1730,18 @@
         "params": 0,
         "cc": 1,
         "nesting": 0
+      },
+      "useBatchHotkeys": {
+        "loc": 10,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
       }
     }
   },
   "src/batch/useBatchPreview.ts": {
-    "file_lines": 261,
-    "func_count": 45,
+    "file_lines": 307,
+    "func_count": 66,
     "funcs": {
       "useCaches": {
         "loc": 5,
@@ -1558,19 +1762,43 @@
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 17,
+        "loc": 18,
         "params": 4,
         "cc": 8,
-        "nesting": 2
+        "nesting": 3
+      },
+      "savePersisted": {
+        "loc": 5,
+        "params": 2,
+        "cc": 3,
+        "nesting": 1
+      },
+      "matchesRoot": {
+        "loc": 6,
+        "params": 3,
+        "cc": 5,
+        "nesting": 1
+      },
+      "loadPersisted": {
+        "loc": 16,
+        "params": 1,
+        "cc": 8,
+        "nesting": 4
+      },
+      "clearPersisted": {
+        "loc": 8,
+        "params": 1,
+        "cc": 5,
+        "nesting": 3
       },
       "makeFallback": {
-        "loc": 3,
-        "params": 1,
+        "loc": 1,
+        "params": 2,
         "cc": 1,
         "nesting": 0
       },
       "evictMap": {
-        "loc": 3,
+        "loc": 1,
         "params": 1,
         "cc": 3,
         "nesting": 2
@@ -1581,20 +1809,14 @@
         "cc": 3,
         "nesting": 1
       },
-      "renderThumbs": {
-        "loc": 8,
-        "params": 4,
-        "cc": 2,
-        "nesting": 1
-      },
       "renderThumbsYielding": {
-        "loc": 12,
+        "loc": 14,
         "params": 4,
-        "cc": 3,
-        "nesting": 2
+        "cc": 1,
+        "nesting": 0
       },
       "loadImgSafe": {
-        "loc": 3,
+        "loc": 7,
         "params": 1,
         "cc": 2,
         "nesting": 1
@@ -1606,19 +1828,19 @@
         "nesting": 1
       },
       "buildEntry": {
-        "loc": 3,
-        "params": 3,
+        "loc": 1,
+        "params": 4,
         "cc": 1,
         "nesting": 0
       },
       "effectiveMerge": {
-        "loc": 3,
+        "loc": 1,
         "params": 3,
         "cc": 2,
         "nesting": 0
       },
       "useDoPreviewCore": {
-        "loc": 19,
+        "loc": 20,
         "params": 1,
         "cc": 1,
         "nesting": 0
@@ -1630,7 +1852,7 @@
         "nesting": 0
       },
       "usePreviewOne": {
-        "loc": 18,
+        "loc": 23,
         "params": 1,
         "cc": 1,
         "nesting": 0
@@ -1642,19 +1864,19 @@
         "nesting": 0
       },
       "runWorkers": {
-        "loc": 21,
+        "loc": 22,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "runNext": {
-        "loc": 15,
+        "loc": 16,
         "params": 0,
-        "cc": 6,
+        "cc": 7,
         "nesting": 3
       },
       "makeRunId": {
-        "loc": 3,
+        "loc": 1,
         "params": 0,
         "cc": 3,
         "nesting": 0
@@ -1666,27 +1888,69 @@
         "nesting": 0
       },
       "makePreviewProgressUpdater": {
-        "loc": 14,
+        "loc": 8,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "usePreviewQueue": {
-        "loc": 27,
+        "loc": 16,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "usePreviewSingle": {
+        "loc": 11,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useRootChange": {
+        "loc": 8,
+        "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "usePersistedLoad": {
         "loc": 10,
         "params": 2,
         "cc": 1,
         "nesting": 0
       },
-      "useBatchPreview": {
-        "loc": 16,
+      "buildRowMap": {
+        "loc": 1,
         "params": 1,
         "cc": 2,
+        "nesting": 1
+      },
+      "shouldSync": {
+        "loc": 6,
+        "params": 2,
+        "cc": 4,
+        "nesting": 1
+      },
+      "collectSync": {
+        "loc": 11,
+        "params": 3,
+        "cc": 4,
+        "nesting": 2
+      },
+      "markSeen": {
+        "loc": 1,
+        "params": 2,
+        "cc": 2,
+        "nesting": 1
+      },
+      "useReviewSync": {
+        "loc": 11,
+        "params": 4,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useBatchPreview": {
+        "loc": 20,
+        "params": 1,
+        "cc": 4,
         "nesting": 0
       }
     }
@@ -1794,49 +2058,67 @@
     }
   },
   "src/batch/useBatchTypes.ts": {
-    "file_lines": 40,
+    "file_lines": 41,
     "func_count": 0,
     "funcs": {}
   },
   "src/batch/useBatchView.ts": {
-    "file_lines": 90,
-    "func_count": 13,
+    "file_lines": 129,
+    "func_count": 27,
     "funcs": {
       "useBatchView": {
-        "loc": 7,
-        "params": 0,
-        "cc": 1,
-        "nesting": 0
-      },
-      "makeView": {
-        "loc": 14,
-        "params": 4,
-        "cc": 1,
-        "nesting": 0
-      },
-      "usePrefsState": {
-        "loc": 10,
+        "loc": 15,
         "params": 0,
         "cc": 1,
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 4,
+        "loc": 10,
+        "params": 2,
+        "cc": 5,
+        "nesting": 2
+      },
+      "makeView": {
+        "loc": 17,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
+      "usePrefsState": {
+        "loc": 8,
+        "params": 0,
+        "cc": 1,
+        "nesting": 0
+      },
       "useVisibleRows": {
-        "loc": 6,
+        "loc": 3,
         "params": 3,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useReviewCounts": {
+        "loc": 12,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useDecidableCount": {
+        "loc": 6,
+        "params": 2,
+        "cc": 1,
+        "nesting": 0
+      },
+      "useApprovedSelectedCount": {
+        "loc": 6,
+        "params": 2,
         "cc": 1,
         "nesting": 0
       }
     }
   },
   "src/lib/batchfilter.ts": {
-    "file_lines": 94,
-    "func_count": 11,
+    "file_lines": 106,
+    "func_count": 12,
     "funcs": {
       "applyBatchFilters": {
         "loc": 3,
@@ -1847,7 +2129,7 @@
       "(anonymous)": {
         "loc": 1,
         "params": 1,
-        "cc": 3,
+        "cc": 4,
         "nesting": 0
       },
       "inDate": {
@@ -1862,6 +2144,12 @@
         "cc": 2,
         "nesting": 0
       },
+      "inReview": {
+        "loc": 4,
+        "params": 2,
+        "cc": 4,
+        "nesting": 1
+      },
       "inSearch": {
         "loc": 5,
         "params": 2,
@@ -1875,7 +2163,7 @@
         "nesting": 0
       },
       "parseBatchFilter": {
-        "loc": 8,
+        "loc": 9,
         "params": 1,
         "cc": 3,
         "nesting": 1
@@ -1899,9 +2187,9 @@
         "nesting": 0
       },
       "batchFilterLabel": {
-        "loc": 8,
+        "loc": 9,
         "params": 1,
-        "cc": 6,
+        "cc": 7,
         "nesting": 1
       }
     }
@@ -2021,7 +2309,7 @@
     }
   },
   "src/lib/batchsort.ts": {
-    "file_lines": 74,
+    "file_lines": 83,
     "func_count": 7,
     "funcs": {
       "sortBatchRows": {
@@ -2039,13 +2327,13 @@
       "cmp": {
         "loc": 9,
         "params": 4,
-        "cc": 6,
+        "cc": 7,
         "nesting": 2
       },
       "primaryCmp": {
-        "loc": 8,
+        "loc": 9,
         "params": 3,
-        "cc": 5,
+        "cc": 8,
         "nesting": 0
       },
       "ci": {
@@ -2123,8 +2411,8 @@
     }
   },
   "src/lib/detect.ts": {
-    "file_lines": 386,
-    "func_count": 56,
+    "file_lines": 225,
+    "func_count": 60,
     "funcs": {
       "median": {
         "loc": 1,
@@ -2133,130 +2421,142 @@
         "nesting": 0
       },
       "(anonymous)": {
-        "loc": 6,
+        "loc": 1,
         "params": 2,
         "cc": 8,
         "nesting": 2
       },
       "sampleBorder": {
-        "loc": 11,
+        "loc": 7,
         "params": 3,
         "cc": 3,
         "nesting": 1
       },
       "push": {
-        "loc": 4,
+        "loc": 1,
         "params": 2,
         "cc": 1,
         "nesting": 0
       },
       "backgroundByMode": {
-        "loc": 17,
+        "loc": 10,
         "params": 3,
         "cc": 10,
         "nesting": 3
       },
       "estimateBackground": {
-        "loc": 4,
+        "loc": 1,
         "params": 3,
         "cc": 2,
         "nesting": 1
       },
-      "diffHistSync": {
-        "loc": 9,
-        "params": 4,
+      "chooseSampleStride": {
+        "loc": 1,
+        "params": 2,
         "cc": 3,
         "nesting": 1
       },
-      "diffHistAsync": {
-        "loc": 10,
+      "histSampledSync": {
+        "loc": 9,
         "params": 4,
         "cc": 5,
-        "nesting": 2
+        "nesting": 3
+      },
+      "histSampledAsync": {
+        "loc": 13,
+        "params": 4,
+        "cc": 8,
+        "nesting": 3
       },
       "maxDiffFromHist": {
-        "loc": 5,
+        "loc": 1,
         "params": 2,
         "cc": 3,
         "nesting": 2
       },
       "makeDownsample": {
-        "loc": 4,
+        "loc": 1,
         "params": 3,
         "cc": 1,
         "nesting": 0
       },
-      "maskDownsampleSync": {
-        "loc": 15,
-        "params": 3,
-        "cc": 6,
+      "maskWithDiffSync": {
+        "loc": 11,
+        "params": 2,
+        "cc": 7,
         "nesting": 3
       },
-      "maskDownsampleAsync": {
-        "loc": 16,
-        "params": 3,
-        "cc": 8,
+      "maskWithDiffAsync": {
+        "loc": 11,
+        "params": 2,
+        "cc": 9,
         "nesting": 3
       },
       "analyze": {
-        "loc": 12,
+        "loc": 8,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "analyzeAsync": {
-        "loc": 13,
+        "loc": 8,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "dilateH": {
-        "loc": 8,
+        "loc": 4,
         "params": 4,
         "cc": 5,
         "nesting": 2
       },
       "dilateV": {
-        "loc": 7,
+        "loc": 4,
         "params": 4,
         "cc": 5,
         "nesting": 2
       },
-      "dilate": {
-        "loc": 5,
+      "dilateBuf": {
+        "loc": 1,
         "params": 4,
         "cc": 2,
         "nesting": 1
       },
-      "tryPush": {
-        "loc": 3,
-        "params": 3,
-        "cc": 3,
+      "findRoot": {
+        "loc": 1,
+        "params": 2,
+        "cc": 2,
         "nesting": 1
       },
-      "updateBounds": {
-        "loc": 4,
-        "params": 4,
-        "cc": 1,
-        "nesting": 0
+      "unionRoots": {
+        "loc": 1,
+        "params": 3,
+        "cc": 2,
+        "nesting": 1
       },
-      "pushNeighbors": {
-        "loc": 12,
-        "params": 4,
-        "cc": 9,
+      "collectNeighbors": {
+        "loc": 8,
+        "params": 3,
+        "cc": 7,
+        "nesting": 1
+      },
+      "firstPass": {
+        "loc": 13,
+        "params": 1,
+        "cc": 8,
         "nesting": 3
       },
-      "floodFillBounds": {
-        "loc": 12,
-        "params": 3,
-        "cc": 3,
+      "secondPass": {
+        "loc": 10,
+        "params": 1,
+        "cc": 8,
         "nesting": 2
       },
-      "labelWithBounds": {
-        "loc": 10,
+      "labelUF": {
+        "loc": 5,
         "params": 2,
-        "cc": 4,
-        "nesting": 2
+        "cc": 1,
+        "nesting": 0
       },
       "downsampleSync": {
         "loc": 5,
@@ -2265,38 +2565,38 @@
         "nesting": 3
       },
       "downsampleAsync": {
-        "loc": 9,
+        "loc": 5,
         "params": 4,
         "cc": 6,
         "nesting": 3
       },
       "removeHLines": {
-        "loc": 10,
+        "loc": 3,
         "params": 4,
         "cc": 8,
         "nesting": 4
       },
       "removeVLines": {
-        "loc": 10,
+        "loc": 3,
         "params": 4,
         "cc": 8,
         "nesting": 4
       },
       "removeGridLines": {
-        "loc": 5,
+        "loc": 4,
         "params": 3,
         "cc": 4,
         "nesting": 3
       },
       "filterBySizeGrid": {
-        "loc": 12,
+        "loc": 3,
         "params": 4,
         "cc": 10,
         "nesting": 2
       },
-      "countAtRadiusFastSync": {
-        "loc": 4,
-        "params": 4,
+      "countFast": {
+        "loc": 1,
+        "params": 1,
         "cc": 1,
         "nesting": 0
       },
@@ -2306,50 +2606,62 @@
         "cc": 2,
         "nesting": 0
       },
-      "buildSeriesFastSync": {
-        "loc": 10,
-        "params": 4,
-        "cc": 7,
-        "nesting": 3
-      },
-      "buildSeriesFastAsync": {
-        "loc": 11,
-        "params": 4,
-        "cc": 8,
-        "nesting": 3
-      },
-      "bestRun": {
-        "loc": 8,
+      "buildRuns": {
+        "loc": 1,
         "params": 1,
-        "cc": 6,
+        "cc": 4,
         "nesting": 2
       },
-      "updateBoundsPx": {
-        "loc": 4,
-        "params": 4,
-        "cc": 5,
-        "nesting": 1
+      "bestRun": {
+        "loc": 1,
+        "params": 1,
+        "cc": 7,
+        "nesting": 2
       },
-      "extractBoxesSync": {
-        "loc": 15,
+      "buildSeriesFastSync": {
+        "loc": 5,
         "params": 4,
         "cc": 9,
         "nesting": 3
       },
-      "extractBoxesAsync": {
-        "loc": 7,
+      "buildSeriesFastAsync": {
+        "loc": 5,
         "params": 4,
-        "cc": 4,
-        "nesting": 2
+        "cc": 9,
+        "nesting": 3
       },
-      "scanRowSync": {
-        "loc": 4,
-        "params": 2,
+      "updateBoundsPx": {
+        "loc": 1,
+        "params": 4,
         "cc": 5,
-        "nesting": 2
+        "nesting": 1
+      },
+      "makeBounds": {
+        "loc": 1,
+        "params": 1,
+        "cc": 1,
+        "nesting": 0
+      },
+      "scanCellBlock": {
+        "loc": 3,
+        "params": 1,
+        "cc": 4,
+        "nesting": 3
+      },
+      "extractBoxesSync": {
+        "loc": 8,
+        "params": 4,
+        "cc": 6,
+        "nesting": 3
+      },
+      "extractBoxesAsync": {
+        "loc": 8,
+        "params": 4,
+        "cc": 8,
+        "nesting": 3
       },
       "buildBoxesFromBounds": {
-        "loc": 9,
+        "loc": 3,
         "params": 3,
         "cc": 4,
         "nesting": 2
@@ -2361,31 +2673,31 @@
         "nesting": 0
       },
       "filterContained": {
-        "loc": 5,
+        "loc": 1,
         "params": 1,
         "cc": 4,
         "nesting": 2
       },
       "filterBySize": {
-        "loc": 8,
+        "loc": 1,
         "params": 3,
         "cc": 1,
         "nesting": 0
       },
       "orderBoxes": {
-        "loc": 8,
+        "loc": 1,
         "params": 1,
         "cc": 3,
         "nesting": 2
       },
       "getDownsample": {
-        "loc": 6,
+        "loc": 1,
         "params": 1,
         "cc": 2,
         "nesting": 1
       },
       "getDownsampleAsync": {
-        "loc": 6,
+        "loc": 1,
         "params": 1,
         "cc": 2,
         "nesting": 1
@@ -2397,13 +2709,13 @@
         "nesting": 0
       },
       "detect": {
-        "loc": 15,
+        "loc": 6,
         "params": 2,
         "cc": 4,
         "nesting": 0
       },
       "detectAsync": {
-        "loc": 18,
+        "loc": 7,
         "params": 2,
         "cc": 4,
         "nesting": 0
@@ -3647,17 +3959,17 @@
     }
   },
   "src/lib/presets.ts": {
-    "file_lines": 110,
-    "func_count": 14,
+    "file_lines": 147,
+    "func_count": 20,
     "funcs": {
       "defaultPreset": {
-        "loc": 10,
+        "loc": 11,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "validatePreset": {
-        "loc": 14,
+        "loc": 15,
         "params": 1,
         "cc": 6,
         "nesting": 1
@@ -3709,6 +4021,42 @@
         "params": 1,
         "cc": 5,
         "nesting": 1
+      },
+      "validateRowMerges": {
+        "loc": 6,
+        "params": 1,
+        "cc": 3,
+        "nesting": 1
+      },
+      "isRecord": {
+        "loc": 3,
+        "params": 1,
+        "cc": 2,
+        "nesting": 0
+      },
+      "addMerge": {
+        "loc": 6,
+        "params": 3,
+        "cc": 3,
+        "nesting": 1
+      },
+      "isNonEmptyString": {
+        "loc": 3,
+        "params": 1,
+        "cc": 2,
+        "nesting": 0
+      },
+      "parseMergeValue": {
+        "loc": 5,
+        "params": 1,
+        "cc": 3,
+        "nesting": 1
+      },
+      "isValidFracNumber": {
+        "loc": 3,
+        "params": 1,
+        "cc": 4,
+        "nesting": 0
       },
       "serializePresetList": {
         "loc": 3,
@@ -4643,8 +4991,8 @@
     }
   },
   "src/lib/statefile.ts": {
-    "file_lines": 184,
-    "func_count": 22,
+    "file_lines": 207,
+    "func_count": 25,
     "funcs": {
       "blankState": {
         "loc": 3,
@@ -4677,15 +5025,15 @@
         "nesting": 0
       },
       "newRecord": {
-        "loc": 6,
+        "loc": 7,
         "params": 2,
         "cc": 1,
         "nesting": 0
       },
       "refreshRecord": {
-        "loc": 9,
+        "loc": 11,
         "params": 3,
-        "cc": 6,
+        "cc": 10,
         "nesting": 0
       },
       "revive": {
@@ -4707,6 +5055,12 @@
         "nesting": 0
       },
       "markProcessed": {
+        "loc": 8,
+        "params": 4,
+        "cc": 1,
+        "nesting": 0
+      },
+      "markReviewed": {
         "loc": 8,
         "params": 4,
         "cc": 1,
@@ -4737,7 +5091,7 @@
         "nesting": 1
       },
       "recordFrom": {
-        "loc": 12,
+        "loc": 14,
         "params": 1,
         "cc": 3,
         "nesting": 0
@@ -4755,6 +5109,12 @@
         "nesting": 0
       },
       "validStatus": {
+        "loc": 3,
+        "params": 1,
+        "cc": 2,
+        "nesting": 0
+      },
+      "validReview": {
         "loc": 3,
         "params": 1,
         "cc": 2,
@@ -10390,7 +10750,7 @@
     }
   },
   "src/selection/Surfaces.tsx": {
-    "file_lines": 82,
+    "file_lines": 83,
     "func_count": 4,
     "funcs": {
       "WriteBanner": {
@@ -10412,7 +10772,7 @@
         "nesting": 1
       },
       "Overlays": {
-        "loc": 20,
+        "loc": 21,
         "params": 1,
         "cc": 7,
         "nesting": 0

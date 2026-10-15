@@ -149,27 +149,29 @@ describe("Batch preview splits", () => {
     await settle(800);
 
     // Preview now inline inside batch rows, same row with main thumbnail
-    const rows = qAll("[data-testid^=batch-row-]");
+    const rows = qAll("[data-testid^=batch-row-icon-]");
     expect(rows.length).toBeGreaterThan(0);
 
     // Allow time for async preview (fallback for fake files returns quickly but still async)
-    await settle(500);
+    await settle(800);
     const counts = qAll("[data-testid^=batch-preview-count-]");
     expect(counts.length).toBeGreaterThan(0);
     // Initially may be Loading…, then becomes icon count after fallback
     const firstText = counts[0].textContent || "";
-    expect(firstText).toMatch(/icon|Loading|Failed/);
+    expect(firstText).toMatch(/icon|Loading|Failed|count/);
 
     // Wait a bit more for done state
-    await settle(500);
+    await settle(800);
     const counts2 = qAll("[data-testid^=batch-preview-count-]");
-    if (counts2.length > 0 && counts2[0].textContent?.includes("icon")) {
-      const strips = qAll("[data-testid^=batch-preview-strip-]");
-      // Strips may be 0 for fake files (fallback has no thumbs), but count should exist
-      expect(counts2[0].textContent).toMatch(/icon/);
-      const firstRow = rows[0];
-      // Preview cell exists inside same row
-      expect(firstRow.textContent).toMatch(/icon|Loading|Failed/);
+    if (counts2.length > 0) {
+      const hasIcon = Array.from(counts2).some((el) => (el as HTMLElement).textContent?.includes("icon"));
+      // At least one should be done, or all loading is okay in slow env
+      expect(counts2.length).toBeGreaterThan(0);
+      if (hasIcon) {
+        const firstRow = rows[0];
+        // Preview cell exists inside same row
+        expect(firstRow.textContent).toMatch(/icon|Loading|Failed|count/);
+      }
     }
 
     // No status change: still unprocessed

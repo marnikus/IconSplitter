@@ -126,6 +126,19 @@ function releaseDb(): null {
   return null;
 }
 
+export async function __resetDbForTests(): Promise<void> {
+  try {
+    const p = dbPromise;
+    dbPromise = null;
+    dbFrom = null;
+    if (p) {
+      try { const db = await p; try { db?.close(); } catch {} } catch {}
+    }
+  } catch {}
+  dbPromise = null;
+  dbFrom = null;
+}
+
 function tx<T>(db: IDBDatabase, store: string, mode: IDBTransactionMode, use: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     let t: IDBTransaction;
