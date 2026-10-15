@@ -197,6 +197,21 @@ function RowViewInner({ r, toggle, selectRow, selectActive, copyPath, thumbFor, 
   );
 }
 
+const RowView = memo(RowViewInner, (prev: any, next: any) => {
+  const pe = prev.previews?.get(prev.r.relPath);
+  const ne = next.previews?.get(next.r.relPath);
+  if (pe !== ne) return false;
+  if (prev.r.relPath !== next.r.relPath) return false;
+  if (prev.r.review !== next.r.review) return false;
+  if (prev.r.selected !== next.r.selected) return false;
+  if (prev.r.status !== next.r.status) return false;
+  if (prev.activeId !== next.activeId) return false;
+  if (prev.thumb !== next.thumb) return false;
+  if (prev.rowMerges !== next.rowMerges) return false;
+  if (prev.globalFrac !== next.globalFrac) return false;
+  return true;
+});
+
 export default function ScanTable(props: ScanTableProps) {
   return (
     <div className="svg-panel" data-testid="scan-table">
