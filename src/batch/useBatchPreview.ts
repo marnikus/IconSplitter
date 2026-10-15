@@ -57,13 +57,15 @@ function matchesRoot(key: string, entry: PreviewEntry, rootName: string): boolea
 }
 async function loadPersisted(rootName?: string): Promise<Map<string, PreviewEntry>> {
   try {
-    const keys = await idbGetAllKeys(PREVIEW_STORE);
     const vals = await idbGetAll<PreviewEntry>(PREVIEW_STORE);
     const m = new Map<string, PreviewEntry>();
-    for (let i = 0; i < vals.length; i++) {
-      const e = vals[i]; const k = keys[i] || "";
+    for (const e of vals) {
       if (!e || !e.relPath) continue;
-      if (rootName && !matchesRoot(k, e, rootName)) continue;
+      if (rootName) {
+        const rn = (e as any).rootName as string | undefined;
+        if (rn && rn !== rootName) continue;
+        // legacy without rootName — include as fallback (old builds)
+      }
       m.set(e.relPath, e);
     }
     return m;
@@ -222,12 +224,13 @@ function usePreviewSingle(previewOne: (row: Row, signal: AbortSignal, overrideFr
     } catch { /* ignore */ }
   }, [previewOne, setPreviews, onReviewed]);
 }
-function useRootChange(root: DirHandleLike | null, clearMemory: () => void) {
-  const prevRef = useRef<DirHandleLike | null>(null);
+function useRootChange(root: DirHandleLike | null, rootName: string, clearMemory: () => void) {
+  const prevRef = useRef<string | null>(null);
   useEffect(() => {
-    if (prevRef.current === null && root !== null) { prevRef.current = root; return; }
-    if (prevRef.current !== root) { clearMemory(); prevRef.current = root; }
-  }, [root, clearMemory]);
+    if (prevRef.current === null && root !== null) { prevRef.current = rootName; return; }
+    if (prevRef.current !== null && prevRef.current !== rootName) { clearMemory(); prevRef.current = rootName; }
+    if (root === null && prevRef.current !== null) { prevRef.current = null; }
+  }, [root, rootName, clearMemory]);
 }
 function usePersistedLoad(rootName: string, setPreviews: React.Dispatch<React.SetStateAction<Map<string, PreviewEntry>>>) {
   useEffect(() => {
@@ -283,7 +286,7 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rootName?:
   const clearMemory = useCallback(() => { abortRef.current?.abort(); setPreviews(new Map()); setIsPreviewing(false); setProgress(null); setRunning(false); }, [abortRef, setPreviews, setIsPreviewing, setProgress, setRunning]);
   const cancel = useCallback(() => { abortRef.current?.abort(); setIsPreviewing(false); setRunning(false); }, [abortRef, setIsPreviewing, setRunning]);
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
-  useRootChange(root, clearMemory);
+  useRootChange(root, rName, clearMemory);
   usePersistedLoad(rName, setPreviews);
   useReviewSync(params.rows, previews, onReviewed, onReviewedBatch);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
