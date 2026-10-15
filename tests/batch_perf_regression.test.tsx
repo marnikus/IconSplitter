@@ -38,16 +38,17 @@ describe("perf regression — exact root cause 3398b0a", () => {
     expect(onlyA[0].count).toBe(4);
   });
 
-  it("savePersisted stores metadata only (no thumbs) — reduces IDB from 60MB to ~1MB", async () => {
+  it("savePersisted stores full entry with thumbs (I-67, no regen)", async () => {
     const root = "testRoot";
     const entry = { relPath: "a.png", count: 4, thumbs: ["data:image/png;base64,xxx", "data2"], boxes: [{ x: 0, y: 0, w: 10, h: 10, ink: 1 }], status: "done", rootName: root };
-    const meta = { relPath: entry.relPath, count: entry.count, boxes: entry.boxes, status: entry.status, rootName: root, thumbs: [] as string[] };
+    // Now stores thumbs, not metadata-only
+    const meta = { relPath: entry.relPath, count: entry.count, boxes: entry.boxes, status: entry.status, rootName: root, thumbs: entry.thumbs };
     await idbPut(PREVIEW_STORE, `${root}::${entry.relPath}`, meta);
     const vals = await idbGetAll<any>(PREVIEW_STORE);
-    expect(vals[0].thumbs.length).toBe(0);
+    expect(vals[0].thumbs.length).toBe(2);
     expect(vals[0].count).toBe(4);
     const json = JSON.stringify(vals[0]);
-    expect(json.length).toBeLessThan(1000);
+    expect(json.length).toBeGreaterThan(0);
   });
 
   it("previewSelected force flag — false skips done with thumbs, true regenerates", () => {

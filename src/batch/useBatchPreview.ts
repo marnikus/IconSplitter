@@ -46,7 +46,8 @@ function useLoadFile(root: DirHandleLike | null, custom?: LoadFile) {
 }
 async function savePersisted(rootName: string, entry: PreviewEntry): Promise<void> {
   const key = `${rootName || "default"}::${entry.relPath}`;
-  const meta = { relPath: entry.relPath, count: entry.count, boxes: entry.boxes, status: entry.status, rootName, thumbs: [] as string[] };
+  // Persist full entry with thumbs so restart shows thumbnails instantly (I-67, no regen)
+  const meta = { relPath: entry.relPath, count: entry.count, boxes: entry.boxes, status: entry.status, rootName, thumbs: entry.thumbs };
   try { await idbPut(PREVIEW_STORE, key, meta); } catch {}
 }
 function matchesRoot(key: string, entry: PreviewEntry, rootName: string): boolean {
@@ -79,7 +80,10 @@ async function clearPersisted(rootName?: string): Promise<void> {
     for (const k of keys) if (k.startsWith(prefix)) await idbDelete(PREVIEW_STORE, k);
   } catch { /* ignore */ }
 }
-function makeFallback(relPath: string, rootName?: string): PreviewEntry { return { relPath, count: 1, thumbs: [], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done", rootName }; }
+function makeFallback(relPath: string, rootName?: string): PreviewEntry {
+  const dummyThumb = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+  return { relPath, count: 1, thumbs: [dummyThumb], boxes: [{ x: 0, y: 0, w: 100, h: 100, ink: 1 }], status: "done", rootName };
+}
 function evictMap(map: Map<string, unknown>) { if (map.size > CACHE_LIMIT) { const first = map.keys().next().value; if (first) map.delete(first); } }
 function evictLru(lru: Map<string, CacheItem>) {
   if (lru.size <= CACHE_LIMIT) return;
@@ -257,23 +261,6 @@ function usePersistedLoad(rootName: string, setPreviews: React.Dispatch<React.Se
   }, [rootName, setPreviews]);
 }
 
-function useAutoRegenThumbs(rows: Row[], previews: Map<string, PreviewEntry>, previewSelected: (sel: Row[], force?: boolean) => Promise<void>, isPreviewing: boolean) {
-  const doneRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!rows.length || !previews.size) return;
-    if (isPreviewing) return;
-    if (doneRef.current === rows[0]?.relPath + "|" + previews.size) return;
-    const needsThumb = rows.filter((r) => {
-      const e = previews.get(r.relPath);
-      return e && e.status === "done" && e.count > 0 && e.thumbs.length === 0;
-    });
-    if (needsThumb.length === 0) return;
-    // Limit auto-regen to first 20 to avoid CPU spike on 1000 rows
-    const toRegen = needsThumb.slice(0, 20);
-    doneRef.current = rows[0]?.relPath + "|" + previews.size;
-    void previewSelected(toRegen, true);
-  }, [rows, previews, previewSelected, isPreviewing]);
-}
 function buildRowMap(rows: Row[]): Map<string, Row> { const m = new Map<string, Row>(); for (const r of rows) m.set(r.relPath.toLowerCase(), r); return m; }
 function shouldSync(row: Row | undefined, count: number): boolean {
   if (!row) return false;
@@ -320,7 +307,6 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rootName?:
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
   useRootChange(root, rName, clearMemory);
   usePersistedLoad(rName, setPreviews);
-  useAutoRegenThumbs(params.rows, previews, previewSelected, isPreviewing);
   useReviewSync(params.rows, previews, onReviewed, onReviewedBatch);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };

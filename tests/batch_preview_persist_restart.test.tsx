@@ -126,14 +126,17 @@ describe("Batch preview persist across restart — 10 images", () => {
 
     // Give IDB a moment to flush
     await settle(1000);
-    // Check IDB has 10 persisted entries (metadata only)
+    // Check IDB has 10 persisted entries with thumbs (I-67, no regen)
     const persisted = await idbGetAll<any>(PREVIEW_STORE);
     expect(persisted.length).toBeGreaterThanOrEqual(10);
-    // Each persisted should have count and rootName, thumbs empty (perf)
+    // Each persisted should have count, rootName, and thumbs (full persist)
     for (const e of persisted) {
       expect(e.relPath).toBeDefined();
       expect(typeof e.count).toBe("number");
       expect(e.rootName).toBeDefined();
+      expect(Array.isArray(e.thumbs)).toBe(true);
+      // After fix, thumbs should be present (not metadata-only empty)
+      expect(e.thumbs.length).toBeGreaterThan(0);
     }
 
     // Simulate app close / restart: unmount, keep IDB (do NOT dropDb), keep localStorage (presets), clear only in-memory roots
@@ -163,15 +166,27 @@ describe("Batch preview persist across restart — 10 images", () => {
       if (countsAfterRestart.length === 10) break;
     }
     countsAfterRestart = qAll("[data-testid^=batch-preview-count-]");
-    // Should be 10 again, loaded from IDB
+    // Should be 10 again, loaded from IDB with thumbs
     expect(countsAfterRestart.length).toBe(10);
     for (const c of Array.from(countsAfterRestart!) as HTMLElement[]) {
-      // Even with metadata-only (no thumbs), count should be visible, not "—"
+      // With full persist (I-67), count should be visible with thumbs, not "—" or "count" fallback
       const txt = c.textContent || "";
       expect(txt.trim()).not.toBe("—");
       expect(txt.trim()).not.toBe("");
-      expect(txt).toMatch(/icon|Loading|Failed|count/);
+      expect(txt).toMatch(/icon|Loading|Failed/);
     }
+    // After restart, thumbs should be present (not just count text fallback)
+    let thumbsAfterRestart: NodeListOf<Element> | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await settle(200);
+      thumbsAfterRestart = qAll("[data-testid^=batch-preview-thumb-]");
+      if (thumbsAfterRestart.length >= 10) break;
+    }
+    thumbsAfterRestart = qAll("[data-testid^=batch-preview-strip-]");
+    // At least 10 preview strips should exist with thumbs
+    expect(thumbsAfterRestart.length).toBeGreaterThanOrEqual(10);
+    const thumbImgs = qAll("[data-testid^=batch-preview-thumb-]");
+    expect(thumbImgs.length).toBeGreaterThanOrEqual(10);
 
     // Ensure no row shows "—" in preview column (which would mean missing entry)
     const dashCells = Array.from(qAll(".svg-cell")).filter((el) => (el as HTMLElement).textContent?.trim() === "—");

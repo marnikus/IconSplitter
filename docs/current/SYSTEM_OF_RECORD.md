@@ -1230,6 +1230,15 @@ Batch:
   used during split of approved items: effective merge = row override ?? global
   `split.mergeFrac` ?? auto (null). `splitWithOverride` in `batchOps.ts` implements
   the override, `useBatch.ts` persists it, `presets.ts` validates it.
+* **I-67 (batch preview thumbs persist, RULE 13/24 — 2026-10-15):**
+  preview entries are persisted in IDB `PREVIEW_STORE` (`iconSplitter/previews`)
+  with full `thumbs` data URLs (not metadata-only), keyed `rootName::relPath`,
+  so after restart list shows thumbnails immediately without regeneration.
+  `count`, `boxes`, `status`, `rootName`, `thumbs` all survive; max 20 thumbs,
+  96px, data URL. No auto-regen on mount; `filterEligible` with `force=false`
+  skips done entries (including those with thumbs), `force=true` regenerates
+  only on explicit user Preview click. No files written to `_split_output`
+  during preview — preview is in-memory + IDB only, split writes only on Split.
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
@@ -1264,6 +1273,7 @@ Batch:
 | Where | What | Rules |
 |---|---|---|
 | localStorage `iconSplitter.presets.v1` | preset list (JSON) including `split` and `rowMerges` per-row overrides (I-66) | validated on read (RULE 13), rowMerges clamped 0..0.15 or null |
+| IndexedDB `iconSplitter/previews` | batch preview entries with thumbs (I-67) `{ relPath, count, thumbs: dataURL[], boxes, status, rootName }` keyed `rootName::relPath` | validated on read, capped at 200 LRU, thumbs max 20×96px, no files written to `_split_output` during preview |
 | localStorage `iconSplitter.lastPreset.v1` | last-used preset name | restores on boot |
 | IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
