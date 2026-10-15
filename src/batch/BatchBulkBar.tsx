@@ -23,9 +23,11 @@ export interface BatchBulkBarProps {
   onThumb: (px: number) => void;
   onSplit: () => void;
   onPreview?: () => void;
+  onRegenerate?: () => void;
   onDecide?: (review: BatchReviewStatus) => void;
   canSplit: boolean;
   canPreview?: boolean;
+  canRegenerate?: boolean;
   previewing?: boolean;
 }
 
@@ -56,12 +58,20 @@ function splitLabel(p: BatchBulkBarProps, approvedSel: number): string {
   return p.reviewCounts ? `▶ Split approved (${approvedSel})` : `Split selected (${p.selectedCount})`;
 }
 
-function PreviewBtn(p: BatchBulkBarProps) {
-  if (!p.onPreview) return null;
+function PreviewBtns(p: BatchBulkBarProps) {
   return (
-    <button type="button" className="svg-btn" data-testid="batch-preview" disabled={p.canPreview === false} onClick={p.onPreview}>
-      {p.previewing ? "◍ Previewing…" : "◉ Preview splits"}
-    </button>
+    <>
+      {p.onPreview && (
+        <button type="button" className="svg-btn" data-testid="batch-preview" disabled={p.canPreview === false} onClick={p.onPreview}>
+          {p.previewing ? "◍ Previewing…" : "◉ Preview splits"}
+        </button>
+      )}
+      {p.onRegenerate && (
+        <button type="button" className="svg-btn" data-testid="batch-regenerate" disabled={p.canRegenerate === false} onClick={p.onRegenerate}>
+          ↺ Regenerate splits
+        </button>
+      )}
+    </>
   );
 }
 
@@ -93,7 +103,7 @@ function Right(p: BatchBulkBarProps) {
   return (
     <>
       <ZoomAndTotal {...p} />
-      <PreviewBtn {...p} />
+      <PreviewBtns {...p} />
       {showReview && <ReviewBtns decidable={decidable} onDecide={p.onDecide} />}
       <button type="button" className="svg-btn primary" data-testid="batch-process" disabled={!p.canSplit} onClick={p.onSplit}>{splitLabel(p, approvedSel)}</button>
     </>

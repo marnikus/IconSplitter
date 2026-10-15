@@ -33,7 +33,10 @@ function useReviewed(v: View) {
 }
 function useCheckedRows(v: View) { return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]); }
 function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: Preview) {
-  return useCallback(() => { void preview.previewSelected(checkedRows); }, [checkedRows, preview]);
+  return useCallback(() => { void preview.previewSelected(checkedRows, false); }, [checkedRows, preview]);
+}
+function useOnRegenerate(checkedRows: View["core"]["s"]["rows"], preview: Preview) {
+  return useCallback(() => { void preview.previewSelected(checkedRows, true); }, [checkedRows, preview]);
 }
 function useRowMergeApply(v: View, preview: Preview) {
   return useCallback((relPath: string, value: number | null) => {
@@ -50,7 +53,7 @@ function useRowMergeReset(v: View, preview: Preview) {
   }, [v, preview]);
 }
 function usePreviewSetup(v: View, onReviewed: (relPath: string, count: number) => void, onReviewedBatch: (entries: { relPath: string; count: number }[]) => void) {
-  return useBatchPreview({ root: v.core.rootRef.current, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onReviewed, onReviewedBatch });
+  return useBatchPreview({ root: v.core.rootRef.current, rootName: v.core.s.rootName, rows: v.core.s.rows, split: v.core.s.preset.split, rowMerges: v.rowMerges, onReviewed, onReviewedBatch });
 }
 
 export default function BatchPanel() {
@@ -62,6 +65,7 @@ export default function BatchPanel() {
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
   const checkedRows = useCheckedRows(v);
   const onPreview = useOnPreview(checkedRows, preview);
+  const onRegenerate = useOnRegenerate(checkedRows, preview);
   const onRowMergeApply = useRowMergeApply(v, preview);
   const onRowMergeReset = useRowMergeReset(v, preview);
   return (
@@ -69,7 +73,7 @@ export default function BatchPanel() {
       <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => {}} mode="split" />
       <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => {}} mode="preview" />
       {!v.core.supported && <Unsupported />}
-      <BatchControls v={v} onPreview={onPreview} previewing={preview.isPreviewing} previewRunning={preview.running} />
+      <BatchControls v={v} onPreview={onPreview} onRegenerate={onRegenerate} previewing={preview.isPreviewing} previewRunning={preview.running} />
       <PresetAndDest v={v} />
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
@@ -80,13 +84,13 @@ export default function BatchPanel() {
   );
 }
 
-function BatchControls({ v, onPreview, previewing, previewRunning }: { v: View; onPreview: () => void; previewing: boolean; previewRunning: boolean }) {
+function BatchControls({ v, onPreview, onRegenerate, previewing, previewRunning }: { v: View; onPreview: () => void; onRegenerate: () => void; previewing: boolean; previewRunning: boolean }) {
   const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null) || (previewRunning ? "Previewing…" : null);
   return (
     <div className="batch-controls-stack space-y-3">
       <div className="v2-controls"><BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} /></div>
       <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} previewing={previewing} />
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onRegenerate={onRegenerate} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} canRegenerate={v.selectedCount > 0 && !busy} previewing={previewing} />
     </div>
   );
 }
