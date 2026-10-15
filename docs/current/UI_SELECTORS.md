@@ -154,6 +154,19 @@ Review window (scan table) — `scan-table` panel:
 | `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
 
+Bulk bar (selection actions) — `BatchBulkBar.tsx` (verified 2026-10-15):
+
+| Test id | Visible text | Notes |
+|---|---|---|
+| `batch-selected-count` | `N selected` | live count of checked rows |
+| `batch-preview` | `◉ Preview splits` → `◍ Previewing…` | renders previews for checked rows, skipping rows whose stored preview is current |
+| `batch-regenerate` | `↺ Regenerate splits` | force=true — re-renders AND overwrites the stored record, even when one exists |
+| `batch-warning-selected` / `batch-approve-selected` / `batch-decline-selected` | `⚠ Warning selected` / `✓ Approve selected` / `✕ Decline selected` | bulk review decisions |
+| `batch-zoom` | thumb-size slider | `batch-thumb` range input |
+
+Preview results (row level): `batch-preview-count-{relPath}` (e.g. `4 icons`),
+`batch-preview-strip-{relPath}`, `batch-preview-thumb-{relPath}-{n}`.
+
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.
 
@@ -263,6 +276,7 @@ Approving a pair writes `<dir>/<stem>.svg.json` beside its images and never a
 | `log-head` | the dock's header | `log-count` ("120 of 200"), `log-autoscroll` ("following" / "paused"), `log-max` (select: 50/100/200/500/1000), `log-copy`, `log-clear`, `log-minimize` ("Minimize" / "Restore"), `log-note` (Copy/Clear feedback) |
 | `log-body` / `log-list` / `log-entry` / `log-empty` | the scrolling entries | one `log-entry` per line: level, `feature.action`, ids, detail; `role="log"` |
 | `--app-dock-h` | CSS custom property on `:root` | the dock's height (236 px open, 36 px minimized), published by `src/log/dockheight.ts`; the fixed floats (`svg-toast`, `svg-busy`, `.toast-above-dock`) read it |
+| `scroll-top-btn` | `↑` corner button, `aria-label="Back to top"` | rendered by the shell next to `app-main` — one instance on every tab; `hidden` while the list is at the top, appears past 80 px of scroll; click returns `app-main` to the top (verified 2026-10-15) |
 
 ## J. Handles still needed (to be added on demand)
 

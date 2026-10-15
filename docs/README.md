@@ -80,6 +80,7 @@ doc itself, never in this map.
 | `archive/2026-10-13-batch-review/README.md` | Batch folders review — approve/decline/warning + 4-icon rule |
 | `archive/2026-10-13-batch-row-merge-override/README.md` | Batch per-row merge override — design doc |
 | `archive/2026-10-13-grid-split-failure/README.md` | Grid image fails to split — 2x2 lightbulb icons |
+| `archive/2026-10-15-preview-restore-scroll-top/design.md` | Preview splits stored + restored after a restart, Regenerate rewrites, back-to-top button on all tabs |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

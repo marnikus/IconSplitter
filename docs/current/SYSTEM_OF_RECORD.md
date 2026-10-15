@@ -24,8 +24,12 @@ A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
    folder / clipboard).
 2. **Batch folders** (Chrome/Edge only, File System Access API) — pick a root
    folder, recursively scan every `*_AI*` image, review and select them, split
-   each into its own organised output tree beside the sources, with presets
-   and per-reference JSON status tracking.
+   each into its own organised output tree beside the sources, with presets,
+   per-reference JSON status tracking, and split PREVIEWS that persist across a
+   page/system restart: a boot with a restored root re-renders them from the
+   stored records (never regenerating on its own — regeneration happens only on
+   the explicit "↺ Regenerate splits", which overwrites the stored record; the
+   plain "◉ Preview splits" skips rows whose stored preview is current).
 3. **Selection** (Chrome/Edge only) — recursively scan a root, pair every
    original with its `_AI` result, review them side by side and store an
    approve/decline decision per pair in the pair's own `<stem>.svg.json` (I-41).
@@ -1257,6 +1261,7 @@ Batch:
 | localStorage `iconSplitter.presets.v1` | preset list (JSON) | validated on read (RULE 13) |
 | localStorage `iconSplitter.lastPreset.v1` | last-used preset name | restores on boot |
 | IndexedDB `iconSplitter/handles` | source/dest directory handles per preset | permission re-requested on restore |
+| IndexedDB `iconSplitter/handles` store `batchPreviews` (DB v4, `PREVIEW_STORE`) | one rendered batch preview per row: key `<rootName>::<relPath>`, value `{ relPath, count, thumbs, boxes, status: "done", rootName, at }` — the fallback-shaped record an undecodable file produced is what persists | validated entry-by-entry on read (`isStoredPreview`, RULE 13): junk → that row is simply not restored; written on every rendered `done` preview (`at` = write time); "↺ Regenerate splits" overwrites the row, plain Preview reuses it while the key matches; Clear deletes this root's rows |
 | `<refDir>/<base>.json` | per-reference source status records | rewritten after every scan/batch; app-owned, overwrite allowed |
 | `<root>/_split_output/…` or custom dest | batch outputs | never overwritten (I-8) |
 | `<root>/review-decisions.json` | **legacy** approve/decline records — read as a fallback only | never written or deleted by this build (I-42); a local pair file wins; corrupt → warn + keep memory (I-12) |
@@ -1304,7 +1309,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Output plan | `src/lib/output.ts` | month/timestamp layout, `_vNN` allocation |
 | FS adapter | `src/lib/fs.ts`, `src/batch/picker.ts` | no-overwrite IO, relative byte/text reads and non-creating presence probes, tree read, folder picking |
 | Batch split | `src/lib/batchsplit.ts`, `src/lib/dom.ts` | sheet→blobs orchestration; image loading |
-| Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts` | orchestration, review window, presets, persistence |
+| Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts`, `previewPersist.ts` | orchestration, review window, presets, persistence, stored split previews (restart restore, RULE 13 validation) |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
 | Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52/I-59): `Rescan`'s one retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name (the pick's own rule: exact leaf, or the direct parent of a path one level inside the folder — I-35) |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
