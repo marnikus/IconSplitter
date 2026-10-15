@@ -1740,8 +1740,8 @@
     }
   },
   "src/batch/useBatchPreview.ts": {
-    "file_lines": 307,
-    "func_count": 66,
+    "file_lines": 328,
+    "func_count": 69,
     "funcs": {
       "useCaches": {
         "loc": 5,
@@ -1864,15 +1864,15 @@
         "nesting": 0
       },
       "runWorkers": {
-        "loc": 22,
+        "loc": 24,
         "params": 1,
         "cc": 1,
         "nesting": 0
       },
       "runNext": {
-        "loc": 16,
+        "loc": 18,
         "params": 0,
-        "cc": 7,
+        "cc": 8,
         "nesting": 3
       },
       "makeRunId": {
@@ -1917,6 +1917,12 @@
         "cc": 1,
         "nesting": 0
       },
+      "useAutoRegenThumbs": {
+        "loc": 17,
+        "params": 4,
+        "cc": 1,
+        "nesting": 0
+      },
       "buildRowMap": {
         "loc": 1,
         "params": 1,
@@ -1948,7 +1954,7 @@
         "nesting": 0
       },
       "useBatchPreview": {
-        "loc": 20,
+        "loc": 21,
         "params": 1,
         "cc": 4,
         "nesting": 0

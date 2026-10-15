@@ -186,7 +186,9 @@ async function runWorkers(args: WorkersArgs) {
         setPreviews((prev) => { const next = new Map(prev); next.set(row.relPath, entry); return next; });
         onReviewed?.(row.relPath, entry.count);
         done++; onProgress?.(done, queue[done] ?? null);
-      } catch { return; }
+      } catch {
+        done++; onProgress?.(done, queue[done] ?? null);
+      }
       await yieldToUI();
     }
   };
@@ -254,6 +256,24 @@ function usePersistedLoad(rootName: string, setPreviews: React.Dispatch<React.Se
     })();
   }, [rootName, setPreviews]);
 }
+
+function useAutoRegenThumbs(rows: Row[], previews: Map<string, PreviewEntry>, previewSelected: (sel: Row[], force?: boolean) => Promise<void>, isPreviewing: boolean) {
+  const doneRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!rows.length || !previews.size) return;
+    if (isPreviewing) return;
+    if (doneRef.current === rows[0]?.relPath + "|" + previews.size) return;
+    const needsThumb = rows.filter((r) => {
+      const e = previews.get(r.relPath);
+      return e && e.status === "done" && e.count > 0 && e.thumbs.length === 0;
+    });
+    if (needsThumb.length === 0) return;
+    // Limit auto-regen to first 20 to avoid CPU spike on 1000 rows
+    const toRegen = needsThumb.slice(0, 20);
+    doneRef.current = rows[0]?.relPath + "|" + previews.size;
+    void previewSelected(toRegen, true);
+  }, [rows, previews, previewSelected, isPreviewing]);
+}
 function buildRowMap(rows: Row[]): Map<string, Row> { const m = new Map<string, Row>(); for (const r of rows) m.set(r.relPath.toLowerCase(), r); return m; }
 function shouldSync(row: Row | undefined, count: number): boolean {
   if (!row) return false;
@@ -300,6 +320,7 @@ export function useBatchPreview(params: { root: DirHandleLike | null; rootName?:
   const dismiss = useCallback(() => { setProgress(null); }, [setProgress]);
   useRootChange(root, rName, clearMemory);
   usePersistedLoad(rName, setPreviews);
+  useAutoRegenThumbs(params.rows, previews, previewSelected, isPreviewing);
   useReviewSync(params.rows, previews, onReviewed, onReviewedBatch);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, [abortRef]);
   return { previews, isPreviewing, previewSelected, clear, previewOne, previewSingle, progress, running, cancel, dismiss };
