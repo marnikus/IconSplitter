@@ -23,7 +23,6 @@ function Inner({ relPath, globalFrac, overrideFrac, onApply, onReset }: BatchRow
   }, []);
 
   const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => updateLocal(e.target.value), [updateLocal]);
-  const onInput = useCallback((e: React.FormEvent<HTMLInputElement>) => updateLocal((e.target as HTMLInputElement).value), [updateLocal]);
   const doApply = useCallback(() => onApply(relPath, local), [relPath, local, onApply]);
   const doReset = useCallback(() => onReset(relPath), [relPath, onReset]);
 
@@ -31,7 +30,7 @@ function Inner({ relPath, globalFrac, overrideFrac, onApply, onReset }: BatchRow
     <div className="flex w-full max-w-[420px] min-w-[300px] flex-nowrap items-center justify-center gap-2 mx-auto rounded-lg border border-white/10 bg-slate-900/40 px-2 py-1.5" data-testid={`batch-row-merge-bar-${relPath}`}>
       <span className="shrink-0 whitespace-nowrap text-[11px] font-medium">Detection</span>
       <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-400" data-testid={`batch-row-merge-label-${relPath}`}>Merge {local.toFixed(4)}{hasOv ? " • overridden" : eff == null ? " (auto)" : ""}</span>
-      <input type="range" min={0} max={0.15} step={0.0025} value={local} onChange={onChange} onInput={onInput} className="w-32 shrink-0 accent-indigo-500" data-testid={`batch-row-merge-slider-${relPath}`} />
+      <input type="range" min={0} max={0.15} step={0.0025} value={local} onChange={onChange} className="w-32 shrink-0 accent-indigo-500" data-testid={`batch-row-merge-slider-${relPath}`} />
       <button type="button" className="btn-mini shrink-0 whitespace-nowrap text-[11px]" data-testid={`batch-row-merge-apply-${relPath}`} onClick={doApply}>Apply</button>
       <button type="button" className="btn-ghost shrink-0 whitespace-nowrap text-[11px] disabled:opacity-40" data-testid={`batch-row-merge-reset-${relPath}`} disabled={!hasOv} onClick={doReset}>↺ Reset</button>
     </div>

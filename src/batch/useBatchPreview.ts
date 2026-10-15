@@ -199,7 +199,7 @@ function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal) => 
   const { previewOne, setPreviews, setIsPreviewing, setProgress, setRunning, abortRef, onReviewed, previews } = args;
   return useCallback(async (selected: Row[], force = false) => {
     const base = selected.filter((r) => r.status !== "missing" && r.status !== "deleted");
-    const eligible = force ? base : base.filter((r) => { const e = previews.get(r.relPath); return !e || e.status !== "done"; });
+    const eligible = force ? base : base.filter((r) => { const e = previews.get(r.relPath); return !e || e.status !== "done" || e.thumbs.length === 0; });
     if (eligible.length === 0) return;
     abortRef.current?.abort();
     const ac = new AbortController(); abortRef.current = ac;
