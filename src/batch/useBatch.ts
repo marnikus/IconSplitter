@@ -1,7 +1,7 @@
 // useBatch.ts — UI orchestration for batch (RULE 2/4/5/7/24)
 // Owns root/dest picking, scan + selection, preset, rowMerges, process run
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultPreset, type Preset } from "../lib/presets";
 import { pickDirectory, fsSupported, ensurePermission } from "./picker";
 import { pickFolderFor } from "../ui/pickroot";
@@ -26,14 +26,13 @@ export function useBatch() {
   useEffect(() => { void boot(ctx, setS); }, []);
   useToastClear(s.toast, setS);
   const say = useCallback((msg: string, err = false) => setS((p) => ({ ...p, toast: { msg, err } })), []);
-  return {
-    s, say,
-    ...useCoreActions(ctx, setS, say),
-    ...useViewActions(ctx, setS),
-    ...usePresetActions(ctx, setS, say),
-    supported: fsSupported(),
-    rootRef: ctx.root,
-  };
+  const coreActions = useCoreActions(ctx, setS, say);
+  const viewActions = useViewActions(ctx, setS);
+  const presetActions = usePresetActions(ctx, setS, say);
+  const supported = useMemo(() => fsSupported(), []);
+  return useMemo(() => ({
+    s, say, ...coreActions, ...viewActions, ...presetActions, supported, rootRef: ctx.root,
+  }), [s, say, coreActions, viewActions, presetActions, supported]);
 }
 
 function useCtx(s: BatchState): Ctx {
@@ -69,7 +68,7 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
   const run = useCallback(() => { void batchProcess(ctx, setS); }, [ctx, setS]);
   const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
   const decide = useCallback((relPaths: string[], review: BatchReviewStatus) => { void decideReview({ ctx, relPaths, review, setS }); }, [ctx, setS]);
-  return { chooseRoot, chooseDest, refresh, run, cancel, decide };
+  return useMemo(() => ({ chooseRoot, chooseDest, refresh, run, cancel, decide }), [chooseRoot, chooseDest, refresh, run, cancel, decide]);
 }
 
 function useViewActions(ctx: Ctx, setS: Setter) {
@@ -90,7 +89,7 @@ function useViewActions(ctx: Ctx, setS: Setter) {
   }, [setS]);
   const clearAllRowMerges = useCallback(() => { setS((p) => ({ ...p, rowMerges: {} })); }, [setS]);
   const setProgress = useCallback((progress: BatchState["progress"]) => { setS((p) => ({ ...p, progress })); }, [setS]);
-  return { toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress };
+  return useMemo(() => ({ toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress }), [toggle, selectAll, setSelected, thumbUrl, setRowMerge, clearRowMerge, clearAllRowMerges, setProgress]);
 }
 
 function usePresetActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
