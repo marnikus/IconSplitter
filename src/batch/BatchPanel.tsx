@@ -1,7 +1,7 @@
 // BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview inline + per-row override + review (approved/declined/warning)
 
 import { useCallback, useMemo } from "react";
-import { copyFolderText, copySplitFolderText } from "../lib/copypath";
+import { copyPath, locateSplits } from "./rowcopy";
 import { useBatchView } from "./useBatchView";
 import ScanTable, { useThumbCache } from "./ScanTable";
 import BatchFilterGrid from "./BatchFilterGrid";
@@ -87,7 +87,8 @@ export default function BatchPanel() {
       <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => {}} mode="preview" />
       {!v.core.supported && <Unsupported />}
       <GrantBar v={v} />
-      <BatchControls v={v} onPreview={onPreview} onRegenerate={onRegenerate} previewing={preview.isPreviewing} previewRunning={preview.running} />
+<BatchControls v={v} />
+      <PinnedBulkBar v={v} preview={preview} onPreview={onPreview} onRegenerate={onRegenerate} />
       <PresetAndDest v={v} />
       <BatchMergeBar preset={v.core.s.preset} setPreset={v.core.setPreset} />
       {preview.previews.size > 0 && <div className="flex justify-end"><button type="button" className="btn-ghost text-xs" data-testid="batch-preview-clear" onClick={preview.clear}>Clear previews</button></div>}
@@ -98,13 +99,23 @@ export default function BatchPanel() {
   );
 }
 
-function BatchControls({ v, onPreview, onRegenerate, previewing, previewRunning }: { v: View; onPreview: () => void; onRegenerate: () => void; previewing: boolean; previewRunning: boolean }) {
-  const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null) || (previewRunning ? "Previewing…" : null);
+/** Pinned split controls (2026-10-16): sticky within .batch-shell, which spans
+ *  the list, so the bar rides .app-main's scroll and pins at the top. */
+function PinnedBulkBar({ v, preview, onPreview, onRegenerate }: { v: View; preview: ReturnType<typeof useBatchPreview>; onPreview: () => void; onRegenerate: () => void }) {
+  const busy = v.core.s.busy || (v.core.s.running ? "Splitting…" : null) || (preview.running ? "Previewing…" : null);
+  const previewing = preview.isPreviewing;
+  return (
+    <div className="batch-bulkbar-pin" data-testid="batch-bulkbar-pin">
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onRegenerate={onRegenerate} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} canRegenerate={v.selectedCount > 0 && !busy} previewing={previewing} />
+    </div>
+  );
+}
+
+function BatchControls({ v }: { v: View }) {
   return (
     <div className="batch-controls-stack space-y-3">
       <div className="v2-controls"><BatchSourceBar rootName={v.core.s.rootName} root={v.core.rootRef.current} rows={v.core.s.rows} chooseRoot={() => void v.core.chooseRoot()} rescan={() => void v.core.refresh()} /></div>
       <BatchFilterGrid filter={v.filter} sort={v.sort} shown={v.visibleCount} setFilter={v.setFilter} setSort={v.setSort} />
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onRegenerate={onRegenerate} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} canRegenerate={v.selectedCount > 0 && !busy} previewing={previewing} />
     </div>
   );
 }
@@ -150,10 +161,4 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
     </div>
   );
 }
-function copyPath(v: View, relPath: string): void { void copyFolderText(v.core.rootRef.current, relPath, v.core.say); }
 
-function locateSplits(v: View, relPath: string): void {
-  const row = v.core.s.rows.find((r) => r.relPath.toLowerCase() === relPath.toLowerCase());
-  if (!row?.outRel) return;
-  void copySplitFolderText(v.core.destRef.current, v.core.rootRef.current, row.outRel, v.core.say);
-}
