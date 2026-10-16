@@ -68,8 +68,14 @@ function validateSplit(x: unknown): SplitSettings {
   };
 }
 
+/** Repairs recoverable numbers on read (RULE 13): a legacy stored "1024" is the user's intent, not junk. */
 function numberOr(x: unknown, fallback: number): number {
-  return typeof x === "number" && Number.isFinite(x) ? x : fallback;
+  if (typeof x === "number") return Number.isFinite(x) ? x : fallback;
+  if (typeof x === "string") {
+    const n = Number(x.trim());
+    return Number.isFinite(n) && x.trim() !== "" ? n : fallback;
+  }
+  return fallback;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

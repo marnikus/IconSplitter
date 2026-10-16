@@ -2693,3 +2693,11 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - Guardrails intact: RULE 5/7 responsiveness (≤24–48 ms stretches), no-overwrite (per-item planned folders), per-item failure isolation, stop semantics (locked by tests), blob order = reading order.
 - RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (26 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 175 files / 1,878 tests; build `dist/index.html` 1,556.06 kB (457.46 kB gzip).
 - Measured in-suite: yields 33 → 5; pipeline 1 046 ms → 111 ms (89 %); combined model ≥80 % for typical batches (see the README for per-scenario estimates).
+
+## 2026-10-15 — fix(batch): exported split size now equals the preset size (legacy string presets repaired)
+
+- User report: "size 1024 (or other preset size) does nothing — exported files have a different size." Research first (`archive/2026-10-15-split-size/README.md`): the whole chain was verified link by link (UI select → state/localStorage → runBatch → paintIcon canvas → blob → file) with component and lib probes — the pipeline always rendered exactly `split.size` px. The break was in the PRESET PARSE: `numberOr` rejected stored numeric strings, so a legacy `"size": "1024"` silently became `0` = auto on every load — the reported symptom, persistent until re-save.
+- TDD: `tests/split_size.test.ts` written RED first (string size → 0, string padding → default), then the fix: `numberOr` repairs finite numeric strings on read (RULE 13 recoverable-intent repair). Integrity kept: `"abc"`/`true`/off-list numbers still fall back (validSize snaps to auto); exact allowed values untouched.
+- The fix is self-healing for existing browsers: the next preset load repairs the value; the next save normalizes it to a number.
+- Contract locks added: `splitSheet` renders exactly `split.size` px (1024/512/0 matrix) — green before and after, proving the pipeline was never at fault.
+- RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (26 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 176 files / 1,884 tests; build `dist/index.html` 1,556.16 kB (457.50 kB gzip).
