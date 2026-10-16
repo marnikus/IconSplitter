@@ -1847,3 +1847,14 @@
 .up-preview-card figcaption { color: var(--v2-muted); font-size: 9px; line-height: 1.45; text-align: center; word-break: break-word; }
 
 .up-overridden { color: var(--v2-purple-2); }
+
+/* Pinned split controls (2026-10-16, archive/2026-10-16-pinned-bulkbar): the bulk
+   bar stays on screen while the rows scroll. The scroll container is .app-main;
+   .batch-shell has no overflow, so sticky pins against it. z-index 6 sits above
+   row content (<=2) and below the progress header (55) and modals (30). The bar
+   itself (.svg-bulk) paints an opaque surface, so rows never show through. */
+.batch-bulkbar-pin {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
