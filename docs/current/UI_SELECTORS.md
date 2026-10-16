@@ -430,6 +430,7 @@ Bulk bar (`svg-bulk`):
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
 | `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration appends behind a run in flight (I-53) |
+| `svg-bulk-image-regen` | button | "◍ Regenerate image (N)" — N counts checked rows (2026-10-16); opens the AI source regeneration dialog for all of them; refuses honestly (toast, no dialog) while a TEXT connection is active; disabled at 0 |
 | `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
@@ -445,6 +446,8 @@ Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
 | `svg-generate-{sourceId}` / `svg-needs-review-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate + review: needs-review (⚠ yellow, regenerated — new review) near approve/decline; approve/decline disabled until a version exists; regeneration automatically sets needs-review |
+| `svg-row-image-regen-{sourceId}` | button | "◍ Regenerate image" (2026-10-16) — opens the SAME AI source regeneration dialog as the bulk action, for just this row; same text-connection guard |
+| `svg-ai-chip-{sourceId}-orig` / `svg-ai-chip-{sourceId}-{n}` | version chips | the AI source's version bar (2026-10-16): the original image plus every recorded regeneration with status "done"; the main one carries class `primary` and `data-active="true"`; clicking a chip makes that version main (persisted to the pair file) — the AI thumbnail switches to it everywhere |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
 | `svg-review-{sourceId}` | badge | pending / approved / declined / needs-review (regenerated — new review, yellow) |
 | `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
@@ -502,6 +505,10 @@ Dialogs:
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
 | `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
+| `svg-img-confirm` | AI source regeneration dialog (2026-10-16): confirm-before-send for image batches, titled "Regenerate AI source image"; `svg-img-cancel` closes, `svg-img-generate` ("Generate now") confirms |
+| `svg-img-count` / `svg-img-provider` | the selected count and the active IMAGE connection as `{conn.name} · {kind label}` (`title` = the raw model id); opening it with a text connection active is refused before the dialog exists |
+| `svg-img-caps` | note | "Text-to-image only — this provider documents no image-edit endpoint, so the current AI image cannot be sent along. One request per source." |
+| `svg-img-preset` / `svg-img-prompt` | the SAME preset dropdown and prompt editor as SVG generation (the shared `PromptBlock`): picking a preset fills the editor with its text; the editor content is the prompt every request sends |
 | `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent; regeneration with no saved prompts shows problem and disables confirm |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |

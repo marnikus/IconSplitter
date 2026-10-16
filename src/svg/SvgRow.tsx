@@ -34,6 +34,9 @@ export interface SvgRowActions {
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
   openLocation: (id: string) => void;
+  /** AI source regeneration + the main-version switch (2026-10-16). */
+  requestImageRegen: (ids: string[]) => void;
+  setImageVersion: (id: string, version: number | null) => void;
 }
 
 export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }) {
@@ -50,12 +53,15 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`} checked={checked}
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
-      <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg} />
+      <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
+        versionBar={<AiVersionBar row={row} a={a} />} />
       <FileCell row={row} />
       <StatusCell row={row} />
       <ReviewCell row={row} />
       <UsageCell row={row} />
       <FileActions row={row} a={a} />
+      <button type="button" className="svg-btn tiny" data-testid={`svg-row-image-regen-${id}`}
+        title="Regenerate this AI source image via the image connection" onClick={(e) => { e.stopPropagation(); a.requestImageRegen([id]); }}>◍ Regenerate image</button>
       <DecisionActions row={row} a={a} />
     </div>
   );
@@ -188,4 +194,23 @@ function UsageCell({ row }: { row: SvgRow }) {
 function label(value: string): string {
   if (value === "needs-review") return "Regenerated — new review";
   return value.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** The AI image's version chips: original + every done regeneration; the main
+    one is marked. Clicking a chip makes that version the MAIN (I-54 switch). */
+function AiVersionBar({ row, a }: { row: SvgRow; a: SvgRowActions }) {
+  const versions = row.meta?.imageVersions.filter((v) => v.status === "done") ?? [];
+  if (versions.length === 0) return null;
+  const id = row.source.id;
+  const main = row.meta?.imagePreferred ?? null;
+  const chip = (key: string, text: string, version: number | null) => (
+    <button key={key} type="button" className={`svg-btn tiny${main === version ? " primary" : ""}`}
+      data-testid={`svg-ai-chip-${id}-${key}`} data-active={main === version ? "true" : "false"}
+      title={main === version ? "This version is the AI source" : "Show this version as the AI source"}
+      onClick={(e) => { e.stopPropagation(); a.setImageVersion(id, version); }}>{text}</button>
+  );
+  return <>
+    {chip("orig", "original", null)}
+    {versions.map((v) => chip(String(v.version), `v${v.version}`, v.version))}
+  </>;
 }

@@ -1870,3 +1870,7 @@
 .svg-image-grid .svg-field { flex: 1 1 128px; }
 .svg-image-model { display: flex; }
 .svg-image-model .svg-field { flex: 1 1 100%; }
+
+/* AI source regeneration (2026-10-16): the version chips under a row's pair. */
+.svg-pair-with-bar { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.svg-ai-versions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }

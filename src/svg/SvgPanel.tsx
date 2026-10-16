@@ -12,17 +12,16 @@ import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { setAppState } from "../state/appstore";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
+import { PanelDialogs, panelRowActions } from "./panelbits";
 import SvgBulkBar from "./SvgBulkBar";
 import RunRecord from "./RunRecord";
 import SvgProgressHeader from "./SvgProgressHeader";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
-import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { idsWithGeneratedSvg, shownVersion } from "./rowmodel";
 import SvgList from "./SvgList";
-import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
 import { exclusionSummary } from "./sourcelist";
 
@@ -52,10 +51,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
-      <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
-        rootRef={rootRef} readCode={g.readCode} presets={g.presets} prompt={g.prompt}
-        onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode}
-        onUseVersion={g.preferVersion} running={g.running} />
+      <PanelDialogs g={g} rootRef={rootRef} />
       <Overlay g={g} />
     </div>
   );
@@ -97,12 +93,7 @@ function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
 /** Everything that only exists once a root is picked. */
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
   if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
-  const actions: SvgRowActions = {
-    activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootToken: g.rootToken, bg: g.bg, rootRef,
-    toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
-    decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
-    openLocation: g.openLocation,
-  };
+  const actions = panelRowActions(g, rootRef);
   return (
     <>
       <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={idsWithGeneratedSvg(g.rows, g.checked).length}
@@ -112,6 +103,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onRegenerate={() => g.regenerateSelected(g.checked)}
+        onImageRegen={() => g.requestImageRegen(g.checked)}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       <SvgList g={g} actions={actions} />
       <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />

@@ -36,6 +36,8 @@ export interface SvgBulkBarProps {
   onBg: (bg: PreviewBackground) => void;
   onGenerate: () => void;
   onRegenerate: () => void;
+  /** AI source regeneration through the image connection (2026-10-16). */
+  onImageRegen: () => void;
   onDecide: (decision: "approved" | "declined" | "needs-review") => void;
   onCancel: () => void;
 }
@@ -92,6 +94,8 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
       <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />
+      <button type="button" className="svg-btn" data-testid="svg-bulk-image-regen" title="Regenerate the AI source image via the image connection"
+        disabled={p.checkedCount === 0} onClick={p.onImageRegen}>◍ Regenerate image ({p.checkedCount})</button>
       <button type="button" className="svg-btn warning" data-testid="svg-needs-review-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("needs-review")}>⚠ Needs review selected</button>
       <button type="button" className="svg-btn success" data-testid="svg-approve-selected"

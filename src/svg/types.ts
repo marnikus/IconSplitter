@@ -77,6 +77,7 @@ export type { QueueItem } from "./runqueue";
 
 export type Dialog =
   | { kind: "confirm"; ids: string[]; operation: SvgOperation }
+  | { kind: "image-regen"; ids: string[] }
   | { kind: "code"; id: string; version: number }
   | { kind: "history"; id: string };
 

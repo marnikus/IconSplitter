@@ -18,6 +18,7 @@ import { buildSvgPreview } from "../lib/svgpreview";
 import { zoomBox, zoomBoxRatio } from "../lib/zoom";
 import { useSideThumbs } from "../selection/thumbs";
 import PairedThumbs, { type PreviewSlot } from "../ui/PairedThumbs";
+import { preferredImagePath } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
 import { previewTargetOf } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
@@ -30,6 +31,8 @@ export interface SvgThumbsProps {
   row: SvgRow;
   thumb: number;
   bg: PreviewBackground;
+  /** Optional bar under the pair: the image-version chips (2026-10-16). */
+  versionBar?: React.ReactNode;
 }
 
 interface Dims {
@@ -37,8 +40,9 @@ interface Dims {
   h: number;
 }
 
-export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg }: SvgThumbsProps) {
-  const ai = useImageUrl(rootRef, row.source.relPath);
+export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, versionBar }: SvgThumbsProps) {
+  // The AI side shows the user's chosen regeneration; without one, the original.
+  const ai = useImageUrl(rootRef, preferredImagePath(row.meta?.imageVersions ?? [], row.meta?.imagePreferred ?? null, row.source.relPath));
   const target = previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
   const id = row.source.id;
@@ -47,11 +51,14 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg }: SvgThu
   // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
   return (
-    <PairedThumbs slots={[
+    <div className="svg-pair-with-bar">
+      <PairedThumbs slots={[
       { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
         children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
       svgSlot({ svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg) }),
     ]} />
+      {versionBar !== undefined && <div className="svg-ai-versions">{versionBar}</div>}
+    </div>
   );
 }
 

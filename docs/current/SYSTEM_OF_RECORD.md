@@ -1311,7 +1311,7 @@ Batch:
 | IndexedDB `iconSplitter/rootpaths` | the picked folders' real full paths, records `[{ handle, path, how }]` — one per folder HANDLE (I-63) | normalised + validated on write and read (I-29/I-39); identity is `isSameEntry`, never the name; capped at 20; never leaves the browser. The old name-keyed `localStorage iconSplitter.rootpaths.v1` is **never read** (a guess may not survive as data, I-59) |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
 | `<dir>/<stem>.svg` | one generated SVG version | never overwritten; `_v2`, `_v3`… allocated from disk + the pair file |
-| `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
+| `<dir>/<stem>.svg.json` | **the pair's own file** (I-41): pair identity + both image faces + the pair's `decision` + one record per SVG version (status, review, prompt, provider/model, timestamps, tokens, cost + basis, validation, error, batch ref) + the AI source's own regeneration history (`imageVersions[]`, `imagePreferred` — 2026-10-16, see I-69) | one file per pair, beside its images; atomic write; corrupt → named + decision kept (I-43); a legacy `v: 1` file keeps its versions and upgrades on the next write (I-42) |
 | IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
 | localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides }` (global defaults + per-icon overrides map) | validated/clamped on read (RULE 13): `background` is `transparent` or a hex (a missing or junk value → `transparent`; a stored white from before 2026-10-08 stays white), `strokeColor` is a hex or `artwork` (missing or junk → `#000000`, the 2026-10-08 default; a stored `artwork` stays `artwork`), `strokePx` is 0–32 px (the pre-2026-10-08 key `strokePt` is read as the same number and never written back; the fingerprint is positional, so nothing flips to stale); the undo path writes through the same store |
 | localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
@@ -1345,6 +1345,7 @@ Object URLs from user files are revoked on sheet removal (sheets mode).
 | Batch UI | `src/batch/useBatch.ts`, `BatchPanel.tsx`, `ScanTable.tsx`, `PresetBar.tsx`, `store.ts`, `previewPersist.ts`, `../lib/batchmerges.ts` | orchestration, review window, presets, persistence, stored split previews (restart restore, RULE 13 validation), per-preset row merges (I-67) |
 | Selection logic | `src/lib/pairing.ts`, `reviewfilter.ts`, `reviewsort.ts`, `reviewmeta.ts`, `reviewfile.ts` |
 | Path capture recovery | `src/ui/rootcapture.ts`, `src/lib/clipboardpath.ts` | the two recovery channels after a pick that missed the path (I-52/I-59): `Rescan`'s one retry and the user's own `Ctrl+V`; the read itself, which reports *why* it was empty (empty / blocked / unsupported) instead of one indistinguishable "none", and adopts nothing it cannot name (the pick's own rule: exact leaf, or the direct parent of a path one level inside the folder — I-35) |
+| AI source regeneration (2026-10-16) | `src/lib/svgimgreg.ts`, `src/lib/pairpath.ts`, `src/svg/imgactions.ts`, `src/svg/imgregfiles.ts`, `src/svg/imgrunner.ts` | the pair-file image history (parse/serialize, I-69), the pure pair-path math split out of pairmeta (RULE 18), the guarded request + confirmed batch + main switch (writes the version file, appends the history, moves `imagePreferred`), the folder write (`AI source regeneration versions`), and the Requesty `images/generations` runner |
 | Pair files | `src/lib/pairmeta.ts`, `src/lib/pairrebase.ts`, `src/selection/pairstore.ts`, `src/selection/pairrecord.ts` | the stored shape (identity + faces + decision + SVG versions), parsing/serializing it, the transitions a decision or a version applies, the rebase that re-points a file read from another root (I-49), the read/write of one file beside the images (tmp → verify → overwrite, I-41/I-43), and the record ⇄ pair-file mapping legacy/undo paths use | pairing (order-independent, per-file problem reasons), filters, sorts, status/hotkey semantics, decision records |
 | Scan sequencing | `src/lib/scanseq.ts` | the monotonically-increasing ticket: only the newest scan may commit |
 | Selection logic (V2) | `src/lib/reviewselect.ts`, `reviewbulk.ts`, `reviewprefs.ts` | checkbox selection, bulk scope/summary, persisted view prefs |
@@ -1493,6 +1494,18 @@ with hotkeys and `data-testid` handles):
   to "nobody chose" (the newest valid version). It is written through
   `saveMetaAt` (tmp → verify → overwrite), off the undo timeline, and the
   version chooser refuses honestly when it cannot be written.
+* **I-69 — the AI source's own versions (2026-10-16).** A regenerated AI source
+  NEVER overwrites the file it replaces: every result is a new file in the
+  pair's subfolder `AI source regeneration versions` (`<stem>_AI_v1.png`,
+  `_v2`… allocated from disk + the pair file, the same rule as SVG versions)
+  and the pair file gains the additive keys `imageVersions[]` (version, file,
+  status, prompt, model, error, timestamps) and `imagePreferred: n` — the same
+  shape and reader tolerance as I-54 (`v` stays 2; an old reader ignores them).
+  `imagePreferred` names the version every AI thumbnail SHOWS (row, chips) and
+  falls back to the original when null, dangling or failed; a failed request
+  still appends an honest failed entry but never moves the pointer. Parsed and
+  written through `lib/svgimgreg` + `saveMetaAt` (tmp → verify → overwrite);
+  the chips that re-point it are off the undo timeline, like I-54's.
 * **I-53 — the generation queue (rewritten 2026-10-08).** Confirming a batch
   while a run is in flight APPENDS it; the run in flight is never interrupted
   and the button is never disabled by it. `refs.queue` is the synchronous

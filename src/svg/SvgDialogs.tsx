@@ -10,6 +10,8 @@ import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
 import SvgPreviewBox from "./SvgPreview";
 import SvgConfirm from "./SvgConfirm";
+import SvgImgConfirm from "./SvgImgConfirm";
+import type { Connection } from "../lib/svgconnections";
 import VersionsDialog from "./VersionsDialog";
 import type { Dialog, SvgRow } from "./types";
 import type { PromptPreset } from "../lib/promptpresets";
@@ -31,6 +33,11 @@ export interface SvgDialogsProps {
   onUseVersion: (id: string, version: number) => Promise<string | null>;
   /** A request is in flight, so a confirmation appends instead of starting (I-53). */
   running: boolean;
+  /** The active connection when it is an image one — the regen dialog's provider. */
+  imageConn: Connection | null;
+  onImagePrompt: (prompt: string) => void;
+  onImagePreset: (name: string) => void;
+  onImageConfirm: () => void;
 }
 
 export default function SvgDialogs(p: SvgDialogsProps) {
@@ -39,6 +46,11 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
       rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
+  }
+  if (dialog.kind === "image-regen") {
+    if (p.imageConn === null) return null;
+    return <SvgImgConfirm ids={dialog.ids} conn={p.imageConn} presets={p.presets} prompt={p.prompt}
+      onPrompt={p.onImagePrompt} onPickPreset={p.onImagePreset} onConfirm={p.onImageConfirm} onCancel={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);
   if (!row) return null;

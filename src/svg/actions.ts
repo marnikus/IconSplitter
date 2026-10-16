@@ -7,6 +7,7 @@ import { validateBatchPlan } from "../lib/svgbatch";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
 import type { Connection, ConnectionKind } from "../lib/svgconnections";
 import { useConnectionActions } from "./connectionactions";
+import { useImgRegenActions } from "./imgactions";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
@@ -51,6 +52,8 @@ export interface SvgActions extends SvgPromptActions {
   deselectAll: () => void; checkActive: () => void; uncheckActive: () => void; setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   requestGenerate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
+  requestImageRegen: (ids: string[]) => void; confirmImageRegen: () => void;
+  setImageVersion: (id: string, version: number | null) => void;
   regenerateSelected: (ids: string[]) => void; cancelRun: () => void; confirmGenerate: (regenPresetName: string | null) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
@@ -60,7 +63,7 @@ export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
   return {
-    ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx),
+    ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx), ...useSvgPromptActions(ctx),
   };
 }
@@ -73,6 +76,7 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
       const cap = picked.message === null ? "" : " · full path captured";
       log({ feature: "svg", action: "root-picked", detail: picked.handle.name + cap });
+      c.refreshKey(); // a fresh pick never went through the remembered-handle boot: load the stored device key too
       await scanSources(c.refs, c);
       c.say(picked.message ?? `Approved sources scanned from ${picked.handle.name}`);
     })();
