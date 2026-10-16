@@ -24,7 +24,7 @@ export function ConnectionRow(p: SvgConnectionsProps) {
   const active = p.connections.find((c) => c.id === p.activeConn) ?? p.connections[0];
   if (!active) return null;
   return (
-    <div className="svg-filters" data-testid="svg-connection-row">
+    <div className="svg-conn-row" data-testid="svg-connection-row">
       <Select label="Connection" testid="svg-connection-select" value={active.id}
         options={p.connections.map((c) => [c.id, `${c.name} · ${c.kind === "image" ? "image" : "text"}`])}
         onChange={p.onSwitch} />
@@ -50,7 +50,7 @@ function onName(e: React.ChangeEvent<HTMLInputElement>, p: SvgConnectionsProps):
 export function ImageSettingsGrid({ image, onImage }: { image: Connection["image"] | undefined; onImage: (patch: Partial<Connection["image"]>) => void }) {
   if (!image) return null;
   return (
-    <div className="svg-provider-fields" data-testid="svg-image-settings">
+    <div className="svg-image-grid" data-testid="svg-image-settings">
       <Select label="Quality" testid="svg-img-quality" value={image.quality}
         options={QUALITIES.map((q) => [q, q])} onChange={(v) => onImage({ quality: v as Connection["image"]["quality"] })} />
       <Select label="Size" testid="svg-img-size" value={image.sizePreset}

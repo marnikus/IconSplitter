@@ -136,7 +136,7 @@ function ProviderCard(p: ProviderCardProps) {
 function ImageCard({ p, active }: { p: ProviderCardProps; active: Connection | undefined }) {
   return (
     <>
-      <div className="svg-provider-fields">
+      <div className="svg-image-model">
         <ModelField config={p.config} onConfig={p.onConfig} />
       </div>
       <ImageSettingsGrid image={active?.image} onImage={p.onImage} />

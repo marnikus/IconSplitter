@@ -11,6 +11,17 @@ import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { dropDb } from "./helpers/idb";
 import { clearApiKey } from "../src/svg/keystore";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const css = () => readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+
+/** Mount and switch to the Sunburst image connection. */
+async function mountForImages(): Promise<void> {
+  await mount();
+  const sel = q("[data-testid=svg-connection-select]") as HTMLSelectElement;
+  await choose("[data-testid=svg-connection-select]", Array.from(sel.options).find((o) => o.text.includes("Sunburst"))!.value);
+}
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 vi.stubGlobal("indexedDB", fakeIndexedDb.indexedDB);
@@ -67,9 +78,39 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await act(async () => ui.unmount());
-  host.remove();
+  if (ui) await act(async () => ui.unmount());
+  host?.remove();
   vi.unstubAllGlobals();
+});
+
+describe("pinned card layout — no clipped controls (RULE 14)", () => {
+  it("the connection row and image grid have their own wrapping rules, not the fixed filter grid", () => {
+    const sheet = css();
+    for (const cls of [".svg-conn-row", ".svg-image-grid"]) {
+      const block = sheet.match(new RegExp(`${cls.replace(".", "\\.")}\\s*\\{([^}]*)\\}`));
+      expect(block).not.toBeNull();
+      const body = block![1];
+      expect(body).toMatch(/flex-wrap:\s*wrap/);
+    }
+    // the model id gets a full row in image mode (never the 118px first-child trap)
+    const model = sheet.match(/\.svg-image-model \.svg-field\s*\{([^}]*)\}/);
+    expect(model).not.toBeNull();
+    expect(model![1]).toMatch(/1\s+1\s+100%/);
+  });
+
+  it("the rows stopped reusing the fixed 6-column filter grid and the provider-fields flex", async () => {
+    await mount();
+    const row = q("[data-testid=svg-connection-row]")!;
+    expect(row.className).toMatch(/svg-conn-row/);
+    expect(row.className).not.toMatch(/svg-filters/);
+  });
+
+  it("the image grid fields wrap instead of overflowing the card", async () => {
+    await mountForImages();
+    const grid = q("[data-testid=svg-image-settings]")!;
+    expect(grid.className).toMatch(/svg-image-grid/);
+    expect(grid.className).not.toMatch(/svg-provider-fields/);
+  });
 });
 
 describe("the connection dropdown", () => {

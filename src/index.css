@@ -1858,3 +1858,15 @@
   top: 0;
   z-index: 6;
 }
+
+/* Connection profiles (2026-10-16, archive/2026-10-16-connections): both new
+   rows wrap inside the ~430px provider card instead of overflowing it — the
+   fixed 6-column .svg-filters grid and the .svg-provider-fields first-child
+   basis (118px) both clipped controls (RULE 14: no clipped controls). */
+.svg-conn-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: end; }
+.svg-conn-row .svg-field { flex: 1 1 150px; }
+.svg-conn-row .svg-btn { flex: 0 0 auto; }
+.svg-image-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.svg-image-grid .svg-field { flex: 1 1 128px; }
+.svg-image-model { display: flex; }
+.svg-image-model .svg-field { flex: 1 1 100%; }
