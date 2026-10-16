@@ -70,7 +70,7 @@ describe("processItems — outRel marks where the splits were written", () => {
   it("a processed item reports its output folder relative to dest", async () => {
     const report = await processItems([item("Category-A/icon_AI.png", null)], { dest: new FakeDir("out"), split: SPLIT, splitImage: twoBlobs, now: date });
     expect(report.results[0].outcome).toBe("processed");
-    expect(report.results[0].outRel).toBe("2026-09/2026-09-30_14-32-08/Category-A/icon_AI");
+    expect(report.results[0].outRel).toBe("2026-09/2026-09-30/Category-A/icon_AI");
   });
 
   it("a skipped item wrote nothing, so it has no output folder", async () => {

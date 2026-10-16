@@ -26,8 +26,8 @@ describe("processItems — output tree per spec §5", () => {
     const dest = new FakeDir("_split_output");
     const items = [item("Category-A/icon-award-ribbon_AI.png", "Category-A/icon-award-ribbon.png")];
     const report = await processItems(items, { dest, split: SPLIT, splitImage: twoBlobs, now: date });
-    expect(report.relBase).toBe("2026-09/2026-09-30_14-32-08");
-    const folder = await dest.getDirectoryHandle("2026-09").then((m) => m.getDirectoryHandle("2026-09-30_14-32-08"));
+    expect(report.relBase).toBe("2026-09/2026-09-30");
+    const folder = await dest.getDirectoryHandle("2026-09").then((m) => m.getDirectoryHandle("2026-09-30"));
     const cat = await folder.getDirectoryHandle("Category-A");
     const src = await cat.getDirectoryHandle("icon-award-ribbon_AI");
     const s1 = await src.getDirectoryHandle("split_01");
@@ -43,7 +43,7 @@ describe("processItems — output tree per spec §5", () => {
     const dest = new FakeDir("out");
     // Pre-create the exact output folder the plan would want.
     const pre = await dest.getDirectoryHandle("2026-09", { create: true });
-    const stamp = await pre.getDirectoryHandle("2026-09-30_14-32-08", { create: true });
+    const stamp = await pre.getDirectoryHandle("2026-09-30", { create: true });
     const dirA = await stamp.getDirectoryHandle("a", { create: true });
     await dirA.getDirectoryHandle("icon_AI", { create: true });
     const items = [item("a/icon_AI.png", null)];
@@ -100,5 +100,27 @@ describe("processItems — output tree per spec §5", () => {
     expect(report.stopped).toBe(true);
     expect(report.results).toHaveLength(1);
     expect(report.results[0].outcome).toBe("processed");
+  });
+});
+
+describe("processItems — same-day runs share the day folder (spec 2026-10-16)", () => {
+  it("a second run on the same day lands in the SAME day folder; the re-split item gets _v02", async () => {
+    const dest = new FakeDir("out");
+    const r1 = await processItems([item("a/icon_AI.png", null)], { dest, split: SPLIT, splitImage: twoBlobs, now: new Date(2026, 8, 30, 9, 15, 0) });
+    expect(r1.relBase).toBe("2026-09/2026-09-30");
+    const r2 = await processItems([item("a/icon_AI.png", null)], { dest, split: SPLIT, splitImage: twoBlobs, now: new Date(2026, 8, 30, 17, 40, 0) });
+    expect(r2.relBase).toBe("2026-09/2026-09-30");
+    const day = await dest.getDirectoryHandle("2026-09").then((m) => m.getDirectoryHandle("2026-09-30"));
+    const a = await day.getDirectoryHandle("a");
+    expect([...a.children.keys()].sort()).toEqual(["icon_AI", "icon_AI_v02"]);
+  });
+
+  it("different items exported later the same day sit side by side in the day folder", async () => {
+    const dest = new FakeDir("out");
+    await processItems([item("a/one_AI.png", null)], { dest, split: SPLIT, splitImage: twoBlobs, now: new Date(2026, 8, 30, 9, 0, 0) });
+    await processItems([item("a/two_AI.png", null)], { dest, split: SPLIT, splitImage: twoBlobs, now: new Date(2026, 8, 30, 10, 0, 0) });
+    const day = await dest.getDirectoryHandle("2026-09").then((m) => m.getDirectoryHandle("2026-09-30"));
+    const a = await day.getDirectoryHandle("a");
+    expect([...a.children.keys()].sort()).toEqual(["one_AI", "two_AI"]);
   });
 });

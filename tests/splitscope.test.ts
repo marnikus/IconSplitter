@@ -158,3 +158,14 @@ describe("splitPairs — the pieces in, the unsplit sheets reported", () => {
     expect(scoped.outside.map((p) => p.relDir)).toEqual([""]);
   });
 });
+
+describe("scopeOf — day-level run folders are run evidence too (spec 2026-10-16)", () => {
+  it("a day folder (new layout) marks the picked set as split output", () => {
+    const day = dir("x", [dir("2026-10-16", [dir("icon_AI", [])])]);
+    expect(scopeOf(directoryNames(day), "x")).toEqual({ split: true, hideOutside: false });
+  });
+
+  it("the day folder as the picked root itself is still split evidence", () => {
+    expect(scopeOf(directoryNames(dir("2026-10-16", [dir("icon_AI", [])])), "2026-10-16")).toEqual({ split: true, hideOutside: false });
+  });
+});

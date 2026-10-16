@@ -93,9 +93,13 @@ Batch folders:
   config in localStorage); last-used preset restores automatically.
 * Processing: rescan runs before each batch; per-item progress, per-item
   failure isolation, Stop button honoured between items.
-* Output tree: `<root>/_split_output/YYYY-MM/YYYY-MM-DD_HH-mm-ss/<src-hierarchy>/<src-stem>/split_NN/<stem>_NN.png`
+* Output tree (2026-10-16): `<root>/_split_output/YYYY-MM/YYYY-MM-DD/<src-hierarchy>/<src-stem>/split_NN/<stem>_NN.png`
   (+ reference copy), or the same structure directly inside a custom destination.
-  Never overwrites; collisions get `_v02…` appended after any existing `_AI_7`.
+  A run is a DAY — extra exports the same day land in the same day folder; the
+  re-split item itself gets `_v02…` (never overwrites; collisions appended after
+  any existing `_AI_7`). Trees written before 2026-10-16 keep their
+  `<YYYY-MM-DD_HH-mm-ss>` run level and stay first-class (`isRunStamp` matches
+  both forms; I-50).
 * State JSON `<base>.json` lives beside the reference; refreshed after every
   scan and batch; corrupt payloads are rejected and rebuilt (RULE 13).
 * "Open in File Explorer" is impossible from a browser — the action copies the
@@ -1066,7 +1070,7 @@ Batch:
   captured and the folder-name fallback otherwise.
 * **I-47 (picking the output folder is picking the set, RULE 3/12):** when the
   picked folder **is** the app's own output folder (`_split_output`, tolerant
-  variants) or one run folder inside it (`<YYYY-MM-DD_HH-mm-ss>`), every pair
+  variants) or one run folder inside it (`<YYYY-MM-DD>`, legacy `<YYYY-MM-DD_HH-mm-ss>`), every pair
   found below it is reviewable — the filter that hides the unsplit sheets
   applies only while the output folder is strictly *below* the picked root
   (`lib/splitscope.ScopeRule { split, hideOutside }`). The scope line names such
@@ -1113,7 +1117,8 @@ Batch:
   reports `split: true` when the picked folder **is** an output folder *or* any
   name in the set (the root's own name, or any directory below it) is a run stamp
   — so `_split_output`, a month folder and one run folder all review the pieces
-  they contain. `hideOutside` still applies only while `_split_output` lies
+  they contain. Since 2026-10-16 a run stamp is a DAY (`YYYY-MM-DD`); the legacy
+  timestamped form counts identically. `hideOutside` still applies only while `_split_output` lies
   strictly below the root (the `test_processing_2` case, I-38/I-40).
 * **I-51 (the app names a folder only from a folder it already named, RULE 4/13
   — amended 2026-10-09):** the full path of a pick comes from the clipboard

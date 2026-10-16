@@ -48,9 +48,13 @@ describe("referenceName / split names (spec §4, §5)", () => {
   });
 });
 
-describe("batchPath — month/timestamp layout (spec §5)", () => {
-  it("builds YYYY-MM/YYYY-MM-DD_HH-mm-ss with zero padding", () => {
+describe("batchPath — month/day layout (spec §5, 2026-10-16: same-day runs share the day folder)", () => {
+  it("builds YYYY-MM/YYYY-MM-DD with zero padding — no time stamp", () => {
     const d = new Date(2026, 8, 30, 14, 32, 8); // 2026-09-30 14:32:08
-    expect(batchPath(d)).toBe("2026-09/2026-09-30_14-32-08");
+    expect(batchPath(d)).toBe("2026-09/2026-09-30");
+  });
+
+  it("two runs on the same day get the exact same path", () => {
+    expect(batchPath(new Date(2026, 8, 30, 9, 0, 0))).toBe(batchPath(new Date(2026, 8, 30, 23, 59, 59)));
   });
 });
