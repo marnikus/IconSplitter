@@ -1,5 +1,5 @@
-import type { Analysis, Box } from "./detect";
-import { yieldToUI } from "./yield";
+import { sheetDims, type Analysis, type Box, type SheetSource } from "./detect";
+import { yieldBudget } from "./yield";
 
 export interface ExportOpts {
   padding: number; // percent of the largest icon side, added on every side
@@ -35,15 +35,9 @@ function createOutCanvas(out: number, bgCss: string) {
   return { c, ctx };
 }
 
-export function renderIcon(
-  img: HTMLImageElement,
-  an: Analysis,
-  allBoxes: Box[],
-  box: Box,
-  sq: SquareInfo,
-  opts: ExportOpts,
-  maxOut?: number,
-): HTMLCanvasElement {
+/** One icon's pixels onto a fresh canvas — everything before transparency. */
+function paintIcon(a: { img: SheetSource; an: Analysis; allBoxes: Box[]; box: Box; sq: SquareInfo; opts: ExportOpts; maxOut?: number }): HTMLCanvasElement {
+  const { img, an, allBoxes, box, sq, opts, maxOut } = a;
   let out = opts.size > 0 ? opts.size : Math.round(sq.total);
   if (maxOut) out = Math.min(out, maxOut);
   out = Math.max(8, out);
@@ -51,11 +45,12 @@ export function renderIcon(
   const bgCss = `rgb(${an.bg[0]},${an.bg[1]},${an.bg[2]})`;
   const { c, ctx } = createOutCanvas(out, bgCss);
   const r = cropRect(box, sq.total);
+  const { nw, nh } = sheetDims(img);
   const draw = (sx: number, sy: number, sw: number, sh: number) => {
     const ix0 = Math.max(sx, 0);
     const iy0 = Math.max(sy, 0);
-    const ix1 = Math.min(sx + sw, img.naturalWidth);
-    const iy1 = Math.min(sy + sh, img.naturalHeight);
+    const ix1 = Math.min(sx + sw, nw);
+    const iy1 = Math.min(sy + sh, nh);
     if (ix1 <= ix0 || iy1 <= iy0) return;
     ctx.drawImage(img, ix0, iy0, ix1 - ix0, iy1 - iy0, (ix0 - r.x) * scale, (iy0 - r.y) * scale, (ix1 - ix0) * scale, (iy1 - iy0) * scale);
   };
@@ -67,45 +62,20 @@ export function renderIcon(
   }
   const m = 2;
   draw(box.x - m, box.y - m, box.w + m * 2, box.h + m * 2);
-  if (opts.transparent) applyTransparencySync(ctx, an, out);
   return c;
 }
 
-export async function renderIconAsync(
-  img: HTMLImageElement,
-  an: Analysis,
-  allBoxes: Box[],
-  box: Box,
-  sq: SquareInfo,
-  opts: ExportOpts,
-  maxOut?: number,
-): Promise<HTMLCanvasElement> {
-  let out = opts.size > 0 ? opts.size : Math.round(sq.total);
-  if (maxOut) out = Math.min(out, maxOut);
-  out = Math.max(8, out);
-  const scale = out / sq.total;
-  const bgCss = `rgb(${an.bg[0]},${an.bg[1]},${an.bg[2]})`;
-  const { c, ctx } = createOutCanvas(out, bgCss);
-  const r = cropRect(box, sq.total);
-  const draw = (sx: number, sy: number, sw: number, sh: number) => {
-    const ix0 = Math.max(sx, 0);
-    const iy0 = Math.max(sy, 0);
-    const ix1 = Math.min(sx + sw, img.naturalWidth);
-    const iy1 = Math.min(sy + sh, img.naturalHeight);
-    if (ix1 <= ix0 || iy1 <= iy0) return;
-    ctx.drawImage(img, ix0, iy0, ix1 - ix0, iy1 - iy0, (ix0 - r.x) * scale, (iy0 - r.y) * scale, (ix1 - ix0) * scale, (iy1 - iy0) * scale);
-  };
-  draw(r.x, r.y, r.size, r.size);
-  await yieldToUI();
-  ctx.fillStyle = bgCss;
-  for (const o of allBoxes) {
-    if (o === box) continue;
-    ctx.fillRect((o.x - r.x) * scale, (o.y - r.y) * scale, o.w * scale, o.h * scale);
-  }
-  const m = 2;
-  draw(box.x - m, box.y - m, box.w + m * 2, box.h + m * 2);
-  await yieldToUI();
-  if (opts.transparent) await applyTransparencyAsync(ctx, an, out);
+const ctxOf = (c: HTMLCanvasElement): CanvasRenderingContext2D => c.getContext("2d", { willReadFrequently: true })!;
+
+export function renderIcon(img: SheetSource, an: Analysis, allBoxes: Box[], box: Box, sq: SquareInfo, opts: ExportOpts, maxOut?: number): HTMLCanvasElement {
+  const c = paintIcon({ img, an, allBoxes, box, sq, opts, maxOut });
+  if (opts.transparent) applyTransparencySync(ctxOf(c), an, c.width);
+  return c;
+}
+
+export async function renderIconAsync(img: SheetSource, an: Analysis, allBoxes: Box[], box: Box, sq: SquareInfo, opts: ExportOpts, maxOut?: number): Promise<HTMLCanvasElement> {
+  const c = paintIcon({ img, an, allBoxes, box, sq, opts, maxOut });
+  if (opts.transparent) await applyTransparencyAsync(ctxOf(c), an, c.width);
   return c;
 }
 
@@ -130,20 +100,17 @@ async function applyTransparencyAsync(ctx: CanvasRenderingContext2D, an: Analysi
   const id = ctx.getImageData(0, 0, out, out);
   const d = id.data;
   const full = an.inkDiff * 0.92;
-  const CHUNK = 64 * 1024; // 64k pixels ~256KB
-  for (let i = 0; i < d.length; i += CHUNK * 4) {
-    const end = Math.min(d.length, i + CHUNK * 4);
-    for (let j = i; j < end; j += 4) {
-      const df = Math.max(Math.abs(d[j] - an.bg[0]), Math.abs(d[j + 1] - an.bg[1]), Math.abs(d[j + 2] - an.bg[2]));
-      let al = df / full;
-      if (al < 0.04) al = 0;
-      if (al > 1) al = 1;
-      d[j] = an.ink[0];
-      d[j + 1] = an.ink[1];
-      d[j + 2] = an.ink[2];
-      d[j + 3] = Math.round(al * 255);
-    }
-    await yieldToUI();
+  const breathe = yieldBudget(); // yield by TIME, not per fixed chunk
+  for (let i = 0; i < d.length; i += 4) {
+    const df = Math.max(Math.abs(d[i] - an.bg[0]), Math.abs(d[i + 1] - an.bg[1]), Math.abs(d[i + 2] - an.bg[2]));
+    let al = df / full;
+    if (al < 0.04) al = 0;
+    if (al > 1) al = 1;
+    d[i] = an.ink[0];
+    d[i + 1] = an.ink[1];
+    d[i + 2] = an.ink[2];
+    d[i + 3] = Math.round(al * 255);
+    if ((i & 0xffff) === 0) await breathe();
   }
   ctx.putImageData(id, 0, 0);
 }

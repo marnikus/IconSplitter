@@ -8,7 +8,7 @@ import { planBatch, type BatchSource } from "../lib/output";
 import { probePath, ensureDirPath, listChildNames, writeFileNew, copyFileTo, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { splitImageName, batchPath, pad2 } from "../lib/naming";
 import type { SplitSettings } from "../lib/presets";
-import { yieldToFrame, yieldToUI } from "../lib/yield";
+import { yieldBudget, yieldToUI } from "../lib/yield";
 
 export interface BatchItem {
   source: BatchSource;
@@ -42,23 +42,28 @@ export interface BatchReport {
   stopped: boolean;
 }
 
+/** Concurrent items in flight: enough to overlap decode/encode/IO, few enough to stay honest on memory. */
+const PIPELINE_WORKERS = 3;
+
 export async function processItems(items: BatchItem[], deps: ProcessDeps): Promise<BatchReport> {
   const now = deps.now ?? new Date();
   const relBase = batchPath(now);
   const plan = planBatch(items.map((i) => i.source), await existingLookup(deps.dest, relBase, items), now);
-  const results: ItemResult[] = [];
-  let stopped = false;
-  for (let i = 0; i < items.length; i++) {
-    if (deps.shouldStop?.()) { stopped = true; break; }
-    await yieldToFrame();
-    await yieldToUI();
-    const res = await processOne(items[i], plan.items[i].relFolder, deps, plan.items[i].folder);
-    results.push(res);
-    deps.onProgress?.(i + 1, items.length, items[i].source.relPath, res); // RULE 5 live progress
-    await yieldToUI();
-    await yieldToFrame();
-  }
-  return { relBase, results, stopped };
+  const results: ItemResult[] = new Array(items.length); // item order, always
+  let next = 0, done = 0, stopped = false;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = next;
+      if (i >= items.length || deps.shouldStop?.()) { if (i < items.length) stopped = true; return; }
+      next += 1;
+      const res = await processOne(items[i], plan.items[i].relFolder, deps, plan.items[i].folder);
+      results[i] = res;
+      done += 1;
+      deps.onProgress?.(done, items.length, items[i].source.relPath, res); // RULE 5 live progress
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PIPELINE_WORKERS, items.length) }, worker));
+  return { relBase, results: results.filter(Boolean), stopped };
 }
 
 async function existingLookup(dest: DirHandleLike, relBase: string, items: BatchItem[]): Promise<(d: string) => string[]> {
@@ -68,7 +73,7 @@ async function existingLookup(dest: DirHandleLike, relBase: string, items: Batch
     const rd = dirs[i];
     const dir = await probePath(dest, rd === "" ? relBase : `${relBase}/${rd}`);
     cache.set(rd, dir ? await listChildNames(dir) : []);
-    if (i % 5 === 0) await yieldToUI();
+    if (i % 5 === 0) await yieldToUI(); // startup lookup: rare, keep cooperative
   }
   return (rd) => cache.get(rd) ?? [];
 }
@@ -122,10 +127,11 @@ async function writeResult(
 
 async function writeSplits(root: DirHandleLike, folder: string, blobs: Blob[]): Promise<DirHandleLike[]> {
   const dirs: DirHandleLike[] = [];
+  const breathe = yieldBudget();
   for (let j = 0; j < blobs.length; j++) {
     const splitDir = await ensureDirPath(root, `split_${pad2(j + 1)}`);
     await writeFileNew(splitDir, splitImageName(folder, j + 1), blobs[j]);
-    await yieldToUI();
+    await breathe();
     dirs.push(splitDir);
   }
   return dirs;

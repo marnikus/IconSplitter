@@ -1,6 +1,8 @@
 // dom.ts — tiny browser helpers shared by the sheets tool and the batch tool.
 // Extracted from App.tsx (RULE 16.5: legacy hotspot shrinks, never grows).
 
+import type { SheetSource } from "./detect";
+
 export function download(blob: Blob, name: string): void {
   const u = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -31,6 +33,21 @@ export async function loadImageFile(file: File): Promise<HTMLImageElement> {
     URL.revokeObjectURL(url);
   }
 }
+
+/**
+ * Decodes a sheet for the split pipeline: `createImageBitmap` decodes off the
+ * main thread and skips the element round-trip; the element path stays as the
+ * fallback (and for engines without the API). Never throws past the fallback.
+ */
+export async function loadSheet(file: File): Promise<SheetSource> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      return await createImageBitmap(file);
+    } catch { /* junk or unsupported → element path below (RULE 4: honest error there) */ }
+  }
+  return loadImageFile(file);
+}
+
 
 /**
  * A decode that never completes is a failed read (RULE 4/7), never an endless

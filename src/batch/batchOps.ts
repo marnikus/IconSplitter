@@ -9,7 +9,7 @@ import { processItems, type BatchItem, type ItemResult } from "./process";
 import { OUTPUT_DIR } from "../lib/batchlayout";
 import type { Preset } from "../lib/presets";
 import { splitSheet } from "../lib/batchsplit";
-import { loadImageFile } from "../lib/dom";
+import { loadSheet } from "../lib/dom";
 import type { Ctx, Row, RowMergeMap, Setter } from "./useBatchTypes";
 import { ensurePermission } from "./picker";
 import { makeBatchProgress, type BatchProgress } from "./BatchProgress";
@@ -163,7 +163,7 @@ export function splitWithOverride(file: File, globalSplit: Preset["split"], ctx:
 }
 
 async function splitSheetWithMerge(file: File, split: Preset["split"], shouldStop?: () => boolean): Promise<Blob[]> {
-  const img = await loadImageFile(file);
+  const img = await loadSheet(file); // off-thread decode when the engine has it
   return splitSheet(img, split, { shouldStop });
 }
 

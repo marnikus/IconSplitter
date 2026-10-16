@@ -1265,6 +1265,12 @@ Batch:
 * **I-67:** a per-item split decision (row merge) survives a page reload; it
   is stored per preset (`batch-merges-v1`), and the SAME value drives the
   preview, the review sync and `splitWithOverride`.
+* **I-70:** the split pipeline schedules by TIME, not by fixed steps: heavy
+  loops yield only when their uninterrupted stretch exceeded the 24 ms budget
+  (`yieldBudget`), PNG encodes of one sheet run concurrently, and approved
+  items flow through a bounded 3-wide pipeline — progress stays live, stop is
+  honoured per item start, results report in item order, and nothing
+  overwrites (port: archive/2026-10-15-split-speed, ≥80 % on overhead-bound runs).
 * **I-69:** batch render identity is stable: `useBatch` and `useBatchView`
   return memoized objects, action callbacks are referentially stable, and scan
   rows render through a memo comparator with `content-visibility: auto` — an

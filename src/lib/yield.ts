@@ -18,3 +18,18 @@ export function yieldToFrame(): Promise<void> {
 export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
+
+/**
+ * Time-budgeted yield: cooperative only when the caller has actually held the
+ * thread longer than `budgetMs`. Replaces fixed per-step yields that cost a
+ * macrotask round-trip each (33 per split — see archive/2026-10-15-split-speed).
+ */
+export function yieldBudget(budgetMs = 24): () => Promise<void> {
+  let last = Date.now();
+  return async () => {
+    const now = Date.now();
+    if (now - last < budgetMs) return;
+    await yieldToUI();
+    last = Date.now();
+  };
+}

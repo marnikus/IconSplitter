@@ -2684,3 +2684,12 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - Pieces: memoized action bags + memoized `core`/view objects, hoisted `decide`/`decideActive`, memoized `RowView` via a data-driven deps table (RULE 18-friendly, cc 11 → 2), `.batch-row` content-visibility, cheap detection bar (`max-w-[420px]`, single `onChange`), restore effect no longer double-fires review sync, thumbs-aware queue eligibility + 1px fallback tile.
 - `tests/batch_flex_thumb_info.test.tsx` width assertion widened to `min-w-[(300|360)px]` (the source branch's own amendment).
 - RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (27 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 174 files / 1,874 tests; build `dist/index.html` 1,555.87 kB (457.25 kB gzip).
+
+## 2026-10-15 — perf(split): split-approved pipeline ≥80% faster on overhead-bound runs
+
+- Research + measurements FIRST (`archive/2026-10-15-split-speed/README.md`): a 4-icon sheet spent **33 cooperative yields** (≈330 ms idle at the conservative 10 ms model); PNG encodes were serial (toBlob #2 issued only after #1 resolved — measured timestamps); 12 sequential items took **1 046 ms** against a 288 ms compute floor.
+- TDD: `tests/split_speed.test.ts` written RED with those exact gates (yields ≤6, concurrent encode issue-before-resolve, pipeline wall <150 ms), then GREEN.
+- Fixes: `yieldBudget(24ms)` time-based scheduling across batchsplit/render/detect/process; per-sheet encodes run via `Promise.all`; `processItems` runs a bounded 3-worker pipeline with item-order results (preallocated), per-item-start stop checks, completion-count progress; `loadSheet` decodes via `createImageBitmap` with the element path as fallback; `renderIcon`/`renderIconAsync` deduplicated through `paintIcon` (RULE 18: kills the duplicated 30-line body).
+- Guardrails intact: RULE 5/7 responsiveness (≤24–48 ms stretches), no-overwrite (per-item planned folders), per-item failure isolation, stop semantics (locked by tests), blob order = reading order.
+- RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (26 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 175 files / 1,878 tests; build `dist/index.html` 1,556.06 kB (457.46 kB gzip).
+- Measured in-suite: yields 33 → 5; pipeline 1 046 ms → 111 ms (89 %); combined model ≥80 % for typical batches (see the README for per-scenario estimates).

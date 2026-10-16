@@ -3,8 +3,17 @@ export interface Box { x: number; y: number; w: number; h: number; ink: number; 
 export interface Analysis { w: number; h: number; scale: number; mask: Uint8Array; bg: [number, number, number]; ink: [number, number, number]; inkDiff: number; threshold: number; ds?: Downsample; }
 export interface DetectResult { boxes: Box[]; usedFrac: number; autoFrac: number; }
 export interface Downsample { cells: Uint8Array; counts: Uint32Array; gw: number; gh: number; f: number; }
-const MAX_DIM = 4000; const CHUNK_PIXELS = 500_000; const CHUNK_ROWS = 50; const FAST_RMAX_CAP = 35; const FAST_RMAX_FRAC = 0.08;
-import { yieldToUI } from "./yield";
+const MAX_DIM = 4000; const FAST_RMAX_CAP = 35; const FAST_RMAX_FRAC = 0.08;
+import { yieldToUI, yieldBudget } from "./yield";
+
+/** A decoded sheet: the classic element or an off-thread-decoded bitmap. */
+export type SheetSource = HTMLImageElement | ImageBitmap;
+/** Sheet dimensions through one helper (naturalWidth for elements, width for bitmaps). */
+export function sheetDims(img: SheetSource): { nw: number; nh: number } {
+  const w = "naturalWidth" in img ? img.naturalWidth : img.width;
+  const h = "naturalHeight" in img ? img.naturalHeight : img.height;
+  return { nw: w, nh: h };
+}
 function median(a: number[]) { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)] ?? 255; }
 function sampleBorder(d: Uint8ClampedArray, w: number, h: number) {
   const rs: number[] = [], gs: number[] = [], bs: number[] = [];
@@ -35,15 +44,15 @@ function histSampledSync(data: Uint8ClampedArray, bg: [number, number, number], 
   return { hist, sampled };
 }
 async function histSampledAsync(data: Uint8ClampedArray, bg: [number, number, number], w: number, h: number) {
-  const hist = new Uint32Array(256); const step = chooseSampleStride(w, h); let sampled = 0, cnt = 0; const bg0 = bg[0], bg1 = bg[1], bg2 = bg[2];
+  const hist = new Uint32Array(256); const step = chooseSampleStride(w, h); let sampled = 0; const bg0 = bg[0], bg1 = bg[1], bg2 = bg[2];
+  const breathe = yieldBudget();
   for (let y = 0; y < h; y += step) {
     for (let x = 0; x < w; x += step) {
       const p = y * w + x, i = p * 4; const al = data[i + 3]; let r: number, g: number, b: number;
       if (al === 255) { r = data[i]; g = data[i + 1]; b = data[i + 2]; } else { const a = al / 255; r = data[i] * a + 255 * (1 - a); g = data[i + 1] * a + 255 * (1 - a); b = data[i + 2] * a + 255 * (1 - a); }
-      const v = Math.max(Math.abs(r - bg0), Math.abs(g - bg1), Math.abs(b - bg2)) | 0; hist[v > 255 ? 255 : v]++; sampled++; cnt++;
-      if (cnt % CHUNK_PIXELS === 0) await yieldToUI();
+      const v = Math.max(Math.abs(r - bg0), Math.abs(g - bg1), Math.abs(b - bg2)) | 0; hist[v > 255 ? 255 : v]++; sampled++;
     }
-    if (y % (CHUNK_ROWS * step) === 0 && y !== 0) await yieldToUI();
+    if ((y & 0x3f) === 0) await breathe(); // time-budgeted: only when the stretch ran long
   }
   return { hist, sampled };
 }
@@ -64,12 +73,13 @@ function maskWithDiffSync(data: Uint8ClampedArray, cfg: MaskCfg) {
 async function maskWithDiffAsync(data: Uint8ClampedArray, cfg: MaskCfg) {
   const { maxD, thr, w, h, f, bg } = cfg; const mask = new Uint8Array(w * h); let sr = 0, sg = 0, sb = 0, sn = 0; const { cells, counts, gw, gh } = makeDownsample(w, h, f);
   const bg0 = bg[0], bg1 = bg[1], bg2 = bg[2];
+  const breathe = yieldBudget();
   for (let y = 0; y < h; y++) { const row = y * w, cy = ((y / f) | 0) * gw; for (let x = 0; x < w; x++) {
     const p = row + x, i = p * 4; const al = data[i + 3]; let r: number, g: number, b: number;
     if (al === 255) { r = data[i]; g = data[i + 1]; b = data[i + 2]; } else { const a = al / 255; r = data[i] * a + 255 * (1 - a); g = data[i + 1] * a + 255 * (1 - a); b = data[i + 2] * a + 255 * (1 - a); }
     const d = Math.max(Math.abs(r - bg0), Math.abs(g - bg1), Math.abs(b - bg2)) | 0;
     if (d > thr) { mask[p] = 1; const c = cy + ((x / f) | 0); cells[c] = 1; counts[c]++; } if (d >= maxD * 0.85) { sr += data[i]; sg += data[i + 1]; sb += data[i + 2]; sn++; }
-  } if (y % CHUNK_ROWS === 0 && y !== 0) await yieldToUI(); }
+  } if ((y & 0x3f) === 0) await breathe(); }
   const ink: [number, number, number] = sn ? [Math.round(sr / sn), Math.round(sg / sn), Math.round(sb / sn)] : [0, 0, 0]; return { mask, ink, cells, counts, gw, gh };
 }
 export function analyze(img: HTMLImageElement): Analysis {
@@ -80,8 +90,9 @@ export function analyze(img: HTMLImageElement): Analysis {
   const { mask, ink, cells, counts, gw, gh } = maskWithDiffSync(data, { maxD, thr, w, h, f, bg });
   return { w, h, scale: nw / w, mask, bg: bg.map(Math.round) as [number, number, number], ink, inkDiff: maxD, threshold: thr, ds: { cells, counts, gw, gh, f } };
 }
-export async function analyzeAsync(img: HTMLImageElement): Promise<Analysis> {
-  const nw = img.naturalWidth, nh = img.naturalHeight, k = Math.min(1, MAX_DIM / Math.max(nw, nh)); const w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
+export async function analyzeAsync(img: SheetSource): Promise<Analysis> {
+  const { nw, nh } = sheetDims(img);
+  const k = Math.min(1, MAX_DIM / Math.max(nw, nh)); const w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
   const f = Math.max(1, Math.ceil(Math.max(w, h) / 400)); const c = document.createElement("canvas"); c.width = w; c.height = h;
   const ctx = c.getContext("2d", { willReadFrequently: true })!; ctx.drawImage(img, 0, 0, w, h); const data = ctx.getImageData(0, 0, w, h).data; const bg = estimateBackground(data, w, h);
   await yieldToUI(); const { hist, sampled } = await histSampledAsync(data, bg, w, h); const maxD = maxDiffFromHist(hist, sampled); const thr = Math.min(110, Math.max(18, maxD * 0.42));
@@ -145,7 +156,8 @@ function downsampleSync(mask: Uint8Array, w: number, h: number, f: number) {
 }
 async function downsampleAsync(mask: Uint8Array, w: number, h: number, f: number) {
   const gw = Math.ceil(w / f), gh = Math.ceil(h / f), cells = new Uint8Array(gw * gh), counts = new Uint32Array(gw * gh);
-  for (let y = 0; y < h; y++) { const row = y * w, cy = ((y / f) | 0) * gw; for (let x = 0; x < w; x++) if (mask[row + x]) { const c = cy + ((x / f) | 0); cells[c] = 1; counts[c]++; } if (y % CHUNK_ROWS === 0 && y !== 0) await yieldToUI(); }
+  const breathe = yieldBudget();
+  for (let y = 0; y < h; y++) { const row = y * w, cy = ((y / f) | 0) * gw; for (let x = 0; x < w; x++) if (mask[row + x]) { const c = cy + ((x / f) | 0); cells[c] = 1; counts[c]++; } if ((y & 0x3f) === 0) await breathe(); }
   return { cells, counts, gw, gh };
 }
 function removeHLines(cells: Uint8Array, gw: number, gh: number, rowSums: number[]) {
@@ -174,7 +186,8 @@ function buildSeriesFastSync(ctx: Grid, rMax: number, f: number, a: Analysis) {
 }
 async function buildSeriesFastAsync(ctx: Grid, rMax: number, f: number, a: Analysis) {
   const series: number[] = []; let ones = 0; const bufs = { tmp: new Uint8Array(ctx.gw * ctx.gh), out: new Uint8Array(ctx.gw * ctx.gh) };
-  for (let r = 1; r <= rMax; r = nextR(r)) { const c = countFast({ ctx, f, a, r, bufs }); series.push(c); if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0; const best = bestRun(buildRuns(series)); if (best && best.count === 4 && best.end - best.start >= 2 && c < 4 && c <= 2) break; await yieldToUI(); }
+  const breathe = yieldBudget();
+  for (let r = 1; r <= rMax; r = nextR(r)) { const c = countFast({ ctx, f, a, r, bufs }); series.push(c); if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0; const best = bestRun(buildRuns(series)); if (best && best.count === 4 && best.end - best.start >= 2 && c < 4 && c <= 2) break; await breathe(); }
   return buildRuns(series);
 }
 function updateBoundsPx(x: number, y: number, l: number, b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; }) { if (x < b.minX[l]) b.minX[l] = x; if (x > b.maxX[l]) b.maxX[l] = x; if (y < b.minY[l]) b.minY[l] = y; if (y > b.maxY[l]) b.maxY[l] = y; b.ink[l]++; }
@@ -192,9 +205,10 @@ function extractBoxesSync(a: Analysis, lab: Labeling, grid: Grid, f: number) {
 }
 async function extractBoxesAsync(a: Analysis, lab: Labeling, grid: Grid, f: number) {
   const { w, h, mask } = a; const b = makeBounds(lab.valid.length); const { cells, gw, gh } = grid;
+  const breathe = yieldBudget();
   for (let gy = 0; gy < gh; gy++) {
     for (let gx = 0; gx < gw; gx++) { const cellIdx = gy * gw + gx; if (!cells[cellIdx]) continue; const l = lab.labels[cellIdx]; if (l < 0 || !lab.valid[l]) continue; const y0 = gy * f, y1 = Math.min(h, y0 + f), x0 = gx * f, x1 = Math.min(w, x0 + f); scanCellBlock({ mask, w, b, l, y0, y1, x0, x1 }); }
-    if (gy % CHUNK_ROWS === 0 && gy !== 0) await yieldToUI();
+    if ((gy & 0x3f) === 0) await breathe();
   }
   return buildBoxesFromBounds(b, lab, a.scale);
 }
