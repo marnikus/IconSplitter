@@ -33,6 +33,8 @@ export interface ItemResult {
   folder: string;
   splits: number;
   refCopied: boolean;
+  /** Output folder relative to dest; "" unless files were actually written. */
+  outRel: string;
   message?: string;
 }
 
@@ -90,7 +92,7 @@ interface WriteCtx {
 }
 
 async function processOne(item: BatchItem, destRel: string, deps: ProcessDeps, folder: string): Promise<ItemResult> {
-  const base = { relPath: item.source.relPath, folder, splits: 0, refCopied: false };
+  const base = { relPath: item.source.relPath, folder, splits: 0, refCopied: false, outRel: "" };
   const file = await tryLoad(item.file);
   if (!file) return { ...base, outcome: "skipped", message: "Source file missing before processing" };
   const blobs = await trySplit(file, deps);
@@ -122,7 +124,7 @@ async function writeResult(
   const splitDirs = await writeSplits(root, ctx.folder, blobs);
   const refCopied = await copyRefs(ctx.item.refFile, splitDirs);
   const message = refCopied ? undefined : "Reference image missing — exported without it";
-  return { ...base, outcome: "processed", splits: blobs.length, refCopied, message };
+  return { ...base, outcome: "processed", splits: blobs.length, refCopied, outRel: ctx.destRel, message };
 }
 
 async function writeSplits(root: DirHandleLike, folder: string, blobs: Blob[]): Promise<DirHandleLike[]> {

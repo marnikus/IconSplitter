@@ -1,7 +1,7 @@
 // BatchPanel.tsx — batch folders, full-width list, V2 selection, merge slider + preview inline + per-row override + review (approved/declined/warning)
 
 import { useCallback, useMemo } from "react";
-import { copyFolderText } from "../lib/copypath";
+import { copyFolderText, copySplitFolderText } from "../lib/copypath";
 import { useBatchView } from "./useBatchView";
 import ScanTable, { useThumbCache } from "./ScanTable";
 import BatchFilterGrid from "./BatchFilterGrid";
@@ -130,7 +130,7 @@ function PresetAndDest({ v }: { v: View }) {
   );
 }
 function FullWidthList({ v, thumbFor, previews, rowStale, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; rowStale: (relPath: string) => boolean; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} thumbFor={thumbFor} previews={previews} rowStale={rowStale} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
+  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} locate={(rel) => locateSplits(v, rel)} thumbFor={thumbFor} previews={previews} rowStale={rowStale} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   const showBusy = !!v.core.s.busy;
@@ -151,3 +151,9 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
   );
 }
 function copyPath(v: View, relPath: string): void { void copyFolderText(v.core.rootRef.current, relPath, v.core.say); }
+
+function locateSplits(v: View, relPath: string): void {
+  const row = v.core.s.rows.find((r) => r.relPath.toLowerCase() === relPath.toLowerCase());
+  if (!row?.outRel) return;
+  void copySplitFolderText(v.core.destRef.current, v.core.rootRef.current, row.outRel, v.core.say);
+}

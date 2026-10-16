@@ -42,7 +42,7 @@ export function useBatch() {
   const viewActions = useViewActions(ctx, setS);
   const presetActions = usePresetActions(ctx, setS, say);
   const supported = useMemo(() => fsSupported(), []);
-  return useMemo(() => ({ s, say, ...coreActions, ...viewActions, ...presetActions, supported, rootRef: ctx.root }),
+  return useMemo(() => ({ s, say, ...coreActions, ...viewActions, ...presetActions, supported, rootRef: ctx.root, destRef: ctx.dest }),
     [s, say, coreActions, viewActions, presetActions, supported, ctx.root]);
 }
 

@@ -2701,3 +2701,10 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - The fix is self-healing for existing browsers: the next preset load repairs the value; the next save normalizes it to a number.
 - Contract locks added: `splitSheet` renders exactly `split.size` px (1024/512/0 matrix) — green before and after, proving the pipeline was never at fault.
 - RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (26 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 176 files / 1,884 tests; build `dist/index.html` 1,556.16 kB (457.50 kB gzip).
+
+## 2026-10-15 — feat(batch): Location button on processed rows copies the splits folder
+
+- User request: after processing, a row must show a "Location" button that copies the path of the folder holding the item's split icons. Research first (`archive/2026-10-15-row-location/README.md`): layout verified against `process.test.ts` — an item's four splits live in `<dest>/<plan.relFolder>/split_01..04`, so that item folder is what gets copied.
+- TDD: `tests/batch_row_locate.test.tsx` RED first (7 failing: honest-base matrix, outRel data chain, button behaviour), then GREEN. Data: `ItemResult.outRel` ("" unless written) -> `finalize` stamps `Row.outRel` (session-scoped; a reload hides the button — the old run's stamp is unknowable; documented scope decision). Copy: `copypath.splitOutputBase` (custom dest bound path -> its name -> root base + `_split_output`, I-29/I-63) + `copySplitFolderText` (clipboard + RULE 9 toast; plain join, NOT `folderCopyText`, which would drop the item folder's last segment per I-56).
+- UI: `batch-row-locate-<relPath>` button ("📍 Location") in the Status cell for rows with an output folder; `destRef` exposed on the batch core (mirrors `rootRef`).
+- RULE 16 gates: `npx tsc --noEmit` clean; `npm run lint` 0 errors (27 warnings, pre-existing); quality:changed GATE PASSED; `npm run verify:fast` ALL LANES PASSED — 177 files / 1,892 tests; build `dist/index.html` 1,557.14 kB (457.79 kB gzip).

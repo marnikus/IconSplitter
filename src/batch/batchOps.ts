@@ -217,10 +217,11 @@ async function finalize(root: DirHandleLike, results: ItemResult[], selected: Ro
   const outcomes = toOutcomes(results, dirs);
   await applyOutcomes(root, outcomes, new Date().toISOString());
   const byPath = new Map(outcomes.map((o) => [o.relPath.toLowerCase(), o.status]));
+  const outByPath = new Map(results.filter((r) => r.outcome === "processed" && r.outRel).map((r) => [r.relPath.toLowerCase(), r.outRel]));
   const c = tally(results);
   setS((p) => ({
     ...p, running: false,
-    rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, selected: false })),
+    rows: p.rows.map((r) => ({ ...r, status: byPath.get(r.relPath.toLowerCase()) ?? r.status, outRel: outByPath.get(r.relPath.toLowerCase()) ?? r.outRel, selected: false })),
     toast: { msg: `Processed ${c.done}, skipped ${c.skipped}, failed ${c.failed}`, err: c.failed > 0 },
   }));
   try { patchBatch({ checked: [] }); } catch { /* best-effort clear */ }

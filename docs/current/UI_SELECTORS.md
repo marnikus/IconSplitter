@@ -153,6 +153,7 @@ Review window (scan table) — `scan-table` panel:
 | `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
 | `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
+| `batch-row-locate-{relPath}` | per-row "📍 Location" button | processed rows with a session output folder: copies `<dest base>\<outRel>` (splits folder); hidden after a reload (archive/2026-10-15-row-location) |
 
 Restart access (I-66) — `BatchPanel.tsx` `GrantBar` (verified 2026-10-15):
 

@@ -14,6 +14,9 @@ export interface Row extends AiImageEntry {
   status: SourceStatus;
   review: BatchReviewStatus;
   selected: boolean;
+  /** Session-scoped: the folder holding this row's splits (set by finalize);
+   *  a reload loses it — the old run's stamp is unknowable after boot. */
+  outRel?: string;
 }
 
 export interface BatchState {

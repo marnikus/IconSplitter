@@ -23,6 +23,8 @@ export interface ScanTableProps {
   selectRow: (id: string, intent: ReturnType<typeof selectIntent>) => void;
   selectActive: (id: string) => void;
   copyPath: (relPath: string) => void;
+  /** Copy the processed row's split-output folder (needs the run's outRel). */
+  locate?: (relPath: string) => void;
   thumbFor: (relPath: string) => Promise<string>;
   previews?: Map<string, PreviewEntry>;
   rowMerges?: RowMergeMap;
@@ -185,7 +187,7 @@ function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
   return undefined;
 }
 
-function RowViewInner({ r, toggle, selectRow, selectActive, copyPath, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, rowStale }: { r: Row } & ScanTableProps) {
+function RowViewInner({ r, toggle, selectRow, selectActive, copyPath, locate, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, rowStale }: { r: Row } & ScanTableProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
   const active = isActive(r.relPath, activeId);
   const ref = useActiveScroll(active);
@@ -202,7 +204,7 @@ function RowViewInner({ r, toggle, selectRow, selectActive, copyPath, thumbFor, 
       <ReviewCell review={review} />
       <DecisionActions r={r} decide={decide} />
       <DateCell mtime={r.mtime} />
-      <ScanStatusCell r={r} />
+      <ScanStatusCell r={r} locate={locate} />
       <OpenCell r={r} copyPath={copyPath} />
     </div>
   );
