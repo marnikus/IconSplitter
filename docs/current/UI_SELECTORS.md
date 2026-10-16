@@ -156,6 +156,16 @@ Review window (scan table) — `scan-table` panel:
 | `batch-row-locate-{relPath}` | per-row "📍 Location" button | processed rows with a session output folder: copies `<dest base>\<outRel>` (splits folder); hidden after a reload (archive/2026-10-15-row-location) |
 | `batch-bulkbar-pin` | sticky wrapper of the split controls bar | pins the bar to the top while rows scroll (`position: sticky` in `.app-main`; archive/2026-10-16-pinned-bulkbar) |
 
+Generate SVG — connection profiles (archive/2026-10-16-connections):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `svg-connection-select` | the quick-switch dropdown | lists saved setups (`name · kind`); switching swaps the live base+model and re-resolves caps |
+| `svg-connection-name` / `svg-connection-kind` | name input / kind select | text generation (SVG) ↔ image generation |
+| `svg-connection-add` / `svg-connection-remove` | + New / ✕ Remove | adds a Sunburst image connection; removal disabled at one |
+| `svg-img-quality` / `svg-img-size` / `svg-img-w` / `svg-img-h` | image parameter grid | size presets + custom W×H (256..4096), shown only for image connections |
+| `svg-img-n` / `svg-img-background` / `svg-img-format` / `svg-img-response` | image parameter grid | n 1..10, background, output format, response format |
+
 Restart access (I-66) — `BatchPanel.tsx` `GrantBar` (verified 2026-10-15):
 
 | Test id | Visible text | Notes |

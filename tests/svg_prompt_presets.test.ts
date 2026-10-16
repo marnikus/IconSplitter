@@ -13,7 +13,7 @@ import { DEFAULT_PREVIEW_BACKGROUND } from "../src/lib/svgbackground";
 const PRESET = { name: "Simpler", text: "Remove one detail." };
 
 function tab(prompt = "Generate an icon."): { get: () => SvgModel; act: ReturnType<typeof svgPromptActionsOf> } {
-  let model = initialModel(loadConfig(), prompt, { thumb: 120, providerOpen: true, bg: DEFAULT_PREVIEW_BACKGROUND }, loadPresets());
+  let model = initialModel(loadConfig(), prompt, { thumb: 120, providerOpen: true, bg: DEFAULT_PREVIEW_BACKGROUND }, { presets: loadPresets() });
   const say = () => undefined;
   const dispatch = (a: Parameters<typeof reduceState>[1]) => { model = reduceState(model, a); };
   const act = svgPromptActionsOf(() => ({ m: model, dispatch, say }));

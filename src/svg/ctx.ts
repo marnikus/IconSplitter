@@ -15,7 +15,7 @@ import { readApiKey } from "./keystore";
 import { isStale, loadCatalog, refreshCatalog } from "./catalog";
 import { loadParamMap, paramsFor, saveParamMap, withParams } from "./paramstore";
 import { resetNote, resolveModelParams } from "./modelparams";
-import { saveConfig, savePrompt } from "./promptstore";
+import { saveConfig, saveConnections, savePrompt } from "./promptstore";
 import { saveSvgPrefs } from "./prefsstore";
 import { bootSources, scanSources, type ScanSetters } from "./scan";
 import { headerState, toListRow, visibleRows, withQueued } from "./rowmodel";
@@ -161,6 +161,7 @@ function useSvgPersist(model: SvgModel): void {
     thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg,
   }), [model.thumb, model.providerOpen, model.bg]);
   useEffect(() => saveConfig(model.config), [model.config]);
+  useEffect(() => saveConnections({ list: model.connections, activeId: model.activeConn }), [model.connections, model.activeConn]);
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
 }
 

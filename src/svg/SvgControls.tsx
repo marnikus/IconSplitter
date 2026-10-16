@@ -6,6 +6,9 @@
 // here — every value comes from the hook and every change goes back to it.
 
 import type { KeySource } from "../lib/keyvault";
+import { ConnectionRow, ImageSettingsGrid } from "./SvgConnections";
+import type { Connection, ConnectionKind } from "../lib/svgconnections";
+import { NumberField, Select } from "../ui/fields";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 
 import {
@@ -34,6 +37,8 @@ export interface SvgControlsProps {
   /** The prompt window (text, presets) — built by svgPromptWindowOf in SvgPanel. */
   prompt: PromptWindowProps;
   provider: string;
+  connections: Connection[];
+  activeConn: string;
   config: SvgConfig;
   caps: ModelCaps;
   params: SamplingParams;
@@ -50,6 +55,11 @@ export interface SvgControlsProps {
   onChooseRoot: () => void;
   onRescan: () => void;
   onConfig: (patch: Partial<SvgConfig>) => void;
+  onSwitchConnection: (id: string) => void;
+  onAddConnection: () => void;
+  onRemoveConnection: () => void;
+  onConnectionMeta: (patch: { name?: string; kind?: ConnectionKind }) => void;
+  onImage: (patch: Partial<Connection["image"]>) => void;
   onParams: (patch: Partial<SamplingParams>) => void;
   onRefreshModels: () => void;
   onDismissNote: () => void;
@@ -70,6 +80,9 @@ export default function SvgControls(p: SvgControlsProps) {
         <SvgPromptZone win={p.prompt} />
         <ProviderCard provider={p.provider} config={p.config} caps={p.caps} params={p.params}
           paramNote={p.paramNote} keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} open={p.providerOpen}
+          connections={p.connections} activeConn={p.activeConn}
+          onSwitchConnection={p.onSwitchConnection} onAddConnection={p.onAddConnection} onRemoveConnection={p.onRemoveConnection}
+          onConnectionMeta={p.onConnectionMeta} onImage={p.onImage}
           onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
           onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} onForgetKey={p.onForgetKey} onToggleOpen={p.onProviderOpen} />
       </div>
@@ -79,26 +92,67 @@ export default function SvgControls(p: SvgControlsProps) {
   );
 }
 
-function ProviderCard({ provider, config, caps, params, paramNote, keySet, keyMask, keySource, open, onConfig, onParams, onRefreshModels, onDismissNote, onSaveKey, onForgetKey, onToggleOpen }: {
-  provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams; paramNote: string | null;
-  keySet: boolean; keyMask: string; keySource: KeySource; open: boolean;
-  onConfig: (patch: Partial<SvgConfig>) => void; onParams: (patch: Partial<SamplingParams>) => void;
-  onRefreshModels: () => void; onDismissNote: () => void; onSaveKey: (key: string) => void; onForgetKey: () => void;
+interface ProviderHeadProps extends Pick<SvgControlsProps, "provider" | "config" | "caps" | "params"> {
+  kind: ConnectionKind;
+  open: boolean;
   onToggleOpen: (open: boolean) => void;
-}) {
+}
+
+interface ProviderCardProps extends Pick<SvgControlsProps,
+  "provider" | "config" | "caps" | "params" | "paramNote" | "keySet" | "keyMask" | "keySource" |
+  "connections" | "activeConn" | "onConfig" | "onParams" | "onRefreshModels" | "onDismissNote" | "onSaveKey" |
+  "onForgetKey" | "onSwitchConnection" | "onAddConnection" | "onRemoveConnection" | "onConnectionMeta" | "onImage"> {
+  open: boolean;
+  onToggleOpen: (open: boolean) => void;
+}
+
+function ProviderCard(p: ProviderCardProps) {
+  const { config, caps, params, paramNote, open } = p;
+  const active = p.connections.find((c) => c.id === p.activeConn);
+  const kind = active?.kind ?? "text";
   return (
     <div className={`svg-provider${open ? "" : " closed"}`} data-testid="svg-provider-card">
-      <ProviderHead provider={provider} config={config} caps={caps} params={params} open={open} onToggleOpen={onToggleOpen} />
+      <ProviderHead {...p} kind={kind} />
       {open && (
         <>
-          <ProviderFields config={config} onConfig={onConfig} />
-          <SvgSampling caps={caps} params={params} note={paramNote} onParams={onParams}
-            onRefresh={onRefreshModels} onDismissNote={onDismissNote} />
-          <ProviderFoot keySet={keySet} keyMask={keyMask} keySource={keySource} model={modelLabel(config.model)} onForgetKey={onForgetKey}
-            onSaveKey={onSaveKey} onRefreshModels={onRefreshModels} />
+          <ConnectionRow connections={p.connections} activeConn={p.activeConn} onSwitch={p.onSwitchConnection}
+            onAdd={p.onAddConnection} onRemove={p.onRemoveConnection} onMeta={p.onConnectionMeta} onImage={p.onImage} />
+          {kind === "image" ? <ImageCard p={p} active={active} /> : (
+            <>
+              <ProviderFields config={config} onConfig={p.onConfig} />
+              <SvgSampling caps={caps} params={params} note={paramNote} onParams={p.onParams}
+                onRefresh={p.onRefreshModels} onDismissNote={p.onDismissNote} />
+            </>
+          )}
+          <ProviderFoot keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} model={modelLabel(config.model)} onForgetKey={p.onForgetKey}
+            onSaveKey={p.onSaveKey} onRefreshModels={p.onRefreshModels} />
         </>
       )}
     </div>
+  );
+}
+
+/** The image connection's body: the editable model id plus the parameter grid. */
+function ImageCard({ p, active }: { p: ProviderCardProps; active: Connection | undefined }) {
+  return (
+    <>
+      <div className="svg-provider-fields">
+        <ModelField config={p.config} onConfig={p.onConfig} />
+      </div>
+      <ImageSettingsGrid image={active?.image} onImage={p.onImage} />
+    </>
+  );
+}
+
+/** The editable model id — shared by both connection kinds.
+function ModelField — shared by both connection kinds. */
+function ModelField({ config, onConfig }: { config: SvgConfig; onConfig: (patch: Partial<SvgConfig>) => void }) {
+  return (
+    <label className="svg-field">
+      <span className="svg-label">Model</span>
+      <input className="svg-input" data-testid="svg-model" aria-label="Requesty model id" spellCheck={false}
+        value={config.model} onChange={(e) => onConfig({ model: e.target.value })} />
+    </label>
   );
 }
 
@@ -131,22 +185,23 @@ function WaitField({ config, onConfig }: { config: SvgConfig; onConfig: (patch: 
 }
 
 /** The one line that survives minimizing: who, which EFFECTIVE limits, and the toggle. */
-function ProviderHead({ provider, config, caps, params, open, onToggleOpen }: {
-  provider: string; config: SvgConfig; caps: ModelCaps; params: SamplingParams;
-  open: boolean; onToggleOpen: (open: boolean) => void;
-}) {
+function ProviderHead(p: ProviderHeadProps) {
+  const { provider, config, caps, params, kind, open } = p;
   // The user's size, never a tier cap; the tier only widens the stall window.
   const perRequest = clampImagesPerRequest(config.imagesPerRequest);
   const note = stallNote(config.timeoutMs, caps, params);
   return (
     <div className="svg-provider-top">
       <span><strong data-testid="svg-provider">{provider}</strong> · OpenAI-compatible</span>
+      {kind === "image"
+        ? <span data-testid="svg-limits">image generation · images/generations</span>
+        : (
       <span data-testid="svg-limits" title={note ?? undefined}>
         {stallLabel(config.timeoutMs, caps, params)} · {config.retries} retries · {perRequest} per request
-      </span>
+      </span>)}
       <button type="button" className="svg-link" data-testid="svg-provider-toggle" aria-expanded={open}
         aria-label={open ? "Minimize model settings" : "Restore model settings"}
-        onClick={() => onToggleOpen(!open)}>{open ? "Minimize" : "Restore"}</button>
+        onClick={() => p.onToggleOpen(!open)}>{open ? "Minimize" : "Restore"}</button>
     </div>
   );
 }
@@ -220,31 +275,6 @@ function FilterLine({ filter, sort, shown, total, onFilter, onSort, onClear }: {
   );
 }
 
-function Select({ label, testid, value, options, onChange }: {
-  label: string; testid: string; value: string; options: [string, string][]; onChange: (v: string) => void;
-}) {
-  return (
-    <label className="svg-field">
-      <span className="svg-label">{label}</span>
-      <select className="svg-input" data-testid={testid} aria-label={label} value={value}
-        onChange={(e) => onChange(e.target.value)}>
-        {options.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function NumberField({ label, testid, value, min, max, onChange }: {
-  label: string; testid: string; value: number; min: number; max: number; onChange: (n: number) => void;
-}) {
-  return (
-    <label className="svg-field">
-      <span className="svg-label">{label}</span>
-      <input className="svg-input" data-testid={testid} type="number" min={min} max={max} step={1}
-        aria-label={label} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
-  );
-}
 
 /** Re-exported so the panel can restore the default prompt without an import. */
 export { DEFAULT_SVG_PROMPT };

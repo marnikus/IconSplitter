@@ -1302,6 +1302,7 @@ Batch:
 | IndexedDB `iconSplitter/handles["__svg__"]` | Generate SVG root handle | falls back to the Selection handle |
 | localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read (RULE 13); a missing/non-boolean `providerOpen` keeps the model card open |
 | localStorage `iconSplitter.svg.prompt.v1` | generation prompt | empty/missing → documented default |
+| localStorage `iconSplitter.svg.connections.v1` | saved provider setups `{ v, activeId, list }` (2026-10-16): name, kind text\|image, base, model, image params | junk → shipped defaults (GPT 6.1 Sol text + Sunburst image); unknown activeId → first; the active connection mirrors the live config's base+model (one writer, `statemodel` "connections") |
 | localStorage `iconSplitter.svg.prompts.v1` | the Generate SVG prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50 (`lib/promptpresets`, `state/presetstore`) |
 | localStorage `iconSplitter.svg.regen.v1` | "Regenerate SVG from" choice + the saved prompt's name | validated on read (RULE 13); the saved prompts are `iconSplitter.svg.prompts.v1` |
 | localStorage `iconSplitter.svg.config.v1` | provider settings (base URL, model id, stall window, retries, concurrency, images/request, max tokens) | clamped on read (RULE 13) |

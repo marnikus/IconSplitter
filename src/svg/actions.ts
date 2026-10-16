@@ -5,6 +5,8 @@ import type { ReviewStatus } from "../lib/svgfile";
 import { message } from "./runner";
 import { validateBatchPlan } from "../lib/svgbatch";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
+import type { Connection, ConnectionKind } from "../lib/svgconnections";
+import { useConnectionActions } from "./connectionactions";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
@@ -41,6 +43,9 @@ export interface SvgActions extends SvgPromptActions {
   readCode: (id: string, version: number) => Promise<string | null>;
   chooseRoot: () => void; rescan: () => void; setThumb: (px: number) => void; setPreviewBg: (bg: PreviewBackground) => void;
   setFilter: (patch: Partial<SvgListFilter>) => void; setSort: (sort: SvgSort) => void; setConfig: (patch: Partial<SvgConfig>) => void;
+  switchConnection: (id: string) => void; addConnection: () => void; removeConnection: () => void;
+  setConnectionMeta: (patch: { name?: string; kind?: ConnectionKind }) => void;
+  setImage: (patch: Partial<Connection["image"]>) => void;
   setProviderOpen: (open: boolean) => void; setParams: (patch: Partial<SamplingParams>) => void; refreshModels: () => void;
   saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void;
   deselectAll: () => void; checkActive: () => void; uncheckActive: () => void; setActive: (id: string) => void;
@@ -55,7 +60,7 @@ export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
   return {
-    ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx),
+    ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx), ...useSvgPromptActions(ctx),
   };
 }

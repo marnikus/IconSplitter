@@ -81,6 +81,9 @@ function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
   return (
     <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
       prompt={svgPromptWindowOf(g)} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
+      connections={g.connections} activeConn={g.activeConn}
+      onSwitchConnection={g.switchConnection} onAddConnection={g.addConnection} onRemoveConnection={g.removeConnection}
+      onConnectionMeta={g.setConnectionMeta} onImage={g.setImage}
       paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
       filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
       onChooseRoot={g.chooseRoot} onRescan={g.rescan} onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}

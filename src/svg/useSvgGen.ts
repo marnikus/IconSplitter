@@ -8,7 +8,7 @@
 
 import { useRef } from "react";
 import { fsSupported } from "../batch/picker";
-import { loadConfig, loadPrompt, loadPresets } from "./promptstore";
+import { loadConfig, loadConnections, loadPrompt, loadPresets } from "./promptstore";
 import { loadSvgPrefs } from "./prefsstore";
 import { useSvgCtx } from "./ctx";
 import { useSvgModel, type SvgModel, type ViewPrefs } from "./statemodel";
@@ -35,7 +35,7 @@ export type SvgGenApi = SvgModel & SvgActions & {
 
 export function useSvgGen(): SvgGenApi {
   const boot = useRef(loadBoot()).current;
-  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs, boot.presets);
+  const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs, { presets: boot.presets, conns: boot.connections });
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
   const recovery = useInflightRecovery(model.rows, ctx.setRowsFn, actions.requestGenerate);
@@ -48,6 +48,7 @@ export function useSvgGen(): SvgGenApi {
 
 interface Boot {
   config: ReturnType<typeof loadConfig>;
+  connections: ReturnType<typeof loadConnections>;
   prompt: string;
   prefs: ViewPrefs;
   presets: ReturnType<typeof loadPresets>;
@@ -57,5 +58,5 @@ interface Boot {
 function loadBoot(): Boot {
   const prefs = loadSvgPrefs();
   const view: ViewPrefs = { thumb: prefs.thumbHeight, providerOpen: prefs.providerOpen, bg: prefs.previewBg };
-  return { config: loadConfig(), prompt: loadPrompt(), prefs: view, presets: loadPresets() };
+  return { config: loadConfig(), connections: loadConnections(), prompt: loadPrompt(), prefs: view, presets: loadPresets() };
 }

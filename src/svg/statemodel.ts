@@ -5,6 +5,7 @@
 
 import type { KeySource } from "../lib/keyvault";
 import { useReducer, type Dispatch } from "react";
+import { seedConnections, type Connection, type ConnectionsStore } from "../lib/svgconnections";
 import type { SvgConfig } from "../lib/svgconfig";
 import {
   DEFAULT_PARAMS,
@@ -35,6 +36,9 @@ export interface SvgModel {
   busy: string | null;
   toast: Toast | null;
   config: SvgConfig;
+  /** The saved provider setups (quick-switch); the active one owns config's base+model. */
+  connections: Connection[];
+  activeConn: string;
   /** Sampling values for the selected model — never a value it refuses. */
   params: SamplingParams;
   /** What the selected model accepts (lib/modelcaps), for the controls and the payload. */
@@ -87,6 +91,7 @@ export type SvgAction =
   | { type: "busy"; busy: string | null }
   | { type: "toast"; toast: Toast | null }
   | { type: "config"; config: SvgConfig }
+  | { type: "connections"; list: Connection[]; activeId: string }
   | { type: "params"; params: SamplingParams }
   | { type: "caps"; caps: ModelCaps }
   | { type: "catalog"; catalog: CatalogModel[] | null }
@@ -110,6 +115,14 @@ export type SvgAction =
   | { type: "queue"; queue: QueueItem[] }
   | { type: "current"; id: string | null };
 
+/** The active connection always mirrors the live config's base+model, so a hand
+ *  edit of the MODEL field is kept by the dropdown too (one truth, two views). */
+function syncConn(m: SvgModel): SvgModel {
+  const active = m.connections.find((c) => c.id === m.activeConn);
+  if (!active || (active.baseUrl === m.config.baseUrl && active.model === m.config.model)) return m;
+  return { ...m, connections: m.connections.map((c) => (c.id === m.activeConn ? { ...c, baseUrl: m.config.baseUrl, model: m.config.model } : c)) };
+}
+
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
   root: (m, a) => ({ ...m, rootName: (a as { name: string }).name, rootToken: m.rootToken + 1 }),
@@ -118,7 +131,15 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: Discovery | null }).discovery }),
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
   toast: (m, a) => ({ ...m, toast: (a as { toast: Toast | null }).toast }),
-  config: (m, a) => ({ ...m, config: (a as { config: SvgConfig }).config }),
+  config: (m, a) => syncConn({ ...m, config: (a as { config: SvgConfig }).config }),
+  // The ONE writer of the connection list: switching/adding/removing land here,
+  // and the live config's base+model follow the now-active connection — so the
+  // dropdown and the runner can never drift apart (useModelSync resolves caps).
+  connections: (m, a) => {
+    const { list, activeId } = a as { list: Connection[]; activeId: string };
+    const active = list.find((c) => c.id === activeId) ?? list[0];
+    return syncConn({ ...m, connections: list, activeConn: active?.id ?? "", config: active ? { ...m.config, baseUrl: active.baseUrl, model: active.model } : m.config });
+  },
   params: (m, a) => ({ ...m, params: (a as { params: SamplingParams }).params }),
   caps: (m, a) => ({ ...m, caps: (a as { caps: ModelCaps }).caps }),
   catalog: (m, a) => ({ ...m, catalog: (a as { catalog: CatalogModel[] | null }).catalog }),
@@ -183,17 +204,21 @@ function presetsModel(m: SvgModel, presets: PromptPreset[]): SvgModel {
   return { ...m, presets, presetPick: picked };
 }
 
-export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, presets: PromptPreset[] = []): SvgModel {
+export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, extras: { presets?: PromptPreset[]; conns?: ConnectionsStore } = {}): SvgModel {
+  const stored = extras.conns ?? { list: seedConnections(config), activeId: "" };
+  const active = stored.list.find((c) => c.id === stored.activeId) ?? stored.list[0];
+  const live = { ...config, baseUrl: active.baseUrl, model: active.model };
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
-    config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, presets, presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
+    config: live, connections: stored.list, activeConn: active.id,
+    params: { ...DEFAULT_PARAMS }, caps: capsFor(live.model), catalog: null, paramNote: null,
+    prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
     filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null,
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
-export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, presets: PromptPreset[]): [SvgModel, Dispatch<SvgAction>] {
-  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, presets));
+export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, extras: { presets?: PromptPreset[]; conns?: ConnectionsStore }): [SvgModel, Dispatch<SvgAction>] {
+  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, extras));
 }
