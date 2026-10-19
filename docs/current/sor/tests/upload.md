@@ -21,6 +21,8 @@ Focused test inventory; [all tests](../TESTS.md).
   record null counted), pruneChecked
 * `upload_undo.test.ts` — the `uploadSettings` entry: payload gate, the live
   binding, the persist-only path, no-op refusal, undo/redo routing
+* `upload_pinned_bulkbar.test.tsx` — the bulk bar sits in the shared sticky
+  `.svg-bulkbar-pin`, a direct child of the tab column, above the rows
 * `upload_preview_stroke.test.tsx` — the reused preview stroke width: control in
   the bulk bar, the tab's own sheet restyles row previews (files untouched),
   Reset/"default", persistence, never the Generate SVG sheet; `createStrokeSheet`

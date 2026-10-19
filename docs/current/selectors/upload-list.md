@@ -10,6 +10,8 @@ status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
 
 ## Bulk bar (`upload-bulk`)
 
+Pinned: the bar sits in `upload-bulkbar-pin`, the Generate SVG tab's sticky `.svg-bulkbar-pin` reused (a direct child of `upload-panel`), so it stays on screen while the rows scroll (2026-10-19).
+
 | `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
 | `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
 | `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |

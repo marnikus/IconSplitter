@@ -2856,3 +2856,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - Change: `lib/svgpricing` prices `openai/gpt-image-2.5-sunburst` ($8 in / $30 out per 1M, `requesty-2026-10-19`); `lib/svgimgreg` reprices stored tokens-only entries on read. A composite icon shows its share of the whole image's estimated cost.
 - Measured: 4 new tests red before the change (rate missing, version, read repricing, row label), green after; svg_cost + svgimgreg + svg_imgreg_ui 73/73.
+
+## 2026-10-19 — SVG to upload: pinned bulk bar
+
+- Change: `UploadPanel` wraps `UploadBulkBar` in the shared sticky `.svg-bulkbar-pin` (`upload-bulkbar-pin`); no new CSS.
+- Measured: `upload_pinned_bulkbar` 2 tests red before, green after.

@@ -70,6 +70,16 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
   };
   return (
     <>
+      <PinnedBulkBar g={g} />
+      <UploadList g={g} actions={actions} />
+    </>
+  );
+}
+
+/** The bulk bar, pinned while the rows scroll — the Generate SVG tab's sticky .svg-bulkbar-pin, reused. */
+function PinnedBulkBar({ g }: { g: UploadApi }) {
+  return (
+    <div className="svg-bulkbar-pin" data-testid="upload-bulkbar-pin">
       <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
         thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setStroke} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport}
@@ -83,8 +93,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
         onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
         onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
-      <UploadList g={g} actions={actions} />
-    </>
+    </div>
   );
 }
 
