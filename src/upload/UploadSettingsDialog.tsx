@@ -18,6 +18,7 @@ import {
   type UploadSettings,
 } from "../lib/upload/settings";
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
+import { paintClash } from "../lib/upload/paintclash";
 import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
@@ -51,6 +52,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
           : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults."}
       </p>
       <AsIsRow p={p} effective={effective} />
+      <PaintClashNote effective={effective} />
       <SettingsGrid p={p} effective={effective} />
       {p.id !== null && (
         <div className="up-set-footer">
@@ -101,6 +103,12 @@ function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: Up
       </span>
     </div>
   );
+}
+
+/** Strokes the chosen background would hide — said before anything is exported. */
+function PaintClashNote({ effective }: { effective: UploadSettings }) {
+  const clash = paintClash(effective);
+  return clash === null ? null : <p className="svg-warning" role="alert" data-testid="upload-set-paint-clash">⚠ {clash}</p>;
 }
 
 /** Padding: a % of the artwork's largest side, or default — the SVG's own margins. */

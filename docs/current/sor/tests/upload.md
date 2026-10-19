@@ -27,6 +27,8 @@ Focused test inventory; [all tests](../TESTS.md).
   (2026-10-19): parse/round-trip, the one stroke (0–50, no per-icon read),
   stable fingerprints, prepare with each default, "as is" = the source byte for
   byte, `runExport` as is commits the source
+* `upload_paint_clash.test.ts` — strokes the background hides (black on black)
+  are named; readable pairs and default/transparent/artwork say nothing
 * `upload_live_preview.test.tsx` — the bar's STROKE writes the export
   `strokePx` and the live preview shows it; no dialog stroke row; the Default
   choices and "All default"; the preview box fits the artboard ratio (2:1;

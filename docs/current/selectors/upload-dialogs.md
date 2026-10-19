@@ -9,6 +9,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 - `upload-set-bg-default` (before `-transparent`);
 - `upload-set-stroke-color-artwork` now reads **Default**; both "none" choices are buttons;
 - the artboard select's first option is `source` ("Default (the SVG's own)").
+- `upload-set-paint-clash` (`.svg-warning`, `role=alert`): only while the stroke colour is unreadable on the background (`lib/upload/paintclash`).
 
 `upload-set-stroke` (the stroke WIDTH) is **gone**: the bar's `upload-stroke` is that one value.
 The older text below is kept for the other handles.

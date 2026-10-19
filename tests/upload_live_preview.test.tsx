@@ -172,3 +172,15 @@ describe("the preview box: the artboard's ratio inside the zoom square", () => {
     expect(small).toEqual([`${ZOOM_DEFAULT}px`, `${ZOOM_DEFAULT}px`]);
   });
 });
+
+describe("a stroke colour the background hides", () => {
+  it("the row preview and the dialog both say the icon will be invisible", async () => {
+    await mount({ background: "#000000", strokeColor: "#000000" });
+    expect(q(`[data-testid=upload-prev-${FOG}-note]`)?.textContent).toMatch(/invisible/);
+    await click("[data-testid=upload-settings-open]");
+    expect(q("[data-testid=upload-set-paint-clash]")?.textContent).toMatch(/invisible/);
+    await click("[data-testid=upload-set-bg-default]");
+    expect(q("[data-testid=upload-set-paint-clash]")).toBeNull();
+    expect(q(`[data-testid=upload-prev-${FOG}-note]`)).toBeNull();
+  });
+});

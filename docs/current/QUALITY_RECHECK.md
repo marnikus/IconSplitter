@@ -2877,3 +2877,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
   - `upload_live_preview`: 7 tests, 6 red with the UI changes stashed, green after.
   - `tests/upload*` + `tests/svg*`: 1205 green.
   - `prepareExportSvg` split to stay under RULE 16.
+
+## 2026-10-19 — Upload paint clash note
+
+- Report: a black thumbnail on SVG to upload. Cause (stored settings): export background `#000000` with stroke colour `#000000` — the live preview honestly showed the black-on-black export. Added `lib/upload/paintclash` (WCAG 3:1) → row preview note + dialog `upload-set-paint-clash`.
+- Measured: `upload_paint_clash` 2 + `upload_live_preview` 8 green (red first: missing module / no note).

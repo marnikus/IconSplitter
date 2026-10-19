@@ -33,7 +33,7 @@ List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight")
 ## Row (`upload-row-{id}`)
 
 | `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
-| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the LIVE EXPORT (2026-10-19): the exact export text for the row's effective settings (the approved SVG itself when "as is"), in a shadow root inside the coloured frame (`data-bg`); the box fits the artboard's ratio inside the zoom square (`zoomBoxFit`: 16 px and 2048 px draw the same size). `upload-prev-{id}-note` = why the export could not be previewed |
+| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the LIVE EXPORT (2026-10-19): the exact export text for the row's effective settings (the approved SVG itself when "as is"), in a shadow root inside the coloured frame (`data-bg`); the box fits the artboard's ratio inside the zoom square (`zoomBoxFit`: 16 px and 2048 px draw the same size). `upload-prev-{id}-note` = why the export could not be previewed, or that its strokes are invisible on its background (paint clash) |
 | `upload-target-{id}` | text | the row's source path (the approved SVG) |
 | `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |

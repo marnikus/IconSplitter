@@ -4,10 +4,12 @@
 // (lib/upload/prepare), so stroke, background, artboard, ratio and padding show
 // before anything is written. "As is" previews the approved source itself.
 // Results are cached per (source, settings fingerprint) and each change waits a
-// short debounce, so typing in STROKE never blocks the list.
+// short debounce, so typing in STROKE never blocks the list. A stroke colour
+// the background hides is said in the note (lib/upload/paintclash).
 
 import { useEffect, useRef, useState } from "react";
 import { isAsIs } from "../lib/upload/asis";
+import { paintClash } from "../lib/upload/paintclash";
 import { prepareExportSvg } from "../lib/upload/prepare";
 import { settingsFingerprint, type UploadSettings } from "../lib/upload/settings";
 import { fnv1a32 } from "../lib/pairing";
@@ -45,7 +47,7 @@ function keyOf(source: string, settings: UploadSettings): string {
 /** One prepare run; a failure previews the source and says why. */
 function buildPreview(key: string, source: string, settings: UploadSettings): ExportPreview {
   const prepared = prepareExportSvg(source, settings);
-  const value = prepared.ok ? { svg: prepared.svg, note: null } : { svg: source, note: `export preview unavailable — ${prepared.detail}` };
+  const value = prepared.ok ? { svg: prepared.svg, note: paintClash(settings) } : { svg: source, note: `export preview unavailable — ${prepared.detail}` };
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
   cache.set(key, value);
   return value;

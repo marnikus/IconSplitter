@@ -28,6 +28,10 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
   `prepareExportSvg(source, effective)`, debounced 120 ms and cached per source
   and fingerprint. The box is `zoomBoxFit`.
+* **Paint clash** (2026-10-19, `lib/upload/paintclash`): a hex stroke colour on
+  a hex background below WCAG non-text contrast (3:1) is named in the row's
+  preview note and in the dialog (`upload-set-paint-clash`) — e.g. black on
+  black exports a solid square. Default / transparent / artwork paint: no note.
 
 * Settings: global defaults (padding %, background — `transparent` (the
   default) or one hex, stroke width in px — the file's own units, written as
