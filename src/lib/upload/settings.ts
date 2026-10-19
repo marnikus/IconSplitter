@@ -24,9 +24,9 @@ export {
 } from "./artboard";
 
 export interface UploadSettings {
-  /** Uniform padding on all four sides, % of the fitted artwork's largest side. */
-  paddingPct: number;
-  /** `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
+  /** Uniform padding on all four sides, % of the fitted artwork's largest side; null = default (the source's own margins). */
+  paddingPct: number | null;
+  /** `default` (no artboard rect, 2026-10-19), `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
   background: string;
   /**
    * Stroke width in px — the file's own user units, written verbatim on every
@@ -76,7 +76,7 @@ export const PADDING_MIN = 0;
 export const PADDING_MAX = 50;
 export const PADDING_DEFAULT = 8;
 export const STROKE_MIN = 0;
-export const STROKE_MAX = 32;
+export const STROKE_MAX = 50; // the bar's range: ONE stroke param (2026-10-19)
 export const STROKE_DEFAULT = 0;
 export const MP_MIN = 1;
 export const MP_MAX = 64;
@@ -88,6 +88,8 @@ export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
 /** The background value that paints nothing in the SVG/EPS. */
 export const TRANSPARENT = "transparent";
+/** "default" (2026-10-19): the export adds no artboard rect — the source's own background. */
+export const BACKGROUND_SOURCE = "default";
 export const BACKGROUND_DEFAULT = TRANSPARENT;
 /** What a format without alpha (JPEG, EPS opacity mixing) paints a transparent background as. */
 export const FLATTEN_DEFAULT = "#ffffff";
@@ -145,6 +147,11 @@ export function readPaint(value: unknown, sentinel: string): string | null {
   return value === sentinel ? sentinel : normalizeHex(value);
 }
 
+/** The background's own vocabulary: `default`, `transparent`, or a hex; null = unreadable. */
+function readBackground(value: unknown): string | null {
+  return value === BACKGROUND_SOURCE ? BACKGROUND_SOURCE : readPaint(value, TRANSPARENT);
+}
+
 export function isTransparent(background: string): boolean {
   return background === TRANSPARENT;
 }
@@ -158,8 +165,8 @@ export function flattenColor(background: string): string {
 export function normalizeSettings(raw: unknown): UploadSettings {
   if (!isRecord(raw)) return { ...DEFAULT_UPLOAD_SETTINGS };
   return {
-    paddingPct: clampPaddingPct(raw.paddingPct),
-    background: readPaint(raw.background, TRANSPARENT) ?? BACKGROUND_DEFAULT,
+    paddingPct: raw.paddingPct === null ? null : clampPaddingPct(raw.paddingPct),
+    background: readBackground(raw.background) ?? BACKGROUND_DEFAULT,
     strokePx: clampStrokePx(raw.strokePx ?? raw.strokePt), // strokePt: the pre-2026-10-08 name, same number
     strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_DEFAULT,
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
@@ -187,10 +194,9 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   return out;
 }
 
-/** The numeric fields and their clamps, so adding one is a single line here. */
+/** The numeric fields and their clamps. `strokePx` is not here: it is ONE value, the bar's (2026-10-19). */
 const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["paddingPct", clampPaddingPct],
-  ["strokePx", clampStrokePx],
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
   ["artboardMegapixels", clampArtboardMegapixels],
@@ -204,9 +210,10 @@ const PAINT_FIELDS: ["background" | "strokeColor", string][] = [
 
 function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void {
   for (const [key, clamp] of NUMERIC_FIELDS) {
-    const value = raw[key] ?? (key === "strokePx" ? raw.strokePt : undefined); // the old name reads, is never written
+    const value = raw[key];
     if (typeof value === "number") Object.assign(out, { [key]: clamp(value) });
   }
+  if (raw.paddingPct === null) out.paddingPct = null; // a pinned "default"
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
@@ -218,7 +225,7 @@ function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
 
 function readPaints(raw: Record<string, unknown>, out: SettingsOverrides): void {
   for (const [key, sentinel] of PAINT_FIELDS) {
-    const paint = readPaint(raw[key], sentinel);
+    const paint = key === "background" ? readBackground(raw[key]) : readPaint(raw[key], sentinel);
     if (paint !== null) out[key] = paint;
   }
 }
@@ -269,7 +276,7 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
-    round3(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
+    s.paddingPct === null ? "default" : round3(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],

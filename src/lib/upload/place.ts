@@ -27,6 +27,8 @@ export interface PlaceWant {
   target: FitTarget | null;
   style: StrokeStyle;
   expand: boolean;
+  /** Default padding (2026-10-19): fit THIS frame (the source viewBox) in one pass — the source's margins, not the measured artwork. */
+  frame?: Bounds | null;
 }
 
 export interface Placed {
@@ -52,6 +54,7 @@ interface Sample { k: number; edges: Edges }
 
 /** The source root placed in its artboard: the artwork clone, the fit and what the passes did. */
 export function placeArtwork(source: Element, want: PlaceWant): PlaceResult {
+  if (want.frame) return placeFrame(source, want, want.frame);
   let bounds = shippedBounds(source);
   if (bounds === null) return { ok: false, code: "unsupported", detail: "the document has no visible geometry" };
   let fit = fitArtboard(bounds, want.paddingPct, want.target);
@@ -65,6 +68,13 @@ export function placeArtwork(source: Element, want: PlaceWant): PlaceResult {
     fit = fitArtboard(bounds, want.paddingPct, want.target);
   }
   return { ok: false, code: "no-fit", detail: `the artwork did not settle in its artboard after ${MAX_PASSES} passes` };
+}
+
+/** The source frame scaled into the target as one unit — no settling: its margins are the source's. */
+function placeFrame(source: Element, want: PlaceWant, frame: Bounds): PlaceResult {
+  const fit = fitArtboard(frame, 0, want.target);
+  const got = candidate(source, fit, want);
+  return got.ok ? { ...got, fit, passes: 1 } : got;
 }
 
 /** The bounds of the artwork as it ships: strokes measured by their real outline; the analytic bounds when the expander refuses. */

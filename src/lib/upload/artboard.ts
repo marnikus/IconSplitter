@@ -14,7 +14,8 @@ import type { FitTarget } from "./geom";
  * chosen (width : height).
  */
 export interface Artboard {
-  mode: "content" | "preset" | "custom";
+  /** `source` (2026-10-19, "default"): the approved SVG's own viewBox size and aspect ratio. */
+  mode: "source" | "content" | "preset" | "custom";
   /** Square edge in px for `preset` mode — always one of ARTBOARD_PRESETS. */
   size: number;
   /** Exact px for `custom` mode; their ratio is the aspect ratio. */
@@ -34,8 +35,8 @@ export const CONTENT_ARTBOARD: Artboard = { mode: "content", size: 512, width: 5
 export function clampArtboard(value: unknown): Artboard {
   if (!isRecord(value)) return { ...CONTENT_ARTBOARD };
   const mode = value.mode;
-  if (mode !== "content" && mode !== "preset" && mode !== "custom") return { ...CONTENT_ARTBOARD };
-  if (mode === "content") return { ...CONTENT_ARTBOARD, mode: "content" };
+  if (mode !== "source" && mode !== "content" && mode !== "preset" && mode !== "custom") return { ...CONTENT_ARTBOARD };
+  if (mode === "content" || mode === "source") return { ...CONTENT_ARTBOARD, mode };
   if (mode === "preset") return { mode, size: nearestPreset(value.size), width: 512, height: 512 };
   const fitted = fitIntoCeiling(clampEdge(value.width), clampEdge(value.height));
   return { mode, size: 512, width: fitted.width, height: fitted.height };

@@ -11,6 +11,7 @@ import type { IconMetadata } from "../lib/upload/meta";
 import {
   effectiveSettings, megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
+import { isAsIs } from "../lib/upload/asis";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -154,7 +155,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const pinned = overrideKeys(a.overrides[id] ?? {}).length;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
-      <small>pad {effective.paddingPct}% · {effective.background} · {strokeLine(effective)}</small>
+      <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${effective.paddingPct === null ? "default" : `${effective.paddingPct}%`} · ${effective.background} · ${strokeLine(effective)}`}</small>
       <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}

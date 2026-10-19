@@ -77,7 +77,13 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   const prepared = prepareExportSvg(ctx.sourceText, ctx.settings);
   if (!prepared.ok) throw new StageError("prepare", `${prepared.code}: ${prepared.detail}`);
   art.prepared = prepared;
-  const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg);
+  // As is (2026-10-19): the approved text ships untouched — no SVGO, no clean rewrite.
+  const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg && !prepared.asIs);
+  if (prepared.asIs) {
+    art.optimizedSvg = optimized.svg;
+    art.optimizeRecord = optimized.record;
+    return;
+  }
   // SVGO may not smuggle anything back in: check, rebuild if it did, and fail
   // honestly when even a rebuild cannot make the file clean (RULE 15).
   const clean = enforceExportSvg(optimized.svg);

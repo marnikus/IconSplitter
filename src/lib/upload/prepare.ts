@@ -16,14 +16,19 @@
 // width/height (stock review, 2026-10-08) — and the artboard rect ALWAYS first:
 // the background colour, or `fill="none"` when transparent (the artboard is an
 // object of the artwork, "select all" in an editor is the artboard).
+// "Default" settings (2026-10-19, lib/upload/asis): a default padding fits the
+// source's own viewBox (its margins) in ONE pass, a default artboard is the
+// source viewBox size, a default background adds no rect — and all of them at
+// once is AS IS: the approved text is returned untouched (no clean, no bake).
 
-import { artboardTarget, isTransparent, megapixelTargetOf, readPaint, TRANSPARENT, type UploadSettings } from "./settings";
+import { artboardTarget, BACKGROUND_SOURCE, isTransparent, megapixelTargetOf, readPaint, TRANSPARENT, type UploadSettings } from "./settings";
+import { isAsIs } from "./asis";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
 import { placeArtwork } from "./place";
 import { strokeStyleOf } from "./restyle";
-import { fmt, type ArtboardFit } from "./geom";
+import { fmt, parseSvgLength, type ArtboardFit, type FitTarget } from "./geom";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -46,8 +51,10 @@ export interface PreparedSvg {
   background: string;
   /** What the root defines once (`stroke`, `stroke-width`); null = per shape, or nothing strokes. */
   globalStroke: GlobalStroke;
-  /** Placement passes it took to settle the shipped artwork in its artboard (1 = the first fit was exact). */
+  /** Placement passes it took to settle the shipped artwork in its artboard (1 = the first fit was exact; 0 = as is). */
   passes: number;
+  /** Every visual setting at "default": `svg` IS the approved source text (2026-10-19). */
+  asIs: boolean;
 }
 
 export type PrepareFailure = Extract<PrepareResult, { ok: false }>;
@@ -60,20 +67,26 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   const doc = parseSvgDocument(sourceSvg);
   if (doc === null) return fail("parse", "the source is not well-formed XML");
   const root = doc.documentElement;
+  if (isAsIs(settings) && root !== null && name(root) === "svg") {
+    const same = asIsPrepared(sourceSvg, root);
+    if (same !== null) return same;
+  }
   const veto = sourceVeto(root);
   if (veto !== null) return veto;
   cleanExportDom(root as Element, { keepRootEmbeds: false });
+  const frame = viewBoxOf(root);
   const vb = visibleBounds(root);
   if (vb !== null && vb.unsupported.length > 0) {
     return fail("unsupported", `unsupported content: ${vb.unsupported.join(", ")}`);
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
   const placed = placeArtwork(root, {
-    paddingPct: settings.paddingPct, target: artboardTarget(settings.artboard, megapixelsOf(settings)),
+    paddingPct: settings.paddingPct ?? 0, target: targetOf(settings, frame),
     style: strokeStyleOf(settings), expand: settings.expandStrokes,
+    frame: settings.paddingPct === null ? frame : null,
   });
   if (!placed.ok) return fail(placed.code, placed.detail);
-  const background = readPaint(settings.background, TRANSPARENT) ?? TRANSPARENT;
+  const background = backgroundOf(settings.background);
   applyArtboard(placed.root, placed.fit, background);
   const globalStroke = unifyStrokes(placed.root); // the artboard rect included: it says `stroke="none"` only when the root hoists a paint
   doc.replaceChild(placed.root, root);
@@ -82,8 +95,46 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
     svg: new XMLSerializer().serializeToString(doc),
     fit: placed.fit, bounds: placed.bounds, background, globalStroke, passes: placed.passes,
     shapesBaked: placed.shapesBaked, strokesNormalized: placed.widths, strokesRecolored: placed.colors,
-    strokesExpanded: placed.expanded,
+    strokesExpanded: placed.expanded, asIs: false,
   };
+}
+
+/** As is: the source text itself, framed by its own viewBox (or px size); null = no readable frame, so the pipeline decides. */
+function asIsPrepared(sourceSvg: string, root: Element): PrepareResult | null {
+  const frame = viewBoxOf(root) ?? sizeOf(root);
+  if (frame === null) return null;
+  const fit: ArtboardFit = {
+    viewBox: `${fmt(frame.minX)} ${fmt(frame.minY)} ${fmt(frame.width)} ${fmt(frame.height)}`,
+    artW: frame.width, artH: frame.height, offsetX: -frame.minX, offsetY: -frame.minY, pad: 0, scale: 1,
+  };
+  return {
+    ok: true, svg: sourceSvg, fit, bounds: frame, background: BACKGROUND_SOURCE, globalStroke: { stroke: null, strokeWidth: null }, passes: 0,
+    shapesBaked: 0, strokesNormalized: 0, strokesRecolored: 0, strokesExpanded: 0, asIs: true,
+  };
+}
+
+/** The root's viewBox as bounds; null when absent or degenerate. */
+function viewBoxOf(root: Element): Bounds | null {
+  const n = (root.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
+  if (n.length !== 4 || n.some((v) => !Number.isFinite(v)) || n[2] <= 0 || n[3] <= 0) return null;
+  return { minX: n[0], minY: n[1], width: n[2], height: n[3] };
+}
+
+/** A root with only a px width/height: the frame at the origin. */
+function sizeOf(root: Element): Bounds | null {
+  const w = parseSvgLength(root.getAttribute("width"));
+  const h = parseSvgLength(root.getAttribute("height"));
+  return w !== null && h !== null && w > 0 && h > 0 ? { minX: 0, minY: 0, width: w, height: h } : null;
+}
+
+/** A default artboard is the source viewBox size; otherwise the pinned px or the MP target. */
+function targetOf(settings: UploadSettings, frame: Bounds | null): FitTarget | null {
+  if (settings.artboard.mode === "source") return frame === null ? null : { width: frame.width, height: frame.height };
+  return artboardTarget(settings.artboard, megapixelsOf(settings));
+}
+
+function backgroundOf(value: string): string {
+  return value === BACKGROUND_SOURCE ? BACKGROUND_SOURCE : readPaint(value, TRANSPARENT) ?? TRANSPARENT;
 }
 
 /**
@@ -126,6 +177,7 @@ function applyArtboard(root: Element, fit: ArtboardFit, background: string): voi
   root.setAttribute("viewBox", fit.viewBox);
   root.removeAttribute("width");
   root.removeAttribute("height");
+  if (background === BACKGROUND_SOURCE) return; // "default": the source's own background, no artboard object
   root.insertBefore(artboardRect(root.ownerDocument, fit, background), root.firstChild);
 }
 
