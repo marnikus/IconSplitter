@@ -11,6 +11,7 @@ file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 
 | Test id | Element | Notes |
 |---|---|---|
+| `svg-bulkbar-pin` | sticky wrapper of the bulk bar | pins the whole bar to the top while rows scroll (`position: sticky` in `.app-main`, 2026-10-19) |
 | `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
 | `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |

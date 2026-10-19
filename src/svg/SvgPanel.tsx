@@ -99,15 +99,17 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
   const actions = panelRowActions(g, rootRef);
   return (
     <>
-      <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={idsWithGeneratedSvg(g.rows, g.checked).length}
-        requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidableCount(g)}
-        thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
-        progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
-        onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
-        onRegenerate={() => g.regenerateSelected(g.checked)}
-        onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
-        onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
+      <div className="svg-bulkbar-pin" data-testid="svg-bulkbar-pin">
+        <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={idsWithGeneratedSvg(g.rows, g.checked).length}
+          requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidableCount(g)}
+          thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
+          progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
+          onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
+          onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
+          onRegenerate={() => g.regenerateSelected(g.checked)}
+          onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
+          onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
+      </div>
       <SvgList g={g} actions={actions} />
       <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
     </>

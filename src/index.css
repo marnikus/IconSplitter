@@ -1014,6 +1014,19 @@
   background: var(--v2-surface);
 }
 
+/* Pinned bulk bar (2026-10-19, user screenshot): selection, preview background,
+   zoom and the bulk actions stay on screen while the rows scroll — the Batch
+   tab's .batch-bulkbar-pin precedent. The scroll container is .app-main and the
+   pin is a direct child of the full-height .svg column, so sticky spans the
+   list. z-index 6 sits above rows and the sticky column header (2) and below
+   modals (30); the progress header lives outside .app-main. .svg-bulk paints an
+   opaque surface, so rows never show through. */
+.svg-bulkbar-pin {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
 .svg-bulk-left, .svg-bulk-right { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .svg-selected-copy { font-size: 11px; font-weight: 700; }
 .svg-scope-copy { color: var(--v2-muted); font-size: 10px; }

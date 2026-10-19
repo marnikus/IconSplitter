@@ -2817,3 +2817,9 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - Windows runner fixed: `tools/quality.mjs`/`tools/verify.mjs` resolve ROOT
   with `fileURLToPath` (the `cmd.exe ENOENT` failure is gone).
 - Design: [test harness](TEST_HARNESS.md).
+
+## 2026-10-19 — Generate SVG bulk bar pinned while rows scroll
+
+- `.svg-bulkbar-pin` (sticky, top 0, z-index 6) wraps `SvgBulkBar` as a direct
+  child of the `.svg` column; `tests/svg_pinned_bulkbar.test.tsx` 4 tests
+  witnessed red (no rule, no pin), now green; svg_ui + svg_ui_config 38 green.
