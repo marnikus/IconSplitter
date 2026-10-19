@@ -2752,3 +2752,10 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - TDD: `tests/svg_imgreg_ui.test.tsx` — the row must have exactly one child per `.svg-columns` header cell, and `svg-row-image-regen-{id}` must sit inside `.svg-decision-actions`; RED first (9 vs 8).
 - Fix: the button moved into `DecisionActions` (same testid, same dialog), `.svg-decision-actions .svg-img-regen { flex: 1 1 100% }` puts it on its own line in that cell. No grid change.
 - Gates: `npx tsc --noEmit` clean; eslint on `src/svg` + the test 0 errors; `tests/svg_imgreg_ui` + `svg_ui` + `svg_connections_ui` 52 tests green; quality gate: SvgRow.tsx OK (36 fns, 217 lines), the only FAILs are the pre-existing `src/App.tsx` and `src/lib/render.ts`. `verify:fast` NOT run — `tools/verify.mjs` / `tools/quality.mjs` compute `ROOT` from `URL.pathname` ("/D:/…"), which Windows rejects as a cwd; the gate above ran from a throwaway copy with `fileURLToPath`. Not checked in a real browser.
+
+## 2026-10-19 — style(svg): row image button matches Regenerate; vector/raster parts separated (RULE 14)
+
+- User request (screenshot): the row's "Regenerate image" was a wide dark bar; make it the same as the SVG "Regenerate" button and leave space between the vector part and the raster part.
+- TDD: `tests/svg_imgreg_ui.test.tsx` — the image button carries the same `svg-btn tiny primary` classes as `svg-generate-{id}` and a `.svg-decision-sep` sits between the two in DOM order; RED first.
+- Change: `SvgRow.tsx` image button → `svg-btn tiny primary svg-img-regen` after a `span.svg-decision-sep`; `index.css` replaces the stretch rule with a full-width 1px divider (8px above, 4px below) that breaks the flex line. Same cell, same testid, no grid change.
+- Gates: `npx tsc --noEmit` clean; eslint on `src/svg` + test 0 errors; `svg_imgreg_ui` + `svg_ui` + `svg_connections_ui` 53 tests green. `verify:fast` not run (Windows `ROOT` bug in `tools/`, see the entry above). Not checked in a real browser.
