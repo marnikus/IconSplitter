@@ -2851,3 +2851,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - Request: the same feature on "SVG to upload", reusing code. Transform: `svg/strokesheet.ts` singleton → `createStrokeSheet()` factory with `SVG_STROKE_SHEET` / `UPLOAD_STROKE_SHEET` (both tabs stay mounted, so one shared sheet would leak widths across tabs); `SvgPreviewBox` `strokeOverride: boolean` → `strokeSheet?: StrokeSheet`; `PreviewStroke` takes `sheet` + `idPrefix`. Upload wiring: `previewStroke` pref, `stroke` action/model, `setStroke`, persist, `UploadBulkBar` + `UploadPreview`. No new CSS. Plan: `docs/archive/2026-10-19-upload-preview-stroke/README.md`.
 - TDD: `tests/upload_preview_stroke.test.tsx` 6/6 red before, green after; `svg_preview_stroke` stays 11/11; tests/upload* + tests/svg* 101 files / 1189 tests green; tsc clean.
+
+## 2026-10-19 — image regeneration cost from the Sunburst rate card
+
+- Change: `lib/svgpricing` prices `openai/gpt-image-2.5-sunburst` ($8 in / $30 out per 1M, `requesty-2026-10-19`); `lib/svgimgreg` reprices stored tokens-only entries on read. A composite icon shows its share of the whole image's estimated cost.
+- Measured: 4 new tests red before the change (rate missing, version, read repricing, row label), green after; svg_cost + svgimgreg + svg_imgreg_ui 73/73.

@@ -70,6 +70,19 @@ describe("the version history — RULE 13 repair, I-54 discipline", () => {
     expect(old.cost.actual).toBeNull();
   });
 
+  it("a stored version with tokens but 'no cost' is priced on read from the rate card (user report: v3 · 1,319 tokens · no cost)", () => {
+    const usage = { input: 300, output: 1019, total: 1319 };
+    const none = { actual: null, estimated: null, currency: "USD", pricing: "requesty-2026-10-01", basis: "none" };
+    const [v] = parseImageVersions([{ ...done(3, "a_v3.png"), model: "openai/gpt-image-2.5-sunburst", usage, cost: none }]);
+    expect(v.cost.basis).toBe("rate-card");
+    expect(v.cost.estimated).toBeCloseTo(((300 * 8 + 1019 * 30) / 1_000_000) * 1.05, 9);
+    // an unknown model or missing token counts still read as unknown — never invented
+    const [unknown] = parseImageVersions([{ ...done(4, "a_v4.png"), model: "someone/unknown", usage, cost: none }]);
+    expect(unknown.cost.basis).toBe("none");
+    const [half] = parseImageVersions([{ ...done(5, "a_v5.png"), model: "openai/gpt-image-2.5-sunburst", usage: { input: null, output: null, total: 1319 }, cost: none }]);
+    expect(half.cost.basis).toBe("none");
+  });
+
   it("a failed version keeps its honest error text", () => {
     const list = parseImageVersions([{ ...done(3, "a_v3.png"), status: "failed", error: "429" }]);
     expect(list[0].status).toBe("failed");

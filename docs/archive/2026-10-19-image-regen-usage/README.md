@@ -63,3 +63,21 @@
 - Usage in the Versions dialog for images (there is no image versions dialog yet).
 - Back-filling cost for images generated before this change: the log has it,
   the pair file never did.
+
+## 6. Follow-up: tokens but "no cost reported" (2026-10-19)
+
+> "Image gen. v3 · 1,319 tokens · no cost reported — the cost is equal to one
+> full image generated, then divided by the number of icons in that batch. Fix."
+
+- **Cause:** the image endpoint reports tokens but no `cost`, and the rate card
+  had only the text model, so `costInfoFor` returned basis `none`.
+- **Fix:** `RATE_CARD` gains `openai/gpt-image-2.5-sunburst` at image input $8 and
+  image output $30 per 1M (OpenAI's model page; text input is $5, but the usage
+  has a single input count, so the estimate can only be too high).
+  `PRICING_VERSION` becomes `requesty-2026-10-19`.
+- A composite cell already stores `allocateUsage(usage, N)`, so its rate-card
+  estimate is the whole image's cost ÷ N, labelled **Estimated**.
+- Entries saved before the fix (tokens with basis `none`) are priced on read in
+  `svgimgreg.entryOf`. An unknown model or missing counts still read as unknown.
+- Tests: `svg_cost` (rate + 3-way share), `svgimgreg` (repricing on read),
+  `svg_imgreg_ui` (a composite with no reported cost shows `$0.0225 Estimated`).

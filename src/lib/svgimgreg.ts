@@ -12,6 +12,7 @@
 // and, per version, the row's "Image gen." usage (archive/2026-10-19-image-regen-usage).
 
 import { toCost, toUsage, type CostInfo, type TokenUsage } from "./svgmodel";
+import { costInfoFor } from "./svgpricing";
 import { NO_USAGE, type Usage } from "./svgrequest";
 
 /** The subfolder holding a pair's regenerated AI images (user's naming). */
@@ -66,8 +67,16 @@ function entryOf(entry: unknown): ImageVersion[] {
     prompt: strField(r, "prompt"), model: strField(r, "model"),
     requestId: strOrNull(r, "requestId"), error: strOrNull(r, "error"),
     updatedAt: strField(r, "updatedAt"),
-    usage: toUsage(r.usage), cost: toCost(r.cost),
+    ...spendOf(strField(r, "model"), r),
   }];
+}
+
+/** A version saved with tokens but no cost (before the image rate card) is priced on read. */
+function spendOf(model: string, r: Record<string, unknown>): Pick<ImageVersion, "usage" | "cost"> {
+  const usage = toUsage(r.usage);
+  const cost = toCost(r.cost);
+  if (cost.basis !== "none") return { usage, cost };
+  return { usage, cost: costInfoFor(model, { ...usage, cost: null, currency: cost.currency }) };
 }
 
 /**

@@ -712,7 +712,7 @@ describe("image regeneration — every pair, one truth (RC5/RC6/RC8)", () => {
 // regeneration spent, and the row's usage column shows it under "Image gen."
 // the same way it shows the SVG version's spend under "SVG gen.".
 describe("image regeneration — tokens and cost on the row", () => {
-  const usageAnswer = (cost: number) => {
+  const usageAnswer = (cost?: number) => {
     const pngHeader = String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10);
     imageAnswer = async () => new Response(JSON.stringify({ data: [{ b64_json: btoa(pngHeader) }],
       usage: { input_tokens: 400, output_tokens: 1325, total_tokens: 1725, cost } }), { status: 200 });
@@ -768,5 +768,29 @@ describe("image regeneration — tokens and cost on the row", () => {
       expect(v.cost).toMatchObject({ actual: null, estimated: 0.025, basis: "batch-split" });
     }
     expect(txt(`[data-testid=svg-usage-img-${FOG}]`)).toContain("$0.0250 Estimated");
+  }, 15000);
+
+  it("tokens but no reported cost: each pair gets its share of the rate-card cost of the one image (user report)", async () => {
+    editCanvas();
+    usageAnswer(); // the image endpoint reports tokens, never a cost
+    const root = manyPairs(["mist"]);
+    const arch = root.children.get("architecture") as FakeDir;
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "preview ready");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "review ready");
+    await click(q("[data-testid=svg-img-apply]")!);
+    await waitFor(() => q("[data-testid=svg-busy]") === null, "images committed");
+    // whole image: (400 × $8 + 1325 × $30) / 1M × 1.05 = $0.0451; each of 2 icons: $0.0225
+    const mist = JSON.parse((arch.children.get("mist_AI.svg.json") as FakeFile).text).imageVersions[0];
+    for (const v of [metaNow().imageVersions[0], mist]) {
+      expect(v.cost.basis).toBe("rate-card");
+      expect(v.cost.estimated).toBeCloseTo(0.02254875, 8);
+    }
+    const cell = txt(`[data-testid=svg-usage-img-${FOG}]`);
+    expect(cell).toContain("$0.0225 Estimated");
+    expect(cell).not.toContain("no cost reported");
   }, 15000);
 });

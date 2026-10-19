@@ -47,7 +47,8 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   number is shown as "reported"; a calculated one is always labelled
   **Estimated** and names its pricing version. The calculation is either the
   image's share of a batch total or, when no cost was reported at all, the
-  versioned rate card (`lib/svgpricing`, verified Requesty rates). Neither is
+  versioned rate card (`lib/svgpricing`, verified Requesty rates; since
+  2026-10-19 it also prices the Sunburst image model). Neither is
   ever presented as provider-reported, and a missing number is shown as "—" and
   never invented.
 * Preview background (prompt §16): the SVG preview sits in a frame whose colour

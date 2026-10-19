@@ -12,7 +12,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   and the pair file gains the additive keys `imageVersions[]` (version, file,
   status, prompt, model, error, timestamps, and since 2026-10-19 `usage` +
   `cost` in the SVG shapes — a composite cell stores its `allocateUsage`
-  share, an estimate unless it was alone) and `imagePreferred: n` — the same
+  share, an estimate unless it was alone; the image endpoint reports tokens
+  but no cost, so the share is priced from the Sunburst rate card — the whole
+  image's cost ÷ its icons, **Estimated**; a stored entry with tokens but basis
+  `none` is priced the same way on read) and `imagePreferred: n` — the same
   shape and reader tolerance as I-54 (`v` stays 2; an old reader ignores them).
   `imagePreferred` names the MAIN image and falls back to the original when
   null, dangling or failed; a failed request still appends an honest failed
