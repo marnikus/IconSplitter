@@ -44,11 +44,18 @@ export function useImgPreview(input: ImagePreviewInput): ImagePreview {
     return () => { live = false; urls.forEach((url) => URL.revokeObjectURL(url)); };
   }, [root, rows, ids, conn, prompt, count, active]);
   if (!active) return { run: null, urls: [], loading: false, error: null };
-  if (state.run !== null && (state.run.prompt !== prompt || state.run.conn.id !== conn.id || state.run.conn.model !== conn.model
-    || state.run.conn.name !== conn.name || state.run.conn.baseUrl !== conn.baseUrl
-    || JSON.stringify(state.run.conn.image) !== JSON.stringify(conn.image) || state.run.root !== root
-    || state.run.count !== count || !sameImageSelection(state.run.ids, ids))) {
+  if (state.run !== null && !matchesPreview(state.run, input, root)) {
     return { run: null, urls: [], loading: true, error: null };
   }
   return state;
+}
+
+function matchesPreview(run: PreparedImageRun, input: ImagePreviewInput, root: DirHandleLike | null): boolean {
+  return run.root === root && run.prompt === input.prompt && run.count === input.count
+    && sameImageSelection(run.ids, input.ids) && sameImageConnection(run.conn, input.conn);
+}
+
+function sameImageConnection(a: Connection, b: Connection): boolean {
+  return a.id === b.id && a.model === b.model && a.name === b.name
+    && a.baseUrl === b.baseUrl && JSON.stringify(a.image) === JSON.stringify(b.image);
 }

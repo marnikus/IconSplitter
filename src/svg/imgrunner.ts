@@ -112,12 +112,16 @@ async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Answ
     args.onSend?.(item);
     return await fetchImage(args, form, item.strict === true, controller.signal);
   } catch (error) {
-    if (error instanceof NamedFailure) throw error;
-    if (controller.signal.aborted) throw new NamedFailure(`no answer within ${Math.round(args.timeoutMs / 1000)} s — nothing was saved`);
-    throw new NamedFailure(`the image request could not reach the provider (${messageOf(error)})`);
+    throw attemptFailure(error, controller.signal.aborted, args.timeoutMs);
   } finally {
     clearTimeout(timer);
   }
+}
+
+function attemptFailure(error: unknown, aborted: boolean, timeoutMs: number): NamedFailure {
+  if (error instanceof NamedFailure) return error;
+  if (aborted) return new NamedFailure(`no answer within ${Math.round(timeoutMs / 1000)} s — nothing was saved`);
+  return new NamedFailure(`the image request could not reach the provider (${messageOf(error)})`);
 }
 
 /** The prompt + the reference, one image per source; b64 is decoded, a URL is downloaded. */
