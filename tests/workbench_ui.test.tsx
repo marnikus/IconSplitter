@@ -3,12 +3,14 @@
 // restart), and the global undo/redo bar is present on every tab.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SESSION } from "../src/lib/session";
-import { getAppState, resetAppStore } from "../src/state/appstore";
+import { getAppState, patchBatch, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
 import { loadSessionState, saveSessionState } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
+import { useSvgHotkeys, type SvgHotActions } from "../src/svg/SvgHotkeys";
+import type { SvgRow } from "../src/svg/types";
 import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,6 +29,18 @@ function mountWorkbench(): void {
   document.body.appendChild(host);
   ui = createRoot(host);
   act(() => { ui.render(<Workbench />); });
+}
+
+function SvgKeyboardProbe({ actions, enabled }: { actions: SvgHotActions; enabled: boolean }) {
+  useSvgHotkeys(actions, enabled);
+  return null;
+}
+
+function mountSvgKeyboard(actions: SvgHotActions): void {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  ui = createRoot(host);
+  act(() => { ui.render(<SvgKeyboardProbe actions={actions} enabled={false} />); });
 }
 
 beforeEach(() => {
@@ -110,4 +124,39 @@ describe("the Generate SVG tab is kept alive (2026-10-08)", () => {
     expect((q("[data-testid='svg-shell']") as HTMLElement).hidden).toBe(true);
     expect(q("[data-testid='upload-unsupported']")).toBeNull();
   });
+
+  it("keeps Batch keyboard listeners silent while its panel is parked", async () => {
+    mountWorkbench(); // Single sheets is active; Batch is mounted but hidden.
+    await act(async () => { patchBatch({ activeId: "hidden-batch-row" }); });
+    expect((q("[data-testid='batch-shell-outer']") as HTMLElement).hidden).toBe(true);
+    expect((q("[data-testid='hist-undo']") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true })); });
+    await settle();
+    expect(getAppState().batch.checked).toEqual([]);
+    expect((q("[data-testid='hist-undo']") as HTMLButtonElement).disabled).toBe(true);
+  });
 });
+
+describe("a parked Generate SVG keyboard layer", () => {
+  it("does not walk SVG rows when another tab owns the keyboard", () => {
+    const actions = svgActions(false);
+    mountSvgKeyboard(actions);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    expect(actions.setActive).not.toHaveBeenCalled();
+  });
+
+  it("does not close a parked SVG dialog on Escape", () => {
+    const actions = svgActions(true);
+    mountSvgKeyboard(actions);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(actions.dismissDialog).not.toHaveBeenCalled();
+  });
+});
+
+function svgActions(dialogOpen: boolean): SvgHotActions {
+  return {
+    visible: [{ source: { id: "svg-row" } } as unknown as SvgRow], activeId: null, dialogOpen,
+    setActive: vi.fn(), toggleCheck: vi.fn(), generate: vi.fn(), decide: vi.fn(),
+    showCode: vi.fn(), dismissDialog: vi.fn(),
+  };
+}

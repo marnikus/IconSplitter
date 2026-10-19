@@ -22,11 +22,13 @@ import type { UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadRowActions } from "./UploadRow";
 import type { UploadDiscovery, UploadExclusion } from "./discovery";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import { useUploadHotkeys } from "./UploadHotkeys";
 
 export default function UploadPanel() {
   const g = useUpload();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
-  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, true);
+  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, g.dialog === null);
+  useUploadHotkeys({ visible: g.visible, activeId: g.activeId, setActive: g.setActive }, g.dialog === null);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
@@ -63,7 +65,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
     activeId: g.activeId, checked: g.checked, thumb: g.thumb, bg: g.bg,
     rootToken: g.rootToken, rootRef,
     defaults: g.defaults, overrides: g.overrides,
-    toggleCheck: g.toggleCheck, setActive: g.setActive, openSettings: g.openSettings,
+    toggleCheck: g.toggleCheck, selectRow: g.selectRow, openSettings: g.openSettings,
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
     editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
     openLocation: g.openLocation,
@@ -86,7 +88,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
+        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
         onApplySettings={() => g.applyDefaultsToSelected(g.checked)}

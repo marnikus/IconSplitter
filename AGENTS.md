@@ -19,6 +19,9 @@ instructions. The app builds into one self-contained `dist/index.html`.
   (RULE 20). Do not make live provider calls while developing or testing.
 - TDD for behaviour changes: witness a failing focused test, implement, then
   run it green. Real `src/lib/` logic is tested, not mocked (RULE 8).
+- Checkable lists in every tab reuse Batch's active/checked/anchor gestures,
+  modifier keys, Q/E and visible-header scope (RULE 25); keep each tab's
+  eligibility and confirmation gates.
 - RULE 16 gates new production functions/components at 30 lines, 4 params,
   CC 10 and nesting 4; new files at 300 lines, hooks/component at 15. Read
   [RULE 16 gates](docs/current/rules/QUALITY_GATES.md) before changing code.

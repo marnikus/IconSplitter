@@ -55,17 +55,22 @@ Selection V2 (adds to, never replaces, the rules above):
   layout in `src/ui/PairedThumbs.tsx`, and neither tab may compute a box of its
   own (I-55) — an 800 px pair is honoured by letting the list scroll sideways,
   which is why the preview column is `max-content` at every breakpoint.
-* Checkbox selection is separate state keyed by `pair_<hash>`, so sorting and
-  filtering never lose it: header checkbox (checked / unchecked /
-  indeterminate), Select visible, Deselect all, and live counts for selected,
-  visible, checked-but-hidden and checked-but-incomplete.
-* Bulk review — **Approve selected** / **Approve visible list**: the affected
-  count is shown and the button arms before applying (Escape or Cancel
-  disarms); one operation = one transition and one summary toast; each affected pair has its own file write. A
-  failed write keeps the change in memory with Retry.
+* Checkbox selection is separate state keyed by `pair_<hash>`: new rows start
+  unchecked; sorting/filtering keep valid checks, including hidden ones. Header
+  checkbox (checked / unchecked / indeterminate) toggles **visible** checks;
+  Select visible adds those rows and Deselect all clears hidden checks too.
+  Live counts distinguish selected, visible, checked-but-hidden and
+  checked-but-incomplete (RULE 25, I-73).
+* Bulk review — **Approve selected / Decline selected / Reset selected** only:
+  the affected count is `checked ∩ visible ∩ complete` (I-15), shown before
+  the button arms; Escape or Cancel disarms. One operation = one transition and
+  one summary toast, with a file write per affected pair. Failed writes keep
+  decisions in memory with Retry. There is no approve/reset-visible action.
 * The **active row** (keyboard target, `aria-current`, scrolled into view) is
-  distinct from a **checked row** (bulk target). `A` / `D` decide the active
-  row; "Next pending after a decision" advances it.
+  distinct from a **checked row** (bulk target). Plain row click activates and
+  sets the Shift anchor **without changing checks**; checkbox/Shift/modified
+  clicks follow [Batch's matrix](../rules/BEHAVIOR.md#rule-25). `A` / `D`
+  decide the active row; "Next pending after a decision" advances it.
 * Extra filter: **Pairing** = all / complete / missing pair.
 
 Everything above runs client-side; nothing is uploaded anywhere.

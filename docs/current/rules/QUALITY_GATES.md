@@ -1,6 +1,6 @@
 # RULE 16 — code-quality gates
 
-Canonical RULE 16 text. Return to the [RULE 1–24 index](../AGENT_RULES.md) or [other quality rules](QUALITY.md).
+Canonical RULE 16 text. Return to the [RULE 1–25 index](../AGENT_RULES.md) or [other quality rules](QUALITY.md).
 
 <a id="rule-16"></a>
 

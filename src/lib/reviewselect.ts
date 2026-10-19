@@ -56,3 +56,50 @@ export function selectRange(order: readonly string[], anchor: string | null, id:
   const low = Math.min(from, to);
   return order.slice(low, Math.max(from, to) + 1);
 }
+
+export interface RowSelection {
+  checked: string[];
+  active: string | null;
+  anchor: string | null;
+}
+
+export interface RowGesture {
+  id: string;
+  intent: SelectIntent;
+  visibleIds: readonly string[];
+}
+
+/** Batch-style row gestures keep the active row separate from checked rows. */
+export function applyRowGesture(before: RowSelection, gesture: RowGesture): RowSelection {
+  const { id, intent, visibleIds } = gesture;
+  if (!visibleIds.includes(id)) return before;
+  if (intent === "replace") return { ...before, active: id, anchor: id };
+  const checked = intent === "range"
+    ? selectRange(visibleIds, before.anchor, id)
+    : toggleChecked(before.checked, id);
+  return { checked, active: id, anchor: intent === "range" ? id : before.anchor };
+}
+
+/** Avoid adding a history entry when a gesture left all three values intact. */
+export function sameRowSelection(a: RowSelection, b: RowSelection): boolean {
+  return a.active === b.active && a.anchor === b.anchor
+    && a.checked.length === b.checked.length
+    && a.checked.every((id, i) => id === b.checked[i]);
+}
+
+/** A completed scan removes targets that no longer name a source. */
+export function pruneRowSelection(before: RowSelection, known: ReadonlySet<string>): RowSelection {
+  return {
+    checked: before.checked.filter((id) => known.has(id)),
+    active: before.active !== null && known.has(before.active) ? before.active : null,
+    anchor: before.anchor !== null && known.has(before.anchor) ? before.anchor : null,
+  };
+}
+
+/** Arrow navigation follows the same visible order as Shift selection. */
+export function nextVisibleId(order: readonly string[], active: string | null, step: 1 | -1): string | null {
+  if (order.length === 0) return null;
+  const at = active === null ? -1 : order.indexOf(active);
+  if (at < 0) return step === 1 ? order[0] : order[order.length - 1];
+  return order[Math.min(Math.max(at + step, 0), order.length - 1)];
+}

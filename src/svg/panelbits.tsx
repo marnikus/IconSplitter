@@ -25,7 +25,7 @@ function DialogsBlock({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHan
 function rowActionsOf(g: SvgGenApi, rootRef: { current: DirHandleLike | null }): SvgRowActions {
   return {
     activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootToken: g.rootToken, bg: g.bg, rootRef,
-    toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
+    toggleCheck: g.toggleCheck, selectRow: g.selectRow, generate: g.requestGenerate,
     decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
     openLocation: g.openLocation,
     requestImageRegen: g.requestImageRegen, setImageVersion: g.setImageVersion, imgRunning: g.imgRunning,

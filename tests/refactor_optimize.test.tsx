@@ -206,8 +206,8 @@ describe("refactor_optimize: ScanTable still 6-col same visual", () => {
     expect(q("[data-testid='batch-row-icon-a_AI_1.png']")?.className).toMatch(/active/);
     expect(q("[data-testid='batch-row-icon-a_AI_1.png']")?.className).toMatch(/selected/);
     const hints = host.querySelector(".svg-hints")?.textContent || "";
-    expect(hints).toMatch(/E select active/);
-    expect(hints).toMatch(/Q deselect active/);
+    expect(hints).toMatch(/E\/Q check\/uncheck/);
+    expect(hints).toMatch(/A\/D\/W review/);
   });
 });
 

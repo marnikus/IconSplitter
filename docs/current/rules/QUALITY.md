@@ -1,6 +1,6 @@
 # Quality and verification rules
 
-Canonical rules for this topic. Return to the [RULE 1–24 index](../AGENT_RULES.md) for the other rules.
+Canonical rules for this topic. Return to the [RULE 1–25 index](../AGENT_RULES.md) for the other rules.
 
 **Detail pages:** [RULE 16 gates](QUALITY_GATES.md).
 

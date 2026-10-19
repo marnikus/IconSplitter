@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
-import { resetAppStore } from "../src/state/appstore";
+import { getAppState, patchView, resetAppStore } from "../src/state/appstore";
 import { HistoryProvider, useHistory, type HistoryApi } from "../src/state/HistoryProvider";
 import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
 import HistoryBar from "../src/ui/HistoryBar";
@@ -178,47 +178,97 @@ describe("Ctrl+Z still works with focus left on a control", () => {
   });
 });
 
-describe("explorer-style multi-selection", () => {
-  it("a plain click selects that row alone", async () => {
+describe("Batch-style active row and checkbox selection", () => {
+  it("a plain row click activates and anchors without changing checks", async () => {
     await click(`[data-testid='v2-check-${FOG}']`);
+    const checkedActions = api.entries.filter((e) => e.type === "checked").length;
+    const previousActive = getAppState().view.selectedId;
     await rowClick(COURT);
-    expect(input(`[data-testid='v2-check-${COURT}']`).checked).toBe(true);
-    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(false);
+    expect(input(`[data-testid='v2-check-${COURT}']`).checked).toBe(false);
+    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(true);
+    expect(q(`[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(getAppState().v2.anchorId).toBe(COURT);
+    expect(api.entries.filter((e) => e.type === "checked")).toHaveLength(checkedActions + 1);
+    await undo(); // one step restores both the previous active row and the anchor
+    expect(getAppState().view.selectedId).toBe(previousActive);
+    expect(getAppState().v2.anchorId).toBeNull();
+    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(true);
+    await redo();
+    expect(getAppState().view.selectedId).toBe(COURT);
+    expect(getAppState().v2.anchorId).toBe(COURT);
   });
 
-  it("shift+click selects the continuous range between the anchor and the row", async () => {
+  it("checkbox changes only checks, never the active row or the shift anchor", async () => {
     await rowClick(FOG);
+    await click(`[data-testid='v2-check-${COURT}']`);
+    expect(input(`[data-testid='v2-check-${COURT}']`).checked).toBe(true);
+    expect(getAppState().view.selectedId).toBe(FOG);
+    expect(getAppState().v2.anchorId).toBe(FOG);
+    await undo();
+    expect(input(`[data-testid='v2-check-${COURT}']`).checked).toBe(false);
+    expect(getAppState().view.selectedId).toBe(FOG);
+    expect(getAppState().v2.anchorId).toBe(FOG);
+  });
+
+  it("shift+click checks the continuous range between the anchor and the row", async () => {
+    await rowClick(FOG);
+    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(false);
     await rowClick(HARBOR, { shiftKey: true });
     for (const id of [FOG, COURT, HARBOR]) {
       expect(input(`[data-testid='v2-check-${id}']`).checked).toBe(true);
     }
   });
 
-  it("ctrl/alt+click adds and removes single rows without touching the rest", async () => {
+  it("ctrl/alt/meta toggle single rows, with the plain-click anchor preserved", async () => {
     await rowClick(FOG);
     await rowClick(HARBOR, { ctrlKey: true });
-    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(true);
-    expect(input(`[data-testid='v2-check-${HARBOR}']`).checked).toBe(true);
-
-    await rowClick(FOG, { altKey: true });
     expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(false);
     expect(input(`[data-testid='v2-check-${HARBOR}']`).checked).toBe(true);
+    await rowClick(COURT, { metaKey: true });
+    await rowClick(HARBOR, { altKey: true });
+    expect(input(`[data-testid='v2-check-${COURT}']`).checked).toBe(true);
+    expect(input(`[data-testid='v2-check-${HARBOR}']`).checked).toBe(false);
+    expect(getAppState().v2.anchorId).toBe(FOG);
+    await rowClick(HARBOR, { shiftKey: true });
+    expect([FOG, COURT, HARBOR].every((id) => input(`[data-testid='v2-check-${id}']`).checked)).toBe(true);
+  });
+
+  it("header off clears only visible checks and keeps hidden checks through undo/redo", async () => {
+    await click("[data-testid='v2-select-visible']");
+    await act(async () => { patchView({ filter: { ...getAppState().view.filter, search: "fog" } }); });
+    expect(q("[data-testid='v2-hidden']")?.textContent).toContain("2 checked but hidden");
+    expect(input("[data-testid='v2-check-all']").checked).toBe(true);
+    const count = api.entries.length;
+    await click("[data-testid='v2-check-all']");
+    expect(api.entries).toHaveLength(count + 1);
+    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(false);
+    expect(getAppState().v2.checked).toEqual(expect.arrayContaining([COURT, HARBOR]));
+    expect(q("[data-testid='v2-hidden']")?.textContent).toContain("2 checked but hidden");
+    await undo();
+    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(true);
+    await redo();
+    expect(getAppState().v2.checked).toEqual(expect.arrayContaining([COURT, HARBOR]));
   });
 
   it("keeps the header checkbox in step with the selection", async () => {
-    await rowClick(FOG);
+    await click(`[data-testid='v2-check-${FOG}']`);
     expect(input("[data-testid='v2-check-all']").indeterminate).toBe(true);
     await click("[data-testid='v2-select-visible']");
     expect(input("[data-testid='v2-check-all']").checked).toBe(true);
   });
 
-  it("every selection gesture is one undoable action", async () => {
+  it("undoes a Shift range with one step and keeps the preceding plain activation", async () => {
     await rowClick(FOG);
+    const count = api.entries.length;
     await rowClick(HARBOR, { shiftKey: true });
+    expect(api.entries).toHaveLength(count + 1);
     await undo();
     expect(input(`[data-testid='v2-check-${COURT}']`).checked).toBe(false);
-    expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(true);
-    await undo();
     expect(input(`[data-testid='v2-check-${FOG}']`).checked).toBe(false);
+    expect(getAppState().view.selectedId).toBe(FOG);
+    expect(getAppState().v2.anchorId).toBe(FOG);
+    await redo();
+    expect(input(`[data-testid='v2-check-${HARBOR}']`).checked).toBe(true);
+    expect(getAppState().view.selectedId).toBe(HARBOR);
   });
 });

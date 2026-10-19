@@ -472,12 +472,12 @@ describe("row model", () => {
     expect(reduceState(landed, { type: "repin" }).order).toEqual(sortedIds(landed.rows, "name"));
   });
 
-  it("drops a checked id the rescan removed", () => {
-    patchSvg({ checked: [FOG, COURT] });
+  it("drops checked, active and anchor ids the rescan removed", () => {
+    patchSvg({ checked: [FOG, COURT], activeId: COURT, anchorId: COURT });
     const rows = [toRow(svgSource(FOG), null, false)];
     pruneChecked(rows);
-    expect(getAppState().svg.checked).toEqual([FOG]);
-    patchSvg({ checked: [] });
+    expect(getAppState().svg).toEqual({ checked: [FOG], activeId: null, anchorId: null });
+    patchSvg({ checked: [], activeId: null, anchorId: null });
   });
 });
 

@@ -40,8 +40,10 @@ Review window (scan table) — `scan-table` panel:
 
 | Test id | Element | Notes |
 |---|---|---|
-| `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
-| `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
+| `batch-check-all` | header checkbox in `batch-bulk` | checked / unchecked / indeterminate; only visible eligible rows, hidden checks preserved when unchecked (RULE 25) |
+| `batch-select-visible` / `batch-deselect` | buttons in `batch-bulk` | add visible eligible rows / clear every check, including hidden |
+| `batch-row-{relPath}` | row (`role="listitem"`) | `aria-current` marks active; plain click activates without changing checks; Shift range / Ctrl, Alt or Cmd toggle (I-73) |
+| `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path; toggles only its check, not active row |
 | `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
 | `batch-row-locate-{relPath}` | per-row "📍 Location" button | processed rows with a session output folder: copies `<dest base>\<outRel>` (splits folder); hidden after a reload (archive/2026-10-15-row-location) |
 | `batch-bulkbar-pin` | sticky wrapper of the split controls bar | pins the bar to the top while rows scroll (`position: sticky` in `.app-main`; archive/2026-10-16-pinned-bulkbar) |
@@ -61,7 +63,7 @@ Bulk bar (selection actions) — `BatchBulkBar.tsx` (verified 2026-10-15):
 
 | Test id | Visible text | Notes |
 |---|---|---|
-| `batch-selected-count` | `N selected` | live count of checked rows |
+| `batch-selected-count` / `batch-scope` / `batch-hidden` | `N selected` / `across N visible images` / `N checked but hidden by filters` | checked total, visible scope and hidden count (last only when > 0) |
 | `batch-preview` | `◉ Preview splits` → `◍ Previewing…` | renders previews for checked rows, skipping rows whose stored preview is current |
 | `batch-regenerate` | `↺ Regenerate splits` | force=true — re-renders AND overwrites the stored record, even when one exists |
 | `batch-warning-selected` / `batch-approve-selected` / `batch-decline-selected` | `⚠ Warning selected` / `✓ Approve selected` / `✕ Decline selected` | bulk review decisions |

@@ -200,6 +200,47 @@ describe("Selection V2 panel", () => {
     expect(q(el, "[aria-current='true']")?.getAttribute("data-testid")).not.toBe(`v2-row-${FOG}`);
   });
 
+  it("open-side child buttons never activate or check their parent row", async () => {
+    stubClipboard("");
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await click(q(el, `[data-testid='v2-open-src-${COURT}']`)!);
+    expect(q(el, `[data-testid='v2-row-${FOG}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBeNull();
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+    expect((q(el, `[data-testid='v2-check-${COURT}']`) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("row decision child buttons do not check or re-activate the old row over auto-next", async () => {
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+    await click(q(el, `[data-testid='v2-approve-row-${FOG}']`)!);
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
+    const next = q(el, "[data-testid^='v2-row-'][aria-current='true']")?.getAttribute("data-testid")?.slice("v2-row-".length);
+    expect(next).toBeTruthy();
+    expect(next).not.toBe(FOG);
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+    await click(q(el, `[data-testid='v2-decline-${next}']`)!);
+    expect(q(el, `[data-testid='v2-row-${next}']`)?.className).toContain("declined");
+    expect(q(el, `[data-testid='v2-row-${next}']`)?.getAttribute("aria-current")).toBeNull();
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+  });
+
+  it("keeps list approval and Q/E shortcuts behind an armed bulk confirmation", async () => {
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await click(q(el, `[data-testid='v2-check-${FOG}']`)!);
+    await click(q(el, "[data-testid='v2-approve-selected']")!); // arm, do not apply
+    await key("q");
+    await key("a");
+    expect((q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement).checked).toBe(true);
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("◔ Pending");
+    await click(q(el, "[data-testid='v2-cancel-bulk']")!);
+    await key("a");
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
+  });
+
   it("moves the active row with the arrow keys", async () => {
     const { el } = await mount(makeRoot());
     await click(q(el, `[data-testid='v2-row-${FOG}']`)!);

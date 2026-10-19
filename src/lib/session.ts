@@ -47,6 +47,7 @@ export interface SessionSvg {
   checked: string[];
   /** Stable source id of the active row — never a list index. */
   activeId: string | null;
+  anchorId: string | null;
 }
 
 /** What only the SVG to upload tab adds: its own selection and active row. */
@@ -54,6 +55,7 @@ export interface SessionUpload {
   checked: string[];
   /** Stable pair id of the active row — never a list index. */
   activeId: string | null;
+  anchorId: string | null;
 }
 
 /** What only the Batch folders tab adds: its own selection, active row and anchor. */
@@ -80,9 +82,9 @@ export const DEFAULT_SELECTION: SessionSelection = {
   collapsed: false, zoom: "fit", sync: true, autoNext: true,
 };
 
-export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null };
+export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: null };
 
-export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null };
+export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
 
 export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchorId: null };
 
@@ -147,6 +149,7 @@ function parseSvgSlice(raw: unknown): SessionSvg {
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
 }
 
@@ -155,6 +158,7 @@ function parseUploadSlice(raw: unknown): SessionUpload {
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
 }
 

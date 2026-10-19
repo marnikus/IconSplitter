@@ -15,6 +15,14 @@ opt-in class as Generate SVG → Requesty; design
   SVG, without a sidecar, outside the split scope and duplicates are reported
   in a banner with their reasons, never listed. Export output is never a
   discovery source (no export loops).
+* List selection follows [Batch's RULE 25 gestures](../rules/BEHAVIOR.md#rule-25)
+  (I-73). An active row opens its metadata detail but is not checked by a plain
+  click; checkbox/modifier clicks change checks. Header toggles visible approved
+  rows without losing hidden checks, Deselect all clears all. New rows start
+  unchecked. Only approved valid SVG rows can be checked; there are no A/D
+  review decisions or shortcuts on this tab. Checked rows drive local
+  export/download or explicitly confirmed metadata requests (RULE 20), never
+  automatic sends.
 
 ## Navigate by operation
 
@@ -50,7 +58,10 @@ opt-in class as Generate SVG → Requesty; design
   Gemini card is one contained grid (Model, Endpoint on its own full-width row,
   Timeout, Retries, Parallel, then the check row) so no control can overlap or
   leave its box.
-* Undo: one new entry type `uploadSettings` (`{ overrides: { [pairId]: Overrides
-  | null } }` before/after) on the shared global timeline; the apply path lives
-  in `src/upload/uploadundo.ts` (a mounted panel applies live; unmounted
-  writes the store directly).
+* Undo: `uploadSettings` (`{ overrides: { [pairId]: Overrides | null } }`
+  before/after) and changed selection gestures both join the **same global**
+  timeline. Selection restores checked ids/anchor/active as one entry, even
+  across tab switches; validated apply with a failed step leaves the cursor
+  unchanged. `src/upload/uploadundo.ts` applies settings live when mounted and
+  writes the store directly when unmounted. Neither local files/downloads nor
+  a confirmed paid metadata call can be undone.

@@ -10,6 +10,8 @@
 // checked one.
 
 import { useEffect, useRef } from "react";
+import { selectIntent, type SelectIntent } from "../lib/reviewselect";
+import { isRowGestureClick } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
 import { NO_COST } from "../lib/svgmodel";
 import type { PreviewBackground } from "../lib/svgbackground";
@@ -29,7 +31,7 @@ export interface SvgRowActions {
   rootToken: number;
   rootRef: { current: DirHandleLike | null };
   toggleCheck: (id: string) => void;
-  setActive: (id: string) => void;
+  selectRow: (id: string, intent: SelectIntent) => void;
   generate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   copyCode: (id: string, version: number) => void;
@@ -55,7 +57,8 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
     <div ref={ref} role="listitem" data-testid={`svg-row-${id}`} tabIndex={active ? 0 : -1}
       aria-current={active ? "true" : undefined}
       className={`svg-row ${shown?.review ?? "pending"}${active ? " active" : ""}${checked ? " selected" : ""}${row.corrupt ? " corrupt" : ""}`}
-      onClick={() => a.setActive(id)}>
+      onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") { e.preventDefault(); a.selectRow(id, "replace"); } }}>
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`} checked={checked}
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />

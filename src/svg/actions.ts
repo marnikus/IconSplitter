@@ -14,6 +14,7 @@ import { clampStroke } from "../lib/previewstroke";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
+import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { useKeyActions } from "./keyactions";
 import { useSvgPromptActions, type SvgPromptActions } from "./promptactions";
@@ -52,7 +53,8 @@ export interface SvgActions extends SvgPromptActions {
   setImage: (patch: Partial<Connection["image"]>) => void;
   setProviderOpen: (open: boolean) => void; setParams: (patch: Partial<SamplingParams>) => void; refreshModels: () => void;
   saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void;
-  deselectAll: () => void; checkActive: () => void; uncheckActive: () => void; setActive: (id: string) => void;
+  uncheckVisible: () => void; deselectAll: () => void; checkActive: () => void; uncheckActive: () => void;
+  selectRow: (id: string, intent: SelectIntent) => void; setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   requestGenerate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
   requestImageRegen: (ids: string[]) => void; confirmImageRegen: (prepared?: PreparedImageRun | null) => void; stopImageRegen: () => void;
@@ -125,43 +127,67 @@ async function refreshModelsNow(latest: { current: SvgCtx }): Promise<void> {
     c.say(`Model list refreshed — ${models.length} models`);
   } catch (error) { c.say(message(error), true); }
 }
-function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "setActive" | "decide"> {
+function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "decide"> {
   const latest = useRef(ctx); latest.current = ctx;
-  const toggleCheck = useCallback((id: string) => {
-    const c = latest.current;
-    const ids = c.checked.includes(id) ? c.checked.filter((x) => x !== id) : [...c.checked, id];
-    editChecked(c, ids, null);
-  }, []);
-  const selectVisible = useCallback(() => {
-    const c = latest.current;
-    editChecked(c, [...new Set([...c.checked, ...c.visible.map((r) => r.source.id)])], null);
-  }, []);
-  const deselectAll = useCallback(() => editChecked(latest.current, [], null), []);
-  const checkActive = useCheckActive(latest);
-  const uncheckActive = useUncheckActive(latest);
-  const setActive = useCallback((id: string) => patchSvg({ activeId: id }), []);
-  const decide = useDecide(latest);
-  return { toggleCheck, selectVisible, deselectAll, checkActive, uncheckActive, setActive, decide };
+  return { ...useSvgChecks(latest), ...useSvgRowActions(latest), decide: useDecide(latest) };
 }
+
+function useSvgChecks(latest: { current: SvgCtx }) {
+  const toggleCheck = useCallback((id: string) => {
+    const before = svgSelection();
+    editChecked(latest.current, { ...before, checked: toggleChecked(before.checked, id) }, "Toggle row", [id]);
+  }, [latest]);
+  const selectVisible = useCallback(() => {
+    const before = svgSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, true) }, "Select visible", ids);
+  }, [latest]);
+  const uncheckVisible = useCallback(() => {
+    const before = svgSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, false) }, "Deselect visible", ids);
+  }, [latest]);
+  const deselectAll = useCallback(() => {
+    const before = svgSelection();
+    editChecked(latest.current, { ...before, checked: [] }, "Deselect all", before.checked);
+  }, [latest]);
+  return { toggleCheck, selectVisible, uncheckVisible, deselectAll,
+    checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest) };
+}
+
+function useSvgRowActions(latest: { current: SvgCtx }) {
+  const selectRow = useCallback((id: string, intent: SelectIntent) => {
+    const before = svgSelection();
+    const visibleIds = latest.current.visible.map((r) => r.source.id);
+    const after = applyRowGesture(before, { id, intent, visibleIds });
+    editChecked(latest.current, after, intent === "replace" ? "Select row" : "Select range", [id]);
+  }, [latest]);
+  const setActive = useCallback((id: string) => {
+    const before = svgSelection();
+    editChecked(latest.current, { ...before, active: id }, "Move active row", [id]);
+  }, [latest]);
+  return { selectRow, setActive };
+}
+
 function useCheckActive(latest: { current: SvgCtx }) {
   return useCallback(() => {
-    const c = latest.current; const id = getAppState().svg.activeId;
-    if (!id || c.checked.includes(id)) return;
-    editChecked(c, [...c.checked, id], null);
-  }, []);
+    const before = svgSelection();
+    if (!before.active) return;
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], true) }, "Select active row", [before.active]);
+  }, [latest]);
 }
 function useUncheckActive(latest: { current: SvgCtx }) {
   return useCallback(() => {
-    const c = latest.current; const id = getAppState().svg.activeId;
-    if (!id || !c.checked.includes(id)) return;
-    editChecked(c, c.checked.filter((x) => x !== id), null);
-  }, []);
+    const before = svgSelection();
+    if (!before.active) return;
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], false) }, "Deselect active row", [before.active]);
+  }, [latest]);
 }
 function useDecide(latest: { current: SvgCtx }) {
   return useCallback((ids: string[], decision: ReviewStatus) => {
     log({ feature: "svg", action: "review-decided", detail: `${ids.length} → ${decision}` });
     void decideReview(latest.current, ids, decision);
-  }, []);
+  }, [latest]);
 }
 function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelected" | "dismissDialog"> {
   const latest = useRef(ctx); latest.current = ctx;
@@ -204,13 +230,19 @@ function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "
   }, []);
   return { confirmGenerate, cancelRun, dropQueued };
 }
-function editChecked(c: SvgCtx, ids: string[], active: string | null): void {
-  const before = getAppState().svg.checked;
-  patchSvg({ checked: ids });
-  if (active !== null) patchSvg({ activeId: active });
+function svgSelection(): RowSelection {
+  const { checked, activeId, anchorId } = getAppState().svg;
+  return { checked, active: activeId, anchor: anchorId };
+}
+
+function editChecked(c: SvgCtx, after: RowSelection, label: string, touched: string[]): void {
+  const before = svgSelection();
+  if (sameRowSelection(before, after)) return;
+  patchSvg({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
   c.hist.push({
-    type: "checked", label: ids.length === 0 ? "Clear selection" : `Select ${ids.length} source${ids.length === 1 ? "s" : "s"}`,
-    origin: getAppState().tab, ids, before: { ids: before }, after: { ids },
+    type: "svgChecked", label, origin: getAppState().tab, ids: touched,
+    before: { ids: before.checked, anchor: before.anchor, active: before.active },
+    after: { ids: after.checked, anchor: after.anchor, active: after.active },
   });
 }
 function dummyRegen(c: SvgCtx): RegenPlan {

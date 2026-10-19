@@ -9,6 +9,7 @@ import { attentionInfo } from "../lib/pairing";
 import type { Decision, ViewPair } from "../lib/reviewfilter";
 import { statusInfo } from "../lib/reviewmeta";
 import { fmtBytes, fmtDate, fmtFormat, fmtTime } from "../selection/fmt";
+import { isRowGestureClick } from "../ui/rowgesture";
 import ThumbPair, { type Dims } from "./ThumbPair";
 import type { ReviewListProps } from "./ReviewList";
 
@@ -20,7 +21,8 @@ export default function ReviewRow({ row, p }: { row: ViewPair; p: ReviewListProp
   return (
     <div ref={ref} role="listitem" data-testid={`v2-row-${row.pairId}`} tabIndex={active ? 0 : -1}
       aria-current={active ? "true" : undefined} className={rowClass(row.decision, active, checked)}
-      onClick={(e) => p.onRowClick(row.pairId, { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey })}>
+      onClick={(e) => { if (isRowGestureClick(e)) p.onRowClick(row.pairId, e); }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); p.onRowClick(row.pairId, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false }); } }}>
       <input type="checkbox" className="v2-check" data-testid={`v2-check-${row.pairId}`} checked={checked}
         aria-label={`Select ${row.base}`} title="Ctrl+click a row to add it, Shift+click to select a range"
         onClick={(e) => e.stopPropagation()} onChange={() => p.toggleCheck(row.pairId)} />

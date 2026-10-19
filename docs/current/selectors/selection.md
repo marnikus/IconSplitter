@@ -62,16 +62,16 @@ Bulk bar (`v2-bulk`):
 
 | Test id | Element | Notes |
 |---|---|---|
-| `v2-check-all` | header checkbox | checked / unchecked / **indeterminate** |
+| `v2-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible checks only, preserving hidden ones (I-73) |
 | `v2-selected-count` | `N selected` | checked rows, independent of the filters |
 | `v2-scope` | `across N visible pairs` | the scope "Select visible" and bulk act on |
 | `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — the same two states as `sel-scope`; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
 | `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
 | `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
-| `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
+| `v2-select-visible` / `v2-deselect` | buttons | add filtered rows / clear ALL checks including hidden |
 | `v2-thumb` | `<input type="range">` | **48–800 px**, step 4; `aria-label="Thumbnail maximum height"`; sizes BOTH thumbnails of every row (I-55) |
 | `v2-thumb-value` | `<output>` | live `128 px` readout (RULE 24) |
-| `v2-approve-selected` / `v2-decline-selected` / `v2-reset-selected` | buttons | the only bulk actions; every label carries the affected count and arms first (`Confirm approve`); disabled at 0. **No bulk action touches the visible list** — `v2-approve-visible` and `v2-reset-visible` were removed |
+| `v2-approve-selected` / `v2-decline-selected` / `v2-reset-selected` | buttons | only checked ∩ visible ∩ complete; affected count in label; arms first (`Confirm approve`), Cancel/Escape disarms, disabled at 0; no approve/reset-visible controls |
 | `v2-cancel-bulk` | button | shown while one action is armed; Escape also disarms |
 
 List review (`v2-list`, rows in `v2-rows` with `role="list"`):
@@ -112,9 +112,11 @@ authoritative state, the clicks only produce it):
 
 | click | result |
 |---|---|
-| plain | select this row only (the shift anchor moves here) |
-| Shift | select the contiguous range from the anchor to this row |
-| Ctrl/Alt/Cmd | add or remove just this row; the anchor stays, so the next Shift still extends from it |
+| plain | activate/anchor this row; leave all checks unchanged |
+| Shift | replace checks with the contiguous visible range from anchor to this row; missing/hidden anchor → this row only |
+| Ctrl/Alt/Cmd | activate and toggle this row's check; keep the anchor and other checks |
 
-Every selection change is one undoable `checked` entry, carrying the ids, the
-anchor and the row a plain click also made active.
+`v2-check-{pairId}` toggles its check without moving active/anchor. Each changed
+gesture is one global `checked` undo entry carrying ids, anchor and active;
+new lists start unchecked. Bulk remains armed and limited to checked ∩ visible ∩
+complete, never active by inference ([RULE 25](../rules/BEHAVIOR.md#rule-25)).

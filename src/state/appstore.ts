@@ -8,6 +8,7 @@
 // the rules stay testable without a DOM (RULE 5).
 
 import { DEFAULT_PREFS, type ReviewPrefs } from "../lib/reviewprefs";
+import { resetListTargets } from "./listtargets";
 import {
   DEFAULT_SESSION, type SessionBatch, type SessionSelection, type SessionState, type SessionSvg, type SessionUpload, type SessionV2, type TabId,
 } from "../lib/session";
@@ -79,6 +80,7 @@ export function subscribe(listener: Listener): () => void {
 /** Install a state wholesale: the restore path, and test isolation. */
 export function resetAppStore(next: AppState = initialAppState(DEFAULT_SESSION, DEFAULT_PREFS)): void {
   state = next;
+  resetListTargets();
   notify();
 }
 

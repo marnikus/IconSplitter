@@ -86,7 +86,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
       {tab === "sheets" && <App />}
       <div className="batch-shell-outer w-full" data-testid="batch-shell-outer" hidden={tab !== "batch"}>
         <TabWrapper>
-          <BatchPanel />
+          <BatchPanel active={tab === "batch"} />
         </TabWrapper>
       </div>
       {tab === "selection" && (

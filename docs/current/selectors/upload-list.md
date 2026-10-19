@@ -12,9 +12,9 @@ status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
 
 Pinned: the bar sits in `upload-bulkbar-pin`, the Generate SVG tab's sticky `.svg-bulkbar-pin` reused (a direct child of `upload-panel`), so it stays on screen while the rows scroll (2026-10-19).
 
-| `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
+| `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible approved rows only, keeps hidden checks |
 | `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
-| `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |
+| `upload-select-visible` / `upload-deselect` | buttons | add visible / clear ALL checks including hidden |
 | `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
 | `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | export stroke width | the Generate SVG control reused (`svg/PreviewStroke`, prefix `upload`, no sheet): IS the defaults' `strokePx` — 0–50 px in the file, `default`/empty/0 = each SVG's own widths; Reset = default. The global stroke width: no row in the global dialog; one icon may pin its own in its dialog (2026-10-19) |
@@ -32,7 +32,12 @@ List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight")
 
 ## Row (`upload-row-{id}`)
 
-| `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
+`upload-row-{id}` (`role="listitem"`, `aria-current` on the active row): plain
+click opens detail without changing checks; Shift replaces the visible range;
+Ctrl/Alt/Cmd toggles one row ([RULE 25](../rules/BEHAVIOR.md#rule-25)). New
+lists start unchecked; there are no A/D review shortcuts.
+
+| `upload-check-{id}` | checkbox | toggles only this check; selection is session-persisted **and globally undoable** (I-73) |
 | `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the LIVE EXPORT (2026-10-19): the exact export text for the row's effective settings (the approved SVG itself when "as is"), in a shadow root inside the coloured frame (`data-bg`); the box fits the artboard's ratio inside the zoom square (`zoomBoxFit`: 16 px and 2048 px draw the same size). `upload-prev-{id}-note` = why the export could not be previewed, or that its strokes are invisible on its background (paint clash) |
 | `upload-target-{id}` | text | the row's source path (the approved SVG) |
 | `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
@@ -64,6 +69,7 @@ Status bar (`upload-statusbar`): `upload-status-counts`
 ("Gemini · {model}"), the key state, `upload-status-meta` /
 `upload-status-export` ("… in flight").
 
-Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
-settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
-([§O](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01)).
+Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of
+settings **and selection** gestures uses global `hist-undo` / `hist-redo`
+([§O](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01));
+metadata requests and exported files are not reversed.

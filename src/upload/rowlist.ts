@@ -4,6 +4,7 @@
 // assembly and the counts stay in rowmodel.
 
 import { compareNames } from "../lib/scan";
+import { checkState } from "../lib/reviewselect";
 import type {
   UploadListFilter, UploadListRow, UploadRow, UploadSort,
 } from "./types";
@@ -73,10 +74,7 @@ export function visibleRows(rows: readonly UploadRow[], filter: UploadListFilter
 
 /** Header checkbox state for the visible rows (indeterminate = some). */
 export function headerState(visible: readonly UploadRow[], checked: readonly string[]): "none" | "some" | "all" {
-  if (visible.length === 0) return "none";
-  const on = visible.filter((r) => checked.includes(r.source.id)).length;
-  if (on === 0) return "none";
-  return on === visible.length ? "all" : "some";
+  return checkState(visible.map((r) => r.source.id), checked);
 }
 
 /** The counters the source bar shows, straight off the rows (no extra state). */

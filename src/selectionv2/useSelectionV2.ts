@@ -10,7 +10,7 @@ import { type ReviewPrefs, type ViewMode } from "../lib/reviewprefs";
 import { clampZoom } from "../lib/zoom";
 import { bulkScope } from "../lib/reviewbulk";
 import {
-  checkState, selectOne, selectRange, setChecked, toggleChecked,
+  applyRowGesture, checkState, sameRowSelection, setChecked, toggleChecked,
   type CheckState, type SelectIntent,
 } from "../lib/reviewselect";
 import { useSelection, type SelectionApi } from "../selection/useSelection";
@@ -34,6 +34,7 @@ export interface SelectionV2Api {
   setScroll: (y: number) => void;
   toggleCheck: (id: string) => void;
   checkVisible: () => void;
+  uncheckVisible: () => void;
   uncheckAll: () => void;
   checkActive: () => void;
   uncheckActive: () => void;
@@ -61,7 +62,7 @@ export function useSelectionV2(): SelectionV2Api {
   const core = useSelection();
   const hist = useHistory();
   const app = useAppState();
-  const { checked, scrollY, anchorId } = app.v2;
+  const { checked, scrollY } = app.v2;
   const visibleIds = useMemo(() => core.visible.map((p) => p.pairId), [core.visible]);
   const scope = bulkScope(core.visible, checked);
   return {
@@ -73,10 +74,11 @@ export function useSelectionV2(): SelectionV2Api {
     setMode: (mode) => editPrefs(hist, { mode }, `View mode: ${mode}`, false),
     setThumb: (px) => editPrefs(hist, { thumbHeight: clampZoom(px) }, `Thumbnail ${clampZoom(px)} px`, true),
     setScroll: (y) => patchV2({ scrollY: y }),
-    selectRow: (id, intent) => applySelect({ hist, visibleIds, checked, anchorId, id, intent }),
-    toggleCheck: (id) => editSelection(hist, toggleChecked(checked, id), anchorId),
-    checkVisible: () => editSelection(hist, setChecked(checked, visibleIds, true), anchorId),
-    uncheckAll: () => editSelection(hist, [], null),
+    selectRow: (id, intent) => applySelect({ hist, visibleIds, id, intent }),
+    toggleCheck: (id) => editSelection(hist, toggleChecked(getAppState().v2.checked, id), getAppState().v2.anchorId),
+    checkVisible: () => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, true), getAppState().v2.anchorId),
+    uncheckVisible: () => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, false), getAppState().v2.anchorId),
+    uncheckAll: () => editSelection(hist, [], getAppState().v2.anchorId),
     checkActive: makeCheckActive(hist),
     uncheckActive: makeUncheckActive(hist),
   };
@@ -85,8 +87,6 @@ export function useSelectionV2(): SelectionV2Api {
 interface SelectArgs {
   hist: HistoryApi;
   visibleIds: string[];
-  checked: string[];
-  anchorId: string | null;
   id: string;
   intent: SelectIntent;
 }
@@ -97,20 +97,21 @@ interface SelectArgs {
  * undo reverses the whole click instead of leaving half of it behind.
  */
 function applySelect(a: SelectArgs): void {
-  const ids = a.intent === "range"
-    ? selectRange(a.visibleIds, a.anchorId, a.id)
-    : a.intent === "toggle" ? toggleChecked(a.checked, a.id) : selectOne(a.id);
-  // ctrl/alt keeps the anchor, so the next shift+click still extends from it
-  editSelection(a.hist, ids, a.intent === "toggle" ? a.anchorId : a.id, a.id);
+  const v2 = getAppState().v2;
+  const before = { checked: v2.checked, anchor: v2.anchorId, active: getAppState().view.selectedId };
+  const after = applyRowGesture(before, { id: a.id, intent: a.intent, visibleIds: a.visibleIds });
+  editSelection(a.hist, after.checked, after.anchor, after.active);
 }
 
 /** One selection gesture = one entry holding the whole selection, so one undo
  *  restores every row it touched, not just the last one. `active` is set by a
  *  row click; the checkbox and header controls leave the active row alone. */
-function editSelection(hist: HistoryApi, ids: string[], anchor: string | null, active?: string): void {
+function editSelection(hist: HistoryApi, ids: string[], anchor: string | null, active?: string | null): void {
   const before = getAppState().v2;
   const beforeActive = getAppState().view.selectedId;
-  const nextActive = active ?? beforeActive;
+  const nextActive = active === undefined ? beforeActive : active;
+  if (sameRowSelection({ checked: before.checked, anchor: before.anchorId, active: beforeActive },
+    { checked: ids, anchor, active: nextActive })) return;
   patchV2({ checked: ids, anchorId: anchor });
   if (active !== undefined) patchView({ selectedId: active });
   hist.push({

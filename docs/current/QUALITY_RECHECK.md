@@ -2887,3 +2887,5 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - One icon may pin its own stroke width again (icon dialog `upload-set-stroke`, inherit button); custom artboard W×H and that field commit on blur/Enter via new `ui/DraftNumberInput`.
 - Measured: 4 tests red first (override parse ×2, icon stroke UI, W×H draft), then green; tests/upload* 631 green.
+
+- 2026-10-19 — RULE 25/I-73 Batch-authoritative list selection across Selection V2, Generate SVG and SVG to upload. Red→green focused regressions: 15 suites / 248 tests; `npx tsc --noEmit` PASS; `npm run lint` PASS (23 existing warnings); `npm run quality:changed` PASS. `npm run verify:fast` PASS: main coverage suite 206 files / 2149 tests, src/lib line coverage 97.28%, single-file build PASS. `npm run verify` PASS on rerun: native 5 files / 30 tests, main 206 files / 2149 tests, coverage 97.28%, build PASS. First fast run failed one stale Batch footer assertion (updated); first full run timed out waiting for an Upload preview; its focused retry and the full rerun passed. No live provider calls. Runner: Node 22.14.0 (project pin 22.12.0), npm 10.9.2.

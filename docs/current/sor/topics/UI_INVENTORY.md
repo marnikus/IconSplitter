@@ -17,9 +17,9 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
 * Sheets mode: header (upload + 3 export buttons), Sheets, Export settings
   (padding/size/transparent), Detection (merge slider + reset), Boundary
   overlay, Result grid, busy overlay, toast.
-* Batch mode: header controls (`batch-root`, `batch-refresh`, `batch-process`,
+* Batch mode: header controls (`batch-root`, `batch-rescan`, `batch-process`,
   `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
-  info, review window (`scan-table`, `select-all`, per-row checkbox/actions),
+  info, review window (`scan-table`, `batch-check-all`, per-row checkbox/actions),
   reference warnings, busy overlay, toast.
 * Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
   help), FilterBar (date modes + From/To, status, sort, order, clear), review
@@ -31,7 +31,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `v2-from` / `v2-to`, `v2-status`, `v2-pairing`, `v2-sort`, `v2-dir`,
   `v2-shown`, `v2-clear`), bulk bar (`v2-check-all`, `v2-selected-count`,
   `v2-scope`, `v2-blocked`, `v2-hidden`, `v2-select-visible`, `v2-deselect`,
-  `v2-thumb` + `v2-thumb-value`, `v2-approve-selected`, `v2-approve-visible`),
+  `v2-thumb` + `v2-thumb-value`, `v2-approve-selected`, `v2-reset-selected`),
   list (`v2-list`, `v2-rows`, `v2-row-*`, `v2-check-*`, `v2-thumb-src` /
   `v2-thumb-ai`, `v2-status-*`, `v2-open-{src,ai}-*`, `v2-decline-*` /
   `v2-approve-row-*`, `v2-autonext`, `v2-empty`, `v2-nomatch`), comparison

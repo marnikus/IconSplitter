@@ -1,55 +1,90 @@
 // uiactions.ts — SVG to upload tab UI actions
 import { useCallback, useRef } from "react";
+import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
 import type { IconMetadata } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
 import type { UploadActions, UploadCtx } from "./actions";
-type UiSlice = Pick<UploadActions, "toggleCheck" | "selectVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "setActive" | "openSettings" | "dismissDialog" | "copyMeta">;
+type UiSlice = Pick<UploadActions, "toggleCheck" | "selectVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "openSettings" | "dismissDialog" | "copyMeta">;
 export function useUiActions(ctx: UploadCtx): UiSlice {
   return { ...useSelectActions(ctx), ...useDialogActions(ctx), ...useCopyActions(ctx) };
 }
-function useSelectActions(ctx: UploadCtx): Pick<UiSlice, "toggleCheck" | "selectVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "setActive"> {
+function useSelectActions(ctx: UploadCtx): Pick<UiSlice, "toggleCheck" | "selectVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive"> {
   const latest = useRef(ctx); latest.current = ctx;
-  const toggleCheck = useToggleCheck();
-  const selectVisible = useSelectVisible(latest);
-  const deselectAll = useDeselectAll();
-  const checkActive = useCheckActive();
-  const uncheckActive = useUncheckActive();
-  const setActive = useSetActive();
-  return { toggleCheck, selectVisible, deselectAll, checkActive, uncheckActive, setActive };
+  return {
+    toggleCheck: useToggleCheck(latest), selectVisible: useSelectVisible(latest),
+    uncheckVisible: useUncheckVisible(latest), deselectAll: useDeselectAll(latest),
+    checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest),
+    selectRow: useSelectRow(latest), setActive: useSetActive(latest),
+  };
 }
-function useToggleCheck() {
+function currentSelection(): RowSelection {
+  const { checked, activeId, anchorId } = getAppState().upload;
+  return { checked, active: activeId, anchor: anchorId };
+}
+function editSelection(c: UploadCtx, after: RowSelection, label: string, touched: string[]): void {
+  const before = currentSelection();
+  if (sameRowSelection(before, after)) return;
+  patchUpload({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
+  c.hist.push({
+    type: "uploadChecked", label, origin: getAppState().tab, ids: touched,
+    before: { ids: before.checked, anchor: before.anchor, active: before.active },
+    after: { ids: after.checked, anchor: after.anchor, active: after.active },
+  });
+}
+function useToggleCheck(latest: { current: UploadCtx }) {
   return useCallback((id: string) => {
-    const checked = getAppState().upload.checked;
-    const ids = checked.includes(id) ? checked.filter((x) => x !== id) : [...checked, id];
-    patchUpload({ checked: ids });
-  }, []);
+    const before = currentSelection();
+    editSelection(latest.current, { ...before, checked: toggleChecked(before.checked, id) }, "Toggle row", [id]);
+  }, [latest]);
 }
 function useSelectVisible(latest: { current: UploadCtx }) {
   return useCallback(() => {
-    const c = latest.current;
-    patchUpload({ checked: [...new Set([...c.checked, ...c.visible.map((r) => r.source.id)])] });
-  }, []);
+    const before = currentSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editSelection(latest.current, { ...before, checked: setChecked(before.checked, ids, true) }, "Select visible", ids);
+  }, [latest]);
 }
-function useDeselectAll() { return useCallback(() => patchUpload({ checked: [] }), []); }
-function useCheckActive() {
+function useUncheckVisible(latest: { current: UploadCtx }) {
   return useCallback(() => {
-    const id = getAppState().upload.activeId;
-    if (!id) return;
-    const checked = getAppState().upload.checked;
-    if (checked.includes(id)) return;
-    patchUpload({ checked: [...checked, id] });
-  }, []);
+    const before = currentSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editSelection(latest.current, { ...before, checked: setChecked(before.checked, ids, false) }, "Deselect visible", ids);
+  }, [latest]);
 }
-function useUncheckActive() {
+function useDeselectAll(latest: { current: UploadCtx }) {
   return useCallback(() => {
-    const id = getAppState().upload.activeId;
-    if (!id) return;
-    const checked = getAppState().upload.checked;
-    if (!checked.includes(id)) return;
-    patchUpload({ checked: checked.filter((x) => x !== id) });
-  }, []);
+    const before = currentSelection();
+    editSelection(latest.current, { ...before, checked: [] }, "Deselect all", before.checked);
+  }, [latest]);
 }
-function useSetActive() { return useCallback((id: string) => patchUpload({ activeId: id }), []); }
+function useCheckActive(latest: { current: UploadCtx }) {
+  return useCallback(() => {
+    const before = currentSelection();
+    if (!before.active) return;
+    editSelection(latest.current, { ...before, checked: setChecked(before.checked, [before.active], true) }, "Select active row", [before.active]);
+  }, [latest]);
+}
+function useUncheckActive(latest: { current: UploadCtx }) {
+  return useCallback(() => {
+    const before = currentSelection();
+    if (!before.active) return;
+    editSelection(latest.current, { ...before, checked: setChecked(before.checked, [before.active], false) }, "Deselect active row", [before.active]);
+  }, [latest]);
+}
+function useSelectRow(latest: { current: UploadCtx }) {
+  return useCallback((id: string, intent: SelectIntent) => {
+    const before = currentSelection();
+    const visibleIds = latest.current.visible.map((r) => r.source.id);
+    const after = applyRowGesture(before, { id, intent, visibleIds });
+    editSelection(latest.current, after, intent === "replace" ? "Select row" : "Select range", [id]);
+  }, [latest]);
+}
+function useSetActive(latest: { current: UploadCtx }) {
+  return useCallback((id: string) => {
+    const before = currentSelection();
+    editSelection(latest.current, { ...before, active: id }, "Move active row", [id]);
+  }, [latest]);
+}
 function useDialogActions(ctx: UploadCtx): Pick<UiSlice, "openSettings" | "dismissDialog"> {
   const latest = useRef(ctx); latest.current = ctx;
   const openSettings = useCallback((id: string | null) => {

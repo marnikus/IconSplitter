@@ -1,9 +1,10 @@
 # Agent Rules — Icon Splitter
 
 What an AI agent (or a human) **MUST** follow when adding or changing code here.
-These 24 stable-numbered rules adapt the rules from
+Rules 1–24 adapt the rules from
 `Process-Images-in-Areana/docs/current/AGENT_RULES.md` to this React + Vite +
-TypeScript browser app. Never renumber; append instead.
+TypeScript browser app; RULE 25 adds a shared list-selection contract. Never
+renumber; append instead.
 
 **In brief:** Keep pixel logic in `src/lib/`, report progress and failures honestly,
 and test real behaviour. Use one undo timeline, validate persisted state, verify
@@ -11,13 +12,13 @@ exports, and deliver complete files. Work locally by default; send only disclose
 inputs to a named provider after preview and confirmation. Meet the RULE 16 gates,
 aim for RULE 18 sizes, and keep the current docs true.
 
-The original RULE headings below are compatibility links to the canonical text in
+The RULE headings below link to the canonical text in
 [behaviour](rules/BEHAVIOR.md), [quality and verification](rules/QUALITY.md), and
 [documentation, privacy and delivery](rules/DOCS_AND_SAFETY.md). Only those
 modules define the rules. RULE 12 retains its old link label; undo/redo **is** now
 implemented (see its linked text).
 
-| Original RULE heading → canonical text | Kind | Adapted from |
+| RULE heading → canonical text | Kind | Adapted from |
 |---|---|---|
 | [RULE 1 — All pixel math goes through `src/lib/`](rules/BEHAVIOR.md#rule-1) | behaviour | PIA RULE 1 — shared visual runner |
 | [RULE 2 — Report every step through the toast/status surface](rules/BEHAVIOR.md#rule-2) | behaviour | PIA RULE 2 — engine.report() |
@@ -43,6 +44,7 @@ implemented (see its linked text).
 | [RULE 22 — Export output must be traceable to its source](rules/DOCS_AND_SAFETY.md#rule-22) | data | PIA RULE 22 — correlation token |
 | [RULE 23 — Delivery is atomic; never a partial file](rules/DOCS_AND_SAFETY.md#rule-23) | data | PIA RULE 23 — atomic save |
 | [RULE 24 — LIVE SYNC: the UI mirrors the stored value at the moment of change](rules/BEHAVIOR.md#rule-24) | behaviour | PIA RULE 24 |
+| [RULE 25 — One list-selection gesture contract](rules/BEHAVIOR.md#rule-25) | behaviour | Batch-authoritative across list tabs |
 
 Related current references: the [root router](README.md) (task read packs) and
 [Code Verification](CODE_VERIFICATION.md). The dated

@@ -1,6 +1,6 @@
 # Behaviour rules
 
-Canonical rules for this topic. Return to the [RULE 1–24 index](../AGENT_RULES.md) for the other rules.
+Canonical rules for this topic. Return to the [RULE 1–25 index](../AGENT_RULES.md) for the other rules.
 
 <a id="rule-1"></a>
 
@@ -113,3 +113,22 @@ State is persisted today: the session snapshot and global undo timeline use loca
 * Every value the user can SEE or EDIT must display the current state IMMEDIATELY when it changes — from any source: adding a sheet, re-detecting, toggling exclusion, moving a slider. No visible value may wait for a re-render triggered by something else.
 * Every mutation goes through state setters with fresh derived values (`useMemo` over current state) — never a cached copy of boxes or previews that can drift from the source of truth.
 * Anti-pattern (banned): "it is in state, it will show after some other interaction". If a user action needs another action to become visible, the sync is broken.
+
+<a id="rule-25"></a>
+
+## RULE 25 — One list-selection gesture contract
+
+Batch, Selection V2, Generate SVG and SVG to upload use **Batch's** list gestures. The active row (keyboard/detail target) and checked rows (bulk target) are independent; an active highlight never implies a check. Batch initially checks eligible rows after a scan; the other three lists start unchecked. A valid restored selection may survive a tab switch, filter or sort. Nested actions do not trigger row selection.
+
+| Gesture | Active row / anchor | Checked rows |
+|---|---|---|
+| Plain row click; Enter on focused row | activate and anchor | unchanged |
+| Row checkbox | unchanged | toggle just that row |
+| Ctrl/Alt/Cmd+row click | activate; keep anchor | toggle just that row; keep others |
+| Shift+row click | activate; anchor becomes target | replace with inclusive **visible-order** range from prior anchor; absent/hidden anchor → target only |
+| Up/Down | move active through visible eligible rows | unchanged |
+| E / Q | unchanged | check / uncheck the active row; without an active row, E selects visible and Q deselects all; never steal text input |
+| Header checkbox | unchanged | tri-state for visible eligible rows; check adds them, uncheck removes **visible only**, preserving hidden checks |
+| Select visible / Deselect all | unchanged | add visible eligible rows / clear every check, including hidden |
+
+Space on a focused Batch/V2/Upload row activates it; Generate SVG retains Space as an active-check alias. Native controls keep their own Space/arrow keys. Filtering and sorting cannot silently select or discard hidden checks; prune ids only when their sources disappear. One changed selection gesture is **one undoable entry** on the global timeline (ids, anchor and active together), not separate entries or an entry for a no-op. Bulk operations consume checked eligible rows, never the active row by inference. See [I-73](../sor/invariants/shared.md#i-73) for the cross-tab guarantee and each tab's behaviour page for eligibility and confirmation gates.

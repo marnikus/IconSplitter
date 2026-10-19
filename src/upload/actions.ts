@@ -4,12 +4,13 @@
 // aborts, journal) and the shared history. The batch runners live in
 // metaactions/exportactions; the selection, dialog and clipboard actions in
 // uiactions. This file owns the source, view, settings, provider and key
-// actions. Undo policy (design §6): ONE entry type `uploadSettings` — the bulk
-// apply and the per-icon override set/reset are undoable; global defaults edits
-// are persisted but not undoable (the same class as presets).
+// actions. Selection uses `uploadChecked`; settings use `uploadSettings` for
+// bulk apply and per-icon overrides. Global defaults stay persisted but not
+// undoable (the same class as presets).
 
 import { useCallback, useRef, type Dispatch } from "react";
 import type { DirHandleLike } from "../lib/fs";
+import type { SelectIntent } from "../lib/reviewselect";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
 import { perIconFields } from "../lib/upload/asis";
@@ -81,9 +82,11 @@ export interface UploadActions extends PromptActions {
   forgetKey: () => void;
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
+  uncheckVisible: () => void;
   deselectAll: () => void;
   checkActive: () => void;
   uncheckActive: () => void;
+  selectRow: (id: string, intent: SelectIntent) => void;
   setActive: (id: string) => void;
   openSettings: (id: string | null) => void;
   dismissDialog: () => void;

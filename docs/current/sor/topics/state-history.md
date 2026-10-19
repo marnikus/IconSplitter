@@ -8,9 +8,9 @@ Design record: `docs/archive/2026-10-01-history-session/design.md`.
 
 ### 12.1 One store above the tabs
 
-`Workbench` renders exactly one panel at a time, so panel-local `useState` is
-destroyed on every tab switch. Everything a restart or a cross-tab undo must see
-therefore lives in `src/state/appstore.ts` — a module-scope store bound to React
+`Workbench` shows one panel at a time; Batch and Generate SVG stay mounted but
+hidden while other panels may unmount. Everything a restart or a cross-tab undo
+must see therefore lives in `src/state/appstore.ts` — a module-scope store bound to React
 by `useAppState` / `useAppView` (`useSyncExternalStore`):
 
 | slice | contents | persisted by |
@@ -19,6 +19,7 @@ by `useAppState` / `useAppView` (`useSyncExternalStore`):
 | `sheets` | `padding`, `size`, `transparent` | session |
 | `view` | `filter`, `sort`, `selectedId`, `collapsed`, `zoom`, `sync`, `autoNext` (shared by Selection and Selection V2) | session |
 | `v2` | `checked`, `scrollY`, `anchorId` (the Shift anchor) | session |
+| `batch`, `svg`, `upload` | each tab's `checked`, `activeId`, `anchorId` | session |
 | `prefs` | V2 `mode`, `thumbHeight` — held in memory only | `selectionv2/prefsstore` |
 
 One owner per value, so the session file deliberately does **not** duplicate: the
@@ -70,15 +71,15 @@ remembered root handle. Stale targets are skipped, never fatal.
 entry and one summary line ("3 pairs reset to pending"). A pending pair owns no
 record (I-13), the record is removed from the JSON, and pair identity, paths and
 file metadata are untouched. Available for one item (`sel-reset` in the
-comparison view) and for the selected / visible scope (`v2-reset-selected`,
-`v2-reset-visible`).
+comparison view) and for the checked ∩ visible ∩ complete scope
+(`v2-reset-selected`); the visible-list variant was removed.
 
 ### 12.5 Undoable vs not (documented and tested)
 
 | undoable | not undoable (and why) |
 |---|---|
 | decisions: approve / decline / reset, single and bulk | batch processing — it writes files into the destination folder |
-| checkbox selection, select visible, deselect all | ZIP / download / clipboard export — the file is already on disk |
+| checkbox/row selection gestures, select visible, deselect all (including Upload) | ZIP / download / clipboard export — the file is already on disk |
 | filters, sort, date mode and range | picking a folder — re-granting permission can be denied, so the app cannot promise it |
 | view prefs (list/compare, thumbnail zoom), zoom, sync, auto-next, sidebar | switching tabs — navigation, restored on restart but not an edit |
 | sheets padding / size / transparent | the folder watcher toggle — not persisted, so undoing it across a restart would be fiction |
@@ -90,7 +91,7 @@ not record it.
 
 | key | contents | owner |
 |---|---|---|
-| `iconSplitter.session.v1` | `{v, savedAt, tab, sheets, selection, selectionV2}` | `state/sessionstore` |
+| `iconSplitter.session.v1` | `{v, savedAt, tab, sheets, selection, selectionV2, svg, upload, batch}` | `state/sessionstore` |
 | `iconSplitter.history.v1` | `{v, entries, index}` capped at 100 | `state/historystore` |
 | `iconSplitter.selectionV2.prefs.v1` | unchanged | `selectionv2/prefsstore` |
 
@@ -100,14 +101,16 @@ startup (RULE 13).
 
 ### 12.7 Selection is one gesture, one entry
 
-A row click used to push two entries (`checked`, then `view` for the active row),
-so the first `Ctrl+Z` only moved the highlight and the selection came back on the
-second press. `useSelectionV2.selectRow(id, intent)` now pushes **one** `checked`
-entry whose `before`/`after` is `{ids, anchor, active}`: `applyChecked` reads all
-three, and a bare array is still accepted so pre-anchor timelines undo cleanly.
-The intents come from `lib/reviewselect`: `selectIntent` reads the modifiers,
-`selectOne` and `selectRange` are pure, and `anchorId` lives in the session so a
-Shift+click survives a tab switch.
+A row click once pushed two entries (`checked` and `view`) and needed two
+undo presses. A changed list gesture now records **one** entry carrying
+`{ids, anchor, active}`; a plain click changes active/anchor but NOT checks.
+Modifiers follow [RULE 25](../../rules/BEHAVIOR.md#rule-25): Shift replaces the
+visible range, Ctrl/Alt/Cmd toggles one row, and checkbox/header gestures
+leave active alone. `lib/reviewselect` owns intent/range semantics; persisted
+anchors let Shift work after a tab switch. V2 keeps `checked`, Batch keeps
+`batchChecked`, and SVG/Upload use `svgChecked`/`uploadChecked`; an older SVG-origin
+`checked` entry restores SVG checks, not V2. Older bare-array timelines still
+read safely. Upload selection joins the global timeline, not a panel-local stack.
 
 The bulk bar is selection-only: **Approve selected**, **Decline selected** and
 **Reset selected to pending**, each armed before it applies and each labelled

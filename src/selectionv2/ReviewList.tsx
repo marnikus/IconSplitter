@@ -53,7 +53,7 @@ export default function ReviewList(p: ReviewListProps) {
       </div>
       <footer className="v2-list-footer">
         <span data-testid="v2-footer">Showing {p.rows.length} of {p.total} pairs</span>
-        <span className="v2-hints"><kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>↑ ↓</kbd> move the active row</span>
+        <span className="v2-hints"><kbd>A</kbd> approve · <kbd>D</kbd> decline · ↑↓ active · E/Q check/uncheck · Shift range · Ctrl toggle</span>
       </footer>
     </section>
   );

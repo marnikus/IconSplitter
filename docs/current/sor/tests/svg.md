@@ -90,16 +90,15 @@ Focused test inventory; [all tests](../TESTS.md).
   selection to several existing SVGs, confirms the exact preview/request, leaves
   the empty row untouched, and appends behind an in-flight request; a row's
   Regenerate still jumps to the front
-* `svg_version_chips.test.tsx` — SVG version chips: valid versions only, shown
-  one active, a click switches preview/tag/pair file, dialog path kept
-* `svg_pinned_bulkbar.test.tsx` — the bulk bar's sticky pin: CSS rule, direct
-  child of the tab column, between controls and rows
-* `svg_preview_stroke.test.tsx` — preview stroke width: lib parsing, the shared
-  sheet restyles row thumbnails without rewriting them, Reset/"default", bad
-  text, persistence, dialogs keep real widths
+* `svg_version_chips.test.tsx` — valid/active chips switch preview, tag and pair
+  file; dialog path preserved
+* `svg_pinned_bulkbar.test.tsx` — sticky bulk bar above rows, direct child of tab
+* `svg_row_gestures.test.tsx` — RULE 25: modifiers, hidden checks, Q/E, A/D/W, dialog isolation and SVG-only undo
+* `svg_preview_stroke.test.tsx` — parse, shared thumbnail style without rewrite,
+  Reset/default, invalid text, persistence, dialogs retaining real widths
 * `svg_ui.test.tsx` + `svg_ui_config.test.tsx` (fixture `helpers/svgpanel.tsx`) — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
-  its Escape close, the confirm-before-send guard, approve + undo, and the
+  its Escape close, the confirm-before-send guard, approve + undo, and paid confirmation;
   preview frame: inline `<svg>` with `xmlns` + `100%` + `xMidYMid meet`, the
   frame's `data-version` equal to the version Copy hands over, "Preview
   failed" + reason for a malformed file, "No SVG" for a source with none, the

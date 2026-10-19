@@ -240,10 +240,10 @@ describe("filters, sort, header, counts", () => {
     expect(counts.failed).toBe(0);
   });
 
-  it("pruneChecked drops checked ids a rescan removed", () => {
-    patchUpload({ checked: ["pair_ok", "pair_gone"] });
+  it("pruneChecked drops checked, active and anchor ids a rescan removed", () => {
+    patchUpload({ checked: ["pair_ok", "pair_gone"], activeId: "pair_gone", anchorId: "pair_gone" });
     pruneChecked(rows);
-    expect(getAppState().upload.checked).toEqual(["pair_ok"]);
+    expect(getAppState().upload).toEqual({ checked: ["pair_ok"], activeId: null, anchorId: null });
   });
 });
 

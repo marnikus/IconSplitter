@@ -49,7 +49,7 @@ function Footer({ shown, total }: { shown: number; total: number }) {
     <footer className="svg-list-footer">
       <span data-testid="svg-footer-summary">{shownLabel(shown, total)}</span>
       <span className="svg-hints">
-        ↑↓ active row · <kbd>Space</kbd> select · <kbd>G</kbd> generate · <kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>V</kbd> code
+        ↑↓ active row · <kbd>E/Q</kbd> check/uncheck · <kbd>Space</kbd> toggle · <kbd>G</kbd> generate · <kbd>A/D/W</kbd> review · <kbd>V</kbd> code
       </span>
     </footer>
   );

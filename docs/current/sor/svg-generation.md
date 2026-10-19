@@ -47,6 +47,14 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   out-of-range positions are reported, never guessed, and empty cells never
   produce output. A plan that cannot be mapped is refused before a byte is
   sent (`lib/svgbatch.validateBatchPlan`, fail-closed).
+* List selection follows [Batch's RULE 25 gestures](../rules/BEHAVIOR.md#rule-25)
+  (I-73): a plain row click only activates/anchors, while checkbox/modifier
+  clicks change checks; a tri-state header toggles visible checks only and
+  Deselect all clears hidden checks. New rows start unchecked; checks and
+  active/anchor changes are one undoable gesture. Only approved existing AI
+  outputs can be checked (I-31); a check is **not consent to send**. Paid runs
+  still preview the exact ordered sources/inputs and require explicit
+  confirmation before any provider request (RULE 20, I-19).
 * Bulk selection actions (2026-10-09): **Generate selected** remains the
   existing all-checked-rows path, including rows with no SVG. **Regenerate
   selected (N)** is separate and selection-only: `N` counts checked rows with

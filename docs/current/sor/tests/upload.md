@@ -19,8 +19,9 @@ Focused test inventory; [all tests](../TESTS.md).
   hash, exact staleness (source/settings/metadata fingerprints), the metadata
   state a record carries, filters/sort/header/counts (incl. a failed run with
   record null counted), pruneChecked
-* `upload_undo.test.ts` — the `uploadSettings` entry: payload gate, the live
-  binding, the persist-only path, no-op refusal, undo/redo routing
+* `upload_undo.test.ts` — `uploadSettings` and RULE 25 selection entries:
+  validated payload, live/persist-only apply, no-op refusal, undo/redo across
+  tabs; failed apply cannot advance the timeline cursor
 * `upload_pinned_bulkbar.test.tsx` — the bulk bar sits in the shared sticky
   `.svg-bulkbar-pin`, a direct child of the tab column, above the rows
 * `upload_default_settings.test.ts` — "default" for every visual setting
@@ -40,4 +41,6 @@ Focused test inventory; [all tests](../TESTS.md).
   entry; reset), the exact-request confirmation, editable/copiable metadata
   fields, invalid-answer refusal, cancel (never resent), interrupted after a
   restart, export → green committed package with the source untouched, stale →
-  re-export, metadata embedded + verified, honest failure commits nothing
+  re-export, metadata embedded + verified, honest failure commits nothing.
+* `upload_row_gestures.test.tsx` — RULE 25: Batch modifiers, visible header,
+  arrows, modal isolation and global selection undo; no A/D or provider calls.

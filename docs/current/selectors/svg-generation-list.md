@@ -12,9 +12,9 @@ file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 | Test id | Element | Notes |
 |---|---|---|
 | `svg-bulkbar-pin` | sticky wrapper of the bulk bar | pins the whole bar to the top while rows scroll (`position: sticky` in `.app-main`, 2026-10-19) |
-| `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
+| `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible checks only, keeps hidden |
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
-| `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
+| `svg-select-visible` / `svg-deselect` | buttons | add visible / clear ALL checks including hidden |
 | `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, **48–800** step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout. Same range, same rule and the same shared layout as Selection V2's `v2-thumb` (I-55 — one implementation, `lib/zoom` + `ui/PairedThumbs`) |
 | `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
 | `svg-stroke-control` → `svg-stroke` / `svg-stroke-value` / `svg-stroke-reset` | preview stroke width | text field (placeholder `default`, 0–50 px, `aria-invalid` on bad text), live label, Reset (disabled at default); preview only, screen px (`vector-effect: non-scaling-stroke`, same visible width for every viewBox) — row thumbnails adopt one shared sheet (2026-10-19) |
@@ -24,14 +24,14 @@ file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 | `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
-The image batch action and Stop control are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
+New lists start unchecked; selection gestures use global Undo ([RULE 25](../rules/BEHAVIOR.md#rule-25)). ↑/↓ move active; E/Q check/uncheck, Space toggles; A/D/W review the active valid SVG. Paid actions still require the exact-input confirmation. The image batch action and Stop control are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
 
 ## Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`)
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-row-{sourceId}` | row `role="listitem"` | keyed by the stable pair id, never a row index |
-| `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"` |
+| `svg-row-{sourceId}` | row `role="listitem"` | `aria-current` = active; plain click activates, not checks; Shift range / Ctrl, Alt, Cmd toggle (I-73) |
+| `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"`; toggles just this check, not active/anchor |
 | `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>` in the same `svg-thumb` square box, `object-fit: contain`); missing → placeholder of the same size |
 | `svg-prev-{sourceId}` | inline preview | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |

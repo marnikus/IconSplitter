@@ -113,6 +113,13 @@ beforeEach(async () => {
 });
 
 describe("Batch V2 selection: active row separate from checked", () => {
+  it("does not record Select visible again when the scan already checked every eligible row", async () => {
+    const before = api.entries.length;
+    await click(q("[data-testid=batch-select-visible]"));
+    expect(api.entries.length).toBe(before);
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/3 selected/);
+  });
+
   it("purple active row is separate from checked bulk rows", async () => {
     const rows = qAll("[data-testid^='batch-row-'][role='listitem']");
     expect(rows.length).toBe(3);
@@ -238,6 +245,17 @@ describe("Batch V2 selection: active row separate from checked", () => {
     splitBtn = q("[data-testid=batch-process]") as HTMLButtonElement;
     expect(splitBtn.disabled).toBe(false);
     expect(splitBtn.textContent).toMatch(/Split approved \(3\)/);
+  });
+
+  it("keeps a quick row activation and checkbox click as two undoable gestures", async () => {
+    await click(q("[data-testid=batch-deselect]"));
+    const before = api.entries.length;
+    await rowClick("icon-a_AI_1.png");
+    await checkClick("icon-a_AI_1.png");
+    expect(api.entries.length).toBe(before + 2);
+    await click(q("[data-testid=hist-undo]"));
+    expect(q("[data-testid='batch-row-icon-a_AI_1.png']")?.className).toContain("active");
+    expect((q("[data-testid='row-select-icon-a_AI_1.png']") as HTMLInputElement).checked).toBe(false);
   });
 
   it("each selection gesture is one undo entry", async () => {

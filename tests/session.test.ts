@@ -94,6 +94,19 @@ describe("parseSession", () => {
     expect(s.selectionV2.checked).toEqual(["ok"]);
   });
 
+  it("restores old sessions without an anchor without losing checked rows or active targets", () => {
+    const s = parseSession(asText({
+      selectionV2: { checked: ["pair_a", "pair_b"], scrollY: 16 },
+      batch: { checked: ["row_a"], activeId: "row_a" },
+      svg: { checked: ["svg_a"], activeId: "svg_a" },
+      upload: { checked: ["upload_a"], activeId: "upload_a" },
+    }));
+    expect(s.selectionV2).toEqual({ checked: ["pair_a", "pair_b"], scrollY: 16, anchorId: null });
+    expect(s.batch).toEqual({ checked: ["row_a"], activeId: "row_a", anchorId: null });
+    expect(s.svg).toEqual({ checked: ["svg_a"], activeId: "svg_a", anchorId: null });
+    expect(s.upload).toEqual({ checked: ["upload_a"], activeId: "upload_a", anchorId: null });
+  });
+
   it("round-trips through serialize", () => {
     const s = parseSession(JSON.stringify(FULL));
     expect(parseSession(serializeSession(s, NOW))).toEqual(s);

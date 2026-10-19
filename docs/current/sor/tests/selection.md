@@ -19,9 +19,13 @@ Focused test inventory; [all tests](../TESTS.md).
 * `reviewselect.test.ts`, `reviewbulk.test.ts`, `reviewprefs.test.ts`,
   `selection_bulk.test.ts`, `hotkeys.test.ts`, `copypath.test.ts` — V2 rules:
   selection incl. indeterminate, bulk scope + one summary line, zoom clamp /
-  no-upscale / corrupt prefs, bulk reducer, shared hotkeys, path fallback
+  no-upscale / corrupt prefs, bulk reducer, shared hotkeys/row-control guards, path fallback
 * `selectionv2_ui.test.tsx` — DOM: recursive scan + both thumbnails, layout
   switch, active row + A/D + auto-next, zoom bounds/value/persistence,
-  selection across filter + sort, approve selected/visible, incomplete pairs
-  out of scope, save failure + retry, empty/no-match, corrupt JSON, rescan,
-  restart persistence, a11y labels
+  selection across filter + sort, **armed selected-only** approve/decline/reset
+  scoped to checked ∩ visible ∩ complete (never approve-visible), incomplete
+  and hidden counts, save failure + retry, empty/no-match, corrupt JSON,
+  rescan, restart persistence, a11y labels. RULE 25 acceptance: initial
+  unchecked, plain click changes active/anchor but not checks, modifiers and
+  checkbox follow Batch, header only toggles visible, and one Undo/Redo
+  restores the entire changed gesture without bypassing the bulk arm.

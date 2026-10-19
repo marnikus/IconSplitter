@@ -16,17 +16,18 @@ import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
-import { patchBatch, patchV2, patchView, setAppState } from "./appstore";
+import { getAppState, patchBatch, patchSvg, patchUpload, patchV2, patchView, setAppState } from "./appstore";
+import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
+  const selection = applySelectionEntry(entry, value);
+  if (selection !== null) return selection;
   switch (entry.type) {
     case "decisions": return applyDecisions(entry.ids, value);
-    case "checked": return applyChecked(value);
-    case "batchChecked": return applyBatchChecked(value);
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
@@ -36,6 +37,17 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
       return patch === null ? false : applyUploadSettingsPatch(patch);
     }
     default: return false; // an entry from a future schema: refuse, do not guess
+  }
+}
+
+/** Route checked state to its tab before considering domain-specific edits. */
+function applySelectionEntry(entry: HistoryEntry, value: unknown): boolean | null {
+  switch (entry.type) {
+    case "checked": return entry.origin === "generateSvg" ? applyLegacySvgChecked(value) : applyChecked(value);
+    case "batchChecked": return applyBatchChecked(value);
+    case "svgChecked": return applyTabChecked(value, patchSvg, "generateSvg");
+    case "uploadChecked": return applyTabChecked(value, patchUpload, "upload");
+    default: return null;
   }
 }
 
@@ -49,7 +61,7 @@ function toReviewPatch(value: unknown): SvgReviewPatch {
 function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
   if (!isRecord(value)) return false;
   return typeof value.id === "string" && Number.isInteger(value.version)
-    && (value.review === "pending" || value.review === "approved" || value.review === "declined");
+    && (value.review === "pending" || value.review === "approved" || value.review === "declined" || value.review === "needs-review");
 }
 
 async function applyDecisions(ids: readonly string[], value: unknown): Promise<boolean> {
@@ -76,6 +88,31 @@ function applyBatchChecked(value: unknown): boolean {
   const sel = toSelection(value);
   if (!sel) return false;
   patchBatch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
+  return true;
+}
+
+/** SVG entries saved before svgChecked existed carried only the checked ids. */
+function applyLegacySvgChecked(value: unknown): boolean {
+  const sel = toSelection(value);
+  if (!sel) return false;
+  const svg = getAppState().svg;
+  if (!selectionTargetsKnown("generateSvg", { checked: sel.ids, active: svg.activeId, anchor: svg.anchorId })) return false;
+  patchSvg({ checked: sel.ids });
+  return true;
+}
+
+function applyTabChecked(
+  value: unknown,
+  patch: (next: { checked: string[]; anchorId: string | null; activeId: string | null }) => void,
+  tab: CheckableList,
+): boolean {
+  if (!isRecord(value)) return false;
+  if (!(value.anchor === null || typeof value.anchor === "string")) return false;
+  if (!(value.active === null || typeof value.active === "string")) return false;
+  const sel = toSelection(value);
+  if (!sel) return false;
+  if (!selectionTargetsKnown(tab, { checked: sel.ids, anchor: sel.anchor, active: sel.active })) return false;
+  patch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
 }
 

@@ -1,8 +1,8 @@
-// useBatchHotkeys.ts — Batch hotkeys: ↑/↓ active, E/Q select, A/D/W review (approved/declined/warning)
+// useBatchHotkeys.ts — Batch arrows and A/D/W review; shared Q/E has one separate listener.
 
 import { useEffect, useRef } from "react";
 import { isTextField } from "../selection/hotkeys";
-import { handleSelectShortcut } from "../lib/selectshortcuts";
+import { isNativeListKeyTarget } from "../ui/rowgesture";
 import type { BatchSelection } from "./useBatchSelection";
 import type { BatchReviewStatus } from "../lib/statefile";
 
@@ -24,22 +24,10 @@ function handleArrow(key: string, t: Target): boolean {
 function makeOnKey(ref: React.MutableRefObject<Target>) {
   return (e: KeyboardEvent) => {
     if (isTextField(e.target)) return;
-    if (
-      handleSelectShortcut(e, {
-        activeId: ref.current.activeId,
-        selectActive: () => ref.current.checkActive(),
-        deselectActive: () => ref.current.uncheckActive(),
-        selectVisible: () => ref.current.checkVisible(),
-        deselectAll: () => ref.current.uncheckAll(),
-      })
-    ) {
-      e.preventDefault();
-      return;
-    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (handleReview(k, ref.current)) { e.preventDefault(); return; }
-    if (handleArrow(e.key, ref.current)) { e.preventDefault(); }
+    if (!isNativeListKeyTarget(e.target) && handleArrow(e.key, ref.current)) e.preventDefault();
   };
 }
 

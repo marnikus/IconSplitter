@@ -13,7 +13,15 @@ Batch folders:
   `name.ext` is linked, never processed, and copied into every `split_NN`
   subfolder. Missing reference → warning + user may skip or continue.
 * Review window: thumbnail, filename, relPath, status badge
-  (unprocessed/processed/skipped/changed/missing/deleted), checkbox, Select/Deselect All.
+  (unprocessed/processed/skipped/changed/missing/deleted), checkbox, Select visible/Deselect all.
+  Its active row and checked rows are independent: Batch owns the shared
+  [RULE 25 gesture matrix](../rules/BEHAVIOR.md#rule-25) (I-73). Plain row click
+  only activates/anchors; checkbox and modifiers change checks, with Shift
+  replacing the visible-order range. Header tri-state is scoped to visible
+  eligible rows (missing/deleted are not selectable), while Deselect all clears
+  hidden checks too. A successful scan checks all eligible rows by default;
+  each click or checkbox change is a separate global `batchChecked` undo entry;
+  consecutive arrow navigation may coalesce, never undoing written split files.
 * Presets store every configurable value (source/dest handles in IndexedDB,
   config in localStorage); last-used preset restores automatically.
 * Processing: rescan runs before each batch; per-item progress, per-item

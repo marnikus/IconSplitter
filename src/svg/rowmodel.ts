@@ -8,6 +8,8 @@ import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { ALL_SVG_FILTER, applySvgFilters, pinOrder, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
+import { rememberListTargets } from "../state/listtargets";
+import { checkState, pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 import { queuedIds, type QueueItem } from "./runqueue";
@@ -137,15 +139,15 @@ export function idsWithGeneratedSvg(rows: SvgRow[], ids: string[]): string[] {
 
 /** Header checkbox state for the visible rows (indeterminate = some). */
 export function headerState(visible: SvgRow[], checked: string[]): "none" | "some" | "all" {
-  if (visible.length === 0) return "none";
-  const on = visible.filter((r) => checked.includes(r.source.id)).length;
-  if (on === 0) return "none";
-  return on === visible.length ? "all" : "some";
+  return checkState(visible.map((r) => r.source.id), checked);
 }
 
 /** A restored check must never point at a source the rescan removed. */
 export function pruneChecked(rows: SvgRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
-  const kept = getAppState().svg.checked.filter((id) => known.has(id));
-  if (kept.length !== getAppState().svg.checked.length) patchSvg({ checked: kept });
+  rememberListTargets("generateSvg", [...known]);
+  const state = getAppState().svg;
+  const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
+  const after = pruneRowSelection(before, known);
+  if (!sameRowSelection(before, after)) patchSvg({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
 }

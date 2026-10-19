@@ -11,6 +11,8 @@ import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload
 import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { cleanMetadata, metadataFingerprint } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
+import { rememberListTargets } from "../state/listtargets";
+import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import { cachedMeta, restoredMeta } from "./metacache";
 import type { UploadRowSource } from "./discovery";
 import {
@@ -279,7 +281,9 @@ export function countsOf(rows: readonly UploadRow[]): UploadCounts {
 /** A restored check must never point at a pair the rescan removed. */
 export function pruneChecked(rows: readonly UploadRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
-  const checked = getAppState().upload.checked;
-  const kept = checked.filter((id) => known.has(id));
-  if (kept.length !== checked.length) patchUpload({ checked: kept });
+  rememberListTargets("upload", [...known]);
+  const state = getAppState().upload;
+  const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
+  const after = pruneRowSelection(before, known);
+  if (!sameRowSelection(before, after)) patchUpload({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
 }

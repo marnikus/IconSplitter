@@ -36,12 +36,13 @@ import { exclusionSummary } from "./sourcelist";
 export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
-  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active);
+  const dialogOpen = g.dialog !== null || g.imgReview !== null;
+  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && !dialogOpen);
   useSvgHotkeys({
-    visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null || g.imgReview !== null,
+    visible: g.visible, activeId: g.activeId, dialogOpen,
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,
     decide: g.decide, showCode: g.showCode, dismissDialog: g.dismissDialog,
-  });
+  }, active);
   useActivation(active, g);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
@@ -104,7 +105,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidableCount(g)}
           thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setPreviewStroke} model={modelLabel(g.config.model)} totals={g.totals}
           progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
-          onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
+          onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
           onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
           onRegenerate={() => g.regenerateSelected(g.checked)}
           onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}

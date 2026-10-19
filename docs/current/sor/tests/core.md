@@ -16,3 +16,8 @@ Focused test inventory; [all tests](../TESTS.md).
 * `process.test.ts` — full output tree, deleted/failed isolation, stop, ref copy
 * `statewrite.test.ts` — per-reference JSON write, missing retention, corrupt replace
 * `store.test.ts` — preset persistence, corrupt rejection, last-used name
+* `batch_selection_v2.test.tsx` — active vs checked, plain/modified/Shift row
+  gestures, checkbox, tri-state header, filtered/hidden checks, Q/E and one
+  global undo entry per changed gesture. RULE 25 acceptance also requires an
+  initially checked eligible rows and Deselect all clearing hidden checks; processing
+  files is not an undoable selection gesture.

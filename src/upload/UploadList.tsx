@@ -67,7 +67,7 @@ function ListFooter({ g }: { g: UploadApi }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="upload-footer-summary">{`Showing ${g.visible.length} of ${g.rows.length} approved SVGs`}</span>
-      <span className="svg-hints">click a row for its metadata fields · <kbd>Export</kbd> writes the package into the pair's export folder</span>
+      <span className="svg-hints">↑↓ active · E/Q check/uncheck · click a row for metadata fields · Export writes into the pair's folder</span>
     </footer>
   );
 }

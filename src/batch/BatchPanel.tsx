@@ -68,13 +68,13 @@ function useRowStale(v: View, preview: Preview) {
   }, [v, preview]);
 }
 
-export default function BatchPanel() {
+export default function BatchPanel({ active = true }: { active?: boolean }) {
   const v = useBatchView();
   const thumbFor = useThumbCache(v.core.thumbUrl);
   const { onReviewed, onReviewedBatch } = useReviewed(v);
   const preview = usePreviewSetup(v, onReviewed, onReviewedBatch);
-  useBatchHotkeys(v as never, true);
-  useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
+  useBatchHotkeys(v as never, active);
+  useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, active);
   const checkedRows = useCheckedRows(v);
   const onPreview = useOnPreview(checkedRows, preview);
   const rowStale = useRowStale(v, preview);

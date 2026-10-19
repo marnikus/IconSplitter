@@ -5,6 +5,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyEntry, ENTRY_TYPES } from "../src/state/apply";
 import { applyDecisionPatch } from "../src/selection/offline";
+import { bindSvgReviewApplier } from "../src/svg/reviewundo";
+import { pruneChecked as pruneSvgChecked } from "../src/svg/rowmodel";
+import { pruneChecked as pruneUploadChecked } from "../src/upload/rowmodel";
 
 // The decision branch writes real files; here we only assert the routing.
 vi.mock("../src/selection/offline", async (importOriginal) => {
@@ -13,7 +16,7 @@ vi.mock("../src/selection/offline", async (importOriginal) => {
 });
 
 const applyDecisionsSpy = vi.mocked(applyDecisionPatch);
-import { getAppState, patchView, resetAppStore, setAppState } from "../src/state/appstore";
+import { getAppState, patchSvg, patchUpload, patchV2, patchView, resetAppStore, setAppState } from "../src/state/appstore";
 import { DEFAULT_SESSION } from "../src/lib/session";
 import { HISTORY_VERSION, type HistoryEntry } from "../src/lib/history";
 
@@ -51,6 +54,60 @@ describe("applyEntry", () => {
     expect(getAppState().v2).toMatchObject({ checked: ["c"], anchorId: null });
   });
 
+  it("applies a new SVG checkbox entry only to SVG state, never to Selection V2", async () => {
+    patchV2({ checked: ["v2_keep"], anchorId: "v2_keep" });
+    await expect(applyEntry(entry("svgChecked", ["svg_a"]), { ids: ["svg_a"], active: "svg_a", anchor: "svg_a" })).resolves.toBe(true);
+    expect(getAppState().svg).toEqual({ checked: ["svg_a"], activeId: "svg_a", anchorId: "svg_a" });
+    expect(getAppState().v2).toMatchObject({ checked: ["v2_keep"], anchorId: "v2_keep" });
+  });
+
+  it("routes pre-fix checked entries from Generate SVG back to SVG, retaining old active target", async () => {
+    patchSvg({ activeId: "svg_keep" });
+    patchV2({ checked: ["v2_keep"] });
+    const legacy = { ...entry("checked", ["svg_old"]), origin: "generateSvg" };
+    await expect(applyEntry(legacy, { ids: ["svg_old"] })).resolves.toBe(true);
+    expect(getAppState().svg).toEqual({ checked: ["svg_old"], activeId: "svg_keep", anchorId: null });
+    expect(getAppState().v2.checked).toEqual(["v2_keep"]);
+  });
+
+  it("applies upload checkbox history to upload only, including the active target", async () => {
+    patchUpload({ checked: ["upload_old"], activeId: "upload_old" });
+    patchV2({ checked: ["v2_keep"] });
+    await expect(applyEntry(entry("uploadChecked", ["upload_new"]), { ids: ["upload_new"], active: "upload_new", anchor: "upload_new" })).resolves.toBe(true);
+    expect(getAppState().upload).toEqual({ checked: ["upload_new"], activeId: "upload_new", anchorId: "upload_new" });
+    expect(getAppState().v2.checked).toEqual(["v2_keep"]);
+    await expect(applyEntry(entry("uploadChecked"), { ids: ["invalid", 7] })).resolves.toBe(false);
+    expect(getAppState().upload).toEqual({ checked: ["upload_new"], activeId: "upload_new", anchorId: "upload_new" });
+  });
+
+  it("refuses selection undo snapshots that resurrect rows removed by a scan", async () => {
+    pruneSvgChecked([{ source: { id: "svg_keep" } }] as unknown as Parameters<typeof pruneSvgChecked>[0]);
+    pruneUploadChecked([{ source: { id: "upload_keep" } }] as unknown as Parameters<typeof pruneUploadChecked>[0]);
+    const svgBefore = getAppState().svg;
+    const uploadBefore = getAppState().upload;
+    const stale = (id: string) => ({ ids: [id], active: id, anchor: id });
+    await expect(applyEntry(entry("svgChecked"), stale("svg_removed"))).resolves.toBe(false);
+    await expect(applyEntry(entry("uploadChecked"), stale("upload_removed"))).resolves.toBe(false);
+    expect(getAppState().svg).toEqual(svgBefore);
+    expect(getAppState().upload).toEqual(uploadBefore);
+    const legacySvg = { ...entry("checked"), origin: "generateSvg" };
+    await expect(applyEntry(legacySvg, { ids: ["svg_removed"] })).resolves.toBe(false);
+    await expect(applyEntry(entry("svgChecked"), stale("svg_keep"))).resolves.toBe(true);
+    await expect(applyEntry(entry("uploadChecked"), stale("upload_keep"))).resolves.toBe(true);
+    pruneSvgChecked([]);
+    await expect(applyEntry(entry("svgChecked"), stale("svg_keep"))).resolves.toBe(false);
+  });
+
+  it("restores the SVG warning review status used by W and the row button", async () => {
+    const seen: unknown[] = [];
+    const unbind = bindSvgReviewApplier(async (patch) => { seen.push(patch); return patch.recs.length > 0; });
+    const patch = { recs: [{ id: "svg_a", version: 1, review: "needs-review" }] };
+    try {
+      await expect(applyEntry(entry("svgReview", ["svg_a"]), patch)).resolves.toBe(true);
+      expect(seen).toEqual([patch]);
+    } finally { unbind(); }
+  });
+
   it("applies only the view keys the entry carries", async () => {
     patchView({ zoom: "full" });
     await expect(applyEntry(entry("view"), { filter: DEFAULT_SESSION.selection.filter })).resolves.toBe(true);
@@ -85,6 +142,6 @@ describe("applyEntry", () => {
 
   it("refuses a kind it does not know instead of guessing", async () => {
     await expect(applyEntry(entry("deleteFiles"), { all: true })).resolves.toBe(false);
-    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"]);
+    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"]);
   });
 });

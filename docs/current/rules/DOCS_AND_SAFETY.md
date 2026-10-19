@@ -1,6 +1,6 @@
 # Documentation, privacy and delivery rules
 
-Canonical rules for this topic. Return to the [RULE 1–24 index](../AGENT_RULES.md) for the other rules.
+Canonical rules for this topic. Return to the [RULE 1–25 index](../AGENT_RULES.md) for the other rules.
 
 <a id="rule-6"></a>
 

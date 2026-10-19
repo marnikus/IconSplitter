@@ -3,8 +3,8 @@
 
 import { memo, useCallback, useEffect, useRef } from "react";
 import type { Row, RowMergeMap } from "./useBatch";
-import type { RowMods } from "../selectionv2/ReviewList";
 import { selectIntent } from "../lib/reviewselect";
+import { isRowGestureClick } from "../ui/rowgesture";
 import { fmtDate, fmtTime } from "../selection/fmt";
 import { useThumbCache } from "./ScanThumb";
 import ScanStatusCell from "./ScanStatusCell";
@@ -64,7 +64,7 @@ function Footer({ count }: { count: number }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="batch-footer">Showing {count} images</span>
-      <span className="svg-hints">↑↓ active row · E select active · Q deselect active · Click = active only · Checkbox = select · Shift range · Ctrl toggle · Approve/Decline in Decision</span>
+      <span className="svg-hints">↑↓ active · E/Q check/uncheck · A/D/W review · Click = active only · Checkbox = check · Shift range · Ctrl toggle</span>
     </footer>
   );
 }
@@ -245,11 +245,8 @@ function isActive(relPath: string, activeId: string | null): boolean {
 function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"], selectActive: ScanTableProps["selectActive"]) {
   return useCallback(
     (e: React.MouseEvent) => {
-      if (disabled) return;
-      const t = e.target as HTMLElement;
-      if (t.closest('input[type="checkbox"]') || t.closest("button") || t.closest("input[type=range]")) return;
-      const mods: RowMods = { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey };
-      const intent = selectIntent(mods);
+      if (disabled || !isRowGestureClick(e)) return;
+      const intent = selectIntent(e);
       if (intent === "replace") selectActive(r.relPath);
       else selectRow(r.relPath, intent);
     },
@@ -260,9 +257,9 @@ function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selec
 function useRowKey(r: Row, disabled: boolean, selectActive: ScanTableProps["selectActive"]) {
   return useCallback(
     (e: React.KeyboardEvent) => {
+      if (e.target !== e.currentTarget || disabled) return;
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        if (disabled) return;
         selectActive(r.relPath);
       }
     },

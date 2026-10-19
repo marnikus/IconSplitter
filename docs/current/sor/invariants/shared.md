@@ -61,3 +61,13 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   (the `completed — check it` state is gone with the completion itself, I-59).
   Copies are unaffected (I-28): they hand over a folder path, the real one when
   captured and the folder-name fallback otherwise.
+
+<a id="i-73"></a>
+* **I-73 (one list selection, RULE 12/25):** Batch, Selection V2, Generate SVG
+  and SVG to upload distinguish active from checked rows and use the same
+  [Batch-authoritative gestures](../../rules/BEHAVIOR.md#rule-25). A plain row
+  click never checks or clears rows; modifiers/checkbox/header act on their
+  defined scope; hidden checks survive filters. Batch initially checks eligible
+  rows; the other three start unchecked. A changed gesture is one global undo
+  entry, including Upload.
+  Tab-specific eligibility and paid confirmation still constrain bulk actions.

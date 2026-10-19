@@ -7,6 +7,8 @@
 // badges never merge them.
 
 import { useEffect, useRef } from "react";
+import { selectIntent, type SelectIntent } from "../lib/reviewselect";
+import { isRowGestureClick } from "../ui/rowgesture";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
   effectiveSettings, megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
@@ -30,7 +32,7 @@ export interface UploadRowActions {
   defaults: UploadSettings;
   overrides: Record<string, SettingsOverrides>;
   toggleCheck: (id: string) => void;
-  setActive: (id: string) => void;
+  selectRow: (id: string, intent: SelectIntent) => void;
   openSettings: (id: string | null) => void;
   openLocation: (id: string) => void;
   requestMetadata: (ids: string[]) => void;
@@ -50,7 +52,8 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
     <div ref={ref} role="listitem" data-testid={`upload-row-${id}`} tabIndex={active ? 0 : -1}
       aria-current={active ? "true" : undefined}
       className={`up-row ${status}${active ? " active" : ""}${checked ? " selected" : ""}`}
-      onClick={() => a.setActive(id)}>
+      onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); a.selectRow(id, "replace"); } }}>
       <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`} checked={checked}
         aria-label={`Select ${row.source.svgName}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
