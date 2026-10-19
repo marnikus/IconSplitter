@@ -28,10 +28,13 @@ Copy and the pair files never change.
 
 ## 3. Design
 
-- **Meaning of the value:** the stroke width in the document's own units
-  (`stroke-width: Npx` inside the SVG = N user units). It is exactly what the
-  file would look like if every `stroke-width` were set to N, so the preview
-  stays honest across zoom levels.
+- **Meaning of the value:** screen pixels. Every thumbnail shows the same
+  visible width, whatever its viewBox, via `vector-effect: non-scaling-stroke`.
+  - Revised the same day. The first version used the document's own units
+    (`stroke-width: Npx` = N user units). The user saw it "work on v4 but not
+    on v5/v6" of one pair: v4 has `viewBox="0 0 256 256"`, v5/v6 have
+    `0 0 1024 1024`, so the same N drew 4× thinner.
+  - Trade-off: the width stays fixed while the zoom changes.
 - **How it is applied (performance):** ONE shared constructable stylesheet
   (`svg/strokesheet.ts`) adopted by every row preview's shadow root
   (`adoptedStyleSheets`). Changing the value is one `replaceSync` on that sheet:
@@ -39,7 +42,7 @@ Copy and the pair files never change.
   - no row re-renders (rows do not receive the value as a prop);
   - the browser restyles all previews at once.
   Default = the sheet is empty, so each document's own widths show again.
-- **The rule:** `svg, svg * { stroke-width: Npx !important }`. `!important`
+- **The rule:** `svg, svg * { stroke-width: Npx !important; vector-effect: non-scaling-stroke !important }`. `!important`
   beats presentation attributes, inline `style` and the document's own
   `<style>`. Elements without a stroke paint nothing extra.
 - **Scope:** row thumbnails only. The Versions and Code dialogs keep the real
@@ -77,4 +80,4 @@ Copy and the pair files never change.
 ## 5. Out of scope
 
 - Writing a stroke width into files (an export feature, not a preview).
-- Non-scaling (screen-pixel) strokes.
+- A width that scales with zoom (a per-document normalization).

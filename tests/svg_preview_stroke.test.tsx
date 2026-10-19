@@ -37,9 +37,11 @@ describe("lib/previewstroke", () => {
     expect(parseStoredStroke(Number.NaN)).toBeNull();
   });
 
-  it("the rule overrides every stroke width; default is no rule at all", () => {
+  it("the rule overrides every stroke width in SCREEN px; default is no rule at all", () => {
     expect(strokeCss(null)).toBe("");
-    expect(strokeCss(4)).toBe("svg, svg * { stroke-width: 4px !important; }");
+    // non-scaling: a 256-unit and a 1024-unit viewBox (user report 2026-10-19:
+    // v4 vs v5/v6 of one pair) must show the SAME visible width
+    expect(strokeCss(4)).toBe("svg, svg * { stroke-width: 4px !important; vector-effect: non-scaling-stroke !important; }");
     expect(strokeLabel(null)).toBe("default");
     expect(strokeLabel(0.5)).toBe("0.5 px");
   });
@@ -86,6 +88,7 @@ describe("preview stroke control in the pinned bar", () => {
     await type("[data-testid=svg-stroke]", "4");
     await settle();
     expect(adopted(preview())).toMatch(/stroke-width: 4px !important/);
+    expect(adopted(preview())).toMatch(/vector-effect: non-scaling-stroke !important/);
     expect(preview().shadowRoot!.innerHTML).toBe(before); // nothing re-parsed or rewritten
     expect(savedText(root)).toBe(SAVED_SVG);
     expect(q("[data-testid=svg-stroke-value]")?.textContent).toBe("4 px");

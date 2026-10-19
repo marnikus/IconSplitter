@@ -1,6 +1,7 @@
 // previewstroke.ts — the preview-only stroke width of the Generate SVG tab
 // (2026-10-19, docs/archive/2026-10-19-svg-preview-stroke). One value for every
-// row thumbnail, in the document's own units; null means "default" — each file
+// row thumbnail, in SCREEN pixels (non-scaling stroke), so files with different
+// viewBox sizes show the same visible width; null means "default" — each file
 // shows its own widths. Saved files are never touched: this only builds the CSS
 // the preview's shared stylesheet carries.
 
@@ -33,7 +34,11 @@ export function strokeLabel(px: number | null): string {
   return px === null ? "default" : `${px} px`;
 }
 
-/** `!important` beats presentation attributes, inline style and the file's own <style>. */
+/**
+ * `!important` beats presentation attributes, inline style and the file's own
+ * <style>. Non-scaling: in document units a 256- and a 1024-unit viewBox drew
+ * the same number 4× apart (user report, v4 vs v5/v6 of one pair).
+ */
 export function strokeCss(px: number | null): string {
-  return px === null ? "" : `svg, svg * { stroke-width: ${px}px !important; }`;
+  return px === null ? "" : `svg, svg * { stroke-width: ${px}px !important; vector-effect: non-scaling-stroke !important; }`;
 }

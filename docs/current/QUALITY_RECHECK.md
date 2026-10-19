@@ -2836,3 +2836,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - Feature: `STROKE` field (0–50 px / "default") + Reset in the pinned Generate SVG bar; row thumbnails adopt one shared constructable stylesheet (`svg/strokesheet.ts`, rule from `lib/previewstroke.ts`), so a change is one `replaceSync` — no re-parse, no row re-render. Files, Copy and dialogs keep real widths; persisted as `previewStroke` in the SVG prefs. Plan: `docs/archive/2026-10-19-svg-preview-stroke/README.md`.
 - TDD: `tests/svg_preview_stroke.test.tsx` 7/11 red before the UI (lib cases written with the lib), 11/11 green after; `tests/svg_*` + `tests/upload*` 95 files / 1116 tests green; tsc clean; lint 0 errors; `quality:changed` GATE PASSED (new files 40/48/40 lines).
+
+## 2026-10-19 — preview stroke width: screen px (fix)
+
+- User report: the override "works on v4 but not v5/v6" of one pair. Measured cause: v4 `viewBox="0 0 256 256"`, v5/v6 `0 0 1024 1024`; a width in document units drew 4× thinner. Fix: `strokeCss` adds `vector-effect: non-scaling-stroke !important`, so the value is screen px and identical on every thumbnail.
+- TDD: 2 tests red (lib rule + adopted sheet), green after; plan doc §3 revised; selectors/invariant updated.
