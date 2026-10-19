@@ -1901,6 +1901,10 @@
 
 .up-bg-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .up-bg-row input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
+/* "Default" choices (2026-10-19, archive/2026-10-19-upload-default-settings): leave the source's own. */
+.up-default-btn.on, .up-set-footer .svg-btn.on { border-color: var(--v2-accent, #7c5cff); color: #fff; background: #2a2350; }
+.up .svg-preview-frame { position: relative; }
+.up-prev-note { position: absolute; left: 4px; right: 4px; bottom: 4px; padding: 2px 4px; border-radius: 3px; background: rgba(8, 12, 24, 0.82); color: #ffb4a8; }
 
 .up-set-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 

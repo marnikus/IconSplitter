@@ -17,7 +17,7 @@ Pinned: the bar sits in `upload-bulkbar-pin`, the Generate SVG tab's sticky `.sv
 | `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |
 | `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
-| `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | preview stroke width | the Generate SVG control reused (`svg/PreviewStroke`, prefix `upload`): 0–50 screen px or `default`, Reset; preview only, through the tab's own `UPLOAD_STROKE_SHEET` (2026-10-19) |
+| `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | export stroke width | the Generate SVG control reused (`svg/PreviewStroke`, prefix `upload`, no sheet): IS the defaults' `strokePx` — 0–50 px in the file, `default`/empty/0 = each SVG's own widths; Reset = default. The ONE stroke width: no dialog row, no per-icon override (2026-10-19) |
 | `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
 | `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = selected icons with NO metadata text yet; the paid request never replaces existing text (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
@@ -33,7 +33,7 @@ List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight")
 ## Row (`upload-row-{id}`)
 
 | `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
-| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
+| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the LIVE EXPORT (2026-10-19): the exact export text for the row's effective settings (the approved SVG itself when "as is"), in a shadow root inside the coloured frame (`data-bg`); the box fits the artboard's ratio inside the zoom square (`zoomBoxFit`: 16 px and 2048 px draw the same size). `upload-prev-{id}-note` = why the export could not be previewed |
 | `upload-target-{id}` | text | the row's source path (the approved SVG) |
 | `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |

@@ -12,7 +12,7 @@ import { useCallback, useRef, type Dispatch } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
-import { clampStroke } from "../lib/previewstroke";
+import { perIconFields } from "../lib/upload/asis";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import { parseGeminiConfig } from "../lib/upload/gemini";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -67,7 +67,6 @@ export interface UploadActions extends PromptActions {
   rescan: () => void;
   setThumb: (px: number) => void;
   setBg: (bg: PreviewBackground) => void;
-  setStroke: (px: number | null) => void;
   setProviderOpen: (open: boolean) => void;
   setFilter: (patch: Partial<UploadListFilter>) => void;
   setSort: (sort: UploadSort) => void;
@@ -156,7 +155,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
   return { chooseRoot, rescan };
 }
 
-function useViewActions(ctx: UploadCtx): Slice<"setThumb" | "setBg" | "setStroke" | "setProviderOpen" | "setFilter" | "setSort" | "clearFilters"> {
+function useViewActions(ctx: UploadCtx): Slice<"setThumb" | "setBg" | "setProviderOpen" | "setFilter" | "setSort" | "clearFilters"> {
   const latest = useRef(ctx);
   latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
@@ -166,8 +165,7 @@ function useViewActions(ctx: UploadCtx): Slice<"setThumb" | "setBg" | "setStroke
   const setFilter = useCallback((patch: Partial<UploadListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: UploadSort) => latest.current.dispatch({ type: "sort", sort }), []);
   const clearFilters = useCallback(() => latest.current.dispatch({ type: "filter", patch: ALL_UPLOAD_FILTER }), []);
-  const setStroke = useCallback((px: number | null) => latest.current.dispatch({ type: "stroke", px: px === null ? null : clampStroke(px) }), []);
-  return { setThumb, setBg, setStroke, setProviderOpen, setFilter, setSort, clearFilters };
+  return { setThumb, setBg, setProviderOpen, setFilter, setSort, clearFilters };
 }
 
 /** Global defaults: persisted, never on the undo timeline (design §6). */
@@ -234,7 +232,7 @@ function useOverrideApplyActions(ctx: UploadCtx): Slice<"applyDefaultsToSelected
     const after: Record<string, SettingsOverrides | null> = {};
     for (const id of ids) {
       before[id] = c.m.overrides[id] ?? null;
-      after[id] = { ...c.m.defaults };
+      after[id] = perIconFields(c.m.defaults);
     }
     c.dispatch({ type: "overrides-patch", overrides: after });
     c.hist.push({

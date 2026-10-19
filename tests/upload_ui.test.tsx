@@ -655,12 +655,13 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
     expect(text("[data-testid=upload-dialog-scope]")).toContain("pinned for this icon");
     expect(text("[data-testid=upload-set-marker-padding]")).toBe("inherited");
-    await type("[data-testid=upload-set-stroke]", "2.2");
-    expect(text("[data-testid=upload-set-marker-stroke]")).toBe("overridden");
-    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("2.2 px");
+    // padding, not the stroke width: that is ONE value, the bar's (2026-10-19)
+    await type("[data-testid=upload-set-padding]", "12");
+    expect(text("[data-testid=upload-set-marker-padding]")).toBe("overridden");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad 12%");
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("1 field overridden");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.overrides[FOG]).toEqual({ strokePx: 2.2 });
+    expect(saved.overrides[FOG]).toEqual({ paddingPct: 12 });
     // one gesture entry, and one undo reverses the pin
     await act(async () => { (q("[data-testid=hist-undo]") as HTMLButtonElement).click(); });
     await settle();
@@ -674,9 +675,10 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await check(ARCH);
     await click("[data-testid=upload-apply-settings]");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.overrides[FOG]).toEqual(saved.defaults);
-    expect(saved.overrides[ARCH]).toEqual(saved.defaults);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("14 fields overridden"); // 10 + epsConverter + expandStrokes + scaleToMegapixels + artboardMegapixels (2026-10-09)
+    const { strokePx: _stroke, ...perIcon } = saved.defaults; // the stroke width is never pinned per icon (2026-10-19)
+    expect(saved.overrides[FOG]).toEqual(perIcon);
+    expect(saved.overrides[ARCH]).toEqual(perIcon);
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("13 fields overridden"); // 14 fields minus strokePx (one value, the bar's — 2026-10-19)
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");

@@ -23,9 +23,14 @@ Focused test inventory; [all tests](../TESTS.md).
   binding, the persist-only path, no-op refusal, undo/redo routing
 * `upload_pinned_bulkbar.test.tsx` — the bulk bar sits in the shared sticky
   `.svg-bulkbar-pin`, a direct child of the tab column, above the rows
-* `upload_preview_stroke.test.tsx` — the reused preview stroke width: control in
-  the bulk bar, the tab's own sheet restyles row previews (files untouched),
-  Reset/"default", persistence, never the Generate SVG sheet; `createStrokeSheet`
+* `upload_default_settings.test.ts` — "default" for every visual setting
+  (2026-10-19): parse/round-trip, the one stroke (0–50, no per-icon read),
+  stable fingerprints, prepare with each default, "as is" = the source byte for
+  byte, `runExport` as is commits the source
+* `upload_live_preview.test.tsx` — the bar's STROKE writes the export
+  `strokePx` and the live preview shows it; no dialog stroke row; the Default
+  choices and "All default"; the preview box fits the artboard ratio (2:1;
+  16 px = 2048 px)
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo

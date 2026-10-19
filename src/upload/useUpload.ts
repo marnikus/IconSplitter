@@ -166,8 +166,8 @@ function usePersist(model: UploadModel): void {
   // The prompt is text the user owns: every keystroke persists (RULE 13).
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
   useEffect(() => {
-    saveUploadPrefs({ thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg, previewStroke: model.stroke });
-  }, [model.thumb, model.providerOpen, model.bg, model.stroke]);
+    saveUploadPrefs({ thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg });
+  }, [model.thumb, model.providerOpen, model.bg]);
 }
 
 /** A mounted panel claims the uploadSettings undo path; unmount releases it. */

@@ -30,12 +30,13 @@ export function ArtboardSetting({ p, effective }: BlockProps) {
       <select className="svg-input" data-testid="upload-set-artboard" aria-label="Artboard size"
         value={a.mode === "preset" ? String(a.size) : a.mode}
         onChange={(e) => patch(fromChoice(e.target.value, a))}>
+        <option value="source">Default (the SVG's own)</option>
         <option value="content">Fit the artwork</option>
         {ARTBOARD_PRESETS.map((size) => <option key={size} value={String(size)}>{size}×{size}</option>)}
         <option value="custom">Custom…</option>
       </select>
       {a.mode === "custom" && <CustomSize a={a} patch={patch} />}
-      <small className="up-hint" data-testid="upload-set-artboard-note">{artboardNote(pinned)}</small>
+      <small className="up-hint" data-testid="upload-set-artboard-note">{a.mode === "source" ? SOURCE_NOTE : artboardNote(pinned)}</small>
       <MegapixelRow p={p} effective={effective} />
     </div>
   );
@@ -63,7 +64,7 @@ function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>
  * megapixels, so there the row is disabled and the note says why.
  */
 function MegapixelRow({ p, effective }: BlockProps) {
-  const pinned = artboardSize(effective.artboard) !== null;
+  const pinned = effective.artboard.mode !== "content"; // a pinned size or the source's own decides
   const on = effective.scaleToMegapixels && !pinned;
   return (
     <div className="up-bg-row">
@@ -85,10 +86,12 @@ function MegapixelRow({ p, effective }: BlockProps) {
 
 /** The select's value → the artboard it means (a preset keeps its square edge). */
 function fromChoice(choice: string, a: Artboard): Partial<Artboard> {
-  if (choice === "content") return { mode: "content" };
+  if (choice === "content" || choice === "source") return { mode: choice };
   if (choice === "custom") return { mode: "custom", width: a.mode === "custom" ? a.width : 512, height: a.mode === "custom" ? a.height : 512 };
   return { mode: "preset", size: Number(choice) };
 }
+
+const SOURCE_NOTE = "default — the SVG's own viewBox size and aspect ratio";
 
 function artboardNote(pinned: { width: number; height: number } | null): string {
   if (pinned === null) return "hugs the artwork — the padding is a share of its largest side";

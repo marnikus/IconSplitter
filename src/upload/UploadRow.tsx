@@ -56,7 +56,8 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
         onChange={() => a.toggleCheck(id)} />
       <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
         thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
-        label={`${row.source.svgName} v${row.source.version}`} version={row.source.version} />
+        label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
+        settings={effectiveSettings(a.defaults, a.overrides[id] ?? {})} />
       <FileCell row={row} />
       <StatusCell row={row} status={status} />
       <MetaCell row={row} />

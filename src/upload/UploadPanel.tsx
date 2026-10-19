@@ -81,7 +81,8 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
   return (
     <div className="svg-bulkbar-pin" data-testid="upload-bulkbar-pin">
       <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
-        thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setStroke} progress={g.progress}
+        thumb={g.thumb} bg={g.bg} stroke={g.defaults.strokePx > 0 ? g.defaults.strokePx : null}
+        onStroke={(px) => g.setDefaults({ strokePx: px ?? 0 })} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}

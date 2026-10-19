@@ -1,19 +1,21 @@
-// UploadPreview.tsx — the framed preview of the approved SVG a row exports.
-// Mirrors svg/SvgThumbs' SVG side: the saved document is read, sanitized and
-// fitted by lib/svgpreview inside a shadow root (never written back), inside a
-// FRAME whose background is the user's preview choice (lib/svgbackground) —
-// the document itself is never modified. The preview stroke width reaches it
-// only through the tab's shared sheet (svg/strokesheet, 2026-10-19). The box comes from the one zoom rule
-// (lib/zoom), so this tab zooms exactly like Generate SVG (I-55).
+// UploadPreview.tsx — the framed preview of what a row EXPORTS. Mirrors
+// svg/SvgThumbs' SVG side: the document is sanitized and fitted by
+// lib/svgpreview inside a shadow root (never written back), inside a FRAME whose
+// background is the user's preview choice (lib/svgbackground). Since 2026-10-19
+// (archive/2026-10-19-upload-default-settings) the document is the live export
+// text whenever the settings change anything visual (exportpreview), and the box
+// fits the artboard's ratio inside the zoom square (lib/zoom zoomBoxFit): a
+// 2048 px or a 16 px artboard draws the same size; a new aspect ratio shows.
 
 import { useMemo } from "react";
 import { previewFrame, type PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
+import type { UploadSettings } from "../lib/upload/settings";
 import { buildSvgPreview } from "../lib/svgpreview";
-import { zoomBoxRatio } from "../lib/zoom";
+import { zoomBoxFit } from "../lib/zoom";
 import { useSvgText } from "../svg/usesvgtext";
 import SvgPreviewBox from "../svg/SvgPreview";
-import { UPLOAD_STROKE_SHEET } from "../svg/strokesheet";
+import { useExportPreview } from "./exportpreview";
 
 export interface UploadPreviewProps {
   rootRef: { current: DirHandleLike | null };
@@ -25,21 +27,25 @@ export interface UploadPreviewProps {
   testid: string;
   label: string;
   version: number;
+  /** The row's effective export settings — what the preview shows. */
+  settings: UploadSettings;
 }
 
-export default function UploadPreview({ rootRef, rootToken, path, thumb, bg, testid, label, version }: UploadPreviewProps) {
-  const svg = useSvgText(rootRef, rootToken, path);
-  const box = useMemo(() => zoomBoxRatio(thumb, ratioOf(svg)), [thumb, svg]);
+export default function UploadPreview({ rootRef, rootToken, path, thumb, bg, testid, label, version, settings }: UploadPreviewProps) {
+  const source = useSvgText(rootRef, rootToken, path);
+  const shown = useExportPreview(source, settings);
+  const box = useMemo(() => zoomBoxFit(thumb, ratioOf(shown.svg)), [thumb, shown.svg]);
   const frame = previewFrame(bg);
   return (
     <div className={`svg-preview-frame${frame.outline ? " contrast" : ""}`} data-testid={`${testid}-frame`}
       style={{ width: box.width, height: box.height, background: frame.color }} data-bg={frame.color}>
-      <SvgPreviewBox code={svg} box={box} testid={testid} label={label} version={version} strokeSheet={UPLOAD_STROKE_SHEET} />
+      <SvgPreviewBox code={shown.svg} box={box} testid={testid} label={label} version={version} />
+      {shown.note !== null && <small className="up-hint up-prev-note" data-testid={`${testid}-note`}>{shown.note}</small>}
     </div>
   );
 }
 
-/** The vector's own viewBox ratio; a square until the document parses. */
+/** The document's own viewBox ratio; a square until it parses. */
 function ratioOf(svg: string | null): number {
   const art = svg === null ? null : buildSvgPreview(svg);
   return art !== null && art.ok ? art.ratio : 1;

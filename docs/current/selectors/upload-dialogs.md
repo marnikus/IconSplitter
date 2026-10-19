@@ -3,6 +3,16 @@
 Selector priority and object shape: [shared conventions](shared.md#i-selector-object-structure--for-every-element). Part of [SVG to upload selectors](upload.md).
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
+**2026-10-19 — "default" for every visual setting** ([plan](../../archive/2026-10-19-upload-default-settings/README.md)):
+- `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default) + `upload-set-as-is-note`;
+- `upload-set-padding-default` (toggles null ↔ 8; `upload-set-padding` then reads empty, placeholder `default`);
+- `upload-set-bg-default` (before `-transparent`);
+- `upload-set-stroke-color-artwork` now reads **Default**; both "none" choices are buttons;
+- the artboard select's first option is `source` ("Default (the SVG's own)").
+
+`upload-set-stroke` (the stroke WIDTH) is **gone**: the bar's `upload-stroke` is that one value.
+The older text below is kept for the other handles.
+
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
 change; `upload-set-stroke` is "Stroke width (px)" since 2026-10-08 — the

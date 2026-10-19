@@ -19,3 +19,10 @@ export function isAsIs(s: UploadSettings): boolean {
   return s.paddingPct === null && s.background === BACKGROUND_SOURCE && s.strokePx === 0
     && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source" && !s.expandStrokes;
 }
+
+/** What an icon may pin: every field but the stroke width — that is ONE value, the bar's (2026-10-19). */
+export function perIconFields(s: UploadSettings): Omit<UploadSettings, "strokePx"> {
+  const { strokePx, ...rest } = s;
+  void strokePx;
+  return rest;
+}

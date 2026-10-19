@@ -3,8 +3,9 @@
 // `replaceSync`: no SVG is re-parsed, no shadow HTML rewritten, no row
 // re-rendered — the browser restyles every preview at once. An empty sheet is
 // "default": each document's own widths show. The CSS is built in lib/previewstroke.
-// One instance per tab (Generate SVG, SVG to upload): both stay mounted, so a
-// width set in one must never repaint the other (archive/2026-10-19-upload-preview-stroke).
+// A factory (archive/2026-10-19-upload-preview-stroke): one instance per tab that
+// previews a width. SVG to upload no longer does — its STROKE is the export width,
+// shown by the live export preview (archive/2026-10-19-upload-default-settings).
 
 import { strokeCss } from "../lib/previewstroke";
 
@@ -53,5 +54,3 @@ function adoptInto(root: ShadowRoot, s: CSSStyleSheet | null): void {
 
 /** The Generate SVG tab's row thumbnails. */
 export const SVG_STROKE_SHEET = createStrokeSheet();
-/** The SVG to upload tab's row previews. */
-export const UPLOAD_STROKE_SHEET = createStrokeSheet();

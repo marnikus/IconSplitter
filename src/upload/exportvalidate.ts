@@ -25,7 +25,7 @@ export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null)
   const epsReadback = epsMetadataCheck(art.epsText, metadata, errors);
   const epsDocument = art.epsFailure === null && epsCheck(art.epsText, errors);
   return {
-    svg: svgCheck(art.svgOut, errors),
+    svg: svgCheck(art.svgOut, errors, art.prepared?.ok === true && art.prepared.asIs),
     readback: svgReadback && epsReadback,
     jpeg: jpegCheck(art, metadata, errors),
     eps: epsDocument && epsReadback,
@@ -34,12 +34,13 @@ export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null)
   };
 }
 
-function svgCheck(svgOut: string | null, errors: string[]): boolean {
+function svgCheck(svgOut: string | null, errors: string[], asIs: boolean): boolean {
   if (svgOut === null) return true;
   const ok = svgParses(svgOut);
   if (!ok) errors.push("the export SVG does not parse");
-  // The file that ships is checked, not assumed: clean SVG 1.1 (2026-10-08).
-  const violations = verifyExportSvg(svgOut);
+  // The file that ships is checked, not assumed: clean SVG 1.1 (2026-10-08) —
+  // except "as is" (2026-10-19), which ships the approved file the user chose not to change.
+  const violations = asIs ? [] : verifyExportSvg(svgOut);
   errors.push(...violations);
   return ok && violations.length === 0;
 }

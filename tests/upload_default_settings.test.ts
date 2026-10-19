@@ -103,3 +103,30 @@ describe("prepareExportSvg with defaults", () => {
     expect(d).not.toMatch(/^M\s*4[ ,]4/);
   });
 });
+
+describe("runExport as is — the package's SVG is the approved file", () => {
+  it("commits the source bytes as <name>.svg (no SVGO, no clean rewrite) and renders the JPEG from it", async () => {
+    const { runExport } = await import("../src/upload/runexport");
+    const { BinDir, BinFile } = await import("./helpers/binfakefs");
+    const { minimalJpeg } = await import("./helpers/minijpeg");
+    const { pairFile } = await import("./helpers/pairfile");
+    const { svgVersion } = await import("./helpers/svgpair");
+    const { serializePairMeta } = await import("../src/lib/pairmeta");
+    const root = new BinDir("root");
+    const dir = new BinDir("icons");
+    root.children.set("icons", dir);
+    dir.children.set("fog_AI.png", new BinFile("fog_AI.png", "ai", 3100));
+    dir.children.set("fog_AI.svg", new BinFile("fog_AI.svg", SOURCE, 3400));
+    dir.children.set("fog_AI.svg.json", new BinFile("fog_AI.svg.json", serializePairMeta(pairFile("icons", "fog_AI.png", { versions: [svgVersion("icons/fog_AI.svg", { version: 1, review: "approved" })] })), 3300));
+    const settings = asIs();
+    const result = await runExport({
+      root, settings, defaults: settings, overrides: {}, metadata: null, metadataInfo: null, record: null,
+      row: { id: "p", base: "fog", suffix: "", dirPath: "icons", version: 1, svgPath: "icons/fog_AI.svg", svgName: "fog_AI.svg", fingerprint: "x", aiPath: "icons/fog_AI.png", metaPath: "icons/fog_AI.svg.json", approvedValid: 1 },
+      deps: { raster: { render: async (_s: string, t: { width: number; height: number }) => t as unknown as HTMLCanvasElement, encode: async (c: HTMLCanvasElement) => minimalJpeg(c.width, c.height) } },
+    });
+    expect(result.error).toBeNull();
+    expect(result.status).toBe("processed");
+    const exported = ((root.children.get("icons") as typeof dir).children.get("export") as typeof dir).children.get("fog.svg") as InstanceType<typeof BinFile>;
+    expect(exported.text).toBe(SOURCE);
+  });
+});

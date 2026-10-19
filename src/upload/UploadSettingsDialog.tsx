@@ -7,12 +7,17 @@
 // two paint rows (background, stroke colour) in UploadPaintSettings.tsx, the
 // EPS converter list + Inkscape helper row in UploadEpsSettings.tsx, the
 // artboard block + "Scale to N MP" row in UploadArtboardSettings.tsx.
+// 2026-10-19 (archive/2026-10-19-upload-default-settings): every visual row has
+// a "default" (leave the source's own), "All default" sets them at once (the
+// export is then the approved SVG, as is), and the stroke WIDTH row is gone — the
+// bar's STROKE field is that one value.
 
 import {
-  artboardSize, clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx,
-  MP_MAX, MP_MIN, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN, STROKE_MAX, STROKE_MIN,
+  artboardSize, clampMegapixels, clampPaddingPct, clampQuality,
+  MP_MAX, MP_MIN, PADDING_DEFAULT, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN,
   type UploadSettings,
 } from "../lib/upload/settings";
+import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
 import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
@@ -45,6 +50,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
           ? "Every icon without its own override inherits these defaults."
           : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults."}
       </p>
+      <AsIsRow p={p} effective={effective} />
       <SettingsGrid p={p} effective={effective} />
       {p.id !== null && (
         <div className="up-set-footer">
@@ -61,19 +67,14 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
-      <NumberSetting p={p} effective={effective} field="paddingPct" label="Padding %" testid="padding"
-        min={PADDING_MIN} max={PADDING_MAX} step={1} clamp={clampPaddingPct}
-        hint="uniform, % of the fitted artwork's largest side" />
-      <NumberSetting p={p} effective={effective} field="strokePx" label="Stroke width (px)" testid="stroke"
-        min={STROKE_MIN} max={STROKE_MAX} step={0.1} clamp={clampStrokePx}
-        hint="0 = leave the artwork's strokes untouched · the number you type is the number in the file" />
+      <PaddingSetting p={p} effective={effective} />
       <StrokeColorSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
         min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
       <ToggleSetting p={p} effective={effective} field="optimizeSvg" label="Optimize SVG (SVGO)" testid="optimize"
-        hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
+        hint={isAsIs(effective) ? "skipped while every visual setting is default — the SVG ships as is" : "the export copy only — viewBox, geometry, strokes and metadata are preserved"} />
       <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
         hint="a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly" />
       <ConverterSetting p={p} effective={effective} />
@@ -81,6 +82,42 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />
     </div>
+  );
+}
+
+/**
+ * "All default": the five visual fields at once (one gesture). In the icon scope
+ * the stroke width is left out — it is ONE value, the bar's.
+ */
+function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  const { strokePx, ...perIcon } = AS_IS_SETTINGS;
+  const on = isAsIs(effective);
+  return (
+    <div className="up-set-footer">
+      <button type="button" className={`svg-btn${on ? " on" : ""}`} data-testid="upload-set-as-is" aria-pressed={on}
+        onClick={() => changeMany(p, p.id === null ? { ...perIcon, strokePx } : perIcon)}>All default (export as is)</button>
+      <span className="up-hint" data-testid="upload-set-as-is-note">
+        {on ? "every visual setting is default: the approved SVG is exported exactly as it is" : "stroke, background, artboard and padding back to the SVG's own"}
+      </span>
+    </div>
+  );
+}
+
+/** Padding: a % of the artwork's largest side, or default — the SVG's own margins. */
+function PaddingSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  const value = effective.paddingPct;
+  return (
+    <label className="svg-field up-set-field">
+      <span className="svg-label">Padding %<Marker p={p} field="paddingPct" testid="padding" /></span>
+      <div className="up-bg-row">
+        <button type="button" className={`svg-btn tiny up-default-btn${value === null ? " on" : ""}`} data-testid="upload-set-padding-default"
+          aria-pressed={value === null} onClick={() => change(p, "paddingPct", value === null ? PADDING_DEFAULT : null)}>Default</button>
+        <input className="svg-input" data-testid="upload-set-padding" type="number" aria-label="Padding %"
+          min={PADDING_MIN} max={PADDING_MAX} step={1} value={value ?? ""} placeholder="default"
+          onChange={(e) => change(p, "paddingPct", e.target.value === "" ? null : clampPaddingPct(Number(e.target.value)))} />
+      </div>
+      <small className="up-hint">{value === null ? "default — the SVG's own margins" : "uniform, % of the fitted artwork's largest side"}</small>
+    </label>
   );
 }
 

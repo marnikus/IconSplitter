@@ -6,6 +6,29 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
 
 ## Current settings and output geometry
 
+* **"Default" for every visual setting** (2026-10-19,
+  [plan](../../archive/2026-10-19-upload-default-settings/README.md); `lib/upload/asis`):
+  - `paddingPct: null` keeps the SVG's own margins: its viewBox is fitted, in one pass.
+  - Background `default` adds no artboard rect.
+  - Stroke colour `artwork` is labelled Default.
+  - Artboard mode `source` is the SVG's own viewBox size and ratio ("Scale to N MP"
+    applies only in `content`).
+  - `strokePx` 0 = default.
+  - **All five default with Expand off = as is**: the export SVG is the approved file
+    byte for byte. It gets no clean, no bake and no SVGO, and the clean-SVG-1.1
+    check is skipped (it must still parse); the JPEG and EPS are built from it.
+  - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding
+    null fingerprints as `"default"`.
+* **One stroke width** (2026-10-19): the bar's STROKE (`upload-stroke`) IS the
+  defaults' `strokePx`, range 0–50.
+  - The dialog has no width row.
+  - `parseOverrides` no longer reads `strokePx`/`strokePt`, and "Apply settings to
+    selected" pins every field except it (13 fields).
+  - The old preview-only `previewStroke` pref is gone from this tab.
+* **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
+  `prepareExportSvg(source, effective)`, debounced 120 ms and cached per source
+  and fingerprint. The box is `zoomBoxFit`.
+
 * Settings: global defaults (padding %, background — `transparent` (the
   default) or one hex, stroke width in px — the file's own units, written as
   typed (2026-10-08; a stored `strokePt` from before reads as the same number

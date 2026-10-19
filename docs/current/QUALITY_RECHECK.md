@@ -2861,3 +2861,19 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - Change: `UploadPanel` wraps `UploadBulkBar` in the shared sticky `.svg-bulkbar-pin` (`upload-bulkbar-pin`); no new CSS.
 - Measured: `upload_pinned_bulkbar` 2 tests red before, green after.
+
+## 2026-10-19 — SVG to upload: "default" settings, as-is export, live export preview, one stroke
+
+- Change:
+  - `lib/upload/asis` (new);
+  - `settings`/`artboard`: padding null, background `default`, artboard `source`, `STROKE_MAX` 50, no per-icon `strokePx`;
+  - `prepare`/`place`: an as-is shortcut, a single-pass source-frame fit, no rect on a default background;
+  - `exportstages`/`exportvalidate`: no SVGO or clean check when as is;
+  - `upload/exportpreview` (new): a debounced, cached live preview; `lib/zoom` `zoomBoxFit`;
+  - dialog Default choices plus "All default"; the bar STROKE = `strokePx`;
+  - removed the Upload preview-only stroke state and `UPLOAD_STROKE_SHEET`.
+- Measured:
+  - `upload_default_settings`: 10 tests, 9 red before (lib), green after.
+  - `upload_live_preview`: 7 tests, 6 red with the UI changes stashed, green after.
+  - `tests/upload*` + `tests/svg*`: 1205 green.
+  - `prepareExportSvg` split to stay under RULE 16.

@@ -67,19 +67,22 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   const doc = parseSvgDocument(sourceSvg);
   if (doc === null) return fail("parse", "the source is not well-formed XML");
   const root = doc.documentElement;
-  if (isAsIs(settings) && root !== null && name(root) === "svg") {
-    const same = asIsPrepared(sourceSvg, root);
-    if (same !== null) return same;
-  }
+  const same = isAsIs(settings) ? asIsPrepared(sourceSvg, root) : null;
+  if (same !== null) return same;
   const veto = sourceVeto(root);
   if (veto !== null) return veto;
   cleanExportDom(root as Element, { keepRootEmbeds: false });
-  const frame = viewBoxOf(root);
   const vb = visibleBounds(root);
   if (vb !== null && vb.unsupported.length > 0) {
     return fail("unsupported", `unsupported content: ${vb.unsupported.join(", ")}`);
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
+  return buildExport(doc, root, settings);
+}
+
+/** Place → artboard → strokes defined once → re-rooted: the export copy of a cleaned, measurable source. */
+function buildExport(doc: Document, root: Element, settings: UploadSettings): PrepareResult {
+  const frame = viewBoxOf(root);
   const placed = placeArtwork(root, {
     paddingPct: settings.paddingPct ?? 0, target: targetOf(settings, frame),
     style: strokeStyleOf(settings), expand: settings.expandStrokes,
@@ -100,7 +103,8 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
 }
 
 /** As is: the source text itself, framed by its own viewBox (or px size); null = no readable frame, so the pipeline decides. */
-function asIsPrepared(sourceSvg: string, root: Element): PrepareResult | null {
+function asIsPrepared(sourceSvg: string, root: Element | null): PrepareResult | null {
+  if (root === null || name(root) !== "svg") return null;
   const frame = viewBoxOf(root) ?? sizeOf(root);
   if (frame === null) return null;
   const fit: ArtboardFit = {

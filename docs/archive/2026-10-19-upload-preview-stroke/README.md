@@ -57,3 +57,10 @@ No new CSS: `.svg-stroke` already styles the control.
 3. The Upload wiring.
 4. Docs: an Upload selector row, the test index, the ledger; gates; commit;
    push.
+
+## Superseded (2026-10-19, same day)
+
+The Upload tab's STROKE became the export stroke width itself, shown by a live
+export preview ([upload-default-settings](../2026-10-19-upload-default-settings/README.md)).
+`UPLOAD_STROKE_SHEET` and the Upload `previewStroke` pref were removed. The
+`createStrokeSheet` factory and Generate SVG's preview-only control stay.

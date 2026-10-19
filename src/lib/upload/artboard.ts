@@ -62,7 +62,7 @@ export function artboardTarget(a: Artboard, megapixels: number | null): FitTarge
 
 /** The megapixel target that really applies: null when the box is off or a pinned size decides. */
 export function megapixelTargetOf(a: Artboard, scaleTo: boolean, megapixels: number): number | null {
-  return scaleTo && artboardSize(a) === null ? megapixels : null;
+  return scaleTo && a.mode === "content" ? megapixels : null; // never the source size (2026-10-19)
 }
 
 export function artboardsEqual(a: Artboard, b: Artboard): boolean {
