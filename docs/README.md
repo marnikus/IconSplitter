@@ -93,6 +93,7 @@ doc itself, never in this map.
 | `archive/2026-10-19-image-regen-reference/README.md` | AI source regeneration sends the prompt AND the current main image as reference (`images/edits`); corrects the earlier "no edit endpoint" claim |
 | `archive/2026-10-19-image-regen-fix/README.md` | Fix: the row's 9th grid cell (RC1), the dialog rendered below the list (RC2), a silent run (RC3/RC4), discarded images for pairs without a file (RC5), SVG saves dropping the image history (RC6), the 120 s cut (RC7), and the SVG generation now reading the MAIN image (RC8) |
 | `archive/2026-10-19-image-regen-spend-log/design.md` | AI source regeneration logs tokens in/out/total + cost per landed request and per run (`svg/imglog.ts`); the outcome toast appends the summed spend |
+| `archive/2026-10-19-ai-source-composite-batch/design.md` | DESIGN ONLY: configurable multi-icon image-edit composites, normalized cell mapping back to per-pair versions, review gate, failure/privacy contracts |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 
