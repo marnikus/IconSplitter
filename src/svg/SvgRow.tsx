@@ -1,7 +1,8 @@
 // SvgRow.tsx — one approved source per row (prompt §2/§16): checkbox, the AI
 // thumbnail beside the SVG the row SHOWS — the user's chosen version when there
 // is one, else the newest valid (I-54) — file identity + relative path,
-// generation status, review status, version/tokens/cost, the file actions
+// generation status, review status, version/tokens/cost (the SVG's, then the
+// main AI image's — "SVG gen." / "Image gen.", 2026-10-19), the file actions
 // (location, copy, code, history) and the row's own Generate / Approve /
 // Decline. Every reader asks `shownVersion`, so the badge, the preview, Copy
 // and the buttons can never disagree. Every code action stays disabled until a
@@ -10,6 +11,7 @@
 
 import { useEffect, useRef } from "react";
 import type { ReviewStatus } from "../lib/svgfile";
+import { NO_COST } from "../lib/svgmodel";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -189,18 +191,40 @@ function ReviewCell({ row }: { row: SvgRow }) {
   );
 }
 
-/** Version, tokens and cost of the newest version — reported or Estimated. */
+/** Two halves: the shown SVG version's spend, then the main AI image's (2026-10-19). */
 function UsageCell({ row }: { row: SvgRow }) {
-  const v = shownVersion(row);
   return (
     <div className="svg-cell svg-usage" data-testid={`svg-usage-${row.source.id}`}>
+      <SvgSpend row={row} />
+      <ImageSpend row={row} />
+    </div>
+  );
+}
+
+/** Version, tokens and cost of the shown SVG version — reported or Estimated. */
+function SvgSpend({ row }: { row: SvgRow }) {
+  const v = shownVersion(row);
+  return (
+    <div className="svg-usage-part" data-testid={`svg-usage-svg-${row.source.id}`}>
+      <small className="svg-usage-head">SVG gen.</small>
       <strong>{v ? `v${v.version}` : "—"}</strong>
-      {v === null
-        ? <small>no usage</small>
-        : <small>{fmtTokens(v.usage.total)} tokens</small>}
-      <small title={v === null ? undefined : costNote(v.model, v.cost)}>
-        {v === null ? costLabel({ actual: null, estimated: null, currency: "USD", pricing: "", basis: "none" }) : costLabel(v.cost)}
-      </small>
+      <small>{v === null ? "no usage" : `${fmtTokens(v.usage.total)} tokens`}</small>
+      <small title={v === null ? undefined : costNote(v.model, v.cost)}>{costLabel(v?.cost ?? NO_COST)}</small>
+    </div>
+  );
+}
+
+/** The same three lines for the AI image shown as main; absent until the pair has an image history. */
+function ImageSpend({ row }: { row: SvgRow }) {
+  const history = row.meta?.imageVersions ?? [];
+  if (history.length === 0) return null;
+  const main = history.find((v) => v.status === "done" && v.version === row.meta?.imagePreferred) ?? null;
+  return (
+    <div className="svg-usage-part image" data-testid={`svg-usage-img-${row.source.id}`}>
+      <small className="svg-usage-head">Image gen.</small>
+      <strong>{main ? `v${main.version}` : "original"}</strong>
+      <small>{main === null ? "no usage" : `${fmtTokens(main.usage.total)} tokens`}</small>
+      <small title={main === null ? undefined : costNote(main.model, main.cost)}>{costLabel(main?.cost ?? NO_COST)}</small>
     </div>
   );
 }

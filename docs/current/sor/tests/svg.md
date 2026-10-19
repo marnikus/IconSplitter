@@ -50,7 +50,8 @@ Focused test inventory; [all tests](../TESTS.md).
   `svg_imgrunner.test.ts`, `svg_imgreg_ui.test.tsx` — image-edit grouping,
   normalized resized crops, exact reference preview, validated preference,
   stale-pair refusal, unknown-request metadata, one multipart composite per
-  request, explicit Apply/Discard, per-pair versions and Stop
+  request, explicit Apply/Discard, per-pair versions and Stop, the spend each
+  image version keeps and the row's "Image gen." usage (2026-10-19)
 * `svg_bg.test.ts`, `svg_cost.test.ts` — the preview-background rules (presets,
   hex validation, stored-payload fallback, the black-vs-background contrast
   rule) and the cost rules (verified rate card + version, provider-reported vs

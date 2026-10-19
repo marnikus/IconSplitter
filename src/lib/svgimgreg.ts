@@ -8,8 +8,10 @@
 // `{ created, data: [{ b64_json?, url? }] }`. 2026-10-19 fix
 // (archive/2026-10-19-image-regen-fix): the image wait floor, the main image
 // the SVG generation reads, and the honest texts of a run. The response's
-// `usage` block (archive/2026-10-19-image-regen-spend-log) feeds the spend log.
+// `usage` block (archive/2026-10-19-image-regen-spend-log) feeds the spend log
+// and, per version, the row's "Image gen." usage (archive/2026-10-19-image-regen-usage).
 
+import { toCost, toUsage, type CostInfo, type TokenUsage } from "./svgmodel";
 import { NO_USAGE, type Usage } from "./svgrequest";
 
 /** The subfolder holding a pair's regenerated AI images (user's naming). */
@@ -35,6 +37,9 @@ export interface ImageVersion {
   requestId: string | null;
   error: string | null;
   updatedAt: string;
+  /** What this version's request spent (its share for a composite) — the SVG shapes, additive. */
+  usage: TokenUsage;
+  cost: CostInfo;
 }
 
 /** A stored history -> the safe list; junk entries are dropped (RULE 13). */
@@ -61,6 +66,7 @@ function entryOf(entry: unknown): ImageVersion[] {
     prompt: strField(r, "prompt"), model: strField(r, "model"),
     requestId: strOrNull(r, "requestId"), error: strOrNull(r, "error"),
     updatedAt: strField(r, "updatedAt"),
+    usage: toUsage(r.usage), cost: toCost(r.cost),
   }];
 }
 

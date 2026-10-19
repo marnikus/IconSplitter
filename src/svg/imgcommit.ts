@@ -1,10 +1,14 @@
 // imgcommit.ts — one image-edit outcome becomes one pair's own version.
 // The image writer owns the latest in-memory fields so a concurrent SVG save
 // cannot erase them; each disk file is unique and the sidecar is verified.
+// The version keeps what its request spent (2026-10-19): tokens + the cost
+// decided by costInfoFor — a composite cell arrives with its allocated share.
 
 import type { DirHandleLike } from "../lib/fs";
 import type { PairMeta } from "../lib/pairmeta";
 import type { Connection } from "../lib/svgconnections";
+import { costInfoFor } from "../lib/svgpricing";
+import { NO_USAGE } from "../lib/svgrequest";
 import { imageRegenDir, imageRegenFileName, nextImageVersion, type ImageVersion } from "../lib/svgimgreg";
 import { saveMetaAt } from "../selection/pairstore";
 import type { SvgCtx } from "./actions";
@@ -34,13 +38,19 @@ async function imageEntry(run: ImageCommitContext, row: SvgRow, history: readonl
   const { stem, dirPath } = row.source;
   const version = nextImageVersion(stem, history, await listRegenNames(run.root, dirPath));
   const name = imageRegenFileName(stem, version);
-  const base = { version, file: `${imageRegenDir(dirPath)}/${name}`, prompt: run.prompt, model: run.conn.model, requestId: result.requestId ?? null, updatedAt: new Date().toISOString() };
+  const base = { version, file: `${imageRegenDir(dirPath)}/${name}`, prompt: run.prompt, model: run.conn.model, requestId: result.requestId ?? null, updatedAt: new Date().toISOString(), ...spendOf(run.conn.model, result) };
   if (result.status !== "done" || result.blob === undefined) return { ...base, status: "failed", error: result.error ?? "unknown error" };
   try {
     return { ...base, file: await writeRegenImage(run.root, dirPath, name, result.blob), status: "done", error: null };
   } catch (error) {
     return { ...base, status: "failed", error: `the new image could not be saved (${messageOf(error)})` };
   }
+}
+
+/** Tokens + cost as the SVG versions store them; no usage reads as unknown, never as zero. */
+function spendOf(model: string, result: ImageRegenResult): Pick<ImageVersion, "usage" | "cost"> {
+  const u = result.usage ?? NO_USAGE;
+  return { usage: { input: u.input, output: u.output, total: u.total }, cost: costInfoFor(model, u) };
 }
 
 function messageOf(error: unknown): string {

@@ -1,12 +1,15 @@
 // imgbatchrun.ts — one confirmed square per image-edit request, one explicit
 // review per multi-icon answer, and independent saves to the original pairs.
-// Request-level usage is recorded once; Stop never resends uncertain outcomes.
+// Request-level usage is logged once and each saved cell keeps its share;
+// Stop never resends uncertain outcomes.
 
 import { cropEditedSheet, normalizedReturnedBlob, type EditedCrop } from "../lib/svgimgpixels";
 import { sameImageSelection } from "../lib/svgimgbatch";
 import type { Connection } from "../lib/svgconnections";
 import { regenOutcome, type RegenTally } from "../lib/svgimgreg";
 import { log } from "../log/logstore";
+import { NO_USAGE, type Usage } from "../lib/svgrequest";
+import { allocateUsage } from "../lib/svgusage";
 import type { SvgCtx } from "./actions";
 import { recordImageResult } from "./imgcommit";
 import { loadImageJournal, removeImageRequest, saveImageJournal, upsertImageRequest, type ImageRequestEvidence } from "./imgjournal";
@@ -171,7 +174,7 @@ async function groupFailure(run: CompositeRun, group: PreparedImageGroup, result
   const reason = result.error ?? "Image edit failed";
   const sent = run.sent.has(index);
   for (const source of group.sources) {
-    if (sent) await saveOutcome(run, group, source.row, { id: source.row.source.id, status: "failed", error: reason, requestId: result.requestId });
+    if (sent) await saveOutcome(run, group, source.row, { id: source.row.source.id, status: "failed", error: reason, requestId: result.requestId, usage: shareOf(group, result) });
     else countFailure(run, source.row.source.id, reason);
   }
   if (!sent || !unknownOutcome(reason)) clearJournal(run, `${run.id}-${index}`);
@@ -225,7 +228,7 @@ async function applyCrops(run: CompositeRun, group: PreparedImageGroup, crops: E
     if (!row || now.refs.root.current !== run.prepared.root) { countFailure(run, source.row.source.id, "The pair or folder changed before Apply"); continue; }
     const changed = await sourceChangeReason(run.prepared.root, source, now.refs.metas.get(source.row.source.id) ?? row.meta);
     if (changed !== null) { countFailure(run, source.row.source.id, changed); continue; }
-    await saveOutcome(run, group, row, { id: source.row.source.id, status: "done", blob: crop.blob, requestId: result.requestId });
+    await saveOutcome(run, group, row, { id: source.row.source.id, status: "done", blob: crop.blob, requestId: result.requestId, usage: shareOf(group, result) });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 }
@@ -238,6 +241,11 @@ async function saveOutcome(run: CompositeRun, group: PreparedImageGroup, row: Pr
   } catch (error) {
     countFailure(run, row.source.id, `${row.source.name}: ${messageOf(error)}`);
   }
+}
+
+/** Each cell's share of the one request it rode in — an estimate unless it was alone (allocateUsage). */
+function shareOf(group: PreparedImageGroup, result: ImageRegenResult): Usage {
+  return allocateUsage(result.usage ?? NO_USAGE, group.plan.cells.length);
 }
 
 function countFailure(run: CompositeRun, id: string, reason: string): void {

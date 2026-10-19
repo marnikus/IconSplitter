@@ -9,6 +9,7 @@ import {
   lastImageFailure, mainImageOf, nextImageVersion, parseImageResponse, parseSingleCompositeResponse, parseImageVersions,
   preferredImagePath, readImageUsage, regenOutcome, withImagesOf,
 } from "../src/lib/svgimgreg";
+import { NO_COST } from "../src/lib/svgmodel";
 import { PAIR_META_VERSION, newPairMeta, parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 
 describe("the Images API usage block (2026-10-19: the log shows tokens + cost)", () => {
@@ -27,7 +28,8 @@ describe("the Images API usage block (2026-10-19: the log shows tokens + cost)",
   });
 });
 
-const done = (version: number, file: string) => ({ version, file, status: "done" as const, prompt: "p", model: "openai/gpt-image-2.5-sunburst", requestId: null, error: null, updatedAt: "2026-10-16T10:00:00.000Z" });
+const done = (version: number, file: string) => ({ version, file, status: "done" as const, prompt: "p", model: "openai/gpt-image-2.5-sunburst", requestId: null, error: null, updatedAt: "2026-10-16T10:00:00.000Z",
+  usage: { input: null, output: null, total: null }, cost: { ...NO_COST } });
 const DIR = "icons/AI source regeneration versions";
 
 describe("the version folder and file names", () => {
@@ -53,6 +55,19 @@ describe("the version history — RULE 13 repair, I-54 discipline", () => {
     for (const junk of [null, 42, "x", {}, { version: "one" }]) {
       expect(parseImageVersions(junk)).toEqual([]);
     }
+  });
+
+  it("usage and cost round-trip; an entry written before 2026-10-19 reads back as unknown (RULE 13)", () => {
+    const usage = { input: 10, output: 20, total: 30 };
+    const cost = { actual: 0.03, estimated: null, currency: "USD", pricing: "p1", basis: "provider" };
+    const [withSpend] = parseImageVersions([{ ...done(1, "a_v1.png"), usage, cost }]);
+    expect(withSpend.usage).toEqual(usage);
+    expect(withSpend.cost).toEqual(cost);
+    const { usage: _u, cost: _c, ...before } = done(2, "a_v2.png"); // the pre-2026-10-19 shape
+    const [old] = parseImageVersions([before]);
+    expect(old.usage).toEqual({ input: null, output: null, total: null });
+    expect(old.cost.basis).toBe("none");
+    expect(old.cost.actual).toBeNull();
   });
 
   it("a failed version keeps its honest error text", () => {

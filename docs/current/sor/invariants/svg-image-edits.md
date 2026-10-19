@@ -10,7 +10,9 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   pair's subfolder `AI source regeneration versions` (`<stem>_AI_v1.png`,
   `_v2`… allocated from disk + the pair file, the same rule as SVG versions)
   and the pair file gains the additive keys `imageVersions[]` (version, file,
-  status, prompt, model, error, timestamps) and `imagePreferred: n` — the same
+  status, prompt, model, error, timestamps, and since 2026-10-19 `usage` +
+  `cost` in the SVG shapes — a composite cell stores its `allocateUsage`
+  share, an estimate unless it was alone) and `imagePreferred: n` — the same
   shape and reader tolerance as I-54 (`v` stays 2; an old reader ignores them).
   `imagePreferred` names the MAIN image and falls back to the original when
   null, dangling or failed; a failed request still appends an honest failed

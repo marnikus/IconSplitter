@@ -102,7 +102,8 @@ export function parseVersion(raw: unknown): SvgVersion | null {
   };
 }
 
-function toCost(raw: unknown): CostInfo {
+/** Also the reader of an AI image version's cost (lib/svgimgreg, 2026-10-19). */
+export function toCost(raw: unknown): CostInfo {
   if (!isRecord(raw)) return { ...NO_COST };
   const actual = numOrNull(raw.actual);
   const estimated = numOrNull(raw.estimated);
@@ -121,7 +122,7 @@ function deriveBasis(actual: number | null, estimated: number | null): CostBasis
   return estimated !== null ? "batch-split" : "none";
 }
 
-function toUsage(raw: unknown): TokenUsage {
+export function toUsage(raw: unknown): TokenUsage {
   const r = isRecord(raw) ? raw : {};
   return { input: numOrNull(r.input), output: numOrNull(r.output), total: numOrNull(r.total) };
 }

@@ -707,3 +707,66 @@ describe("image regeneration — every pair, one truth (RC5/RC6/RC8)", () => {
     expect(sheets.at(-1)).toEqual([`${REGEN}/fog_AI_v1.png`]);
   });
 });
+
+// 2026-10-19 (archive/2026-10-19-image-regen-usage): the pair file keeps what a
+// regeneration spent, and the row's usage column shows it under "Image gen."
+// the same way it shows the SVG version's spend under "SVG gen.".
+describe("image regeneration — tokens and cost on the row", () => {
+  const usageAnswer = (cost: number) => {
+    const pngHeader = String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10);
+    imageAnswer = async () => new Response(JSON.stringify({ data: [{ b64_json: btoa(pngHeader) }],
+      usage: { input_tokens: 400, output_tokens: 1325, total_tokens: 1725, cost } }), { status: 200 });
+  };
+
+  it("a single regen stores the reported spend; the row shows v1 · tokens · reported under 'Image gen.'", async () => {
+    usageAnswer(0.0132);
+    await mountWithImages();
+    expect(txt(`[data-testid=svg-usage-svg-${FOG}]`)).toContain("SVG gen.");
+    expect(q(`[data-testid=svg-usage-img-${FOG}]`)).toBeNull(); // no image history yet
+    await regenerateRow();
+    await settle(200);
+    const v = metaNow().imageVersions[0];
+    expect(v.usage).toEqual({ input: 400, output: 1325, total: 1725 });
+    expect(v.cost).toMatchObject({ actual: 0.0132, estimated: null, basis: "provider" });
+    const cell = txt(`[data-testid=svg-usage-img-${FOG}]`);
+    expect(cell).toContain("Image gen.");
+    expect(cell).toContain("v1");
+    expect(cell).toContain("1,725 tokens");
+    expect(cell).toContain("$0.0132 reported");
+    // the SVG half is still the SVG half
+    expect(txt(`[data-testid=svg-usage-svg-${FOG}]`)).not.toContain("1,725");
+  });
+
+  it("the original as main shows 'original' with no usage, the history kept", async () => {
+    usageAnswer(0.0132);
+    await mountWithImages();
+    await regenerateRow();
+    await settle(200);
+    await click(q(`[data-testid=svg-ai-chip-${FOG}-orig]`)!);
+    await settle(150);
+    const cell = txt(`[data-testid=svg-usage-img-${FOG}]`);
+    expect(cell).toContain("original");
+    expect(cell).not.toContain("1,725");
+  });
+
+  it("a two-pair composite stores each pair an ESTIMATED half share of the one request", async () => {
+    editCanvas();
+    usageAnswer(0.05);
+    const root = manyPairs(["mist"]);
+    const arch = root.children.get("architecture") as FakeDir;
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "preview ready");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "review ready");
+    await click(q("[data-testid=svg-img-apply]")!);
+    await waitFor(() => q("[data-testid=svg-busy]") === null, "images committed");
+    const mist = JSON.parse((arch.children.get("mist_AI.svg.json") as FakeFile).text).imageVersions[0];
+    for (const v of [metaNow().imageVersions[0], mist]) {
+      expect(v.usage.total).toBe(862.5);
+      expect(v.cost).toMatchObject({ actual: null, estimated: 0.025, basis: "batch-split" });
+    }
+    expect(txt(`[data-testid=svg-usage-img-${FOG}]`)).toContain("$0.0250 Estimated");
+  }, 15000);
+});

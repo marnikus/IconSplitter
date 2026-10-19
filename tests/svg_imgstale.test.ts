@@ -26,7 +26,8 @@ describe("prepared image edit applied only to its original main source", () => {
   it("refuses a new preferred version even when the original bytes are unchanged", async () => {
     const { root, source } = await fixture();
     const meta = newPairMeta({ id: "a", base: "a", suffix: "", dirPath: "", ai: { relPath: "a.png", name: "a.png", fingerprint: "1:1" }, source: null });
-    meta.imageVersions = [{ version: 1, file: "v1.png", status: "done", prompt: "p", model: "m", requestId: null, error: null, updatedAt: "today" }];
+    meta.imageVersions = [{ version: 1, file: "v1.png", status: "done", prompt: "p", model: "m", requestId: null, error: null, updatedAt: "today",
+      usage: { input: null, output: null, total: null }, cost: { actual: null, estimated: null, currency: "USD", pricing: "", basis: "none" } }];
     meta.imagePreferred = 1;
     expect(await sourceChangeReason(root, source, meta)).toMatch(/changed/i);
   });

@@ -2841,3 +2841,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - User report: the override "works on v4 but not v5/v6" of one pair. Measured cause: v4 `viewBox="0 0 256 256"`, v5/v6 `0 0 1024 1024`; a width in document units drew 4× thinner. Fix: `strokeCss` adds `vector-effect: non-scaling-stroke !important`, so the value is screen px and identical on every thumbnail.
 - TDD: 2 tests red (lib rule + adopted sheet), green after; plan doc §3 revised; selectors/invariant updated.
+
+## 2026-10-19 — AI source regeneration: tokens + cost on the row
+
+- User report: an image regeneration's spend appeared only in the log/toast, not in the row's usage column. Cause: `imgcommit.recordImageResult` built `ImageVersion` without usage/cost (the type had no fields). Fix: additive `usage` + `cost` on `ImageVersion` (parsed with `svgmodel.toUsage/toCost`), cost via `costInfoFor`, composite cells get `allocateUsage(usage, cells)` (estimate unless alone); `SvgRow.UsageCell` shows "SVG gen." then "Image gen." (vN · tokens · cost, or "original"). Plan: `docs/archive/2026-10-19-image-regen-usage/README.md`.
+- TDD: 4 tests red (svgimgreg round-trip + 3 in svg_imgreg_ui "tokens and cost on the row"), green after; svgimgreg + svg_imgreg_ui 61/61.
