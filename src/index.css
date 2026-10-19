@@ -1409,8 +1409,10 @@
 .svg-progress-mini span { display: block; height: 100%; width: 60%; background: var(--v2-purple); }
 
 .svg-file-actions, .svg-decision-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-/* The image action sits on its own line under Generate / ⚠ / ✓ / ✕ — one grid cell, no stretch. */
-.svg-decision-actions .svg-img-regen { flex: 1 1 100%; }
+/* Vector (SVG) buttons above, raster (image) button below: a full-width separator
+   breaks the line and leaves clear space between the two parts. The image button
+   is a normal primary button, the same size and colour as Regenerate. */
+.svg-decision-actions .svg-decision-sep { flex: 0 0 100%; height: 0; margin: 8px 0 4px; border-top: 1px solid var(--v2-line); }
 
 .svg-list-footer {
   display: flex;

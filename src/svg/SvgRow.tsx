@@ -102,7 +102,8 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "declined"))}>✕</button>
-      <button type="button" className="svg-btn tiny svg-img-regen" data-testid={`svg-row-image-regen-${id}`}
+      <span className="svg-decision-sep" aria-hidden="true" />
+      <button type="button" className="svg-btn tiny primary svg-img-regen" data-testid={`svg-row-image-regen-${id}`}
         title="Regenerate this AI source image via the image connection" onClick={click(() => a.requestImageRegen([id]))}>◍ Regenerate image</button>
     </div>
   );
