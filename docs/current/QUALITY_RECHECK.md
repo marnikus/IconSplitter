@@ -2805,3 +2805,15 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - Change: new root router `docs/current/README.md` (task read packs with KB sizes, cross-cutting lookups, page conventions, do-not-load list); 10 oversized pages split into `-<part>` siblings or per-area folders (`sor/owners/`, `sor/storage/`); invariants split into `svg-run`, `svg-image-edits`, `paths-capture`, `paths-scope`; RULE 16 moved to `rules/QUALITY_GATES.md`; ratchet/CI to `VERIFICATION_RATCHET.md`. All inbound links/anchors retargeted.
 - Measured: 76 current pages (ledger excluded), largest 8842 bytes (was 25,369); new test caps every page at 9,000 bytes and the router at 5,000. Docs link test also fixed to GitHub slug rules (no whitespace collapse).
 - Gates: docs_navigation 4/4; `npx tsc --noEmit` clean; `npm run lint` 0 errors (27 pre-existing warnings); RULE 16 gate via Windows-safe throwaway copy: passed (no src files). Full vitest: 2042/2055, failures = quality_base (known Windows ROOT bug) + load-flaky files (algo_efficiency, batch_preview_restart, svg_ui, secret_hygiene) that pass in isolation. `verify:fast` not runnable on native Windows (tools ROOT bug).
+
+## 2026-10-19 — test harness speed-up (vitest projects, quiet settle)
+
+- Full `npx vitest run`: old harness 54–103 s across four runs on the Windows
+  reference box (two at clean HEAD today: 103 s and 54 s, both with
+  load-flaky failures); new harness ~15 s duration / ~17 s wall, 197 files,
+  2055/2055 green on three consecutive runs.
+- `npm run verify` (full): ALL LANES PASSED in 66 s — tsc 10.9 s, lint 11.4 s,
+  quality 1.2 s, native perf 3.6 s, tests+coverage 28.3 s, build 9.5 s.
+- Windows runner fixed: `tools/quality.mjs`/`tools/verify.mjs` resolve ROOT
+  with `fileURLToPath` (the `cmd.exe ENOENT` failure is gone).
+- Design: [test harness](TEST_HARNESS.md).

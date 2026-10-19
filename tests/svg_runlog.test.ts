@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_runlog.test.ts — the SVG feature's log vocabulary (feature §3): every run
 // stage, request, retry, error, token and cost reaches the global log with its
 // stable ids — and the composite's data URL, which travels on the same events

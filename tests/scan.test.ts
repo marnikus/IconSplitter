@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 2 — scan: recursive walk with ignore list, AI eligibility,
 // reference linking, and diff of two scans (added/changed/kept/missing).
 import { describe, expect, it } from "vitest";

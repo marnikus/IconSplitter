@@ -1,3 +1,4 @@
+// @vitest-environment node
 // grid_split.test.ts — TDD for 2x2 lightbulb grid failure
 // Image: 4 icons in grid with thin dividers that previously merged into 1
 

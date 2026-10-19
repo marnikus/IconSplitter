@@ -20,6 +20,7 @@ import { resetAppStore } from "../src/state/appstore";
 import { PREFS_KEY } from "../src/selectionv2/prefsstore";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -658,8 +659,6 @@ function nativeValue(el: HTMLInputElement | HTMLSelectElement, value: string): v
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
 }
 
-async function settle(): Promise<void> {
-  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-}
+const settle = () => quietSettle(0);
 
 

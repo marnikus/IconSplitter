@@ -1,3 +1,4 @@
+// @vitest-environment node
 // appstore.test.ts — the store that lives ABOVE the tabs. Workbench renders one
 // panel at a time, so panel-local useState cannot be the owner of anything a
 // global undo/redo or a restart must see (RULE 12; design doc §2).

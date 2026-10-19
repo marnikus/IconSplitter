@@ -1,3 +1,4 @@
+// @vitest-environment node
 // tools/verify.mjs — the cross-platform RULE 16 lane runner (CODE_VERIFICATION.md §8).
 // These tests spawn the REAL runner in --plan mode and characterize its contract:
 // which lanes run in fast mode, which in --full mode, in which order, and with
@@ -49,17 +50,18 @@ describe("fast lane plan (npm run verify:fast)", () => {
 });
 
 describe("full lane plan (npm run verify, pre-push hook)", () => {
-  it("adds the standalone test lane before the coverage lane", () => {
+  it("adds only the uninstrumented native project before coverage — never a second full suite", () => {
     const lanes = plan("--full");
     expect(vitestLanes(lanes)).toHaveLength(2);
     expect(lanes.map((l) => l.name)).toEqual([
       "Types",
       "Lint",
       "Quality gate (changed)",
-      "Tests",
+      "Perf budgets (native, uninstrumented)",
       "Tests + coverage",
       "Build",
     ]);
+    expect(lanes[3].args).toEqual(["vitest", "run", "--project", "native"]);
   });
 });
 

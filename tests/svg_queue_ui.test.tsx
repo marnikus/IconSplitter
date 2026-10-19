@@ -28,6 +28,7 @@ import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 import { streamFrames, transport, type Transport } from "./helpers/svgtransport";
+import { waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -123,13 +124,7 @@ async function settle(): Promise<void> {
 }
 
 /** Waits for a real condition the run needs several turns to reach. */
-async function waitFor(pred: () => boolean, what: string, budgetMs = 4000): Promise<void> {
-  const until = Date.now() + budgetMs;
-  await act(async () => {
-    while (!pred() && Date.now() < until) await tick();
-  });
-  expect(pred(), `never reached: ${what}`).toBe(true);
-}
+const waitFor = (pred: () => boolean, what: string, budgetMs = 4000) => waitUntil(pred, what, budgetMs);
 
 async function mount(root: FakeDir): Promise<void> {
   picked = root;

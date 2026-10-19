@@ -13,6 +13,7 @@ import { DEFAULT_BATCH_SORT } from "../src/lib/batchsort";
 import ScanTable from "../src/batch/ScanTable";
 import fs from "fs";
 import path from "path";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,11 +34,7 @@ function q(sel: string) {
   return host.querySelector(sel) as HTMLElement | null;
 }
 
-async function settle(ms = 20) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
-  });
-}
+const settle = (ms = 20) => quietSettle(ms);
 
 beforeEach(async () => {
   if (host) {

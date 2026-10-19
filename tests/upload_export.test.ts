@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the export record runs for real: schema v1 round-trips, corrupt
 // JSON is rejected (never destroys outputs), and the stage planner implements
 // selective re-export exactly as design §4.4 specifies.

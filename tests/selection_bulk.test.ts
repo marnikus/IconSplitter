@@ -1,3 +1,4 @@
+// @vitest-environment node
 // selection_bulk.test.ts — RULE 8: the bulk reducer is one state transition
 // for the whole batch (spec V2 §6/§11): records rebuilt once, changed
 // decisions update the existing record, incomplete pairs untouched.

@@ -10,6 +10,7 @@ import { clearKnownRoots } from "../src/lib/knownroots";
 import BatchPanel from "../src/batch/BatchPanel";
 import { BATCH_PREFS_KEY } from "../src/lib/batchprefs";
 import { clampMergeFrac } from "../src/lib/batchpreview";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -48,11 +49,7 @@ function q(sel: string): Element | null {
 function qAll(sel: string): NodeListOf<Element> {
   return host.querySelectorAll(sel);
 }
-async function settle(ms = 80) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
-  });
-}
+const settle = (ms = 80) => quietSettle(ms);
 async function click(el: Element) {
   await act(async () => {
     (el as HTMLElement).click();

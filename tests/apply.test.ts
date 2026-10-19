@@ -1,3 +1,4 @@
+// @vitest-environment node
 // apply.test.ts — the canonical undo/redo mutation path (design doc §3).
 // Every tracked kind is applied here; a value that does not fit is refused so
 // the history cursor can stay where it was.

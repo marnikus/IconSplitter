@@ -20,6 +20,7 @@ import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { minimalJpeg } from "./helpers/minijpeg";
 import { svgVersion } from "./helpers/svgpair";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,7 +48,7 @@ let host: HTMLDivElement;
 let ui: Root;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 async function click(sel: string): Promise<void> {
   await act(async () => { (q(sel) as HTMLButtonElement).click(); });

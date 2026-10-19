@@ -89,7 +89,7 @@ Focused test inventory; [all tests](../TESTS.md).
   selection to several existing SVGs, confirms the exact preview/request, leaves
   the empty row untouched, and appends behind an in-flight request; a row's
   Regenerate still jumps to the front
-* `svg_ui.test.tsx` — DOM: approved rows only, newest SVG beside its source,
+* `svg_ui.test.tsx` + `svg_ui_config.test.tsx` (fixture `helpers/svgpanel.tsx`) — DOM: approved rows only, newest SVG beside its source,
   bulk header checkbox + disabled bulk actions, filters, the code dialog and
   its Escape close, the confirm-before-send guard, approve + undo, and the
   preview frame: inline `<svg>` with `xmlns` + `100%` + `xMidYMid meet`, the

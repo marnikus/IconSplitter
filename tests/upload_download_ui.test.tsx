@@ -18,6 +18,7 @@ import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { commitPackage, PACKAGE_EPS as EPS, PACKAGE_JPG as JPG, PACKAGE_SVG as SVG, type PackageKind } from "./helpers/uploadpackage";
+import { settle as quietSettle, waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,15 +42,9 @@ let ui: Root;
 let picker: ReturnType<typeof vi.fn>;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
-async function waitFor(fn: () => boolean, label: string, ms = 8000): Promise<void> {
-  const start = Date.now();
-  while (!fn()) {
-    if (Date.now() - start > ms) throw new Error(`timed out waiting for ${label}`);
-    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
-  }
-}
+const waitFor = (fn: () => boolean, label: string, ms = 8000) => waitUntil(fn, label, ms);
 async function click(sel: string): Promise<void> {
   await waitFor(() => q(sel) !== null && (q(sel) as HTMLButtonElement).disabled !== true, `${sel} enabled`);
   await act(async () => { q(sel)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the settings domain rules run for real: defaults, clamps, the
 // global/local override merge, reset semantics and the fingerprint that
 // selective re-export keys on.

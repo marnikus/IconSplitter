@@ -1,3 +1,4 @@
+// @vitest-environment node
 // reviewfilter.test.ts — RULE 8: date/status/search filtering for Selection.
 import { describe, expect, it } from "vitest";
 import {

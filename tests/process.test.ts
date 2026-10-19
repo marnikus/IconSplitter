@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 9 — batch orchestrator: plan + split + no-overwrite writes +
 // per-item isolation + stop (RULE 5/7). splitImage injected; fs via fakes.
 import { describe, expect, it } from "vitest";

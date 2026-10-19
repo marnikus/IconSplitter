@@ -6,6 +6,7 @@ import SvgImgConfirm from "../src/svg/SvgImgConfirm";
 import type { PreparedImageRun } from "../src/svg/imgprepare";
 import type { SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { settle as quietSettle } from "./helpers/quiet";
 
 const rows = ["a", "b", "c", "d"].map((id) => ({
   source: { id, name: `${id}.png`, relPath: `${id}.png`, dirPath: "", stem: id, metaPath: `${id}.svg.json` },
@@ -17,7 +18,7 @@ const folder = () => {
   return root;
 };
 const refs = () => ({ current: folder() });
-const wait = async () => { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 300)); }); };
+const wait = () => quietSettle(300);
 let host: HTMLDivElement;
 let ui: Root;
 

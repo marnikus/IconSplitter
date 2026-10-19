@@ -9,6 +9,7 @@ import { getAppState, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
 import { loadSessionState, saveSessionState } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +20,7 @@ const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const click = async (sel: string) => {
   await act(async () => { (q(sel) as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 };
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 function mountWorkbench(): void {
   host = document.createElement("div");

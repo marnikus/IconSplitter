@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetAppStore, setAppState } from "../src/state/appstore";
 import { resetLogStore } from "../src/log/logstore";
 import Workbench from "../src/ui/Workbench";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,11 +33,7 @@ function decls(sheet: string, selector: string): string[] {
   return body.split(/[;\n]/).map((d) => d.trim()).filter(Boolean);
 }
 
-const settle = async () => {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
-  });
-};
+const settle = () => quietSettle(0);
 
 function mount(): void {
   host = document.createElement("div");

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the provider call itself executes against a fake transport: the
 // exact URL, headers and body are asserted, every failure mode is produced by
 // the real code path, and the key is proven to stay out of the reported error.

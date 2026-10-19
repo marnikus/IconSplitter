@@ -5,14 +5,16 @@
 // executes every test, so the fast path runs the suite exactly once.
 //
 //   node tools/verify.mjs                  # fast lanes (every commit)
-//   node tools/verify.mjs --full           # + standalone test lane (pre-push parity)
+//   node tools/verify.mjs --full           # + uninstrumented perf-budget lane (pre-push)
 //   node tools/verify.mjs --base <ref>     # passes --base to the quality lane (shallow clones)
 //   node tools/verify.mjs --plan [--json]  # prints the lane plan and runs nothing (test seam)
 //
 // The lane plan is a contract: tests/verify_runner.test.ts characterizes it.
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+// fileURLToPath: URL.pathname is "/D:/My%20Dir/" on Windows, an invalid cwd.
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const args = process.argv.slice(2);
 const full = args.includes("--full");
 const planOnly = args.includes("--plan");
@@ -29,7 +31,10 @@ function lanePlan() {
     { name: "Types", cmd: "npx", args: ["tsc", "--noEmit"] },
     { name: "Lint", cmd: "npx", args: ["eslint", "src", "tests", "tools", "--max-warnings", "1000"] },
     { name: "Quality gate (changed)", cmd: "node", args: ["tools/quality.mjs", "--changed", "--allow-legacy", ...baseArgs()] },
-    ...(full ? [{ name: "Tests", cmd: "npx", args: ["vitest", "run"] }] : []),
+    // --full adds the wall-clock budgets WITHOUT coverage instrumentation: the
+    // native project only (TEST_HARNESS.md) — the coverage lane already runs
+    // every test, so a second full-suite lane would be pure duplication.
+    ...(full ? [{ name: "Perf budgets (native, uninstrumented)", cmd: "npx", args: ["vitest", "run", "--project", "native"] }] : []),
     // PERF_BUDGETS tells wall-clock alarms (algo_efficiency) that instrumentation inflates every run.
     { name: "Tests + coverage", cmd: "npx", args: ["vitest", "run", "--coverage"], env: { PERF_BUDGETS: "coverage" } },
     { name: "Build", cmd: "npm", args: ["run", "build"] },

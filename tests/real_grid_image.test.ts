@@ -1,3 +1,4 @@
+// @vitest-environment node
 // real_grid_image.test.ts — TDD for exact user image (2x2 lightbulb grid)
 // Must split into at least 4 icons, otherwise incorrect
 // Uses pngjs to decode real PNG without canvas

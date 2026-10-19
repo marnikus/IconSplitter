@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_uploadlog.test.ts — CP-1 (merge-report §9, T13): the tab's CLOSED log
 // vocabulary. Every entry the tab can emit is one of six outcomes, every entry
 // names the icon or the run it belongs to, and NONE has a `data` field — the

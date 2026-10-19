@@ -1,3 +1,4 @@
+// @vitest-environment node
 // modelcaps.test.ts — what the selected model actually accepts (prompt §"show
 // only options supported by the selected model"). Everything here is pure: a
 // model id plus an optional catalog entry must decide the temperature range,

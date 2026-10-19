@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fakeIndexedDb from "fake-indexeddb";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+import { settle } from "./helpers/quiet";
 import { clearKnownRoots } from "../src/lib/knownroots";
 import { setImageDecodeTimeout } from "../src/lib/dom";
 import BatchPanel from "../src/batch/BatchPanel";
@@ -130,10 +131,6 @@ async function unmount(): Promise<void> {
 
 const q = (sel: string): Element | null => host.querySelector(sel);
 const qAll = (sel: string): NodeListOf<Element> => host.querySelectorAll(sel);
-
-async function settle(ms = 80): Promise<void> {
-  await act(async () => { await new Promise((r) => setTimeout(r, ms)); });
-}
 
 async function click(el: Element): Promise<void> {
   await act(async () => { (el as HTMLElement).click(); });

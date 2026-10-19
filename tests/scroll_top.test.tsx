@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetAppStore } from "../src/state/appstore";
 import Workbench from "../src/ui/Workbench";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,7 +17,7 @@ let host: HTMLDivElement;
 let ui: Root;
 
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 const click = async (sel: string) => {
   await act(async () => { (q(sel) as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true })); });
   await settle();

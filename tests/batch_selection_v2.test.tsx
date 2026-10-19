@@ -12,6 +12,7 @@ import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider, useHistory, type HistoryApi } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
 import { BATCH_PREFS_KEY } from "../src/lib/batchprefs";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,7 +44,7 @@ function Probe() {
 
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const qAll = (sel: string) => host.querySelectorAll(sel) as NodeListOf<HTMLElement>;
-const settle = async (ms = 80) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); };
+const settle = (ms = 80) => quietSettle(ms);
 const click = async (el: Element | null) => {
   if (!el) throw new Error("click target missing");
   await act(async () => { (el as HTMLElement).click(); });

@@ -88,6 +88,9 @@ node tools/quality.mjs --json           # machine-readable
 npm test                     # vitest run
 ```
 
+Projects, shared setup, `settle`/`waitUntil` and how to keep the run short:
+[test harness](TEST_HARNESS.md).
+
 Tests execute the real `analyze` / `detect` / `renderIcon` logic against
 synthetic pixels and recording canvas shims. If a test passes with the feature
 deleted, it is not a test.
@@ -124,15 +127,16 @@ Run before releases and after refactors; zero **new** findings on a diff.
 ### 8. Combined check — one cross-platform runner (lanes 1–6 + build)
 
 ```bash
-npm run verify:fast   # = node tools/verify.mjs — every commit (~2 min)
-npm run verify        # = node tools/verify.mjs --full — before push (~3 min)
+npm run verify:fast   # = node tools/verify.mjs — every commit (~1 min)
+npm run verify        # = node tools/verify.mjs --full — before push (~65 s, 2026-10-19)
 ```
 
 Fast lanes: tsc + eslint + quality gate (changed, ratchet) + **one** suite run
 (the coverage lane already executes every test — the old
 `tools/pre_push_check.sh` ran the suite twice, lanes 4+5) + `vite build`
-(single-file output must succeed). `--full` adds the standalone `vitest run`
-lane for pre-push parity with the historical bash script it replaced.
+(single-file output must succeed). `--full` adds the `native` project
+(wall-clock perf budgets) uninstrumented — coverage instrumentation would skew
+them — instead of a second full suite run.
 `node tools/verify.mjs --plan [--json]` prints the lane plan without running
 it — the contract `tests/verify_runner.test.ts` characterizes.
 `--base <ref>` is forwarded to the quality lane (shallow clones).

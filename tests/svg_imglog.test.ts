@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_imglog.test.ts — the global log names what an AI source regeneration
 // spent (user report 2026-10-19: "logs do not contain how much the
 // regeneration cost and tokens spent"). Reported numbers stay reported; a

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svgimgreg.test.ts — AI source image regeneration (user request 2026-10-16,
 // archive/2026-10-16-image-regen): the version folder, the version history in
 // the pair file (I-54 additive fields), the version-number rule, the Images API

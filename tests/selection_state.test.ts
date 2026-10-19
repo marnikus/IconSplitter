@@ -1,3 +1,4 @@
+// @vitest-environment node
 // selection_state.test.ts — RULE 8/24: pure reducers behind useSelection.
 import { describe, expect, it } from "vitest";
 import {

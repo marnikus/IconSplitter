@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { imageEditLimit, planImageEditGroups, returnedCellRect, compositeEditPrompt, sameImageSelection } from "../src/lib/svgimgbatch";
 

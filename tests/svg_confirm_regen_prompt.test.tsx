@@ -13,6 +13,7 @@ import type { SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import type { PromptPreset } from "../src/lib/promptpresets";
+import { settle as quietSettle } from "./helpers/quiet";
 
 vi.mock("../src/svg/composite", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/svg/composite")>();
@@ -32,11 +33,7 @@ vi.mock("../src/svg/composite", async (importOriginal) => {
 let host: HTMLDivElement;
 let ui: Root;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
-const settle = async () => {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
-  });
-};
+const settle = () => quietSettle(0);
 
 function rows(n: number): SvgRow[] {
   return Array.from({ length: n }, (_, i) => {

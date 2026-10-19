@@ -26,6 +26,7 @@ import SvgPanel from "../src/svg/SvgPanel";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 import { transport, type Transport } from "./helpers/svgtransport";
+import { settle as quietSettle, waitUntil } from "./helpers/quiet";
 
 vi.stubGlobal("indexedDB", fakeIndexedDb.indexedDB);
 vi.stubGlobal("IDBKeyRange", fakeIndexedDb.IDBKeyRange);
@@ -117,7 +118,7 @@ let host: HTMLDivElement;
 let ui: Root | undefined;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const txt = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async (ms = 60) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); };
+const settle = (ms = 60) => quietSettle(ms);
 const click = async (el: Element) => { await act(async () => { (el as HTMLElement).click(); }); await settle(30); };
 const choose = async (sel: string, text: string) => {
   const el = q(sel) as HTMLSelectElement;
@@ -149,11 +150,7 @@ const regenNames = () => {
   const dir = (root.source.children.get("architecture") as FakeDir).children.get("AI source regeneration versions") as FakeDir | undefined;
   return dir ? [...dir.children.keys()] : [];
 };
-async function waitFor(pred: () => boolean, what: string, budgetMs = 4000): Promise<void> {
-  const until = Date.now() + budgetMs;
-  await act(async () => { while (!pred() && Date.now() < until) await new Promise((r) => setTimeout(r, 10)); });
-  expect(pred(), `never reached: ${what}`).toBe(true);
-}
+const waitFor = (pred: () => boolean, what: string, budgetMs = 4000) => waitUntil(pred, what, budgetMs);
 
 // ── CSS contracts (jsdom does no layout, so the rules themselves are pinned) ─
 const css = () => readFileSync(join(process.cwd(), "src/index.css"), "utf8");

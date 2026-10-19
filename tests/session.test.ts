@@ -1,3 +1,4 @@
+// @vitest-environment node
 // session.test.ts — RULE 8/13: the restart snapshot. Every field is validated
 // on read, stale ids are pruned, and a corrupt payload costs one ignored load.
 //

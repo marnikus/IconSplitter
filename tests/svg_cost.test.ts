@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_cost.test.ts — the cost rules execute for real (RULE 8): the verified
 // rate card and its version, the ONE decision between a provider-reported
 // number and a calculated one, and the wording every surface shows. A provider

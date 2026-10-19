@@ -1,3 +1,4 @@
+// @vitest-environment node
 // reviewselect.test.ts — RULE 8: checkbox selection is its own state, keyed
 // by stable pair id, and never leaks into review status (spec V2 §5/§9).
 import { describe, expect, it } from "vitest";

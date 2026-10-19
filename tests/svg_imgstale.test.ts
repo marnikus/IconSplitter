@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { newPairMeta } from "../src/lib/pairmeta";
 import { fingerprintOf, type PreparedImageSource } from "../src/svg/imgprepare";

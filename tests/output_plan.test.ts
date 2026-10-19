@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 5 — output planning (spec §5): month/timestamp layout, per-source
 // folders, collision → _v02/_v03, never overwriting existing names.
 import { describe, expect, it } from "vitest";

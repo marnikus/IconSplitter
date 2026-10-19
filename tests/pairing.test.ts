@@ -1,3 +1,4 @@
+// @vitest-environment node
 // pairing.test.ts — RULE 8: discovery + pairing semantics for Selection mode.
 import { describe, expect, it } from "vitest";
 import { walkTree, type FileEntry, type TreeNode } from "../src/lib/scan";

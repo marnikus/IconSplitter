@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svgconnections.test.ts — connection profiles of the Generate SVG tab: the
 // quick-switch list, the Requesty image connection (GPT-Image-2.5 Sunburst),
 // and the exact images/generations wire body (research 2026-10-16, archive doc).

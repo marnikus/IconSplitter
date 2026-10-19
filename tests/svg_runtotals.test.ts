@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_runtotals.test.ts — the ONE arithmetic behind "N done · M left"
 // (2026-10-08): the popup on every tab, the bulk bar and the log all read it,
 // so they can never disagree. Proven on plain data: mid-request, between

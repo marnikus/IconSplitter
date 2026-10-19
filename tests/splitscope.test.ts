@@ -1,3 +1,4 @@
+// @vitest-environment node
 // splitscope.test.ts — RULE 3/24: the reviewable set is the split output.
 // The Batch tab writes its pieces into `<dest>/<YYYY-MM>/<stamp>/<folder>/
 // split_NN/` (dest = `_split_output` by default) and copies the reference beside

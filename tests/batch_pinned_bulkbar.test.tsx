@@ -12,6 +12,7 @@ import * as fakeIndexedDb from "fake-indexeddb";
 import { dropDb } from "./helpers/idb";
 import { setImageDecodeTimeout } from "../src/lib/dom";
 import BatchPanel from "../src/batch/BatchPanel";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 vi.stubGlobal("indexedDB", fakeIndexedDb.indexedDB);
@@ -34,7 +35,7 @@ function decls(sheet: string, selector: string): string[] {
 let host: HTMLDivElement;
 let ui: Root;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
-const settle = async (ms = 80) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); };
+const settle = (ms = 80) => quietSettle(ms);
 
 beforeEach(async () => {
   setImageDecodeTimeout(25);

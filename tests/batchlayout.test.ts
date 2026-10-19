@@ -1,3 +1,4 @@
+// @vitest-environment node
 // batchlayout.test.ts — the output-layout name patterns, one source (RULE 10).
 // 2026-10-16 spec: a run level is a DAY (`YYYY-MM-DD`); the legacy timestamp
 // form stays recognized — exports already on disk keep their scope (I-50).

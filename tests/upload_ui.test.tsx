@@ -28,6 +28,7 @@ import { minimalJpeg } from "./helpers/minijpeg";
 import { clearGeminiKey } from "../src/upload/keystore";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
+import { settle as quietSettle, waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,7 +75,7 @@ const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const qa = (sel: string) => host.querySelectorAll(sel);
 const text = (sel: string) => q(sel)?.textContent ?? "";
 const input = (sel: string) => q(sel) as HTMLInputElement;
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 /**
  * The rows and dialogs arrive with the async scan/state, so every selector is
@@ -161,13 +162,7 @@ async function activate(id: string): Promise<void> {
 }
 
 /** Polls until the condition holds — the pipelines do real work per row. */
-async function waitFor(fn: () => boolean, label: string, ms = 8000): Promise<void> {
-  const start = Date.now();
-  while (!fn()) {
-    if (Date.now() - start > ms) throw new Error(`timed out waiting for ${label}`);
-    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
-  }
-}
+const waitFor = (fn: () => boolean, label: string, ms = 8000) => waitUntil(fn, label, ms);
 
 /** fog + arch approved with a valid v1; court pending; an orphan SVG; export junk. */
 function makeRoot(): BinDir {
@@ -1142,7 +1137,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
   itSlow("reports a journalled in-flight request as interrupted after a restart", async () => {
     localStorage.setItem(JOURNAL_KEY, JSON.stringify([{ rowId: FOG, startedAt: 1, requestId: null }]));
     await mount(makeRoot());
-    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("interrupted");
+    // the journal is read after the list renders: wait for the state, not a tick count
+    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("interrupted"), "the interrupted state");
     expect(text("[data-testid=upload-warn-interrupted]")).toContain("never resent automatically");
   });
 

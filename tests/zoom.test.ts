@@ -1,3 +1,4 @@
+// @vitest-environment node
 // zoom.test.ts — RULE 10/18: ONE zoom definition for both tabs (I-55). The
 // range, the clamp and the size rule live here; Selection V2 and Generate SVG
 // persist and mount them, they never define them. The rule is height-driven and

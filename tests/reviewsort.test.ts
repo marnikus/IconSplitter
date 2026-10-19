@@ -1,3 +1,4 @@
+// @vitest-environment node
 // reviewsort.test.ts — RULE 8: every sort mode + direction, status metadata
 // and keyboard mapping (a11y §11: status is text-first, keys are testable).
 import { describe, expect, it } from "vitest";

@@ -1,6 +1,6 @@
 # Test inventory by task
 
-No frozen test count: consult the runner for current measurements. The focused suites use synthetic images, in-memory filesystem fakes and happy-dom. Tests must exercise real logic (RULE 8).
+No frozen test count: consult the runner for current measurements. The focused suites use synthetic images, in-memory filesystem fakes and happy-dom. Tests must exercise real logic (RULE 8). How the runner is laid out and how DOM tests settle: [test harness](../TEST_HARNESS.md).
 
 - [Sheets and batch](tests/core.md)
 - [Selection and pairing](tests/selection.md)

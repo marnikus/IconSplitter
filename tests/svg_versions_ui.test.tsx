@@ -20,6 +20,7 @@ import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,7 +78,7 @@ async function makeRoot(o: { blockWrite?: boolean } = {}): Promise<FakeDir> {
 
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 async function click(el: HTMLElement | null): Promise<void> {
   await act(async () => { el?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — approved-SVG discovery runs for real over a fake folder tree:
 // one row per pair with a valid approved SVG version (newest = the export
 // source), `export/` never discovered (no export loops), splitscope applied,

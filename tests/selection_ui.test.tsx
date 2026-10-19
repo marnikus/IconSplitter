@@ -8,6 +8,7 @@ import SelectionPanel from "../src/selection/SelectionPanel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { resetAppStore } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { settle as quietSettle } from "./helpers/quiet";
 
 type PickerWindow = { showDirectoryPicker?: () => Promise<unknown> };
 
@@ -120,6 +121,4 @@ describe("SelectionPanel in a DOM", () => {
 });
 
 /** Lets detached promise chains (scan/persist) run to completion. */
-function settle(): Promise<void> {
-  return act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-}
+const settle = () => quietSettle(0);

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svgimgedit.test.ts — the image-EDIT wire (user request 2026-10-19): AI source
 // regeneration sends the PROMPT and the current main AI image as the reference.
 // Requesty documents POST {base}/images/edits (multipart, `image[]` per file,

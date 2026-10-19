@@ -18,6 +18,7 @@ import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { commitPackage, PACKAGE_SVG as SVG } from "./helpers/uploadpackage";
+import { waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,13 +42,7 @@ let ui: Root;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
 
-async function waitFor(fn: () => boolean, label: string, ms = 8000): Promise<void> {
-  const start = Date.now();
-  while (!fn()) {
-    if (Date.now() - start > ms) throw new Error(`timed out waiting for ${label}`);
-    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
-  }
-}
+const waitFor = (fn: () => boolean, label: string, ms = 8000) => waitUntil(fn, label, ms);
 
 /** fog: committed with an EPS fix on record; arch: committed, nothing fixed. */
 async function makeRoot(): Promise<BinDir> {

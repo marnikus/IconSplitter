@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 1 — naming: _AI parsing, references, split names, variations, batch path.
 import { describe, expect, it } from "vitest";
 import {

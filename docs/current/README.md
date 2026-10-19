@@ -29,6 +29,7 @@ enforced by `tests/docs_navigation.test.ts`); sizes below are KB.
 | An I-n ID | [ID lookup](sor/invariants/README.md) |
 | A RULE n | [RULE 1–24 index](AGENT_RULES.md) → [behaviour](rules/BEHAVIOR.md), [quality](rules/QUALITY.md), [RULE 16 gates](rules/QUALITY_GATES.md), [docs/privacy/delivery](rules/DOCS_AND_SAFETY.md) |
 | Commands and gates | [Code Verification](CODE_VERIFICATION.md); why a gate failed: [ratchet & CI](VERIFICATION_RATCHET.md) |
+| Test runner speed, setup, settling | [test harness](TEST_HARNESS.md) |
 | What the app is | [six-mode overview](sor/OVERVIEW.md) |
 
 ## 3. Page conventions

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_queue.test.ts — the queue's own rules (I-53), proven without a DOM or a
 // network: a confirmed batch APPENDS, only the head may start, a drop leaves the
 // rest in order, a cancel empties it and reports how much it dropped, and a

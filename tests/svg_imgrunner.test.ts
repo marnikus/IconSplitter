@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_imgrunner.test.ts — the AI source regeneration batch sends the prompt AND
 // the source's current main image to /images/edits (user request 2026-10-19).
 // An unreadable reference is an honest per-item failure, never a silent

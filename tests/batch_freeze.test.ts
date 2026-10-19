@@ -1,3 +1,4 @@
+// @vitest-environment node
 // batch_freeze.test.ts — ensures batch processing yields to UI (no freeze)
 import { describe, it, expect } from "vitest";
 import { yieldToUI, yieldToFrame, sleep } from "../src/lib/yield";
