@@ -50,6 +50,18 @@ export function imageItemSpec(result: ImageRegenResult, model: string): LogSpec 
   };
 }
 
+/** One composite's reported usage, even when its cells are discarded or fail to save. */
+export function imageGroupSpec(result: ImageRegenResult, model: string, icons: number): LogSpec {
+  const u = result.usage ?? NO_USAGE;
+  const failed = result.status === "failed";
+  return {
+    level: failed ? "error" : "info", feature: FEATURE, action: "image-regen-request",
+    ids: { group: result.id, ...(result.requestId ? { request: result.requestId } : {}) },
+    detail: `${icons} icons · ${failed ? result.error ?? "request failed" : "response received; awaiting crop/review"} · ${spendOf(model, u)}`,
+    data: { icons, status: result.status, ...spendData(model, u) },
+  };
+}
+
 /** The run summary: the outcome text (regenOutcome) plus the summed spend of every request. */
 export function imageRunSpec(results: readonly ImageRegenResult[], model: string, tally: RegenTally): LogSpec {
   const u = totalOf(results);

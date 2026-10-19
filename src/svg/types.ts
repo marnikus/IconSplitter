@@ -75,6 +75,14 @@ import type { QueueItem } from "./runqueue";
 
 export type { QueueItem } from "./runqueue";
 
+export interface ImageReview {
+  group: number;
+  total: number;
+  mosaic: string;
+  cells: { id: string; name: string; url: string }[];
+  busy: boolean;
+}
+
 export type Dialog =
   | { kind: "confirm"; ids: string[]; operation: SvgOperation }
   | { kind: "image-regen"; ids: string[] }

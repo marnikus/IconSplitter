@@ -1,0 +1,54 @@
+# Upload invariants
+
+Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
+
+<a id="i-60"></a>
+* **I-60 (the artboard is the shipped artwork, RULE 4/13 — 2026-10-09):** the
+  viewBox is computed from the bounds of the FINAL document — the configured
+  stroke width, expansion, joins and caps included, measured by the strokes'
+  real outlines — plus the padding; nothing visible lies outside it; a pinned
+  artboard centres the shipped bounds to the file's precision; the artboard
+  rect is always the first child (the background colour, or `fill="none"` when
+  transparent); the placement passes are recorded, and a placement that does
+  not settle fails by name (`no-fit`) instead of shipping a guess. Pinned by
+  `upload_prepare` ("the artboard is the shipped artwork"), `upload_geom`
+  (unpainted shapes have no bounds), `upload_optimize`/`upload_clean`/
+  `upload_eps` (the invisible rect through the pipeline) and `upload_runexport`
+  (`tools.artboard` agrees with the viewBox).
+
+<a id="i-61"></a>
+* **I-61 (the built-in EPS is an executable program, RULE 4/13 — 2026-10-09):**
+  an EPS is PostScript; one invalid instruction and the interpreter stops before
+  the artwork (the report: `-0.75 0 0 -0.75 0 750 concat` → `/typecheck` in
+  Illustrator — `concat` takes ONE array). So: the uprighting CTM is written as
+  `[a b c d tx ty] concat`; a shape with both paints fills inside its own
+  `gsave … grestore` and THEN strokes (PostScript `fill` consumes the current
+  path — the old `… fill … stroke` stroked nothing); a shape that paints
+  nothing emits nothing (an unpainted path is not an object; the DSC box
+  carries the artboard). And the program is CHECKED: `lib/upload/epscheck.
+  checkPostScript` is an operand-stack model of the writer's own subset
+  (numbers, `[…]`, `newpath moveto lineto curveto closepath concat setrgbcolor
+  setlinewidth setdash setlinecap setlinejoin setmiterlimit fill stroke gsave
+  grestore`) — arity, operand types, a current point before `lineto`/`curveto`,
+  a path before `fill`/`stroke`, balanced `gsave`, an empty stack at the end —
+  stopping at the first error like the interpreter and naming its line.
+  `verifyEps` runs it, and the built-in converter runs `verifyEps` on its own
+  output before answering ok, so a non-executable EPS is an EPS-stage failure
+  (`partial`, SVG/JPEG committed), never a file. The converter-neutral commit
+  gate (`verifyEpsDocument`) is unchanged: Inkscape's cairo PostScript uses
+  procedures and dictionaries outside the subset's vocabulary and is not
+  judged by it. Tests execute the subset too (`tests/helpers/psrun.ts`): every
+  fixture runs without error and paints only inside `%%HiResBoundingBox`.
+  No `showpage`, `%%Pages` or preview was added — none is required for an EPS
+  import, and none was the cause.
+
+<a id="i-62"></a>
+* **I-62 ("scale to N MP" scales the artboard, not the JPEG, RULE 4/13 —
+  2026-10-09):** on, in `content` mode only, the content fit is scaled
+  uniformly so `artW × artH = N × 10⁶` (to the file's precision; exact in one
+  pass when the artwork is all fills), strokes keep the verbatim px, the record
+  carries `tools.artboard.scaledTo = N` (null whenever it does not apply), the
+  fingerprint moves only while the box is on, and the JPEG keeps
+  `jpegMegapixels`. Pinned by `upload_settings`, `upload_geom` (the megapixel
+  fit), `upload_prepare` ("scale the artboard to N megapixels"),
+  `upload_runexport` and `upload_eps_settings_ui`.

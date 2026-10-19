@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { imageEditLimit, planImageEditGroups, returnedCellRect, compositeEditPrompt } from "../src/lib/svgimgbatch";
+import { imageEditLimit, planImageEditGroups, returnedCellRect, compositeEditPrompt, sameImageSelection } from "../src/lib/svgimgbatch";
 
 const sources = (count: number) => Array.from({ length: count }, (_, i) => ({
   id: `pair-${i + 1}`, name: `icon-${i + 1}.png`, fingerprint: `main-${i + 1}`,
 }));
 
 describe("image-edit composite plans", () => {
+  it("compares identity arrays without delimiter collisions", () => {
+    expect(sameImageSelection(["a|b", "c"], ["a", "b|c"])).toBe(false);
+    expect(sameImageSelection(["a|b", "c"], ["a|b", "c"])).toBe(true);
+  });
+
   it("keeps one source per request at size one", () => {
     const groups = planImageEditGroups(sources(2), 1, 1024);
     expect(groups).toHaveLength(2);

@@ -15,6 +15,8 @@ import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import { PanelDialogs, panelRowActions } from "./panelbits";
 import SvgBulkBar from "./SvgBulkBar";
 import RunRecord from "./RunRecord";
+import SvgImgReview from "./SvgImgReview";
+import SvgImgInflight from "./SvgImgInflight";
 import SvgProgressHeader from "./SvgProgressHeader";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
@@ -36,7 +38,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active);
   useSvgHotkeys({
-    visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null,
+    visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null || g.imgReview !== null,
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,
     decide: g.decide, showCode: g.showCode, dismissDialog: g.dismissDialog,
   });
@@ -52,6 +54,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
       <PanelDialogs g={g} rootRef={rootRef} />
+      {g.imgReview && <SvgImgReview review={g.imgReview} onApply={g.applyImageReview} onDiscard={g.discardImageReview} />}
       <Overlay g={g} />
     </div>
   );
@@ -99,11 +102,11 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
       <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={idsWithGeneratedSvg(g.rows, g.checked).length}
         requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidableCount(g)}
         thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
-        progress={g.progress} running={g.running}
+        progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onRegenerate={() => g.regenerateSelected(g.checked)}
-        onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length} onImageStop={g.stopImageRegen}
+        onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       <SvgList g={g} actions={actions} />
       <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
@@ -164,6 +167,8 @@ function Banners({ g }: { g: SvgGenApi }) {
   return (
     <>
       <Inflight g={g} />
+      <SvgImgInflight entries={g.imgJournal} warning={g.imgJournalWarning} busy={g.busy?.startsWith("Regenerating AI sources") ?? false}
+        onRetry={g.retryImageUnknown} onDismiss={g.dismissImageJournal} />
       {notes.map((n) => <Banner key={n.id} note={n} />)}
     </>
   );

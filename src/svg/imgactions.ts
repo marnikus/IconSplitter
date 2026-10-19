@@ -14,51 +14,72 @@ import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import type { PairMeta } from "../lib/pairmeta";
 import type { Connection } from "../lib/svgconnections";
-import {
-  imageRegenDir, imageRegenFileName, imageWaitMs, mainImageOf, nextImageVersion, regenOutcome,
-  type ImageVersion, type RegenTally,
-} from "../lib/svgimgreg";
+import { imageWaitMs, mainImageOf, regenOutcome, type RegenTally } from "../lib/svgimgreg";
 import { saveMetaAt } from "../selection/pairstore";
 import { log } from "../log/logstore";
 import type { SvgCtx, Slice } from "./actions";
 import { imageItemSpec, imageRunSpec, imageSpendSuffix } from "./imglog";
-import { listRegenNames, readReferenceImage, writeRegenImage } from "./imgregfiles";
+import { readReferenceImage } from "./imgregfiles";
+import { recordImageResult } from "./imgcommit";
+import { decideCompositeReview, runCompositeEdits, type CompositeControl } from "./imgbatchrun";
+import { loadImageJournal, removeImageRequest, saveImageJournal } from "./imgjournal";
+import type { PreparedImageRun } from "./imgprepare";
 import { runImageBatch, type ImageRegenItem, type ImageRegenResult } from "./imgrunner";
-import { metaForSource } from "./sources";
 import type { SvgRow } from "./types";
 
-type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "stopImageRegen" | "setImageVersion">;
+type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "stopImageRegen" | "setImageVersion" | "applyImageReview" | "discardImageReview" | "dismissImageJournal" | "retryImageUnknown">;
 
 export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
   const latest = useRef(ctx);
   latest.current = ctx;
-  const control = useRef<ImgControl>({ active: false, stop: false }).current;
+  const control = useRef<CompositeControl>({ active: false, stop: false, pending: null, current: () => latest.current }).current;
   const requestImageRegen = useCallback((ids: string[]) => openDialog(latest.current, ids, control), [control]);
-  const confirmImageRegen = useCallback(() => {
+  const confirmImageRegen = useCallback((prepared: PreparedImageRun | null = null) => {
     if (control.active) return; // a second click while the first run starts
     control.active = true;
     control.stop = false;
-    void runImageRegen(latest.current, control)
-      .catch((error: unknown) => latest.current.say(`AI source regeneration stopped: ${messageOf(error)}`, true))
+    const run = prepared === null ? runImageRegen(latest.current, control) : runCompositeEdits(latest.current, prepared, control);
+    void run.catch((error: unknown) => latest.current.say(`AI source regeneration stopped: ${messageOf(error)}`, true))
       .finally(() => { control.active = false; });
   }, [control]);
   const stopImageRegen = useCallback(() => {
     if (!control.active) return;
     control.stop = true;
-    latest.current.say("Stopping — requests already sent will finish and be saved; nothing new is sent");
+    latest.current.say("Stopping — requests already sent will finish; multi-icon results still need review. Nothing new is sent");
   }, [control]);
   const setImageVersion = useCallback((id: string, version: number | null) => {
     void mainOf(latest.current, id, version).catch((error: unknown) => latest.current.say(`The main image could not be changed: ${messageOf(error)}`, true));
   }, []);
-  return { requestImageRegen, confirmImageRegen, stopImageRegen, setImageVersion };
+  return { requestImageRegen, confirmImageRegen, stopImageRegen, setImageVersion,
+    ...useImageOutcomeActions(latest, control) };
+}
+
+type OutcomeSlice = Slice<"applyImageReview" | "discardImageReview" | "dismissImageJournal" | "retryImageUnknown">;
+
+/** A response review and a persisted unknown request have separate decisions. */
+function useImageOutcomeActions(latest: { current: SvgCtx }, control: CompositeControl): OutcomeSlice {
+  const applyImageReview = useCallback(() => void decideCompositeReview(control, true), [control]);
+  const discardImageReview = useCallback(() => void decideCompositeReview(control, false), [control]);
+  const dismissImageJournal = useCallback((id: string) => {
+    const entries = id === "corrupt" ? [] : removeImageRequest(loadImageJournal().entries, id);
+    saveImageJournal(entries);
+    latest.current.dispatch({ type: "img-journal", entries });
+    latest.current.dispatch({ type: "img-journal-warning", warning: false });
+    latest.current.say("Image request note dismissed — nothing was resent");
+  }, [latest]);
+  const retryImageUnknown = useCallback((id: string) => {
+    const entry = loadImageJournal().entries.find((item) => item.id === id);
+    if (entry) openDialog(latest.current, entry.ids, control);
+  }, [control, latest]);
+  return { applyImageReview, discardImageReview, dismissImageJournal, retryImageUnknown };
 }
 
 /** The guarded request: a reason for every refusal, then the shared confirm dialog. */
-function openDialog(c: SvgCtx, ids: string[], control: ImgControl): void {
+function openDialog(c: SvgCtx, ids: string[], control: CompositeControl): void {
   const why = refusalOf(c, ids, control);
   if (why !== null) return c.say(why, true);
   // An unreadable pair file is never overwritten (I-43): refused before anything is paid for.
-  const rows = c.rows.filter((r) => ids.includes(r.source.id));
+  const rows = ids.map((id) => c.rows.find((r) => r.source.id === id)).filter((r): r is SvgRow => r !== undefined);
   const usable = rows.filter((r) => !r.corrupt).map((r) => r.source.id);
   const unreadable = rows.length - usable.length;
   if (usable.length === 0) {
@@ -69,7 +90,7 @@ function openDialog(c: SvgCtx, ids: string[], control: ImgControl): void {
 }
 
 /** Why a regeneration cannot start now, or null. */
-function refusalOf(c: SvgCtx, ids: string[], control: ImgControl): string | null {
+function refusalOf(c: SvgCtx, ids: string[], control: CompositeControl): string | null {
   if (ids.length === 0) return "Select at least one source first";
   if (control.active) return "AI source regeneration is already running — wait for it or stop it";
   if (c.m.busy !== null) return `Wait for “${c.m.busy}” to finish`;
@@ -99,12 +120,6 @@ async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<vo
 
 // ── the run ───────────────────────────────────────────────────────────────
 
-/** The hook's run control: one batch at a time, Stop read before each item. */
-interface ImgControl {
-  active: boolean;
-  stop: boolean;
-}
-
 /** Everything one run needs, fixed at confirm time. */
 interface ImgRun {
   c: SvgCtx;
@@ -124,7 +139,7 @@ function activeImageConn(m: SvgCtx["m"]): Connection | null {
 }
 
 /** Confirm: close the dialog, then run; every outcome is reported. */
-async function runImageRegen(c: SvgCtx, control: ImgControl): Promise<void> {
+async function runImageRegen(c: SvgCtx, control: CompositeControl): Promise<void> {
   const run = runOf(c);
   c.dispatch({ type: "dialog", dialog: null });
   if (typeof run === "string") return c.say(run, true);
@@ -153,7 +168,7 @@ function runOf(c: SvgCtx): ImgRun | string {
   if (conn === null) return "Switch to an image connection to regenerate AI sources";
   if (root === null) return "The folder is gone — pick it again";
   if (c.m.prompt.trim() === "") return "Write a prompt first — nothing was sent";
-  const rows = c.rows.filter((r) => dialog.ids.includes(r.source.id));
+  const rows = dialog.ids.map((id) => c.rows.find((r) => r.source.id === id)).filter((r): r is SvgRow => r !== undefined);
   if (rows.length === 0) return "Those sources are no longer in the list — rescan the folder";
   return { c, conn, root, rows, prompt: c.m.prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
 }
@@ -184,7 +199,7 @@ async function land(run: ImgRun, row: SvgRow, result: ImageRegenResult): Promise
   run.results.push(result);
   if (result.status === "done") log(imageItemSpec(result, run.conn.model));
   try {
-    const entry = await record(run, row, result);
+    const entry = await recordImageResult(run, row, result);
     count(run, row, entry.status === "done" ? null : entry.error ?? "unknown error");
   } catch (error) {
     count(run, row, `${row.source.name}: ${messageOf(error)}`);
@@ -202,42 +217,6 @@ function count(run: ImgRun, row: SvgRow, failure: string | null): void {
   run.tally.failed += 1;
   run.tally.reason ??= failure;
   log({ feature: "svg", action: "image-regen-failed", ids: { source: row.source.id }, detail: failure });
-}
-
-/**
- * Version file + history entry, then the in-memory copy and the row, then the
- * pair file. Memory first, like runbatch.persist: an SVG save running meanwhile
- * takes these image fields from that copy (RC6). The entry is true either way —
- * a done one names a file that exists — so a refused pair-file write is
- * reported and the next save of this pair writes it.
- */
-async function record(run: ImgRun, row: SvgRow, result: ImageRegenResult): Promise<ImageVersion> {
-  const { c } = run;
-  const id = row.source.id;
-  const entry = await entryFor(run, row, (c.refs.metas.get(id) ?? row.meta)?.imageVersions ?? [], result);
-  // A pair without a file gets one (I-41, RC5); the freshest copy is the base.
-  const prev: PairMeta = c.refs.metas.get(id) ?? row.meta ?? metaForSource(row.source, null);
-  const meta: PairMeta = { ...prev, imageVersions: [...prev.imageVersions, entry], imagePreferred: entry.status === "done" ? entry.version : prev.imagePreferred };
-  c.refs.metas.set(id, meta);
-  c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? { ...r, meta } : r)));
-  const refused = await saveMetaAt(run.root, row.source.metaPath, meta).then(() => null, (error: unknown) => messageOf(error));
-  if (refused !== null) throw new Error(`its pair file could not be written (${refused}) — the next save of this pair records it`);
-  return entry;
-}
-
-/** A done result is written as the next version; a failure (or a refused write) is an honest failed entry. */
-async function entryFor(run: ImgRun, row: SvgRow, history: readonly ImageVersion[], result: ImageRegenResult): Promise<ImageVersion> {
-  const { stem, dirPath } = row.source;
-  const version = nextImageVersion(stem, history, await listRegenNames(run.root, dirPath));
-  const name = imageRegenFileName(stem, version);
-  // a failed entry names the path it would have had — never written
-  const base = { version, file: `${imageRegenDir(dirPath)}/${name}`, prompt: run.prompt, model: run.conn.model, requestId: result.requestId ?? null, updatedAt: new Date().toISOString() };
-  if (result.status !== "done" || result.blob === undefined) return { ...base, status: "failed", error: result.error ?? "unknown error" };
-  try {
-    return { ...base, file: await writeRegenImage(run.root, dirPath, name, result.blob), status: "done", error: null };
-  } catch (error) {
-    return { ...base, status: "failed", error: `the new image could not be saved (${messageOf(error)})` };
-  }
 }
 
 function finish(run: ImgRun): void {

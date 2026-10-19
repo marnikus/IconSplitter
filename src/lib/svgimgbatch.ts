@@ -26,6 +26,11 @@ export const MIN_EDIT_CELL = 256;
 export const MAX_EDIT_COUNT = 16;
 export const DEFAULT_EDIT_COUNT = 4;
 
+/** An ordered selection is equal only when every original ID still occupies its slot. */
+export function sameImageSelection(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
 export function imageEditLimit(side: number): number {
   if (!Number.isInteger(side) || side < MIN_EDIT_CELL || side > 4096) return 0;
   return Math.min(MAX_EDIT_COUNT, Math.floor(side / MIN_EDIT_CELL) ** 2);

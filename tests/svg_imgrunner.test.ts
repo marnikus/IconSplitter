@@ -28,6 +28,60 @@ function args(over: Partial<ImageRegenArgs>, fetchImpl: typeof fetch): ImageRege
   };
 }
 
+describe("composite edit requests", () => {
+  it("sends one prepared sheet and its own grid prompt, not an output n", async () => {
+    const calls: Call[] = [];
+    const sent: string[] = [];
+    const item = { id: "group-1", fileName: "icons.png", reference: ref("NINE"), prompt: "Keep nine cells", strict: true };
+    const out = await runImageBatch(args({ items: [item], onSend: (i) => sent.push(i.id) }, fakeFetch(calls)));
+    expect(out[0].status).toBe("done");
+    expect(sent).toEqual(["group-1"]);
+    const form = calls[0].init.body as FormData;
+    expect(form.get("prompt")).toBe("Keep nine cells");
+    expect(await (form.get("image[]") as File).text()).toBe("NINE");
+    expect(form.has("n")).toBe(false);
+  });
+
+  it("retains provider-reported cost and request id even when a composite answer is unusable", async () => {
+    const body = { data: [{ b64_json: "UE5H" }, { b64_json: "UE5H" }],
+      usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30, cost: 0.09 } };
+    const reply = () => new Response(JSON.stringify(body), { status: 200, headers: { "x-request-id": "req-ambiguous" } });
+    const item = { id: "group-1", fileName: "icons.png", reference: ref("NINE"), strict: true };
+    const [result] = await runImageBatch(args({ items: [item] }, fakeFetch([], reply)));
+    expect(result).toMatchObject({ status: "failed", requestId: "req-ambiguous", usage: { total: 30, cost: 0.09 } });
+  });
+
+  it("rejects extra returned images instead of silently saving the first", async () => {
+    const body = { data: [{ b64_json: "UE5H" }, { b64_json: "UE5H" }] };
+    const reply = () => new Response(JSON.stringify(body), { status: 200 });
+    const item = { id: "group-1", fileName: "icons.png", reference: ref("NINE"), strict: true };
+    const [result] = await runImageBatch(args({ items: [item] }, fakeFetch([], reply)));
+    expect(result).toMatchObject({ status: "failed", error: expect.stringMatching(/one image/i) });
+  });
+
+  it("does not mark a request sent when multipart construction fails first", async () => {
+    const calls: Call[] = [];
+    const sent: string[] = [];
+    const OriginalFile = File;
+    vi.stubGlobal("File", class extends OriginalFile {
+      constructor() { super([], "broken.png"); throw new Error("file creation failed"); }
+    });
+    const [result] = await runImageBatch(args({ onSend: (item) => sent.push(item.id) }, fakeFetch(calls)));
+    expect(result.status).toBe("failed");
+    expect(sent).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("checks Stop again after reading a reference, before any network send", async () => {
+    const calls: Call[] = [];
+    let stop = false;
+    const item = { id: "group-1", fileName: "icons.png", reference: async () => { stop = true; return new Blob(["NINE"]); } };
+    const out = await runImageBatch(args({ items: [item], shouldStop: () => stop }, fakeFetch(calls)));
+    expect(calls).toHaveLength(0);
+    expect(out.filter(Boolean)).toHaveLength(0);
+  });
+});
+
 describe("regeneration request = prompt + reference image", () => {
   it("posts multipart to /images/edits with the reference bytes and the prompt", async () => {
     const calls: Call[] = [];
@@ -105,7 +159,7 @@ describe("the response path is unchanged", () => {
   });
 });
 
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const three = [
   { id: "a", fileName: "a_AI.png", reference: ref("AAA") },

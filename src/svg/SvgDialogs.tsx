@@ -13,6 +13,7 @@ import SvgConfirm from "./SvgConfirm";
 import SvgImgConfirm from "./SvgImgConfirm";
 import type { Connection } from "../lib/svgconnections";
 import { imageWaitMs } from "../lib/svgimgreg";
+import type { PreparedImageRun } from "./imgprepare";
 import VersionsDialog from "./VersionsDialog";
 import type { Dialog, SvgRow } from "./types";
 import type { PromptPreset } from "../lib/promptpresets";
@@ -38,7 +39,7 @@ export interface SvgDialogsProps {
   imageConn: Connection | null;
   onImagePrompt: (prompt: string) => void;
   onImagePreset: (name: string) => void;
-  onImageConfirm: () => void;
+  onImageConfirm: (prepared: PreparedImageRun | null) => void;
 }
 
 export default function SvgDialogs(p: SvgDialogsProps) {
@@ -50,7 +51,7 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   }
   if (dialog.kind === "image-regen") {
     if (p.imageConn === null) return null;
-    return <SvgImgConfirm ids={dialog.ids} conn={p.imageConn} presets={p.presets} prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)}
+    return <SvgImgConfirm ids={dialog.ids} rows={p.rows} rootRef={p.rootRef} conn={p.imageConn} presets={p.presets} prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)}
       onPrompt={p.onImagePrompt} onPickPreset={p.onImagePreset} onConfirm={p.onImageConfirm} onCancel={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);

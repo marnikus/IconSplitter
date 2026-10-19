@@ -18,6 +18,8 @@ import { pairId } from "../src/lib/pairing";
 import { newPairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { clearApiKey, saveApiKey } from "../src/svg/keystore";
+import { IMAGE_EDIT_PREF_KEY } from "../src/svg/imgprefs";
+import { getLogState } from "../src/log/logstore";
 import { resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import SvgPanel from "../src/svg/SvgPanel";
@@ -459,6 +461,224 @@ describe("image regeneration — nothing fails silently (RC4)", () => {
     expect(q("[data-testid=svg-busy]")).toBeNull();
     expect(q(`[data-testid=svg-ai-running-${FOG}]`)).toBeNull();
   });
+});
+
+function manyPairs(names: string[]): FakeDir {
+  const root = makeRoot();
+  const arch = root.children.get("architecture") as FakeDir;
+  const decisions = JSON.parse((root.children.get("review-decisions.json") as FakeFile).text) as { records: unknown[] };
+  for (const name of names) {
+    const id = pairId("architecture", name, "");
+    arch.children.set(`${name}.png`, new FakeFile(`${name}.png`, 12, 3000, "c"));
+    arch.children.set(`${name}_AI.png`, new FakeFile(`${name}_AI.png`, 20, 3100, "d"));
+    arch.children.set(`${name}_AI.svg.json`, new FakeFile(`${name}_AI.svg.json`, 10, 3200, serializePairMeta(newPairMeta({
+      id, base: name, suffix: "", dirPath: "architecture",
+      ai: { relPath: `architecture/${name}_AI.png`, name: `${name}_AI.png`, fingerprint: "20:3100" },
+      source: { relPath: `architecture/${name}.png`, name: `${name}.png`, fingerprint: "12:3000" },
+    }))));
+    decisions.records.push({ pair_id: id, source: `${id}.png`, ai_result: `${id}_AI.png`, decision: "approved", reviewed_at: "2026-10-01T09:00:00.000Z" });
+  }
+  root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify(decisions)));
+  return root;
+}
+
+function editCanvas(outputSide = 1024): void {
+  const pngHeader = String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10);
+  imageAnswer = async () => new Response(JSON.stringify({ data: [{ b64_json: btoa(pngHeader) }] }), { status: 200 });
+  vi.stubGlobal("createImageBitmap", async (file: File) => ({ width: file.name === "edited-image" ? outputSide : 100,
+    height: file.name === "edited-image" ? outputSide : 100, close: () => undefined }));
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:prepared") });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => ({ fillStyle: "", fillRect: () => undefined, drawImage: () => undefined }) as never);
+  let encoded = 0;
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((cb) => cb(new Blob([++encoded === 1 ? "SHEET" : `CROP-${encoded}`], { type: "image/png" })));
+}
+
+describe("composite AI-source regeneration", () => {
+  it("sends one previewed sheet for two pairs, reviews returned crops, and saves separate preferred versions", async () => {
+    const root = manyPairs(["mist"]);
+    const arch = root.children.get("architecture") as FakeDir;
+    editCanvas();
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite] img") !== null, "the confirmed sheet preview");
+    expect(txt("[data-testid=svg-img-manifest]")).toMatch(/fog_AI\.png.*mist_AI\.png/s);
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "returned cells to review");
+    expect(metaNow().imageVersions).toHaveLength(0);
+    expect(imageCalls).toHaveLength(1);
+    expect(imageCalls[0].ref).toBe("SHEET");
+    expect(imageCalls[0].prompt).toMatch(/same cell positions/i);
+    await click(q("[data-testid=svg-img-apply]")!);
+    await waitFor(() => metaNow().imagePreferred === 1, "first pair new main");
+    const second = JSON.parse((arch.children.get("mist_AI.svg.json") as FakeFile).text);
+    expect(second.imageVersions).toHaveLength(1);
+    expect(second.imagePreferred).toBe(1);
+    expect(metaNow().imageVersions[0].file).toMatch(/AI source regeneration versions\/fog_AI_v1\.png/);
+  });
+
+  it("splits a resized 3×3 response back into nine different pair histories", async () => {
+    const names = Array.from({ length: 8 }, (_, i) => `icon${i + 2}`);
+    const root = manyPairs(names);
+    const arch = root.children.get("architecture") as FakeDir;
+    editCanvas(1536);
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    const input = q("[data-testid=svg-img-per-request]") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "9");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await waitFor(() => txt("[data-testid=svg-img-manifest]").includes("icon9_AI.png"), "nine slots ready");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "nine returned cells");
+    expect(q("[data-testid=svg-img-review]")!.querySelectorAll(".svg-img-result-cells img")).toHaveLength(9);
+    await click(q("[data-testid=svg-img-apply]")!);
+    await waitFor(() => metaNow().imagePreferred === 1, "first of nine saved");
+    const files = arch.children.get("AI source regeneration versions") as FakeDir;
+    const images = ["fog", ...names].map((name) => {
+      const metaFile = arch.children.get(`${name}_AI.svg.json`) as FakeFile;
+      expect(JSON.parse(metaFile.text).imagePreferred).toBe(1);
+      return (files.children.get(`${name}_AI_v1.png`) as FakeFile).text;
+    });
+    expect(new Set(images).size).toBe(9);
+    expect(imageCalls).toHaveLength(1);
+    expect(imageCalls[0].prompt).toMatch(/3×3/);
+  }, 15000);
+
+  it("Discard writes no versions; a changed source is skipped when applying another result", async () => {
+    const root = manyPairs(["mist"]);
+    const arch = root.children.get("architecture") as FakeDir;
+    editCanvas();
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "two-icon preview");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "review before discard");
+    await click(q("[data-testid=svg-img-discard]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") === null, "discarded result closed");
+    expect(metaNow().imageVersions).toEqual([]);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "new preview");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "new review");
+    arch.children.set("mist_AI.png", new FakeFile("mist_AI.png", 9, 4, "changed"));
+    await click(q("[data-testid=svg-img-apply]")!);
+    await waitFor(() => metaNow().imagePreferred === 1, "unchanged pair saved");
+    const second = JSON.parse((arch.children.get("mist_AI.svg.json") as FakeFile).text);
+    expect(second.imagePreferred).toBeNull();
+    expect(second.imageVersions).toEqual([]);
+  }, 15000);
+
+  it("does not send a broken group but still processes other previewed groups", async () => {
+    editCanvas();
+    const root = manyPairs(["icon2", "icon3", "icon4", "icon5"]);
+    await mountWithImages(root);
+    localStorage.setItem(IMAGE_EDIT_PREF_KEY, JSON.stringify({ v: 1, count: 2 }));
+    (root.children.get("architecture") as FakeDir).children.delete("fog_AI.png");
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-skipped]") !== null, "one group skipped during preparation");
+    expect(txt("[data-testid=svg-img-skipped]")).toMatch(/2 not sent.*fog_AI\.png/i);
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "valid group review");
+    await click(q("[data-testid=svg-img-discard]")!);
+    await waitFor(() => imageCalls.length === 2 && q("[data-testid=svg-busy]") === null, "other valid group completed");
+    expect(metaNow().imageVersions).toEqual([]);
+    const arch = root.children.get("architecture") as FakeDir;
+    expect(JSON.parse((arch.children.get("icon5_AI.svg.json") as FakeFile).text).imagePreferred).toBe(1);
+  }, 15000);
+
+  it("logs the provider's cost once for a composite, never once per saved icon", async () => {
+    editCanvas();
+    const pngHeader = String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10);
+    imageAnswer = async () => new Response(JSON.stringify({ data: [{ b64_json: btoa(pngHeader) }],
+      usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30, cost: 0.05 } }), { status: 200 });
+    await mountWithImages(manyPairs(["mist"]));
+    const before = getLogState().entries.length;
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "preview ready");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "review ready");
+    await click(q("[data-testid=svg-img-apply]")!);
+    await waitFor(() => q("[data-testid=svg-busy]") === null, "images committed");
+    const logs = getLogState().entries.slice(before).filter((entry) => entry.action === "image-regen-request");
+    expect(logs).toHaveLength(1);
+    expect(logs[0].data?.cost).toBe(0.05);
+    expect(txt("[data-testid=svg-toast]")).toContain("$0.0500");
+  }, 15000);
+
+  it("Stop blocks the next group but lets the sent group finish and be reviewed", async () => {
+    const reply = deferred<Response>();
+    editCanvas();
+    const goodReply = imageAnswer;
+    imageAnswer = () => reply.promise;
+    await mountWithImages(manyPairs(["mist", "icon3", "icon4"]));
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    const input = q("[data-testid=svg-img-per-request]") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await waitFor(() => txt("[data-testid=svg-img-composite]").includes("Request 1 of 2"), "two prepared requests");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => imageCalls.length === 1, "first edit sent");
+    await click(q("[data-testid=svg-img-stop]")!);
+    await act(async () => reply.resolve(await goodReply()));
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "sent group review still offered");
+    await click(q("[data-testid=svg-img-discard]")!);
+    await waitFor(() => q("[data-testid=svg-busy]") === null, "stopped run ended");
+    expect(imageCalls).toHaveLength(1);
+    expect(txt("[data-testid=svg-toast]")).toMatch(/2 discarded.*2 not sent/i);
+  }, 15000);
+
+  it("Stop remains available while the user reviews an answered group", async () => {
+    editCanvas();
+    await mountWithImages(manyPairs(["mist", "icon3", "icon4"]));
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    const input = q("[data-testid=svg-img-per-request]") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await waitFor(() => txt("[data-testid=svg-img-composite]").includes("Request 1 of 2"), "two requests previewed");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-review]") !== null, "first group review");
+    expect(q("[data-testid=svg-img-stop]")).not.toBeNull();
+    await click(q("[data-testid=svg-img-stop]")!);
+    await click(q("[data-testid=svg-img-discard]")!);
+    await waitFor(() => q("[data-testid=svg-busy]") === null, "run stopped after review");
+    expect(imageCalls).toHaveLength(1);
+  }, 15000);
+
+  it("an unknown network outcome is never automatically resent, even after Retry is clicked", async () => {
+    editCanvas();
+    imageAnswer = async () => { throw new TypeError("connection lost"); };
+    const root = manyPairs(["mist"]);
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "prepared reference");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => q("[data-testid=svg-img-inflight]") !== null, "unknown-outcome note");
+    expect(imageCalls).toHaveLength(1);
+    await act(async () => ui?.unmount());
+    ui = undefined;
+    resetAppStore();
+    await mountWithImages(root);
+    expect(q("[data-testid=svg-img-inflight]")).not.toBeNull();
+    expect(imageCalls).toHaveLength(1);
+    await click(q("[data-testid=svg-img-inflight-retry]")!);
+    expect(q("[data-testid=svg-img-confirm]")).not.toBeNull();
+    expect(imageCalls).toHaveLength(1);
+  }, 15000);
 });
 
 describe("image regeneration — every pair, one truth (RC5/RC6/RC8)", () => {

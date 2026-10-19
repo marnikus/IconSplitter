@@ -79,6 +79,15 @@ export function nextImageVersion(stem: string, history: readonly ImageVersion[],
   return max + 1;
 }
 
+/** A composite can only be mapped when the provider returns exactly one image. */
+export function parseSingleCompositeResponse(raw: unknown): { b64: string } | { url: string } {
+  const data = typeof raw === "object" && raw !== null ? (raw as { data?: unknown }).data : null;
+  if (!Array.isArray(data) || data.length !== 1) throw new Error("The image response must contain exactly one image");
+  const image = parseImageResponse(raw);
+  if (image === null) throw new Error("The image response must contain exactly one image with usable content");
+  return image;
+}
+
 /** The documented response, reduced to its first image — or null. */
 export function parseImageResponse(raw: unknown): { b64: string } | { url: string } | null {
   const first = firstImageOf(raw);

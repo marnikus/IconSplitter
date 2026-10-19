@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   IMAGE_REGEN_DIR, IMAGE_WAIT_FLOOR_MS, b64ToBlob, imageRegenDir, imageRegenFileName, imageWaitMs,
-  lastImageFailure, mainImageOf, nextImageVersion, parseImageResponse, parseImageVersions,
+  lastImageFailure, mainImageOf, nextImageVersion, parseImageResponse, parseSingleCompositeResponse, parseImageVersions,
   preferredImagePath, readImageUsage, regenOutcome, withImagesOf,
 } from "../src/lib/svgimgreg";
 import { PAIR_META_VERSION, newPairMeta, parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
@@ -83,6 +83,13 @@ describe("the Images API response", () => {
     for (const junk of [null, 7, {}, { data: [] }, { data: [{}] }, { data: "nope" }]) {
       expect(parseImageResponse(junk)).toBeNull();
     }
+  });
+
+  it("requires exactly one returned composite; never silently takes the first of several", () => {
+    expect(parseSingleCompositeResponse({ data: [{ b64_json: "AAAA" }] })).toEqual({ b64: "AAAA" });
+    expect(() => parseSingleCompositeResponse({ data: [] })).toThrow(/one image/i);
+    expect(() => parseSingleCompositeResponse({ data: [{ b64_json: "AAAA" }, { b64_json: "BBBB" }] })).toThrow(/one image/i);
+    expect(() => parseSingleCompositeResponse({ data: [{}] })).toThrow(/one image/i);
   });
 
   it("b64ToBlob decodes to the exact bytes", async () => {

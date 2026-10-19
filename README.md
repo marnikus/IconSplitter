@@ -28,9 +28,12 @@ It has six modes (tabs across the top):
   validated, versioned `<name>.svg` beside each AI image and records each
   version — prompt, model, token usage, cost, validation and review state — in
   that pair's own `<name>.svg.json` next to it (the same file that holds the
-  pair's approval: no separate global metadata file exists). Nothing is
-  uploaded anywhere else and the key never leaves the browser. Also Chrome/Edge
-  only.
+  pair's approval: no separate global metadata file exists). **Regenerate image**
+  can send several current AI sources as one previewed square image-edit request;
+  choose how many icons per request, review the returned cells, then apply each
+  as a separate, non-overwriting main-image version. Only confirmed requests
+  send the disclosed images/prompt to the configured provider; the key is used
+  for those requests but never logged or exported. Also Chrome/Edge only.
 * **SVG to upload** — takes the chosen, approved SVG version of each icon and
   builds its upload-ready package beside the sources: an artboard fitted to
   the artwork as it ships (or pinned to a size, or scaled to N megapixels)
@@ -255,10 +258,11 @@ is writable again — no other file is touched.
 
 ## Project rules (code quality)
 
-Every change to this codebase must follow the code-quality rules in
-[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) (24 rules — size,
-complexity, testing, docs and behaviour gates, adopted from the sister project
-`Process-Images-in-Areana`). Before every push run the verification lanes:
+For development, start with the short [`AGENTS.md`](AGENTS.md) bootstrap and
+choose the relevant tab in the [current-doc router](docs/current/README.md).
+The [`AGENT_RULES.md`](docs/current/AGENT_RULES.md) index links to the 24
+numbered quality, testing, documentation and behaviour rules. Before every
+push run the verification lanes:
 
 ```bash
 npm run verify:fast   # every commit: types + lint + gate + one suite run + build
@@ -268,11 +272,10 @@ npm run hooks:install # optional: enforce the full gate automatically via a pre-
 
 Both run through `tools/verify.mjs` (node — no bash needed on Windows).
 
-Current behaviour and invariants are documented in
-[`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md); the
-verification workflow lives in
-[`docs/current/CODE_VERIFICATION.md`](docs/current/CODE_VERIFICATION.md); the
-doc map is [`docs/README.md`](docs/README.md).
+Current behaviour, invariant IDs and UI handles have one owner per tab in
+[`docs/current/README.md`](docs/current/README.md). The
+[verification workflow](docs/current/CODE_VERIFICATION.md) and
+[historical index](docs/HISTORY_INDEX.md) are opt-in references.
 
 ## Project structure
 

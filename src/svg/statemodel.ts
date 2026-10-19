@@ -19,7 +19,8 @@ import type { PreviewBackground } from "../lib/svgbackground";
 import { findPreset, type PromptPreset } from "../lib/promptpresets";
 import type { Discovery } from "./sources";
 import type { QueueItem } from "./runqueue";
-import type { Dialog, RunProgress, SvgRow } from "./types";
+import type { Dialog, ImageReview, RunProgress, SvgRow } from "./types";
+import { loadImageJournal, type ImageRequestEvidence } from "./imgjournal";
 import { sortedIds } from "./rowmodel";
 import { NO_CHAIN, type Chain } from "./runtotals";
 
@@ -83,6 +84,11 @@ export interface SvgModel {
   currentId: string | null;
   /** Sources whose AI image is being regenerated (2026-10-19 RC3); one writer: the run in svg/imgactions. */
   imgRunning: string[];
+  /** The generated composite awaits an explicit Apply or Discard. */
+  imgReview: ImageReview | null;
+  /** Metadata-only sent requests with no saved result after a restart. */
+  imgJournal: ImageRequestEvidence[];
+  imgJournalWarning: boolean;
 }
 
 export type SvgAction =
@@ -116,7 +122,10 @@ export type SvgAction =
   | { type: "running"; running: boolean }
   | { type: "queue"; queue: QueueItem[] }
   | { type: "current"; id: string | null }
-  | { type: "img-running"; ids: string[]; on: boolean };
+  | { type: "img-running"; ids: string[]; on: boolean }
+  | { type: "img-review"; review: ImageReview | null }
+  | { type: "img-journal"; entries: ImageRequestEvidence[] }
+  | { type: "img-journal-warning"; warning: boolean };
 
 /** The active connection always mirrors the live config's base+model, so a hand
  *  edit of the MODEL field is kept by the dropdown too (one truth, two views). */
@@ -166,6 +175,9 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
   current: (m, a) => ({ ...m, currentId: (a as { id: string | null }).id }),
   "img-running": (m, a) => ({ ...m, imgRunning: inFlight(m.imgRunning, a as { ids: string[]; on: boolean }) }),
+  "img-review": (m, a) => ({ ...m, imgReview: (a as { review: ImageReview | null }).review }),
+  "img-journal": (m, a) => ({ ...m, imgJournal: (a as { entries: ImageRequestEvidence[] }).entries }),
+  "img-journal-warning": (m, a) => ({ ...m, imgJournalWarning: (a as { warning: boolean }).warning }),
 };
 
 /** Marks ids in flight (on) or landed (off); concurrent writers never clobber each other. */
@@ -214,6 +226,7 @@ function presetsModel(m: SvgModel, presets: PromptPreset[]): SvgModel {
 }
 
 export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, extras: { presets?: PromptPreset[]; conns?: ConnectionsStore } = {}): SvgModel {
+  const journal = loadImageJournal();
   const stored = extras.conns ?? { list: seedConnections(config), activeId: "" };
   const active = stored.list.find((c) => c.id === stored.activeId) ?? stored.list[0];
   const live = { ...config, baseUrl: active.baseUrl, model: active.model };
@@ -224,6 +237,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
     filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
+    imgReview: null, imgJournal: journal.entries, imgJournalWarning: journal.warning,
   };
 }
 

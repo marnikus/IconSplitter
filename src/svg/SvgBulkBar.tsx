@@ -38,8 +38,10 @@ export interface SvgBulkBarProps {
   onRegenerate: () => void;
   /** AI source regeneration through the image connection (2026-10-16). */
   onImageRegen: () => void;
-  /** AI sources still in flight (2026-10-19): the action waits, Stop appears. */
+  /** AI sources sent or awaiting review; the action waits, Stop appears. */
   imageRunning: number;
+  /** A run can also be preparing/skipping groups with no request on the wire yet. */
+  imageActive?: boolean;
   onImageStop: () => void;
   onDecide: (decision: "approved" | "declined" | "needs-review") => void;
   onCancel: () => void;
@@ -121,11 +123,11 @@ function RegenerateButton({ p }: { p: SvgBulkBarProps }) {
 
 /** One image batch at a time: while it runs the action waits and Stop sends nothing new (RULE 7). */
 function ImageRegenButtons({ p }: { p: SvgBulkBarProps }) {
-  const running = p.imageRunning > 0;
+  const running = p.imageActive === true || p.imageRunning > 0;
   return (
     <>
       {running && <button type="button" className="svg-btn" data-testid="svg-img-stop" onClick={p.onImageStop}
-        title="Send no further image requests; the ones already sent finish and are saved">■ Stop images ({p.imageRunning} left)</button>}
+        title="Send no further image requests; sent composites can still finish and need review">■ Stop images{p.imageRunning > 0 ? ` (${p.imageRunning} left)` : ""}</button>}
       <button type="button" className="svg-btn" data-testid="svg-bulk-image-regen" disabled={p.checkedCount === 0 || running}
         title={running ? "AI sources are being regenerated — wait for them or stop them" : "Regenerate the AI source image via the image connection"}
         onClick={p.onImageRegen}>◍ Regenerate image ({p.checkedCount})</button>

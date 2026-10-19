@@ -3,7 +3,7 @@
 // regeneration cost and tokens spent"). Reported numbers stay reported; a
 // number the provider did not send is "—" / "no cost reported", never invented.
 import { describe, expect, it } from "vitest";
-import { imageItemSpec, imageRunSpec, imageSpendLine, imageSpendSuffix } from "../src/svg/imglog";
+import { imageGroupSpec, imageItemSpec, imageRunSpec, imageSpendLine, imageSpendSuffix } from "../src/svg/imglog";
 import type { ImageRegenResult } from "../src/svg/imgrunner";
 
 const MODEL = "openai/gpt-image-2.5-sunburst";
@@ -27,6 +27,15 @@ describe("one entry per regenerated source", () => {
     expect(spec.detail).toMatch(/HTTP 402/);
     expect(spec.detail).toMatch(/— tokens · no cost reported/);
     expect(spec.data).toMatchObject({ tokens: null, cost: null });
+  });
+});
+
+describe("a composite is one billable request, not one cost per crop", () => {
+  it("reports response receipt before the user accepts anything", () => {
+    const spec = imageGroupSpec(ok, MODEL, 9);
+    expect(spec).toMatchObject({ action: "image-regen-request", data: { cost: 0.12, icons: 9 } });
+    expect(spec.detail).toMatch(/response received/i);
+    expect(spec.detail).not.toMatch(/regenerated/i);
   });
 });
 

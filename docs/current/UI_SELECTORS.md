@@ -509,10 +509,14 @@ Dialogs:
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
 | `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
-| `svg-img-confirm` | AI source regeneration dialog (2026-10-16): confirm-before-send for image batches, titled "Regenerate AI source image". Since 2026-10-19 the `.svg-backdrop` overlay around `section.svg-modal.img-regen[role=dialog][aria-modal=true]` (the `svg-confirm` shell, wider: a roomy reading surface — controls first, the prompt last at full width, fitted to its text up to the viewport cap); `svg-img-cancel` (head) closes without sending, Escape too; `svg-img-generate` ("Generate now", pinned to the bottom) confirms and is disabled while the prompt is blank |
-| `svg-img-wait` | fact | "N s per image" — the whole wait for one image: the stall window raised to the 300 s image floor (2026-10-19) |
+| `svg-img-confirm` | AI source regeneration dialog: confirm-before-send, titled "Regenerate AI source image"; `.svg-backdrop` around `section.svg-modal.img-regen[role=dialog][aria-modal=true]`; `svg-img-cancel` / Escape sends nothing; `svg-img-generate` is disabled for a blank prompt, invalid size/count or an unprepared multi-icon preview. A prepared preview Blob is the exact multipart image sent, never rebuilt after confirmation (I-72) |
+| `svg-img-wait` | fact | "N s per image" for a single source, "N s per request" for an image-edit composite; at least the 300 s image floor |
 | `svg-img-count` / `svg-img-provider` | the selected count and the active IMAGE connection as `{conn.name} · {kind label}` (`title` = the raw model id); opening it with a text connection active is refused before the dialog exists |
-| `svg-img-caps` | note | "Image edit — each request sends this prompt together with that source's current main AI image as the reference. One request per source; each result is saved as a new version and becomes the main AI source, which the SVG generation then uses. Nothing is overwritten." (corrected 2026-10-19; it used to claim text-to-image only) |
+| `svg-img-caps` | note | Single: prompt + current main image per request, result saved as new main. Multi: one explicitly previewed square of up to the chosen number of current main images per request; response must be reviewed before saving separate per-pair versions. No original is overwritten |
+| `svg-img-per-request` / `svg-img-count-error` | image-edit-only positive integer preference (default 4, 1–16, further limited by square output size at ≥256 px/cell); invalid count/output setting disables Generate and is named, never silently clamped; a corrupt stored preference resets with one warning |
+| `svg-img-preview-loading` / `svg-img-preview-error` / `svg-img-skipped` | the exact local composite is being prepared; a group that cannot be read/decoded is not sent, with named reason, while other valid groups remain available |
+| `svg-img-composite` / `svg-img-manifest` / `svg-img-effective-prompt` | per-request square preview with numbered row-major filenames (relative path when names collide), blank-cell count, provider and **full** thin-line/grid prompt; `svg-img-prev` / `svg-img-next` page valid requests |
+| `svg-img-review` / `svg-img-apply` / `svg-img-discard` | returned mosaic beside proposed named cell crops; only Apply saves independent versions and changes each pair's main image; Discard changes no version and cannot refund a sent request |
 | `svg-img-preset` / `svg-img-prompt` | the SAME preset dropdown and prompt editor as SVG generation (the shared `PromptBlock`): picking a preset fills the editor with its text; the editor content is the prompt every request sends |
 | `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent; regeneration with no saved prompts shows problem and disables confirm |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
@@ -529,6 +533,10 @@ outcome, shown while `iconSplitter.svg.inflight.v1` has entries) with
 been resent"), `svg-inflight-retry` (opens the normal confirmation for exactly
 those sources — the only way to resend, always a deliberate user action) and
 `svg-inflight-dismiss` (acknowledges the note and clears the journal).
+`svg-img-inflight` is the separate image-edit sent/unknown or lost-review
+notice (provider may have charged); `svg-img-inflight-retry` opens a NEW
+confirmation, never sends automatically; `svg-img-inflight-dismiss` forgets
+that record, and `svg-img-journal-warning` names a corrupt stored journal.
 
 Shared surfaces: `svg-warn-{noteId}` (`pairfile` — the pair files that could not
 be parsed, I-43 / `problems` — the
