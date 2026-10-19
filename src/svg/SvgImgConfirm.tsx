@@ -3,7 +3,7 @@
 // and the FULL PROMPT — the same main prompt and preset list the SVG generation
 // uses ("presets with same prompts"). Escape/Cancel never send anything.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { connectionLabel, type Connection } from "../lib/svgconnections";
 import type { PromptPreset } from "../lib/promptpresets";
 import { Select } from "../ui/fields";
@@ -23,12 +23,12 @@ export default function SvgImgConfirm(p: SvgImgConfirmProps) {
   useEscape(p.onCancel);
   return (
     <div className="svg-backdrop" data-testid="svg-img-confirm">
-      <section className="svg-modal narrow" role="dialog" aria-modal="true" aria-label="Confirm AI source regeneration">
+      <section className="svg-modal img-regen" role="dialog" aria-modal="true" aria-label="Confirm AI source regeneration">
         <header className="svg-modal-head">
           <h2>Regenerate AI source image</h2>
           <button type="button" className="svg-btn" data-testid="svg-img-cancel" onClick={p.onCancel}>Cancel</button>
         </header>
-        <div className="svg-modal-body">
+        <div className="svg-modal-body svg-img-body">
           <ConfirmHead ids={p.ids.length} conn={p.conn} />
           <p className="svg-note">
             Text-to-image only — this provider documents no image-edit endpoint, so the
@@ -49,8 +49,8 @@ export default function SvgImgConfirm(p: SvgImgConfirmProps) {
 /** Counts and the active connection, as the dialog's static head. */
 function ConfirmHead(p: { ids: number; conn: Connection }) {
   return (
-    <div className="svg-provider-fields">
-      <label className="svg-field">
+    <div className="svg-img-meta">
+      <label className="svg-field svg-img-count">
         <span className="svg-label">Selected images</span>
         <span className="svg-input flat" data-testid="svg-img-count">{p.ids}</span>
       </label>
@@ -62,23 +62,40 @@ function ConfirmHead(p: { ids: number; conn: Connection }) {
   );
 }
 
-/** The shared prompt + its preset dropdown (the SVG generation's own list). */
+/** The shared prompt + its preset dropdown: preset on its own row, the prompt below at full width. */
 function PromptBlock({ presets, prompt, onPickPreset, onPrompt }: {
   presets: readonly PromptPreset[]; prompt: string;
   onPickPreset: (name: string) => void; onPrompt: (prompt: string) => void;
 }) {
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  useFitToText(box, prompt);
   return (
-    <div className="svg-provider-fields">
+    <div className="svg-img-prompt-block">
       <Select label="Prompt preset" testid="svg-img-preset" value=""
         options={[["", "— pick a saved prompt —"], ...presets.map((x) => [x.name, x.name] as [string, string])]}
         onChange={onPickPreset} />
       <label className="svg-field">
         <span className="svg-label">Prompt</span>
-        <textarea className="svg-input" data-testid="svg-img-prompt" rows={5} aria-label="Image prompt"
+        <textarea ref={box} className="svg-input svg-img-prompt" data-testid="svg-img-prompt" rows={3} aria-label="Image prompt"
           value={prompt} onChange={(e) => onPrompt(e.target.value)} />
       </label>
     </div>
   );
+}
+
+/** Sizes the box to the WHOLE text (CSS caps it at the browser height), refitting on edit and resize. */
+function useFitToText(ref: React.RefObject<HTMLTextAreaElement | null>, text: string): void {
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = ref.current;
+      if (el === null) return;
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [ref, text]);
 }
 
 function useEscape(onCancel: () => void): void {

@@ -79,6 +79,9 @@ recorded maxima but never grow. Over the ideal with reason:
    appended to `QUALITY_RECHECK.md` with the measured gate numbers.
 4. Commit message: `<type>(<area>): <what> (I-<n>… when invariants moved)` + a
    `Verified:` line (lanes run, test count, build size).
+5. Push when a task is finished (owner rule, 2026-10-19): once the change is committed, `git push`
+   the current branch — never leave a finished task unpushed. If a gate could not run (say so in
+   the `Verified:` line) or the push is rejected, report it instead of forcing.
 
 ## 6. Conventions
 

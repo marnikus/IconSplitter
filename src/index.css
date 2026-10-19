@@ -1153,6 +1153,37 @@
 
 /* The paginated confirmation: one page per request. */
 .svg-modal.wide { width: min(760px, 94vw); }
+
+/* AI source regeneration dialog (2026-10-19): a roomy reading surface. The modal
+   is wider than the SVG confirm and never taller than the browser; the controls
+   come first, the prompt last at full width, its box fitted to the whole text by
+   SvgImgConfirm (no inner scroll) until it reaches the viewport cap. */
+.svg-modal.img-regen {
+  width: min(980px, 96vw);
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.svg-img-body { min-height: 0; overflow-y: auto; display: grid; gap: 12px; align-content: start; }
+/* Generate stays reachable when the prompt hits the viewport cap and the body scrolls. */
+.svg-img-body .svg-modal-actions { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 10px 16px; background: #0d1425; border-top: 1px solid var(--v2-line); }
+.svg-img-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+.svg-img-meta .svg-field { flex: 1 1 260px; }
+.svg-img-meta .svg-img-count { flex: 0 0 140px; }
+.svg-img-prompt-block { display: grid; gap: 12px; }
+.svg-img-prompt-block .svg-field { width: 100%; }
+.svg-img-prompt {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  max-height: calc(94vh - 340px);
+  overflow-y: auto;
+  resize: none;
+  font-size: 12px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
 .svg-batch-pager { display: grid; gap: 7px; margin: 10px 0; }
 .svg-confirm-prompt { display: grid; gap: 6px; margin: 14px 0; padding: 10px; border: 1px solid var(--v2-line); border-radius: 7px; background: var(--v2-surface); }
 .svg-confirm-prompt .svg-field-label { font-size: 9px; color: var(--v2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
