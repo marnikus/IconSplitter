@@ -2823,3 +2823,11 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - `.svg-bulkbar-pin` (sticky, top 0, z-index 6) wraps `SvgBulkBar` as a direct
   child of the `.svg` column; `tests/svg_pinned_bulkbar.test.tsx` 4 tests
   witnessed red (no rule, no pin), now green; svg_ui + svg_ui_config 38 green.
+
+## 2026-10-19 — SVG version chips under the SVG preview
+
+- Plan: docs/archive/2026-10-19-svg-version-chips. `SvgVersionChips` calls the
+  Versions dialog's `preferVersion` owner; the strip under the pair is now two
+  width-bound cells (AI chips | SVG chips). Versions dialog unchanged.
+- `tests/svg_version_chips.test.tsx`: 4 of 5 red before (no chips), 5/5 green
+  after; all 49 `tests/svg_*` files / 498 tests green.

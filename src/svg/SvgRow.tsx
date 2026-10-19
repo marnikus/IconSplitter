@@ -39,6 +39,8 @@ export interface SvgRowActions {
   setImageVersion: (id: string, version: number | null) => void;
   /** Sources whose AI image is being regenerated (2026-10-19). */
   imgRunning: string[];
+  /** Shows a recorded SVG version — the Versions dialog's owner (2026-10-19 chips). */
+  preferVersion: (id: string, version: number) => Promise<string | null>;
 }
 
 export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }) {
@@ -56,7 +58,8 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
       <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
-        aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }} />
+        aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }}
+        onPreferSvg={(sourceId, version) => void a.preferVersion(sourceId, version)} />
       <FileCell row={row} />
       <StatusCell row={row} />
       <ReviewCell row={row} />

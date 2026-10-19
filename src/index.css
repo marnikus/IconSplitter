@@ -1939,6 +1939,11 @@
    cell — never a 9th grid cell — and `contain: inline-size` keeps it from
    widening the max-content preview column: it takes the pair's width and wraps. */
 .svg-pair-with-bar { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* The strip under the pair (2026-10-19): one cell per preview, as wide as it and
+   with .pair-thumbs' gap, so each set of chips sits under the image it switches;
+   96 px keeps chips readable at the smallest zoom. */
+.svg-pair-bars { display: flex; align-items: flex-start; gap: 8px; }
+.svg-pair-bar { flex: none; min-width: 96px; }
 .svg-ai-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; contain: inline-size; }
 .svg-ai-bar .svg-progress-mini { width: 48px; margin-top: 0; }
 .svg-ai-bar .svg-progress-mini span { animation: v2-pulse 1.2s ease-in-out infinite; }

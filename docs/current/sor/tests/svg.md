@@ -89,6 +89,8 @@ Focused test inventory; [all tests](../TESTS.md).
   selection to several existing SVGs, confirms the exact preview/request, leaves
   the empty row untouched, and appends behind an in-flight request; a row's
   Regenerate still jumps to the front
+* `svg_version_chips.test.tsx` — SVG version chips: valid versions only, shown
+  one active, a click switches preview/tag/pair file, dialog path kept
 * `svg_pinned_bulkbar.test.tsx` — the bulk bar's sticky pin: CSS rule, direct
   child of the tab column, between controls and rows
 * `svg_ui.test.tsx` + `svg_ui_config.test.tsx` (fixture `helpers/svgpanel.tsx`) — DOM: approved rows only, newest SVG beside its source,
