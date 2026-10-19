@@ -38,6 +38,9 @@ export interface SvgBulkBarProps {
   onRegenerate: () => void;
   /** AI source regeneration through the image connection (2026-10-16). */
   onImageRegen: () => void;
+  /** AI sources still in flight (2026-10-19): the action waits, Stop appears. */
+  imageRunning: number;
+  onImageStop: () => void;
   onDecide: (decision: "approved" | "declined" | "needs-review") => void;
   onCancel: () => void;
 }
@@ -94,8 +97,7 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
       <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />
-      <button type="button" className="svg-btn" data-testid="svg-bulk-image-regen" title="Regenerate the AI source image via the image connection"
-        disabled={p.checkedCount === 0} onClick={p.onImageRegen}>◍ Regenerate image ({p.checkedCount})</button>
+      <ImageRegenButtons p={p} />
       <button type="button" className="svg-btn warning" data-testid="svg-needs-review-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("needs-review")}>⚠ Needs review selected</button>
       <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
@@ -114,6 +116,20 @@ function RegenerateButton({ p }: { p: SvgBulkBarProps }) {
     <button type="button" className="svg-btn" data-testid="svg-regenerate-selected"
       disabled={p.regenerableCount === 0} onClick={p.onRegenerate} title={title}>
       ↻ Regenerate selected ({p.regenerableCount})</button>
+  );
+}
+
+/** One image batch at a time: while it runs the action waits and Stop sends nothing new (RULE 7). */
+function ImageRegenButtons({ p }: { p: SvgBulkBarProps }) {
+  const running = p.imageRunning > 0;
+  return (
+    <>
+      {running && <button type="button" className="svg-btn" data-testid="svg-img-stop" onClick={p.onImageStop}
+        title="Send no further image requests; the ones already sent finish and are saved">■ Stop images ({p.imageRunning} left)</button>}
+      <button type="button" className="svg-btn" data-testid="svg-bulk-image-regen" disabled={p.checkedCount === 0 || running}
+        title={running ? "AI sources are being regenerated — wait for them or stop them" : "Regenerate the AI source image via the image connection"}
+        onClick={p.onImageRegen}>◍ Regenerate image ({p.checkedCount})</button>
+    </>
   );
 }
 

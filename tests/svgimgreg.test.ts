@@ -4,8 +4,9 @@
 // response parse, and the main-version resolution the AI thumb loads.
 import { describe, expect, it } from "vitest";
 import {
-  IMAGE_REGEN_DIR, b64ToBlob, imageRegenDir, imageRegenFileName, nextImageVersion,
-  parseImageResponse, parseImageVersions, preferredImagePath,
+  IMAGE_REGEN_DIR, IMAGE_WAIT_FLOOR_MS, b64ToBlob, imageRegenDir, imageRegenFileName, imageWaitMs,
+  lastImageFailure, mainImageOf, nextImageVersion, parseImageResponse, parseImageVersions,
+  preferredImagePath, regenOutcome, withImagesOf,
 } from "../src/lib/svgimgreg";
 import { PAIR_META_VERSION, newPairMeta, parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 
@@ -131,5 +132,79 @@ describe("the pair file carries the image history (additive, I-54)", () => {
     expect(PAIR_META_VERSION).toBe(2);
     const back = parsePairMeta(serializePairMeta({ ...base(), imagePreferred: 1 }));
     expect(back.ok && back.meta.v === 2).toBe(true);
+  });
+});
+
+// 2026-10-19 fix (archive/2026-10-19-image-regen-fix): the run is visible and
+// honest, and the main image is what the SVG generation reads.
+const failed = (version: number, error: string) => ({ ...done(version, `a_v${version}.png`), status: "failed" as const, error });
+
+describe("the image wait — RC7: an image arrives in one piece", () => {
+  it("never waits less than the image floor, and keeps a longer stall window", () => {
+    expect(IMAGE_WAIT_FLOOR_MS).toBe(300_000);
+    expect(imageWaitMs(120_000)).toBe(300_000);
+    expect(imageWaitMs(600_000)).toBe(600_000);
+  });
+});
+
+describe("the last attempt's failure — the row strip line (RC4)", () => {
+  it("names the error only while the LAST attempt failed", () => {
+    expect(lastImageFailure([])).toBeNull();
+    expect(lastImageFailure([done(1, "a_v1.png")])).toBeNull();
+    expect(lastImageFailure([done(1, "a_v1.png"), failed(2, "HTTP 400 bad size")])).toBe("HTTP 400 bad size");
+    expect(lastImageFailure([failed(1, "boom"), done(2, "a_v2.png")])).toBeNull();
+  });
+
+  it("a failed entry without a recorded reason still says it failed", () => {
+    expect(lastImageFailure([{ ...failed(1, ""), error: null }])).toBe("unknown error");
+  });
+});
+
+describe("the main image — RC8: the one file the SVG generation reads", () => {
+  it("is the chosen done version, else the original", () => {
+    const meta = { imageVersions: [done(1, `${DIR}/fog_AI_v1.png`), failed(2, "x")], imagePreferred: 1 };
+    expect(mainImageOf(meta, "icons/fog_AI.png")).toBe(`${DIR}/fog_AI_v1.png`);
+    expect(mainImageOf({ ...meta, imagePreferred: 2 }, "icons/fog_AI.png")).toBe("icons/fog_AI.png");
+    expect(mainImageOf({ ...meta, imagePreferred: null }, "icons/fog_AI.png")).toBe("icons/fog_AI.png");
+    expect(mainImageOf(null, "icons/fog_AI.png")).toBe("icons/fog_AI.png");
+  });
+});
+
+describe("the outcome toast — RULE 4: never a success-looking no-op", () => {
+  it("all regenerated", () => {
+    expect(regenOutcome({ total: 2, done: 2, failed: 0, reason: null })).toEqual({
+      msg: "Regenerated 2 AI sources — each is now the main image", err: false,
+    });
+    expect(regenOutcome({ total: 1, done: 1, failed: 0, reason: null }).msg).toBe("Regenerated 1 AI source — it is now the main image");
+  });
+
+  it("some failed: the count AND the first reason", () => {
+    expect(regenOutcome({ total: 3, done: 2, failed: 1, reason: "HTTP 429 rate limited" })).toEqual({
+      msg: "Regenerated 2 of 3 AI sources — 1 failed: HTTP 429 rate limited", err: true,
+    });
+  });
+
+  it("nothing regenerated: the reason, as an error", () => {
+    expect(regenOutcome({ total: 1, done: 0, failed: 1, reason: "HTTP 400 Unknown parameter" })).toEqual({
+      msg: "No AI source was regenerated — HTTP 400 Unknown parameter", err: true,
+    });
+  });
+
+  it("stopped: what landed, what failed, what was never sent", () => {
+    expect(regenOutcome({ total: 5, done: 1, failed: 0, reason: null })).toEqual({
+      msg: "Stopped — 1 regenerated, 0 failed, 4 not sent", err: false,
+    });
+    expect(regenOutcome({ total: 4, done: 0, failed: 1, reason: "boom" })).toEqual({
+      msg: "Stopped — 0 regenerated, 1 failed, 3 not sent: boom", err: true,
+    });
+  });
+});
+
+describe("field ownership — RC6: an SVG save never drops the image history", () => {
+  it("takes the image fields from the latest in-memory copy, everything else from the SVG save", () => {
+    const svgSide = { id: "x", versions: [1, 2], imageVersions: [], imagePreferred: null };
+    const latest = { imageVersions: [done(1, `${DIR}/fog_AI_v1.png`)], imagePreferred: 1 };
+    expect(withImagesOf(svgSide, latest)).toEqual({ id: "x", versions: [1, 2], imageVersions: latest.imageVersions, imagePreferred: 1 });
+    expect(withImagesOf(svgSide, null)).toBe(svgSide);
   });
 });

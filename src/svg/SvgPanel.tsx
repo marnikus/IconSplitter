@@ -103,7 +103,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
         onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
         onRegenerate={() => g.regenerateSelected(g.checked)}
-        onImageRegen={() => g.requestImageRegen(g.checked)}
+        onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length} onImageStop={g.stopImageRegen}
         onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       <SvgList g={g} actions={actions} />
       <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />

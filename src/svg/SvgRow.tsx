@@ -37,6 +37,8 @@ export interface SvgRowActions {
   /** AI source regeneration + the main-version switch (2026-10-16). */
   requestImageRegen: (ids: string[]) => void;
   setImageVersion: (id: string, version: number | null) => void;
+  /** Sources whose AI image is being regenerated (2026-10-19). */
+  imgRunning: string[];
 }
 
 export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }) {
@@ -54,7 +56,7 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
       <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
-        versionBar={<AiVersionBar row={row} a={a} />} />
+        aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }} />
       <FileCell row={row} />
       <StatusCell row={row} />
       <ReviewCell row={row} />
@@ -103,9 +105,17 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "declined"))}>✕</button>
       <span className="svg-decision-sep" aria-hidden="true" />
-      <button type="button" className="svg-btn tiny primary svg-img-regen" data-testid={`svg-row-image-regen-${id}`}
-        title="Regenerate this AI source image via the image connection" onClick={click(() => a.requestImageRegen([id]))}>◍ Regenerate image</button>
+      <ImageRegenButton id={id} running={a.imgRunning.includes(id)} onClick={click(() => a.requestImageRegen([id]))} />
     </div>
+  );
+}
+
+/** The raster action under the vector ones; waits while this row's image is in flight (2026-10-19). */
+function ImageRegenButton({ id, running, onClick }: { id: string; running: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button type="button" className="svg-btn tiny primary svg-img-regen" data-testid={`svg-row-image-regen-${id}`} disabled={running}
+      title={running ? "This AI source image is being regenerated" : "Regenerate this AI source image via the image connection"}
+      onClick={onClick}>{running ? "◍ Regenerating…" : "◍ Regenerate image"}</button>
   );
 }
 
@@ -195,23 +205,4 @@ function UsageCell({ row }: { row: SvgRow }) {
 function label(value: string): string {
   if (value === "needs-review") return "Regenerated — new review";
   return value.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-}
-
-/** The AI image's version chips: original + every done regeneration; the main
-    one is marked. Clicking a chip makes that version the MAIN (I-54 switch). */
-function AiVersionBar({ row, a }: { row: SvgRow; a: SvgRowActions }) {
-  const versions = row.meta?.imageVersions.filter((v) => v.status === "done") ?? [];
-  if (versions.length === 0) return null;
-  const id = row.source.id;
-  const main = row.meta?.imagePreferred ?? null;
-  const chip = (key: string, text: string, version: number | null) => (
-    <button key={key} type="button" className={`svg-btn tiny${main === version ? " primary" : ""}`}
-      data-testid={`svg-ai-chip-${id}-${key}`} data-active={main === version ? "true" : "false"}
-      title={main === version ? "This version is the AI source" : "Show this version as the AI source"}
-      onClick={(e) => { e.stopPropagation(); a.setImageVersion(id, version); }}>{text}</button>
-  );
-  return <>
-    {chip("orig", "original", null)}
-    {versions.map((v) => chip(String(v.version), `v${v.version}`, v.version))}
-  </>;
 }

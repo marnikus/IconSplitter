@@ -1906,6 +1906,12 @@
 .svg-image-model { display: flex; }
 .svg-image-model .svg-field { flex: 1 1 100%; }
 
-/* AI source regeneration (2026-10-16): the version chips under a row's pair. */
+/* AI source regeneration (2026-10-16): the strip under a row's pair. 2026-10-19:
+   the in-flight bar, the version chips and the last failure INSIDE the pair
+   cell — never a 9th grid cell — and `contain: inline-size` keeps it from
+   widening the max-content preview column: it takes the pair's width and wraps. */
 .svg-pair-with-bar { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.svg-ai-versions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.svg-ai-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; contain: inline-size; }
+.svg-ai-bar .svg-progress-mini { width: 48px; margin-top: 0; }
+.svg-ai-bar .svg-progress-mini span { animation: v2-pulse 1.2s ease-in-out infinite; }
+.svg-ai-bar .svg-error { flex: 1 1 100%; overflow: hidden; color: var(--v2-red); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

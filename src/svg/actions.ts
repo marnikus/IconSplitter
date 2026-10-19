@@ -52,7 +52,7 @@ export interface SvgActions extends SvgPromptActions {
   deselectAll: () => void; checkActive: () => void; uncheckActive: () => void; setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   requestGenerate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
-  requestImageRegen: (ids: string[]) => void; confirmImageRegen: () => void;
+  requestImageRegen: (ids: string[]) => void; confirmImageRegen: () => void; stopImageRegen: () => void;
   setImageVersion: (id: string, version: number | null) => void;
   regenerateSelected: (ids: string[]) => void; cancelRun: () => void; confirmGenerate: (regenPresetName: string | null) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;

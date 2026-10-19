@@ -9,7 +9,8 @@
 // The pair is laid out by the shared PairedThumbs and sized by the shared zoom
 // rule (I-55), which is what makes this tab and Selection V2 zoom identically:
 // each side gets the box its OWN ratio asks for at the slider's height, so
-// neither is stretched, capped or cut.
+// neither is stretched, capped or cut. Under the pair sits the AI-source strip
+// (AiSourceBar, 2026-10-19): in flight, version chips, last failure.
 
 import { useCallback, useEffect, useState } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
@@ -18,7 +19,7 @@ import { buildSvgPreview } from "../lib/svgpreview";
 import { zoomBox, zoomBoxRatio } from "../lib/zoom";
 import { useSideThumbs } from "../selection/thumbs";
 import PairedThumbs, { type PreviewSlot } from "../ui/PairedThumbs";
-import { preferredImagePath } from "../lib/svgimgreg";
+import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
 import { previewTargetOf } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
@@ -31,8 +32,8 @@ export interface SvgThumbsProps {
   row: SvgRow;
   thumb: number;
   bg: PreviewBackground;
-  /** Optional bar under the pair: the image-version chips (2026-10-16). */
-  versionBar?: React.ReactNode;
+  /** The AI-source strip's actions; absent = no strip under the pair. */
+  aiActions?: AiBarActions;
 }
 
 interface Dims {
@@ -40,9 +41,9 @@ interface Dims {
   h: number;
 }
 
-export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, versionBar }: SvgThumbsProps) {
-  // The AI side shows the user's chosen regeneration; without one, the original.
-  const ai = useImageUrl(rootRef, preferredImagePath(row.meta?.imageVersions ?? [], row.meta?.imagePreferred ?? null, row.source.relPath));
+export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiActions }: SvgThumbsProps) {
+  // The AI side shows the MAIN image — the same file the SVG generation reads (RC8).
+  const ai = useImageUrl(rootRef, mainImageOf(row.meta, row.source.relPath));
   const target = previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
   const id = row.source.id;
@@ -57,7 +58,7 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, versionB
         children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
       svgSlot({ svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg) }),
     ]} />
-      {versionBar !== undefined && <div className="svg-ai-versions">{versionBar}</div>}
+      {aiActions !== undefined && <AiSourceBar row={row} ai={aiActions} />}
     </div>
   );
 }
@@ -125,4 +126,62 @@ function useImageUrl(rootRef: { current: DirHandleLike | null }, relPath: string
     return () => { live = false; };
   }, [relPath, thumbFor]);
   return url;
+}
+
+/** What the AI-source strip shows and does for its row (wired from the panel's actions). */
+interface AiBarActions {
+  /** The row's AI image is being regenerated right now (svg/imgactions). */
+  running: boolean;
+  onMain: (id: string, version: number | null) => void;
+}
+
+/**
+ * The AI-source strip under the pair (2026-10-19): the in-flight marker, the
+ * version chips that pick the MAIN image (the I-54 switch) and the last
+ * attempt's failure, read from the pair file — beside the image they are
+ * about, INSIDE the pair cell (the row keeps exactly the cells its grid
+ * declares; the "◍ Regenerate image" action lives in the decision cell).
+ * Nothing to show = no strip.
+ */
+function AiSourceBar({ row, ai }: { row: SvgRow; ai: AiBarActions }) {
+  const strip = stripOf(row, ai.running);
+  if (strip === null) return null;
+  const id = row.source.id;
+  return (
+    <div className="svg-ai-bar" data-testid={`svg-ai-bar-${id}`}>
+      {ai.running && (
+        <span className="svg-progress-mini" data-testid={`svg-ai-running-${id}`} role="progressbar"
+          aria-label="Regenerating the AI source image"><span /></span>
+      )}
+      <VersionChips row={row} onMain={ai.onMain} />
+      {strip.failure !== null && (
+        <small className="svg-error" data-testid={`svg-ai-error-${id}`} title={strip.failure}>Last image attempt failed: {strip.failure}</small>
+      )}
+    </div>
+  );
+}
+
+/** What the strip has to show — null when nothing is in flight, chosen or failed. */
+function stripOf(row: SvgRow, running: boolean): { failure: string | null } | null {
+  const versions = row.meta?.imageVersions ?? [];
+  const failure = running ? null : lastImageFailure(versions);
+  const chips = versions.some((v) => v.status === "done");
+  return running || chips || failure !== null ? { failure } : null;
+}
+
+/** Original + every done regeneration, the main one marked; a click makes that version MAIN. */
+function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMain"] }) {
+  const versions = row.meta?.imageVersions.filter((v) => v.status === "done") ?? [];
+  if (versions.length === 0) return null;
+  const id = row.source.id;
+  const preferred = row.meta?.imagePreferred ?? null;
+  // the same rule as svgimgreg.mainImageOf: a pointer to no done version means the original
+  const main = versions.some((v) => v.version === preferred) ? preferred : null;
+  const chip = (key: string, text: string, version: number | null) => (
+    <button key={key} type="button" className={`svg-btn tiny${main === version ? " primary" : ""}`}
+      data-testid={`svg-ai-chip-${id}-${key}`} data-active={main === version ? "true" : "false"}
+      title={main === version ? "This version is the AI source" : "Use this version as the AI source"}
+      onClick={(e) => { e.stopPropagation(); onMain(id, version); }}>{text}</button>
+  );
+  return <>{chip("orig", "original", null)}{versions.map((v) => chip(String(v.version), `v${v.version}`, v.version))}</>;
 }
