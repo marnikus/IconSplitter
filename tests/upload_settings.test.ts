@@ -199,9 +199,10 @@ describe("global defaults + per-icon overrides", () => {
     expect(normalizeSettings({ strokePt: 2 }).strokePx).toBe(2);
     expect(normalizeSettings({ strokePx: 3, strokePt: 2 }).strokePx).toBe(3); // the new key wins
     expect(normalizeSettings({ strokePx: 60 }).strokePx).toBe(50);
-    // 2026-10-19: the stroke width is ONE value (the bar's) — no per-icon override reads it, under either name
-    expect(parseOverrides({ strokePt: 2.5 })).toEqual({});
-    expect(parseOverrides({ strokePx: 1, strokePt: 2.5 })).toEqual({});
+    // an icon may pin its own width (2026-10-19 follow-up), under either name, clamped
+    expect(parseOverrides({ strokePt: 2.5 })).toEqual({ strokePx: 2.5 });
+    expect(parseOverrides({ strokePx: 1, strokePt: 2.5 })).toEqual({ strokePx: 1 });
+    expect(parseOverrides({ strokePx: 99 })).toEqual({ strokePx: 50 });
     expect(Object.keys(normalizeSettings({ strokePt: 2 }))).not.toContain("strokePt"); // read as an alias, never written
     // the same number under the new name is the same fingerprint: no export flips to stale by the rename
     expect(settingsFingerprint({ ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2 })).toBe(settingsFingerprint(normalizeSettings({ strokePt: 2 })));

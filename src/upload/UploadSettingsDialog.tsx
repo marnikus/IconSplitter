@@ -9,16 +9,17 @@
 // artboard block + "Scale to N MP" row in UploadArtboardSettings.tsx.
 // 2026-10-19 (archive/2026-10-19-upload-default-settings): every visual row has
 // a "default" (leave the source's own), "All default" sets them at once (the
-// export is then the approved SVG, as is), and the stroke WIDTH row is gone — the
-// bar's STROKE field is that one value.
+// export is then the approved SVG, as is), and the global stroke WIDTH is the
+// bar's STROKE field; only the icon scope has a width row — that icon's own value.
 
 import {
-  artboardSize, clampMegapixels, clampPaddingPct, clampQuality,
+  artboardSize, clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx, STROKE_MAX, STROKE_MIN,
   MP_MAX, MP_MIN, PADDING_DEFAULT, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN,
   type UploadSettings,
 } from "../lib/upload/settings";
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
 import { paintClash } from "../lib/upload/paintclash";
+import DraftNumberInput from "../ui/DraftNumberInput";
 import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
@@ -70,6 +71,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
   return (
     <div className="up-set-grid">
       <PaddingSetting p={p} effective={effective} />
+      {p.id !== null && <IconStrokeSetting p={p} id={p.id} />}
       <StrokeColorSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
@@ -87,21 +89,41 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
   );
 }
 
-/**
- * "All default": the five visual fields at once (one gesture). In the icon scope
- * the stroke width is left out — it is ONE value, the bar's.
- */
+/** "All default": the five visual fields at once (one gesture; in the icon scope a pinned stroke width of 0). */
 function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const { strokePx, ...perIcon } = AS_IS_SETTINGS;
   const on = isAsIs(effective);
   return (
     <div className="up-set-footer">
       <button type="button" className={`svg-btn${on ? " on" : ""}`} data-testid="upload-set-as-is" aria-pressed={on}
-        onClick={() => changeMany(p, p.id === null ? { ...perIcon, strokePx } : perIcon)}>All default (export as is)</button>
+        onClick={() => changeMany(p, AS_IS_SETTINGS)}>All default (export as is)</button>
       <span className="up-hint" data-testid="upload-set-as-is-note">
         {on ? "every visual setting is default: the approved SVG is exported exactly as it is" : "stroke, background, artboard and padding back to the SVG's own"}
       </span>
     </div>
+  );
+}
+
+/**
+ * One icon's own stroke width (icon scope only): empty = the bar's value,
+ * inherited; a number pins it (0 = the artwork's own widths). Committed when
+ * the field is left, so typing "12" never writes "1" on the way.
+ */
+function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string }) {
+  const pinned = p.overrides.strokePx;
+  const bar = p.defaults.strokePx > 0 ? `${p.defaults.strokePx} px` : "default";
+  const inherit = () => { const { strokePx, ...rest } = p.overrides; void strokePx; p.onOverride(id, rest); };
+  return (
+    <label className="svg-field up-set-field">
+      <span className="svg-label">Stroke width px<Marker p={p} field="strokePx" testid="stroke" /></span>
+      <div className="up-bg-row">
+        <button type="button" className={`svg-btn tiny up-default-btn${pinned === undefined ? " on" : ""}`} data-testid="upload-set-stroke-inherit"
+          aria-pressed={pinned === undefined} onClick={inherit}>Bar ({bar})</button>
+        <DraftNumberInput testid="upload-set-stroke" label="This icon's stroke width in px" min={STROKE_MIN} max={STROKE_MAX} step={0.1}
+          value={pinned ?? null} placeholder={`bar: ${bar}`}
+          onCommit={(n) => (n === null ? inherit() : change(p, "strokePx", clampStrokePx(n)))} />
+      </div>
+      <small className="up-hint">{pinned === undefined ? "follows the bar's STROKE" : pinned === 0 ? "this icon keeps the artwork's own widths" : "this icon only — the bar's STROKE no longer changes it"}</small>
+    </label>
   );
 }
 

@@ -11,7 +11,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 - the artboard select's first option is `source` ("Default (the SVG's own)").
 - `upload-set-paint-clash` (`.svg-warning`, `role=alert`): only while the stroke colour is unreadable on the background (`lib/upload/paintclash`).
 
-`upload-set-stroke` (the stroke WIDTH) is **gone**: the bar's `upload-stroke` is that one value.
+`upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope** (follow-up 2026-10-19): that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 The older text below is kept for the other handles.
 
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
@@ -53,7 +53,7 @@ to fills". The row's settings cell reads `eps off · builtin` /
 The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
-clamped on change) with the reduced-gcd ratio `upload-set-artboard-ratio` and
+clamped when the field is left — blur/Enter; a draft while typing, 2026-10-19) with the reduced-gcd ratio `upload-set-artboard-ratio` and
 the megapixel readout `upload-set-artboard-mp`. `upload-set-mp` is NEVER disabled (2026-10-08): with a pinned
 artboard the checkbox `upload-set-mp-match` ("same size as the artboard",
 default checked) offers the choice, typing a megapixel value unticks it in the

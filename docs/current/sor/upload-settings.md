@@ -21,13 +21,18 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
     null fingerprints as `"default"`.
 * **One stroke width** (2026-10-19): the bar's STROKE (`upload-stroke`) IS the
   defaults' `strokePx`, range 0–50.
-  - The dialog has no width row.
-  - `parseOverrides` no longer reads `strokePx`/`strokePt`, and "Apply settings to
-    selected" pins every field except it (13 fields).
+  - The global dialog has no width row. One icon MAY pin its own width (follow-up,
+    same day): its dialog's `upload-set-stroke` (empty = the bar's, inherited;
+    `upload-set-stroke-inherit` drops the pin), read by `parseOverrides` (with
+    the `strokePt` alias). "Apply settings to selected" pins every field except
+    it (13 fields), so the bar stays live for those icons.
   - The old preview-only `previewStroke` pref is gone from this tab.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
   `prepareExportSvg(source, effective)`, debounced 120 ms and cached per source
   and fingerprint. The box is `zoomBoxFit`.
+* **Typed numbers commit on leave** (2026-10-19, `ui/DraftNumberInput`): the
+  custom artboard W×H and the icon's stroke width keep a local draft while
+  typed; blur/Enter validates (clamps) and writes once, Escape restores.
 * **Paint clash** (2026-10-19, `lib/upload/paintclash`): a hex stroke colour on
   a hex background below WCAG non-text contrast (3:1) is named in the row's
   preview note and in the dialog (`upload-set-paint-clash`) — e.g. black on

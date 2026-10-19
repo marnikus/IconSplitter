@@ -24,7 +24,7 @@ Focused test inventory; [all tests](../TESTS.md).
 * `upload_pinned_bulkbar.test.tsx` — the bulk bar sits in the shared sticky
   `.svg-bulkbar-pin`, a direct child of the tab column, above the rows
 * `upload_default_settings.test.ts` — "default" for every visual setting
-  (2026-10-19): parse/round-trip, the one stroke (0–50, no per-icon read),
+  (2026-10-19): parse/round-trip, the stroke (0–50, an icon's own read),
   stable fingerprints, prepare with each default, "as is" = the source byte for
   byte, `runExport` as is commits the source
 * `upload_paint_clash.test.ts` — strokes the background hides (black on black)
@@ -32,7 +32,8 @@ Focused test inventory; [all tests](../TESTS.md).
 * `upload_live_preview.test.tsx` — the bar's STROKE writes the export
   `strokePx` and the live preview shows it; no dialog stroke row; the Default
   choices and "All default"; the preview box fits the artboard ratio (2:1;
-  16 px = 2048 px)
+  16 px = 2048 px); the icon's own stroke override (written on leave,
+  inherit drops it); the custom W×H not clamped/written per keystroke
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo

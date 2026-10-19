@@ -705,8 +705,11 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
 
     // the custom size is where the aspect ratio lives, and it reads back
     await selectOption("[data-testid=upload-set-artboard]", "custom");
+    // each field is checked when it is left, not per keystroke (2026-10-19)
     await type("[data-testid=upload-set-artboard-w]", "1024");
+    await act(async () => { input("[data-testid=upload-set-artboard-w]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await type("[data-testid=upload-set-artboard-h]", "576");
+    await act(async () => { input("[data-testid=upload-set-artboard-h]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await settle();
     expect(storedDefaults().artboard).toMatchObject({ mode: "custom", width: 1024, height: 576 });
     expect(text("[data-testid=upload-set-artboard-ratio]")).toContain("16:9");

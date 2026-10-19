@@ -43,10 +43,10 @@ describe("the settings know 'default'", () => {
     expect(over).toMatchObject({ paddingPct: null, background: "default", artboard: { mode: "source" } });
   });
 
-  it("the stroke width is ONE value (the bar's): 0–50, and a per-icon strokePx is not read", () => {
+  it("the stroke width is the bar's (0–50); one icon may pin its own", () => {
     expect(STROKE_MAX).toBe(50);
     expect(normalizeSettings({ strokePx: 45 }).strokePx).toBe(45);
-    expect(parseOverrides({ strokePx: 3, paddingPct: 4 })).toEqual({ paddingPct: 4 });
+    expect(parseOverrides({ strokePx: 3, paddingPct: 4 })).toEqual({ strokePx: 3, paddingPct: 4 });
   });
 
   it("existing fingerprints are unchanged; each new default is distinct", () => {

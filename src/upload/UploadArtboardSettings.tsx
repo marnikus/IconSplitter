@@ -5,12 +5,14 @@
 // `content` mode the artwork (icon + padding) is scaled uniformly so the
 // artboard's area is N × 10⁶ px², strokes keeping their verbatim px; a pinned
 // artboard decides the megapixels itself, so the row is disabled and says so.
-// Every change is live (RULE 24) through the ONE write path in settingsfield.
+// Every change is live (RULE 24) through the ONE write path in settingsfield;
+// the custom W×H commit when their field is left (2026-10-19, ui/DraftNumberInput).
 
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard, clampArtboardMegapixels,
   MP_MAX, MP_MIN, type Artboard, type UploadSettings,
 } from "../lib/upload/settings";
+import DraftNumberInput from "../ui/DraftNumberInput";
 import { Marker, change, type UploadSettingsDialogProps } from "./settingsfield";
 
 interface BlockProps { p: UploadSettingsDialogProps; effective: UploadSettings }
@@ -42,17 +44,15 @@ export function ArtboardSetting({ p, effective }: BlockProps) {
   );
 }
 
-/** The custom width × height, and the ratio they spell out. */
+/** The custom width × height, and the ratio they spell out — each checked when its field is left, never per keystroke. */
 function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>) => void }) {
   return (
     <div className="up-bg-row">
-      <input className="svg-input" type="number" data-testid="upload-set-artboard-w" aria-label="Artboard width in px"
-        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.width}
-        onChange={(e) => patch({ width: Number(e.target.value) })} />
+      <DraftNumberInput testid="upload-set-artboard-w" label="Artboard width in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
+        value={a.width} onCommit={(n) => { if (n !== null) patch({ width: n }); }} />
       <output className="svg-bg-value" data-testid="upload-set-artboard-ratio">{ratioOf(a)}</output>
-      <input className="svg-input" type="number" data-testid="upload-set-artboard-h" aria-label="Artboard height in px"
-        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.height}
-        onChange={(e) => patch({ height: Number(e.target.value) })} />
+      <DraftNumberInput testid="upload-set-artboard-h" label="Artboard height in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
+        value={a.height} onCommit={(n) => { if (n !== null) patch({ height: n }); }} />
       <output className="svg-bg-value" data-testid="upload-set-artboard-mp">{mpOf(a)}</output>
     </div>
   );

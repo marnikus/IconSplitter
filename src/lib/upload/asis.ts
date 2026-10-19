@@ -20,7 +20,7 @@ export function isAsIs(s: UploadSettings): boolean {
     && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source" && !s.expandStrokes;
 }
 
-/** What an icon may pin: every field but the stroke width — that is ONE value, the bar's (2026-10-19). */
+/** What "Apply settings to selected" pins: every field but the stroke width, so the bar's STROKE stays live for those icons (an icon pins its own width only in its dialog). */
 export function perIconFields(s: UploadSettings): Omit<UploadSettings, "strokePx"> {
   const { strokePx, ...rest } = s;
   void strokePx;

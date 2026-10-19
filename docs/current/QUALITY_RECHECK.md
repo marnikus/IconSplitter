@@ -2882,3 +2882,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - Report: a black thumbnail on SVG to upload. Cause (stored settings): export background `#000000` with stroke colour `#000000` — the live preview honestly showed the black-on-black export. Added `lib/upload/paintclash` (WCAG 3:1) → row preview note + dialog `upload-set-paint-clash`.
 - Measured: `upload_paint_clash` 2 + `upload_live_preview` 8 green (red first: missing module / no note).
+
+## 2026-10-19 — Upload per-icon stroke + commit-on-leave numbers
+
+- One icon may pin its own stroke width again (icon dialog `upload-set-stroke`, inherit button); custom artboard W×H and that field commit on blur/Enter via new `ui/DraftNumberInput`.
+- Measured: 4 tests red first (override parse ×2, icon stroke UI, W×H draft), then green; tests/upload* 631 green.

@@ -184,3 +184,44 @@ describe("a stroke colour the background hides", () => {
     expect(q(`[data-testid=upload-prev-${FOG}-note]`)).toBeNull();
   });
 });
+
+async function blur(sel: string): Promise<void> {
+  await act(async () => { q(sel)!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); }); // React's onBlur
+  await settle(250);
+}
+
+describe("one icon may pin its own stroke width (2026-10-19 follow-up)", () => {
+  it("the icon's dialog writes an override the row previews; the bar still drives the rest; inherit drops it", async () => {
+    await mount({ strokePx: 2 });
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    const field = () => q("[data-testid=upload-set-stroke]") as HTMLInputElement;
+    expect(field().value).toBe("");
+    expect(field().placeholder).toContain("2");
+    await type("[data-testid=upload-set-stroke]", "7");
+    expect(loadUploadSettings().overrides[FOG]?.strokePx).toBeUndefined(); // not until the field is left
+    await blur("[data-testid=upload-set-stroke]");
+    expect(loadUploadSettings().overrides[FOG]?.strokePx).toBe(7);
+    expect(loadUploadSettings().defaults.strokePx).toBe(2);
+    expect(art()).toContain('stroke-width="7"');
+    await click("[data-testid=upload-set-stroke-inherit]");
+    expect(loadUploadSettings().overrides[FOG]?.strokePx).toBeUndefined();
+  });
+});
+
+describe("the custom artboard size is checked when the field is left, not per keystroke", () => {
+  it("typing '1' on the way to '1600' is not clamped or written; leaving the field commits the clamped value", async () => {
+    await mount({ artboard: { mode: "custom", size: 512, width: 512, height: 512 } });
+    await click("[data-testid=upload-settings-open]");
+    const w = () => q("[data-testid=upload-set-artboard-w]") as HTMLInputElement;
+    await type("[data-testid=upload-set-artboard-w]", "1");
+    expect(w().value).toBe("1");
+    expect(loadUploadSettings().defaults.artboard.width).toBe(512);
+    await type("[data-testid=upload-set-artboard-w]", "1600");
+    await blur("[data-testid=upload-set-artboard-w]");
+    expect(loadUploadSettings().defaults.artboard.width).toBe(1600);
+    await type("[data-testid=upload-set-artboard-w]", "3");
+    await blur("[data-testid=upload-set-artboard-w]");
+    expect(loadUploadSettings().defaults.artboard.width).toBeGreaterThan(3); // clamped to the minimum on leave
+    expect(w().value).toBe(String(loadUploadSettings().defaults.artboard.width));
+  });
+});

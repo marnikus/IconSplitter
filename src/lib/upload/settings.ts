@@ -194,7 +194,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   return out;
 }
 
-/** The numeric fields and their clamps. `strokePx` is not here: it is ONE value, the bar's (2026-10-19). */
+/** The numeric fields and their clamps; `strokePx` (an icon's own width) is read with its alias below. */
 const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["paddingPct", clampPaddingPct],
   ["jpegMegapixels", clampMegapixels],
@@ -214,6 +214,8 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
     if (typeof value === "number") Object.assign(out, { [key]: clamp(value) });
   }
   if (raw.paddingPct === null) out.paddingPct = null; // a pinned "default"
+  const stroke = raw.strokePx ?? raw.strokePt; // strokePt: the pre-2026-10-08 name
+  if (typeof stroke === "number") out.strokePx = clampStrokePx(stroke);
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
