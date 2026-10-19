@@ -5,9 +5,25 @@
 import { describe, expect, it } from "vitest";
 import {
   IMAGE_REGEN_DIR, b64ToBlob, imageRegenDir, imageRegenFileName, nextImageVersion,
-  parseImageResponse, parseImageVersions, preferredImagePath,
+  parseImageResponse, parseImageVersions, preferredImagePath, readImageUsage,
 } from "../src/lib/svgimgreg";
 import { PAIR_META_VERSION, newPairMeta, parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
+
+describe("the Images API usage block (2026-10-19: the log shows tokens + cost)", () => {
+  it("reads input/output/total tokens and a router-reported cost", () => {
+    const u = readImageUsage({ data: [], usage: { input_tokens: 1200, output_tokens: 4160, total_tokens: 5360, cost: 0.1734 } });
+    expect(u).toEqual({ input: 1200, output: 4160, total: 5360, cost: 0.1734, currency: "USD" });
+  });
+
+  it("accepts the chat-style names too", () => {
+    expect(readImageUsage({ usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 } })).toMatchObject({ input: 3, output: 4, total: 7, cost: null });
+  });
+
+  it("never invents a number: no usage block -> every field null", () => {
+    expect(readImageUsage({ data: [{ b64_json: "x" }] })).toEqual({ input: null, output: null, total: null, cost: null, currency: "USD" });
+    expect(readImageUsage({ usage: { total_tokens: "lots" } }).total).toBeNull();
+  });
+});
 
 const done = (version: number, file: string) => ({ version, file, status: "done" as const, prompt: "p", model: "openai/gpt-image-2.5-sunburst", requestId: null, error: null, updatedAt: "2026-10-16T10:00:00.000Z" });
 const DIR = "icons/AI source regeneration versions";

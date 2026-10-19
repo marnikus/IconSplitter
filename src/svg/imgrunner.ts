@@ -9,7 +9,8 @@
 
 import type { Connection } from "../lib/svgconnections";
 import { buildEditForm, imageEditUrl } from "../lib/svgimgedit";
-import { b64ToBlob, parseImageResponse } from "../lib/svgimgreg";
+import { b64ToBlob, parseImageResponse, readImageUsage } from "../lib/svgimgreg";
+import { readRequestId, type Usage } from "../lib/svgrequest";
 
 export interface ImageRegenItem {
   id: string;
@@ -24,7 +25,13 @@ export interface ImageRegenResult {
   status: "done" | "failed";
   blob?: Blob;
   error?: string;
+  /** What the provider reported for this request (2026-10-19); absent when no response was read. */
+  usage?: Usage;
+  requestId?: string | null;
 }
+
+/** One answered request: the image plus what it spent. */
+type Answer = Required<Pick<ImageRegenResult, "blob" | "usage" | "requestId">>;
 
 export interface ImageRegenArgs {
   conn: Connection;
@@ -41,7 +48,7 @@ export interface ImageRegenArgs {
 const NO_REFERENCE = "the current AI image could not be read, so nothing was sent";
 
 /** One Images API edit request: the prompt + this item's reference, one image per source. */
-async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Blob> {
+async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Answer> {
   const { conn, key, prompt, timeoutMs, fetchImpl } = args;
   const blob = await item.reference();
   if (blob === null) throw new Error(NO_REFERENCE);
@@ -57,15 +64,21 @@ async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Blob
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`the image request failed (HTTP ${response.status})`);
-    const parsed = parseImageResponse(await response.json());
-    if (parsed === null) throw new Error("the image response had no image in it");
-    if ("b64" in parsed) return b64ToBlob(parsed.b64);
-    const bin = await (fetchImpl ?? fetch)(parsed.url);
-    if (!bin.ok) throw new Error(`the image url could not be read (HTTP ${bin.status})`);
-    return await bin.blob();
+    const raw: unknown = await response.json();
+    return { blob: await imageOf(raw, fetchImpl), usage: readImageUsage(raw), requestId: readRequestId(response.headers) };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The response's first image as a blob: inline base64, or its url fetched. */
+async function imageOf(raw: unknown, fetchImpl?: typeof fetch): Promise<Blob> {
+  const parsed = parseImageResponse(raw);
+  if (parsed === null) throw new Error("the image response had no image in it");
+  if ("b64" in parsed) return b64ToBlob(parsed.b64);
+  const bin = await (fetchImpl ?? fetch)(parsed.url);
+  if (!bin.ok) throw new Error(`the image url could not be read (HTTP ${bin.status})`);
+  return await bin.blob();
 }
 
 /** Bounded pool: at most `concurrency` requests in flight, stop per item start. */
@@ -79,7 +92,7 @@ export async function runImageBatch(args: ImageRegenArgs): Promise<ImageRegenRes
       next += 1;
       const item = args.items[i];
       try {
-        results[i] = { id: item.id, status: "done", blob: await attempt(args, item) };
+        results[i] = { id: item.id, status: "done", ...(await attempt(args, item)) };
       } catch (error) {
         results[i] = { id: item.id, status: "failed", error: error instanceof Error ? error.message : String(error) };
       }

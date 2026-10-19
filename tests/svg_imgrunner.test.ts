@@ -81,6 +81,20 @@ describe("an unreadable reference is an honest failure, never a text-only reques
   });
 });
 
+describe("what each request spent travels with its result (2026-10-19)", () => {
+  it("a done item carries the provider usage and request id", async () => {
+    const body = { data: [{ b64_json: "UE5H" }], usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30, cost: 0.05 } };
+    const reply = () => new Response(JSON.stringify(body), { status: 200, headers: { "x-request-id": "req-1" } });
+    const out = await runImageBatch(args({}, fakeFetch([], reply)));
+    expect(out[0]).toMatchObject({ status: "done", requestId: "req-1", usage: { input: 10, output: 20, total: 30, cost: 0.05 } });
+  });
+
+  it("a response without usage says so with nulls, never zeros", async () => {
+    const out = await runImageBatch(args({}, fakeFetch([])));
+    expect(out[0].usage).toMatchObject({ total: null, cost: null });
+  });
+});
+
 describe("the response path is unchanged", () => {
   it("HTTP errors stay honest", async () => {
     const out = await runImageBatch(args({}, fakeFetch([], () => new Response("no", { status: 402 }))));

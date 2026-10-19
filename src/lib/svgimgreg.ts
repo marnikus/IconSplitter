@@ -5,7 +5,9 @@
 // thumb loads. Pure: every rule lives here; IO and UI glue do not.
 // Wire facts verified 2026-10-16 (archive/2026-10-16-image-regen): the request
 // is lib/svgconnections' buildImageBody; the response is
-// `{ created, data: [{ b64_json?, url? }] }`.
+// `{ created, data: [{ b64_json?, url? }], usage? }`.
+
+import { NO_USAGE, type Usage } from "./svgrequest";
 
 /** The subfolder holding a pair's regenerated AI images (user's naming). */
 export const IMAGE_REGEN_DIR = "AI source regeneration versions";
@@ -91,6 +93,26 @@ function firstImageOf(raw: unknown): Record<string, unknown> | null {
   const first = data[0];
   return typeof first === "object" && first !== null ? (first as Record<string, unknown>) : null;
 }
+
+/**
+ * The response's `usage` block (2026-10-19): the Images API names tokens
+ * input_/output_tokens, the chat names are accepted too; the router may add a
+ * USD `cost`. A missing number stays null — never invented.
+ */
+export function readImageUsage(raw: unknown): Usage {
+  const u = typeof raw === "object" && raw !== null ? (raw as { usage?: unknown }).usage : null;
+  if (typeof u !== "object" || u === null) return { ...NO_USAGE };
+  const r = u as Record<string, unknown>;
+  return {
+    input: numOf(r.input_tokens) ?? numOf(r.prompt_tokens),
+    output: numOf(r.output_tokens) ?? numOf(r.completion_tokens),
+    total: numOf(r.total_tokens),
+    cost: numOf(r.cost),
+    currency: typeof r.currency === "string" ? r.currency : "USD",
+  };
+}
+
+const numOf = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** An inline image's base64 payload -> the PNG blob the tab writes. */
 export function b64ToBlob(b64: string, type = "image/png"): Blob {

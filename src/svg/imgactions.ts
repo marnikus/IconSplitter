@@ -12,7 +12,8 @@ import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { log } from "../log/logstore";
 import type { SvgCtx, Slice } from "./actions";
 import { listRegenNames, readReferenceImage, writeRegenImage } from "./imgregfiles";
-import { runImageBatch, type ImageRegenItem } from "./imgrunner";
+import { imageItemSpec, imageRunSpec, imageSpendLine, type ImageTally } from "./imglog";
+import { runImageBatch, type ImageRegenItem, type ImageRegenResult } from "./imgrunner";
 import type { SvgRow } from "./types";
 
 type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "setImageVersion">;
@@ -59,17 +60,26 @@ async function confirmOf(c: SvgCtx): Promise<void> {
     items: rows.map((r) => referenceItem(root, r)),
     concurrency: c.m.config.concurrency, timeoutMs: c.m.config.timeoutMs,
   });
-  let done = 0, failed = 0;
+  const tally = await recordAll({ c, root, model: conn.model }, rows, report);
+  log(imageRunSpec(report, conn.model, tally));
+  sayOutcome(c, tally, imageSpendLine(report, conn.model));
+}
+
+/** The run's surroundings every recorded result needs. */
+interface RunScope { c: SvgCtx; root: DirHandleLike; model: string }
+
+/** Logs and records every result in order; done = a done request whose image landed. */
+async function recordAll(s: RunScope, rows: readonly SvgRow[], report: readonly ImageRegenResult[]): Promise<ImageTally> {
+  const tally: ImageTally = { done: 0, failed: 0 };
   for (let i = 0; i < report.length; i++) {
-    const row = rows[i];
-    const src = row.source;
-    const meta = await recordResult(root, { aiRelPath: src.relPath, dirPath: src.dirPath, stem: src.stem }, report[i], { prompt: c.m.prompt, model: conn.model });
-    if (meta === null) { failed += 1; continue; }
-    done += 1;
-    c.setRowsFn((rs) => rs.map((r) => (r.source.id === row.source.id ? { ...r, meta } : r)));
+    log(imageItemSpec(report[i], s.model));
+    const src = rows[i].source;
+    const meta = await recordResult(s.root, { aiRelPath: src.relPath, dirPath: src.dirPath, stem: src.stem }, report[i], { prompt: s.c.m.prompt, model: s.model });
+    if (meta !== null) s.c.setRowsFn((rs) => rs.map((r) => (r.source.id === src.id ? { ...r, meta } : r)));
+    if (meta !== null && report[i].status === "done") tally.done += 1;
+    else tally.failed += 1;
   }
-  log({ feature: "svg", action: "image-regen", detail: `${done} done, ${failed} failed` });
-  sayOutcome(c, done, failed);
+  return tally;
 }
 
 /**
@@ -82,12 +92,12 @@ function referenceItem(root: DirHandleLike, row: SvgRow): ImageRegenItem {
   return { id: row.source.id, fileName: path.slice(path.lastIndexOf("/") + 1), reference: () => readReferenceImage(root, path) };
 }
 
-/** The post-run toast: what landed, what did not. */
-function sayOutcome(c: SvgCtx, done: number, failed: number): void {
+/** The post-run toast: what landed, what did not, what it spent. */
+function sayOutcome(c: SvgCtx, { done, failed }: ImageTally, spend: string): void {
   const ok = done > 0
     ? `Regenerated ${done} AI source${done === 1 ? "" : "s"} — new main version${failed > 0 ? `, ${failed} failed` : ""}`
     : "No AI source was regenerated";
-  c.say(ok, failed > 0 || done === 0);
+  c.say(`${ok} · ${spend}`, failed > 0 || done === 0);
 }
 
 /** The main switch: point imagePreferred at a version (or the original). */
@@ -108,7 +118,7 @@ async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<vo
 interface RegenReq { prompt: string; model: string }
 
 /** One runner outcome for one row. */
-type RegenResult = { status: "done" | "failed"; blob?: Blob; error?: string };
+type RegenResult = { status: "done" | "failed"; blob?: Blob; error?: string; requestId?: string | null };
 
 /** The meta after the append (what setRows stores for the row). */
 type ImgRecord = PairMeta;
@@ -152,7 +162,8 @@ async function entryFor(
   const version = nextImageVersion(at.target.stem, history, known);
   const file = imageRegenFileName(at.target.stem, version);
   const ok = result.status === "done" && result.blob !== undefined;
-  if (!ok) return { version, file, status: "failed", prompt: req.prompt, model: req.model, requestId: null, error: result.error ?? "unknown", updatedAt: now };
+  const requestId = result.requestId ?? null;
+  if (!ok) return { version, file, status: "failed", prompt: req.prompt, model: req.model, requestId, error: result.error ?? "unknown", updatedAt: now };
   const stored = await writeRegenImage(at.root, at.target.dirPath, file, result.blob as Blob);
-  return { version, file: stored, status: "done", prompt: req.prompt, model: req.model, requestId: null, error: null, updatedAt: now };
+  return { version, file: stored, status: "done", prompt: req.prompt, model: req.model, requestId, error: null, updatedAt: now };
 }
