@@ -7,7 +7,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
 <a id="i-17"></a>
 * **I-17 (SVG preview, RULE 3/14):** the preview background is an app setting —
   it lives in the frame around the preview and never in the SVG text, the
-  sidecar or an export; the code dialog always shows the saved bytes.
+  sidecar or an export; the code dialog always shows the saved bytes. The
+  preview stroke width (2026-10-19) is the same kind of setting: one shared
+  stylesheet adopted by the row thumbnails' shadow roots (`svg/strokesheet`),
+  empty at default; files, Copy and the dialogs keep the real widths.
 
 <a id="i-18"></a>
 * **I-18 (SVG cost, RULE 4):** a version's cost is either provider-reported or a

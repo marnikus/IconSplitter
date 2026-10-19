@@ -2831,3 +2831,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
   width-bound cells (AI chips | SVG chips). Versions dialog unchanged.
 - `tests/svg_version_chips.test.tsx`: 4 of 5 red before (no chips), 5/5 green
   after; all 49 `tests/svg_*` files / 498 tests green.
+
+## 2026-10-19 — SVG preview stroke width (pinned bar)
+
+- Feature: `STROKE` field (0–50 px / "default") + Reset in the pinned Generate SVG bar; row thumbnails adopt one shared constructable stylesheet (`svg/strokesheet.ts`, rule from `lib/previewstroke.ts`), so a change is one `replaceSync` — no re-parse, no row re-render. Files, Copy and dialogs keep real widths; persisted as `previewStroke` in the SVG prefs. Plan: `docs/archive/2026-10-19-svg-preview-stroke/README.md`.
+- TDD: `tests/svg_preview_stroke.test.tsx` 7/11 red before the UI (lib cases written with the lib), 11/11 green after; `tests/svg_*` + `tests/upload*` 95 files / 1116 tests green; tsc clean; lint 0 errors; `quality:changed` GATE PASSED (new files 40/48/40 lines).

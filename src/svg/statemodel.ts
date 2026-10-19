@@ -65,6 +65,8 @@ export interface SvgModel {
   providerOpen: boolean;
   /** Preview-frame background — an app setting, never part of an SVG. */
   bg: PreviewBackground;
+  /** Preview-only stroke width for the row thumbnails; null = each file's own. */
+  stroke: number | null;
   filter: SvgListFilter;
   sort: SvgSort;
   /**
@@ -112,6 +114,7 @@ export type SvgAction =
   | { type: "thumb"; px: number }
   | { type: "provider-open"; open: boolean }
   | { type: "bg"; bg: PreviewBackground }
+  | { type: "stroke"; px: number | null }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
   | { type: "repin" }
@@ -164,6 +167,7 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
+  stroke: (m, a) => ({ ...m, stroke: (a as { px: number | null }).px }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
   sort: (m, a) => repinned({ ...m, sort: (a as { sort: SvgSort }).sort }),
   repin: (m) => repinned(m),
@@ -216,6 +220,7 @@ export interface ViewPrefs {
   thumb: number;
   providerOpen: boolean;
   bg: PreviewBackground;
+  stroke: number | null;
 }
 
 /** The model a fresh tab opens with (persisted values are merged in boot). */
@@ -235,7 +240,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     config: live, connections: stored.list, activeConn: active.id,
     params: { ...DEFAULT_PARAMS }, caps: capsFor(live.model), catalog: null, paramNote: null,
     prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
-    thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
+    thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg, stroke: prefs.stroke,
     filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
     imgReview: null, imgJournal: journal.entries, imgJournalWarning: journal.warning,
   };

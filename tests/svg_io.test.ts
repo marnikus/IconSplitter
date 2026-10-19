@@ -662,7 +662,7 @@ describe("runner events and the review decision", () => {
 });
 
 const CFG = { baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 };
-const VIEW_PREFS = { thumb: 84, providerOpen: true, bg: { preset: "white", custom: "#808080" } } as const;
+const VIEW_PREFS = { thumb: 84, providerOpen: true, bg: { preset: "white", custom: "#808080" }, stroke: null } as const;
 
 describe("state reducer and preview", () => {
   it("starts from the documented defaults and applies every action once", () => {
@@ -685,9 +685,9 @@ describe("state reducer and preview", () => {
 
   it("remembers the zoom, the card's state and the preview background", () => {
     localStorage.setItem(SVG_PREFS_KEY, JSON.stringify({ thumbHeight: 132, providerOpen: false }));
-    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false, previewBg: DEFAULT_PREVIEW_BACKGROUND });
-    saveSvgPrefs({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
-    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false, previewBg: DEFAULT_PREVIEW_BACKGROUND, previewStroke: null });
+    saveSvgPrefs({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" }, previewStroke: 2.5 });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" }, previewStroke: 2.5 });
     localStorage.removeItem(SVG_PREFS_KEY);
   });
 

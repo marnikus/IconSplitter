@@ -1,4 +1,5 @@
 // prefsstore.ts — Generate SVG view prefs (thumbnail zoom, preview background,
+// preview stroke width,
 // whether the provider card is minimized), persisted locally. The zoom range
 // and clamping stay in lib/zoom so the SVG tab and the Selection V2 tab
 // share ONE definition of "thumbnail height" (RULE 10); the background payload
@@ -6,6 +7,7 @@
 
 import { clampZoom, ZOOM_DEFAULT } from "../lib/zoom";
 import { DEFAULT_PREVIEW_BACKGROUND, parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
+import { parseStoredStroke } from "../lib/previewstroke";
 import { readKey, writeKey } from "../state/safestorage";
 import { isRecord } from "../lib/isrecord";
 
@@ -16,10 +18,12 @@ export interface SvgPrefs {
   /** false when the user minimized the provider card to save vertical space. */
   providerOpen: boolean;
   previewBg: PreviewBackground;
+  /** Preview-only stroke width for every row thumbnail; null = each file's own (2026-10-19). */
+  previewStroke: number | null;
 }
 
 export const DEFAULT_SVG_PREFS: SvgPrefs = {
-  thumbHeight: ZOOM_DEFAULT, providerOpen: true, previewBg: DEFAULT_PREVIEW_BACKGROUND,
+  thumbHeight: ZOOM_DEFAULT, providerOpen: true, previewBg: DEFAULT_PREVIEW_BACKGROUND, previewStroke: null,
 };
 
 export function parseSvgPrefs(raw: unknown): SvgPrefs {
@@ -29,6 +33,7 @@ export function parseSvgPrefs(raw: unknown): SvgPrefs {
     // Anything that is not an explicit false keeps the card open.
     providerOpen: raw.providerOpen !== false,
     previewBg: parsePreviewBackground(raw.previewBg),
+    previewStroke: parseStoredStroke(raw.previewStroke),
   };
 }
 

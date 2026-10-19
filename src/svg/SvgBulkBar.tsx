@@ -1,7 +1,8 @@
 // SvgBulkBar.tsx — the bulk bar of the Generate SVG tab (prompt §2/§15/§16/§17).
 // Header checkbox with an indeterminate state, the selected/visible scope,
 // select-visible and deselect-all, the two PREVIEW settings (thumbnail zoom and
-// the frame background — one control per decision, RULE 10), the estimate line,
+// the frame background — one control per decision, RULE 10), the preview stroke
+// width (PreviewStroke), the estimate line,
 // and the four bulk actions: Generate, Regenerate, Approve, Decline. There is
 // no "approve visible" action — every bulk operation applies to the SELECTION
 // only. Approve/Decline stay disabled until a selected row has a valid SVG.
@@ -12,6 +13,7 @@ import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBa
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import { costText, fmtTokens } from "../lib/svgusage";
 import Elapsed from "./Elapsed";
+import PreviewStroke from "./PreviewStroke";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -25,6 +27,8 @@ export interface SvgBulkBarProps {
   decidableCount: number;
   thumb: number;
   bg: PreviewBackground;
+  /** Preview-only stroke width for every row thumbnail; null = each file's own. */
+  stroke: number | null;
   model: string;
   totals: { tokens: number | null; cost: number | null; estimated: number | null };
   progress: RunProgress | null;
@@ -34,6 +38,7 @@ export interface SvgBulkBarProps {
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
+  onStroke: (px: number | null) => void;
   onGenerate: () => void;
   onRegenerate: () => void;
   /** AI source regeneration through the image connection (2026-10-16). */
@@ -75,6 +80,8 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
   return (
     <div className="svg-bulk-right">
       <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <span className="svg-divider" aria-hidden="true" />
+      <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} />
       <span className="svg-divider" aria-hidden="true" />
       <div className="svg-zoom">
         <label htmlFor="svg-thumb">ZOOM</label>

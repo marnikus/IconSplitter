@@ -99,7 +99,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame }: SvgSlotArgs): Preview
     background: frame.color,
     attrs: { "data-bg": frame.color },
     children: <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`}
-      label={`${stem} SVG v${version}`} version={version} />,
+      label={`${stem} SVG v${version}`} version={version} strokeOverride />,
   };
 }
 

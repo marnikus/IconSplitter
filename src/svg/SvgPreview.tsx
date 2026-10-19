@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
+import { adoptPreviewStroke } from "./strokesheet";
 
 export interface SvgPreviewProps {
   code: string | null;
@@ -15,9 +16,11 @@ export interface SvgPreviewProps {
   label: string;
   /** Recorded so a test can prove preview and Copy show the same version. */
   version: number;
+  /** Row thumbnails follow the pinned bar's preview stroke width; dialogs keep the real one. */
+  strokeOverride?: boolean;
 }
 
-export default function SvgPreviewBox({ code, box, testid, label, version }: SvgPreviewProps) {
+export default function SvgPreviewBox({ code, box, testid, label, version, strokeOverride = false }: SvgPreviewProps) {
   const preview = useMemo(() => buildSvgPreview(code), [code]);
   if (code === null || code.trim() === "") {
     return <Chip className="svg-thumb missing" box={box} testid={testid}>No SVG</Chip>;
@@ -25,7 +28,7 @@ export default function SvgPreviewBox({ code, box, testid, label, version }: Svg
   if (!preview.ok) {
     return <Chip className="svg-thumb missing error" box={box} testid={testid} error={preview.error}>Preview failed</Chip>;
   }
-  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} />;
+  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeOverride} />;
 }
 
 interface ChipProps {
@@ -50,11 +53,12 @@ interface ShadowProps {
   testid: string;
   label: string;
   version: number;
+  stroke: boolean;
 }
 
-function ShadowSvg({ html, box, testid, label, version }: ShadowProps) {
+function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
-  useShadowArt(html, host);
+  useShadowArt(html, host, stroke);
   return (
     <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height }}
       role="img" aria-label={label} data-testid={testid} data-version={version} />
@@ -62,11 +66,12 @@ function ShadowSvg({ html, box, testid, label, version }: ShadowProps) {
 }
 
 /** Paints the sanitized document inside its own shadow root (RULE 20). */
-function useShadowArt(html: string, host: { current: HTMLDivElement | null }): void {
+function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: boolean): void {
   useEffect(() => {
     const node = host.current;
     if (node === null) return;
     const root = node.shadowRoot ?? node.attachShadow({ mode: "open" });
     root.innerHTML = `${PREVIEW_CSS}${html}`;
-  }, [html, host]);
+    if (stroke) adoptPreviewStroke(root);
+  }, [html, host, stroke]);
 }

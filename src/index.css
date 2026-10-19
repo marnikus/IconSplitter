@@ -1322,6 +1322,23 @@
 .svg-bg input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
 .svg-bg-value { color: var(--v2-muted); font-size: 9px; white-space: nowrap; }
 
+/* preview stroke width (2026-10-19): a field, "px", the applied value, Reset */
+.svg-stroke { display: flex; align-items: center; gap: 4px; color: var(--v2-muted); font-size: 9px; }
+.svg-stroke > label { color: var(--v2-muted-2); font-size: 8px; font-weight: 800; letter-spacing: 0.07em; }
+.svg-stroke input {
+  width: 52px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid #35405e;
+  border-radius: 4px;
+  background: #0c1222;
+  color: inherit;
+  font-size: 10px;
+}
+.svg-stroke input[aria-invalid="true"] { border-color: #d14b4b; }
+.svg-stroke-value { white-space: nowrap; min-width: 40px; }
+.svg-stroke .svg-btn { padding: 2px 8px; }
+
 .svg-row {
   position: relative;
   min-height: calc(var(--svg-thumb) + 22px);

@@ -57,6 +57,6 @@ interface Boot {
 /** Values the tab opens with, read once from local storage (RULE 6). */
 function loadBoot(): Boot {
   const prefs = loadSvgPrefs();
-  const view: ViewPrefs = { thumb: prefs.thumbHeight, providerOpen: prefs.providerOpen, bg: prefs.previewBg };
+  const view: ViewPrefs = { thumb: prefs.thumbHeight, providerOpen: prefs.providerOpen, bg: prefs.previewBg, stroke: prefs.previewStroke };
   return { config: loadConfig(), connections: loadConnections(), prompt: loadPrompt(), prefs: view, presets: loadPresets() };
 }
