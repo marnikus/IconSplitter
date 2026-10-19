@@ -101,7 +101,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `upload-select-visible`, `upload-deselect`, `upload-thumb` +
   `upload-thumb-value`, preview background (`upload-bg`,
   `upload-bg-{white,black,gray,green,red}`, `upload-bg-custom`,
-  `upload-bg-value`), `upload-estimate` / `upload-progress`,
+  `upload-bg-value`), preview stroke (`upload-stroke`, `upload-stroke-value`,
+  `upload-stroke-reset`), `upload-estimate` / `upload-progress`,
   `upload-apply-settings`, `upload-meta-selected`,
   `upload-meta-regenerate-selected`, `upload-export-selected`,
   `upload-cancel-run`), list (`upload-list`,

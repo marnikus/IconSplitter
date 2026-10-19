@@ -2846,3 +2846,8 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 
 - User report: an image regeneration's spend appeared only in the log/toast, not in the row's usage column. Cause: `imgcommit.recordImageResult` built `ImageVersion` without usage/cost (the type had no fields). Fix: additive `usage` + `cost` on `ImageVersion` (parsed with `svgmodel.toUsage/toCost`), cost via `costInfoFor`, composite cells get `allocateUsage(usage, cells)` (estimate unless alone); `SvgRow.UsageCell` shows "SVG gen." then "Image gen." (vN · tokens · cost, or "original"). Plan: `docs/archive/2026-10-19-image-regen-usage/README.md`.
 - TDD: 4 tests red (svgimgreg round-trip + 3 in svg_imgreg_ui "tokens and cost on the row"), green after; svgimgreg + svg_imgreg_ui 61/61.
+
+## 2026-10-19 — preview stroke width reused on SVG to upload
+
+- Request: the same feature on "SVG to upload", reusing code. Transform: `svg/strokesheet.ts` singleton → `createStrokeSheet()` factory with `SVG_STROKE_SHEET` / `UPLOAD_STROKE_SHEET` (both tabs stay mounted, so one shared sheet would leak widths across tabs); `SvgPreviewBox` `strokeOverride: boolean` → `strokeSheet?: StrokeSheet`; `PreviewStroke` takes `sheet` + `idPrefix`. Upload wiring: `previewStroke` pref, `stroke` action/model, `setStroke`, persist, `UploadBulkBar` + `UploadPreview`. No new CSS. Plan: `docs/archive/2026-10-19-upload-preview-stroke/README.md`.
+- TDD: `tests/upload_preview_stroke.test.tsx` 6/6 red before, green after; `svg_preview_stroke` stays 11/11; tests/upload* + tests/svg* 101 files / 1189 tests green; tsc clean.

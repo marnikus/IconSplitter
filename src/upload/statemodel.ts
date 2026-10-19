@@ -54,6 +54,8 @@ export interface UploadModel {
   providerOpen: boolean;
   /** Preview-frame background — an app setting, never part of an SVG. */
   bg: PreviewBackground;
+  /** Preview-only stroke width for the row previews; null = each file's own. */
+  stroke: number | null;
   filter: UploadListFilter;
   sort: UploadSort;
   dialog: UploadDialog | null;
@@ -86,6 +88,7 @@ export type UploadAction =
   | { type: "key"; key: string | null; source?: KeySource }
   | { type: "thumb"; px: number }
   | { type: "bg"; bg: PreviewBackground }
+  | { type: "stroke"; px: number | null }
   | { type: "provider-open"; open: boolean }
   | { type: "filter"; patch: Partial<UploadListFilter> }
   | { type: "sort"; sort: UploadSort }
@@ -133,6 +136,7 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   key: (m, a) => keyModel(m, (a as { key: string | null }).key, (a as { source?: KeySource }).source),
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
+  stroke: (m, a) => ({ ...m, stroke: (a as { px: number | null }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<UploadListFilter> }).patch } }),
   sort: (m, a) => ({ ...m, sort: (a as { sort: UploadSort }).sort }),
@@ -217,7 +221,7 @@ export function initialModel(boot: Boot): UploadModel {
     defaults: boot.settings.defaults, overrides: boot.settings.overrides,
     gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, prompt: boot.prompt, presets: boot.presets,
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
-    thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
+    thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg, stroke: boot.prefs.previewStroke,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
     runningMeta: 0, runningExport: 0, progress: null,
   };

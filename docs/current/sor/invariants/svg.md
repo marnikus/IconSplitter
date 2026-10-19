@@ -9,7 +9,8 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   it lives in the frame around the preview and never in the SVG text, the
   sidecar or an export; the code dialog always shows the saved bytes. The
   preview stroke width (2026-10-19) is the same kind of setting: one shared
-  stylesheet (screen px, non-scaling) adopted by the row thumbnails' shadow roots (`svg/strokesheet`),
+  stylesheet (screen px, non-scaling) adopted by the row thumbnails' shadow roots
+  (`svg/strokesheet`, one instance per tab — SVG to upload has its own),
   empty at default; files, Copy and the dialogs keep the real widths.
 
 <a id="i-18"></a>

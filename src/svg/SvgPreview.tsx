@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
-import { adoptPreviewStroke } from "./strokesheet";
+import type { StrokeSheet } from "./strokesheet";
 
 export interface SvgPreviewProps {
   code: string | null;
@@ -16,11 +16,11 @@ export interface SvgPreviewProps {
   label: string;
   /** Recorded so a test can prove preview and Copy show the same version. */
   version: number;
-  /** Row thumbnails follow the pinned bar's preview stroke width; dialogs keep the real one. */
-  strokeOverride?: boolean;
+  /** The tab's preview-stroke sheet row thumbnails follow; absent = the real widths (dialogs). */
+  strokeSheet?: StrokeSheet;
 }
 
-export default function SvgPreviewBox({ code, box, testid, label, version, strokeOverride = false }: SvgPreviewProps) {
+export default function SvgPreviewBox({ code, box, testid, label, version, strokeSheet }: SvgPreviewProps) {
   const preview = useMemo(() => buildSvgPreview(code), [code]);
   if (code === null || code.trim() === "") {
     return <Chip className="svg-thumb missing" box={box} testid={testid}>No SVG</Chip>;
@@ -28,7 +28,7 @@ export default function SvgPreviewBox({ code, box, testid, label, version, strok
   if (!preview.ok) {
     return <Chip className="svg-thumb missing error" box={box} testid={testid} error={preview.error}>Preview failed</Chip>;
   }
-  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeOverride} />;
+  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeSheet} />;
 }
 
 interface ChipProps {
@@ -53,7 +53,7 @@ interface ShadowProps {
   testid: string;
   label: string;
   version: number;
-  stroke: boolean;
+  stroke: StrokeSheet | undefined;
 }
 
 function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
@@ -66,12 +66,12 @@ function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
 }
 
 /** Paints the sanitized document inside its own shadow root (RULE 20). */
-function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: boolean): void {
+function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: StrokeSheet | undefined): void {
   useEffect(() => {
     const node = host.current;
     if (node === null) return;
     const root = node.shadowRoot ?? node.attachShadow({ mode: "open" });
     root.innerHTML = `${PREVIEW_CSS}${html}`;
-    if (stroke) adoptPreviewStroke(root);
+    stroke?.adopt(root);
   }, [html, host, stroke]);
 }

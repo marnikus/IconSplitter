@@ -82,15 +82,15 @@ describe("configstore — the Gemini provider config", () => {
 });
 
 describe("prefsstore — the view prefs", () => {
-  it("round-trips the zoom, the card state and the preview background", () => {
-    saveUploadPrefs({ thumbHeight: 200, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
-    expect(loadUploadPrefs()).toEqual({ thumbHeight: 200, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
+  it("round-trips the zoom, the card state, the preview background and stroke", () => {
+    saveUploadPrefs({ thumbHeight: 200, providerOpen: false, previewBg: { preset: "black", custom: "#123456" }, previewStroke: 3.5 });
+    expect(loadUploadPrefs()).toEqual({ thumbHeight: 200, providerOpen: false, previewBg: { preset: "black", custom: "#123456" }, previewStroke: 3.5 });
   });
 
   it("defaults on a corrupt payload and clamps the zoom into the shared range", () => {
     localStorage.setItem("iconSplitter.upload.prefs.v1", "null");
     expect(loadUploadPrefs()).toEqual(DEFAULT_UPLOAD_PREFS);
-    saveUploadPrefs({ thumbHeight: 99999, providerOpen: true, previewBg: DEFAULT_PREVIEW_BACKGROUND });
+    saveUploadPrefs({ thumbHeight: 99999, providerOpen: true, previewBg: DEFAULT_PREVIEW_BACKGROUND, previewStroke: null });
     expect(loadUploadPrefs().thumbHeight).toBe(800);
     expect(loadUploadPrefs().thumbHeight).not.toBe(ZOOM_DEFAULT); // a real write, not the default
   });

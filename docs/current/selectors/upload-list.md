@@ -15,6 +15,7 @@ status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
 | `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |
 | `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
+| `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | preview stroke width | the Generate SVG control reused (`svg/PreviewStroke`, prefix `upload`): 0–50 screen px or `default`, Reset; preview only, through the tab's own `UPLOAD_STROKE_SHEET` (2026-10-19) |
 | `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
 | `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = selected icons with NO metadata text yet; the paid request never replaces existing text (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |

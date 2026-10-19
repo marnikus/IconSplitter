@@ -21,6 +21,9 @@ Focused test inventory; [all tests](../TESTS.md).
   record null counted), pruneChecked
 * `upload_undo.test.ts` — the `uploadSettings` entry: payload gate, the live
   binding, the persist-only path, no-op refusal, undo/redo routing
+* `upload_preview_stroke.test.tsx` — the reused preview stroke width: control in
+  the bulk bar, the tab's own sheet restyles row previews (files untouched),
+  Reset/"default", persistence, never the Generate SVG sheet; `createStrokeSheet`
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo

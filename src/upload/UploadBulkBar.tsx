@@ -1,7 +1,7 @@
 // UploadBulkBar.tsx — the bulk bar of the "SVG to upload" tab (design §4.1/
 // §6): the header checkbox with an indeterminate state, the selection scope,
-// the two PREVIEW settings (thumbnail zoom and the frame background — one
-// control per decision, RULE 10) with the global Export settings button beside
+// the PREVIEW settings (thumbnail zoom, the frame background and the stroke
+// width shared with Generate SVG's PreviewStroke — one control per decision, RULE 10) with the global Export settings button beside
 // them (the reference puts the tools here, not in the provider card), the live
 // progress line, and the bulk controls: Apply settings, Generate metadata,
 // Regenerate metadata, Export selected, Download all (the selection's committed
@@ -9,6 +9,8 @@
 // is in flight. Every bulk action applies to the SELECTION only.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
+import PreviewStroke from "../svg/PreviewStroke";
+import { UPLOAD_STROKE_SHEET } from "../svg/strokesheet";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 
 export interface UploadBulkBarProps {
@@ -17,6 +19,8 @@ export interface UploadBulkBarProps {
   visibleCount: number;
   thumb: number;
   bg: PreviewBackground;
+  /** Preview-only stroke width for every row preview; null = each file's own. */
+  stroke: number | null;
   progress: { done: number; total: number } | null;
   runningMeta: number;
   runningExport: number;
@@ -31,6 +35,7 @@ export interface UploadBulkBarProps {
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
+  onStroke: (px: number | null) => void;
   onSettings: () => void;
   onApplySettings: () => void;
   onMetadata: () => void;
@@ -71,6 +76,8 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
   return (
     <div className="svg-bulk-right" data-testid="upload-bulk-right">
       <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <span className="svg-divider" aria-hidden="true" />
+      <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} sheet={UPLOAD_STROKE_SHEET} idPrefix="upload" />
       <span className="svg-divider" aria-hidden="true" />
       <Zoom thumb={p.thumb} onThumb={p.onThumb} />
       <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>

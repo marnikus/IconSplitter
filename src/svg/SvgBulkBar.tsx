@@ -14,6 +14,7 @@ import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom
 import { costText, fmtTokens } from "../lib/svgusage";
 import Elapsed from "./Elapsed";
 import PreviewStroke from "./PreviewStroke";
+import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -81,7 +82,7 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
     <div className="svg-bulk-right">
       <PreviewBg bg={p.bg} onBg={p.onBg} />
       <span className="svg-divider" aria-hidden="true" />
-      <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} />
+      <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} sheet={SVG_STROKE_SHEET} idPrefix="svg" />
       <span className="svg-divider" aria-hidden="true" />
       <div className="svg-zoom">
         <label htmlFor="svg-thumb">ZOOM</label>

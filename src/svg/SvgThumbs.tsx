@@ -26,6 +26,7 @@ import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
 import { previewTargetOf, shownVersion } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
+import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { SvgRow } from "./types";
 
 export interface SvgThumbsProps {
@@ -99,7 +100,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame }: SvgSlotArgs): Preview
     background: frame.color,
     attrs: { "data-bg": frame.color },
     children: <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`}
-      label={`${stem} SVG v${version}`} version={version} strokeOverride />,
+      label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />,
   };
 }
 

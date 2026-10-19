@@ -2,7 +2,8 @@
 // Mirrors svg/SvgThumbs' SVG side: the saved document is read, sanitized and
 // fitted by lib/svgpreview inside a shadow root (never written back), inside a
 // FRAME whose background is the user's preview choice (lib/svgbackground) —
-// the document itself is never modified. The box comes from the one zoom rule
+// the document itself is never modified. The preview stroke width reaches it
+// only through the tab's shared sheet (svg/strokesheet, 2026-10-19). The box comes from the one zoom rule
 // (lib/zoom), so this tab zooms exactly like Generate SVG (I-55).
 
 import { useMemo } from "react";
@@ -12,6 +13,7 @@ import { buildSvgPreview } from "../lib/svgpreview";
 import { zoomBoxRatio } from "../lib/zoom";
 import { useSvgText } from "../svg/usesvgtext";
 import SvgPreviewBox from "../svg/SvgPreview";
+import { UPLOAD_STROKE_SHEET } from "../svg/strokesheet";
 
 export interface UploadPreviewProps {
   rootRef: { current: DirHandleLike | null };
@@ -32,7 +34,7 @@ export default function UploadPreview({ rootRef, rootToken, path, thumb, bg, tes
   return (
     <div className={`svg-preview-frame${frame.outline ? " contrast" : ""}`} data-testid={`${testid}-frame`}
       style={{ width: box.width, height: box.height, background: frame.color }} data-bg={frame.color}>
-      <SvgPreviewBox code={svg} box={box} testid={testid} label={label} version={version} />
+      <SvgPreviewBox code={svg} box={box} testid={testid} label={label} version={version} strokeSheet={UPLOAD_STROKE_SHEET} />
     </div>
   );
 }
