@@ -13,5 +13,5 @@ No frozen test count: consult the runner for current measurements. The focused s
 Must exist before the matching change ships:
 
 * any new exported lib/batch function → a test that fails if it is deleted
-* sheet/batch UI flows → component tests using `UI_SELECTORS.md` handles when first needed
+* sheet/batch UI flows → component tests using the owning `selectors/` page handles when first needed
 * ZIP/folder export → assertion on names + count (I-6/I-8), not just "no throw"

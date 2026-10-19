@@ -1,6 +1,6 @@
 # AI-source image edits — current behaviour
 
-Read [I-71](invariants/svg.md#i-71) and [I-72](invariants/svg.md#i-72) for non-overwriting pair history and composite identity; see [image-edit handles](../selectors/svg-image-edits.md), [storage keys](STORAGE.md) and [tests](TESTS.md). This workflow is independent of SVG-text contact-sheet generation.
+Read [I-71](invariants/svg-image-edits.md#i-71) and [I-72](invariants/svg-image-edits.md#i-72) for non-overwriting pair history and composite identity; see [image-edit handles](../selectors/svg-image-edits.md), [storage keys](STORAGE.md) and [tests](TESTS.md). This workflow is independent of SVG-text contact-sheet generation.
 
 ## Confirmed composite workflow
 

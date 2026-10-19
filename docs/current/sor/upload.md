@@ -18,7 +18,7 @@ opt-in class as Generate SVG → Requesty; design
 
 ## Navigate by operation
 
-- [Settings, artboard and geometry](upload-settings.md)
+- [Settings and artboard](upload-settings.md) · [output geometry](upload-geometry.md)
 - [Metadata generation, validation and confirmation](upload-metadata.md)
 - [Clean SVG, JPEG and atomic export](upload-export.md)
 - [EPS conversion and stroke expansion](upload-eps.md)

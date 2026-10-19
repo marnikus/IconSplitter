@@ -21,18 +21,22 @@ instructions. The app builds into one self-contained `dist/index.html`.
   run it green. Real `src/lib/` logic is tested, not mocked (RULE 8).
 - RULE 16 gates new production functions/components at 30 lines, 4 params,
   CC 10 and nesting 4; new files at 300 lines, hooks/component at 15. Read
-  [`rules/QUALITY.md`](docs/current/rules/QUALITY.md) before changing code.
+  [RULE 16 gates](docs/current/rules/QUALITY_GATES.md) before changing code.
 - Report progress and failures honestly; Stop blocks unsent work. One global
   undo timeline; validate persisted data on read. Full rule index:
   [`AGENT_RULES.md`](docs/current/AGENT_RULES.md).
 
 ## Open only what the task needs
 
+Open [`docs/current/README.md`](docs/current/README.md) and pick **one** read
+pack row: its *Start* pages, then detail pages only for the area you change.
+Every current page is ≤ 9 KB; never load a whole directory.
+
 | Task | Current owner |
 |---|---|
-| One of the six tabs | [`docs/current/README.md`](docs/current/README.md) → that tab's behaviour + invariant IDs + selectors |
-| AI-source image-edit composites | [`sor/svg-image-edits.md`](docs/current/sor/svg-image-edits.md), [`invariants/svg.md`](docs/current/sor/invariants/svg.md), [`selectors/svg-image-edits.md`](docs/current/selectors/svg-image-edits.md) |
-| Persistence, pair history or root paths | [`sor/STORAGE.md`](docs/current/sor/STORAGE.md) + the owning tab/invariants |
+| One of the six tabs | the tab's row in [the router](docs/current/README.md#1-task-read-packs) |
+| Persistence, pair history or root paths | [`sor/STORAGE.md`](docs/current/sor/STORAGE.md), [path invariants](docs/current/sor/invariants/paths.md) |
+| Which file / test owns X | [owners](docs/current/sor/OWNERS.md), [tests](docs/current/sor/TESTS.md) |
 | Commands, build or gates | [`CODE_VERIFICATION.md`](docs/current/CODE_VERIFICATION.md) |
 | Design handoff | [`design/README.md`](design/README.md), then the matching `SPEC.md` |
 

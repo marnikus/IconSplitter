@@ -36,7 +36,7 @@ when `total === 0` — tests may assert disabled-state instead of toast.
 |---|---|
 | Test id | `sheet-remove-{sheetId}` (per-row remove button) |
 | Semantic fallback | `title="Remove"` attribute, visible ✕ |
-| Notes | the row itself is a click target (selects the sheet); no testid on rows yet — add `sheet-row-{id}` when a test needs it (see §J) |
+| Notes | the row itself is a click target (selects the sheet); no testid on rows yet — add `sheet-row-{id}` when a test needs it (see [§J discovery list](shared.md#j-handles-still-needed-to-be-added-on-demand)) |
 
 ## E. Export settings panel
 

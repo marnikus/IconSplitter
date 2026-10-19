@@ -19,7 +19,7 @@ function anchors(markdown: string): Set<string> {
   for (const match of markdown.matchAll(/<a\s+id="([^"]+)"\s*\/?>/g)) found.add(match[1]);
   for (const match of markdown.matchAll(/^#{1,6}\s+(.+)$/gm)) {
     const label = match[1].replace(/<[^>]*>/g, "").replace(/[`*_]/g, "").toLowerCase();
-    found.add(label.replace(/[^\p{L}\p{N} -]/gu, "").trim().replace(/\s+/g, "-"));
+    found.add(label.replace(/[^\p{L}\p{N} -]/gu, "").trim().replace(/ /g, "-"));
   }
   return found;
 }
@@ -32,7 +32,7 @@ function localLinks(path: string, markdown: string): string[] {
     const [name, fragment] = target.split("#");
     const dest = resolve(dirname(path), decodeURIComponent(name));
     if (!existsSync(dest)) { errors.push(`${relative(root, path)} → ${target}`); continue; }
-    const repoPath = relative(root, dest).replaceAll("\\", "/");
+    const repoPath = relative(root, dest).replace(/\\/g, "/");
     const excluded = repoPath.startsWith("docs/archive/") || repoPath === "docs/current/QUALITY_RECHECK.md"
       || repoPath.startsWith("dist/") || /^design\/.*\.html$/.test(repoPath);
     if (fragment && !excluded && !anchors(readFileSync(dest, "utf8")).has(decodeURIComponent(fragment))) {
@@ -52,6 +52,13 @@ describe("agent documentation routes", () => {
       expect(route).toContain(`sor/${tab}`);
       expect(route).toContain(`selectors/${tab}`);
     }
+  });
+
+  it("keeps every current page inside one agent read budget", () => {
+    const over = pages(current).map((path) => [relative(root, path).replace(/\\/g, "/"), statSync(path).size] as const)
+      .filter(([, size]) => size > 9_000);
+    expect(over).toEqual([]);
+    expect(Buffer.byteLength(doc("docs/current/README.md"))).toBeLessThan(5_000);
   });
 
   it("keeps local file/heading links valid without loading the ledger or archives", () => {

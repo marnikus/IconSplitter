@@ -26,7 +26,7 @@ Stable [invariant IDs](sor/invariants/README.md), [storage](sor/STORAGE.md),
 
 ## 5. Invariants
 
-[ID-to-owner lookup](sor/invariants/README.md); [I-71](sor/invariants/svg.md#i-71) and [I-72](sor/invariants/svg.md#i-72) protect image edits.
+[ID-to-owner lookup](sor/invariants/README.md); [I-71](sor/invariants/svg-image-edits.md#i-71) and [I-72](sor/invariants/svg-image-edits.md#i-72) protect image edits.
 
 ## 6. Storage map
 

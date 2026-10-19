@@ -2,11 +2,11 @@
 
 Selector priority: **semantic** (role / label / text) > **structural** (parent / child) > **class fragment** (last resort). See [shared selector rules](shared.md#i-selector-object-structure--for-every-element).
 
-These controls live in the Generate SVG tab. The shared connection switch, row selection, pair preview, toast, and status bar are documented in [Generate SVG](svg-generation.md#p-generate-svg--srcsvg); this page owns the image-edit-only controls and the provider consent/review flow (I-71/I-72).
+These controls live in the Generate SVG tab. The shared connection switch, row selection, pair preview, toast, and status bar are documented in [Generate SVG](svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01); this page owns the image-edit-only controls and the provider consent/review flow (I-71/I-72).
 
 ## Image connection settings
 
-The connection selector/name/kind/add/remove controls are [shared with SVG generation](svg-generation.md#p-generate-svg--srcsvg). `svg-image-settings` appears only for an image connection (`src/svg/SvgConnections.tsx`).
+The connection selector/name/kind/add/remove controls are [shared with SVG generation](svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01). `svg-image-settings` appears only for an image connection (`src/svg/SvgConnections.tsx`).
 
 | Test id | Element | Notes |
 |---|---|---|
@@ -43,4 +43,4 @@ Opening the dialog sends nothing. Only an explicitly confirmed provider request 
 
 ## Image-edit interruption and status
 
-`svg-img-inflight` is the separate image-edit sent/unknown or lost-review notice (provider may have charged); `svg-img-inflight-retry` opens a NEW confirmation, never sends automatically; `svg-img-inflight-dismiss` forgets that record, and `svg-img-journal-warning` names a corrupt stored journal. `svg-busy` also says "Regenerating AI sources · done/total" while an image batch runs, advancing per landed result (2026-10-19). The [shared SVG toast and status surfaces](svg-generation.md#p-generate-svg--srcsvg) report the outcome.
+`svg-img-inflight` is the separate image-edit sent/unknown or lost-review notice (provider may have charged); `svg-img-inflight-retry` opens a NEW confirmation, never sends automatically; `svg-img-inflight-dismiss` forgets that record, and `svg-img-journal-warning` names a corrupt stored journal. `svg-busy` also says "Regenerating AI sources · done/total" while an image batch runs, advancing per landed result (2026-10-19). The [shared SVG toast and status surfaces](svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01) report the outcome.

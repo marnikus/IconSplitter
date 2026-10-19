@@ -36,11 +36,11 @@ Verification lives in the export path and fails **closed**: any failed check →
 
 ## RULE 17 — One current doc, dated archive
 
-* `docs/current/` holds only what is true today — the `SYSTEM_OF_RECORD.md` and `AGENT_RULES.md` routers and their canonical current modules. If not true today it does not belong here.
+* `docs/current/` holds only what is true today — the root router `docs/current/README.md` and the one canonical page per fact it routes to. If not true today it does not belong here.
 * Every design/plan/root-cause doc goes straight into `docs/archive/<YYYY-MM-DD>-<topic>/`, dated by day written. Archived docs are never edited to "catch up".
-* **Do not add a new top-level doc for a feature.** Write the design into the archive, then update the rows of `SYSTEM_OF_RECORD.md` it affects and the map in `docs/README.md`.
+* **Do not add a new top-level doc for a feature.** Write the design into the archive, then update the owning current pages (behaviour, invariants, selectors, owners, storage, tests) and, for a new page, its row in `docs/current/README.md`. A page that would pass 9 KB is split into a `-<part>` sibling (RULE 18).
 * Reference docs by full repo-relative path on one line so they stay greppable.
-* A doc that no longer describes reality gets folded into `SYSTEM_OF_RECORD.md` or replaced by a one-line pointer — never deleted, because reasoning is value.
+* A doc that no longer describes reality gets folded into its owning current page or replaced by a one-line pointer — never deleted, because reasoning is value.
 
 <a id="rule-20"></a>
 

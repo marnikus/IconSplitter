@@ -1,13 +1,7 @@
 # Documentation map — Icon Splitter
 
-**Current contracts:** [choose a task route](current/README.md). Open only the
-behaviour, invariant IDs, handles and rules it names. The old filenames remain
-as short compatibility indices:
-
-- [Agent rules (RULE 1–24)](current/AGENT_RULES.md)
-- [System of Record (§1–§20, I-n lookup)](current/SYSTEM_OF_RECORD.md)
-- [UI selector reference (A–S)](current/UI_SELECTORS.md)
-- [Verification workflow](current/CODE_VERIFICATION.md)
+**Current contracts:** the [root router](current/README.md) is the one entry
+point. Pick a task read pack there; every current page fits one small read.
 
 **Historical reasoning:** [dated archive index](HISTORY_INDEX.md). Archived
 plans are immutable snapshots, not current instructions. Open a named archive

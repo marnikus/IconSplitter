@@ -2799,3 +2799,9 @@ files / 1512 tests, coverage, build — ALL LANES PASSED. RULE 16: every new fn
 - Changed scope: design proposal + docs index; 0 production source files. No behaviour or invariant changed.
 - `npm run verify:fast`: 5/5 lanes failed at 0.0 s on Windows (`tools/verify.mjs` cwd / URL-path issue); `npm run verify`: 6/6 lanes failed at 0.0 s for the same reason. `node tools/quality.mjs --changed --allow-legacy`: `cmd.exe ENOENT`; no changed `src/` files to measure.
 - Manual lanes: `npx tsc --noEmit` passed; ESLint 0 errors / 27 warnings; focused AI-image/composite tests 92/92 passed; full coverage suite 1994/2009 passed, 15 failed across 5 files (`algo_efficiency`, `batch_preview_restart`, `quality_base`, `split_speed`, `svg_ui`); build passed, single HTML 1,587.48 kB (gzip 466.30 kB). Full suite was not green.
+
+## 2026-10-19 — docs restructured for agent context budgets
+
+- Change: new root router `docs/current/README.md` (task read packs with KB sizes, cross-cutting lookups, page conventions, do-not-load list); 10 oversized pages split into `-<part>` siblings or per-area folders (`sor/owners/`, `sor/storage/`); invariants split into `svg-run`, `svg-image-edits`, `paths-capture`, `paths-scope`; RULE 16 moved to `rules/QUALITY_GATES.md`; ratchet/CI to `VERIFICATION_RATCHET.md`. All inbound links/anchors retargeted.
+- Measured: 76 current pages (ledger excluded), largest 8842 bytes (was 25,369); new test caps every page at 9,000 bytes and the router at 5,000. Docs link test also fixed to GitHub slug rules (no whitespace collapse).
+- Gates: docs_navigation 4/4; `npx tsc --noEmit` clean; `npm run lint` 0 errors (27 pre-existing warnings); RULE 16 gate via Windows-safe throwaway copy: passed (no src files). Full vitest: 2042/2055, failures = quality_base (known Windows ROOT bug) + load-flaky files (algo_efficiency, batch_preview_restart, svg_ui, secret_hygiene) that pass in isolation. `verify:fast` not runnable on native Windows (tools ROOT bug).

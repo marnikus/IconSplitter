@@ -42,9 +42,9 @@ source doc's "Missing Selectors" section.
 | `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with the others |
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
 | `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
-| `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` (template design, §N) |
-| `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` (§P) |
-| `tab-upload` | `SVG to upload` | mounts `UploadPanel` (§R), after Generate SVG |
+| `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` ([§N](selection.md#n-selection-review-v2--srcselectionv2-verified-2026-10-01)) |
+| `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` ([§P](svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01)) |
+| `tab-upload` | `SVG to upload` | mounts `UploadPanel` ([§R](upload.md#r-svg-to-upload--srcupload-verified-2026-10-07)), after Generate SVG |
 
 Semantic fallback: button role + visible text.
 
