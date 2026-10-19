@@ -189,6 +189,30 @@ describe("image regeneration — the confirmed batch", () => {
     expect(modal!.contains(q("[data-testid=svg-img-generate]"))).toBe(true);
   });
 
+  it("the row stays one grid cell per header column; the image action lives INSIDE the decision cell", async () => {
+    await mountWithImages();
+    const row = q(`[data-testid=svg-row-${FOG}]`)!;
+    const columns = q(".svg-columns")!;
+    expect(row.children.length).toBe(columns.children.length);
+    const button = q(`[data-testid=svg-row-image-regen-${FOG}]`)!;
+    expect(button.parentElement?.classList.contains("svg-decision-actions")).toBe(true);
+    expect(button.parentElement?.parentElement).toBe(row);
+  });
+
+  it("the image button looks like the SVG Regenerate button, split from the vector buttons by a separator", async () => {
+    await mountWithImages();
+    const svgBtn = q(`[data-testid=svg-generate-${FOG}]`)!;
+    const imgBtn = q(`[data-testid=svg-row-image-regen-${FOG}]`)!;
+    for (const cls of ["svg-btn", "tiny", "primary"]) {
+      expect(imgBtn.classList.contains(cls)).toBe(svgBtn.classList.contains(cls));
+    }
+    const sep = q(`[data-testid=svg-row-${FOG}] .svg-decision-sep`)!;
+    expect(sep).not.toBeNull();
+    const order = [...imgBtn.parentElement!.children];
+    expect(order.indexOf(svgBtn)).toBeLessThan(order.indexOf(sep));
+    expect(order.indexOf(sep)).toBeLessThan(order.indexOf(imgBtn));
+  });
+
   it("the row action opens the same dialog for just that row", async () => {
     await mountWithImages();
     await click(q(`[data-testid=svg-row-image-regen-${FOG}]`)!);

@@ -1409,6 +1409,8 @@
 .svg-progress-mini span { display: block; height: 100%; width: 60%; background: var(--v2-purple); }
 
 .svg-file-actions, .svg-decision-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+/* The image action sits on its own line under Generate / ⚠ / ✓ / ✕ — one grid cell, no stretch. */
+.svg-decision-actions .svg-img-regen { flex: 1 1 100%; }
 
 .svg-list-footer {
   display: flex;

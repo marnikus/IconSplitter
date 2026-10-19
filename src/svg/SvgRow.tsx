@@ -60,8 +60,6 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
       <ReviewCell row={row} />
       <UsageCell row={row} />
       <FileActions row={row} a={a} />
-      <button type="button" className="svg-btn tiny" data-testid={`svg-row-image-regen-${id}`}
-        title="Regenerate this AI source image via the image connection" onClick={(e) => { e.stopPropagation(); a.requestImageRegen([id]); }}>◍ Regenerate image</button>
       <DecisionActions row={row} a={a} />
     </div>
   );
@@ -104,6 +102,8 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "declined"))}>✕</button>
+      <button type="button" className="svg-btn tiny svg-img-regen" data-testid={`svg-row-image-regen-${id}`}
+        title="Regenerate this AI source image via the image connection" onClick={click(() => a.requestImageRegen([id]))}>◍ Regenerate image</button>
     </div>
   );
 }
