@@ -22,22 +22,26 @@ export interface SvgImgConfirmProps {
 export default function SvgImgConfirm(p: SvgImgConfirmProps) {
   useEscape(p.onCancel);
   return (
-    <div className="svg-modal" data-testid="svg-img-confirm" role="dialog" aria-label="Confirm AI source regeneration">
-      <div className="svg-modal-head">
-        <h2>Regenerate AI source image</h2>
-        <button type="button" className="svg-btn" data-testid="svg-img-cancel" onClick={p.onCancel}>Cancel</button>
-      </div>
-      <ConfirmHead ids={p.ids.length} conn={p.conn} />
-      <p className="svg-caps">
-        Text-to-image only — this provider documents no image-edit endpoint, so the
-        current AI image cannot be sent along. One request per source.
-      </p>
-      <PromptBlock presets={p.presets} prompt={p.prompt} onPickPreset={p.onPickPreset} onPrompt={p.onPrompt} />
-      <div className="svg-modal-foot">
-        <button type="button" className="svg-btn primary" data-testid="svg-img-generate" onClick={p.onConfirm}>
-          Generate now
-        </button>
-      </div>
+    <div className="svg-backdrop" data-testid="svg-img-confirm">
+      <section className="svg-modal narrow" role="dialog" aria-modal="true" aria-label="Confirm AI source regeneration">
+        <header className="svg-modal-head">
+          <h2>Regenerate AI source image</h2>
+          <button type="button" className="svg-btn" data-testid="svg-img-cancel" onClick={p.onCancel}>Cancel</button>
+        </header>
+        <div className="svg-modal-body">
+          <ConfirmHead ids={p.ids.length} conn={p.conn} />
+          <p className="svg-note">
+            Text-to-image only — this provider documents no image-edit endpoint, so the
+            current AI image cannot be sent along. One request per source.
+          </p>
+          <PromptBlock presets={p.presets} prompt={p.prompt} onPickPreset={p.onPickPreset} onPrompt={p.onPrompt} />
+          <div className="svg-modal-actions">
+            <button type="button" className="svg-btn primary" data-testid="svg-img-generate" onClick={p.onConfirm}>
+              Generate now
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

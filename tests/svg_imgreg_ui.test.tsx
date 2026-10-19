@@ -178,6 +178,17 @@ describe("image regeneration — the confirmed batch", () => {
     expect((await meta()).imagePreferred).toBe(1);
   });
 
+  it("the dialog is a real modal: backdrop + dialog section holding the prompt and Generate", async () => {
+    await mountWithImages();
+    await click(q(`[data-testid=svg-row-image-regen-${FOG}]`)!);
+    const backdrop = q("[data-testid=svg-img-confirm]")!;
+    expect(backdrop.className).toContain("svg-backdrop");
+    const modal = backdrop.querySelector("section.svg-modal[role=dialog]");
+    expect(modal).not.toBeNull();
+    expect(modal!.contains(q("[data-testid=svg-img-prompt]"))).toBe(true);
+    expect(modal!.contains(q("[data-testid=svg-img-generate]"))).toBe(true);
+  });
+
   it("the row action opens the same dialog for just that row", async () => {
     await mountWithImages();
     await click(q(`[data-testid=svg-row-image-regen-${FOG}]`)!);

@@ -32,7 +32,12 @@ export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
     if (c.refs.key.current === null) { c.say("Add the API key first — it lives only on this device", true); return; }
     c.dispatch({ type: "dialog", dialog: { kind: "image-regen", ids } });
   }, []);
-  const confirmImageRegen = useCallback(() => { void confirmOf(latest.current); }, []);
+  const confirmImageRegen = useCallback(() => {
+    const c = latest.current;
+    confirmOf(c).catch((error: unknown) => {
+      c.say(`Image regeneration stopped: ${error instanceof Error ? error.message : String(error)}`, true);
+    });
+  }, []);
   const setImageVersion = useCallback((id: string, version: number | null) => { void mainOf(latest.current, id, version); }, []);
   return { requestImageRegen, confirmImageRegen, setImageVersion };
 }
@@ -47,6 +52,7 @@ async function confirmOf(c: SvgCtx): Promise<void> {
   if (rows.length === 0) return;
   const root = c.refs.root.current as DirHandleLike | null;
   if (root === null) return c.say("The folder is gone — pick it again", true);
+  c.say(`Regenerating ${rows.length} AI source image${rows.length === 1 ? "" : "s"}…`);
   const report = await runImageBatch({
     conn, key: c.refs.key.current ?? "", prompt: c.m.prompt,
     items: rows.map((r) => ({ id: r.source.id })),
