@@ -1,10 +1,10 @@
 // pairmeta.ts — one JSON per image pair, in the folder that holds it (I-41/I-42).
 // Owns: the pair's identity and both image faces, the pair's own decision ("may
-// this AI image be generated from?"), and the SVG history that belongs to it —
-// versions, generation status, review, tokens, cost. There is deliberately NO
-// global metadata file: the pair's record travels with the images, so a copied
-// or renamed folder keeps its approvals. Pure: parsing, serializing and the
-// transition rules only (RULE 1/3).
+// this AI image be generated from?"), the SVG history, and (since 2026-10-16)
+// the additive fields that carry regenerated-AI-source history (parsed here,
+// transitioned in lib/aimeta.ts). There is NO global metadata file: the pair's
+// record travels with the images, so a copied or renamed folder keeps its
+// approvals. Pure: parsing, serializing and the transition rules only (RULE 1/3).
 
 import { isRecord } from "./isrecord";
 import { readPreferred } from "./pairpreferred";
@@ -14,9 +14,10 @@ import type { Decision } from "./reviewfilter";
 import type { ReviewRecord } from "./reviewfile";
 import { svgStem } from "./svgfile";
 import { parseVersion, type SvgVersion } from "./svgmodel";
+import { parseAiVersion, type AiVersion } from "./imgmodel";
 import type { ReviewPair, SideRef } from "./pairing";
 
-/** Bump when the stored shape changes; a reader must understand both. */
+/** Wire version stays at 2 (additive: older readers ignore unknown keys). */
 export const PAIR_META_VERSION = 2;
 const LEGACY_VERSION = 1;
 
@@ -27,7 +28,7 @@ export interface PairSide {
   fingerprint: string;
 }
 
-/** What identifies the pair everywhere (stable across a move, design I-42). */
+/** Identifies the pair everywhere (stable across moves, design I-42). */
 export interface PairIdentity {
   id: string;
   base: string;
@@ -36,10 +37,9 @@ export interface PairIdentity {
 }
 
 /**
- * The pair's file: identity + faces + the pair decision + every SVG version.
- * `decision` is null when nobody ever decided (a legacy file carries versions
- * but no pair decision) — null and "pending" are different: pending is a
- * deliberate reset that must outlive the legacy fallback.
+ * Pair file: identity + faces + pair decision + SVG history + additive AI
+ * history (2026-10-16). null decision ≠ "pending" (pending is a deliberate
+ * reset that must outlive the legacy fallback).
  */
 export interface PairMeta extends PairIdentity {
   v: number;
@@ -55,6 +55,10 @@ export interface PairMeta extends PairIdentity {
    * switch — the history under `versions` is what makes every choice re-choosable.
    */
   preferred: number | null;
+  /** Regenerated AI-source versions; v1 is the original file on disk. */
+  aiVersions: AiVersion[];
+  /** Chosen AI source version to display/use as SVG input — null = newest valid. */
+  aiPreferred: number | null;
 }
 
 export type MetaParse = { ok: true; meta: PairMeta } | { ok: false };
@@ -65,15 +69,18 @@ export interface NewMetaArgs extends PairIdentity {
 }
 
 export function newPairMeta(args: NewMetaArgs): PairMeta {
-  return { v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null, versions: [], preferred: null };
+  return {
+    v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null,
+    versions: [], preferred: null, aiVersions: [], aiPreferred: null,
+  };
 }
 
-/** `<AI stem>.svg.json` — the name that has always lived beside the AI image. */
+/** `<AI stem>.svg.json` — the name beside the AI image. */
 export function metaFileName(aiName: string): string {
   return `${svgStem(aiName)}.svg.json`;
 }
 
-/** The same, from an AI image's path relative to the root. */
+/** meta path from an AI relPath. */
 export function metaPathForAi(aiRelPath: string): string {
   if (aiRelPath === "") return "";
   const at = aiRelPath.lastIndexOf("/");
@@ -82,13 +89,9 @@ export function metaPathForAi(aiRelPath: string): string {
   return dir === "" ? name : `${dir}/${name}`;
 }
 
-/**
- * Where a pair's file lives, relative to the scanned root. A pair whose AI side
- * is gone is still located by the name that side would have, so the file beside
- * the reference keeps answering for it (design §2.1).
- */
+/** meta path for a pair: AI side if present, else inferred name. */
 export function metaPathFor(pair: ReviewPair): string {
-  if (pair.ai === null && pair.source === null) return ""; // no face: nothing to name it after
+  if (pair.ai === null && pair.source === null) return "";
   if (pair.ai !== null) return metaPathForAi(pair.ai.relPath);
   const aiName = aiSideName(pair);
   if (aiName === "") return "";
@@ -96,10 +99,10 @@ export function metaPathFor(pair: ReviewPair): string {
   return pair.relDir === "" ? fileName : `${pair.relDir}/${fileName}`;
 }
 
-/** The AI image file name a pair without one would have (`fog_AI_9_01.png`). */
+/** AI filename a pair without one would have (`fog_AI_9_01.png`). */
 function aiSideName(pair: ReviewPair): string {
   const from = pair.source?.relPath ?? pair.base;
-  if (from === "") return ""; // neither face exists: there is no name to build
+  if (from === "") return "";
   return `${pair.base}_AI${pair.suffix}${extOf(from)}`;
 }
 
@@ -108,7 +111,6 @@ function extOf(name: string): string {
   return dot > 0 ? name.slice(dot) : ".png";
 }
 
-/** A side as the pair file stores it; the path drives name and stem. */
 export function sideOf(relPath: string, fingerprint: string): PairSide {
   return { relPath, name: baseName(relPath), fingerprint };
 }
@@ -117,12 +119,10 @@ function baseName(relPath: string): string {
   return relPath.split("/").pop() ?? relPath;
 }
 
-/** The identity of the pair a photographed side belongs to. */
 export function identityOf(pair: ReviewPair): PairIdentity {
   return { id: pair.pairId, base: pair.base, suffix: pair.suffix, dirPath: pair.relDir };
 }
 
-/** Fresh side data from a scanned pair: paths plus a size:mtime fingerprint. */
 export function aiSideOf(pair: ReviewPair): PairSide {
   return sideFromPath(pair.ai?.relPath ?? aiSideNameAt(pair), pair.ai);
 }
@@ -137,19 +137,11 @@ function sideFromPath(relPath: string, side: SideRef | null): PairSide {
   return { relPath, name: baseName(relPath), fingerprint: side === null ? "" : fingerprintOf(side) };
 }
 
-function aiSideNameAt(pair: ReviewPair): string {
-  return aiSideName(pair);
-}
+function aiSideNameAt(pair: ReviewPair): string { return aiSideName(pair); }
 
-function fingerprintOf(side: SideRef): string {
-  return `${side.size}:${side.mtime}`;
-}
+function fingerprintOf(side: SideRef): string { return `${side.size}:${side.mtime}`; }
 
-/**
- * The pair id a pair file's path names — so a file that will not parse can still
- * be reported against the pair it belongs to (the extension is not part of the
- * id, so the name alone is enough). "" when the path is not a pair file.
- */
+/** Pair id from a meta path — "" when the path doesn't look like a pair file. */
 export function pairIdOfMetaPath(relPath: string): string {
   const at = relPath.lastIndexOf("/");
   const dir = at < 0 ? "" : relPath.slice(0, at);
@@ -160,10 +152,10 @@ export function pairIdOfMetaPath(relPath: string): string {
   return parsed === null ? "" : pairId(dir, parsed.base, parsed.suffix);
 }
 
-/** The stored decision as a record entry (I-13: pending owns no record). */
+/** Stored decision as record entry (I-13: pending owns no record). */
 export function toRecord(meta: PairMeta, pair: ReviewPair): ReviewRecord | null {
   if (meta.decision === null || meta.decision === "pending") return null;
-  if (pair.source === null && pair.ai === null) return null; // a record must name a file
+  if (pair.source === null && pair.ai === null) return null;
   return {
     pair_id: meta.id,
     source: pair.source?.relPath ?? null,
@@ -173,22 +165,17 @@ export function toRecord(meta: PairMeta, pair: ReviewPair): ReviewRecord | null 
   };
 }
 
-/** The pair decision, leaving the SVG history exactly as it was. */
+/** Apply a pair decision, leaving SVG/AI history intact. */
 export function withDecision(meta: PairMeta, decision: Decision, nowIso: string): PairMeta {
   return { ...meta, decision, reviewedAt: nowIso };
 }
 
-/**
- * One generation attempt recorded into the pair's file. The pair half — its
- * identity, its faces, its own decision — is carried over untouched, because a
- * generation must never drop an approval (and vice versa, I-41).
- */
+/** Add or replace one SVG version; pair identity stays intact (I-41). */
 export function withVersion(meta: PairMeta, rec: SvgVersion): PairMeta {
   const rest = meta.versions.filter((v) => v.version !== rec.version);
   return { ...meta, versions: [...rest, rec].sort((a, b) => a.version - b.version) };
 }
 
-/** The stored shape (design §2): identity under `pair`, faces beside it. */
 export function serializePairMeta(meta: PairMeta): string {
   return JSON.stringify(toJson(meta), null, 2);
 }
@@ -197,30 +184,19 @@ function toJson(meta: PairMeta): Record<string, unknown> {
   return {
     v: PAIR_META_VERSION,
     pair: { id: meta.id, base: meta.base, suffix: meta.suffix, dir: meta.dirPath },
-    ai: meta.ai,
-    source: meta.source,
-    decision: meta.decision,
-    reviewedAt: meta.reviewedAt,
-    // Written even when null: the key's presence documents the choice, and a
-    // reader that predates it ignores an unknown key (I-54, no version bump).
-    preferred: meta.preferred,
-    versions: meta.versions,
+    ai: meta.ai, source: meta.source, decision: meta.decision, reviewedAt: meta.reviewedAt,
+    preferred: meta.preferred, versions: meta.versions,
+    aiVersions: meta.aiVersions, aiPreferred: meta.aiPreferred,
   };
 }
 
 /**
- * Reads a pair file: v2 as it is, a legacy v1 sidecar as this pair's file (its
- * versions kept, the AI face taken from the stored source, the identity derived
- * from that path). A file that is not either shape is refused; a half-damaged
- * version list keeps every record that still parses (RULE 13).
+ * Parse a pair file: v2 (current), or legacy v1 (source WAS the AI image).
+ * Refuses junk; half-damaged version lists keep every record that parses (RULE 13).
  */
 export function parsePairMeta(text: string): MetaParse {
   let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return { ok: false };
-  }
+  try { raw = JSON.parse(text); } catch { return { ok: false }; }
   if (!isRecord(raw) || !Array.isArray(raw.versions)) return { ok: false };
   if (raw.v === LEGACY_VERSION) return pairMetaFromLegacy(raw);
   if (raw.v !== PAIR_META_VERSION || !isRecord(raw.pair)) return { ok: false };
@@ -236,17 +212,18 @@ function readV2(raw: Record<string, unknown>): MetaParse {
     ok: true,
     meta: {
       v: PAIR_META_VERSION, id, base, suffix: str(pair.suffix), dirPath: str(pair.dir),
-      ai: toSide(raw.ai),
-      source: isRecord(raw.source) ? toSide(raw.source) : null,
-      decision: toDecision(raw.decision),
-      reviewedAt: nullableStr(raw.reviewedAt),
+      ai: toSide(raw.ai), source: isRecord(raw.source) ? toSide(raw.source) : null,
+      decision: toDecision(raw.decision), reviewedAt: nullableStr(raw.reviewedAt),
       preferred: readPreferred(raw.preferred),
-      versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
+      versions: (raw.versions as unknown[]).flatMap((x) => parseVersion(x) ?? []),
+      aiVersions: Array.isArray(raw.aiVersions)
+        ? (raw.aiVersions as unknown[]).flatMap((x) => parseAiVersion(x) ?? []) : [],
+      aiPreferred: readPreferred(raw.aiPreferred),
     },
   };
 }
 
-/** v1 -> v2: the old file's `source` WAS the AI image (design §2.1). */
+/** v1 → v2: old `source` was the AI image; AI history defaults empty. */
 export function pairMetaFromLegacy(raw: Record<string, unknown>): MetaParse {
   const ai = toSide(raw.source);
   if (ai.relPath === "") return { ok: false };
@@ -255,16 +232,14 @@ export function pairMetaFromLegacy(raw: Record<string, unknown>): MetaParse {
   return {
     ok: true,
     meta: {
-      v: PAIR_META_VERSION,
-      id: pairId(dirPath, named.base, named.suffix),
-      ...named, dirPath,
+      v: PAIR_META_VERSION, id: pairId(dirPath, named.base, named.suffix), ...named, dirPath,
       ai, source: null, decision: null, reviewedAt: null, preferred: null,
-      versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
+      versions: (raw.versions as unknown[]).flatMap((x) => parseVersion(x) ?? []),
+      aiVersions: [], aiPreferred: null,
     },
   };
 }
 
-/** The pair's base and suffix, read from the AI image's own name. */
 function nameParts(aiRelPath: string): { base: string; suffix: string } {
   const name = aiRelPath.split("/").pop() ?? "";
   const parsed = parseAiName(name);
@@ -285,14 +260,6 @@ function dirOf(relPath: string): string {
   return at < 0 ? "" : relPath.slice(0, at);
 }
 
-function stem(name: string): string {
-  return svgStem(name);
-}
-
-function str(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function nullableStr(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
+function stem(name: string): string { return svgStem(name); }
+function str(value: unknown): string { return typeof value === "string" ? value : ""; }
+function nullableStr(value: unknown): string | null { return typeof value === "string" ? value : null; }

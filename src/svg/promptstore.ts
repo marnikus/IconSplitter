@@ -7,19 +7,40 @@
 import { parseConfig, serializeConfig, type SvgConfig } from "../lib/svgconfig";
 import { parseConnectionsStore, serializeConnectionsStore, type ConnectionsStore } from "../lib/svgconnections";
 import { parsePrompt, serializePrompt } from "../lib/svgprompt";
+import { parseImgPrompt, serializeImgPrompt } from "../lib/imgprompt";
 import { presetStore } from "../state/presetstore";
 import { readKey, writeKey } from "../state/safestorage";
+import { DEFAULT_IMG_PRESETS } from "../lib/imgprompt";
 
 const PROMPT_KEY = "iconSplitter.svg.prompt.v1";
 const CONFIG_KEY = "iconSplitter.svg.config.v1";
 const CONNECTIONS_KEY = "iconSplitter.svg.connections.v1";
 /** The Generate SVG prompt presets: their own list, never the metadata one. */
 export const PRESETS_KEY = "iconSplitter.svg.prompts.v1";
+/** The AI-source generation prompt (separate from SVG prompt). */
+const IMG_PROMPT_KEY = "iconSplitter.img.prompt.v1";
+/** AI-source regeneration presets. */
+export const IMG_PRESETS_KEY = "iconSplitter.img.prompts.v1";
 
 /** The Generate SVG prompt's own preset list (the shared presetStore). */
 export const svgPresets = presetStore(PRESETS_KEY);
 export const loadPresets = svgPresets.load;
 export const savePresets = svgPresets.save;
+
+/** The AI-source prompt's preset list (seeded with DEFAULT_IMG_PRESETS on first load). */
+export const imgPresets = presetStore(IMG_PRESETS_KEY);
+export const loadImgPresets = () => {
+  const list = imgPresets.load();
+  return list.length > 0 ? list : [...DEFAULT_IMG_PRESETS];
+};
+export const saveImgPresets = imgPresets.save;
+
+export function loadImgPrompt(): string {
+  return parseImgPrompt(readObject(IMG_PROMPT_KEY)?.prompt);
+}
+export function saveImgPrompt(prompt: string): void {
+  writeKey(IMG_PROMPT_KEY, serializeImgPrompt(prompt));
+}
 
 export function loadPrompt(): string {
   return parsePrompt(readObject(PROMPT_KEY)?.prompt);
