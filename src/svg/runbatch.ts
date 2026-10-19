@@ -21,6 +21,7 @@ import { type PairMeta } from "../lib/pairmeta";
 import { sendBatch } from "./runsend";
 import { saveMetaAt } from "../selection/pairstore";
 import { buildComposite, type BuiltComposite } from "./composite";
+import { mainImageOf, withImagesOf } from "../lib/svgimgreg";
 import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";
 import type { RunState } from "./runtypes";
@@ -90,7 +91,8 @@ function newBatchCtx(ctx: Omit<BatchCtx, "tally">): BatchCtx {
 /** A composite that cannot be built must produce no request at all. */
 async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
   try {
-    return await buildComposite(ctx.state.args.root, ctx.items);
+    const metas = ctx.state.args.metas; // the main AI image is the source (RC8)
+    return await buildComposite(ctx.state.args.root, ctx.items, (s) => mainImageOf(metas.get(s.id) ?? null, s.relPath));
   } catch (error) {
     failBatch(ctx, `composite failed: ${message(error)}`, "payload", null);
     return null;
@@ -183,8 +185,10 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
 }
 
 /** Writes the pair's own file and keeps the in-memory copy in step (RULE 24). */
-async function persist(state: RunState, item: SvgSource, meta: PairMeta | null): Promise<PairMeta | null> {
-  if (!meta) return null;
+async function persist(state: RunState, item: SvgSource, next: PairMeta | null): Promise<PairMeta | null> {
+  if (!next) return null;
+  // the image fields are the image writer's: taken from the latest copy (RC6)
+  const meta = withImagesOf(next, state.args.metas.get(item.id) ?? null);
   state.args.metas.set(item.id, meta);
   try {
     await saveMetaAt(state.args.root, item.metaPath, meta);

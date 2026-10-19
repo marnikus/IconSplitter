@@ -6,15 +6,13 @@
 // Estimated, nothing reported says so — never an invented number.
 
 import type { LogSpec } from "../lib/log";
+import { regenOutcome, type RegenTally } from "../lib/svgimgreg";
 import { costInfoFor } from "../lib/svgpricing";
 import { NO_USAGE, type Usage } from "../lib/svgrequest";
 import { costLabel, fmtTokens, sumUsage } from "../lib/svgusage";
 import type { ImageRegenResult } from "./imgrunner";
 
 const FEATURE = "svg";
-
-/** What landed on disk after the run (a done request whose write failed is not done). */
-export interface ImageTally { done: number; failed: number }
 
 /** "1,000 in · 4,000 out · 5,000 tokens · $0.1200 reported". */
 function spendOf(model: string, u: Usage): string {
@@ -34,6 +32,12 @@ export function imageSpendLine(results: readonly ImageRegenResult[], model: stri
   return spendOf(model, totalOf(results));
 }
 
+/** The toast's tail: the summed spend, or nothing when the provider reported no number. */
+export function imageSpendSuffix(results: readonly ImageRegenResult[], model: string): string {
+  const u = totalOf(results);
+  return u.total === null && u.input === null && u.cost === null ? "" : ` · ${spendOf(model, u)}`;
+}
+
 /** One source's request: its outcome and what it spent. */
 export function imageItemSpec(result: ImageRegenResult, model: string): LogSpec {
   const u = result.usage ?? NO_USAGE;
@@ -46,13 +50,13 @@ export function imageItemSpec(result: ImageRegenResult, model: string): LogSpec 
   };
 }
 
-/** The run summary: counts plus the summed spend of every request. */
-export function imageRunSpec(results: readonly ImageRegenResult[], model: string, tally: ImageTally): LogSpec {
+/** The run summary: the outcome text (regenOutcome) plus the summed spend of every request. */
+export function imageRunSpec(results: readonly ImageRegenResult[], model: string, tally: RegenTally): LogSpec {
   const u = totalOf(results);
   return {
     level: tally.done === 0 ? "error" : tally.failed > 0 ? "warn" : "info",
     feature: FEATURE, action: "image-regen",
-    detail: `${tally.done} done, ${tally.failed} failed · ${spendOf(model, u)}`,
-    data: { ...tally, ...spendData(model, u) },
+    detail: `${regenOutcome(tally).msg} · ${spendOf(model, u)}`,
+    data: { total: tally.total, done: tally.done, failed: tally.failed, ...spendData(model, u) },
   };
 }

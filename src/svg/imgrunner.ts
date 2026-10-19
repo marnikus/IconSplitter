@@ -1,16 +1,20 @@
 // imgrunner.ts — the Images API batch of AI source regeneration (2026-10-16;
-// image EDIT since 2026-10-19). Owns: one injected-fetch attempt (Bearer key,
-// stall-window timeout, honest HTTP/shape errors) and the bounded worker pool
-// that keeps memory and the router happy. Every request carries the prompt AND
-// the source's current main image as the reference (POST /images/edits,
-// multipart); a reference that cannot be read fails THAT item honestly — it is
-// never silently sent as text-only. No retry here: an uncertain outcome must
-// never be silently resent (the same policy the SVG runner holds).
+// image EDIT since 2026-10-19). Owns: one injected-fetch attempt (Bearer key, a
+// wait limit, honest HTTP/shape errors) and the bounded worker pool that keeps
+// memory and the router happy. Every request carries the prompt AND the
+// source's current main image as the reference (POST /images/edits, multipart
+// — lib/svgimgedit); a reference that cannot be read fails THAT item honestly —
+// it is never silently sent as text-only. No retry here: an uncertain outcome
+// must never be silently resent (the same policy the SVG runner holds).
+// 2026-10-19 fix (archive/2026-10-19-image-regen-fix): each outcome reaches
+// `onResult` the moment it lands (RULE 5/24), and every failure says why — the
+// router's own message (lib/svgrequest classifyHttp), a timeout, an
+// unreachable host.
 
 import type { Connection } from "../lib/svgconnections";
-import { buildEditForm, imageEditUrl } from "../lib/svgimgedit";
+import { buildEditForm, imageEditUrl, type ReferenceImage } from "../lib/svgimgedit";
 import { b64ToBlob, parseImageResponse, readImageUsage } from "../lib/svgimgreg";
-import { readRequestId, type Usage } from "../lib/svgrequest";
+import { classifyHttp, parseJson, readRequestId, type Usage } from "../lib/svgrequest";
 
 export interface ImageRegenItem {
   id: string;
@@ -25,7 +29,7 @@ export interface ImageRegenResult {
   status: "done" | "failed";
   blob?: Blob;
   error?: string;
-  /** What the provider reported for this request (2026-10-19); absent when no response was read. */
+  /** What the provider reported for this request (2026-10-19 spend log); only on a done result. */
   usage?: Usage;
   requestId?: string | null;
 }
@@ -39,65 +43,93 @@ export interface ImageRegenArgs {
   prompt: string;
   items: readonly ImageRegenItem[];
   concurrency: number;
+  /** The whole wait for one image (svgimgreg.imageWaitMs): it arrives in one piece. */
   timeoutMs: number;
   fetchImpl?: typeof fetch;
+  /** Read before each item starts: true = nothing new is sent (RULE 7). */
   shouldStop?: () => boolean;
+  /** Called the moment an item's outcome is known; the caller records it. */
+  onResult?: (result: ImageRegenResult, index: number) => Promise<void> | void;
 }
 
 /** The honest per-item failure for a reference that could not be read. */
 const NO_REFERENCE = "the current AI image could not be read, so nothing was sent";
 
-/** One Images API edit request: the prompt + this item's reference, one image per source. */
-async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Answer> {
-  const { conn, key, prompt, timeoutMs, fetchImpl } = args;
-  const blob = await item.reference();
-  if (blob === null) throw new Error(NO_REFERENCE);
-  const body = buildEditForm(conn, prompt, { blob, fileName: item.fileName });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+/** A failure already worded for the user — passed through unchanged. */
+class NamedFailure extends Error {}
+
+/** Bounded pool: at most `concurrency` requests in flight, stop read per item start. */
+export async function runImageBatch(args: ImageRegenArgs): Promise<ImageRegenResult[]> {
+  const results: ImageRegenResult[] = new Array(args.items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < args.items.length && args.shouldStop?.() !== true) {
+      const i = next;
+      next += 1;
+      results[i] = await outcomeOf(args, args.items[i]);
+      await args.onResult?.(results[i], i);
+    }
+  };
+  const lanes = Math.max(1, Math.min(args.concurrency, args.items.length));
+  await Promise.all(Array.from({ length: lanes }, worker));
+  return results;
+}
+
+async function outcomeOf(args: ImageRegenArgs, item: ImageRegenItem): Promise<ImageRegenResult> {
   try {
-    // No Content-Type: the browser writes the multipart boundary itself.
-    const response = await (fetchImpl ?? fetch)(imageEditUrl(conn.baseUrl), {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}` },
-      body,
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`the image request failed (HTTP ${response.status})`);
-    const raw: unknown = await response.json();
-    return { blob: await imageOf(raw, fetchImpl), usage: readImageUsage(raw), requestId: readRequestId(response.headers) };
+    return { id: item.id, status: "done", ...(await attempt(args, item)) };
+  } catch (error) {
+    return { id: item.id, status: "failed", error: messageOf(error) };
+  }
+}
+
+/** One edit request under the wait limit; a raw transport error becomes a plain reason. */
+async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Answer> {
+  // Read first, outside the wait: a reader that throws fails this item with its own reason.
+  const blob = await item.reference();
+  if (blob === null) throw new NamedFailure(NO_REFERENCE);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), args.timeoutMs);
+  try {
+    return await fetchImage(args, { blob, fileName: item.fileName }, controller.signal);
+  } catch (error) {
+    if (error instanceof NamedFailure) throw error;
+    if (controller.signal.aborted) throw new NamedFailure(`no answer within ${Math.round(args.timeoutMs / 1000)} s — nothing was saved`);
+    throw new NamedFailure(`the image request could not reach the provider (${messageOf(error)})`);
   } finally {
     clearTimeout(timer);
   }
 }
 
-/** The response's first image as a blob: inline base64, or its url fetched. */
-async function imageOf(raw: unknown, fetchImpl?: typeof fetch): Promise<Blob> {
-  const parsed = parseImageResponse(raw);
-  if (parsed === null) throw new Error("the image response had no image in it");
-  if ("b64" in parsed) return b64ToBlob(parsed.b64);
-  const bin = await (fetchImpl ?? fetch)(parsed.url);
-  if (!bin.ok) throw new Error(`the image url could not be read (HTTP ${bin.status})`);
+/** The prompt + the reference, one image per source; b64 is decoded, a URL is downloaded. */
+async function fetchImage(args: ImageRegenArgs, reference: ReferenceImage, signal: AbortSignal): Promise<Answer> {
+  const { conn, key, prompt } = args;
+  const send = args.fetchImpl ?? fetch;
+  // No Content-Type: the browser writes the multipart boundary itself.
+  const response = await send(imageEditUrl(conn.baseUrl), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body: buildEditForm(conn, prompt, reference),
+    signal,
+  });
+  const body = parseJson(await response.text());
+  if (!response.ok) throw new NamedFailure(`the image request failed (HTTP ${classifyHttp(response.status, body, null).message})`);
+  const parsed = parseImageResponse(body);
+  if (parsed === null) throw new NamedFailure("the image response had no image in it");
+  const blob = "b64" in parsed ? b64ToBlob(parsed.b64) : await download(parsed.url, send, signal);
+  return { blob, usage: readImageUsage(body), requestId: readRequestId(response.headers) };
+}
+
+/** A `url` answer: the browser must be allowed to read it (CORS) — b64 never needs that. */
+async function download(url: string, send: typeof fetch, signal: AbortSignal): Promise<Blob> {
+  const bin = await send(url, { signal }).catch((error: unknown) => {
+    if (signal.aborted) throw error;
+    throw new NamedFailure(`the image URL could not be downloaded (${messageOf(error)})`);
+  });
+  if (!bin.ok) throw new NamedFailure(`the image URL could not be read (HTTP ${bin.status})`);
   return await bin.blob();
 }
 
-/** Bounded pool: at most `concurrency` requests in flight, stop per item start. */
-export async function runImageBatch(args: ImageRegenArgs): Promise<ImageRegenResult[]> {
-  const results: ImageRegenResult[] = new Array(args.items.length);
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    for (;;) {
-      const i = next;
-      if (i >= args.items.length || args.shouldStop?.()) return;
-      next += 1;
-      const item = args.items[i];
-      try {
-        results[i] = { id: item.id, status: "done", ...(await attempt(args, item)) };
-      } catch (error) {
-        results[i] = { id: item.id, status: "failed", error: error instanceof Error ? error.message : String(error) };
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(args.concurrency, args.items.length)) }, worker));
-  return results;
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -5,7 +5,10 @@
 // thumb loads. Pure: every rule lives here; IO and UI glue do not.
 // Wire facts verified 2026-10-16 (archive/2026-10-16-image-regen): the request
 // is lib/svgconnections' buildImageBody; the response is
-// `{ created, data: [{ b64_json?, url? }], usage? }`.
+// `{ created, data: [{ b64_json?, url? }] }`. 2026-10-19 fix
+// (archive/2026-10-19-image-regen-fix): the image wait floor, the main image
+// the SVG generation reads, and the honest texts of a run. The response's
+// `usage` block (archive/2026-10-19-image-regen-spend-log) feeds the spend log.
 
 import { NO_USAGE, type Usage } from "./svgrequest";
 
@@ -130,4 +133,63 @@ export function preferredImagePath(versions: readonly ImageVersion[], preferred:
   if (preferred === null) return fallback;
   const chosen = versions.find((v) => v.version === preferred && v.status === "done");
   return chosen?.file ?? fallback;
+}
+
+/** The two pair-file fields that name the main image (structural: no cycle with pairmeta). */
+export interface ImageMain {
+  imageVersions: readonly ImageVersion[];
+  imagePreferred: number | null;
+}
+
+/**
+ * THE file a pair's AI source is (RC8): the row shows it and the SVG
+ * generation vectorizes it — one rule, so the two can never disagree.
+ */
+export function mainImageOf(meta: ImageMain | null, original: string): string {
+  return meta === null ? original : preferredImagePath(meta.imageVersions, meta.imagePreferred, original);
+}
+
+/**
+ * Field ownership (RC6): the image fields belong to the image writer. An SVG
+ * save built from an older copy takes them from the LATEST in-memory copy, so
+ * a regeneration that landed meanwhile is never dropped.
+ */
+export function withImagesOf<T extends ImageMain>(meta: T, latest: ImageMain | null): T {
+  return latest === null ? meta : { ...meta, imageVersions: latest.imageVersions, imagePreferred: latest.imagePreferred };
+}
+
+/** An image arrives in one piece at the end — never wait less than this (RC7). */
+export const IMAGE_WAIT_FLOOR_MS = 300_000;
+
+/** The wait for one image request: the stall window, raised to the image floor. */
+export function imageWaitMs(stallMs: number): number {
+  return Math.max(stallMs, IMAGE_WAIT_FLOOR_MS);
+}
+
+/** The reason the LAST attempt failed, or null when it did not (the row strip line). */
+export function lastImageFailure(versions: readonly ImageVersion[]): string | null {
+  const last = versions.at(-1);
+  if (last === undefined || last.status !== "failed") return null;
+  return last.error !== null && last.error !== "" ? last.error : "unknown error";
+}
+
+export interface RegenTally {
+  total: number;
+  done: number;
+  failed: number;
+  /** The first failure's reason, shown with the count (RULE 4). */
+  reason: string | null;
+}
+
+/** The outcome toast: what landed, what failed and why, what was never sent. */
+export function regenOutcome(t: RegenTally): { msg: string; err: boolean } {
+  const err = t.failed > 0;
+  const why = t.reason === null ? "" : `: ${t.reason}`;
+  const notSent = t.total - t.done - t.failed;
+  if (notSent > 0) return { msg: `Stopped — ${t.done} regenerated, ${t.failed} failed, ${notSent} not sent${why}`, err };
+  if (t.done === 0) return { msg: `No AI source was regenerated${t.reason === null ? "" : ` — ${t.reason}`}`, err: true };
+  if (err) return { msg: `Regenerated ${t.done} of ${t.total} AI sources — ${t.failed} failed${why}`, err };
+  return t.done === 1
+    ? { msg: "Regenerated 1 AI source — it is now the main image", err }
+    : { msg: `Regenerated ${t.done} AI sources — each is now the main image`, err };
 }

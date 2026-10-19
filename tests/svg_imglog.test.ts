@@ -3,7 +3,7 @@
 // regeneration cost and tokens spent"). Reported numbers stay reported; a
 // number the provider did not send is "—" / "no cost reported", never invented.
 import { describe, expect, it } from "vitest";
-import { imageItemSpec, imageRunSpec, imageSpendLine } from "../src/svg/imglog";
+import { imageItemSpec, imageRunSpec, imageSpendLine, imageSpendSuffix } from "../src/svg/imglog";
 import type { ImageRegenResult } from "../src/svg/imgrunner";
 
 const MODEL = "openai/gpt-image-2.5-sunburst";
@@ -33,13 +33,24 @@ describe("one entry per regenerated source", () => {
 describe("the run summary sums the spend", () => {
   it("totals every request's tokens and cost", () => {
     expect(imageSpendLine([ok, ok2, bad], MODEL)).toBe("1,500 in · 6,000 out · 7,500 tokens · $0.1800 reported");
-    const spec = imageRunSpec([ok, ok2, bad], MODEL, { done: 2, failed: 1 });
+    const spec = imageRunSpec([ok, ok2, bad], MODEL, { total: 3, done: 2, failed: 1, reason: "HTTP 402" });
     expect(spec).toMatchObject({ feature: "svg", action: "image-regen", level: "warn" });
-    expect(spec.detail).toBe("2 done, 1 failed · 1,500 in · 6,000 out · 7,500 tokens · $0.1800 reported");
-    expect(spec.data).toMatchObject({ done: 2, failed: 1, tokens: 7500, cost: 0.18, model: MODEL });
+    expect(spec.detail).toBe("Regenerated 2 of 3 AI sources — 1 failed: HTTP 402 · 1,500 in · 6,000 out · 7,500 tokens · $0.1800 reported");
+    expect(spec.data).toMatchObject({ total: 3, done: 2, failed: 1, tokens: 7500, cost: 0.18, model: MODEL });
   });
 
   it("nothing reported -> says so", () => {
     expect(imageSpendLine([bad], MODEL)).toBe("— in · — out · — tokens · no cost reported");
+  });
+});
+
+describe("the toast suffix — only what was reported (the log always keeps the spend)", () => {
+  it("is empty when no number was reported", () => {
+    expect(imageSpendSuffix([bad], MODEL)).toBe("");
+    expect(imageSpendSuffix([], MODEL)).toBe("");
+  });
+
+  it("names the summed spend when anything was reported", () => {
+    expect(imageSpendSuffix([ok, bad], MODEL)).toBe(" · 1,000 in · 4,000 out · 5,000 tokens · $0.1200 reported");
   });
 });

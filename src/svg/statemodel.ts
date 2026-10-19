@@ -81,6 +81,8 @@ export interface SvgModel {
   queue: QueueItem[];
   /** Currently generating source id, for persistent progress header. */
   currentId: string | null;
+  /** Sources whose AI image is being regenerated (2026-10-19 RC3); one writer: the run in svg/imgactions. */
+  imgRunning: string[];
 }
 
 export type SvgAction =
@@ -113,7 +115,8 @@ export type SvgAction =
   | { type: "progress-fn"; fn: (p: RunProgress | null) => RunProgress | null }
   | { type: "running"; running: boolean }
   | { type: "queue"; queue: QueueItem[] }
-  | { type: "current"; id: string | null };
+  | { type: "current"; id: string | null }
+  | { type: "img-running"; ids: string[]; on: boolean };
 
 /** The active connection always mirrors the live config's base+model, so a hand
  *  edit of the MODEL field is kept by the dropdown too (one truth, two views). */
@@ -162,7 +165,13 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   running: (m, a) => ({ ...m, running: (a as { running: boolean }).running }),
   queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
   current: (m, a) => ({ ...m, currentId: (a as { id: string | null }).id }),
+  "img-running": (m, a) => ({ ...m, imgRunning: inFlight(m.imgRunning, a as { ids: string[]; on: boolean }) }),
 };
+
+/** Marks ids in flight (on) or landed (off); concurrent writers never clobber each other. */
+function inFlight(now: string[], a: { ids: string[]; on: boolean }): string[] {
+  return a.on ? [...now, ...a.ids.filter((id) => !now.includes(id))] : now.filter((id) => !a.ids.includes(id));
+}
 
 export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
   return HANDLERS[action.type](model, action);
@@ -214,7 +223,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     params: { ...DEFAULT_PARAMS }, caps: capsFor(live.model), catalog: null, paramNote: null,
     prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
-    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null,
+    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
   };
 }
 

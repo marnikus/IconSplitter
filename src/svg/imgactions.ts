@@ -1,169 +1,254 @@
-// imgactions.ts — the AI source image regeneration actions (2026-10-16):
-// the guarded request, the confirmed batch (write + pair-file history + main
-// pointer), and the main switch. Reuses the SVG side's stores: the pair file
-// via loadMetaAt/saveMetaAt (atomic, I-54 additive fields) and the row list.
-// The batch itself is pure orchestration below the hook (RULE 18 sizes).
+// imgactions.ts — AI source image regeneration (2026-10-16): the guarded
+// request, the confirm that starts ONE run at a time, Stop, the main switch —
+// and the run itself. 2026-10-19 fix (archive/2026-10-19-image-regen-fix):
+// every refusal says why (RULE 2); an unreadable pair file is refused before
+// anything is sent (I-43); the run marks its rows in flight, advances the busy
+// pill per landed result (RULE 2/5) and records every result the moment it
+// lands — version file, the in-memory copy every SVG save starts from (RC6),
+// the row (RULE 24), the pair file — then says what landed, what failed and
+// why. Nothing here fails silently: each result is caught on its own and the
+// whole run is wrapped (RULE 4). Spend log (archive/2026-10-19-image-regen-spend-log):
+// each landed request logs its tokens + cost; the summary and toast carry the sum.
 
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import { metaPathForAi, type PairMeta } from "../lib/pairmeta";
-import { imageRegenFileName, nextImageVersion, preferredImagePath, type ImageVersion } from "../lib/svgimgreg";
-import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
+import type { PairMeta } from "../lib/pairmeta";
+import type { Connection } from "../lib/svgconnections";
+import {
+  imageRegenDir, imageRegenFileName, imageWaitMs, mainImageOf, nextImageVersion, regenOutcome,
+  type ImageVersion, type RegenTally,
+} from "../lib/svgimgreg";
+import { saveMetaAt } from "../selection/pairstore";
 import { log } from "../log/logstore";
 import type { SvgCtx, Slice } from "./actions";
+import { imageItemSpec, imageRunSpec, imageSpendSuffix } from "./imglog";
 import { listRegenNames, readReferenceImage, writeRegenImage } from "./imgregfiles";
-import { imageItemSpec, imageRunSpec, imageSpendLine, type ImageTally } from "./imglog";
 import { runImageBatch, type ImageRegenItem, type ImageRegenResult } from "./imgrunner";
+import { metaForSource } from "./sources";
 import type { SvgRow } from "./types";
 
-type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "setImageVersion">;
-
-/** The active connection record, or null when it is not an image one. */
-function activeImageConn(m: SvgCtx["m"]) {
-  const conn = m.connections.find((c) => c.id === m.activeConn);
-  return conn && conn.kind === "image" ? conn : null;
-}
+type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "stopImageRegen" | "setImageVersion">;
 
 export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
   const latest = useRef(ctx);
   latest.current = ctx;
-  const requestImageRegen = useCallback((ids: string[]) => {
-    const c = latest.current;
-    if (ids.length === 0) return;
-    if (activeImageConn(c.m) === null) { c.say("Switch to an image connection to regenerate AI sources", true); return; }
-    if (c.refs.key.current === null) { c.say("Add the API key first — it lives only on this device", true); return; }
-    c.dispatch({ type: "dialog", dialog: { kind: "image-regen", ids } });
-  }, []);
+  const control = useRef<ImgControl>({ active: false, stop: false }).current;
+  const requestImageRegen = useCallback((ids: string[]) => openDialog(latest.current, ids, control), [control]);
   const confirmImageRegen = useCallback(() => {
-    const c = latest.current;
-    confirmOf(c).catch((error: unknown) => {
-      c.say(`Image regeneration stopped: ${error instanceof Error ? error.message : String(error)}`, true);
-    });
+    if (control.active) return; // a second click while the first run starts
+    control.active = true;
+    control.stop = false;
+    void runImageRegen(latest.current, control)
+      .catch((error: unknown) => latest.current.say(`AI source regeneration stopped: ${messageOf(error)}`, true))
+      .finally(() => { control.active = false; });
+  }, [control]);
+  const stopImageRegen = useCallback(() => {
+    if (!control.active) return;
+    control.stop = true;
+    latest.current.say("Stopping — requests already sent will finish and be saved; nothing new is sent");
+  }, [control]);
+  const setImageVersion = useCallback((id: string, version: number | null) => {
+    void mainOf(latest.current, id, version).catch((error: unknown) => latest.current.say(`The main image could not be changed: ${messageOf(error)}`, true));
   }, []);
-  const setImageVersion = useCallback((id: string, version: number | null) => { void mainOf(latest.current, id, version); }, []);
-  return { requestImageRegen, confirmImageRegen, setImageVersion };
+  return { requestImageRegen, confirmImageRegen, stopImageRegen, setImageVersion };
 }
 
-/** Guarded confirm: close the dialog, run the batch, record every result. */
-async function confirmOf(c: SvgCtx): Promise<void> {
-  const conn = activeImageConn(c.m);
-  const dialog = c.m.dialog;
-  if (conn === null || dialog === null || dialog.kind !== "image-regen") return;
-  const rows = c.rows.filter((r) => dialog.ids.includes(r.source.id));
-  c.dispatch({ type: "dialog", dialog: null });
-  if (rows.length === 0) return;
-  const root = c.refs.root.current as DirHandleLike | null;
-  if (root === null) return c.say("The folder is gone — pick it again", true);
-  c.say(`Regenerating ${rows.length} AI source image${rows.length === 1 ? "" : "s"} from the current image + prompt…`);
-  const report = await runImageBatch({
-    conn, key: c.refs.key.current ?? "", prompt: c.m.prompt,
-    items: rows.map((r) => referenceItem(root, r)),
-    concurrency: c.m.config.concurrency, timeoutMs: c.m.config.timeoutMs,
-  });
-  const tally = await recordAll({ c, root, model: conn.model }, rows, report);
-  log(imageRunSpec(report, conn.model, tally));
-  sayOutcome(c, tally, imageSpendLine(report, conn.model));
-}
-
-/** The run's surroundings every recorded result needs. */
-interface RunScope { c: SvgCtx; root: DirHandleLike; model: string }
-
-/** Logs and records every result in order; done = a done request whose image landed. */
-async function recordAll(s: RunScope, rows: readonly SvgRow[], report: readonly ImageRegenResult[]): Promise<ImageTally> {
-  const tally: ImageTally = { done: 0, failed: 0 };
-  for (let i = 0; i < report.length; i++) {
-    log(imageItemSpec(report[i], s.model));
-    const src = rows[i].source;
-    const meta = await recordResult(s.root, { aiRelPath: src.relPath, dirPath: src.dirPath, stem: src.stem }, report[i], { prompt: s.c.m.prompt, model: s.model });
-    if (meta !== null) s.c.setRowsFn((rs) => rs.map((r) => (r.source.id === src.id ? { ...r, meta } : r)));
-    if (meta !== null && report[i].status === "done") tally.done += 1;
-    else tally.failed += 1;
+/** The guarded request: a reason for every refusal, then the shared confirm dialog. */
+function openDialog(c: SvgCtx, ids: string[], control: ImgControl): void {
+  const why = refusalOf(c, ids, control);
+  if (why !== null) return c.say(why, true);
+  // An unreadable pair file is never overwritten (I-43): refused before anything is paid for.
+  const rows = c.rows.filter((r) => ids.includes(r.source.id));
+  const usable = rows.filter((r) => !r.corrupt).map((r) => r.source.id);
+  const unreadable = rows.length - usable.length;
+  if (usable.length === 0) {
+    return c.say(unreadable > 0 ? "Its pair file is unreadable — fix or remove it first; nothing was sent" : "Those sources are no longer in the list — rescan the folder", true);
   }
-  return tally;
+  if (unreadable > 0) c.say(`${unreadable} source(s) skipped — their pair file is unreadable`, true);
+  c.dispatch({ type: "dialog", dialog: { kind: "image-regen", ids: usable } });
+}
+
+/** Why a regeneration cannot start now, or null. */
+function refusalOf(c: SvgCtx, ids: string[], control: ImgControl): string | null {
+  if (ids.length === 0) return "Select at least one source first";
+  if (control.active) return "AI source regeneration is already running — wait for it or stop it";
+  if (c.m.busy !== null) return `Wait for “${c.m.busy}” to finish`;
+  if (activeImageConn(c.m) === null) return "Switch to an image connection to regenerate AI sources";
+  if (c.refs.key.current === null) return "Add the API key first — it lives only on this device";
+  return null;
+}
+
+/** The main switch: saved first, then the in-memory copy and the row — a failed save changes nothing. */
+async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<void> {
+  const root = c.refs.root.current as DirHandleLike | null;
+  const row = c.rows.find((r) => r.source.id === id);
+  if (root === null || row === undefined) return c.say("No folder is open — the choice cannot be saved", true);
+  const prev = c.refs.metas.get(id) ?? row.meta;
+  if (prev === null) return c.say("This pair has no record file yet — regenerate its image first", true);
+  const meta: PairMeta = { ...prev, imagePreferred: version };
+  try {
+    await saveMetaAt(root, row.source.metaPath, meta);
+  } catch (error) {
+    return c.say(`The choice for ${row.source.name} could not be saved — nothing changed (${messageOf(error)})`, true);
+  }
+  c.refs.metas.set(id, meta);
+  c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? { ...r, meta } : r)));
+  log({ feature: "svg", action: "image-main", ids: { source: id }, detail: version === null ? "original" : `v${version}` });
+  c.say(version === null ? "AI source: the original is main again" : `AI source: v${version} is main — the SVG generation uses it`);
+}
+
+// ── the run ───────────────────────────────────────────────────────────────
+
+/** The hook's run control: one batch at a time, Stop read before each item. */
+interface ImgControl {
+  active: boolean;
+  stop: boolean;
+}
+
+/** Everything one run needs, fixed at confirm time. */
+interface ImgRun {
+  c: SvgCtx;
+  conn: Connection;
+  root: DirHandleLike;
+  rows: SvgRow[];
+  prompt: string;
+  tally: RegenTally;
+  /** Every outcome that landed, for the summed spend. */
+  results: ImageRegenResult[];
+}
+
+/** The active connection record, or null when it is not an image one. */
+function activeImageConn(m: SvgCtx["m"]): Connection | null {
+  const conn = m.connections.find((c) => c.id === m.activeConn);
+  return conn !== undefined && conn.kind === "image" ? conn : null;
+}
+
+/** Confirm: close the dialog, then run; every outcome is reported. */
+async function runImageRegen(c: SvgCtx, control: ImgControl): Promise<void> {
+  const run = runOf(c);
+  c.dispatch({ type: "dialog", dialog: null });
+  if (typeof run === "string") return c.say(run, true);
+  begin(run);
+  try {
+    await runImageBatch({
+      conn: run.conn, key: c.refs.key.current ?? "", prompt: run.prompt,
+      items: run.rows.map((r) => referenceItem(run.root, r)),
+      concurrency: c.m.config.concurrency, timeoutMs: imageWaitMs(c.m.config.timeoutMs),
+      shouldStop: () => control.stop,
+      onResult: (result, i) => land(run, run.rows[i], result),
+    });
+  } catch (error) {
+    run.tally.reason ??= messageOf(error);
+  } finally {
+    finish(run);
+  }
+}
+
+/** The run the open dialog asks for, or the reason it cannot start. */
+function runOf(c: SvgCtx): ImgRun | string {
+  const dialog = c.m.dialog;
+  const conn = activeImageConn(c.m);
+  const root = c.refs.root.current as DirHandleLike | null;
+  if (dialog === null || dialog.kind !== "image-regen") return "Nothing to regenerate — the dialog was closed";
+  if (conn === null) return "Switch to an image connection to regenerate AI sources";
+  if (root === null) return "The folder is gone — pick it again";
+  if (c.m.prompt.trim() === "") return "Write a prompt first — nothing was sent";
+  const rows = c.rows.filter((r) => dialog.ids.includes(r.source.id));
+  if (rows.length === 0) return "Those sources are no longer in the list — rescan the folder";
+  return { c, conn, root, rows, prompt: c.m.prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
 }
 
 /**
  * What one row sends (2026-10-19): the prompt travels with the row's CURRENT
- * main AI image — the same file the thumbnail shows (a chosen regeneration, else
- * the original). The path is fixed now; the bytes are read when the request starts.
+ * main AI image — the same file the thumbnail shows and the SVG generation
+ * reads (mainImageOf). The path is fixed now; the bytes are read when the
+ * request starts (lazy — a large batch never holds every image in memory).
  */
 function referenceItem(root: DirHandleLike, row: SvgRow): ImageRegenItem {
-  const path = preferredImagePath(row.meta?.imageVersions ?? [], row.meta?.imagePreferred ?? null, row.source.relPath);
+  const path = mainImageOf(row.meta, row.source.relPath);
   return { id: row.source.id, fileName: path.slice(path.lastIndexOf("/") + 1), reference: () => readReferenceImage(root, path) };
 }
 
-/** The post-run toast: what landed, what did not, what it spent. */
-function sayOutcome(c: SvgCtx, { done, failed }: ImageTally, spend: string): void {
-  const ok = done > 0
-    ? `Regenerated ${done} AI source${done === 1 ? "" : "s"} — new main version${failed > 0 ? `, ${failed} failed` : ""}`
-    : "No AI source was regenerated";
-  c.say(`${ok} · ${spend}`, failed > 0 || done === 0);
+const busyText = (run: ImgRun) => `Regenerating AI sources · ${run.tally.done + run.tally.failed}/${run.tally.total}`;
+
+function begin(run: ImgRun): void {
+  const { c, rows, conn } = run;
+  c.dispatch({ type: "img-running", ids: rows.map((r) => r.source.id), on: true });
+  c.setBusy(busyText(run));
+  c.say(`Regenerating ${rows.length} AI source${rows.length === 1 ? "" : "s"} via ${conn.name} from the current image + prompt — each can take a minute or two`);
+  log({ feature: "svg", action: "image-regen-start", detail: `${rows.length} · ${conn.model}` });
 }
 
-/** The main switch: point imagePreferred at a version (or the original). */
-async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<void> {
-  const root = c.refs.root.current as DirHandleLike | null;
-  const row = c.rows.find((r) => r.source.id === id);
-  if (root === null || row === undefined) return;
-  const metaPath = metaPathForAi(row.source.relPath);
-  const read = await loadMetaAt(root, metaPath);
-  if (read.meta === null) return c.say("The pair file is gone — rescan the folder", true);
-  const meta: PairMeta = { ...read.meta, imagePreferred: version };
-  await saveMetaAt(root, metaPath, meta);
+/** One outcome, recorded the moment it lands; its failure never stops the others (RULE 5). */
+async function land(run: ImgRun, row: SvgRow, result: ImageRegenResult): Promise<void> {
+  run.results.push(result);
+  if (result.status === "done") log(imageItemSpec(result, run.conn.model));
+  try {
+    const entry = await record(run, row, result);
+    count(run, row, entry.status === "done" ? null : entry.error ?? "unknown error");
+  } catch (error) {
+    count(run, row, `${row.source.name}: ${messageOf(error)}`);
+  } finally {
+    run.c.dispatch({ type: "img-running", ids: [row.source.id], on: false });
+    run.c.setBusy(busyText(run));
+  }
+}
+
+function count(run: ImgRun, row: SvgRow, failure: string | null): void {
+  if (failure === null) {
+    run.tally.done += 1;
+    return;
+  }
+  run.tally.failed += 1;
+  run.tally.reason ??= failure;
+  log({ feature: "svg", action: "image-regen-failed", ids: { source: row.source.id }, detail: failure });
+}
+
+/**
+ * Version file + history entry, then the in-memory copy and the row, then the
+ * pair file. Memory first, like runbatch.persist: an SVG save running meanwhile
+ * takes these image fields from that copy (RC6). The entry is true either way —
+ * a done one names a file that exists — so a refused pair-file write is
+ * reported and the next save of this pair writes it.
+ */
+async function record(run: ImgRun, row: SvgRow, result: ImageRegenResult): Promise<ImageVersion> {
+  const { c } = run;
+  const id = row.source.id;
+  const entry = await entryFor(run, row, (c.refs.metas.get(id) ?? row.meta)?.imageVersions ?? [], result);
+  // A pair without a file gets one (I-41, RC5); the freshest copy is the base.
+  const prev: PairMeta = c.refs.metas.get(id) ?? row.meta ?? metaForSource(row.source, null);
+  const meta: PairMeta = { ...prev, imageVersions: [...prev.imageVersions, entry], imagePreferred: entry.status === "done" ? entry.version : prev.imagePreferred };
+  c.refs.metas.set(id, meta);
   c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? { ...r, meta } : r)));
-  log({ feature: "svg", action: "image-main", detail: `${id} -> ${version ?? "original"}` });
+  const refused = await saveMetaAt(run.root, row.source.metaPath, meta).then(() => null, (error: unknown) => messageOf(error));
+  if (refused !== null) throw new Error(`its pair file could not be written (${refused}) — the next save of this pair records it`);
+  return entry;
 }
 
-/** The request text and model, threaded into every history entry. */
-interface RegenReq { prompt: string; model: string }
-
-/** One runner outcome for one row. */
-type RegenResult = { status: "done" | "failed"; blob?: Blob; error?: string; requestId?: string | null };
-
-/** The meta after the append (what setRows stores for the row). */
-type ImgRecord = PairMeta;
-
-/** Where one result lands: which pair, which folder, which stem. */
-interface ResultTarget { aiRelPath: string; dirPath: string; stem: string }
-
-/** A write slot: the open root plus the target inside it. */
-interface RegenPlace { root: DirHandleLike; target: ResultTarget }
-
-/** Writes one result and appends it to the pair's image history (null = no pair file). */
-async function recordResult(
-  root: DirHandleLike, target: ResultTarget,
-  result: RegenResult, req: RegenReq,
-): Promise<ImgRecord | null> {
-  const metaPath = metaPathForAi(target.aiRelPath);
-  const prev = (await loadMetaAt(root, metaPath)).meta;
-  if (prev === null) return null;
-  const meta = await extendedWith({ root, target }, prev, result, req);
-  await saveMetaAt(root, metaPath, meta);
-  return meta;
+/** A done result is written as the next version; a failure (or a refused write) is an honest failed entry. */
+async function entryFor(run: ImgRun, row: SvgRow, history: readonly ImageVersion[], result: ImageRegenResult): Promise<ImageVersion> {
+  const { stem, dirPath } = row.source;
+  const version = nextImageVersion(stem, history, await listRegenNames(run.root, dirPath));
+  const name = imageRegenFileName(stem, version);
+  // a failed entry names the path it would have had — never written
+  const base = { version, file: `${imageRegenDir(dirPath)}/${name}`, prompt: run.prompt, model: run.conn.model, requestId: result.requestId ?? null, updatedAt: new Date().toISOString() };
+  if (result.status !== "done" || result.blob === undefined) return { ...base, status: "failed", error: result.error ?? "unknown error" };
+  try {
+    return { ...base, file: await writeRegenImage(run.root, dirPath, name, result.blob), status: "done", error: null };
+  } catch (error) {
+    return { ...base, status: "failed", error: `the new image could not be saved (${messageOf(error)})` };
+  }
 }
 
-/** The previous meta extended with this run's entry; the pointer moves on done. */
-async function extendedWith(
-  at: RegenPlace, prev: PairMeta,
-  result: RegenResult, req: RegenReq,
-): Promise<PairMeta> {
-  const entry = await entryFor(at, prev.imageVersions, result, req);
-  const preferred = entry.status === "done" ? entry.version : prev.imagePreferred;
-  return { ...prev, imageVersions: [...prev.imageVersions, entry], imagePreferred: preferred };
+function finish(run: ImgRun): void {
+  const { c, rows } = run;
+  c.dispatch({ type: "img-running", ids: rows.map((r) => r.source.id), on: false });
+  c.setBusy(null);
+  const out = regenOutcome(run.tally);
+  c.say(`${out.msg}${imageSpendSuffix(run.results, run.conn.model)}`, out.err);
+  log(imageRunSpec(run.results, run.conn.model, run.tally));
 }
 
-/** One history entry: a written file for a done result, an honest note otherwise. */
-async function entryFor(
-  at: RegenPlace, history: readonly ImageVersion[],
-  result: RegenResult, req: RegenReq,
-): Promise<ImageVersion> {
-  const now = new Date().toISOString();
-  const known = result.status === "done" ? await listRegenNames(at.root, at.target.dirPath) : [];
-  const version = nextImageVersion(at.target.stem, history, known);
-  const file = imageRegenFileName(at.target.stem, version);
-  const ok = result.status === "done" && result.blob !== undefined;
-  const requestId = result.requestId ?? null;
-  if (!ok) return { version, file, status: "failed", prompt: req.prompt, model: req.model, requestId, error: result.error ?? "unknown", updatedAt: now };
-  const stored = await writeRegenImage(at.root, at.target.dirPath, file, result.blob as Blob);
-  return { version, file: stored, status: "done", prompt: req.prompt, model: req.model, requestId, error: null, updatedAt: now };
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -28,9 +28,8 @@ function rowActionsOf(g: SvgGenApi, rootRef: { current: DirHandleLike | null }):
     toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
     decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
     openLocation: g.openLocation,
-      requestImageRegen: g.requestImageRegen,
-    setImageVersion: g.setImageVersion,
-    };
+    requestImageRegen: g.requestImageRegen, setImageVersion: g.setImageVersion, imgRunning: g.imgRunning,
+  };
 }
 
 

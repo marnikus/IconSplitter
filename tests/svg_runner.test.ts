@@ -438,3 +438,58 @@ describe("runGeneration — Regenerate from current SVG (one icon per request)",
     }
   });
 });
+
+// 2026-10-19 (archive/2026-10-19-image-regen-fix, RC8): a regenerated AI image
+// that the user made MAIN is what the SVG generation vectorizes — the row shows
+// it as "AI source", so the request must carry the same file.
+describe("runGeneration — the main AI image is the source", () => {
+  it("the composite reads each source's chosen regenerated image, else the original", async () => {
+    const { root, sources } = fixture(2);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: null });
+    const v1 = "architecture/AI source regeneration versions/icon-1_AI_v1.png";
+    const entry = { version: 1, file: v1, status: "done" as const, prompt: "p", model: "m", requestId: null, error: null, updatedAt: "2026-10-19T09:00:00.000Z" };
+    args.metas.set(sources[0].id, { ...pairMetaFor(sources[0]), imageVersions: [entry], imagePreferred: 1 });
+
+    await runGeneration(args);
+
+    const call = compositeCalls.mock.calls.slice(callsAtStart)[0] as unknown[];
+    const imageOf = call[2] as ((s: SvgSource) => string) | undefined;
+    expect(typeof imageOf).toBe("function");
+    expect(imageOf!(sources[0])).toBe(v1);
+    expect(imageOf!(sources[1])).toBe(sources[1].relPath);
+  });
+});
+
+// RC6 (field ownership): the image writer may land while an SVG is being saved —
+// between the save's read of the pair file and its write. The image history
+// must survive; the SVG writer owns the SVG fields only.
+describe("runGeneration — an image regeneration landing mid-save", () => {
+  it("keeps the image history that landed while the SVG file was being written", async () => {
+    const { root, sources } = fixture(1);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: null });
+    const base = pairMetaFor(sources[0]);
+    args.metas.set(sources[0].id, base);
+    const v1 = "architecture/AI source regeneration versions/icon-1_AI_v1.png";
+    const entry = { version: 1, file: v1, status: "done" as const, prompt: "p", model: "m", requestId: null, error: null, updatedAt: "2026-10-19T09:00:00.000Z" };
+    const arch = root.children.get("architecture") as FakeDir;
+    const create = arch.getFileHandle.bind(arch);
+    arch.getFileHandle = async (n: string, opts?: { create?: boolean }) => {
+      // the image writer lands exactly while the SVG file is written
+      if (opts?.create === true && n.endsWith(".svg")) args.metas.set(sources[0].id, { ...base, imageVersions: [entry], imagePreferred: 1 });
+      return create(n, opts);
+    };
+
+    const summary = await runGeneration(args);
+
+    expect(summary.saved).toBe(1);
+    const saved = JSON.parse((arch.children.get(`${sources[0].stem}.svg.json`) as FakeFile).text);
+    expect(saved.versions).toHaveLength(1);
+    expect(saved.imageVersions).toHaveLength(1);
+    expect(saved.imagePreferred).toBe(1);
+    expect(args.metas.get(sources[0].id)?.imageVersions).toHaveLength(1);
+  });
+});

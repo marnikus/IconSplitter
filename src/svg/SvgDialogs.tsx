@@ -12,6 +12,7 @@ import SvgPreviewBox from "./SvgPreview";
 import SvgConfirm from "./SvgConfirm";
 import SvgImgConfirm from "./SvgImgConfirm";
 import type { Connection } from "../lib/svgconnections";
+import { imageWaitMs } from "../lib/svgimgreg";
 import VersionsDialog from "./VersionsDialog";
 import type { Dialog, SvgRow } from "./types";
 import type { PromptPreset } from "../lib/promptpresets";
@@ -49,7 +50,7 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   }
   if (dialog.kind === "image-regen") {
     if (p.imageConn === null) return null;
-    return <SvgImgConfirm ids={dialog.ids} conn={p.imageConn} presets={p.presets} prompt={p.prompt}
+    return <SvgImgConfirm ids={dialog.ids} conn={p.imageConn} presets={p.presets} prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)}
       onPrompt={p.onImagePrompt} onPickPreset={p.onImagePreset} onConfirm={p.onImageConfirm} onCancel={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);

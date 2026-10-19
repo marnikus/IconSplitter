@@ -81,9 +81,18 @@ doc itself, never in this map.
 | `archive/2026-10-13-batch-row-merge-override/README.md` | Batch per-row merge override — design doc |
 | `archive/2026-10-13-grid-split-failure/README.md` | Grid image fails to split — 2x2 lightbulb icons |
 | `archive/2026-10-15-preview-restore-scroll-top/design.md` | Preview splits stored + restored after a restart, Regenerate rewrites, back-to-top button on all tabs |
-| `archive/2026-10-19-image-regen-reference/README.md` | AI source regeneration sends the prompt AND the current main image as reference (`images/edits`); corrects the earlier "no edit endpoint" claim |
-| `archive/2026-10-19-image-regen-spend-log/design.md` | AI source regeneration logs tokens in/out/total + cost per source and per run (`svg/imglog.ts`); "done" no longer counts failed requests |
 | `archive/2026-10-15-preview-store-preset/research.md` | Research: previews lost on reload (boot permission gesture gap), per-item merge decisions not persisted — root causes RC1–RC4, rules I-66..I-68, fix plan |
+| `archive/2026-10-15-batch-perf-stability/README.md` | Batch perf stability — scroll freeze / CPU spike fix (ported) |
+| `archive/2026-10-15-row-location/README.md` | Row "Location" button — copy the split-output folder of a processed item |
+| `archive/2026-10-15-split-size/README.md` | Split export size — "preset size does nothing": research and fix |
+| `archive/2026-10-15-split-speed/README.md` | Split-approved pipeline speed — research and improvement plan (≥80 % target) |
+| `archive/2026-10-16-connections/README.md` | Connection profiles — quick-switch dropdown, a Requesty image connection (Sunburst), full image controls |
+| `archive/2026-10-16-day-run-folder/README.md` | Day-level run folders — same-day exports share one folder |
+| `archive/2026-10-16-pinned-bulkbar/README.md` | Pinned bulk bar — the split controls stay reachable while scrolling |
+| `archive/2026-10-16-image-regen/README.md` | AI source image regeneration — image connection, confirmed prompt (shared presets), versioned main in "AI source regeneration versions" (I-71) |
+| `archive/2026-10-19-image-regen-reference/README.md` | AI source regeneration sends the prompt AND the current main image as reference (`images/edits`); corrects the earlier "no edit endpoint" claim |
+| `archive/2026-10-19-image-regen-fix/README.md` | Fix: the row's 9th grid cell (RC1), the dialog rendered below the list (RC2), a silent run (RC3/RC4), discarded images for pairs without a file (RC5), SVG saves dropping the image history (RC6), the 120 s cut (RC7), and the SVG generation now reading the MAIN image (RC8) |
+| `archive/2026-10-19-image-regen-spend-log/design.md` | AI source regeneration logs tokens in/out/total + cost per landed request and per run (`svg/imglog.ts`); the outcome toast appends the summed spend |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 
