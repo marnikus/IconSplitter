@@ -7,12 +7,13 @@
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { metaPathForAi, type PairMeta } from "../lib/pairmeta";
-import { imageRegenFileName, nextImageVersion, type ImageVersion } from "../lib/svgimgreg";
+import { imageRegenFileName, nextImageVersion, preferredImagePath, type ImageVersion } from "../lib/svgimgreg";
 import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { log } from "../log/logstore";
 import type { SvgCtx, Slice } from "./actions";
-import { listRegenNames, writeRegenImage } from "./imgregfiles";
-import { runImageBatch } from "./imgrunner";
+import { listRegenNames, readReferenceImage, writeRegenImage } from "./imgregfiles";
+import { runImageBatch, type ImageRegenItem } from "./imgrunner";
+import type { SvgRow } from "./types";
 
 type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "setImageVersion">;
 
@@ -52,10 +53,10 @@ async function confirmOf(c: SvgCtx): Promise<void> {
   if (rows.length === 0) return;
   const root = c.refs.root.current as DirHandleLike | null;
   if (root === null) return c.say("The folder is gone — pick it again", true);
-  c.say(`Regenerating ${rows.length} AI source image${rows.length === 1 ? "" : "s"}…`);
+  c.say(`Regenerating ${rows.length} AI source image${rows.length === 1 ? "" : "s"} from the current image + prompt…`);
   const report = await runImageBatch({
     conn, key: c.refs.key.current ?? "", prompt: c.m.prompt,
-    items: rows.map((r) => ({ id: r.source.id })),
+    items: rows.map((r) => referenceItem(root, r)),
     concurrency: c.m.config.concurrency, timeoutMs: c.m.config.timeoutMs,
   });
   let done = 0, failed = 0;
@@ -69,6 +70,16 @@ async function confirmOf(c: SvgCtx): Promise<void> {
   }
   log({ feature: "svg", action: "image-regen", detail: `${done} done, ${failed} failed` });
   sayOutcome(c, done, failed);
+}
+
+/**
+ * What one row sends (2026-10-19): the prompt travels with the row's CURRENT
+ * main AI image — the same file the thumbnail shows (a chosen regeneration, else
+ * the original). The path is fixed now; the bytes are read when the request starts.
+ */
+function referenceItem(root: DirHandleLike, row: SvgRow): ImageRegenItem {
+  const path = preferredImagePath(row.meta?.imageVersions ?? [], row.meta?.imagePreferred ?? null, row.source.relPath);
+  return { id: row.source.id, fileName: path.slice(path.lastIndexOf("/") + 1), reference: () => readReferenceImage(root, path) };
 }
 
 /** The post-run toast: what landed, what did not. */

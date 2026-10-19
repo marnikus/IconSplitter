@@ -30,14 +30,17 @@ vi.mock("../src/batch/store", async (importOriginal) => {
   };
 });
 
-// The network is never real: the runner returns one PNG per item, recorded.
-const runs: { items: unknown[]; prompt: string }[] = [];
+// The network is never real: the runner returns one PNG per item, recorded —
+// with the REFERENCE image each item would have sent (resolved at call time).
+interface RunRecord { items: { id: string; fileName: string }[]; prompt: string; refs: (string | null)[] }
+const runs: RunRecord[] = [];
 vi.mock("../src/svg/imgrunner", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/svg/imgrunner")>();
   return {
     ...actual,
-    runImageBatch: vi.fn(async (args: { items: { id: string }[]; prompt: string }) => {
-      runs.push({ items: args.items, prompt: args.prompt });
+    runImageBatch: vi.fn(async (args: { items: { id: string; fileName: string; reference: () => Promise<Blob | null> }[]; prompt: string }) => {
+      const refs = await Promise.all(args.items.map(async (i) => (await i.reference())?.text() ?? null));
+      runs.push({ items: args.items, prompt: args.prompt, refs });
       return args.items.map((i) => ({ id: i.id, status: "done" as const, blob: new Blob(["PNGDATA"], { type: "image/png" }) }));
     }),
   };
@@ -176,6 +179,33 @@ describe("image regeneration — the confirmed batch", () => {
     await click(q(`[data-testid=svg-ai-chip-${FOG}-1]`)!);
     await settle(150);
     expect((await meta()).imagePreferred).toBe(1);
+  });
+
+  it("sends the prompt AND the source's current main image as the reference; a later run references the new main", async () => {
+    await mountWithImages();
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    expect(q("[data-testid=svg-img-confirm]")!.textContent).toMatch(/reference/i);
+    expect(q("[data-testid=svg-img-confirm]")!.textContent).not.toMatch(/text-to-image only/i);
+    await click(q("[data-testid=svg-img-generate]")!);
+    await settle(200);
+    expect(runs[0].items[0].fileName).toBe("fog_AI.png");
+    expect(runs[0].refs).toEqual(["b"]); // the ORIGINAL AI source (fixture bytes) on the first run
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await click(q("[data-testid=svg-img-generate]")!);
+    await settle(200);
+    expect(runs[1].items[0].fileName).toBe("fog_AI_v1.png");
+    expect(runs[1].refs).toEqual(["PNGDATA"]); // v1 is main now, so v1 is the reference
+  });
+
+  it("an unreadable current image is reported by the runner contract, not sent text-only (reference resolves to null)", async () => {
+    await mountWithImages();
+    const root = stored.get("__svg__") as { source: FakeDir };
+    ((root.source.children.get("architecture") as FakeDir).children).delete("fog_AI.png");
+    await click(q(`[data-testid=svg-row-image-regen-${FOG}]`)!);
+    await click(q("[data-testid=svg-img-generate]")!);
+    await settle(200);
+    expect(runs[0].refs).toEqual([null]);
   });
 
   it("the dialog is a real modal: backdrop + dialog section holding the prompt and Generate", async () => {

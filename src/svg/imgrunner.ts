@@ -1,15 +1,22 @@
-// imgrunner.ts — the Images API batch of AI source regeneration (2026-10-16).
-// Owns: one injected-fetch attempt (Bearer key, stall-window timeout, honest
-// HTTP/shape errors) and the bounded worker pool that keeps memory and the
-// router happy. No retry here: an uncertain outcome must never be silently
-// resent (the same policy the SVG runner holds).
+// imgrunner.ts — the Images API batch of AI source regeneration (2026-10-16;
+// image EDIT since 2026-10-19). Owns: one injected-fetch attempt (Bearer key,
+// stall-window timeout, honest HTTP/shape errors) and the bounded worker pool
+// that keeps memory and the router happy. Every request carries the prompt AND
+// the source's current main image as the reference (POST /images/edits,
+// multipart); a reference that cannot be read fails THAT item honestly — it is
+// never silently sent as text-only. No retry here: an uncertain outcome must
+// never be silently resent (the same policy the SVG runner holds).
 
 import type { Connection } from "../lib/svgconnections";
-import { buildImageBody, imageUrl } from "../lib/svgconnections";
+import { buildEditForm, imageEditUrl } from "../lib/svgimgedit";
 import { b64ToBlob, parseImageResponse } from "../lib/svgimgreg";
 
 export interface ImageRegenItem {
   id: string;
+  /** The name the reference travels under (the main AI file's own name). */
+  fileName: string;
+  /** Reads the reference lazily (a 1000-pair batch never holds every image); null = unreadable. */
+  reference: () => Promise<Blob | null>;
 }
 
 export interface ImageRegenResult {
@@ -30,17 +37,23 @@ export interface ImageRegenArgs {
   shouldStop?: () => boolean;
 }
 
-/** One Images API request: exactly one image per source (n=1, always). */
-async function attempt(args: ImageRegenArgs): Promise<Blob> {
+/** The honest per-item failure for a reference that could not be read. */
+const NO_REFERENCE = "the current AI image could not be read, so nothing was sent";
+
+/** One Images API edit request: the prompt + this item's reference, one image per source. */
+async function attempt(args: ImageRegenArgs, item: ImageRegenItem): Promise<Blob> {
   const { conn, key, prompt, timeoutMs, fetchImpl } = args;
-  const body = buildImageBody({ ...conn, image: { ...conn.image, n: 1 } }, prompt);
+  const blob = await item.reference();
+  if (blob === null) throw new Error(NO_REFERENCE);
+  const body = buildEditForm(conn, prompt, { blob, fileName: item.fileName });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await (fetchImpl ?? fetch)(imageUrl(conn.baseUrl), {
+    // No Content-Type: the browser writes the multipart boundary itself.
+    const response = await (fetchImpl ?? fetch)(imageEditUrl(conn.baseUrl), {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      headers: { Authorization: `Bearer ${key}` },
+      body,
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`the image request failed (HTTP ${response.status})`);
@@ -66,7 +79,7 @@ export async function runImageBatch(args: ImageRegenArgs): Promise<ImageRegenRes
       next += 1;
       const item = args.items[i];
       try {
-        results[i] = { id: item.id, status: "done", blob: await attempt(args) };
+        results[i] = { id: item.id, status: "done", blob: await attempt(args, item) };
       } catch (error) {
         results[i] = { id: item.id, status: "failed", error: error instanceof Error ? error.message : String(error) };
       }

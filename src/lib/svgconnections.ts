@@ -9,8 +9,9 @@
 //     "openai/gpt-image-2.5-sunburst" (released 2026-09-08)
 //   * quality auto|low|medium|high|xhigh|max; size auto | WxH; background
 //     auto|opaque|transparent; output_format png|jpeg|webp
-// Requesty's docs index has NO image-edit endpoint — generation only (honest
-// scope; the doc in archive/2026-10-16-connections records the decision).
+// Image EDIT (prompt + reference image) is a separate endpoint, POST {base}/images/edits,
+// owned by lib/svgimgedit.ts. An earlier note here claiming Requesty had none was wrong
+// (corrected 2026-10-19, archive/2026-10-19-image-regen-reference).
 
 export type ConnectionKind = "text" | "image";
 

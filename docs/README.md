@@ -81,6 +81,7 @@ doc itself, never in this map.
 | `archive/2026-10-13-batch-row-merge-override/README.md` | Batch per-row merge override — design doc |
 | `archive/2026-10-13-grid-split-failure/README.md` | Grid image fails to split — 2x2 lightbulb icons |
 | `archive/2026-10-15-preview-restore-scroll-top/design.md` | Preview splits stored + restored after a restart, Regenerate rewrites, back-to-top button on all tabs |
+| `archive/2026-10-19-image-regen-reference/README.md` | AI source regeneration sends the prompt AND the current main image as reference (`images/edits`); corrects the earlier "no edit endpoint" claim |
 | `archive/2026-10-15-preview-store-preset/research.md` | Research: previews lost on reload (boot permission gesture gap), per-item merge decisions not persisted — root causes RC1–RC4, rules I-66..I-68, fix plan |
 
 Archived docs are dated by the day they were written and never edited afterwards.

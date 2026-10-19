@@ -30,9 +30,9 @@ export default function SvgImgConfirm(p: SvgImgConfirmProps) {
         </header>
         <div className="svg-modal-body svg-img-body">
           <ConfirmHead ids={p.ids.length} conn={p.conn} />
-          <p className="svg-note">
-            Text-to-image only — this provider documents no image-edit endpoint, so the
-            current AI image cannot be sent along. One request per source.
+          <p className="svg-note" data-testid="svg-img-caps">
+            Image edit — each request sends this prompt together with that source&apos;s
+            current main AI image as the reference. One request per source.
           </p>
           <PromptBlock presets={p.presets} prompt={p.prompt} onPickPreset={p.onPickPreset} onPrompt={p.onPrompt} />
           <div className="svg-modal-actions">
