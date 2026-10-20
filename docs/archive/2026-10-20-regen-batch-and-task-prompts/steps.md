@@ -9,7 +9,8 @@ updates it owns (RULE 17). No slice sends anything to a provider from a test.
 **Files:** `src/lib/svgregen.ts`, `src/lib/prompttasks.ts` (new), tests
 `tests/svgregen_batch.test.ts`, `tests/prompttasks.test.ts`.
 
-1. `REGN_PER_REQUEST_MIN/MAX/DEFAULT` (1..9/4), `clampRegenPerRequest`.
+1. `REGN_PER_REQUEST_MIN/MAX/DEFAULT` (1..9, default 9 — a full 3×3 sheet),
+   `clampRegenPerRequest`.
 2. `parseRegenBatch` / `serializeRegenBatch` — tolerant (RULE 13).
 3. `regenBatchPrompt(presetText, items, codes)` and the delegating
    `currentSvgPrompt` (text in [prompts.md](prompts.md)); `regenRecordText`.
@@ -68,10 +69,11 @@ mixed selection, an unreadable file.
 5. `confirmGenerate(choice)` enqueues with the size the popup showed, so a later
    settings change cannot move a queued batch.
 
-**Tests:** 9 icons at 4 → 3 requests of 4/4/1; the prompt of request 2 contains
-exactly positions 5–8; a queued item keeps its preset text after the preset is
-deleted; a request whose code is missing fails alone; size 1 equals today's
-text.
+**Tests:** 9 icons at the default 9 → ONE request of 9 with all nine codes;
+the same 9 lowered to 4 → 3 requests of 4/4/1, and the prompt of request 2
+contains exactly positions 5–8; a queued item keeps its preset text after the
+preset is deleted; a request whose code is missing fails alone; size 1 equals
+today's text.
 
 **Gate:** the slice tests, `tests/svg_queue_ui.test.tsx`,
 `tests/svg_confirm_regen_prompt.test.tsx`, `npx tsc --noEmit`, `npm run lint`.
@@ -152,7 +154,7 @@ full-prompt preview contains exactly the page's codes.
 | `tests/svg_prompttasks_store.test.ts` | task store validation and per-entry drop |
 | `tests/svg_regencodes.test.ts` | one code reader, mixed selection, unreadable file |
 | `tests/svg_queue_regen_batch.test.ts` | frozen prompt/size in a queued item |
-| `tests/svg_confirm_regen_batch.test.tsx` | pager at 4/4/1, per-page prompt, exclusions |
+| `tests/svg_confirm_regen_batch.test.tsx` | default 9 → one page; 4 → 4/4/1 pager; per-page prompt; exclusions |
 | `tests/svg_confirm_task_prompt.test.tsx` | default message, tabs, six-task memory |
 | `tests/svg_img_confirm_task_prompt.test.tsx` | image popup uses the shared picker |
 

@@ -9,7 +9,7 @@ work: [steps.md](steps.md).
 
 | Key | Shape | Rules |
 |---|---|---|
-| `iconSplitter.svg.regenBatch.v1` | `{ v: 1, count }` | int 1..9, default 4; corrupt → 4 + note in popup |
+| `iconSplitter.svg.regenBatch.v1` | `{ v: 1, count }` | int 1..9, **default 9** (one batch = one full 3×3 sheet); corrupt → 9 + note in popup |
 | `iconSplitter.svg.promptTasks.v1` | `{ v: 1, tasks: { [taskId]: { choice: "main" \| "preset", presetName } } }` | per-entry validation, unknown task ids dropped, name trimmed ≤ 60, ≤ 16 entries, missing preset resolved at read time |
 | `iconSplitter.svg.prompts.v1` | unchanged preset list | unchanged |
 | `iconSplitter.svg.regen.v1` | unchanged | kept for the front-placement fallback only; no longer read by the confirmation |
@@ -100,9 +100,11 @@ Image-edit confirmation reuses `svg-img-prompt-default`, `svg-img-task-tabs`,
 
 ## 9. Acceptance criteria
 
-1. Nine checked rows with 4 per regeneration request produce 3 confirmed pages
-   (4 + 4 + 1), each page showing its own grid, manifest, sheet and full prompt
-   containing exactly its icons' codes.
+1. Nine checked rows at the default 9 per regeneration request produce exactly
+   ONE confirmed page holding all nine icons with their nine codes. Lowering the
+   control to 4 re-plans the same selection into 3 pages (4 + 4 + 1), each page
+   showing its own grid, manifest, sheet and full prompt containing exactly its
+   icons' codes.
 2. The answer's SVGs land on the right pairs by title; a deliberately swapped
    title, a duplicate title and a missing position each produce their named
    problem and no wrong file.
@@ -126,8 +128,9 @@ Image-edit confirmation reuses `svg-img-prompt-default`, `svg-img-task-tabs`,
    sheet is the same one generation sends, so the model can correct the drawing
    against the reference). Alternative — code-only requests — is a later
    optimisation, not this change.
-2. **Batch size default 4?** Assumed 4 to match `imagesPerRequest` and the
-   image-edit default.
+2. **Batch size default?** Settled by the user: one regeneration batch carries
+   up to **9** icons (the full 3×3 sheet), so 9 is the default and the maximum;
+   only the user lowering the control makes a smaller batch.
 3. **Should the single-icon regeneration keep the old main-prompt fallback?**
    Assumed no — one contract for both shapes, an unreadable code is a named
    exclusion.

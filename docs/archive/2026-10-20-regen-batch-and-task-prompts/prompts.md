@@ -149,7 +149,7 @@ cannot be deselected; the other tab is inspectable and editable and shows the
 `iconSplitter.svg.regenBatch.v1`
 
 ```json
-{ "v": 1, "count": 4 }
+{ "v": 1, "count": 9 }
 ```
 
 `iconSplitter.svg.promptTasks.v1`

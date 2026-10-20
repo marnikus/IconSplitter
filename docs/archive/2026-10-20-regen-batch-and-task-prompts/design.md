@@ -51,10 +51,13 @@ SVG generation prompt.
 
 ### 3.1 Batch regeneration (P1)
 
-* **New setting — icons per regeneration request.** Integer 1..9 (the composite
-  grid is at most 3×3), default 4, stored under
-  `iconSplitter.svg.regenBatch.v1`, independent of `imagesPerRequest` (first
-  generation) and of the image-edit count. 1 keeps today's behaviour exactly.
+* **New setting — icons per regeneration request.** Integer 1..9, **default 9**:
+  one batch fills the largest square sheet this app builds (3×3 = 9 cells, the
+  same ceiling `imagesPerRequest` has), so a nine-icon regeneration is ONE
+  request. It is stored under `iconSplitter.svg.regenBatch.v1`, independent of
+  `imagesPerRequest` (first generation) and of the image-edit count. Lowering it
+  splits the same selection into more requests; 1 keeps today's behaviour
+  exactly.
 * **Plan.** A regeneration selection of N icons becomes
   `ceil(N / regenPerRequest)` requests, built by the existing `planBatches`
   (same grid, same empty-cell rule, same ordered manifest). The confirmation's
