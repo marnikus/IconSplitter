@@ -14,9 +14,9 @@ import { effectiveStallMs, EFFORT_RULES } from "../src/lib/effortlimits";
 import { clearInflight, inflightSummary, loadInflight } from "../src/svg/journal";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { runGeneration, type RunEvent, type RunSummary } from "../src/svg/runner";
-import { singlePrompt } from "../src/lib/svgprompt";
+import { loadRegenCodes, type RegenCode } from "../src/svg/regencodes";
+import { toRow } from "../src/svg/rowmodel";
 import type { RegenPlan } from "../src/lib/svgregen";
-import type { RunArgs } from "../src/svg/runtypes";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { streamFrames, transport } from "./helpers/svgtransport";
@@ -88,6 +88,7 @@ function runArgs(root: FakeDir, sources: SvgSource[], config: Partial<SvgConfig>
       params,
       prompt: "p",
       regen: { kind: "main" } as RegenPlan,
+      regenCodes: new Map<string, RegenCode>(),
       sources,
       metas: new Map(),
       onEvent: (e: RunEvent) => events.push(e),
@@ -391,25 +392,27 @@ describe("runGeneration — one request per batch", () => {
   });
 });
 
-describe("runGeneration — Regenerate from current SVG (one icon per request)", () => {
+describe("runGeneration — Regenerate from current SVG (batch, 2026-10-20)", () => {
   const PRESET = "Make the strokes bolder.";
   const codeOf = (i: number) => `<svg viewBox="0 0 24 24"><title>old ${i}</title></svg>`;
 
-  /** Three icons, each with a valid v1 SVG on disk and in its pair file. */
-  function regenFixture(): { args: RunArgs; sources: SvgSource[] } {
+  /** Three icons, each with a valid v1 SVG on disk, in its pair file and frozen as a code. */
+  async function regenFixture(size: number) {
     const { root, sources } = fixture(3);
     const arch = root.children.get("architecture") as FakeDir;
     sources.forEach((s, i) => {
       arch.children.set(`${s.stem}_v1.svg`, new FakeFile(`${s.stem}_v1.svg`, 10, 1, codeOf(i + 1)));
     });
     const run = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
-    run.args.regen = { kind: "current-svg", presetName: "Bolder", presetText: PRESET };
+    run.args.regen = { kind: "current-svg", presetName: "Bolder", presetText: PRESET, size };
+    const rows = sources.map((s) => toRow(s, pairMetaFor(s, [svgVersion(svgPathFor(s, 1))]), false));
     for (const s of sources) run.args.metas.set(s.id, pairMetaFor(s, [svgVersion(svgPathFor(s, 1))]));
+    run.args.regenCodes = (await loadRegenCodes(root, rows, sources.map((s) => s.id))).codes;
     return { args: run.args, sources };
   }
 
-  it("sends every icon alone, at size 1, with its own SVG code and the saved prompt", async () => {
-    const run = regenFixture();
+  it("size 1 keeps today's request: one icon, its own code, the saved prompt", async () => {
+    const run = await regenFixture(1);
     const t = transport();
     vi.stubGlobal("fetch", t.fetch);
 
@@ -424,18 +427,62 @@ describe("runGeneration — Regenerate from current SVG (one icon per request)",
     });
   });
 
-  it("records the saved prompt in the new version, never the SVG code", async () => {
-    const run = regenFixture();
+  it("the default size 9 sends the whole selection as ONE request carrying all three codes", async () => {
+    const run = await regenFixture(9);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(summary.perRequest).toBe(9);
+    expect(t.calls).toHaveLength(1);
+    expect(t.calls[0].items).toHaveLength(3);
+    const prompt = t.calls[0].prompt;
+    expect(prompt).toContain("Here is a batch of 3 icons to regenerate");
+    expect(prompt).toContain("3 — ");
+    run.sources.forEach((_, i) => expect(prompt).toContain(codeOf(i + 1)));
+    expect(summary.saved).toBe(3);
+  });
+
+  it("a size of 2 plans 4/4/1-style pages: 3 icons become 2 requests of 2 and 1", async () => {
+    const run = await regenFixture(2);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(summary.perRequest).toBe(2);
+    expect(t.calls.map((c) => c.items.length)).toEqual([2, 1]);
+    expect(t.calls[0].prompt).toContain("Here is a batch of 2 icons to regenerate");
+  });
+
+  it("records the saved prompt and the position in each new version, never the SVG code", async () => {
+    const run = await regenFixture(9);
     vi.stubGlobal("fetch", transport().fetch);
 
     await runGeneration(run.args);
 
-    for (const s of run.sources) {
+    run.sources.forEach((s, i) => {
       const last = run.args.metas.get(s.id)?.versions.at(-1);
       expect(last?.version).toBe(2);
-      expect(last?.prompt).toBe(singlePrompt(PRESET, s.stem));
-      expect(last?.prompt).not.toContain("old ");
-    }
+      expect(last?.prompt).toContain(PRESET);
+      expect(last?.prompt).toContain(`position ${i + 1}/3`);
+      expect(last?.prompt).not.toContain("<svg");
+    });
+  });
+
+  it("a request whose frozen code is missing fails alone, saying nothing was sent", async () => {
+    const run = await regenFixture(9);
+    const gone = run.sources[1];
+    run.args.regenCodes = new Map([...(run.args.regenCodes ?? new Map()).entries()].filter(([id]) => id !== gone.id));
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(t.calls).toHaveLength(0);
+    expect(summary.saved).toBe(0);
+    expect(summary.problems.join(" ")).toContain("could not be read");
   });
 });
 

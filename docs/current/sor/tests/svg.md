@@ -1,9 +1,6 @@
 # Generate SVG and image-edit tests
 
-Focused test inventory; [all tests](../TESTS.md).
-
-* `prompt_presets_shared.test.ts` — the one preset rule (pick, Quick load refusal, Save as snapshot and blank refusal, Delete keeps the editor) and the store round-trip per key (2026-10-09, I-65); `svg_prompt_presets.test.ts` — the same rule through the real Generate SVG reducer, the SVG list separate from the metadata list; `svg_regen_ui.test.tsx` — the regen window over its real storage (main by default, drop-down of SVG presets, live list update, no row in Export settings, regen above the prompt window).
-* `svg_regen.test.ts`, `svg_regenprompt.test.ts`, and the Regenerate-from-SVG block of `svg_runner.test.ts` (2026-10-09) — the stored choice and its refusals, the main prompt + first image (locked), the saved prompt + newest valid code + same image (one icon per request, the record without the code), the row and its global-only scope
+Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and review suites have their own [detail page](svg-prompt-review.md).
 * `svg_lib.test.ts` — also `clampTimeoutMs` / `clampRetries` (the card's own
   controls share the read path's clamps) including nonsense input.
 * `svg_batch.test.ts`, `svg_effort.test.ts` — the split and the tier rules:
@@ -23,10 +20,9 @@ Focused test inventory; [all tests](../TESTS.md).
   request id and cleared on completion, and a mid-stream cancel keeping the
   finished request while clearing the journal
 * `svg_stream.test.ts` / `svg_stream_read.test.ts` — the SSE parser (chunk
-  boundaries, deltas, `: keepalive`, usage chunk, `[DONE]`, error payload,
-  unreadable frames counted) and the reader over a real `ReadableStream` (idle
-  watchdog vs. a keepalive-reset window, stall before the first byte, user
-  abort, JSON fallback, request id from the header or the stream, `onId`)
+  boundaries, deltas, `: keepalive`, usage, `[DONE]`, error payload, counted
+  bad frames) and the reader over a real `ReadableStream` (idle watchdog,
+  stall, abort, JSON fallback, request id from header or stream, `onId`)
 * `svg_journal.test.ts` / `svg_recovery.test.ts` — the in-flight journal
   (validated reads, corrupt = empty, id attached late, finished request
   removed, honest summary) and the restart recovery (rows marked Unknown with

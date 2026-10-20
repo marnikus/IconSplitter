@@ -38,7 +38,8 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   decision file), written tmp → verify → overwrite → cleanup. Missing sidecar
   = pending; a corrupt sidecar warns and never destroys the SVG files. Each
   version records the source path/fingerprint, the SVG path/version, the
-  generation and review status, the exact prompt, provider+model, request and
+  generation status (the review status is the item's ONE status, see below), the
+  exact prompt, provider+model, request and
   completion timestamps, input/output/total tokens when reported, the cost with
   its currency, basis and **pricing version**, the validation result and a
   redacted error.
@@ -67,19 +68,30 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   attribute on the root, written only when the document declares no colour of
   its own — exactly as the standalone file would. Copy/Code always hand over
   the saved bytes.
-* Review: a new valid SVG starts **pending**; Approve/Decline act on the
-  selection (one history entry per gesture, undoable). The approved version
-  is identified in the row; regenerating adds a new pending version without
-  deleting old decisions or history.
-* Regenerate SVG from (2026-10-09; design `docs/archive/2026-10-09-regenerate-from-svg/design.md`).
-  Feature 1 (the default, locked by tests): a row's Regenerate sends the FULL
-  main prompt plus the source's first image alone, one request. Feature 2:
-  the Generate SVG tab's window **Regenerate SVG from** (global, directly above
-  the prompt window; moved here from Export settings on 2026-10-09) →
-  **Regenerate from current SVG** sends the saved prompt picked from the SVG
-  prompt presets, the icon's newest valid SVG code and the same first image,
-  one icon per request (I-64). A missing or blank saved prompt refuses the run
-  before any byte leaves; an icon with no valid SVG yet gets the main prompt.
+* Review: **one status per item**, not per SVG version (2026-10-20,
+  `docs/archive/2026-10-20-item-review-status/`). A new valid SVG starts
+  **pending**; Approve/Decline act on the selection and write the pair's single
+  `review` (one history entry per gesture, undoable by source). Every version of
+  that row carries the same status, so switching the version you look at — the
+  newest, or one chosen from the history — never changes the badge, the review
+  filter, the tally or the approved count. Regenerating reopens the review for
+  the whole row (`needs-review`) without deleting a version; a failed attempt
+  changes neither the status nor the history. Files written before this change
+  have no item-level key: the newest decided version's status is read once and
+  upgraded on the next write, and a per-version `review` key stays in the stored
+  shape as a mirror so older builds read one consistent answer.
+* Regenerate SVG from (2026-10-09; batch 2026-10-20,
+  `docs/archive/2026-10-20-regen-batch-and-task-prompts/`). A regeneration
+  request carries the saved prompt **and** the current SVG code of every icon it
+  carries — one icon for a single-icon task, up to nine (a full 3×3 sheet)
+  when the connection's **Images / request** is set to nine (shipped default
+  four). The text is the prompt, ordered `position — name` manifest, response
+  contract and each carried icon's code; the answer is matched back by
+  `<title>` first and declared position second (I-74/I-75). The popup shows the
+  connection's request size, not a second control; a missing preset, code or
+  over-limit request is refused before any byte leaves. Regeneration never
+  falls back to the main prompt, and an icon without a readable current SVG is
+  named and left out instead of being guessed (I-76).
 * Failures: a failed request keeps the previous SVG; a rate limit reports its
   retry-after; cancellation stops unsent requests and keeps completed
   results; a restart marks an interrupted request as interrupted/unknown and

@@ -80,9 +80,3 @@ export function preferredVersion(versions: readonly SvgVersion[], preferred: num
   if (preferred === null) return null;
   return versions.find((v) => v.version === preferred && v.status === "generated" && v.validation.ok) ?? null;
 }
-
-/** The version currently carrying an approval, if any. */
-export function approvedVersion(versions: readonly SvgVersion[]): SvgVersion | null {
-  const list = versions.filter((v) => v.review === "approved");
-  return list.length > 0 ? list[list.length - 1] : null;
-}

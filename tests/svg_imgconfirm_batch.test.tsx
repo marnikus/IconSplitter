@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_IMAGE_CONNECTION } from "../src/lib/svgconnections";
 import SvgImgConfirm from "../src/svg/SvgImgConfirm";
+import { imgConfirmProps } from "./helpers/svgimgconfirm";
 import type { PreparedImageRun } from "../src/svg/imgprepare";
 import type { SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
@@ -49,9 +50,9 @@ describe("multi-icon image-edit confirmation", () => {
     const rootRef = refs();
     await act(async () => {
       ui = createRoot(host);
-      ui.render(<SvgImgConfirm ids={["c", "a", "d", "b"]} rows={rows} rootRef={rootRef}
-        conn={DEFAULT_IMAGE_CONNECTION} presets={[]} prompt="Make thin lines" waitMs={300000}
-        onPrompt={() => undefined} onPickPreset={() => undefined} onConfirm={(run) => { if (run) sent.push(run); }} onCancel={() => undefined} />);
+      ui.render(<SvgImgConfirm {...imgConfirmProps({ ids: ["c", "a", "d", "b"], rows,
+        conn: DEFAULT_IMAGE_CONNECTION, prompt: "Make thin lines", waitMs: 300000, root: rootRef.current,
+        onConfirm: (run) => { if (run) sent.push(run); } })} />);
     });
     await wait();
     expect((host.querySelector("[data-testid=svg-img-per-request]") as HTMLInputElement).value).toBe("4");

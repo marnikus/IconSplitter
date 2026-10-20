@@ -81,15 +81,15 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   a file and resolvable via the pair's `imageVersions` / `mainImageOf`.
 
 <a id="i-64"></a>
-* **I-64 (one icon, its own code, RULE 3/4/13 — 2026-10-09):** in the
-  current-SVG regeneration every request carries exactly ONE icon: its composite
-  is that icon's AI image, its text is the saved prompt, the icon-name line and
-  the newest valid SVG file's text (`lib/svgregen.currentSvgPrompt`, built in
-  `svg/regenprompt.ts`). The pair file records the prompt text, never the code.
-  A stored choice that cannot run (no saved prompt picked, or the picked one is
-  gone or blank) starts no request; the window and the run both say why. The
-  drop-down lists the SVG prompt presets (`iconSplitter.svg.prompts.v1`), never
-  the metadata presets (2026-10-09 move; the window is `svg/RegenSetting.tsx`).
+* **I-64 (each icon, its own code, RULE 3/4/13 — 2026-10-09; batch revised
+  2026-10-20):** a current-SVG regeneration carries one icon's code at size 1,
+  or the code of every icon in a request sized by the connection's **Images /
+  request** (1..9, shipped default 4; I-74). The composite and ordered manifest
+  identify each AI image; the request text carries the saved task prompt and
+  each icon's current SVG code (`svg/regenprompt.ts`). The pair file records
+  that icon's prompt text and position, never another icon's code. A missing,
+  gone or blank saved prompt refuses the send with a reason; regeneration lists
+  SVG prompt presets (`iconSplitter.svg.prompts.v1`), never metadata presets.
 
 <a id="i-65"></a>
 * **I-65 (one preset rule for every prompt window, RULE 13/24 — 2026-10-09):**
@@ -99,3 +99,47 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   keeps its own key (`iconSplitter.upload.prompts.v1`, `iconSplitter.svg.prompts.v1`),
   so a preset never crosses between tabs. Delete never clears the editor; Save as
   stores a snapshot of exactly the text in the editor; a blank name is refused.
+
+<a id="i-74"></a>
+* **I-74 (a regeneration request carries its icons' codes, RULE 3/4 — 2026-10-20):**
+  a current-SVG regeneration request carries at most the connection's
+  configured icons-per-request (1..9, shipped default 4), one composite, the saved prompt, the
+  ordered manifest and **every** carried icon's current SVG code, all frozen when
+  the batch was confirmed (`svg/regenprompt.ts`, `lib/svgregen.regenBatchPrompt`).
+  It never mixes the main prompt into it: a missing prompt, a missing code or a
+  text over the 60 000-character ceiling refuses that request in words, and an
+  icon without a readable current SVG never enters a regeneration plan.
+
+<a id="i-75"></a>
+* **I-75 (match by title, then position, RULE 4 — 2026-10-20):** a returned SVG is
+  matched to its source by the manifest name in its `<title>` first and by its
+  declared position second. Duplicate titles, unknown names and missing positions
+  are reported per icon, never guessed, and an empty grid cell never produces a
+  version.
+
+<a id="i-76"></a>
+* **I-76 (a confirmed batch is frozen, RULE 13/24 — 2026-10-20):** the queued item
+  keeps the prompt text and label it will send, its per-request size and the
+  current SVG code of each icon. Later edits or deletions of the preset, the
+  prompt window or the settings cannot change what that batch sends.
+
+<a id="i-77"></a>
+* **I-77 (six prompt tasks, RULE 13/24 — 2026-10-20):** each prompt task
+  (`svg.generate|svg.regenerate|image.edit` × `single|batch`) remembers its own
+  last chosen prompt; a popup preselects it, shows it above the picker and
+  changes only that task. A stored preset that no longer exists is named with its
+  fallback, never silently replaced, and a regeneration task can never fall back
+  to the main prompt.
+
+<a id="i-78"></a>
+* **I-78 (review belongs to the item, RULE 13/24 — 2026-10-20):** an icon row has
+  exactly ONE review status, stored once as the pair file's `review`. Approve /
+  Decline / Needs review write that one field (and mirror it into every version
+  record), so the row badge, its list row, the review filter, the tally and the
+  approved count read the item — switching the shown version, choosing another
+  in the history or renaming a file can never change them. A generated attempt
+  sets it (`pending`, or `needs-review` after a regeneration) and fails closed
+  for a failed attempt, which keeps the previous status. Undo records
+  `{ id, review }` — a version in an older entry is accepted and ignored — and a
+  file without the item-level key reads the highest-numbered decided version
+  once (`lib/pairmeta.derivedReview`), regardless of stored order, never per version.

@@ -10,11 +10,13 @@ opt-in class as Generate SVG → Requesty; design
 `docs/archive/2026-10-06-svg-to-upload/design.md`):
 
 * Discovery walks the root ignoring `export`, reads every `.svg.json` sidecar
-  and lists ONE row per pair with ≥1 valid approved SVG version; the export
-  source is the NEWEST approved valid version. Pairs without an approved valid
-  SVG, without a sidecar, outside the split scope and duplicates are reported
-  in a banner with their reasons, never listed. Export output is never a
-  discovery source (no export loops).
+  and lists ONE row per **item-approved** pair with ≥1 valid generated SVG on
+  disk (I-78); the export source is the NEWEST valid version, regardless of a
+  preview-only preferred-version choice. A declined or needs-review item cannot
+  export an older previously approved version; legacy files without item-level
+  review derive it from the newest decided version. Pairs without approval or
+  valid artwork, without a sidecar, outside split scope and duplicates are
+  reported with reasons, never listed. Export output never feeds discovery.
 * List selection follows [Batch's RULE 25 gestures](../rules/BEHAVIOR.md#rule-25)
   (I-73). An active row opens its metadata detail but is not checked by a plain
   click; checkbox/modifier clicks change checks. Header toggles visible approved

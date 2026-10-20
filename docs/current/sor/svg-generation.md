@@ -2,7 +2,7 @@
 
 Confirmed Requesty calls are the narrow RULE 20 exception. Image-source editing has its [own behaviour page](svg-image-edits.md); see [invariants/svg.md](invariants/svg.md), [SVG selectors](../selectors/svg-generation.md), [storage](STORAGE.md) and [test owners](TESTS.md).
 
-**Detail pages:** [results, preview, cost, review, regeneration](svg-generation-results.md).
+**Detail pages:** [results, preview, cost, review](svg-generation-results.md) · [task prompts and batch regeneration](svg-generation-prompts.md).
 
 ## Behaviour and request flow
 
@@ -67,6 +67,9 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   valid generated SVG never enter that batch. The shared confirmation says
   "Confirm SVG regeneration"; both actions keep the existing validation,
   versioned-save and confirmation gates.
+* [Task prompts and batch regeneration](svg-generation-prompts.md) (I-74…I-77):
+  the selection chooses a remembered task prompt; the connection's request size
+  and frozen current SVG codes govern a confirmed regeneration.
 * Confirmation (nothing is sent by opening it): the selected count, the
   **total request count** and the configured per-request size, the
   provider/model, the sampling settings, the streaming fact and the effective

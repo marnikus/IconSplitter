@@ -25,6 +25,7 @@ import { decideCompositeReview, runCompositeEdits, type CompositeControl } from 
 import { loadImageJournal, removeImageRequest, saveImageJournal } from "./imgjournal";
 import type { PreparedImageRun } from "./imgprepare";
 import { runImageBatch, type ImageRegenItem, type ImageRegenResult } from "./imgrunner";
+import { taskPromptOf } from "./taskprompt";
 import type { SvgRow } from "./types";
 
 type ImgSlice = Slice<"requestImageRegen" | "confirmImageRegen" | "stopImageRegen" | "setImageVersion" | "applyImageReview" | "discardImageReview" | "dismissImageJournal" | "retryImageUnknown">;
@@ -167,10 +168,13 @@ function runOf(c: SvgCtx): ImgRun | string {
   if (dialog === null || dialog.kind !== "image-regen") return "Nothing to regenerate — the dialog was closed";
   if (conn === null) return "Switch to an image connection to regenerate AI sources";
   if (root === null) return "The folder is gone — pick it again";
-  if (c.m.prompt.trim() === "") return "Write a prompt first — nothing was sent";
   const rows = dialog.ids.map((id) => c.rows.find((r) => r.source.id === id)).filter((r): r is SvgRow => r !== undefined);
   if (rows.length === 0) return "Those sources are no longer in the list — rescan the folder";
-  return { c, conn, root, rows, prompt: c.m.prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
+  // The task's remembered default is what this edit sends (2026-10-20): the
+  // prompt the single/batch task last chose, never silently the textarea's text.
+  const prompt = taskPromptOf(c, "image.edit", rows.length);
+  if (prompt.trim() === "") return "Write a prompt first — nothing was sent";
+  return { c, conn, root, rows, prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
 }
 
 /**

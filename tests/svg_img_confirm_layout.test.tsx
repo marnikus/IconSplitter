@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SvgImgConfirm from "../src/svg/SvgImgConfirm";
 import { DEFAULT_IMAGE_CONNECTION } from "../src/lib/svgconnections";
+import { imgConfirmProps } from "./helpers/svgimgconfirm";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -22,8 +23,8 @@ async function mount(prompt: string): Promise<void> {
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
-    root.render(<SvgImgConfirm ids={["a"]} conn={DEFAULT_IMAGE_CONNECTION} presets={[{ name: "One", text: "x" }]}
-      prompt={prompt} onPrompt={() => undefined} onPickPreset={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />);
+    root.render(<SvgImgConfirm {...imgConfirmProps({ ids: ["a"], conn: DEFAULT_IMAGE_CONNECTION,
+      presets: [{ name: "One", text: "x" }], prompt })} />);
   });
 }
 
@@ -36,7 +37,7 @@ afterEach(async () => {
 describe("regeneration dialog — comfortable reading layout", () => {
   it("lists the controls first and the prompt LAST, full width in its own block", async () => {
     await mount("Redraw this icon");
-    const order = ["svg-img-count", "svg-img-provider", "svg-img-preset", "svg-img-prompt", "svg-img-generate"];
+    const order = ["svg-img-count", "svg-img-provider", "svg-img-prompt-select", "svg-img-prompt", "svg-img-generate"];
     const nodes = order.map((id) => q(`[data-testid=${id}]`)!);
     nodes.forEach((n) => expect(n).not.toBeNull());
     for (let i = 1; i < nodes.length; i += 1) {
@@ -44,7 +45,7 @@ describe("regeneration dialog — comfortable reading layout", () => {
     }
     // the prompt never shares a flex row with the preset (that squeezed both)
     expect(q("[data-testid=svg-img-prompt]")!.closest(".svg-provider-fields")).toBeNull();
-    expect(q("[data-testid=svg-img-preset]")!.closest(".svg-provider-fields")).toBeNull();
+    expect(q("[data-testid=svg-img-prompt-select]")!.closest(".svg-provider-fields")).toBeNull();
   });
 
   it("fits the prompt box to its whole text: height = scrollHeight, refit when the text changes", async () => {
@@ -54,8 +55,8 @@ describe("regeneration dialog — comfortable reading layout", () => {
     const box = q<HTMLTextAreaElement>("[data-testid=svg-img-prompt]")!;
     expect(box.style.height).toBe("420px");
     height = 610;
-    await act(async () => { root.render(<SvgImgConfirm ids={["a"]} conn={DEFAULT_IMAGE_CONNECTION} presets={[]}
-      prompt={"a much longer prompt ".repeat(40)} onPrompt={() => undefined} onPickPreset={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />); });
+    await act(async () => { root.render(<SvgImgConfirm {...imgConfirmProps({ ids: ["a"],
+      conn: DEFAULT_IMAGE_CONNECTION, prompt: "a much longer prompt ".repeat(40) })} />); });
     expect(box.style.height).toBe("610px");
   });
 });

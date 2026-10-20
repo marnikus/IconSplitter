@@ -1,0 +1,8 @@
+# Generate SVG — prompt, regeneration and review tests
+
+Part of the [Generate SVG test inventory](svg.md). Behaviour: [task prompts and batch regeneration](../svg-generation-prompts.md); [saved results and item review](../svg-generation-results.md). These suites run the real pure rules and fake local IO; provider calls stay stubbed.
+
+* `prompt_presets_shared.test.ts` — the one preset rule (pick, Quick load refusal, Save as snapshot and blank refusal, Delete keeps the editor) and the store round-trip per key (I-65); `svg_prompt_presets.test.ts` — the same rule through the real reducer, the SVG list separate from the metadata list; `svg_regen_ui.test.tsx` — the regeneration window over real storage.
+* `svg_regen.test.ts`, `svg_regenprompt.test.ts`, `svgregen_batch.test.ts` and the regeneration block of `svg_runner.test.ts` — the stored choice/refusals, the connection's 1..9 request size (shipped default 4, frozen in the plan), batch text (prompt + manifest + contract + every carried code; size 1 unchanged), title/position matching, per-icon record without another icon's code and row/global scope.
+* `prompttasks.test.ts`, `svg_taskprompt.test.ts`, `svg_confirm_task_prompt.test.tsx`, `svg_img_confirm_task_prompt.test.tsx`, `svg_confirm_regen_batch.test.tsx` — six tasks with separate memory, the default named above the picker, gone-preset fallback and connection-sized pages.
+* `svg_review_item.test.ts` — one item-level review through generations, preferred-version changes and undo, plus the highest-numbered decided review from unsorted legacy histories. `upload_discovery.test.ts` gates export on the same item status, not an older approved version.

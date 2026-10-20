@@ -7,7 +7,7 @@ import { extractSvgBlocks, matchBlocks, readHeadPosition, readTitle, sameName, t
 import { parseSvg, svgDataUrl, validateSvg } from "../src/lib/svgvalidate";
 import { countIcons } from "../src/lib/svgicons";
 import {
-  approvedVersion, newestValid, nextVersion,
+  newestValid, nextVersion,
   svgFileName, svgStem, tallyReviews, versionOfFileName,
 } from "../src/lib/svgfile";
 import { metaFileName } from "../src/lib/pairmeta";
@@ -194,11 +194,13 @@ describe("svgfile", () => {
     expect(withVersion(grown, rec(1)).versions.map((v) => v.version)).toEqual([1, 2]);
   });
 
-  it("finds the newest valid and the approved version, and tallies reviews", () => {
+  it("finds the newest valid version and tallies the item's one review", () => {
     const s = withVersion(withVersion(file(), rec(1, { review: "approved" })), rec(2));
     expect(newestValid(s.versions)?.version).toBe(2);
-    expect(approvedVersion(s.versions)?.version).toBe(1);
-    expect(tallyReviews(s.versions)).toEqual({ pending: 1, approved: 1, declined: 0, "needs-review": 0 });
+    // One status per ITEM: the second generation reopens the review, so no
+    // version disagrees with another (2026-10-20).
+    expect(s.review).toBe("pending");
+    expect(tallyReviews(s.versions)).toEqual({ pending: 2, approved: 0, declined: 0, "needs-review": 0 });
     const failed = withVersion(s, rec(3, { status: "failed", validation: { ok: false, errors: ["x"], warnings: [], icons: 0 } }));
     expect(newestValid(failed.versions)?.version).toBe(2);
     expect(newestValid([])).toBeNull();

@@ -297,7 +297,7 @@ describe("image regeneration — the confirmed batch", () => {
     expect(dialog).not.toBeNull();
     expect(dialog!.textContent).toMatch(/Sunburst/);
     expect(q("[data-testid=svg-img-prompt]")).not.toBeNull();
-    expect(q("[data-testid=svg-img-preset]")).not.toBeNull();
+    expect(q("[data-testid=svg-img-prompt-select]")).not.toBeNull();
     await click(q("[data-testid=svg-img-generate]")!);
     await settle(200);
     const m = await meta();

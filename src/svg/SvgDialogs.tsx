@@ -4,7 +4,7 @@
 // version chooser (VersionsDialog, I-54). Escape closes any of them WITHOUT
 // sending anything.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
@@ -15,7 +15,9 @@ import type { Connection } from "../lib/svgconnections";
 import { imageWaitMs } from "../lib/svgimgreg";
 import type { PreparedImageRun } from "./imgprepare";
 import VersionsDialog from "./VersionsDialog";
-import type { Dialog, SvgRow } from "./types";
+import type { ConfirmedBatch, Dialog, SvgRow } from "./types";
+import type { PromptTaskId, TaskPromptEntry } from "../lib/prompttasks";
+import { loadTaskPrompts, saveTaskEntry } from "../state/prompttasksstore";
 import type { PromptPreset } from "../lib/promptpresets";
 
 export interface SvgDialogsProps {
@@ -28,7 +30,8 @@ export interface SvgDialogsProps {
   readCode: (id: string, version: number) => Promise<string | null>;
   presets: PromptPreset[];
   prompt: string;
-  onConfirm: (regenPresetName: string | null) => void;
+  /** The confirmation's own frozen prompt, size and codes (2026-10-20). */
+  onConfirm: (batch: ConfirmedBatch) => void;
   onDismiss: () => void;
   onShowCode: (id: string, version: number) => void;
   /** Chooses which version the row shows (I-54); resolves why it failed, or null. */
@@ -38,21 +41,27 @@ export interface SvgDialogsProps {
   /** The active connection when it is an image one — the regen dialog's provider. */
   imageConn: Connection | null;
   onImagePrompt: (prompt: string) => void;
-  onImagePreset: (name: string) => void;
   onImageConfirm: (prepared: PreparedImageRun | null) => void;
 }
 
 export default function SvgDialogs(p: SvgDialogsProps) {
   const dialog = p.dialog;
-  if (dialog === null) return null;
+  // The task memory and the regen size are read when a dialog opens, so an
+  // entry saved by another popup a moment ago is already in force (RULE 24).
+  const stored = useMemo(() => dialog === null ? null : loadTaskPrompts(), [dialog]);
+  if (dialog === null || stored === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
-      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
+      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} taskEntries={stored}
+      onTaskEntry={(task: PromptTaskId, entry: TaskPromptEntry) => { saveTaskEntry(task, entry); }}
+      onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }
   if (dialog.kind === "image-regen") {
     if (p.imageConn === null) return null;
-    return <SvgImgConfirm ids={dialog.ids} rows={p.rows} rootRef={p.rootRef} conn={p.imageConn} presets={p.presets} prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)}
-      onPrompt={p.onImagePrompt} onPickPreset={p.onImagePreset} onConfirm={p.onImageConfirm} onCancel={p.onDismiss} />;
+    return <SvgImgConfirm ids={dialog.ids} rows={p.rows} rootRef={p.rootRef} conn={p.imageConn} presets={p.presets}
+      prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)} taskEntries={stored}
+      onTaskEntry={(task: PromptTaskId, entry: TaskPromptEntry) => { saveTaskEntry(task, entry); }}
+      onPrompt={p.onImagePrompt} onConfirm={p.onImageConfirm} onCancel={p.onDismiss} />;
   }
   const row = p.rows.find((r) => r.source.id === dialog.id);
   if (!row) return null;
