@@ -160,6 +160,21 @@ export function toBatchSource(s: SvgSource): BatchSource {
   return { sourceId: s.id, name: s.stem, relPath: s.relPath, fingerprint: s.fingerprint };
 }
 
+/** Disambiguates duplicate stems across split subfolders within a run while preserving plain stems otherwise. */
+export function toBatchSourcesUnique(sources: readonly SvgSource[]): BatchSource[] {
+  const counts = new Map<string, number>();
+  for (const s of sources) {
+    const key = s.stem.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return sources.map((s) => ({
+    sourceId: s.id,
+    name: (counts.get(s.stem.toLowerCase()) ?? 0) > 1 ? stemOf(s.relPath) : s.stem,
+    relPath: s.relPath,
+    fingerprint: s.fingerprint,
+  }));
+}
+
 /** The pair's file content for a source the list just discovered (I-41). */
 export function metaForSource(source: SvgSource, existing: PairMeta | null): PairMeta {
   if (existing !== null) return existing;

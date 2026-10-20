@@ -13,7 +13,8 @@
 // charge. Only a failure the provider itself confirmed may be retried.
 
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
-import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
+import { extractSvgBlocks, matchBlocks, matchBlocksByTitle } from "../lib/svgextract";
+import { singlePrompt } from "../lib/svgprompt";
 import type { Failure, Usage } from "../lib/svgrequest";
 import { endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
@@ -118,7 +119,10 @@ function finishBatch(ctx: BatchCtx): void {
 }
 
 async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
-  const matched = matchBlocks(extractSvgBlocks(text), batchManifest(ctx.plan.items));
+  const strictTitle = ctx.state.args.regen.kind === "current-svg" && ctx.items.length > 1;
+  const blocks = extractSvgBlocks(text);
+  const manifest = batchManifest(ctx.plan.items);
+  const matched = strictTitle ? matchBlocksByTitle(blocks, manifest) : matchBlocks(blocks, manifest);
   ctx.state.usages.push(usage);
   ctx.usage = usage;
   ctx.share = allocateUsage(usage, ctx.items.length);
@@ -145,8 +149,12 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   const meta = state.args.metas.get(item.id) ?? null;
   const usage = ctx.share ?? zeroUsage();
   const isRegen = state.args.regen.kind === "current-svg";
+  const planName = plan.items.find((i) => i.sourceId === item.id)?.name ?? item.stem;
+  const versionPrompt = state.args.regen.kind === "current-svg"
+    ? singlePrompt(state.args.regen.presetText, planName)
+    : ctx.recorded;
   const args: SaveArgs = {
-    root: state.args.root, source: item, code, prompt: ctx.recorded,
+    root: state.args.root, source: item, code, prompt: versionPrompt,
     provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
     usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
     review: isRegen ? "needs-review" : "pending",

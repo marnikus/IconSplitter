@@ -64,4 +64,69 @@ describe("multi-icon image-edit confirmation", () => {
     expect(await sent[0].groups[0].reference.text()).toBe("COMPOSITE");
     expect(sent[0].groups[0].plan.cells.map((cell) => cell.id)).toEqual(["c", "a", "d", "b"]);
   });
+
+  it("shows default prompt banner above preset list, remembers single vs batch image presets separately, and never clobbers main SVG prompt", async () => {
+    const presets = [
+      { name: "Img Single", text: "Redraw single icon source cleanly." },
+      { name: "Img Grid 4", text: "Harmonize 2x2 grid icons cleanly." },
+    ];
+    const mainSvgEditorSpy = vi.fn();
+    let confirmedPrompt: string | undefined;
+    const rootRef = refs();
+
+    await act(async () => {
+      ui = createRoot(host);
+      ui.render(
+        <SvgImgConfirm
+          ids={["a", "b", "c", "d"]}
+          rows={rows}
+          rootRef={rootRef}
+          conn={DEFAULT_IMAGE_CONNECTION}
+          presets={presets}
+          prompt="Main SVG tab prompt"
+          waitMs={300000}
+          onPrompt={mainSvgEditorSpy}
+          onPickPreset={() => undefined}
+          onConfirm={(_run, promptOverride) => { confirmedPrompt = promptOverride; }}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+    await wait();
+
+    const banner = host.querySelector("[data-testid=svg-img-default-prompt]")!;
+    const presetSel = host.querySelector("[data-testid=svg-img-preset]") as HTMLSelectElement;
+    expect(banner.compareDocumentPosition(presetSel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner.textContent).toBe("Default prompt for AI source image · batch (multiple icons): Main editor prompt");
+
+    // Pick "Img Grid 4" for batch -> updates banner, textarea, and effective composite prompt without touching mainSvgEditorSpy!
+    await act(async () => {
+      presetSel.value = "Img Grid 4";
+      presetSel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await wait();
+    expect(mainSvgEditorSpy).not.toHaveBeenCalled();
+    expect(banner.textContent).toBe("Default prompt for AI source image · batch (multiple icons): “Img Grid 4”");
+    expect((host.querySelector("[data-testid=svg-img-prompt]") as HTMLTextAreaElement).value).toBe("Harmonize 2x2 grid icons cleanly.");
+    expect(host.querySelector("[data-testid=svg-img-effective-prompt]")?.textContent).toContain("Harmonize 2x2 grid icons cleanly.");
+
+    // Toggle per-request count to 1 -> switches live to single-icon scope with independent default!
+    const countInput = host.querySelector("[data-testid=svg-img-per-request]") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(countInput, "1");
+      countInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await wait();
+    expect(banner.textContent).toBe("Default prompt for AI source image · single icon: Main editor prompt");
+    expect((host.querySelector("[data-testid=svg-img-prompt]") as HTMLTextAreaElement).value).toBe("Main SVG tab prompt");
+
+    // Pick "Img Single" for single scope and confirm -> passes "Redraw single icon source cleanly."!
+    await act(async () => {
+      presetSel.value = "Img Single";
+      presetSel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await wait();
+    await act(async () => (host.querySelector("[data-testid=svg-img-generate]") as HTMLButtonElement).click());
+    expect(confirmedPrompt).toBe("Redraw single icon source cleanly.");
+  });
 });

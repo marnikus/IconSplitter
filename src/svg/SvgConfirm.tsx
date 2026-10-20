@@ -1,30 +1,22 @@
-// SvgConfirm.tsx — the confirmation that must precede any send (prompt §2/§3/
-// §16): the selected count, the REQUEST count at the size the USER configured
-// (the reasoning level never shrinks it — 2026-10-05), the provider and
-// sampling facts, and one page per batch with that page's own contact sheet,
-// its ordered `position — name` manifest and its empty cells. Opening it sends
-// nothing; every page's composite is built in memory when the page is first shown
-// and cached for the dialog's lifetime. A plan that cannot be mapped is refused
-// here (RULE 15).
-// 2026-10-09: generation vs regeneration are clearly distinguished —
-// "Generation batch now" uses main current loaded prompt, "Regeneration now"
-// shows a dropdown of saved prompts applied to full batch.
+// SvgConfirm.tsx — confirmation dialog for both SVG generation and batch SVG
+// regeneration. Displays active per-task/per-scope default prompt above the
+// preset dropdown, supports configurable 1..9 icons per regeneration request,
+// and previews the exact contact sheet + outgoing text payload per batch page.
 
-import { useEffect, useMemo, useState } from "react";
-import { planBatches, validateBatchPlan, type BatchPlan } from "../lib/svgbatch";
-import { inIdOrder } from "../lib/selectionorder";
+import { useState } from "react";
 import { stallLabel, stallNote } from "../lib/effortlimits";
-import { clampImagesPerRequest } from "../lib/svgconfig";
 import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
-import type { BuiltComposite } from "./composite";
-import { toBatchSource } from "./sources";
 import type { SvgOperation, SvgRow } from "./types";
 import type { PromptPreset } from "../lib/promptpresets";
-import { regenPlanFromPresetName, type RegenPlan } from "../lib/svgregen";
+import { TaskPromptPicker, useTaskPromptSelection, type TaskPromptSelection } from "../ui/TaskPromptPicker";
+import { loadRegenSetting } from "./regenstore";
+import { MAX_REGEN_BATCH, saveRegenBatchPref } from "./regenprefs";
+import type { ConfirmSvgInput } from "./runcontrol";
 import { BatchPager } from "./SvgConfirmPager";
 import { FullPromptPreview } from "./SvgConfirmFullPrompt";
+import { useBuiltConfirmPlan, useConfirmBatchCount, type ConfirmBatchCountState, type ConfirmPlan } from "./SvgConfirmPlan";
 
 export interface SvgConfirmProps {
   ids: string[];
@@ -37,13 +29,29 @@ export interface SvgConfirmProps {
   running: boolean;
   presets: PromptPreset[];
   prompt: string;
-  onConfirm: (regenPresetName: string | null) => void;
+  onConfirm: (choice: ConfirmSvgInput) => void;
   onDismiss: () => void;
 }
 
+function useConfirmModalState(p: SvgConfirmProps) {
+  const [page, setPage] = useState(0);
+  const batch = useConfirmBatchCount(p, () => setPage(0));
+  const promptSel = useTaskPromptSelection({
+    operation: p.operation === "regenerate" ? "svg-regenerate" : "svg-generate",
+    scope: batch.scope,
+    presets: p.presets,
+    mainPrompt: p.prompt,
+    legacyPresetName: loadRegenSetting().presetName,
+  });
+  const selected = promptSel.resolved.presetName ?? "";
+  const plan = useBuiltConfirmPlan({
+    input: p, selected, perRequest: batch.perRequest, countError: batch.countError, page, setPage,
+  });
+  return { batch, promptSel, selected, plan };
+}
+
 export default function SvgConfirm(p: SvgConfirmProps) {
-  const { selected, setSelected } = useSelectedPreset(p.presets);
-  const plan = useConfirmPlan(p, selected);
+  const { batch, promptSel, selected, plan } = useConfirmModalState(p);
   return (
     <div className="svg-backdrop" data-testid="svg-confirm">
       <section className="svg-modal wide" role="dialog" aria-modal="true" aria-labelledby="svg-confirm-title">
@@ -51,26 +59,68 @@ export default function SvgConfirm(p: SvgConfirmProps) {
         <div className="svg-modal-body">
           <ModeBadge operation={p.operation} />
           <QueueNote running={p.running} count={plan.picked.length} />
-          <PromptChooser operation={p.operation} presets={p.presets} selected={selected} onSelect={setSelected} />
+          <PromptAndCountRow operation={p.operation} presets={p.presets} selection={promptSel} batch={batch} />
           <Facts plan={plan} p={p} selected={selected} />
           <PlanBody plan={plan} p={p} />
-          <FullPromptPreview operation={p.operation} prompt={p.prompt} presets={p.presets} selected={selected}
-            regen={plan.regen} active={plan.active} picked={plan.picked} rootRef={p.rootRef} />
-          <PolicyNote operation={p.operation} />
-          <Actions plan={plan} p={p} selected={selected} />
+          <FullPromptPreview operation={p.operation} prompt={promptSel.resolved.text} presets={p.presets}
+            selected={selected} regen={plan.regen} active={plan.active} picked={plan.picked} rootRef={p.rootRef} />
+          <PolicyNote operation={p.operation} perRequest={plan.perRequest} />
+          <Actions plan={plan} p={p} selection={promptSel} />
         </div>
       </section>
     </div>
   );
 }
 
-function useSelectedPreset(presets: PromptPreset[]) {
-  const [selected, setSelected] = useState<string>(() => presets[0]?.name ?? "");
-  useEffect(() => {
-    if (presets.length === 0) { setSelected(""); return; }
-    if (!presets.some((pr) => pr.name === selected)) setSelected(presets[0].name);
-  }, [presets, selected]);
-  return { selected, setSelected };
+function PromptAndCountRow(p: {
+  operation: SvgOperation;
+  presets: PromptPreset[];
+  selection: TaskPromptSelection;
+  batch: ConfirmBatchCountState;
+}) {
+  const isRegen = p.operation === "regenerate";
+  const pickedName = p.selection.resolved.presetName;
+  return (
+    <div className="svg-regen-controls-row">
+      <div className="svg-regen-prompt">
+        <TaskPromptPicker
+          selection={p.selection}
+          presets={p.presets}
+          selectTestId={isRegen ? "svg-confirm-regen-preset" : "svg-confirm-gen-preset"}
+          defaultMsgTestId="svg-confirm-default-prompt"
+          label={isRegen ? "Regeneration prompt" : "Generation prompt preset"}
+        />
+        {!isRegen && (
+          <small className="svg-note" data-testid="svg-confirm-main-prompt">
+            {pickedName ? `Using saved preset “${pickedName}” — applied to full batch.` : "Using main prompt (currently loaded) — applied to full batch."}
+          </small>
+        )}
+      </div>
+      {isRegen && <RegenBatchCountControl batch={p.batch} />}
+    </div>
+  );
+}
+
+function RegenBatchCountControl({ batch }: { batch: ConfirmBatchCountState }) {
+  return (
+    <div className="svg-regen-count">
+      <label className="svg-field">
+        <span className="svg-label">Icons per regeneration request</span>
+        <input
+          className="svg-input"
+          type="number"
+          min="1"
+          max={MAX_REGEN_BATCH}
+          step="1"
+          data-testid="svg-regen-per-request"
+          value={batch.countText}
+          onChange={(e) => batch.setCountText(e.target.value)}
+        />
+      </label>
+      {batch.storageWarning && <p role="status">Saved SVG regeneration batch count was unreadable; using 4.</p>}
+      {batch.countError && <p role="alert" data-testid="svg-regen-count-error">{batch.countError}</p>}
+    </div>
+  );
 }
 
 function DialogHead({ operation, onDismiss }: { operation: SvgOperation; onDismiss: () => void }) {
@@ -99,95 +149,27 @@ function QueueNote({ running, count }: { running: boolean; count: number }) {
   );
 }
 
-function PromptChooser({
-  operation, presets, selected, onSelect,
-}: {
-  operation: SvgOperation;
-  presets: PromptPreset[];
-  selected: string;
-  onSelect: (name: string) => void;
-}) {
-  if (operation === "generate") {
-    return <p className="svg-note" data-testid="svg-confirm-main-prompt">Using main prompt (currently loaded) — applied to full batch.</p>;
-  }
-  return <RegenPicker presets={presets} selected={selected} onSelect={onSelect} />;
-}
-
-function RegenPicker({
-  presets, selected, onSelect,
-}: {
-  presets: PromptPreset[];
-  selected: string;
-  onSelect: (name: string) => void;
-}) {
-  if (presets.length === 0) return null;
-  return (
-    <div className="svg-field">
-      <label className="svg-label" htmlFor="svg-confirm-regen-preset">Regeneration prompt</label>
-      <select id="svg-confirm-regen-preset" className="svg-input" data-testid="svg-confirm-regen-preset"
-        aria-label="Prompt for regeneration" value={selected} onChange={(e) => onSelect(e.target.value)}>
-        {presets.map((pr) => <option key={pr.name} value={pr.name}>{pr.name}</option>)}
-      </select>
-      <small className="svg-note" data-testid="svg-confirm-regen-note">
-        Selected prompt will be applied to full batch — one icon per request with its current SVG code.
-      </small>
-    </div>
-  );
-}
-
-interface ConfirmPlan {
-  picked: SvgRow[];
-  perRequest: number;
-  plans: BatchPlan[];
-  problems: string[];
-  page: number;
-  cache: Map<string, BuiltComposite>;
-  active: BatchPlan | null;
-  setPage: (page: number) => void;
-  regen: RegenPlan | null;
-}
-
-function useConfirmPlan(p: SvgConfirmProps, selected: string): ConfirmPlan {
-  const picked = useMemo(() => inIdOrder(p.rows, p.ids, (r) => r.source.id), [p.rows, p.ids]);
-  const regen = useMemo<RegenPlan | null>(() => {
-    if (p.operation !== "regenerate") return null;
-    if (p.presets.length === 0) return null;
-    const res = regenPlanFromPresetName(selected, p.presets);
-    return res.ok ? res.plan : null;
-  }, [p.operation, p.presets, selected]);
-  const perRequest = useMemo(() => {
-    return p.operation === "regenerate" ? 1 : clampImagesPerRequest(p.config.imagesPerRequest);
-  }, [p.operation, p.config.imagesPerRequest]);
-  const plans = useMemo(() => planBatches(picked.map((r) => toBatchSource(r.source)), perRequest), [picked, perRequest]);
-  const problems = useMemo(() => {
-    const base = validateBatchPlan(plans, perRequest);
-    if (base.length > 0) return base;
-    if (p.operation === "regenerate") {
-      if (p.presets.length === 0) return ["No saved prompts — save one in the prompt window first"];
-      const res = regenPlanFromPresetName(selected, p.presets);
-      if (!res.ok) return [res.problem];
-    }
-    return [];
-  }, [plans, perRequest, p.operation, p.presets, selected]);
-  const [page, setPage] = useState(0);
-  const cache = useMemo(() => new Map<string, BuiltComposite>(), []);
-  const active = plans[Math.min(page, Math.max(0, plans.length - 1))] ?? null;
-  return { picked, perRequest, plans, problems, page, cache, active, setPage, regen };
-}
-
 function PlanBody({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
   if (plan.problems.length > 0) {
     return <p className="svg-note error" data-testid="svg-confirm-problem">{plan.problems[0]} — nothing will be sent.</p>;
   }
   if (plan.active === null) return null;
-  return <BatchPager plan={plan.active} page={plan.page} pages={plan.plans.length}
-    picked={plan.picked} rootRef={p.rootRef} cache={plan.cache} onPage={plan.setPage} />;
+  return (
+    <BatchPager plan={plan.active} page={plan.page} pages={plan.plans.length}
+      picked={plan.picked} rootRef={p.rootRef} cache={plan.cache} onPage={plan.setPage} />
+  );
 }
 
-function Actions({ plan, p, selected }: { plan: ConfirmPlan; p: SvgConfirmProps; selected: string }) {
+function Actions({ plan, p, selection }: { plan: ConfirmPlan; p: SvgConfirmProps; selection: TaskPromptSelection }) {
   const handleConfirm = () => {
-    if (p.operation === "regenerate") p.onConfirm(selected);
-    else p.onConfirm(null);
+    selection.persistCurrent();
+    if (p.operation === "regenerate") {
+      saveRegenBatchPref(plan.perRequest);
+      p.onConfirm(selection.resolved.presetName);
+      return;
+    }
+    const override = selection.resolved.presetName === null ? null : selection.resolved.text;
+    p.onConfirm(override === null ? null : { regenPresetName: null, promptOverride: override });
   };
   return (
     <div className="svg-modal-actions">
@@ -202,11 +184,11 @@ function Actions({ plan, p, selected }: { plan: ConfirmPlan; p: SvgConfirmProps;
 
 function Facts({ plan, p, selected }: { plan: ConfirmPlan; p: SvgConfirmProps; selected: string }) {
   const note = stallNote(p.config.timeoutMs, p.caps, p.params);
-  const regenLabel = p.operation === "regenerate" && selected !== "" ? ` · prompt “${selected}”` : "";
+  const promptNote = selected !== "" ? ` · prompt “${selected}”` : "";
   return (
     <div className="svg-facts">
       <Fact label="Selected images" value={String(plan.picked.length)} testid="svg-confirm-count" />
-      <Fact label="Requests" value={`${plan.plans.length} × ${plan.perRequest} max${regenLabel}`} testid="svg-confirm-requests" />
+      <Fact label="Requests" value={`${plan.plans.length} × ${plan.perRequest} max${promptNote}`} testid="svg-confirm-requests" />
       <Fact label="Provider / model" value={p.config.model} testid="svg-confirm-model" />
       <Fact label="Model settings" value={paramsLabel(p.caps, p.params)} testid="svg-confirm-sampling" />
       <Fact label="Stall window" value={stallLabel(p.config.timeoutMs, p.caps, p.params)} testid="svg-confirm-timeout" />
@@ -225,15 +207,14 @@ function Fact({ label, value, testid }: { label: string; value: string; testid?:
   );
 }
 
-function PolicyNote({ operation }: { operation: SvgOperation }) {
+function PolicyNote({ operation, perRequest }: { operation: SvgOperation; perRequest: number }) {
   return (
     <p className="svg-note">
       {operation === "regenerate"
-        ? "Regeneration uses the selected saved prompt plus the icon's current SVG code and its image — one icon per request. Existing versions are never overwritten."
-        : "The main prompt (currently loaded) is sent with every request, streamed so the connection cannot be cut for being idle. Existing SVG versions are never overwritten — each result is saved as the next version."}{" "}
+        ? `Regeneration sends up to ${perRequest} icon(s) per request with their contact sheet, selected preset, and current SVG code(s), matching returned SVGs strictly by <title>. Existing versions are never overwritten.`
+        : "The selected prompt is sent with every request, streamed so the connection cannot be cut for being idle. Existing SVG versions are never overwritten — each result is saved as the next version."}{" "}
       A rate limit reports its retry-after delay; a request that goes silent for the whole
-      stall window is reported as outcome unknown with its request id and is never resent, because a
-      resend could be a duplicate charge. The batch size above is exactly what you configured.
+      stall window is reported as outcome unknown with its request id and is never resent.
     </p>
   );
 }

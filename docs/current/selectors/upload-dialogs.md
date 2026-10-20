@@ -71,7 +71,12 @@ while it applies.
 
 Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
 request — `upload-meta-provider`, `upload-meta-endpoint`,
-`upload-meta-prompt` (the exact prompt that WILL be sent, read-only, wrapping),
+`upload-meta-default-prompt` (directly above `upload-meta-preset`, stating the
+active default prompt for `(upload-generate | upload-regenerate) × (single | batch)`,
+`I-75`), `upload-meta-preset` (`<select>` over `iconSplitter.upload.prompts.v1`),
+`upload-meta-prompt` (the exact prompt that WILL be sent, read-only, wrapping,
+live-synced to the selected preset or main prompt without overwriting the tab's
+editor),
 the auth/retries facts, the images the request will carry
 (`upload-preview-strip`, one `upload-preview-{id}` with its own
 `upload-preview-caption-{id}`, `upload-preview-count`,

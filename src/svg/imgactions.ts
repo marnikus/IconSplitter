@@ -34,11 +34,11 @@ export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
   latest.current = ctx;
   const control = useRef<CompositeControl>({ active: false, stop: false, pending: null, current: () => latest.current }).current;
   const requestImageRegen = useCallback((ids: string[]) => openDialog(latest.current, ids, control), [control]);
-  const confirmImageRegen = useCallback((prepared: PreparedImageRun | null = null) => {
+  const confirmImageRegen = useCallback((prepared: PreparedImageRun | null = null, promptOverride?: string) => {
     if (control.active) return; // a second click while the first run starts
     control.active = true;
     control.stop = false;
-    const run = prepared === null ? runImageRegen(latest.current, control) : runCompositeEdits(latest.current, prepared, control);
+    const run = prepared === null ? runImageRegen(latest.current, control, promptOverride) : runCompositeEdits(latest.current, prepared, control);
     void run.catch((error: unknown) => latest.current.say(`AI source regeneration stopped: ${messageOf(error)}`, true))
       .finally(() => { control.active = false; });
   }, [control]);
@@ -139,8 +139,8 @@ function activeImageConn(m: SvgCtx["m"]): Connection | null {
 }
 
 /** Confirm: close the dialog, then run; every outcome is reported. */
-async function runImageRegen(c: SvgCtx, control: CompositeControl): Promise<void> {
-  const run = runOf(c);
+async function runImageRegen(c: SvgCtx, control: CompositeControl, promptOverride?: string): Promise<void> {
+  const run = runOf(c, promptOverride);
   c.dispatch({ type: "dialog", dialog: null });
   if (typeof run === "string") return c.say(run, true);
   begin(run);
@@ -160,17 +160,18 @@ async function runImageRegen(c: SvgCtx, control: CompositeControl): Promise<void
 }
 
 /** The run the open dialog asks for, or the reason it cannot start. */
-function runOf(c: SvgCtx): ImgRun | string {
+function runOf(c: SvgCtx, promptOverride?: string): ImgRun | string {
   const dialog = c.m.dialog;
   const conn = activeImageConn(c.m);
   const root = c.refs.root.current as DirHandleLike | null;
+  const prompt = promptOverride ?? c.m.prompt;
   if (dialog === null || dialog.kind !== "image-regen") return "Nothing to regenerate — the dialog was closed";
   if (conn === null) return "Switch to an image connection to regenerate AI sources";
   if (root === null) return "The folder is gone — pick it again";
-  if (c.m.prompt.trim() === "") return "Write a prompt first — nothing was sent";
+  if (prompt.trim() === "") return "Write a prompt first — nothing was sent";
   const rows = dialog.ids.map((id) => c.rows.find((r) => r.source.id === id)).filter((r): r is SvgRow => r !== undefined);
   if (rows.length === 0) return "Those sources are no longer in the list — rescan the folder";
-  return { c, conn, root, rows, prompt: c.m.prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
+  return { c, conn, root, rows, prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
 }
 
 /**

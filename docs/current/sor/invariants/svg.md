@@ -77,15 +77,24 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   would feed an artifact back into generation, and the counts would not add up.
 
 <a id="i-64"></a>
-* **I-64 (one icon, its own code, RULE 3/4/13 — 2026-10-09):** in the
-  current-SVG regeneration every request carries exactly ONE icon: its composite
-  is that icon's AI image, its text is the saved prompt, the icon-name line and
-  the newest valid SVG file's text (`lib/svgregen.currentSvgPrompt`, built in
-  `svg/regenprompt.ts`). The pair file records the prompt text, never the code.
-  A stored choice that cannot run (no saved prompt picked, or the picked one is
-  gone or blank) starts no request; the window and the run both say why. The
-  drop-down lists the SVG prompt presets (`iconSplitter.svg.prompts.v1`), never
-  the metadata presets (2026-10-09 move; the window is `svg/RegenSetting.tsx`).
+* **I-64 (one or more icons, each with its own code, RULE 3/4/13 — revised 2026-10-20):**
+  in current-SVG regeneration each request carries `perRequest` icons (`1..9`,
+  default `4`, persisted under `iconSplitter.svg.regenBatch.v1`, editable live in
+  `svg-confirm-per-request`): its composite contact sheet contains those icons'
+  AI images in `inIdOrder`, and its prompt carries the chosen saved prompt plus
+  every icon's verbatim embedded SVG code block (`lib/svgregen.batchSvgRegenPrompt`
+  for `n > 1`, `currentSvgPrompt` for `n === 1`, built in `svg/regenprompt.ts`).
+  Embedded input SVG code is never rewritten; returned SVGs in multi-icon
+  regeneration are matched strictly by normalized `<title>` stem (`I-74`).
+
+<a id="i-74"></a>
+* **I-74 (strict title matching for batch SVG regeneration, RULE 3/4/23 — 2026-10-20):**
+  when a current-SVG regeneration request carries more than one icon, returned
+  SVG documents are matched strictly by normalized `<svg><title>` stem
+  (`lib/svgextract.matchBlocksByTitle`), never by positional fallback. Unknown
+  titles, duplicate claims, missing `<title>`, invalid SVG, or missing stems
+  fail only the affected icon(s) while validly matched siblings save normally as
+  non-overwriting new versions (`_v2`, `_v3`, …).
 
 <a id="i-65"></a>
 * **I-65 (one preset rule for every prompt window, RULE 13/24 — 2026-10-09):**

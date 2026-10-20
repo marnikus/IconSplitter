@@ -337,7 +337,7 @@ async function mount(root: BinDir): Promise<void> {
     ui = createRoot(host);
     ui.render(<HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
   });
-  await waitFor(() => q("[data-testid=upload-row-count]") !== null, "the list to render");
+  await waitFor(() => q("[data-testid=upload-audit]") !== null, "the initial scan to finish");
   await settle();
 }
 
@@ -1047,18 +1047,23 @@ describe("metadata — the exact request, editable fields, accept", () => {
   });
 
   it("previews each row's own approved SVG, before and after a rescan", async () => {
+    const hasArt = (html: string, mark: "FOG" | "ARCH" | "ARCH2") => {
+      if (mark === "FOG") return html.includes("M2 2h20v20H2z") || html.includes("M1.6 1.6L21.6 1.6L21.6 21.6L1.6 21.6Z");
+      if (mark === "ARCH") return html.includes("M4 4h8v8H4z") || html.includes("M0.64 0.64L8.64 0.64L8.64 8.64L0.64 8.64Z");
+      return html.includes("M3 3h3v3H3z") || html.includes("M0.24 0.24L3.24 0.24L3.24 3.24L0.24 0.24Z");
+    };
     const root = makeDistinctRoot();
     vi.stubGlobal("fetch", geminiTransport(GOOD_ANSWER).fetch);
     await mount(root);
-    await waitFor(() => previewHtml(FOG).includes("M2 2h20v20H2z"), "fog's artwork");
-    expect(previewHtml(ARCH)).toContain("M4 4h8v8H4z"); // never the neighbour's drawing
-    expect(previewHtml(ARCH)).not.toContain("M2 2h20v20H2z");
+    await waitFor(() => hasArt(previewHtml(FOG), "FOG"), "fog's artwork");
+    await waitFor(() => hasArt(previewHtml(ARCH), "ARCH"), "arch's artwork");
+    expect(hasArt(previewHtml(ARCH), "FOG")).toBe(false); // never the neighbour's drawing
     // the user replaces the approved SVG on disk and rescans: only that row changes
     const dir = root.children.get(DIR) as BinDir;
     dir.children.set("arch_AI.svg", new BinFile("arch_AI.svg", distinctSvg("ARCH2"), 3600));
     await click("[data-testid=upload-rescan]");
-    await waitFor(() => previewHtml(ARCH).includes("M3 3h3v3H3z"), "the new artwork");
-    expect(previewHtml(FOG)).toContain("M2 2h20v20H2z"); // untouched
+    await waitFor(() => hasArt(previewHtml(ARCH), "ARCH2"), "the new artwork");
+    expect(hasArt(previewHtml(FOG), "FOG")).toBe(true); // untouched
   });
 
   itSlow("labels one preview per selected icon, and no image ever crosses rows", async () => {

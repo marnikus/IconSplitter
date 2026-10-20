@@ -7,7 +7,7 @@
 import { planBatches, type BatchPlan } from "../lib/svgbatch";
 import { inIdOrder } from "../lib/selectionorder";
 import { MAIN_PLAN, requestSizeFor, type RegenPlan } from "../lib/svgregen";
-import { toBatchSource } from "./sources";
+import { toBatchSourcesUnique } from "./sources";
 import { resolveRegen } from "./regenstore";
 import type { SvgCtx } from "./actions";
 
@@ -25,7 +25,7 @@ export interface PlanCtx {
  */
 export function planOf(c: PlanCtx, ids: string[], regen: RegenPlan | null = null): BatchPlan[] {
   const picked = inIdOrder(c.rows, ids, (r) => r.source.id);
-  return planBatches(picked.map((r) => toBatchSource(r.source)), perRequestOf(c, regen));
+  return planBatches(toBatchSourcesUnique(picked.map((r) => r.source)), perRequestOf(c, regen));
 }
 
 /**

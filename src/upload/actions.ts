@@ -97,7 +97,7 @@ export interface UploadActions extends PromptActions {
   regenerateMetadataSelected: (ids: string[]) => void;
   /** Bulk: generate the missing metadata FIRST, then export the whole selection. */
   exportSelected: (ids: string[]) => void;
-  confirmMetadata: () => void;
+  confirmMetadata: (promptOverride?: string) => void;
   cancelMetadata: () => void;
   acceptMetadata: (id: string) => void;
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;

@@ -103,12 +103,25 @@ describe("Feature 2 — the saved prompt + the current SVG code + the same image
     expect(out.ok ? "" : out.error).toContain("nothing was sent");
   });
 
-  it("never puts an SVG code into a multi-icon request", async () => {
+  it("carries every icon's chosen valid SVG code in a multi-icon batch request, and fails closed if any is missing", async () => {
     const a = svgSource("pair_1");
     const b = svgSource("pair_2");
-    const meta = pairMetaFor(a, [svgVersion(svgPathFor(a, 1))]);
-    const root = folderWith({ [svgPathFor(a, 1)]: OLD_CODE });
-    const out = await requestTextOf(argsFor(root, CURRENT, { [a.id]: meta }), [a, b], planFor([a, b]));
-    expect(out.ok && out.text.prompt).not.toContain(OLD_CODE);
+    const codeB = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>';
+    const metaA = pairMetaFor(a, [svgVersion(svgPathFor(a, 1))]);
+    const metaB = pairMetaFor(b, [svgVersion(svgPathFor(b, 1))]);
+    const fullRoot = folderWith({ [svgPathFor(a, 1)]: OLD_CODE, [svgPathFor(b, 1)]: codeB });
+    const okOut = await requestTextOf(argsFor(fullRoot, CURRENT, { [a.id]: metaA, [b.id]: metaB }), [a, b], planFor([a, b]));
+    expect(okOut.ok).toBe(true);
+    if (okOut.ok) {
+      expect(okOut.text.prompt).toContain(OLD_CODE);
+      expect(okOut.text.prompt).toContain(codeB);
+      expect(okOut.text.record).not.toContain("<svg");
+    }
+
+    // Missing SVG on second item fails closed before sending anything.
+    const partialRoot = folderWith({ [svgPathFor(a, 1)]: OLD_CODE });
+    const badOut = await requestTextOf(argsFor(partialRoot, CURRENT, { [a.id]: metaA }), [a, b], planFor([a, b]));
+    expect(badOut.ok).toBe(false);
+    expect(badOut.ok ? "" : badOut.error).toContain("nothing was sent");
   });
 });

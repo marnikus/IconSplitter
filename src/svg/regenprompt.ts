@@ -1,15 +1,12 @@
-// regenprompt.ts — the text and image ONE request of a run carries (2026-10-09).
-// Owns the choice between the two regeneration modes per request: the main
-// prompt (every request that is not one regenerated icon) or the saved prompt
-// + the icon's newest valid SVG code, read from its file, with the same image.
-// The version record keeps the prompt text but never the code — the code is the
-// previous version's own file. A code that cannot be read fails that icon;
-// an icon with no valid SVG yet is a first generation and gets the main prompt.
+// regenprompt.ts — the text ONE request of a run carries.
+// Supports first-generation prompts (single / batch) AND current-SVG regeneration
+// for both single icons (1) and multi-icon batches (2..9). Version lookup always
+// reads chosenVersion(versions, preferred) so previewed and sent SVGs match (I-54).
 
 import { batchManifest, type BatchPlan } from "../lib/svgbatch";
 import { batchPrompt, singlePrompt } from "../lib/svgprompt";
-import { currentSvgPrompt, type CurrentSvgPlan } from "../lib/svgregen";
-import { newestValid } from "../lib/svgfile";
+import { batchRegenPrompt, currentSvgPrompt, type CurrentSvgPlan, type RegenBatchEntry } from "../lib/svgregen";
+import { chosenVersion } from "../lib/svgfile";
 import { log } from "../log/logstore";
 import { readSvgText } from "./svgfiles";
 import type { RunArgs } from "./runtypes";
@@ -23,30 +20,65 @@ export interface RequestText {
 
 export type RequestTextResult = { ok: true; text: RequestText } | { ok: false; error: string };
 
-export async function requestTextOf(args: RunArgs, items: readonly SvgSource[], plan: BatchPlan): Promise<RequestTextResult> {
-  const only = items.length === 1 ? items[0] : undefined;
-  if (args.regen.kind === "current-svg" && only !== undefined) return regenTextOf(args, args.regen, only, plan);
-  return { ok: true, text: mainTextOf(args.prompt, items, plan) };
+export async function requestTextOf(
+  args: RunArgs, items: readonly SvgSource[], plan: BatchPlan,
+): Promise<RequestTextResult> {
+  if (args.regen.kind !== "current-svg") {
+    return { ok: true, text: mainTextOf(args.prompt, items, plan) };
+  }
+  if (items.length === 1) {
+    return regenSingleTextOf(args, args.regen, items[0], plan);
+  }
+  return regenBatchTextOf(args, args.regen, items, plan);
 }
 
 function mainTextOf(prompt: string, items: readonly SvgSource[], plan: BatchPlan): RequestText {
-  const text = items.length === 1 ? singlePrompt(prompt, items[0].stem) : batchPrompt(prompt, batchManifest(plan.items));
+  const planName = plan.items[0]?.name ?? items[0]?.stem ?? "";
+  const text = items.length === 1
+    ? singlePrompt(prompt, planName)
+    : batchPrompt(prompt, batchManifest(plan.items));
   return { prompt: text, record: prompt };
 }
 
-async function regenTextOf(args: RunArgs, regen: CurrentSvgPlan, item: SvgSource, plan: BatchPlan): Promise<RequestTextResult> {
-  const current = newestValid(args.metas.get(item.id)?.versions ?? []);
+function currentVersionOf(args: RunArgs, item: SvgSource) {
+  const meta = args.metas.get(item.id);
+  return chosenVersion(meta?.versions ?? [], meta?.preferred ?? null);
+}
+
+async function regenSingleTextOf(
+  args: RunArgs, regen: CurrentSvgPlan, item: SvgSource, plan: BatchPlan,
+): Promise<RequestTextResult> {
+  const current = currentVersionOf(args, item);
   if (current === null) {
     log({ level: "warn", feature: "svg", action: "regen-no-svg", detail: `${item.name}: no valid SVG yet — sent with the main prompt` });
     return { ok: true, text: mainTextOf(args.prompt, [item], plan) };
   }
   const code = await readSvgText(args.root, current.svgPath);
   if (code === null) return { ok: false, error: `${item.name}: the current SVG could not be read — nothing was sent` };
+  const targetName = plan.items[0]?.name ?? item.stem;
   return {
     ok: true,
     text: {
-      prompt: currentSvgPrompt(regen.presetText, item.stem, code),
-      record: singlePrompt(regen.presetText, item.stem),
+      prompt: currentSvgPrompt(regen.presetText, targetName, code),
+      record: singlePrompt(regen.presetText, targetName),
     },
+  };
+}
+
+async function regenBatchTextOf(
+  args: RunArgs, regen: CurrentSvgPlan, items: readonly SvgSource[], plan: BatchPlan,
+): Promise<RequestTextResult> {
+  const entries: RegenBatchEntry[] = [];
+  for (const item of items) {
+    const current = currentVersionOf(args, item);
+    if (current === null) return { ok: false, error: `${item.name}: the current SVG could not be read — nothing was sent` };
+    const code = await readSvgText(args.root, current.svgPath);
+    if (code === null) return { ok: false, error: `${item.name}: the current SVG could not be read — nothing was sent` };
+    const slot = plan.items.find((p) => p.sourceId === item.id);
+    entries.push({ position: slot?.position ?? entries.length + 1, name: slot?.name ?? item.stem, code });
+  }
+  return {
+    ok: true,
+    text: { prompt: batchRegenPrompt(regen.presetText, entries), record: regen.presetText },
   };
 }

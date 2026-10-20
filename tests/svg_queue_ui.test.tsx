@@ -379,35 +379,26 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     await click("[data-testid=svg-regenerate-selected]");
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
-    // 2026-10-09: regeneration is 1 image per request
-    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("2 × 1 max");
+    // 2026-10-20 (I-64/I-74): batch SVG regeneration defaults to 4 icons per request,
+    // combining both eligible checked rows into ONE contact-sheet + multi-SVG request
+    // while excluding mist (no existing SVG).
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("1 × 4 max");
     expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
-    expect(q("[data-testid=svg-confirm-regen-preset]" )).not.toBeNull();
-    // 2026-10-09: regen is 1 per request, so first page shows 1 of 2
+    expect(q("[data-testid=svg-confirm-regen-preset]")).not.toBeNull();
     const manifestPage1 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
       .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
-    expect(manifestPage1).toHaveLength(1);
-    expect(["court_AI", "fog_AI"]).toContain(manifestPage1[0]);
-    // walk to next request
-    await click("[data-testid=svg-batch-next]");
-    const manifestPage2 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
-      .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
-    expect(manifestPage2).toHaveLength(1);
-    const combined = [...manifestPage1, ...manifestPage2].sort();
-    expect(combined).toEqual(["court_AI", "fog_AI"]);
-    expect(combined.some((name) => name.includes("mist"))).toBe(false);
+    expect([...manifestPage1].sort()).toEqual(["court_AI", "fog_AI"]);
+    expect(manifestPage1.some((name) => name.includes("mist"))).toBe(false);
 
     await click("[data-testid=svg-confirm-generate]");
-    await waitFor(() => t.calls.length === 2, "the Regenerate first request to send (2×1)");
-    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
-    await waitFor(() => t.calls.length === 3, "the Regenerate second request to send (2×1)");
-    const sent1 = (callsOf(t)[1] ?? []).map((name) => name ?? "");
-    const sent2 = (callsOf(t)[2] ?? []).map((name) => name ?? "");
-    const sentAll = [...sent1, ...sent2];
+    await waitFor(() => t.calls.length === 2, "the combined Regenerate batch request to send (1×4)");
+    const sentAll = (callsOf(t)[1] ?? []).map((name) => name ?? "");
     expect([...sentAll].sort()).toEqual(["court_AI.png", "fog_AI.png"]);
     expect(sentAll).toHaveLength(2);
     expect(sentAll.some((name) => name.includes("mist"))).toBe(false);
-    await act(async () => { t.streams[2].push(streamFrames(t.calls[2].items)); t.streams[2].close(); });
+    expect(t.calls[1].prompt).toContain("court_AI");
+    expect(t.calls[1].prompt).toContain("fog_AI");
+    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
     await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the regeneration batch to finish");
 
     const arch = root.children.get("architecture") as FakeDir;

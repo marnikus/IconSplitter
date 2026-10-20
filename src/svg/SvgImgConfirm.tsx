@@ -1,13 +1,14 @@
 // SvgImgConfirm.tsx — preview the precise image-edit payload before an
-// explicit provider send. Multi-icon edits show one square sheet per request;
-// the single-icon path keeps its existing prompt-and-reference behaviour.
+// explicit provider send. Supports independent per-scope (single vs batch)
+// remembered default presets without clobbering the main SVG tab prompt editor.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { connectionLabel, resolveSize, type Connection } from "../lib/svgconnections";
 import { imageEditLimit, MAX_EDIT_COUNT } from "../lib/svgimgbatch";
 import type { DirHandleLike } from "../lib/fs";
 import type { PromptPreset } from "../lib/promptpresets";
-import { Select } from "../ui/fields";
+import { scopeOfTask } from "../lib/taskprompts";
+import { TaskPromptPicker, useTaskPromptSelection, type TaskPromptSelection } from "../ui/TaskPromptPicker";
 import { loadImageEditPref, saveImageEditPref } from "./imgprefs";
 import type { PreparedImageRun } from "./imgprepare";
 import type { SvgRow } from "./types";
@@ -26,7 +27,7 @@ export interface SvgImgConfirmProps {
   waitMs?: number;
   onPrompt: (prompt: string) => void;
   onPickPreset: (name: string) => void;
-  onConfirm: (prepared: PreparedImageRun | null) => void;
+  onConfirm: (prepared: PreparedImageRun | null, promptOverride?: string) => void;
   onCancel: () => void;
 }
 
@@ -50,6 +51,17 @@ interface ConfirmState {
   countText: string; count: number; limit: number; warning: boolean; multi: boolean;
   problem: string | null; preview: ImagePreview; ready: boolean;
   page: number; setPage: (page: number) => void; chooseCount: (text: string) => void;
+  promptSel: TaskPromptSelection; draftPrompt: string; editDraft: (text: string) => void;
+}
+
+function useSyncedDraft(resolvedKey: string, resolvedText: string) {
+  const [draft, setDraft] = useState(resolvedText);
+  const [prevKey, setPrevKey] = useState(resolvedKey);
+  if (prevKey !== resolvedKey) {
+    setPrevKey(resolvedKey);
+    setDraft(resolvedText);
+  }
+  return [draft, setDraft] as const;
 }
 
 function useImageConfirmState(p: SvgImgConfirmProps): ConfirmState {
@@ -59,13 +71,26 @@ function useImageConfirmState(p: SvgImgConfirmProps): ConfirmState {
   const side = squareSide(p.conn);
   const count = Number(countText);
   const multi = p.ids.length > 1 && count > 1;
+  const promptSel = useTaskPromptSelection({
+    operation: "svg-image",
+    scope: scopeOfTask(p.ids.length, count, true),
+    presets: p.presets,
+    mainPrompt: p.prompt,
+  });
+  const syncKey = `${promptSel.resolved.taskId}::${promptSel.resolved.selectValue}::${promptSel.resolved.text}`;
+  const [draftPrompt, setDraftPrompt] = useSyncedDraft(syncKey, promptSel.resolved.text);
   const limit = imageEditLimit(side);
   const problem = countProblem(countText, p.ids.length, limit, side);
-  const preview = useImgPreview({ rootRef: p.rootRef ?? EMPTY_ROOT, rows: p.rows ?? EMPTY_ROWS, ids: p.ids,
-    conn: p.conn, prompt: p.prompt, count, active: shouldPreview(multi, problem, p.prompt) });
+  const preview = useImgPreview({
+    rootRef: p.rootRef ?? EMPTY_ROOT, rows: p.rows ?? EMPTY_ROWS, ids: p.ids,
+    conn: p.conn, prompt: draftPrompt, count, active: shouldPreview(multi, problem, draftPrompt),
+  });
   const chooseCount = (text: string) => rememberCount(text, setCountText, setPage);
-  return { countText, count, limit, warning: stored.warning, multi, problem, preview,
-    ready: canConfirm(p.prompt, problem, multi, preview), page, setPage, chooseCount };
+  return {
+    countText, count, limit, warning: stored.warning, multi, problem, preview,
+    ready: canConfirm(draftPrompt, problem, multi, preview),
+    page, setPage, chooseCount, promptSel, draftPrompt, editDraft: setDraftPrompt,
+  };
 }
 
 function countProblem(text: string, selected: number, limit: number, side: number): string | null {
@@ -91,20 +116,26 @@ function rememberCount(text: string, setText: (text: string) => void, setPage: (
 }
 
 function ConfirmBody({ p, state: s }: { p: SvgImgConfirmProps; state: ConfirmState }) {
-  return <div className="svg-modal-body svg-img-body">
-    <ConfirmHead ids={p.ids.length} conn={p.conn} waitMs={p.waitMs} multi={s.multi} />
-    <CountControl text={s.countText} limit={s.limit} warning={s.warning} problem={s.problem} onChange={s.chooseCount} />
-    <p className="svg-note" data-testid="svg-img-caps">Image edit — {s.multi
-      ? `each request sends one previewed square containing up to ${s.count} current main AI images to ${p.conn.name}. Review returned cells before saving their individual new versions. Nothing is overwritten.`
-      : "each request sends this prompt together with that source’s current main AI image as the reference. One request per source; each result is saved as a new version and becomes the main AI source, which the SVG generation then uses. Nothing is overwritten."}</p>
-    <PreviewPanel preview={s.preview} page={s.page} setPage={s.setPage} multi={s.multi} />
-    <PromptBlock presets={p.presets} prompt={p.prompt} onPickPreset={p.onPickPreset} onPrompt={p.onPrompt} />
-    <div className="svg-modal-actions">
-      <button type="button" className="svg-btn primary" data-testid="svg-img-generate" disabled={!s.ready}
-        title={!s.ready ? s.problem ?? "Write a prompt and wait for its exact reference preview" : undefined}
-        onClick={() => p.onConfirm(s.multi ? s.preview.run : null)}>Generate now</button>
+  const onConfirmClick = () => {
+    s.promptSel.persistCurrent();
+    p.onConfirm(s.multi ? s.preview.run : null, s.draftPrompt);
+  };
+  return (
+    <div className="svg-modal-body svg-img-body">
+      <ConfirmHead ids={p.ids.length} conn={p.conn} waitMs={p.waitMs} multi={s.multi} />
+      <CountControl text={s.countText} limit={s.limit} warning={s.warning} problem={s.problem} onChange={s.chooseCount} />
+      <p className="svg-note" data-testid="svg-img-caps">Image edit — {s.multi
+        ? `each request sends one previewed square containing up to ${s.count} current main AI images to ${p.conn.name}. Review returned cells before saving their individual new versions. Nothing is overwritten.`
+        : "each request sends this prompt together with that source’s current main AI image as the reference. One request per source; each result is saved as a new version and becomes the main AI source, which the SVG generation then uses. Nothing is overwritten."}</p>
+      <PreviewPanel preview={s.preview} page={s.page} setPage={s.setPage} multi={s.multi} />
+      <PromptBlock presets={p.presets} selection={s.promptSel} prompt={s.draftPrompt} onPrompt={s.editDraft} />
+      <div className="svg-modal-actions">
+        <button type="button" className="svg-btn primary" data-testid="svg-img-generate" disabled={!s.ready}
+          title={!s.ready ? s.problem ?? "Write a prompt and wait for its exact reference preview" : undefined}
+          onClick={onConfirmClick}>Generate now</button>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function squareSide(conn: Connection): number {
@@ -155,18 +186,21 @@ function ConfirmHead(p: { ids: number; conn: Connection; waitMs?: number; multi:
   </div>;
 }
 
-/** The shared prompt + its preset dropdown: preset on its own row, the prompt below at full width. */
-function PromptBlock({ presets, prompt, onPickPreset, onPrompt }: {
-  presets: readonly PromptPreset[]; prompt: string;
-  onPickPreset: (name: string) => void; onPrompt: (prompt: string) => void;
+function PromptBlock({ presets, selection, prompt, onPrompt }: {
+  presets: readonly PromptPreset[]; selection: TaskPromptSelection;
+  prompt: string; onPrompt: (prompt: string) => void;
 }) {
   const box = useRef<HTMLTextAreaElement | null>(null);
   useFitToText(box, prompt);
   return (
     <div className="svg-img-prompt-block">
-      <Select label="Prompt preset" testid="svg-img-preset" value=""
-        options={[["", "— pick a saved prompt —"], ...presets.map((x) => [x.name, x.name] as [string, string])]}
-        onChange={onPickPreset} />
+      <TaskPromptPicker
+        selection={selection}
+        presets={presets}
+        selectTestId="svg-img-preset"
+        defaultMsgTestId="svg-img-default-prompt"
+        label="Prompt preset"
+      />
       <label className="svg-field">
         <span className="svg-label">Prompt</span>
         <textarea ref={box} className="svg-input svg-img-prompt" data-testid="svg-img-prompt" rows={3} aria-label="Image prompt"

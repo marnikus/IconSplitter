@@ -64,23 +64,28 @@ function nextTimer(deadline: number): Pending | undefined {
   return next;
 }
 
+/** Clears any tracked timers leaked by an unmounted test so warp never bleeds across tests. */
+export function clearTrackedTimers(): void {
+  timers.clear();
+}
+
 /**
- * One step of app time inside act(). Queued immediates (IndexedDB, React's
- * scheduler) run first. When the app is otherwise idle and only a timer due
- * inside the window remains, the clock jumps to it and it fires now — what a
- * fixed sleep would have done, minus the wall-clock wait. Returns false when
- * nothing was left to run.
+ * One step of app time inside act(). Queued immediates and resolved promises
+ * run first before advancing virtual time to a future timer.
  */
 async function step(deadline: number): Promise<boolean> {
-  const timer = immediates === 0 ? nextTimer(deadline) : undefined;
-  const work = immediates > 0 || timer !== undefined;
   await act(async () => {
-    if (timer !== undefined) {
-      warp += Math.max(0, timer.due - now());
-      timer.fire();
-    }
     await new Promise<void>((r) => realSetImmediate(r));
   });
+  const timer = immediates === 0 ? nextTimer(deadline) : undefined;
+  const work = immediates > 0 || timer !== undefined;
+  if (timer !== undefined) {
+    await act(async () => {
+      warp += Math.max(0, timer.due - now());
+      timer.fire();
+      await new Promise<void>((r) => realSetImmediate(r));
+    });
+  }
   return work;
 }
 

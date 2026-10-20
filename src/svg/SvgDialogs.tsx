@@ -14,6 +14,7 @@ import SvgImgConfirm from "./SvgImgConfirm";
 import type { Connection } from "../lib/svgconnections";
 import { imageWaitMs } from "../lib/svgimgreg";
 import type { PreparedImageRun } from "./imgprepare";
+import type { ConfirmSvgInput } from "./runcontrol";
 import VersionsDialog from "./VersionsDialog";
 import type { Dialog, SvgRow } from "./types";
 import type { PromptPreset } from "../lib/promptpresets";
@@ -28,7 +29,7 @@ export interface SvgDialogsProps {
   readCode: (id: string, version: number) => Promise<string | null>;
   presets: PromptPreset[];
   prompt: string;
-  onConfirm: (regenPresetName: string | null) => void;
+  onConfirm: (choice: ConfirmSvgInput) => void;
   onDismiss: () => void;
   onShowCode: (id: string, version: number) => void;
   /** Chooses which version the row shows (I-54); resolves why it failed, or null. */
@@ -39,7 +40,7 @@ export interface SvgDialogsProps {
   imageConn: Connection | null;
   onImagePrompt: (prompt: string) => void;
   onImagePreset: (name: string) => void;
-  onImageConfirm: (prepared: PreparedImageRun | null) => void;
+  onImageConfirm: (prepared: PreparedImageRun | null, promptOverride?: string) => void;
 }
 
 export default function SvgDialogs(p: SvgDialogsProps) {

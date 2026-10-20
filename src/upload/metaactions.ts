@@ -41,14 +41,16 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
     const existing = idsWithMetadata(latest.current.rows, ids).length === ids.length;
     openMetaDialog(latest, ids, [], existing ? "regenerate" : "generate");
   }, [latest]);
-  const confirmMetadata = useCallback(() => {
+  const confirmMetadata = useCallback((promptOverride?: string) => {
     const c = latest.current;
     const dialog = c.m.dialog;
     if (dialog === null || dialog.kind !== "meta") return;
     const previews = dialog.previews;
     const thenExport = dialog.thenExport;
     c.dispatch({ type: "dialog", dialog: null });
-    void runMetadataBatch(latest, dialog.ids, previews, { acceptValid: thenExport.length > 0, thenExport });
+    void runMetadataBatch(latest, dialog.ids, previews, {
+      acceptValid: thenExport.length > 0, thenExport, promptOverride,
+    });
   }, [latest]);
   const cancelMetadata = useCallback(() => {
     const c = latest.current;
@@ -109,6 +111,8 @@ interface MetaBatchOptions {
   acceptValid?: boolean;
   /** The whole selection to export once the answers are in (empty = none). */
   thenExport?: string[];
+  /** Explicit prompt text confirmed in UploadMetaDialog. */
+  promptOverride?: string;
 }
 
 /** One metadata batch: bounded concurrency, per-item isolation, cancel-aware. */
@@ -128,7 +132,7 @@ async function runMetadataBatch(
   const tally = { done: 0, ok: 0, total: ids.length };
   c.dispatch({ type: "progress", progress: { done: 0, total: tally.total } });
   const ctx: MetaRunCtx = {
-    latest, root, key, queue: [...ids], previews,
+    latest, root, key, prompt: opts.promptOverride ?? c.m.prompt, queue: [...ids], previews,
     signal: abort.signal, tally, accept: opts.acceptValid === true, accepted: new Map(),
   };
   const width = Math.max(1, Math.min(c.m.gemini.concurrency, ids.length));
@@ -158,6 +162,7 @@ interface MetaRunCtx {
   latest: Latest;
   root: DirHandleLike;
   key: string;
+  prompt: string;
   queue: string[];
   /** The images the confirmation showed, keyed by row id + source revision. */
   previews: readonly SentPreview[];
@@ -198,7 +203,7 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
     rowId: id, svgText, config: c.m.gemini, apiKey: ctx.key, signal: ctx.signal,
     // The prompt the editor shows is the prompt that is sent (and, later, the
     // prompt the export record names) — never a default the user cannot see.
-    prompt: c.m.prompt,
+    prompt: ctx.prompt,
     ...(prepared === null ? {} : { image: prepared.image }),
     deps: { journal: c.refs.journal.current },
   });

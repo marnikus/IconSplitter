@@ -1,9 +1,9 @@
 // svgextract.ts — turning a provider answer back into SVG documents (prompt §6/§7/§9).
 // Owns: splitting the response into SVG blocks (fenced code blocks or raw
 // markup), reading the position id and the <title> out of each block, and
-// matching blocks to the ordered manifest by NAME first and position second.
-// Nothing is ever assigned by appearance, and a duplicate/unknown/out-of-range
-// id is reported instead of guessed at.
+// matching blocks to the ordered manifest (name-first + position fallback for
+// initial generation; strict <title>-only matching with duplicate quarantine for
+// multi-SVG batch regeneration). Nothing is ever guessed by array index.
 
 import type { ManifestItem } from "./svgbatch";
 
@@ -101,6 +101,47 @@ export function matchBlocks(blocks: readonly SvgBlock[], manifest: readonly Mani
   }
   const missing = manifest.map((m) => m.position).filter((p) => !byPosition.has(p));
   return { ok: problems.length === 0 && missing.length === 0, byPosition, missing, problems };
+}
+
+/**
+ * Strict <title>-only matcher for multi-SVG batch regeneration:
+ * never falls back to heading/array order, and quarantines duplicate <title>
+ * collisions so neither ambiguous block can overwrite an icon's history.
+ */
+export function matchBlocksByTitle(blocks: readonly SvgBlock[], manifest: readonly ManifestItem[]): MatchResult {
+  const byPosition = new Map<number, string>();
+  const ambiguous = new Set<number>();
+  const problems: string[] = [];
+  for (const block of blocks) {
+    applyTitleMatch(block, manifest, { byPosition, ambiguous, problems });
+  }
+  const missing = manifest.map((m) => m.position).filter((p) => !byPosition.has(p));
+  return { ok: problems.length === 0 && missing.length === 0, byPosition, missing, problems };
+}
+
+interface TitleAcc {
+  byPosition: Map<number, string>;
+  ambiguous: Set<number>;
+  problems: string[];
+}
+
+function applyTitleMatch(block: SvgBlock, manifest: readonly ManifestItem[], acc: TitleAcc): void {
+  if (block.title === null) {
+    acc.problems.push("unmatched result: missing <title>");
+    return;
+  }
+  const hit = manifest.find((m) => sameName(m.name, block.title as string));
+  if (!hit) {
+    acc.problems.push(`unmatched result: unknown title "${block.title}"`);
+    return;
+  }
+  if (acc.ambiguous.has(hit.position) || acc.byPosition.has(hit.position)) {
+    acc.byPosition.delete(hit.position);
+    acc.ambiguous.add(hit.position);
+    acc.problems.push(`duplicate result for title "${block.title}"`);
+    return;
+  }
+  acc.byPosition.set(hit.position, block.code);
 }
 
 function resolvePosition(block: SvgBlock, manifest: readonly ManifestItem[]): number | null {

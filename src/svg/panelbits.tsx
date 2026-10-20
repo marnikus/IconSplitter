@@ -15,8 +15,8 @@ function DialogsBlock({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHan
       onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode}
       onUseVersion={g.preferVersion} running={g.running}
       imageConn={g.connections.find((c) => c.id === g.activeConn && c.kind === "image") ?? null}
-      onImagePrompt={g.setPrompt}
-      onImagePreset={(name) => { const preset = g.presets.find((x) => x.name === name); if (preset !== undefined) g.setPrompt(preset.text); g.pickPreset(name); }}
+      onImagePrompt={() => undefined}
+      onImagePreset={() => undefined}
       onImageConfirm={g.confirmImageRegen} />
   );
 }

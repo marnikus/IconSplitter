@@ -39,7 +39,8 @@ Opening the dialog sends nothing. Only an explicitly confirmed provider request 
 | `svg-img-preview-loading` / `svg-img-preview-error` / `svg-img-skipped` | states | the exact local composite is being prepared; a group that cannot be read/decoded is not sent, with named reason, while other valid groups remain available |
 | `svg-img-composite` / `svg-img-manifest` / `svg-img-effective-prompt` | preview | per-request square preview with numbered row-major filenames (relative path when names collide), blank-cell count, provider and **full** thin-line/grid prompt; `svg-img-prev` / `svg-img-next` page valid requests |
 | `svg-img-review` / `svg-img-apply` / `svg-img-discard` | returned-mosaic review dialog | returned mosaic beside proposed named cell crops; only Apply saves independent versions and changes each pair's main image; Discard changes no version and cannot refund a sent request |
-| `svg-img-preset` / `svg-img-prompt` | preset / editor | the SAME preset dropdown and prompt editor as SVG generation (the shared `PromptBlock`): picking a preset fills the editor with its text; the editor content is the prompt every request sends |
+| `svg-img-default-prompt` | note | directly above `svg-img-preset`: active default prompt for `svg-image:single` vs `svg-image:batch` (`I-75`) |
+| `svg-img-preset` / `svg-img-prompt` | preset / editor | the SAME preset dropdown and prompt editor as SVG generation: picking a preset updates the dialog's prompt preview/editor and remembers the per-scope default (`I-75`) without overwriting the main SVG editor |
 
 ## Image-edit interruption and status
 

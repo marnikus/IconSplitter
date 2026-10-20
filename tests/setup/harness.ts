@@ -10,7 +10,7 @@
 import * as React from "react";
 import { act } from "react";
 import { afterEach, vi } from "vitest";
-import { installQuietTracking } from "../helpers/quiet";
+import { clearTrackedTimers, installQuietTracking } from "../helpers/quiet";
 
 if (process.env.REACT_OWNER_STACKS !== "1") {
   const internals = (React as unknown as Record<string, object>).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
@@ -19,7 +19,16 @@ if (process.env.REACT_OWNER_STACKS !== "1") {
 }
 
 const hasDom = typeof document !== "undefined";
-if (hasDom) installQuietTracking();
+const realFetch = globalThis.fetch;
+function offlineSafeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/.test(raw)) return realFetch(input, init);
+  return Promise.reject(new TypeError("Failed to fetch"));
+}
+if (hasDom) {
+  globalThis.fetch = offlineSafeFetch as typeof fetch;
+  installQuietTracking();
+}
 
 const roots = new Set<{ unmount(): void }>();
 
@@ -39,5 +48,9 @@ afterEach(async () => {
   const left = [...roots];
   roots.clear();
   if (left.length > 0) await act(async () => { for (const root of left) root.unmount(); });
-  if (hasDom) document.body.replaceChildren();
+  if (hasDom) {
+    document.body.replaceChildren();
+    clearTrackedTimers();
+    if (globalThis.fetch === realFetch) globalThis.fetch = offlineSafeFetch as typeof fetch;
+  }
 });

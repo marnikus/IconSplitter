@@ -8,8 +8,10 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 |---|---|
 | `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-title` is "Confirm SVG generation" or "Confirm SVG regeneration"; `svg-confirm-generate` says "Generate now" / "Regenerate now" while idle and "Add to queue" during a run, with `svg-confirm-cancel` / `svg-confirm-close` |
 | `svg-confirm-mode` | badge | "Generation batch now" vs "Regeneration now" — clearly says which prompt path this batch uses (2026-10-09) |
-| `svg-confirm-main-prompt` | note | generation only: "Uses the main currently loaded prompt" — main prompt not reloaded in popup |
+| `svg-confirm-default-prompt` | note | directly above preset dropdown: shows active default prompt for `(svg-generate \| svg-regenerate) × (single \| batch)` (`I-75`) |
+| `svg-confirm-gen-preset` / `svg-confirm-main-prompt` | `select` / note | generation only: preset selector (`(Main editor prompt)` + saved SVG presets) and note |
 | `svg-confirm-regen-preset` / `svg-confirm-regen-note` / `svg-confirm-regen-label` | regeneration only: dropdown of saved prompts applied to full batch, plus note |
+| `svg-confirm-per-request` / `svg-confirm-per-request-error` | `input[type=number]` / alert | live icons-per-request control (`1..9`, persisted under `iconSplitter.svg.regenBatch.v1` for regeneration); changing between `1` and `>1` dynamically flips single vs batch scope |
 | `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + main prompt), regeneration = `currentSvgPrompt(presetText, stem, code)` (preset + Icon name line for title detection + current SVG code verbatim). One per request; regeneration loads code via `readSvgText` |
 | `svg-confirm-full-prompt-note` | small | explains what full prompt contains |
 | `svg-confirm-full-prompt-loading` | note | shown while SVG code loads for regeneration preview |

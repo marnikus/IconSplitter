@@ -71,3 +71,15 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   rows; the other three start unchecked. A changed gesture is one global undo
   entry, including Upload.
   Tab-specific eligibility and paid confirmation still constrain bulk actions.
+
+<a id="i-75"></a>
+* **I-75 (per-task and single-vs-batch prompt memory, RULE 12/13/24 — 2026-10-20):**
+  every AI task confirmation popup across tabs (`svg-generate`, `svg-regenerate`,
+  `svg-image`, `upload-generate`, `upload-regenerate`) distinguishes single-icon
+  (`single`) from multi-icon (`batch`) scope (`lib/taskprompts`, `state/taskpromptstore`,
+  `iconSplitter.taskPrompts.v1`), remembers the last chosen preset independently
+  for all 10 `TaskPromptKey` slots without clobbering the main editor prompt,
+  validates stored choices on read against that tab's own preset store (`I-65`),
+  and displays an explicit default-prompt indicator directly above the preset
+  dropdown (`ui/TaskPromptPicker`).
+

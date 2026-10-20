@@ -12,7 +12,7 @@ import { effectiveStallMs } from "../lib/effortlimits";
 import { costInfoFor } from "../lib/svgpricing";
 import { sumUsage } from "../lib/svgusage";
 import type { Usage } from "../lib/svgrequest";
-import { toBatchSource, type SvgSource } from "./sources";
+import { toBatchSourcesUnique, type SvgSource } from "./sources";
 import { newRunId } from "./journal";
 import { runBatch } from "./runbatch";
 
@@ -81,6 +81,6 @@ function sumEstimated(model: string, usages: readonly Usage[]): number | null {
 
 /** Selection order is the batch order: the scan's deterministic order. */
 function toBatchSources(sources: readonly SvgSource[]): BatchSource[] {
-  return sources.map(toBatchSource);
+  return toBatchSourcesUnique(sources);
 }
 

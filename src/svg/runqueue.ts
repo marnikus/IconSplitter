@@ -24,6 +24,8 @@ export interface QueueItem {
   label: string;
   /** Regeneration plan for this batch: null = first generation (main prompt). */
   regen: RegenPlan | null;
+  /** Optional confirmed prompt text for first-generation preset overrides. */
+  promptOverride?: string | null;
 }
 
 let seq = 0;
@@ -33,10 +35,16 @@ export function queueItem(
   ids: readonly string[],
   requests: number,
   label: string,
-  regen: RegenPlan | null = null,
+  opts?: RegenPlan | null | { regen?: RegenPlan | null; promptOverride?: string | null },
 ): QueueItem {
   seq += 1;
-  return { id: `q${seq}`, ids: [...ids], count: ids.length, requests: Math.max(1, requests), label, regen };
+  const isBag = opts !== null && typeof opts === "object" && !("kind" in opts);
+  const regen = isBag ? (opts.regen ?? null) : (opts ?? null);
+  const promptOverride = isBag ? (opts.promptOverride ?? null) : null;
+  return {
+    id: `q${seq}`, ids: [...ids], count: ids.length,
+    requests: Math.max(1, requests), label, regen, promptOverride,
+  };
 }
 
 /** Appends: new work never interrupts or displaces what is already waiting. */

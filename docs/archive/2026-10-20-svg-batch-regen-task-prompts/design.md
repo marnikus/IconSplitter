@@ -1,7 +1,7 @@
 # Batch SVG Regeneration & Per-Task / Single-vs-Batch Default Prompt Selection — Design & Implementation Plan
 
 Date: 2026-10-20 · Area: Generate SVG (`src/svg/`), SVG to upload (`src/upload/`), Shared UI (`src/ui/`), State (`src/state/`), Domain logic (`src/lib/`)
-**Status: DESIGN & TDD IMPLEMENTATION PLAN ONLY — no production code changes yet.**
+**Status: IMPLEMENTED & VERIFIED (Phases A–D complete; all 6 verification lanes green).**
 
 ---
 

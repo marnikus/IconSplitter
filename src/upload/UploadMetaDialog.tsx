@@ -1,17 +1,27 @@
-// UploadMetaDialog.tsx — the exact request, shown before any paid submission
-// (design §2.4/§5): the four facts, the images the request will carry (one per
-// selected icon, each rendered from its OWN approved SVG and sent unchanged),
-// the exact prompt, and the two buttons. Send is held back until those images
-// are ready, so nothing is ever paid for before the user can see it.
+// UploadMetaDialog.tsx — confirmation before any paid Gemini metadata submission.
+// Displays active per-task/per-scope default prompt above the preset list
+// (upload-generate:single | batch, upload-regenerate:single | batch), syncs the
+// outgoing prompt preview live, and sends the confirmed prompt without clobbering
+// the tab editor's main prompt.
 
 import { generateContentUrl, PROVIDER_NAME } from "../lib/upload/gemini";
+import { scopeOfTask } from "../lib/taskprompts";
 import { capPreviews, previewCaption } from "../lib/upload/sentpreview";
+import { TaskPromptPicker, useTaskPromptSelection, type TaskPromptSelection } from "../ui/TaskPromptPicker";
 import type { UploadApi } from "./useUpload";
 import type { MetaDialog as MetaDialogModel } from "./types";
 
-
-/** The exact request, shown before any paid submission (design §2.4/§5). */
 export default function UploadMetaDialog({ g, dialog }: { g: UploadApi; dialog: MetaDialogModel }) {
+  const promptSel = useTaskPromptSelection({
+    operation: dialog.mode === "regenerate" ? "upload-regenerate" : "upload-generate",
+    scope: scopeOfTask(dialog.ids.length, 50, false),
+    presets: g.presets,
+    mainPrompt: g.prompt,
+  });
+  const handleConfirm = () => {
+    promptSel.persistCurrent();
+    g.confirmMetadata(promptSel.resolved.text);
+  };
   return (
     <div className="svg-backdrop" data-testid="upload-meta-backdrop" onClick={g.dismissDialog}>
       <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="upload-meta-title"
@@ -22,15 +32,14 @@ export default function UploadMetaDialog({ g, dialog }: { g: UploadApi; dialog: 
           <ThenExportNote count={dialog.thenExport.length} />
           <MetaFacts g={g} />
           <MetaPreviews dialog={dialog} />
-          <MetaPrompt g={g} />
-          <DialogActions onDismiss={g.dismissDialog} onConfirm={g.confirmMetadata} disabled={dialog.preparing} mode={dialog.mode} />
+          <MetaPrompt g={g} selection={promptSel} />
+          <DialogActions onDismiss={g.dismissDialog} onConfirm={handleConfirm} disabled={dialog.preparing} mode={dialog.mode} />
         </div>
       </section>
     </div>
   );
 }
 
-/** The dialog's title line — what is asked for, and what follows it. */
 function MetaDialogHead({ count, mode, thenExport, onDismiss }: {
   count: number; mode: MetaDialogModel["mode"]; thenExport: number; onDismiss: () => void;
 }) {
@@ -47,7 +56,6 @@ function MetaDialogHead({ count, mode, thenExport, onDismiss }: {
   );
 }
 
-/** What this ONE request does — and what regeneration replaces. */
 function SentNote({ mode }: { mode: MetaDialogModel["mode"] }) {
   const replacement = mode === "regenerate"
     ? " A returned answer replaces the current text and is never auto-accepted; review it and fix validation errors before accepting. A provider failure keeps the existing text."
@@ -60,7 +68,6 @@ function SentNote({ mode }: { mode: MetaDialogModel["mode"] }) {
   );
 }
 
-/** The second half of "Export selected", stated before anything is paid for. */
 function ThenExportNote({ count }: { count: number }) {
   if (count === 0) return null;
   const icons = `icon${count === 1 ? "" : "s"}`;
@@ -75,13 +82,19 @@ function ThenExportNote({ count }: { count: number }) {
   );
 }
 
-/** The prompt that will be sent, plus the exact request shape it travels in. */
-function MetaPrompt({ g }: { g: UploadApi }) {
+function MetaPrompt({ g, selection }: { g: UploadApi; selection: TaskPromptSelection }) {
   return (
     <>
+      <TaskPromptPicker
+        selection={selection}
+        presets={g.presets}
+        selectTestId="upload-meta-preset"
+        defaultMsgTestId="upload-meta-default-prompt"
+        label="Metadata prompt preset"
+      />
       <p className="svg-note">The exact prompt that will be sent (the validator enforces every rule it states):</p>
       <textarea className="svg-code up-meta-prompt" readOnly data-testid="upload-meta-prompt"
-        aria-label="The exact metadata prompt" value={g.prompt} />
+        aria-label="The exact metadata prompt" value={selection.resolved.text} />
       <p className="svg-note">
         Request body: <code>{"{ contents: [{ role: \"user\", parts: [{ text: <the prompt> }, { inlineData: { mimeType: \"image/jpeg\", data: <the base64 preview shown above> } }] }] }"}</code>
         {" "}The image is sent exactly as previewed — one 512 px JPEG of each icon's own approved SVG.
@@ -90,12 +103,6 @@ function MetaPrompt({ g }: { g: UploadApi }) {
   );
 }
 
-/**
- * The images the request will carry, one per selected icon, each labelled with
- * the file it came from (design §2.4): the bytes below ARE the bytes sent, so a
- * wrong or stale picture is visible before anything is paid for. Bounded
- * (PREVIEW_LIMIT) and honest about what it left out.
- */
 function MetaPreviews({ dialog }: { dialog: MetaDialogModel }) {
   const { shown, hidden } = capPreviews(dialog.previews);
   if (dialog.preparing && dialog.previews.length === 0) {
@@ -124,7 +131,6 @@ function MetaPreviews({ dialog }: { dialog: MetaDialogModel }) {
   );
 }
 
-/** One honest sentence about how many icons this strip shows an image for. */
 function previewCountText(shown: number, total: number, hidden: number): string {
   const rest = hidden > 0 ? ` The first ${shown} are shown; the other ${hidden} are sent the same way, from their own approved SVG.` : "";
   const missing = total - shown - hidden;
@@ -132,7 +138,6 @@ function previewCountText(shown: number, total: number, hidden: number): string 
   return `${shown} of ${total} icon(s) previewed — each request carries its own icon's image.${rest}${gaps}`;
 }
 
-/** Confirm sends; dismiss only closes — the request is never sent twice. */
 function DialogActions({ onDismiss, onConfirm, disabled, mode }: {
   onDismiss: () => void; onConfirm: () => void; disabled: boolean; mode: MetaDialogModel["mode"];
 }) {
@@ -148,7 +153,6 @@ function DialogActions({ onDismiss, onConfirm, disabled, mode }: {
   );
 }
 
-/** The four facts the confirmation states: provider, endpoint, auth, retries. */
 function MetaFacts({ g }: { g: UploadApi }) {
   return (
     <div className="svg-facts">
