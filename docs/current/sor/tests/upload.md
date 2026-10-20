@@ -47,9 +47,10 @@ Focused test inventory; [all tests](../TESTS.md).
   are named; readable pairs and default/transparent/artwork say nothing
 * `upload_live_preview.test.tsx` — the bar's STROKE writes the export
   `strokePx` and the live preview shows it; no dialog stroke row; the Default
-  choices and "All default"; the preview box fits the artboard ratio (2:1;
-  16 px = 2048 px); the icon's own stroke override (written on leave,
-  inherit drops it); the custom W×H not clamped/written per keystroke;
+  choices and "All default"; padding Default and icon-stroke Bar activate only
+  inside their buttons, not blank setting space; the preview box fits the
+  artboard ratio (2:1; 16 px = 2048 px); the icon's own stroke override
+  (written on leave, inherit drops it); custom W×H commits on leave;
   per-icon Shadow width/gap, live gradient preview and built-in-EPS warning
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog

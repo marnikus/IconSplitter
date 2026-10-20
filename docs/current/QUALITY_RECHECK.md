@@ -2905,3 +2905,7 @@ Measured on Node v22.14.0 / npm 10.9.2 (.nvmrc specifies v22.12.0): focused comb
 ## 2026-10-20 — Integrate SVG regeneration and item review with Upload Shadow
 
 Measured on Node v22.14.0 / npm 10.9.2 (.nvmrc specifies v22.12.0): focused integration 18 suites / 313 tests passed; TypeScript passed; lint 0 errors / 23 existing warnings; quality:changed passed; verify:fast passed 216 suites / 2272 tests, overall coverage 94.72% statements and 97.44% lines, build passed. Full verify passed: native perf 5 suites / 30 tests, coverage 216 suites / 2272 tests and build. Merge preserved both prior append-only quality entries; generated dist/index.html was not staged.
+
+## 2026-10-20 — Upload settings button hit areas
+
+Measured on Node v22.14.0 / npm 10.9.2 (.nvmrc specifies v22.12.0): padding Default and icon-stroke Bar blank-area clicks witnessed red then green; focused dialog/docs run 3 suites / 66 tests passed; TypeScript passed; lint 0 errors / 23 existing warnings; quality:changed passed. verify:fast passed 216 suites / 2274 tests, overall coverage 94.72% statements and 97.44% lines, build passed. Full verify passed: native perf 5 suites / 30 tests, coverage 216 suites / 2274 tests and build. Earlier coverage runs timed out unrelated suites under Drive-path load; isolated checks and the final fast/full gates passed.

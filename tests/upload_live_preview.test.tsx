@@ -146,6 +146,21 @@ describe("default for every visual setting", () => {
     expect(q(`[data-testid=upload-settings-${FOG}]`)?.textContent).toContain("as is");
   });
 
+  it("padding Default does not activate when blank space in its setting is clicked", async () => {
+    await mount();
+    await click("[data-testid=upload-settings-open]");
+    const button = q("[data-testid=upload-set-padding-default]")!;
+    const field = button.closest(".up-set-field") as HTMLElement;
+    await act(async () => { field.click(); }); // outside the button's own bounds
+    await settle(250);
+    expect(loadUploadSettings().defaults.paddingPct).toBe(8);
+    await act(async () => { (field.querySelector(".svg-label") as HTMLLabelElement).click(); });
+    expect(loadUploadSettings().defaults.paddingPct).toBe(8);
+    expect(button.closest("label")).toBeNull(); // labels activate nested buttons from empty space
+    await click("[data-testid=upload-set-padding-default]");
+    expect(loadUploadSettings().defaults.paddingPct).toBeNull();
+  });
+
   it("padding Default toggles null and back to a number", async () => {
     await mount();
     await click("[data-testid=upload-settings-open]");
@@ -227,6 +242,21 @@ describe("one icon may pin its own stroke width (2026-10-19 follow-up)", () => {
     expect(loadUploadSettings().overrides[FOG]?.strokePx).toBe(7);
     expect(loadUploadSettings().defaults.strokePx).toBe(2);
     expect(art()).toContain('stroke-width="7"');
+    await click("[data-testid=upload-set-stroke-inherit]");
+    expect(loadUploadSettings().overrides[FOG]?.strokePx).toBeUndefined();
+  });
+
+  it("does not clear an icon's stroke pin from blank space around its Bar button", async () => {
+    await mount({ strokePx: 2 });
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await type("[data-testid=upload-set-stroke]", "7");
+    await blur("[data-testid=upload-set-stroke]");
+    const button = q("[data-testid=upload-set-stroke-inherit]")!;
+    const field = button.closest(".up-set-field") as HTMLElement;
+    await act(async () => { field.click(); });
+    await settle(250);
+    expect(loadUploadSettings().overrides[FOG]?.strokePx).toBe(7);
+    expect(button.closest("label")).toBeNull();
     await click("[data-testid=upload-set-stroke-inherit]");
     expect(loadUploadSettings().overrides[FOG]?.strokePx).toBeUndefined();
   });

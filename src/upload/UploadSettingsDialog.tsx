@@ -117,7 +117,7 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
   const bar = p.defaults.strokePx > 0 ? `${p.defaults.strokePx} px` : "default";
   const inherit = () => { const { strokePx, ...rest } = p.overrides; void strokePx; p.onOverride(id, rest); };
   return (
-    <label className="svg-field up-set-field">
+    <div className="svg-field up-set-field">
       <span className="svg-label">Stroke width px<Marker p={p} field="strokePx" testid="stroke" /></span>
       <div className="up-bg-row">
         <button type="button" className={`svg-btn tiny up-default-btn${pinned === undefined ? " on" : ""}`} data-testid="upload-set-stroke-inherit"
@@ -127,7 +127,7 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
           onCommit={(n) => (n === null ? inherit() : change(p, "strokePx", clampStrokePx(n)))} />
       </div>
       <small className="up-hint">{pinned === undefined ? "follows the bar's STROKE" : pinned === 0 ? "this icon keeps the artwork's own widths" : "this icon only — the bar's STROKE no longer changes it"}</small>
-    </label>
+    </div>
   );
 }
 
@@ -141,17 +141,17 @@ function PaintClashNote({ effective }: { effective: UploadSettings }) {
 function PaddingSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   const value = effective.paddingPct;
   return (
-    <label className="svg-field up-set-field">
-      <span className="svg-label">Padding %<Marker p={p} field="paddingPct" testid="padding" /></span>
+    <div className="svg-field up-set-field">
+      <label className="svg-label" htmlFor="upload-set-padding">Padding %<Marker p={p} field="paddingPct" testid="padding" /></label>
       <div className="up-bg-row">
         <button type="button" className={`svg-btn tiny up-default-btn${value === null ? " on" : ""}`} data-testid="upload-set-padding-default"
           aria-pressed={value === null} onClick={() => change(p, "paddingPct", value === null ? PADDING_DEFAULT : null)}>Default</button>
-        <input className="svg-input" data-testid="upload-set-padding" type="number" aria-label="Padding %"
+        <input id="upload-set-padding" className="svg-input" data-testid="upload-set-padding" type="number" aria-label="Padding %"
           min={PADDING_MIN} max={PADDING_MAX} step={1} value={value ?? ""} placeholder="default"
           onChange={(e) => change(p, "paddingPct", e.target.value === "" ? null : clampPaddingPct(Number(e.target.value)))} />
       </div>
       <small className="up-hint">{value === null ? "default — the SVG's own margins" : "uniform, % of the fitted artwork's largest side"}</small>
-    </label>
+    </div>
   );
 }
 
