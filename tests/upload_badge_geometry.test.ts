@@ -1,4 +1,4 @@
-// upload_badge_geometry.test.ts — the supplied 411×19 filled badge baked into final artboard coordinates.
+// upload_badge_geometry.test.ts — the supplied 412×20 seven-path badge baked into final artboard coordinates.
 import { describe, expect, it } from "vitest";
 import { appendCornerBadge, type BadgeCorner } from "../src/lib/upload/cornerbadge";
 import { insideArtboard } from "../src/lib/upload/place";
@@ -19,7 +19,7 @@ function placed(corner: BadgeCorner) {
   const result = appendCornerBadge(root, { width: 512, height: 256 }, badge(corner));
   if (!result.ok) throw new Error(result.detail);
   expect(root.querySelector("rect")?.outerHTML).toBe(original);
-  expect(root.querySelectorAll("path")).toHaveLength(2);
+  expect(root.querySelectorAll("path")).toHaveLength(7);
   expect(root.querySelector("[transform], text, image")).toBeNull();
   expect(insideArtboard(root)).toBe(true);
   return { root, result };
@@ -28,27 +28,37 @@ function placed(corner: BadgeCorner) {
 describe("the fixed vector badge on the final artboard", () => {
   it.each([
     ["top-left", 15.36, 7.68], ["top-right", 291.84, 7.68],
-    ["bottom-left", 15.36, 256 - 7.68 - 204.8 * 19 / 411],
-    ["bottom-right", 291.84, 256 - 7.68 - 204.8 * 19 / 411],
+    ["bottom-left", 15.36, 256 - 7.68 - 204.8 * 20 / 412],
+    ["bottom-right", 291.84, 256 - 7.68 - 204.8 * 20 / 412],
   ] as [BadgeCorner, number, number][])("anchors %s using exact 3%% horizontal/vertical insets", (corner, x, y) => {
     const { result } = placed(corner);
     expect(result.bounds.x).toBeCloseTo(x, 2);
     expect(result.bounds.y).toBeCloseTo(y, 2);
     expect(result.bounds.width).toBeCloseTo(204.8, 3);
-    expect(result.bounds.height).toBeCloseTo(204.8 * 19 / 411, 3);
+    expect(result.bounds.height).toBeCloseTo(204.8 * 20 / 412, 3);
   });
 
-  it("preserves both supplied filled shapes without visible strokes under inherited icon paint", () => {
+  it("keeps the glyph filled and the six handles stroked under inherited icon paint", () => {
     const root = artboard(512, 256, 'stroke="#f00" stroke-width="18" fill="#f0f" fill-opacity="0" stroke-opacity="0" stroke-linecap="round"');
     const result = appendCornerBadge(root, { width: 512, height: 256 }, badge());
     if (!result.ok) throw new Error(result.detail);
-    expect(result.paths).toHaveLength(2);
-    for (const path of result.paths) {
+    expect(result.paths).toHaveLength(7);
+    const filled = result.paths.filter((path) => path.getAttribute("stroke") === "none");
+    const stroked = result.paths.filter((path) => path.getAttribute("stroke") === "#000000");
+    expect(filled).toHaveLength(1);
+    expect(stroked).toHaveLength(6);
+    for (const path of filled) {
       expect(path.nodeName).toBe("path");
       expect(path.getAttribute("fill")).toBe("#000000");
       expect(path.getAttribute("fill-opacity")).toBe("1");
-      expect(path.getAttribute("stroke")).toBe("none");
       expect(path.getAttribute("stroke-width")).toBeNull();
+    }
+    for (const path of stroked) {
+      expect(path.nodeName).toBe("path");
+      expect(path.getAttribute("fill")).toBe("none");
+      expect(path.getAttribute("stroke-opacity")).toBe("1");
+      expect(Number(path.getAttribute("stroke-width"))).toBeGreaterThan(0);
+      expect(path.getAttribute("stroke-linecap")).toBe("butt"); // no inherited round cap
     }
     expect(root.querySelector("[opacity], [transform]")).toBeNull();
     expect(insideArtboard(root)).toBe(true);
@@ -58,7 +68,7 @@ describe("the fixed vector badge on the final artboard", () => {
     const root = artboard(411, 8);
     const result = appendCornerBadge(root, { width: 411, height: 8 }, badge("bottom-right", 100, 3, 3));
     if (!result.ok) throw new Error(result.detail);
-    expect(result.bounds.width).toBeCloseTo((8 - 0.24) * 411 / 19, 3);
+    expect(result.bounds.width).toBeCloseTo((8 - 0.24) * 412 / 20, 3);
     expect(result.bounds.height).toBeCloseTo(7.76, 3);
     expect(411 - result.bounds.x - result.bounds.width).toBeCloseTo(12.33, 3);
     expect(8 - result.bounds.y - result.bounds.height).toBeCloseTo(0.24, 3);

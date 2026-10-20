@@ -23,11 +23,11 @@ describe("the corner badge in prepared Upload SVG", () => {
     expect(prepareExportSvg(ICON, asIs)).toMatchObject({ ok: true, svg: ICON, asIs: true });
     const { root, result } = prepared(ICON, { ...asIs, badgeEnabled: true });
     expect(result.asIs).toBe(false);
-    expect(root.querySelectorAll("path")).toHaveLength(2);
+    expect(root.querySelectorAll("path")).toHaveLength(7); // one glyph + six handles
     expect(root.querySelector("text, image, [transform]")).toBeNull();
     expect(insideArtboard(root)).toBe(true);
-    expect(root.querySelectorAll("path[fill='#000000'][stroke='none']")).toHaveLength(2);
-    expect(root.querySelectorAll("path[stroke]:not([stroke='none'])")).toHaveLength(0);
+    expect(root.querySelectorAll("path[fill='#000000'][stroke='none']")).toHaveLength(1);
+    expect(root.querySelectorAll("path[stroke='#000000']")).toHaveLength(6);
   });
 
   it("places the badge above a fixed icon without changing its fitted coordinates or background order", () => {
@@ -42,12 +42,13 @@ describe("the corner badge in prepared Upload SVG", () => {
     expect(insideArtboard(on.root)).toBe(true);
   });
 
-  it("keeps Expand strokes output free of painted badge strokes", () => {
+  it("keeps Expand strokes output from recolouring the badge's own paint", () => {
     const source = `<svg ${NS} viewBox="0 0 100 100"><path d="M10 50h80" fill="none" stroke="#111" stroke-width="2"/></svg>`;
     const { root, result } = prepared(source, badge({ expandStrokes: true }));
     expect(result.strokesExpanded).toBe(1);
-    expect(root.querySelectorAll("path[fill='#000000']")).toHaveLength(2);
-    expect(root.querySelectorAll("path[stroke]:not([stroke='none'])")).toHaveLength(0);
+    // The expanded icon is filled too, so the badge glyph is the filled path with no stroke.
+    expect(root.querySelectorAll("path[fill='#000000'][stroke='none']")).toHaveLength(1);
+    expect(root.querySelectorAll("path[stroke='#000000']")).toHaveLength(6);
   });
 
   it("refuses an impossible edge inset rather than moving the requested distance", () => {
