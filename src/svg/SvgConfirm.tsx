@@ -13,9 +13,9 @@
 import { useMemo, useState } from "react";
 import type { PromptPreset } from "../lib/promptpresets";
 import type {
-  PromptChoice, PromptShape, PromptTaskId, PromptWork, ResolvedTaskPrompt, TaskPromptEntry, TaskPromptMap,
+  PromptChoice, PromptTaskId, PromptWork, ResolvedTaskPrompt, TaskPromptEntry, TaskPromptMap,
 } from "../lib/prompttasks";
-import { resolveTaskPrompt, shapeOf, taskFor, taskLabel, taskOf, workOf } from "../lib/prompttasks";
+import { resolveTaskPrompt, taskLabel, taskOf } from "../lib/prompttasks";
 import { clampRegenPerRequest } from "../lib/svgregen";
 import { inIdOrder } from "../lib/selectionorder";
 import { stallLabel, stallNote } from "../lib/effortlimits";
@@ -62,8 +62,8 @@ export default function SvgConfirm(p: SvgConfirmProps) {
         <div className="svg-modal-body">
           <ModeBadge operation={p.operation} task={s.ownTask} />
           <QueueNote running={p.running} count={s.plan.picked.length} />
-          <TaskPromptPicker testId="svg-confirm-prompt" work={s.work} count={p.ids.length} view={s.view}
-            onView={s.setView} entries={s.entries} onEntry={s.chooseEntry} sources={s.sources} note={s.note} />
+          <TaskPromptPicker testId="svg-confirm-prompt" work={s.work} count={p.ids.length}
+            entries={s.entries} onEntry={s.chooseEntry} sources={s.sources} note={s.note} />
           <SizeControl state={s} operation={p.operation} warning={p.regenSizeWarning === true} />
           <Facts plan={s.plan} p={p} choice={s.own.choice} />
           <ExclusionNote names={s.plan.excluded} />
@@ -81,8 +81,6 @@ export default function SvgConfirm(p: SvgConfirmProps) {
 interface ConfirmState {
   work: PromptWork;
   ownTask: PromptTaskId;
-  view: PromptShape;
-  setView: (shape: PromptShape) => void;
   entries: TaskPromptMap;
   chooseEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void;
   sources: { presets: PromptPreset[]; mainPrompt: string };
@@ -94,11 +92,10 @@ interface ConfirmState {
   plan: ConfirmPlan;
 }
 
-/** Everything the dialog decides, in one place: tabs, size, codes, the plan. */
+/** Everything the dialog decides, in one place: its task, size, codes and plan. */
 function useConfirmState(p: SvgConfirmProps): ConfirmState {
   const work: PromptWork = p.operation === "regenerate" ? "svg.regenerate" : "svg.generate";
   const ownTask = taskOf(work, p.ids.length);
-  const [view, setView] = useState<PromptShape>(shapeOf(ownTask));
   const [entries, setEntries] = useState<TaskPromptMap>(p.taskEntries);
   const [size, setSize] = useState(clampRegenPerRequest(p.regenSize));
   const picked = useMemo(() => inIdOrder(p.rows, p.ids, (r) => r.source.id), [p.rows, p.ids]);
@@ -115,13 +112,12 @@ function useConfirmState(p: SvgConfirmProps): ConfirmState {
     setSize(next);
     p.onRegenSize(next);
   };
-  const note = noteFor(ownTask, view, own, size);
-  return { work, ownTask, view, setView, entries, chooseEntry, sources, own, note, size, chooseSize, codes, plan };
+  const note = noteFor(ownTask, own, size);
+  return { work, ownTask, entries, chooseEntry, sources, own, note, size, chooseSize, codes, plan };
 }
 
-/** What the viewed tab's prompt does — or that this batch does not use it. */
-function noteFor(ownTask: PromptTaskId, view: PromptShape, own: ResolvedTaskPrompt, size: number): string {
-  if (view !== shapeOf(ownTask)) return `${taskLabel(taskFor(workOf(ownTask), view))} — not used by this batch`;
+/** What this task's prompt does for the batch in flight. */
+function noteFor(ownTask: PromptTaskId, own: ResolvedTaskPrompt, size: number): string {
   if (ownTask.startsWith("svg.generate")) {
     return own.choice.kind === "preset"
       ? "This preset is used for this batch only — the main prompt in the prompt window is not changed."

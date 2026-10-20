@@ -40,8 +40,7 @@ Opening the dialog sends nothing. Only an explicitly confirmed provider request 
 | `svg-img-composite` / `svg-img-manifest` / `svg-img-effective-prompt` | preview | per-request square preview with numbered row-major filenames (relative path when names collide), blank-cell count, provider and **full** thin-line/grid prompt; `svg-img-prev` / `svg-img-next` page valid requests |
 | `svg-img-review` / `svg-img-apply` / `svg-img-discard` | returned-mosaic review dialog | returned mosaic beside proposed named cell crops; only Apply saves independent versions and changes each pair's main image; Discard changes no version and cannot refund a sent request |
 | `svg-img-prompt` | editor | the same editable prompt box as before; editable only while the task uses the main prompt — a chosen preset is read-only and says so |
-| `svg-img-prompt-default` / `svg-img-prompt-box` | note / wrapper | the same picker as SVG generation (I-77), for `image.edit.single` / `image.edit.batch`: the default prompt is named above the list and `data-task` on the wrapper names the task in force |
-| `svg-img-prompt-tabs` / `svg-img-prompt-single` / `svg-img-prompt-batch` | tabs | the other shape's remembered default can be inspected; its note says "not used by this batch" |
+| `svg-img-prompt-default` / `svg-img-prompt-box` | note / wrapper | the same picker as SVG generation (I-77): the selected count decides `image.edit.single` vs `image.edit.batch` (no tab), `data-task` names it, and its default prompt is stated above the list |
 | `svg-img-prompt-select` / `svg-img-prompt-effective` | `select` / small | main prompt plus every saved preset (`iconSplitter.svg.prompts.v1`); a preset notice says the prompt window is not changed |
 | `svg-img-load-preset` | button | explicit "Load into the main prompt editor": writes the preset's text into the shared prompt and returns this task to the main prompt |
 

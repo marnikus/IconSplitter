@@ -1,28 +1,28 @@
 // TaskPromptPicker.tsx — ONE prompt picker for every paying popup (2026-10-20).
-// It shows, above the list, which prompt is the default for the task in force
-// ("Default prompt for this task — …"), the Single/Batch tabs of that work (each
-// shape remembers its own default), and the choice itself: the main prompt plus
-// every saved preset, or only the presets when the work is regeneration.
-// No rule lives here: resolution is lib/prompttasks, storage is the caller's.
+// The popup knows how many icons it is about to send, so the task is DETECTED,
+// never chosen: one icon is the single task, two or more are the batch task.
+// Above the list it names that task's default prompt ("Default prompt for this
+// task — …"), then offers the choice itself: the main prompt plus every saved
+// preset, or only the presets when the work is regeneration. Choosing a value
+// is remembered for the task in force, so a single icon and a batch never
+// overwrite each other's default. No rule lives here: resolution is
+// lib/prompttasks, storage is the caller's.
 
 import { findPreset, type PromptPreset } from "../lib/promptpresets";
 import {
-  allowsMain, defaultPromptNote, resolveTaskPrompt, shapeOf, taskFor, taskLabel,
-  type PromptShape, type PromptSources, type PromptTaskId, type PromptWork, type ResolvedTaskPrompt,
+  allowsMain, defaultPromptNote, resolveTaskPrompt, taskLabel, taskOf,
+  type PromptSources, type PromptTaskId, type PromptWork, type ResolvedTaskPrompt,
   type TaskPromptEntry, type TaskPromptMap,
 } from "../lib/prompttasks";
 
 const MAIN_VALUE = "main";
 
 export interface TaskPromptPickerProps {
-  /** Test-id prefix: `<id>-default`, `<id>-tabs`, `<id>-single`, `<id>-batch`, `<id>-select`, `<id>-note`. */
+  /** Test-id prefix: `<id>-default`, `<id>-box`, `<id>-select`, `<id>-note`, `<id>-effective`. */
   testId: string;
   work: PromptWork;
-  /** What the popup will really send, so its own tab is the active one. */
+  /** How many icons this popup will send — it decides the task, nothing else does. */
   count: number;
-  /** Which shape's default is being looked at (a tab switch, never the batch's own). */
-  view: PromptShape;
-  onView: (shape: PromptShape) => void;
   entries: TaskPromptMap;
   onEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void;
   sources: PromptSources;
@@ -31,37 +31,15 @@ export interface TaskPromptPickerProps {
 }
 
 export default function TaskPromptPicker(p: TaskPromptPickerProps) {
-  const { view, own } = shapesOf(p);
-  const task = taskFor(p.work, view);
+  const task = taskOf(p.work, p.count);
   const resolved = resolveTaskPrompt(task, p.entries[task], p.sources);
   return (
     <div className="svg-task-prompt" data-testid={`${p.testId}-box`} data-task={task}>
       <p className="svg-note strong" data-testid={`${p.testId}-default`} data-stale={resolved.stale !== null}>
         {defaultPromptNote(resolved)}
       </p>
-      <Tabs p={p} view={view} own={own} />
       <Choice p={p} task={task} resolved={resolved} />
       <small className="svg-note" data-testid={`${p.testId}-note`}>{p.note ?? ""}</small>
-    </div>
-  );
-}
-
-function shapesOf(p: TaskPromptPickerProps): { view: PromptShape; own: PromptShape } {
-  return { view: p.view, own: shapeOf(taskFor(p.work, p.count > 1 ? "batch" : "single")) };
-}
-
-/** Single / batch: the one this popup sends is marked and cannot be hidden. */
-function Tabs({ p, view, own }: { p: TaskPromptPickerProps; view: PromptShape; own: PromptShape }) {
-  const shapes: PromptShape[] = ["single", "batch"];
-  return (
-    <div className="svg-task-tabs" role="tablist" aria-label="Prompt task" data-testid={`${p.testId}-tabs`}>
-      {shapes.map((shape) => (
-        <button key={shape} type="button" role="tab" aria-selected={view === shape}
-          className={`svg-btn tiny${view === shape ? " primary" : ""}`} data-testid={`${p.testId}-${shape}`}
-          data-own={shape === own} onClick={() => p.onView(shape)}>
-          {shape === "single" ? "Single icon" : "Batch"}
-        </button>
-      ))}
     </div>
   );
 }

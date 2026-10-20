@@ -85,15 +85,22 @@ describe("the task in force", () => {
     expect(select().value).toBe("Bolder");
   });
 
-  it("single and batch remember separately: this popup uses its own shape's default", async () => {
-    await mount({ n: 4, entries: { "svg.generate.single": { choice: "preset", presetName: "Simpler" } } });
-    expect(note()).toBe("Default prompt for this task — main prompt (currently loaded)");
-    expect(select().value).toBe("main");
-    // the single tab shows ITS default and says it is not what this batch sends
-    await act(async () => { (q("[data-testid=svg-confirm-prompt-single]") as HTMLButtonElement).click(); });
-    await settle();
+  it("single and batch remember separately: the selection alone decides the task", async () => {
+    const both = {
+      "svg.generate.single": { choice: "preset", presetName: "Simpler" },
+      "svg.generate.batch": { choice: "preset", presetName: "Bolder" },
+    } as const;
+    await mount({ n: 4, entries: both });
+    expect(note()).toBe("Default prompt for this task — “Bolder”");
+    expect(select().value).toBe("Bolder");
+    ui.unmount();
+    await mount({ n: 1, entries: both });
     expect(note()).toBe("Default prompt for this task — “Simpler”");
-    expect(q("[data-testid=svg-confirm-prompt-note]")?.textContent).toContain("not used by this batch");
+    expect(select().value).toBe("Simpler");
+    // no tabs anywhere: the shape is detected, never chosen
+    expect(q("[data-testid=svg-confirm-prompt-tabs]")).toBeNull();
+    expect(q("[data-testid=svg-confirm-prompt-single]")).toBeNull();
+    expect(q("[data-testid=svg-confirm-prompt-batch]")).toBeNull();
   });
 
   it("a preset default that is gone is named and falls back to the main prompt", async () => {
@@ -102,23 +109,25 @@ describe("the task in force", () => {
     expect(select().value).toBe("main");
   });
 
-  it("choosing a value remembers it for the task whose tab is open, not for this batch's task", async () => {
+  it("choosing a value remembers it for the detected task, and only that task", async () => {
     const onTaskEntry = vi.fn();
-    await mount({ n: 4, onTaskEntry });
-    await act(async () => { (q("[data-testid=svg-confirm-prompt-single]") as HTMLButtonElement).click(); });
-    await settle();
+    await mount({ n: 1, onTaskEntry });
     await act(async () => {
       select().value = "Simpler";
       select().dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
     expect(onTaskEntry).toHaveBeenCalledWith("svg.generate.single", { choice: "preset", presetName: "Simpler" });
-    // the batch itself still sends the default of the batch task
-    const onConfirm = vi.fn();
+    // a batch of nine is a different task: it keeps its own default
     ui.unmount();
-    await mount({ n: 4, onConfirm });
-    await act(async () => { (q("[data-testid=svg-confirm-generate]") as HTMLButtonElement).click(); });
-    expect((onConfirm.mock.calls[0][0] as ConfirmedBatch).choice).toEqual({ kind: "main" });
+    const batchEntry = vi.fn();
+    await mount({ n: 9, onTaskEntry: batchEntry });
+    expect(note()).toBe("Default prompt for this task — main prompt (currently loaded)");
+    await act(async () => {
+      select().value = "Bolder";
+      select().dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(batchEntry).toHaveBeenCalledWith("svg.generate.batch", { choice: "preset", presetName: "Bolder" });
   });
 });
 

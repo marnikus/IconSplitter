@@ -66,9 +66,10 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
 * Prompt tasks and batch regeneration (2026-10-20, I-74…I-77): a task is the
   work (`svg.generate`, `svg.regenerate`, `image.edit`) × the selection's shape
   (one icon = `single`, two or more = `batch`). Six tasks each remember their own
-  last prompt; a popup preselects it, names it **above** the picker
-  (`svg-confirm-prompt-default`) and offers Single icon/Batch tabs, so the other
-  shape can be inspected without touching this batch. Regeneration offers only
+  last prompt; the selection alone decides the task (one icon = single, two or
+  more = batch — there is nothing to switch), and the popup preselects that
+  task's stored prompt and names it **above** the picker
+  (`svg-confirm-prompt-default`). Regeneration offers only
   saved presets and carries each icon's current SVG code, up to nine icons (a
   3×3 sheet) per request at the popup's own 1..9 size; a gone preset, a missing
   code or an over-limit request is named and refuses the send.

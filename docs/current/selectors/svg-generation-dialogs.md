@@ -10,8 +10,8 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 | `svg-confirm-mode` | badge | "Generation batch now" vs "Regeneration now" — clearly says which prompt path this batch uses (2026-10-09) |
 | `svg-confirm-task` | badge | the task in force: "Generate SVG · batch" / "Regenerate SVG · single icon" (I-77) |
 | `svg-confirm-prompt-default` | note | **above** the picker: "Default prompt for this task — …" (states a gone preset or the refusal) |
-| `svg-confirm-prompt-tabs` / `svg-confirm-prompt-single` / `svg-confirm-prompt-batch` | tabs | which shape's default is shown; the batch's own tab is `data-own` and the other note says "not used by this batch" |
-| `svg-confirm-prompt-select` / `svg-confirm-prompt-note` | `select` / small | the task's prompt: main (generation) plus every saved preset; regeneration only lists presets. Choosing one is remembered for the open tab's task |
+| `svg-confirm-prompt-box` | wrapper | `data-task` names the task the selection itself decided (`…​.single` for one icon, `…​.batch` for two or more) — there is no tab or switch to choose it |
+| `svg-confirm-prompt-select` / `svg-confirm-prompt-note` | `select` / small | the detected task's prompt: main (generation) plus every saved preset; regeneration only lists presets. Choosing one is remembered for that task alone |
 | `svg-confirm-regen-size` | number input | icons per regeneration request (1..9, default 9): re-plans the pages live and is remembered for the tab |
 | `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for the current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + the task's prompt), regeneration = `regenBatchPrompt` (preset + ordered manifest + response contract + **every** carried icon's current SVG code; one icon keeps the single-icon text). One per request, built from the frozen codes |
 | `svg-confirm-full-prompt-note` | small | explains what full prompt contains |

@@ -62,13 +62,18 @@ describe("image edit — the task in force", () => {
     expect(box().value).toBe("main prompt");
   });
 
-  it("several icons are the batch task; the single tab names its own default as unused", async () => {
+  it("several icons are the batch task: the count alone decides, with no tabs", async () => {
     await mount({ ids: ["a", "b", "c"], entries: { "image.edit.single": { choice: "preset", presetName: "Simpler" } } });
     expect(q("[data-testid=svg-img-prompt-box]")?.getAttribute("data-task")).toBe("image.edit.batch");
+    // the single icon's default belongs to that situation, not to this edit
     expect(select().value).toBe("main");
-    await act(async () => { (q("[data-testid=svg-img-prompt-single]") as HTMLButtonElement).click(); });
+    expect(q("[data-testid=svg-img-prompt-tabs]")).toBeNull();
+    expect(q("[data-testid=svg-img-prompt-single]")).toBeNull();
+    // ...and one icon shows that remembered default
+    ui.unmount();
+    await mount({ ids: ["a"], entries: { "image.edit.single": { choice: "preset", presetName: "Simpler" } } });
     expect(text("svg-img-prompt-default")).toBe("Default prompt for this task — “Simpler”");
-    expect(text("svg-img-prompt-note")).toContain("not used by this batch");
+    expect(box().value).toBe("Fewer details.");
   });
 
   it("a remembered preset default fills the read-only prompt and never touches the main prompt", async () => {

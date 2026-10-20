@@ -12,8 +12,8 @@ import { imageEditLimit, MAX_EDIT_COUNT } from "../lib/svgimgbatch";
 import type { DirHandleLike } from "../lib/fs";
 import type { PromptPreset } from "../lib/promptpresets";
 import {
-  choiceText, resolveTaskPrompt, shapeOf, taskFor, taskLabel,
-  MAIN_ENTRY, type PromptShape, type PromptTaskId, type ResolvedTaskPrompt, type TaskPromptEntry, type TaskPromptMap,
+  choiceText, resolveTaskPrompt, taskOf,
+  MAIN_ENTRY, type PromptTaskId, type ResolvedTaskPrompt, type TaskPromptEntry, type TaskPromptMap,
 } from "../lib/prompttasks";
 import TaskPromptPicker from "../ui/TaskPromptPicker";
 import { loadImageEditPref, saveImageEditPref } from "./imgprefs";
@@ -60,8 +60,8 @@ export default function SvgImgConfirm(p: SvgImgConfirmProps) {
 }
 
 interface TaskState {
-  ownTask: PromptTaskId; view: PromptShape; setView: (shape: PromptShape) => void;
-  /** What THIS edit will really send, whichever tab is being looked at. */
+  ownTask: PromptTaskId;
+  /** The task's resolved prompt — the one this edit really sends. */
   own: ResolvedTaskPrompt; text: string; note: string; entries: TaskPromptMap;
   chooseEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void; loadPreset: () => void;
 }
@@ -91,8 +91,7 @@ function useImageConfirmState(p: SvgImgConfirmProps): ConfirmState {
 
 /** The picker's own state: which tab is shown, what that task will send. */
 function useTaskState(p: SvgImgConfirmProps): TaskState {
-  const ownTask = taskFor(WORK, p.ids.length > 1 ? "batch" : "single");
-  const [view, setView] = useState<PromptShape>(shapeOf(ownTask));
+  const ownTask = taskOf(WORK, p.ids.length);
   const [entries, setEntries] = useState<TaskPromptMap>(p.taskEntries);
   const sources = { presets: p.presets, mainPrompt: p.prompt };
   const own = resolveTaskPrompt(ownTask, entries[ownTask], sources);
@@ -105,13 +104,12 @@ function useTaskState(p: SvgImgConfirmProps): TaskState {
     p.onPrompt(own.choice.text);
     chooseEntry(ownTask, MAIN_ENTRY);
   };
-  return { ownTask, view, setView, entries, chooseEntry, own, text: choiceText(own.choice, p.prompt),
-    note: noteFor(ownTask, view, own), loadPreset };
+  return { ownTask, entries, chooseEntry, own, text: choiceText(own.choice, p.prompt),
+    note: noteFor(own), loadPreset };
 }
 
-/** What the viewed tab's prompt does — or that this edit does not use it. */
-function noteFor(ownTask: PromptTaskId, view: PromptShape, own: ResolvedTaskPrompt): string {
-  if (view !== shapeOf(ownTask)) return `${taskLabel(taskFor(WORK, view))} — not used by this batch`;
+/** What this task's prompt does for the edit in flight. */
+function noteFor(own: ResolvedTaskPrompt): string {
   if (own.choice.kind === "preset") return "This saved prompt is used for this edit only — the prompt window is not changed.";
   return "This edit sends the main prompt (currently loaded); editing it here changes the shared prompt.";
 }
@@ -146,7 +144,7 @@ function ConfirmBody({ p, state: s }: { p: SvgImgConfirmProps; state: ConfirmSta
       ? `each request sends one previewed square containing up to ${s.count} current main AI images to ${p.conn.name}. Review returned cells before saving their individual new versions. Nothing is overwritten.`
       : "each request sends this prompt together with that source’s current main AI image as the reference. One request per source; each result is saved as a new version and becomes the main AI source, which the SVG generation then uses. Nothing is overwritten."}</p>
     <PreviewPanel preview={s.preview} page={s.page} setPage={s.setPage} multi={s.multi} />
-    <TaskPromptPicker testId="svg-img-prompt" work={WORK} count={p.ids.length} view={s.view} onView={s.setView}
+    <TaskPromptPicker testId="svg-img-prompt" work={WORK} count={p.ids.length}
       entries={s.entries} onEntry={s.chooseEntry} sources={{ presets: p.presets, mainPrompt: p.prompt }} note={s.note} />
     <PromptBox state={s} onPrompt={p.onPrompt} />
     <div className="svg-modal-actions">
