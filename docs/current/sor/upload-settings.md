@@ -2,7 +2,7 @@
 
 The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I-62](invariants/upload.md).
 
-**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md).
+**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md).
 
 ## Current settings and output geometry
 
@@ -14,7 +14,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   - Artboard mode `source` is the SVG's own viewBox size and ratio ("Scale to N MP"
     applies only in `content`).
   - `strokePx` 0 = default.
-  - **All five default with Expand, Shadow and corner badge off = as is**: the export SVG is the approved file
+  - **All five default with Expand, Shadow, corner badge and size guide off = as is**: the export SVG is the approved file
     byte for byte. It gets no clean, no bake and no SVGO, and the clean-SVG-1.1
     check is skipped (it must still parse); the JPEG and EPS are built from it.
   - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding
@@ -25,10 +25,10 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
     same day): its dialog's `upload-set-stroke` (empty = the bar's, inherited;
     `upload-set-stroke-inherit` drops the pin), read by `parseOverrides` (with
     the `strokePt` alias). "Apply settings to selected" pins the 13 general
-    fields, not the bar stroke or separately applied Shadow/badge pins.
+    fields, not the bar stroke or separately applied Shadow/badge/size-guide pins.
   - The old preview-only `previewStroke` pref is gone from this tab.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
-  `prepareExportSvg(source, effective)`, including applied Shadow and corner badge vectors,
+  `prepareExportSvg(source, effective)`, including applied Shadow, corner badge and size guide vectors,
   debounced 120 ms and cached per source and fingerprint. The box is `zoomBoxFit`.
 * **Typed numbers commit on leave** (2026-10-19, `ui/DraftNumberInput`): the
   custom artboard W×H and the icon's stroke width keep a local draft while
@@ -57,22 +57,16 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   the gradient: the bar, row and both dialog scopes warn that the result is
   partial with valid SVG/JPEG; the chosen local converter never switches silently.
 * **Artboard corner badge** (2026-10-20): the supplied fixed black vector is
-  checked-only opt-in, with one **Badge defaults** block (four corners, width %
-  and two inward edge distances) plus per-icon overrides. Those defaults never
-  opt unchecked icons in, and a badge-on icon without placement pins inherits
-  them; badge-on changes alone affect the fingerprint. The
-  [corner badge contract](upload-badge.md) owns placement, failure, EPS and undo
-  details.
+  checked-only opt-in, with one **Badge defaults** block (corner, width %, two
+  inward insets) plus per-icon overrides; those defaults never opt unchecked
+  icons in. See the [corner badge contract](upload-badge.md).
 * Settings: global defaults (padding %, background — `transparent` (the
   default) or one hex, stroke width in px — the file's own units, written as
-  typed (2026-10-08; a stored `strokePt` from before reads as the same number
-  under `strokePx`), stroke
-  colour — one hex, `#000000` by default (2026-10-08), or the artwork's own,
-  JPEG target MP, JPEG quality, SVGO
-  optimize on, optional EPS, artboard) plus per-icon overrides; the effective
-  settings are defaults under,
-  overrides on top, and the settings dialog marks every field inherited or
-  overridden. "Apply settings to selected" pins the current defaults onto the
+  typed (2026-10-08; a stored `strokePt` reads as `strokePx`), stroke colour —
+  one hex, `#000000` by default, or the artwork's own, JPEG target MP, JPEG
+  quality, SVGO optimize on, optional EPS, artboard) plus per-icon overrides;
+  the effective settings are defaults under, overrides on top, and every field
+  is marked inherited or overridden. "Apply settings to selected" pins the current defaults onto the
   selection as ONE undoable `uploadSettings` history entry; per-icon set/reset
   pushes one entry each; global-defaults edits are persisted but NOT undoable
   (the same class as presets). The checkbox selection is session-persisted and
@@ -123,3 +117,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   `overridesEqual` in the undo path derives from) names every overrideable
   field, so a change confined to the artboard or the flag can never be
   swallowed as "nothing changed".
+* **S/L size guide** (2026-10-20): the finished icon repeated smaller (S left
+  of L, letter outlines underneath) is a checked-only opt-in with one **Size
+  guide defaults** block that never opts unchecked icons in; see the
+  [size guide contract](upload-sizeguide.md).

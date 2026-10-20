@@ -114,3 +114,9 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   Exact edge percentages and a uniform aspect-preserving scale keep its paint
   inside the final emitted viewBox, or preparation fails by name. With Expand
   strokes on, its six outlined handles become fills before append.
+* **Size guide:** the [S/L repeats](upload-sizeguide.md) are clones of the
+  finished icon alone (no artboard rect, no Shadow ellipse), each baked by one
+  uniform matrix into artboard px and restyled to its own stroke width. They are
+  appended after the stroke hoist and before the badge, never change the icon
+  fit or artboard size, and shrink uniformly or fail as `no-fit` when the
+  requested percentages cannot fit the chosen insets.

@@ -8,6 +8,7 @@
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { SelectedShadow } from "./shadowselection";
 import type { SelectedBadge } from "./badgeselection";
+import type { SelectedSizeGuide } from "./sizeguideselection";
 
 export interface UploadSettingsDialogProps {
   /** null = the global defaults; else the icon's file name. */
@@ -23,6 +24,8 @@ export interface UploadSettingsDialogProps {
   onSelectedShadowDimensions: (patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
   selectedBadge: SelectedBadge;
   onSelectedBadgeToggle: () => void;
+  selectedSizeGuide: SelectedSizeGuide;
+  onSelectedSizeGuideToggle: () => void;
   onDefaults: (patch: Partial<UploadSettings>) => void;
   onOverride: (id: string, patch: SettingsOverrides) => void;
   onResetOverride: (id: string) => void;

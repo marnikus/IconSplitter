@@ -43,6 +43,9 @@ describe("defaults and clamps", () => {
       scaleToMegapixels: false, artboardMegapixels: 5, // 2026-10-09 (I-62)
       shadowEnabled: false, shadowWidthPct: 80, shadowGapPct: 5,
       badgeEnabled: false, badgeCorner: "bottom-right", badgeWidthPct: 40, badgeOffsetXPct: 3, badgeOffsetYPct: 3,
+      sizeGuideEnabled: false, sizeGuideCorner: "bottom-left", sizeGuideSmallPct: 6, sizeGuideLargePct: 12,
+      sizeGuideSmallStrokePct: 0, sizeGuideLargeStrokePct: 0, sizeGuideGapPct: 2,
+      sizeGuideOffsetXPct: 3, sizeGuideOffsetYPct: 3,
     });
   });
 

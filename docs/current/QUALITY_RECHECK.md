@@ -2917,3 +2917,12 @@ Measured on Node v22.14.0 / npm 10.9.2 (.nvmrc specifies v22.12.0): padding Defa
 - `npm run verify:fast` — PASS: tsc, eslint (0 errors), changed-quality, 713 tests / 55 files with coverage, single-file build (198 s).
 - `npm run verify` — PASS on the immediate rerun (2308 tests, coverage, native, build; 195 s). The first full run had two load-sensitive `upload_ui` metadata assertions fail (approval toast, row preview); both pass alone and in the rerun — recorded, not hidden.
 - Focused red→green: `upload_badge_geometry`, `upload_badge`, `upload_outline`, `upload_runexport`, `upload_live_preview`, `upload_ui` badge block.
+
+## 2026-10-20 — S/L size guide repeats inside the artboard
+
+- Red→green focused suites: `upload_sizeguide_geometry` (11), `upload_sizeguide` (13), `upload_sizeguide_settings` (4), plus the size-guide block of `upload_ui` and `docs_navigation`.
+- `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 warnings — one fewer than before: `settings.ts normalizeSettings` was split into `settingssizeguide.ts`).
+- `node tools/quality.mjs --changed --allow-legacy --base HEAD` PASS after splitting the new module set: `settingssizeguide.ts` (98 lines), `sizeguidelabel.ts` (50), `sizeguidecopy.ts` (116), `sizeguide.ts` (261), `settingsgestures.ts` (21); `settings.ts` 356 → 297 and `actions.ts` 306 → 285 lines.
+- `upload_ui` "previews each row's own approved SVG" was diagnosed instead of re-recorded as a flake: it waited for the SOURCE path literal, which the live export preview only shows until the prepared text replaces it, so it failed about half the time (also on a detached worktree of the base commit). The fixture now gives each file its own FILL (`#123456` / `#654321` / `#00ff00`), the identity a preview keeps in both the approved and the prepared rendering; three consecutive coverage runs of the file pass.
+- `npm run verify:fast` PASS (ALL LANES): 222 suites / 2339 tests, build PASS.
+- `npm run verify` PASS: native perf 5 suites / 30 tests, coverage 222 suites / 2339 tests, statements 94.64 %, lines 97.54 %, build PASS.

@@ -24,10 +24,12 @@
 import { artboardTarget, BACKGROUND_SOURCE, isTransparent, megapixelTargetOf, readPaint, TRANSPARENT, type UploadSettings } from "./settings";
 import { isAsIs } from "./asis";
 import { appendCornerBadge } from "./cornerbadge";
+import { appendSizeGuide } from "./sizeguide";
+import { overflowsSourceFrame, placeArtwork, shippedBounds } from "./place";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
-import { overflowsSourceFrame, placeArtwork } from "./place";
+
 import { strokeStyleOf } from "./restyle";
 import { fmt, parseSvgLength, type ArtboardFit, type FitTarget } from "./geom";
 
@@ -46,7 +48,7 @@ export interface PreparedSvg {
   strokesNormalized: number;
   /** Elements whose stroke paint was set (0 when strokeColor = artwork). */
   strokesRecolored: number;
-  /** Visible strokes turned into filled shapes, the badge's handles included (0 unless `expandStrokes` is on). */
+  /** Visible strokes turned into filled shapes, the size guide and badge handles included (0 unless `expandStrokes` is on). */
   strokesExpanded: number;
   /** The background the export paints: `transparent` or the normalized hex. */
   background: string;
@@ -100,10 +102,12 @@ function buildExport(doc: Document, root: Element, settings: UploadSettings, fra
   });
   if (!placed.ok) return fail(placed.code, placed.detail);
   const background = backgroundOf(settings.background);
-  applyArtboard(placed.root, placed.fit, background);
+  const boardRect = applyArtboard(placed.root, placed.fit, background);
   const globalStroke = unifyStrokes(placed.root); // the artboard rect included: it says `stroke="none"` only when the root hoists a paint
   // The shadow is explicitly stroke-free even if the source has no strokes to hoist.
   placed.shadow?.setAttribute("stroke", "none");
+  const guide = sizeGuideStageOf(placed.root, settings, placed.shadow, boardRect);
+  if (guide.failure !== null) return guide.failure;
   const badge = badgeStageOf(placed.root, settings);
   if (badge.failure !== null) return badge.failure;
   doc.replaceChild(placed.root, root);
@@ -112,8 +116,50 @@ function buildExport(doc: Document, root: Element, settings: UploadSettings, fra
     svg: new XMLSerializer().serializeToString(doc),
     fit: placed.fit, bounds: placed.bounds, background, globalStroke, passes: placed.passes,
     shapesBaked: placed.shapesBaked, strokesNormalized: placed.widths, strokesRecolored: placed.colors,
-    strokesExpanded: placed.expanded + badge.expanded, asIs: false,
+    strokesExpanded: placed.expanded + guide.expanded + badge.expanded, asIs: false,
   };
+}
+
+interface Stage { failure: PrepareFailure | null; expanded: number }
+
+/**
+ * The size guide repeats the FINISHED icon (its own artboard rect and shadow
+ * excluded), so it is staged after the stroke hoist and before the badge:
+ * each repeat carries its own stroke definition and never inherits the root's.
+ */
+function sizeGuideStageOf(root: Element, settings: UploadSettings, shadow: Element | undefined, boardRect: Element | null): Stage {
+  if (!settings.sizeGuideEnabled) return { failure: null, expanded: 0 };
+  const board = viewBoxOf(root);
+  if (board === null) return { failure: fail("no-fit", "the final artboard has no room for the size guide"), expanded: 0 };
+  const icon = iconSnapshot(root, boardRect, shadow);
+  const bounds = shippedBounds(icon);
+  if (bounds === null || bounds.width <= 0) {
+    return { failure: fail("no-fit", "the placed icon has no measurable geometry to repeat"), expanded: 0 };
+  }
+  const widthPx = (pct: number) => (pct > 0 ? (board.width * pct) / 100 : null);
+  const guide = appendSizeGuide(root, { width: board.width, height: board.height }, {
+    icon, bounds, expand: settings.expandStrokes, color: null,
+    strokePx: { small: widthPx(settings.sizeGuideSmallStrokePct), large: widthPx(settings.sizeGuideLargeStrokePct) },
+  }, {
+    corner: settings.sizeGuideCorner,
+    offsetXPct: settings.sizeGuideOffsetXPct, offsetYPct: settings.sizeGuideOffsetYPct,
+    smallPct: settings.sizeGuideSmallPct, largePct: settings.sizeGuideLargePct,
+    smallStrokePct: settings.sizeGuideSmallStrokePct, largeStrokePct: settings.sizeGuideLargeStrokePct,
+    gapPct: settings.sizeGuideGapPct,
+  });
+  return guide.ok
+    ? { failure: null, expanded: guide.expanded }
+    : { failure: fail(guide.code, guide.detail), expanded: 0 };
+}
+
+/** The placed icon alone: the root's own attributes (the hoisted stroke) and its children, minus the artboard and shadow. */
+function iconSnapshot(root: Element, boardRect: Element | null, shadow: Element | undefined): Element {
+  const snapshot = root.cloneNode(false) as Element;
+  for (const child of Array.from(root.children)) {
+    if (child === boardRect || child === shadow) continue;
+    snapshot.appendChild(child.cloneNode(true));
+  }
+  return snapshot;
 }
 
 interface BadgeStage { failure: PrepareFailure | null; expanded: number }
@@ -207,12 +253,14 @@ function megapixelsOf(settings: UploadSettings): number | null {
 }
 
 /** Re-roots the document: the artboard viewBox (no px size) and the artboard rect first — the artwork already sits in it. */
-function applyArtboard(root: Element, fit: ArtboardFit, background: string): void {
+function applyArtboard(root: Element, fit: ArtboardFit, background: string): Element | null {
   root.setAttribute("viewBox", fit.viewBox);
   root.removeAttribute("width");
   root.removeAttribute("height");
-  if (background === BACKGROUND_SOURCE) return; // "default": the source's own background, no artboard object
-  root.insertBefore(artboardRect(root.ownerDocument, fit, background), root.firstChild);
+  if (background === BACKGROUND_SOURCE) return null; // "default": the source's own background, no artboard object
+  const rect = artboardRect(root.ownerDocument, fit, background);
+  root.insertBefore(rect, root.firstChild);
+  return rect;
 }
 
 /** The artboard as an object: filled with the background colour, or invisible (`fill="none"`) when transparent. */

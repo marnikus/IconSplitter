@@ -17,6 +17,7 @@ import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "
 import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
 import type { EpsConverterId } from "./epsconv/types";
 import type { BadgeCorner } from "./cornerbadge";
+import { normalizeSizeGuide, readSizeGuideOverrides, SIZE_GUIDE_DEFAULTS, SIZE_GUIDE_FIELDS, type SizeGuideSettings } from "./settingssizeguide";
 import {
   ARTBOARD_MP_DEFAULT, BADGE_OFFSET_DEFAULT, BADGE_WIDTH_DEFAULT, MP_DEFAULT, PADDING_DEFAULT,
   QUALITY_DEFAULT, SHADOW_GAP_DEFAULT, SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT,
@@ -31,6 +32,10 @@ export {
 } from "./artboard";
 export { settingsFingerprint } from "./settingsfingerprint";
 export type { BadgeCorner } from "./cornerbadge";
+export {
+  SIZE_GUIDE_CORNERS, SIZE_GUIDE_CORNER_DEFAULT, parseSizeGuideCorner,
+  type SizeGuideCorner, type SizeGuideSettings,
+} from "./settingssizeguide";
 
 export const BADGE_CORNERS: readonly BadgeCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 export const BADGE_CORNER_DEFAULT: BadgeCorner = "bottom-right";
@@ -39,7 +44,8 @@ export function parseBadgeCorner(value: unknown): BadgeCorner | null {
   return typeof value === "string" && BADGE_CORNERS.includes(value as BadgeCorner) ? value as BadgeCorner : null;
 }
 
-export interface UploadSettings {
+
+export interface UploadSettings extends SizeGuideSettings {
   /** Uniform padding on all four sides, % of the fitted artwork's largest side; null = default (the source's own margins). */
   paddingPct: number | null;
   /** `default` (no artboard rect, 2026-10-19), `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
@@ -139,6 +145,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   badgeWidthPct: BADGE_WIDTH_DEFAULT,
   badgeOffsetXPct: BADGE_OFFSET_DEFAULT,
   badgeOffsetYPct: BADGE_OFFSET_DEFAULT,
+  ...SIZE_GUIDE_DEFAULTS,
 };
 
 /** A paint field: its sentinel word (`transparent` / `artwork`) or a normalized hex; null = unreadable. */
@@ -187,6 +194,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     badgeWidthPct: clampBadgeWidthPct(raw.badgeWidthPct),
     badgeOffsetXPct: clampBadgeOffsetPct(raw.badgeOffsetXPct),
     badgeOffsetYPct: clampBadgeOffsetPct(raw.badgeOffsetYPct),
+    ...normalizeSizeGuide(raw), // opt-in per icon: a stored `sizeGuideEnabled: true` reads back false
   };
 }
 
@@ -200,6 +208,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   readArtboard(raw, out);
   const corner = parseBadgeCorner(raw.badgeCorner);
   if (corner !== null) out.badgeCorner = corner;
+  Object.assign(out, readSizeGuideOverrides(raw));
   if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
   return out;
 }
@@ -263,17 +272,13 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
   return (Object.keys(overrides) as (keyof UploadSettings)[]).filter((k) => overrides[k] !== undefined);
 }
 
-/**
- * Every overrideable field, in canonical order — the ONE list the undo
- * equality, the store readers and `settingsEqual` derive from (2026-10-08: the
- * hand-kept copy in `uploadundo.ts` had already missed the artboard, so a
- * change that only touched it compared EQUAL and could be swallowed).
- */
+/** Every overrideable field, in canonical order — the ONE list undo equality and `settingsEqual` derive from. */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
   "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
   "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
+  ...SIZE_GUIDE_FIELDS,
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {

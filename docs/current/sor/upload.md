@@ -34,10 +34,14 @@ opt-in class as Generate SVG → Requesty; design
   vector graphic on checked icons' final artboards. Corner, width and X/Y edge
   insets are configurable without changing icon fit; [badge](upload-badge.md)
   owns its checked-only/per-icon, preview and export contract.
+* An independent **S/L size guide** checkbox repeats the finished icon smaller
+  in one corner, with its supplied S and L letter outlines underneath; corner,
+  both sizes, both stroke widths, the gap and X/Y edge insets are configurable.
+  The [size guide](upload-sizeguide.md) owns the layout and failure contract.
 
 ## Navigate by operation
 
-- [Settings and artboard](upload-settings.md) · [output geometry](upload-geometry.md) · [corner badge](upload-badge.md)
+- [Settings and artboard](upload-settings.md) · [output geometry](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md)
 - [Metadata generation, validation and confirmation](upload-metadata.md)
 - [Clean SVG, JPEG and atomic export](upload-export.md)
 - [EPS conversion and stroke expansion](upload-eps.md)

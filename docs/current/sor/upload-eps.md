@@ -14,7 +14,9 @@ Download all: it cannot masquerade as the requested shadowed EPS. Choosing the
 local Inkscape converter remains explicit; the app never switches converters
 or launches the helper for Shadow. The optional [corner badge](upload-badge.md)
 uses solid black paths that the built-in writer can emit as EPS; a badge combined
-with Shadow is still partial because the gradient remains unsupported.
+with Shadow is still partial because the gradient remains unsupported. The
+[S/L size guide](upload-sizeguide.md) is likewise ordinary filled paths, valid
+in built-in EPS.
 
 * EPS converters (2026-10-09, design
   `docs/archive/2026-10-09-eps-converters-inkscape-expand/design.md`): the

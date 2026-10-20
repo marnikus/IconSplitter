@@ -18,16 +18,25 @@ export const AS_IS_SETTINGS: Pick<UploadSettings, "paddingPct" | "background" | 
 export function isAsIs(s: UploadSettings): boolean {
   return s.paddingPct === null && s.background === BACKGROUND_SOURCE && s.strokePx === 0
     && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source"
-    && !s.expandStrokes && !s.shadowEnabled && !s.badgeEnabled;
+    && !s.expandStrokes && !s.shadowEnabled && !s.badgeEnabled && !s.sizeGuideEnabled;
 }
 
 /** General bulk settings leave bar stroke and separately applied effect pins alone. */
 export function perIconFields(s: UploadSettings): Omit<UploadSettings,
   "strokePx" | "shadowEnabled" | "shadowWidthPct" | "shadowGapPct" |
-  "badgeEnabled" | "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct"> {
+  "badgeEnabled" | "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct" |
+  "sizeGuideEnabled" | "sizeGuideCorner" | "sizeGuideSmallPct" | "sizeGuideLargePct" |
+  "sizeGuideSmallStrokePct" | "sizeGuideLargeStrokePct" | "sizeGuideGapPct" |
+  "sizeGuideOffsetXPct" | "sizeGuideOffsetYPct"> {
   const { strokePx, shadowEnabled, shadowWidthPct, shadowGapPct,
-    badgeEnabled, badgeCorner, badgeWidthPct, badgeOffsetXPct, badgeOffsetYPct, ...rest } = s;
+    badgeEnabled, badgeCorner, badgeWidthPct, badgeOffsetXPct, badgeOffsetYPct,
+    sizeGuideEnabled, sizeGuideCorner, sizeGuideSmallPct, sizeGuideLargePct,
+    sizeGuideSmallStrokePct, sizeGuideLargeStrokePct, sizeGuideGapPct,
+    sizeGuideOffsetXPct, sizeGuideOffsetYPct, ...rest } = s;
   void strokePx; void shadowEnabled; void shadowWidthPct; void shadowGapPct;
   void badgeEnabled; void badgeCorner; void badgeWidthPct; void badgeOffsetXPct; void badgeOffsetYPct;
+  void sizeGuideEnabled; void sizeGuideCorner; void sizeGuideSmallPct; void sizeGuideLargePct;
+  void sizeGuideSmallStrokePct; void sizeGuideLargeStrokePct; void sizeGuideGapPct;
+  void sizeGuideOffsetXPct; void sizeGuideOffsetYPct;
   return rest;
 }

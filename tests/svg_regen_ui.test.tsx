@@ -118,6 +118,8 @@ describe("Export settings — the regen window moved out", () => {
         onSelectedShadowToggle={() => undefined} onSelectedShadowDimensions={() => undefined}
         selectedBadge={{ state: "none" }}
         onSelectedBadgeToggle={() => undefined}
+        selectedSizeGuide={{ state: "none" }}
+        onSelectedSizeGuideToggle={() => undefined}
         onDefaults={() => undefined} onOverride={() => undefined} onResetOverride={() => undefined} onClose={() => undefined} />,
     );
     expect(q("[data-testid=svg-regen]")).toBeNull();

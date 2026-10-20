@@ -16,6 +16,7 @@ import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
 import { selectedShadow } from "./shadowselection";
 import { selectedBadge } from "./badgeselection";
+import { selectedSizeGuide } from "./sizeguideselection";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
 import UploadMetaDialog from "./UploadMetaDialog";
@@ -225,6 +226,8 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
       selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides)}
       onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
+      selectedSizeGuide={selectedSizeGuide(g.checked, g.defaults, g.overrides)}
+      onSelectedSizeGuideToggle={() => g.toggleSizeGuideSelected(g.checked)}
       onDefaults={g.setDefaults}
       onOverride={g.setOverride}
       onResetOverride={g.resetOverride}

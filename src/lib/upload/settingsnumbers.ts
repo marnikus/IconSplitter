@@ -24,6 +24,21 @@ export const BADGE_WIDTH_MAX = 100;
 export const BADGE_OFFSET_DEFAULT = 3;
 export const BADGE_OFFSET_MIN = 0;
 export const BADGE_OFFSET_MAX = 100;
+export const SIZE_GUIDE_SMALL_DEFAULT = 6;
+export const SIZE_GUIDE_SMALL_MIN = 1;
+export const SIZE_GUIDE_SMALL_MAX = 100;
+export const SIZE_GUIDE_LARGE_DEFAULT = 12;
+export const SIZE_GUIDE_LARGE_MIN = 1;
+export const SIZE_GUIDE_LARGE_MAX = 100;
+export const SIZE_GUIDE_STROKE_DEFAULT = 0;
+export const SIZE_GUIDE_STROKE_MIN = 0;
+export const SIZE_GUIDE_STROKE_MAX = 20;
+export const SIZE_GUIDE_GAP_DEFAULT = 2;
+export const SIZE_GUIDE_GAP_MIN = 0;
+export const SIZE_GUIDE_GAP_MAX = 100;
+export const SIZE_GUIDE_OFFSET_DEFAULT = 3;
+export const SIZE_GUIDE_OFFSET_MIN = 0;
+export const SIZE_GUIDE_OFFSET_MAX = 100;
 
 export const clampPaddingPct = (value: unknown) => clampNum(value, PADDING_MIN, PADDING_MAX, PADDING_DEFAULT);
 export const clampStrokePx = (value: unknown) => clampNum(value, STROKE_MIN, STROKE_MAX, STROKE_DEFAULT);
@@ -34,6 +49,11 @@ export const clampShadowWidthPct = (value: unknown) => clampNum(value, SHADOW_WI
 export const clampShadowGapPct = (value: unknown) => clampNum(value, SHADOW_GAP_MIN, SHADOW_GAP_MAX, SHADOW_GAP_DEFAULT);
 export const clampBadgeWidthPct = (value: unknown) => clampNum(value, BADGE_WIDTH_MIN, BADGE_WIDTH_MAX, BADGE_WIDTH_DEFAULT);
 export const clampBadgeOffsetPct = (value: unknown) => clampNum(value, BADGE_OFFSET_MIN, BADGE_OFFSET_MAX, BADGE_OFFSET_DEFAULT);
+export const clampSizeGuideSmallPct = (value: unknown) => clampNum(value, SIZE_GUIDE_SMALL_MIN, SIZE_GUIDE_SMALL_MAX, SIZE_GUIDE_SMALL_DEFAULT);
+export const clampSizeGuideLargePct = (value: unknown) => clampNum(value, SIZE_GUIDE_LARGE_MIN, SIZE_GUIDE_LARGE_MAX, SIZE_GUIDE_LARGE_DEFAULT);
+export const clampSizeGuideStrokePct = (value: unknown) => clampNum(value, SIZE_GUIDE_STROKE_MIN, SIZE_GUIDE_STROKE_MAX, SIZE_GUIDE_STROKE_DEFAULT);
+export const clampSizeGuideGapPct = (value: unknown) => clampNum(value, SIZE_GUIDE_GAP_MIN, SIZE_GUIDE_GAP_MAX, SIZE_GUIDE_GAP_DEFAULT);
+export const clampSizeGuideOffsetPct = (value: unknown) => clampNum(value, SIZE_GUIDE_OFFSET_MIN, SIZE_GUIDE_OFFSET_MAX, SIZE_GUIDE_OFFSET_DEFAULT);
 
 function clampNum(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);

@@ -298,8 +298,19 @@ function taggedJpeg(width: number, height: number, marker: string): Uint8Array {
   return new Uint8Array([body[0], body[1], ...app1, ...body.slice(2)]);
 }
 
-/** Texts of the SVGs that differ per row, so a mix-up is visible in the bytes. */
-const distinctSvg = (mark: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-icon="${mark}"><path d="${pathOf(mark)}"/></svg>`;
+/**
+ * Texts of the SVGs that differ per row, so a mix-up is visible in the bytes.
+ * The per-file FILL is the identity a row preview keeps in both renderings:
+ * with visual defaults off the box shows the approved text, and with any visual
+ * setting on it shows the PREPARED export, whose path data is baked into
+ * artboard px — the literal `d` no longer appears, the paint still does.
+ */
+const distinctSvg = (mark: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-icon="${mark}"><path d="${pathOf(mark)}" fill="${colorOf(mark)}"/></svg>`;
+
+function colorOf(mark: string): string {
+  if (mark === "FOG") return "#123456";
+  return mark === "ARCH2" ? "#00ff00" : "#654321";
+}
 
 /** One distinct path per marker — also readable out of the row's shadow preview. */
 function pathOf(mark: string): string {
@@ -783,6 +794,67 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=hist-undo]");
     expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toMatchObject({ badgeEnabled: true, shadowEnabled: true });
   });
+
+  it("offers one size-guide control set; its defaults never opt an icon in", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    const selected = input("[data-testid=upload-set-sizeguide-selected]");
+    expect(selected.disabled).toBe(true);
+    expect(selected.checked).toBe(false);
+    expect(text("[data-testid=upload-sizeguide-defaults-note]")).toMatch(/never turn on/i);
+    expect((q("[data-testid=upload-set-sizeguide-corner]") as HTMLSelectElement).value).toBe("bottom-left");
+    expect(input("[data-testid=upload-set-sizeguide-small-width]").value).toBe("6");
+    expect(input("[data-testid=upload-set-sizeguide-large-width]").value).toBe("12");
+    expect(input("[data-testid=upload-set-sizeguide-small-stroke]").value).toBe("0");
+    expect(input("[data-testid=upload-set-sizeguide-large-stroke]").value).toBe("0");
+    expect(input("[data-testid=upload-set-sizeguide-gap]").value).toBe("2");
+    expect(input("[data-testid=upload-set-sizeguide-offset-x]").getAttribute("aria-label")).toMatch(/left edge/i);
+    expect(input("[data-testid=upload-set-sizeguide-offset-y]").getAttribute("aria-label")).toMatch(/bottom edge/i);
+    expect(text("[data-testid=upload-sizeguide-fit-note]")).toMatch(/shrink.*100%/i);
+    await selectOption("[data-testid=upload-set-sizeguide-corner]", "top-right");
+    expect(input("[data-testid=upload-set-sizeguide-offset-x]").getAttribute("aria-label")).toMatch(/right edge/i);
+    expect(input("[data-testid=upload-set-sizeguide-offset-y]").getAttribute("aria-label")).toMatch(/top edge/i);
+    await type("[data-testid=upload-set-sizeguide-large-width]", "15");
+    await act(async () => { input("[data-testid=upload-set-sizeguide-large-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-set-sizeguide-gap]", "4");
+    await act(async () => { input("[data-testid=upload-set-sizeguide-gap]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const stored = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(stored.defaults).toMatchObject({ sizeGuideEnabled: false, sizeGuideCorner: "top-right", sizeGuideLargePct: 15, sizeGuideGapPct: 4 });
+    expect(stored.overrides).toEqual({});
+  });
+
+  it("toggles the size guide only for checked icons and names the Expand strokes interaction", async () => {
+    await mount(makeRoot());
+    await activate(ARCH);
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    const selected = input("[data-testid=upload-set-sizeguide-selected]");
+    expect(selected.checked).toBe(false);
+    await click("[data-testid=upload-set-sizeguide-selected]");
+    expect(selected.checked).toBe(true);
+    const stored = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(stored.overrides[FOG]).toEqual({ sizeGuideEnabled: true });
+    expect(stored.overrides[ARCH]).toBeUndefined();
+    await click("[data-testid=upload-set-expand]");
+    expect(text("[data-testid=upload-sizeguide-expand-note]")).toMatch(/outline only/i);
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]"); // the Expand strokes toggle
+    await click("[data-testid=hist-undo]"); // the size-guide opt-in
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toBeUndefined();
+  });
+
+  it("shows the size guide's per-icon pins and its own edge labels", async () => {
+    await mount(makeRoot());
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(text("[data-testid=upload-set-marker-sizeguide]")).toBe("inherited");
+    await click("[data-testid=upload-set-sizeguide]");
+    expect(text("[data-testid=upload-set-marker-sizeguide]")).toBe("overridden");
+    await type("[data-testid=upload-set-sizeguide-small-stroke]", "0.5");
+    await act(async () => { input("[data-testid=upload-set-sizeguide-small-stroke]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(text("[data-testid=upload-set-marker-sizeguide-small-stroke]")).toBe("overridden");
+    const pinned = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(pinned.overrides[FOG]).toMatchObject({ sizeGuideEnabled: true, sizeGuideSmallStrokePct: 0.5 });
+  });
 });
 
 describe("the metadata prompt panel — editable, saved, presets", () => {
@@ -964,10 +1036,14 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     const { strokePx: _stroke, shadowEnabled: _shadow, shadowWidthPct: _width, shadowGapPct: _gap,
       badgeEnabled: _badge, badgeCorner: _corner, badgeWidthPct: _badgeWidth,
-      badgeOffsetXPct: _insetX, badgeOffsetYPct: _insetY, ...perIcon } = saved.defaults; // general apply leaves decoration pins and bar stroke alone
+      badgeOffsetXPct: _insetX, badgeOffsetYPct: _insetY,
+      sizeGuideEnabled: _guide, sizeGuideCorner: _guideCorner, sizeGuideSmallPct: _small,
+      sizeGuideLargePct: _large, sizeGuideSmallStrokePct: _smallStroke, sizeGuideLargeStrokePct: _largeStroke,
+      sizeGuideGapPct: _guideGap, sizeGuideOffsetXPct: _guideX, sizeGuideOffsetYPct: _guideY,
+      ...perIcon } = saved.defaults; // general apply leaves decoration pins and bar stroke alone
     expect(saved.overrides[FOG]).toEqual(perIcon);
     expect(saved.overrides[ARCH]).toEqual(perIcon);
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("13 fields overridden"); // 14 fields minus strokePx (one value, the bar's — 2026-10-19)
+    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("13 fields overridden"); // 23 fields minus strokePx (the bar's) and the three decorations
     // exactly one history entry for the whole batch
     const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [];
     const uploadEntries = entries.filter((e: { type: string }) => e.type === "uploadSettings");
@@ -1354,18 +1430,18 @@ describe("metadata — the exact request, editable fields, accept", () => {
     const unrelated = setTimeout(() => undefined, 8000);
     void nodeSleep(40).then(releaseRead);
     try {
-      await waitForFilePreview(FOG, "M2 2h20v20H2z");
+      await waitForFilePreview(FOG, "#123456");
     } finally {
       clearTimeout(unrelated);
     }
-    expect(previewHtml(ARCH).includes("M4 4h8v8H4z")).toBe(true); // never the neighbour's drawing
-    expect(previewHtml(ARCH).includes("M2 2h20v20H2z")).toBe(false);
+    expect(previewHtml(ARCH).includes("#654321")).toBe(true); // never the neighbour's drawing
+    expect(previewHtml(ARCH).includes("#123456")).toBe(false);
     // the user replaces the approved SVG on disk and rescans: only that row changes
     const dir = root.children.get(DIR) as BinDir;
     dir.children.set("arch_AI.svg", new BinFile("arch_AI.svg", distinctSvg("ARCH2"), 3600));
     await click("[data-testid=upload-rescan]");
-    await waitForFilePreview(ARCH, "M3 3h3v3H3z");
-    expect(previewHtml(FOG).includes("M2 2h20v20H2z")).toBe(true); // untouched
+    await waitForFilePreview(ARCH, "#00ff00");
+    expect(previewHtml(FOG).includes("#123456")).toBe(true); // untouched
   });
 
   itSlow("labels one preview per selected icon, and no image ever crosses rows", async () => {

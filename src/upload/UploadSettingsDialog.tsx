@@ -26,6 +26,7 @@ import { ConverterSetting } from "./UploadEpsSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
 import UploadShadowSettings from "./UploadShadowSettings";
 import UploadBadgeSettings from "./UploadBadgeSettings";
+import UploadSizeGuideSettings from "./UploadSizeGuideSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -78,6 +79,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ArtboardSetting p={p} effective={effective} />
       <UploadShadowSettings p={p} effective={effective} />
       <UploadBadgeSettings p={p} effective={effective} />
+      <UploadSizeGuideSettings p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
         min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
@@ -99,11 +101,11 @@ function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: Up
   return (
     <div className="up-set-footer">
       <button type="button" className={`svg-btn${on ? " on" : ""}`} data-testid="upload-set-as-is" aria-pressed={on}
-        onClick={() => changeMany(p, { ...AS_IS_SETTINGS, shadowEnabled: false, badgeEnabled: false })}>All default (export as is)</button>
+        onClick={() => changeMany(p, { ...AS_IS_SETTINGS, shadowEnabled: false, badgeEnabled: false, sizeGuideEnabled: false })}>All default (export as is)</button>
       <span className="up-hint" data-testid="upload-set-as-is-note">
         {on ? "every visual setting is default: the approved SVG is exported exactly as it is"
           : p.id === null ? "reset global visual defaults; checked icons keep their separately applied shadows and badges"
-            : "stroke, background, artboard and padding back to the SVG's own; this icon's shadow and badge off"}
+            : "stroke, background, artboard and padding back to the SVG's own; this icon's shadow, badge and size guide off"}
       </span>
     </div>
   );

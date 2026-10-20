@@ -14,7 +14,9 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   behind the icon but after the background. A selected corner badge is instead
   added **after** fitting, above the icon, with exact artboard-edge % insets;
   it cannot refit the icon or leave the shipped viewBox (a no-room placement
-  fails by name; [badge contract](../upload-badge.md)). With default/null padding the
+  fails by name; [badge contract](../upload-badge.md)). An enabled
+  [size guide](../upload-sizeguide.md) is added after the stroke hoist and
+  before that badge, shrinking uniformly or failing `no-fit`. With default/null padding the
   authored source viewBox (or width/height-only frame) is also an unpainted
   layout frame, extended only when the shadow overflows; an extension that
   would reveal formerly clipped painted art fails `unsupported`. Fully

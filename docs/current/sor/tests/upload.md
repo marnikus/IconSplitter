@@ -48,6 +48,12 @@ Focused test inventory; [all tests](../TESTS.md).
   icon coordinates unchanged. `upload_runexport` verifies clean SVG,
   preview/JPEG prepared input and genuine built-in EPS for opaque badge
   paths/outlines, with existing Shadow partial EPS unchanged.
+* `upload_sizeguide_geometry.test.ts`, `upload_sizeguide.test.ts` and
+  `upload_sizeguide_settings.test.ts` — S-then-L bottom alignment, exact
+  four-corner insets, ratio-preserving tall icons, per-logo stroke widths,
+  supplied S/L outlines and label geometry, uniform shrink/no-fit with untouched
+  insets, gradient id renaming, no artboard/shadow repeat, badge-last ordering,
+  expand-strokes behaviour, opt-in/default fingerprints and validation.
 * `upload_expand.test.ts` — hidden strokes stay hidden when expanded, and a
   visible stroke under zero inherited fill opacity keeps its paint; source
   geometry and Shadow bounds agree with exported outlines
@@ -68,7 +74,9 @@ Focused test inventory; [all tests](../TESTS.md).
   restart, selected-only Shadow (hidden checks, mixed toggles, undo, general
   bulk apply preserves it, popup EPS warning), selected-only badge opt-in
   (mixed/hidden checks, undo, one shared defaults block, per-icon
-  markers/reset), deferred source-file preview
+  markers/reset), selected-only size-guide opt-in (mixed/hidden checks, undo,
+  one shared defaults block, corner-driven edge labels, per-icon markers),
+  deferred source-file preview
   read under unrelated timers and rescan, export → green committed package with
   the source untouched, stale →
   re-export, metadata embedded + verified, honest failure commits nothing.

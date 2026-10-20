@@ -48,7 +48,9 @@ adds the supplied opaque paths above the artwork **after** fitting; preview,
 JPEG, optimized SVG and built-in EPS share that vector. Badge-off files keep
 their previous bytes/fingerprints, while enabled placement and template changes
 mark only affected packages stale. Badge plus Shadow retains Shadow's honest
-partial-EPS result.
+partial-EPS result. The optional [S/L size guide](upload-sizeguide.md) adds its
+two baked repeats and letter paths the same way: off by default, shared with
+every renderer, and fingerprinting only while enabled.
 
 ## Incremental export and commit
 
