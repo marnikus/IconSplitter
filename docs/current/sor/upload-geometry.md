@@ -109,3 +109,7 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   outlines retain their source display/visibility and explicitly use the
   effective stroke opacity for their fill, even under inherited zero fill
   opacity. Shadow-off as-is bytes remain unchanged.
+* **Corner badge:** the [artboard-relative vector](upload-badge.md) is appended
+  after the icon/Shadow fit, so it never changes icon geometry or artboard size.
+  Exact edge percentages and a uniform aspect-preserving scale keep its paint
+  inside the final emitted viewBox, or preparation fails by name.

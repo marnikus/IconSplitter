@@ -17,12 +17,17 @@ export const AS_IS_SETTINGS: Pick<UploadSettings, "paddingPct" | "background" | 
 /** True when the export would change nothing visual: the approved SVG ships as it is. */
 export function isAsIs(s: UploadSettings): boolean {
   return s.paddingPct === null && s.background === BACKGROUND_SOURCE && s.strokePx === 0
-    && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source" && !s.expandStrokes && !s.shadowEnabled;
+    && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source"
+    && !s.expandStrokes && !s.shadowEnabled && !s.badgeEnabled;
 }
 
-/** General bulk settings leave the bar's stroke width and separately applied shadow pins alone. */
-export function perIconFields(s: UploadSettings): Omit<UploadSettings, "strokePx" | "shadowEnabled" | "shadowWidthPct" | "shadowGapPct"> {
-  const { strokePx, shadowEnabled, shadowWidthPct, shadowGapPct, ...rest } = s;
+/** General bulk settings leave bar stroke and separately applied effect pins alone. */
+export function perIconFields(s: UploadSettings): Omit<UploadSettings,
+  "strokePx" | "shadowEnabled" | "shadowWidthPct" | "shadowGapPct" |
+  "badgeEnabled" | "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct"> {
+  const { strokePx, shadowEnabled, shadowWidthPct, shadowGapPct,
+    badgeEnabled, badgeCorner, badgeWidthPct, badgeOffsetXPct, badgeOffsetYPct, ...rest } = s;
   void strokePx; void shadowEnabled; void shadowWidthPct; void shadowGapPct;
+  void badgeEnabled; void badgeCorner; void badgeWidthPct; void badgeOffsetXPct; void badgeOffsetYPct;
   return rest;
 }

@@ -40,6 +40,13 @@ Focused test inventory; [all tests](../TESTS.md).
   gradient SVG and built-in-EPS partial output; its two-pass regression proves
   that a previously committed EPS stays on disk but vanishes from the new
   partial or EPS-disabled record and Download all.
+* `upload_badge_settings.test.ts`, `upload_badge_geometry.test.ts`,
+  `upload_badge.test.ts` and `upload_outline.test.ts` — opt-in/default
+  fingerprints, scientific-notation path parsing, exact four-corner insets,
+  width/aspect and narrow-artboard fit, source/root-opacity/no-fit safety,
+  badge-off byte identity and icon coordinates unchanged. `upload_runexport`
+  verifies clean SVG, preview/JPEG prepared input and genuine built-in EPS for
+  opaque badge paths, with existing Shadow partial EPS unchanged.
 * `upload_expand.test.ts` — hidden strokes stay hidden when expanded, and a
   visible stroke under zero inherited fill opacity keeps its paint; source
   geometry and Shadow bounds agree with exported outlines
@@ -51,14 +58,15 @@ Focused test inventory; [all tests](../TESTS.md).
   inside their buttons, not blank setting space; the preview box fits the
   artboard ratio (2:1; 16 px = 2048 px); the icon's own stroke override
   (written on leave, inherit drops it); custom W×H commits on leave;
-  per-icon Shadow width/gap, live gradient preview and built-in-EPS warning
+  per-icon Shadow width/gap and corner badge, live vector preview and built-in-EPS warning
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
   entry; reset), the exact-request confirmation, editable/copiable metadata
   fields, invalid-answer refusal, cancel (never resent), interrupted after a
   restart, selected-only Shadow (hidden checks, mixed toggles, undo, general
-  bulk apply preserves it, popup EPS warning), deferred source-file preview
+  bulk apply preserves it, popup EPS warning), selected-only badge (mixed/hidden
+  checks, four placement fields, undo, per-icon markers/reset), deferred source-file preview
   read under unrelated timers and rescan, export → green committed package with
   the source untouched, stale →
   re-export, metadata embedded + verified, honest failure commits nothing.

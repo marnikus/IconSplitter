@@ -2,7 +2,7 @@
 
 The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I-62](invariants/upload.md).
 
-**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md).
+**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md).
 
 ## Current settings and output geometry
 
@@ -14,7 +14,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   - Artboard mode `source` is the SVG's own viewBox size and ratio ("Scale to N MP"
     applies only in `content`).
   - `strokePx` 0 = default.
-  - **All five default with Expand and Shadow off = as is**: the export SVG is the approved file
+  - **All five default with Expand, Shadow and corner badge off = as is**: the export SVG is the approved file
     byte for byte. It gets no clean, no bake and no SVGO, and the clean-SVG-1.1
     check is skipped (it must still parse); the JPEG and EPS are built from it.
   - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding
@@ -25,10 +25,10 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
     same day): its dialog's `upload-set-stroke` (empty = the bar's, inherited;
     `upload-set-stroke-inherit` drops the pin), read by `parseOverrides` (with
     the `strokePt` alias). "Apply settings to selected" pins the 13 general
-    fields, not the bar stroke or separately applied shadow pins.
+    fields, not the bar stroke or separately applied Shadow/badge pins.
   - The old preview-only `previewStroke` pref is gone from this tab.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
-  `prepareExportSvg(source, effective)`, including its applied gradient shadow,
+  `prepareExportSvg(source, effective)`, including applied Shadow and corner badge vectors,
   debounced 120 ms and cached per source and fingerprint. The box is `zoomBoxFit`.
 * **Typed numbers commit on leave** (2026-10-19, `ui/DraftNumberInput`): the
   custom artboard W×H and the icon's stroke width keep a local draft while
@@ -56,6 +56,11 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   fingerprints (and byte-for-byte as-is) unchanged. Built-in EPS cannot paint
   the gradient: the bar, row and both dialog scopes warn that the result is
   partial with valid SVG/JPEG; the chosen local converter never switches silently.
+* **Artboard corner badge** (2026-10-20): the supplied fixed black vector is
+  selected-only/per-icon opt-in, with four corners, width % and two inward edge
+  distances %. Global placement defaults never opt unchecked icons in; badge-on
+  changes alone affect the fingerprint. The [corner badge contract](upload-badge.md)
+  owns placement, failure, EPS and undo details.
 * Settings: global defaults (padding %, background — `transparent` (the
   default) or one hex, stroke width in px — the file's own units, written as
   typed (2026-10-08; a stored `strokePt` from before reads as the same number

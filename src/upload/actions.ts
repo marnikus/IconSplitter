@@ -33,6 +33,7 @@ import { useExportActions } from "./exportactions";
 import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
 import { useOverrideApplyActions, useShadowActions } from "./shadowactions";
+import { useBadgeActions } from "./badgeactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
   ALL_UPLOAD_FILTER,
@@ -78,6 +79,8 @@ export interface UploadActions extends PromptActions {
   applyDefaultsToSelected: (ids: string[]) => void;
   toggleShadowSelected: (ids: string[]) => void;
   setShadowSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
+  toggleBadgeSelected: (ids: string[]) => void;
+  setBadgeSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct">>) => void;
   setGemini: (patch: Partial<GeminiConfig>) => void;
   checkModel: () => void;
   saveKey: (key: string) => void;
@@ -124,6 +127,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useOverrideResetActions(ctx),
     ...useOverrideApplyActions(ctx),
     ...useShadowActions(ctx),
+    ...useBadgeActions(ctx),
     ...useGeminiActions(ctx),
     ...useModelCheckActions(ctx),
     ...useKeyActions(ctx),
@@ -196,8 +200,8 @@ function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
     const after = Object.keys(patch).length === 0 ? null : patch;
     if (overridesEqual(before ?? {}, after ?? {})) return;
     c.dispatch({ type: "override", id, patch: after });
-    // A shadow toggle/number commit is separate from the next gesture; other drags still coalesce.
-    const push = changesShadow(before, after) ? c.hist.push : c.hist.pushGesture;
+    // Decoration toggles and committed numbers are discrete; other drags still coalesce.
+    const push = changesShadow(before, after) || changesBadge(before, after) ? c.hist.push : c.hist.pushGesture;
     push({
       type: "uploadSettings",
       label: `Override settings — ${nameOf(c, id)}`,
@@ -212,6 +216,12 @@ function changesShadow(before: SettingsOverrides | null, after: SettingsOverride
   return before?.shadowEnabled !== after?.shadowEnabled
     || before?.shadowWidthPct !== after?.shadowWidthPct
     || before?.shadowGapPct !== after?.shadowGapPct;
+}
+
+/** Per-icon badge commits get one undo entry per gesture (including the corner select). */
+function changesBadge(before: SettingsOverrides | null, after: SettingsOverrides | null): boolean {
+  const fields = ["badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct"] as const;
+  return fields.some((field) => before?.[field] !== after?.[field]);
 }
 
 /** Reset one icon to the defaults — one undoable entry. */

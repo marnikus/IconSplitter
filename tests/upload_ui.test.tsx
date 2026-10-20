@@ -637,6 +637,157 @@ describe("selection + the bulk bar", () => {
     expect(q("[data-testid=upload-shadow-eps-warning]")).toBeNull();
     expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")).toBeNull();
   });
+
+  it("offers a disabled badge checkbox at zero checks; editing defaults never opts an icon in", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    const selected = input("[data-testid=upload-set-badge-selected]");
+    expect(selected.closest("[data-testid=upload-dialog-backdrop]")).not.toBeNull();
+    expect(selected.disabled).toBe(true);
+    expect(selected.checked).toBe(false);
+    expect((input("[data-testid=upload-badge-width]").closest("fieldset") as HTMLFieldSetElement).disabled).toBe(true);
+    await click("[data-testid=upload-set-badge-section] .svg-label");
+    expect(selected.checked).toBe(false); // headings are not part of a checkbox's hitbox
+    expect(input("[data-testid=upload-set-badge-width]").value).toBe("40");
+    expect((q("[data-testid=upload-set-badge-corner]") as HTMLSelectElement).value).toBe("bottom-right");
+    expect(input("[data-testid=upload-set-badge-offset-x]").value).toBe("3");
+    expect(input("[data-testid=upload-set-badge-offset-y]").value).toBe("3");
+    expect(text("[data-testid=upload-badge-fit-note]")).toMatch(/shrink.*100%/i);
+    await type("[data-testid=upload-set-badge-width]", "48");
+    await act(async () => { input("[data-testid=upload-set-badge-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await selectOption("[data-testid=upload-set-badge-corner]", "top-left");
+    await type("[data-testid=upload-set-badge-offset-x]", "9");
+    await act(async () => { input("[data-testid=upload-set-badge-offset-x]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const stored = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(stored.defaults).toMatchObject({ badgeEnabled: false, badgeWidthPct: 48, badgeCorner: "top-left", badgeOffsetXPct: 9 });
+    expect(stored.overrides).toEqual({});
+    expect((q("[data-testid=hist-undo]") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("toggles badges only for checked icons including hidden checks, not the active unchecked row", async () => {
+    await mount(makeRoot());
+    await activate(ARCH);
+    await check(FOG);
+    await type("[data-testid=upload-search]", "arch_AI");
+    expect(q(`[data-testid=upload-row-${FOG}]`)).toBeNull();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await click("[data-testid=upload-settings-open]");
+    const selected = input("[data-testid=upload-set-badge-selected]");
+    expect(selected.checked).toBe(false);
+    await click("[data-testid=upload-set-badge-selected]");
+    expect(selected.checked).toBe(true);
+    const stored = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(stored.overrides[FOG]).toMatchObject({ badgeEnabled: true });
+    expect(stored.overrides[ARCH]).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toBeUndefined();
+    await click("[data-testid=hist-redo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toMatchObject({ badgeEnabled: true });
+  });
+
+  it("adds badges to a mixed check, edits only badge-on checks and removes an all-on check", async () => {
+    await mount(makeRoot());
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-badge-selected]");
+    await click("[data-testid=upload-set-close]");
+    await check(ARCH);
+    await click("[data-testid=upload-settings-open]");
+    const selected = () => input("[data-testid=upload-set-badge-selected]");
+    expect(selected().indeterminate).toBe(true);
+    await type("[data-testid=upload-badge-width]", "51");
+    await act(async () => { input("[data-testid=upload-badge-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await selectOption("[data-testid=upload-badge-corner]", "top-right");
+    await type("[data-testid=upload-badge-offset-x]", "7");
+    await act(async () => { input("[data-testid=upload-badge-offset-x]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-badge-offset-y]", "8");
+    await act(async () => { input("[data-testid=upload-badge-offset-y]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const mixed = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides;
+    expect(mixed[FOG]).toMatchObject({ badgeEnabled: true, badgeWidthPct: 51, badgeCorner: "top-right", badgeOffsetXPct: 7, badgeOffsetYPct: 8 });
+    expect(mixed[ARCH]).toBeUndefined();
+    expect(selected().indeterminate).toBe(true);
+    await click("[data-testid=upload-set-badge-selected]");
+    expect(selected().checked).toBe(true);
+    expect(selected().indeterminate).toBe(false);
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[ARCH]).toEqual({ badgeEnabled: true });
+    await click("[data-testid=upload-set-badge-selected]");
+    const removed = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides;
+    for (const id of [FOG, ARCH]) expect(removed[id]).toMatchObject({ badgeEnabled: false });
+  });
+
+  it("records one undo per selected badge dimension or corner and preserves other icons", async () => {
+    await mount(makeRoot());
+    await check(FOG);
+    await check(ARCH);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-badge-selected]");
+    const before = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries.length;
+    await type("[data-testid=upload-badge-width]", "62");
+    await act(async () => { input("[data-testid=upload-badge-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await selectOption("[data-testid=upload-badge-corner]", "bottom-left");
+    await type("[data-testid=upload-badge-offset-x]", "11");
+    await act(async () => { input("[data-testid=upload-badge-offset-x]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-badge-offset-y]", "12");
+    await act(async () => { input("[data-testid=upload-badge-offset-y]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const entries = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries;
+    expect(entries).toHaveLength(before + 4);
+    expect(entries.slice(-4).every((e: { type: string; ids: string[] }) => e.type === "uploadSettings" && e.ids.length === 2)).toBe(true);
+    await type("[data-testid=upload-badge-width]", "62");
+    await act(async () => { input("[data-testid=upload-badge-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries).toHaveLength(before + 4);
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    for (const id of [FOG, ARCH]) {
+      const restored = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[id];
+      expect(restored).toMatchObject({ badgeWidthPct: 62, badgeCorner: "bottom-left", badgeOffsetXPct: 11 });
+      expect(restored.badgeOffsetYPct).toBeUndefined(); // inherits the 3% default again
+    }
+  });
+
+  it("shows per-icon badge pins and resets them; general bulk apply preserves badge and Shadow pins", async () => {
+    await mount(makeRoot());
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(text("[data-testid=upload-set-marker-badge]")).toBe("inherited");
+    await click("[data-testid=upload-set-badge-section] .svg-label");
+    expect(input("[data-testid=upload-set-badge]").checked).toBe(false);
+    await click("[data-testid=upload-set-badge]");
+    expect(text("[data-testid=upload-set-marker-badge]")).toBe("overridden");
+    await type("[data-testid=upload-set-badge-width]", "55");
+    await act(async () => { input("[data-testid=upload-set-badge-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(text("[data-testid=upload-set-marker-badge-width]")).toBe("overridden");
+    expect(input("[data-testid=upload-set-badge-offset-x]").getAttribute("aria-label")).toMatch(/right edge/i);
+    expect(input("[data-testid=upload-set-badge-offset-y]").getAttribute("aria-label")).toMatch(/bottom edge/i);
+    await selectOption("[data-testid=upload-set-badge-corner]", "top-left");
+    expect(text("[data-testid=upload-set-marker-badge-corner]")).toBe("overridden");
+    expect(input("[data-testid=upload-set-badge-offset-x]").getAttribute("aria-label")).toMatch(/left edge/i);
+    expect(input("[data-testid=upload-set-badge-offset-y]").getAttribute("aria-label")).toMatch(/top edge/i);
+    await type("[data-testid=upload-set-badge-offset-x]", "6");
+    await act(async () => { input("[data-testid=upload-set-badge-offset-x]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-set-badge-offset-y]", "9");
+    await act(async () => { input("[data-testid=upload-set-badge-offset-y]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(text("[data-testid=upload-set-marker-badge-offset-x]")).toBe("overridden");
+    expect(text("[data-testid=upload-set-marker-badge-offset-y]")).toBe("overridden");
+    await click("[data-testid=upload-set-close]");
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-shadow-selected]");
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=upload-apply-settings]");
+    let pinned = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG];
+    expect(pinned).toMatchObject({ badgeEnabled: true, badgeWidthPct: 55, badgeCorner: "top-left", badgeOffsetXPct: 6, badgeOffsetYPct: 9, shadowEnabled: true });
+    await click("[data-testid=hist-undo]");
+    pinned = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG];
+    expect(pinned).toMatchObject({ badgeEnabled: true, badgeWidthPct: 55, badgeCorner: "top-left", badgeOffsetXPct: 6, badgeOffsetYPct: 9, shadowEnabled: true });
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-reset]");
+    expect(text("[data-testid=upload-set-marker-badge]")).toBe("inherited");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toBeUndefined();
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toMatchObject({ badgeEnabled: true, shadowEnabled: true });
+  });
 });
 
 describe("the metadata prompt panel — editable, saved, presets", () => {
@@ -816,7 +967,9 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await check(ARCH);
     await click("[data-testid=upload-apply-settings]");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    const { strokePx: _stroke, shadowEnabled: _shadow, shadowWidthPct: _width, shadowGapPct: _gap, ...perIcon } = saved.defaults; // general settings leave bar stroke and separately applied shadow pins alone
+    const { strokePx: _stroke, shadowEnabled: _shadow, shadowWidthPct: _width, shadowGapPct: _gap,
+      badgeEnabled: _badge, badgeCorner: _corner, badgeWidthPct: _badgeWidth,
+      badgeOffsetXPct: _insetX, badgeOffsetYPct: _insetY, ...perIcon } = saved.defaults; // general apply leaves decoration pins and bar stroke alone
     expect(saved.overrides[FOG]).toEqual(perIcon);
     expect(saved.overrides[ARCH]).toEqual(perIcon);
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("13 fields overridden"); // 14 fields minus strokePx (one value, the bar's — 2026-10-19)

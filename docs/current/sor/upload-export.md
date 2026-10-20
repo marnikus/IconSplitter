@@ -43,7 +43,12 @@ JPEG rasterization consume the same prepared SVG, while the committed SVG is
 cleaned and metadata-embedded as usual. A shadow-enabled settings fingerprint
 also includes the template hash, so changing the template or percentages marks
 only affected packages stale. With shadow off, the historic fingerprint and
-byte-for-byte as-is shortcut remain unchanged.
+byte-for-byte as-is shortcut remain unchanged. The optional [corner badge](upload-badge.md)
+adds the supplied opaque paths above the artwork **after** fitting; preview,
+JPEG, optimized SVG and built-in EPS share that vector. Badge-off files keep
+their previous bytes/fingerprints, while enabled placement and template changes
+mark only affected packages stale. Badge plus Shadow retains Shadow's honest
+partial-EPS result.
 
 ## Incremental export and commit
 

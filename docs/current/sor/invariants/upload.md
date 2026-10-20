@@ -11,7 +11,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   rect is always the first child (the background colour, or `fill="none"` when
   transparent); an enabled template shadow is centred below the *final painted*
   icon, sized/spaced by its width/height percentages and included in the fit,
-  behind the icon but after the background. With default/null padding the
+  behind the icon but after the background. A selected corner badge is instead
+  added **after** fitting, above the icon, with exact artboard-edge % insets;
+  it cannot refit the icon or leave the shipped viewBox (a no-room placement
+  fails by name; [badge contract](../upload-badge.md)). With default/null padding the
   authored source viewBox (or width/height-only frame) is also an unpainted
   layout frame, extended only when the shadow overflows; an extension that
   would reveal formerly clipped painted art fails `unsupported`. Fully

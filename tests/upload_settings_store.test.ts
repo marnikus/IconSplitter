@@ -56,6 +56,19 @@ describe("settingsstore — defaults + overrides", () => {
     expect(loaded.overrides).toEqual({ selected: { shadowEnabled: true }, other: { shadowEnabled: false } });
   });
 
+  it("keeps the corner badge opt-in per icon while preserving numeric global defaults", () => {
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
+      v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, badgeEnabled: true, badgeCorner: "top-left",
+        badgeWidthPct: 65, badgeOffsetXPct: 8, badgeOffsetYPct: 11 },
+      overrides: { selected: { badgeEnabled: true, badgeCorner: "bottom-left", badgeOffsetXPct: 12 },
+        other: { badgeEnabled: "yes", badgeCorner: "center" } },
+    }));
+    const loaded = loadUploadSettings();
+    expect(loaded.defaults).toMatchObject({ badgeEnabled: false, badgeCorner: "top-left",
+      badgeWidthPct: 65, badgeOffsetXPct: 8, badgeOffsetYPct: 11 });
+    expect(loaded.overrides).toEqual({ selected: { badgeEnabled: true, badgeCorner: "bottom-left", badgeOffsetXPct: 12 } });
+  });
+
   it("drops invalid override fields and empty overrides on read", () => {
     const parsed = parseUploadSettingsState({
       v: 1, defaults: DEFAULT_UPLOAD_SETTINGS,
