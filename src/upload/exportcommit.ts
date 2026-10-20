@@ -84,10 +84,12 @@ async function writeRecord(
   input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"], replaced: readonly string[],
 ): Promise<ExportRecord> {
   const kept = pruneRemoved(input.record.outputs, replaced, outputs);
+  // Failed or disabled EPS is not part of this package; leave earlier bytes on disk.
+  const keepEps = !input.partial && input.record.tools.eps.enabled;
   input.record.outputs = {
     svg: outputs.svg === null ? kept.svg : await outputRecord(input, outputs.svg),
     jpg: outputs.jpg === null ? kept.jpg : await outputRecord(input, outputs.jpg),
-    eps: outputs.eps === null ? kept.eps : await outputRecord(input, outputs.eps),
+    eps: outputs.eps === null ? (keepEps ? kept.eps : null) : await outputRecord(input, outputs.eps),
   };
   input.record.stage = "committed";
   input.record.status = input.partial ? "partial" : "processed";

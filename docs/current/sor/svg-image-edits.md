@@ -14,6 +14,10 @@ Read [I-71](invariants/svg-image-edits.md#i-71) and [I-72](invariants/svg-image-
   displays that exact Blob, a 1-based row-major filename manifest (relative
   paths only where names collide), empty cells, provider/model and the complete
   thin-line/grid-preservation prompt.
+  Regenerated PNGs remain addressable through `imageVersions` / `mainImageOf`,
+  but recursive Selection and Generate SVG discovery do not treat those exact
+  app-owned files as fresh review pairs or audit references; unrelated files in
+  the version folder are still scanned (I-71).
   A failed preflight group is named and not sent; other prepared groups remain
   available. A changed source between preview and send is refused, never
   silently replaced. Each confirmed request sends one multipart `image[]`

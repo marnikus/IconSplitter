@@ -14,6 +14,7 @@ import { useUpload, type UploadApi } from "./useUpload";
 import { downloadPlanOf } from "./downloadactions";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
+import { selectedShadow } from "./shadowselection";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
 import UploadMetaDialog from "./UploadMetaDialog";
@@ -88,6 +89,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
+        shadowEpsUnsupported={selectedShadow(g.checked, g.defaults, g.overrides).epsUnsupported}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
@@ -216,6 +218,10 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       id={id}
       defaults={g.defaults}
       overrides={id === null ? {} : g.overrides[id] ?? {}}
+      selectedShadow={selectedShadow(g.checked, g.defaults, g.overrides)}
+      selectedCount={g.checked.length}
+      onSelectedShadowToggle={() => g.toggleShadowSelected(g.checked)}
+      onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
       onDefaults={g.setDefaults}
       onOverride={g.setOverride}
       onResetOverride={g.resetOverride}

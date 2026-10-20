@@ -36,6 +36,15 @@ This page owns the local export copy, verification and atomic package. See [uplo
   readback, and the namespace rule still covers it (a declaration inside it is
   a violation, hoisted to the root).
 
+The optional Upload shadow is a vector ellipse with referenced radial-gradient
+stops from `src/svg/templates/shadow.svg`; the clean pass/SVGO keep only its
+used, collision-free paint ID and rewrite the reference together. Preview and
+JPEG rasterization consume the same prepared SVG, while the committed SVG is
+cleaned and metadata-embedded as usual. A shadow-enabled settings fingerprint
+also includes the template hash, so changing the template or percentages marks
+only affected packages stale. With shadow off, the historic fingerprint and
+byte-for-byte as-is shortcut remain unchanged.
+
 ## Incremental export and commit
 
 * Export: the stage planner re-runs only what changed (a metadata edit re-embeds
@@ -47,7 +56,10 @@ This page owns the local export copy, verification and atomic package. See [uplo
   only that SVG/EPS, never the JPEG. Every output validates before it commits
   (SVG parses + metadata readback; JPEG decodes at the recorded dims + XMP
   readback; EPS header and bounding box, plus accepted XMP readback) and commits
-  atomically (tmp → verify → overwrite → cleanup, `export.json` LAST as the commit marker), so a crash
+  atomically (tmp → verify → overwrite → cleanup, `export.json` LAST as the commit marker).
+  A partial EPS stage or disabling EPS detaches any earlier EPS from the new
+  record and Download all without deleting its old bytes, so a stale EPS
+  cannot appear in a new package. A crash
   mid-commit leaves the last valid package in place. EPS is a genuine writer for a
   documented subset; anything outside fails that stage honestly → `partial`
   (SVG/JPEG stay committed). A **rounded `<rect>`** is INSIDE the subset

@@ -157,6 +157,30 @@ describe("default for every visual setting", () => {
   });
 });
 
+describe("per-icon shadow controls and exact live preview", () => {
+  it("updates one icon's gradient and warns when built-in EPS is also requested", async () => {
+    await mount();
+    expect(art()).not.toContain("radialGradient");
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-shadow]");
+    await waitUntil(() => art().includes("radialGradient"), "shadow in the row preview", 8000);
+    expect(loadUploadSettings().overrides[FOG].shadowEnabled).toBe(true);
+    expect(q("[data-testid=upload-set-marker-shadow]")?.textContent).toBe("overridden");
+    await type("[data-testid=upload-set-shadow-width]", "130");
+    await blur("[data-testid=upload-set-shadow-width]");
+    await type("[data-testid=upload-set-shadow-gap]", "10");
+    await blur("[data-testid=upload-set-shadow-gap]");
+    expect(loadUploadSettings().overrides[FOG]).toMatchObject({ shadowEnabled: true, shadowWidthPct: 130, shadowGapPct: 10 });
+    expect(q(`[data-testid=upload-settings-${FOG}]`)?.textContent).toContain("shadow 130% · gap 10%");
+    await click("[data-testid=upload-set-eps]");
+    expect(q("[data-testid=upload-shadow-eps-note]")?.textContent).toMatch(/EPS.*partial/);
+    expect(q(`[data-testid=upload-shadow-eps-${FOG}]`)?.textContent).toMatch(/EPS.*partial/);
+    await click("[data-testid=upload-set-as-is]");
+    expect(loadUploadSettings().overrides[FOG].shadowEnabled).toBe(false);
+    expect(art()).not.toContain("radialGradient");
+  });
+});
+
 describe("the preview box: the artboard's ratio inside the zoom square", () => {
   it("a 2:1 artboard draws full zoom width and half height", async () => {
     await mount({ artboard: { mode: "custom", size: 512, width: 200, height: 100 } });

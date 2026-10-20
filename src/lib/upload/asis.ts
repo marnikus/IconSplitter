@@ -17,12 +17,12 @@ export const AS_IS_SETTINGS: Pick<UploadSettings, "paddingPct" | "background" | 
 /** True when the export would change nothing visual: the approved SVG ships as it is. */
 export function isAsIs(s: UploadSettings): boolean {
   return s.paddingPct === null && s.background === BACKGROUND_SOURCE && s.strokePx === 0
-    && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source" && !s.expandStrokes;
+    && s.strokeColor === STROKE_COLOR_ARTWORK && s.artboard.mode === "source" && !s.expandStrokes && !s.shadowEnabled;
 }
 
-/** What "Apply settings to selected" pins: every field but the stroke width, so the bar's STROKE stays live for those icons (an icon pins its own width only in its dialog). */
-export function perIconFields(s: UploadSettings): Omit<UploadSettings, "strokePx"> {
-  const { strokePx, ...rest } = s;
-  void strokePx;
+/** General bulk settings leave the bar's stroke width and separately applied shadow pins alone. */
+export function perIconFields(s: UploadSettings): Omit<UploadSettings, "strokePx" | "shadowEnabled" | "shadowWidthPct" | "shadowGapPct"> {
+  const { strokePx, shadowEnabled, shadowWidthPct, shadowGapPct, ...rest } = s;
+  void strokePx; void shadowEnabled; void shadowWidthPct; void shadowGapPct;
   return rest;
 }

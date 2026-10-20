@@ -72,10 +72,12 @@ function expandOne(job: Job): boolean {
     path.setAttribute("d", outlineToPathData(expanded));
     path.setAttribute("fill", job.hit.stroke.paint);
     path.setAttribute("fill-rule", "nonzero");
-    const opacity = inherited(el, "stroke-opacity");
-    if (opacity !== null && opacity.trim() !== "1") path.setAttribute("fill-opacity", opacity.trim());
-    const own = own_(el, "opacity");
-    if (own !== null) path.setAttribute("opacity", own);
+    // A stroke does not inherit fill-opacity; pin its effective opacity on the new fill.
+    path.setAttribute("fill-opacity", inherited(el, "stroke-opacity")?.trim() ?? "1");
+    for (const prop of ["opacity", "display", "visibility"]) {
+      const value = own_(el, prop);
+      if (value !== null) path.setAttribute(prop, value);
+    }
     el.after(path);
   }
   if (effectiveFill(el).toLowerCase() === "none") el.remove();

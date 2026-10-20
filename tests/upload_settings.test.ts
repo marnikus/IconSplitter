@@ -41,6 +41,7 @@ describe("defaults and clamps", () => {
       jpegMatchArtboard: true,
       epsConverter: "builtin", expandStrokes: false, // 2026-10-09
       scaleToMegapixels: false, artboardMegapixels: 5, // 2026-10-09 (I-62)
+      shadowEnabled: false, shadowWidthPct: 80, shadowGapPct: 5,
     });
   });
 

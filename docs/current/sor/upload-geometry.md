@@ -84,3 +84,28 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   artboard's ratio (15.1 MP on a square artboard → 3886×3886; 4 MP on 512×256 →
   2828×1414) — verified by decoding the SOF back. All of it happens on an export
   COPY — the approved source is never written.
+* **Template shadow** (2026-10-20): optional vector radial-gradient ellipse
+  copied from `src/svg/templates/shadow.svg`, never a raster, SVG filter or
+  preview-only effect. Each placement candidate first bakes/restyles/expands
+  the icon and measures its final painted bounds; shadow width is a percent of
+  that width, the empty gap below is a percent of its height, centred on its X
+  midpoint. Its gradient is normalized from the template's user-space unit
+  circle to an equivalent ellipse-relative `objectBoundingBox` paint, so the
+  bake/probe still measures exact stroke outlines; a collision-free gradient ID
+  is referenced by the shadow, whose `stroke="none"` prevents an inherited
+  border. The fit includes the union of icon and ellipse; with default/null
+  padding the original source viewBox is a phantom layout frame, retained
+  when the shadow fits and extended when it overflows. Source/content, pinned
+  and MP artboards contain the whole composite without cropping; the artboard
+  background remains first, the shadow is drawn before the icon. A source with
+  width/height but no viewBox retains that authored frame before root-dimension
+  cleanup. Fully transparent paint, `display="none"` subtrees and
+  `visibility="hidden"` elements do not inflate the icon bounds or position
+  the shadow; a child can override inherited visibility but not display. If
+  painted content outside the
+  source viewport would become visible when extending that frame, Shadow
+  preparation refuses it as `unsupported` instead of silently exposing artwork;
+  analytic stroke reach also ignores a zero-opacity stroke. Expanded stroke
+  outlines retain their source display/visibility and explicitly use the
+  effective stroke opacity for their fill, even under inherited zero fill
+  opacity. Shadow-off as-is bytes remain unchanged.

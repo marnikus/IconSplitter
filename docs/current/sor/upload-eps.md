@@ -4,6 +4,16 @@ The optional EPS path in [SVG to upload](upload.md); exports are local and valid
 
 ## Converter choices
 
+An enabled Upload template shadow is a radial-gradient SVG paint; the built-in
+EPS subset cannot write gradient fills. The selected bulk bar, row and Export
+settings popup (both scopes) warn **before export**; the EPS stage reports
+`partial` with its
+reason while validated SVG/JPEG commit. An EPS from an earlier, unshadowed
+package remains on disk without being named in the new partial `export.json` or
+Download all: it cannot masquerade as the requested shadowed EPS. Choosing the
+local Inkscape converter remains explicit; the app never switches converters
+or launches the helper for Shadow.
+
 * EPS converters (2026-10-09, design
   `docs/archive/2026-10-09-eps-converters-inkscape-expand/design.md`): the
   EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`

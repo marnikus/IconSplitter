@@ -17,6 +17,7 @@ import { fitArtboard, type ArtboardFit, type FitTarget } from "./geom";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { identity, type Matrix } from "./geom/matrix";
 import { restyleStrokes, type StrokeStyle } from "./restyle";
+import { appendUploadShadow } from "./shadow";
 
 export const MAX_PASSES = 4;
 /** The file is written to 3 decimals; a residual under this is the rounding, not a misfit. */
@@ -27,8 +28,10 @@ export interface PlaceWant {
   target: FitTarget | null;
   style: StrokeStyle;
   expand: boolean;
-  /** Default padding (2026-10-19): fit THIS frame (the source viewBox) in one pass — the source's margins, not the measured artwork. */
+  /** Default padding: fit the source viewBox (or width/height frame) — its margins, not just the measured artwork. */
   frame?: Bounds | null;
+  /** Optional shadow sized from the final painted icon, then fitted together with it. */
+  shadow?: { widthPct: number; gapPct: number };
 }
 
 export interface Placed {
@@ -42,6 +45,8 @@ export interface Placed {
   widths: number;
   colors: number;
   expanded: number;
+  /** The generated shadow element, restored to stroke=none after global stroke unification. */
+  shadow?: Element;
 }
 
 export type PlaceResult = ({ ok: true } & Placed) | { ok: false; code: "unsupported" | "no-fit"; detail: string };
@@ -54,7 +59,7 @@ interface Sample { k: number; edges: Edges }
 
 /** The source root placed in its artboard: the artwork clone, the fit and what the passes did. */
 export function placeArtwork(source: Element, want: PlaceWant): PlaceResult {
-  if (want.frame) return placeFrame(source, want, want.frame);
+  if (want.frame) return want.shadow ? placeShadowFrame(source, want, want.frame) : placeFrame(source, want, want.frame);
   let bounds = shippedBounds(source);
   if (bounds === null) return { ok: false, code: "unsupported", detail: "the document has no visible geometry" };
   let fit = fitArtboard(bounds, want.paddingPct, want.target);
@@ -77,11 +82,55 @@ function placeFrame(source: Element, want: PlaceWant, frame: Bounds): PlaceResul
   return got.ok ? { ...got, fit, passes: 1 } : got;
 }
 
+/** Keep the source viewport as a phantom frame, extending it only where the new shadow overflows. */
+function placeShadowFrame(source: Element, want: PlaceWant, frame: Bounds): PlaceResult {
+  let bounds = frame;
+  let fit = fitArtboard(bounds, 0, want.target);
+  const samples: Sample[] = [];
+  for (let pass = 1; pass <= MAX_PASSES; pass++) {
+    const got = candidate(source, fit, want);
+    if (!got.ok) return got;
+    const measured = unionBounds(got.bounds, mappedFrame(frame, fit));
+    if (settled(measured, fit, bounds)) return { ...got, fit, passes: pass };
+    samples.push({ k: fit.scale, edges: edgesOf(measured, fit) });
+    bounds = correctedBounds(samples, { ...want, paddingPct: 0 });
+    fit = fitArtboard(bounds, 0, want.target);
+  }
+  return { ok: false, code: "no-fit", detail: `the shadow did not settle in its artboard after ${MAX_PASSES} passes` };
+}
+
+/** The original viewport frame under this candidate's baked artboard matrix. */
+function mappedFrame(frame: Bounds, fit: ArtboardFit): Bounds {
+  return {
+    minX: fit.offsetX + frame.minX * fit.scale, minY: fit.offsetY + frame.minY * fit.scale,
+    width: frame.width * fit.scale, height: frame.height * fit.scale,
+  };
+}
+
+function unionBounds(a: Bounds, b: Bounds): Bounds {
+  const minX = Math.min(a.minX, b.minX);
+  const minY = Math.min(a.minY, b.minY);
+  return {
+    minX, minY,
+    width: Math.max(a.minX + a.width, b.minX + b.width) - minX,
+    height: Math.max(a.minY + a.height, b.minY + b.height) - minY,
+  };
+}
+
 /** The bounds of the artwork as it ships: strokes measured by their real outline; the analytic bounds when the expander refuses. */
 export function shippedBounds(root: Element): Bounds | null {
   const probe = root.cloneNode(true) as Element;
   const exact = bakeGeometry(probe, identity()).unsupported.length === 0 && expandStrokes(probe).refused === null;
   return visibleBounds(exact ? probe : root)?.bounds ?? null;
+}
+
+/** Enlarging the source viewport for a shadow would reveal this previously clipped paint. */
+export function overflowsSourceFrame(root: Element, frame: Bounds): boolean {
+  const painted = shippedBounds(root);
+  if (painted === null) return false;
+  return painted.minX < frame.minX - FILE_PRECISION || painted.minY < frame.minY - FILE_PRECISION
+    || painted.minX + painted.width > frame.minX + frame.width + FILE_PRECISION
+    || painted.minY + painted.height > frame.minY + frame.height + FILE_PRECISION;
 }
 
 /** True when nothing the document paints lies outside its viewBox (to the file's precision). */
@@ -101,9 +150,20 @@ function candidate(source: Element, fit: ArtboardFit, want: PlaceWant): Candidat
   const touched = restyleStrokes(root, want.style);
   const expanded = want.expand ? expandStrokes(root) : { shapes: 0, refused: null };
   if (expanded.refused !== null) return { ok: false, code: "unsupported", detail: `unsupported: ${expanded.refused}` };
+  const icon = shippedBounds(root);
+  if (icon === null) return { ok: false, code: "unsupported", detail: "the placed document has no visible geometry" };
+  const shaded = shadowedBounds(root, icon, want.shadow);
+  if (shaded === null) return { ok: false, code: "unsupported", detail: "the shadow template or icon bounds are invalid" };
+  return { ok: true, root, ...shaded, shapesBaked: baked.baked, widths: touched.widths, colors: touched.colors, expanded: expanded.shapes };
+}
+
+/** Add the ellipse only after the icon's shipped stroke/expansion is measured; fit their union. */
+function shadowedBounds(root: Element, icon: Bounds, spec: PlaceWant["shadow"]): { bounds: Bounds; shadow?: Element } | null {
+  if (!spec) return { bounds: icon };
+  const shadow = appendUploadShadow(root, icon, spec.widthPct, spec.gapPct);
+  if (shadow === null) return null;
   const bounds = shippedBounds(root);
-  if (bounds === null) return { ok: false, code: "unsupported", detail: "the placed document has no visible geometry" };
-  return { ok: true, root, bounds, shapesBaked: baked.baked, widths: touched.widths, colors: touched.colors, expanded: expanded.shapes };
+  return bounds === null ? null : { bounds, shadow };
 }
 
 /** The artboard's placement as a matrix: translate(offset) · scale(scale) — what the bake absorbs. */

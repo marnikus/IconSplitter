@@ -28,7 +28,11 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   its per-file status (`svg-problem-*` — a missing reference or an unreadable
   file never removes a row, I-22); `Discovery.unreadable` names the files that
   could not be read this scan; `Discovery.problems` counts the listed ones.
-  A corrupt decision file warns and keeps the in-memory decisions.
+  Owned `_AI_vN.png` image regenerations are not new sources or references
+  only in their immediate `AI source regeneration versions` parent (or picked
+  root); they remain in the file index for direct `imageVersions` access, and
+  `audit.files` still counts every file walked. A corrupt decision file warns
+  and keeps the in-memory decisions.
 * Generation: the editable prompt (stored locally, resettable to the
   documented default) is sent with the approved AI images as a data-URL
   `image_url` part, and the answer is **streamed** (`stream: true` +

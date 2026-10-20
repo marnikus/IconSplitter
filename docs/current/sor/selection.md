@@ -15,7 +15,11 @@ Selection:
   unspecified — never reaches the algorithm. `pairEntries` is a function of
   the file *set*: for one pair id the raster result beats the `.svg` artifact,
   the list comes out in `(folder, base, suffix)` order, and a versioned output
-  (`X_AI_v2.svg`) is ignored rather than invented as a source row.
+  (`X_AI_v2.svg`) is ignored rather than invented as a source row. The shared
+  scan also excludes only this app's regenerated image artifacts: a canonical
+  `_AI` stem followed by positive `_vN.png`, directly in the case-insensitive
+  `AI source regeneration versions` folder (or at its picked root). Other files
+  in that folder and similarly named files elsewhere remain reviewable.
 * A read that fails (locked / being replaced mid-write) is **not** data: the
   walk retries once, then marks the file `unreadable` with its path — `size 0`
   alone is never evidence, an unreadable file is never reported as changed or

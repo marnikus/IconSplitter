@@ -9,8 +9,15 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   real outlines — plus the padding; nothing visible lies outside it; a pinned
   artboard centres the shipped bounds to the file's precision; the artboard
   rect is always the first child (the background colour, or `fill="none"` when
-  transparent); the placement passes are recorded, and a placement that does
-  not settle fails by name (`no-fit`) instead of shipping a guess. Pinned by
+  transparent); an enabled template shadow is centred below the *final painted*
+  icon, sized/spaced by its width/height percentages and included in the fit,
+  behind the icon but after the background. With default/null padding the
+  authored source viewBox (or width/height-only frame) is also an unpainted
+  layout frame, extended only when the shadow overflows; an extension that
+  would reveal formerly clipped painted art fails `unsupported`. Fully
+  transparent or hidden paint has no sizing effect. The placement passes are recorded,
+  and a placement that does not settle fails by name (`no-fit`) instead of
+  shipping a guess. Pinned by
   `upload_prepare` ("the artboard is the shipped artwork"), `upload_geom`
   (unpainted shapes have no bounds), `upload_optimize`/`upload_clean`/
   `upload_eps` (the invisible rect through the pipeline) and `upload_runexport`

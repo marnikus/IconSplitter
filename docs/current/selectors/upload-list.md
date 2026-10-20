@@ -19,7 +19,8 @@ Pinned: the bar sits in `upload-bulkbar-pin`, the Generate SVG tab's sticky `.sv
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
 | `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | export stroke width | the Generate SVG control reused (`svg/PreviewStroke`, prefix `upload`, no sheet): IS the defaults' `strokePx` — 0–50 px in the file, `default`/empty/0 = each SVG's own widths; Reset = default. The global stroke width: no row in the global dialog; one icon may pin its own in its dialog (2026-10-19) |
 | `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
-| `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
+| `upload-apply-settings` | button | pins the 13 general defaults onto the selection, preserving shadow pins — ONE undoable `uploadSettings` entry |
+| `upload-shadow-eps-warning` | `role=alert` | shown when a selected shadowed icon requests built-in EPS; warns SVG/JPEG export but EPS will be partial |
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = selected icons with NO metadata text yet; the paid request never replaces existing text (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
 | `upload-meta-regenerate-selected` | button | "↻ Regenerate metadata (N)" — N = selected icons whose metadata is non-null; opens an exact-request confirmation/previews for only those rows, excluding empty rows (disabled at 0 eligible rows) |
 | `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
@@ -44,7 +45,7 @@ lists start unchecked; there are no A/D review shortcuts.
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |
 | `upload-note-{id}` | small | (2026-10-08) the amber `.svg-note` "EPS auto-fixed: …" line from `record.tools.eps.fixes` — present only when the EPS writer adjusted something on its own (a rounded `<rect>` drawn as an exact outline); the row stays Processed, nothing is asked |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
-| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
+| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | effective settings including `shadow W% · gap G%` when on, plus "inherits defaults" / "N fields overridden"; `upload-shadow-eps-{id}` warns built-in EPS partial before row export |
 | `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
 | `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
 

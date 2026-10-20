@@ -8,6 +8,7 @@
 // encoder and the image decoder.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { setTimeout as nodeSleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
@@ -312,6 +313,15 @@ function previewHtml(id: string): string {
   return q(`[data-testid=upload-prev-${id}]`)?.shadowRoot?.innerHTML ?? "";
 }
 
+/** File.text is native I/O; unrelated fast-forwarded timers must not exhaust its wait. */
+async function waitForFilePreview(id: string, drawing: string): Promise<void> {
+  const stopAt = Date.now() + 8000;
+  while (!previewHtml(id).includes(drawing) && Date.now() < stopAt) {
+    await act(async () => { await nodeSleep(1); });
+  }
+  if (!previewHtml(id).includes(drawing)) throw new Error(`never reached: ${id} SVG preview`);
+}
+
 /** makeRoot with per-row artwork: arch's file is emphatically NOT fog's. */
 function makeDistinctRoot(): BinDir {
   const root = makeRoot();
@@ -496,6 +506,137 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=upload-select-visible]");
     expect(text("[data-testid=upload-selected-count]")).toBe("2 selected");
   });
+
+  it("disables the selected Shadow checkbox with no checks; defaults do not enable unselected icons", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    const toggle = q("[data-testid=upload-set-shadow-selected]") as HTMLInputElement;
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.checked).toBe(false);
+    expect(q("[data-testid=upload-shadow-controls]")?.closest("[data-testid=upload-dialog-backdrop]")).not.toBeNull();
+    expect(q("[data-testid=upload-shadow-controls]")?.closest("[data-testid=upload-bulk]")).toBeNull();
+    await type("[data-testid=upload-set-shadow-width]", "95");
+    await act(async () => { q("[data-testid=upload-set-shadow-width]")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const stored = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(stored.defaults).toMatchObject({ shadowEnabled: false, shadowWidthPct: 95 });
+    expect(stored.overrides[FOG]).toBeUndefined();
+    await click("[data-testid=upload-set-close]");
+    expect(q(`[data-testid=upload-prev-${FOG}]`)?.shadowRoot?.querySelector("radialGradient")).toBeNull();
+  });
+
+  it("Shadow popup changes checked icons including hidden rows, never the active unchecked row or provider", async () => {
+    await mount(makeRoot());
+    await activate(ARCH);
+    await check(FOG);
+    await type("[data-testid=upload-search]", "arch_AI");
+    expect(q(`[data-testid=upload-row-${FOG}]`)).toBeNull();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await click("[data-testid=upload-settings-open]");
+    const selected = q("[data-testid=upload-set-shadow-selected]") as HTMLInputElement;
+    expect(selected.closest("[data-testid=upload-dialog-backdrop]")).not.toBeNull();
+    expect(selected.checked).toBe(false);
+    await click("[data-testid=upload-set-shadow-selected]");
+    expect(selected.checked).toBe(true);
+    await click("[data-testid=upload-set-close]");
+    const raw = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(raw.overrides[FOG]).toMatchObject({ shadowEnabled: true });
+    expect(raw.overrides[ARCH]).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();
+    await type("[data-testid=upload-search]", "");
+    await waitFor(() => Boolean(q(`[data-testid=upload-prev-${FOG}]`)?.shadowRoot?.querySelector("radialGradient")),
+      "the shadow in the selected row's live export preview");
+    expect(q(`[data-testid=upload-prev-${ARCH}]`)?.shadowRoot?.querySelector("radialGradient")).toBeNull();
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("shadow");
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toBeUndefined();
+    await click("[data-testid=hist-redo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toMatchObject({ shadowEnabled: true });
+  });
+
+  it("Shadow checkbox enables mixed checked rows then removes them, with selected width and gap", async () => {
+    await mount(makeRoot());
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-shadow-selected]");
+    await click("[data-testid=upload-set-close]");
+    await check(ARCH);
+    await click("[data-testid=upload-settings-open]");
+    const toggle = () => q("[data-testid=upload-set-shadow-selected]") as HTMLInputElement;
+    expect(toggle().checked).toBe(false);
+    expect(toggle().indeterminate).toBe(true);
+    await click("[data-testid=upload-set-shadow-selected]");
+    expect(toggle().checked).toBe(true);
+    expect(toggle().indeterminate).toBe(false);
+    await type("[data-testid=upload-shadow-width]", "125");
+    await act(async () => { q("[data-testid=upload-shadow-width]")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-shadow-gap]", "12");
+    await act(async () => { q("[data-testid=upload-shadow-gap]")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const overrides = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides;
+    for (const id of [FOG, ARCH]) expect(overrides[id]).toMatchObject({ shadowEnabled: true, shadowWidthPct: 125, shadowGapPct: 12 });
+    const historyLength = JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries.length;
+    await type("[data-testid=upload-shadow-width]", "125");
+    await act(async () => { q("[data-testid=upload-shadow-width]")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries).toHaveLength(historyLength);
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toMatchObject({ shadowWidthPct: 125 });
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("shadow 125% · gap 5%");
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-shadow-selected]");
+    for (const id of [FOG, ARCH]) expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[id].shadowEnabled).toBe(false);
+    expect(q("[data-testid=upload-shadow-selected]")).toBeNull();
+  });
+
+  it("edits selected Shadow width without enabling a checked icon whose Shadow is off", async () => {
+    await mount(makeRoot());
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-shadow-selected]");
+    await click("[data-testid=upload-set-close]");
+    await check(ARCH);
+    await click("[data-testid=upload-settings-open]");
+    const toggle = q("[data-testid=upload-set-shadow-selected]") as HTMLInputElement;
+    expect(toggle.indeterminate).toBe(true);
+    await type("[data-testid=upload-shadow-width]", "130");
+    await act(async () => { q("[data-testid=upload-shadow-width]")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    const overrides = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides;
+    expect(overrides[FOG]).toMatchObject({ shadowEnabled: true, shadowWidthPct: 130 });
+    expect(overrides[ARCH]).toBeUndefined();
+    expect(toggle.indeterminate).toBe(true);
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toEqual({ shadowEnabled: true });
+  });
+
+  it("general bulk settings preserve an applied shadow and each action undoes separately", async () => {
+    await mount(makeRoot());
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-shadow-selected]");
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=upload-apply-settings]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG].shadowEnabled).toBe(true);
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toEqual({ shadowEnabled: true });
+    await click("[data-testid=hist-undo]");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toBeUndefined();
+  });
+
+  it("warns before a shadowed selection is exported with the built-in EPS writer", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-eps]");
+    await click("[data-testid=upload-set-close]");
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    await click("[data-testid=upload-set-shadow-selected]");
+    expect(q("[data-testid=upload-shadow-eps-warning]")?.textContent).toMatch(/SVG\/JPEG.*EPS.*partial/);
+    expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")?.textContent).toMatch(/EPS.*partial/);
+    await click("[data-testid=upload-set-shadow-selected]");
+    expect(q("[data-testid=upload-shadow-eps-warning]")).toBeNull();
+    expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")).toBeNull();
+  });
 });
 
 describe("the metadata prompt panel — editable, saved, presets", () => {
@@ -640,7 +781,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await mount(makeRoot());
     await click("[data-testid=upload-settings-open]");
     expect(q("[data-testid=upload-dialog]") ?? q("[data-testid=upload-dialog-backdrop]")).not.toBeNull();
-    expect(text("[data-testid=upload-dialog-scope]")).toContain("inherits these defaults");
+    expect(text("[data-testid=upload-dialog-scope]")).toContain("General settings are inherited");
     await type("[data-testid=upload-set-padding]", "20");
     expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad 20%"); // inherited, live
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
@@ -675,7 +816,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
     await check(ARCH);
     await click("[data-testid=upload-apply-settings]");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    const { strokePx: _stroke, ...perIcon } = saved.defaults; // the stroke width is never pinned per icon (2026-10-19)
+    const { strokePx: _stroke, shadowEnabled: _shadow, shadowWidthPct: _width, shadowGapPct: _gap, ...perIcon } = saved.defaults; // general settings leave bar stroke and separately applied shadow pins alone
     expect(saved.overrides[FOG]).toEqual(perIcon);
     expect(saved.overrides[ARCH]).toEqual(perIcon);
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("13 fields overridden"); // 14 fields minus strokePx (one value, the bar's — 2026-10-19)
@@ -1046,19 +1187,37 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(t.calls).toHaveLength(0); // nothing was paid for while waiting
   });
 
-  it("previews each row's own approved SVG, before and after a rescan", async () => {
+  itSlow("previews each row's own approved SVG, before and after a rescan", async () => {
     const root = makeDistinctRoot();
+    // A file read can still be pending after scan. An unrelated app timer must
+    // not spend the artwork wait's entire virtual-time budget before it lands.
+    const fog = (root.children.get(DIR) as BinDir).children.get("fog_AI.svg") as BinFile;
+    const getFile = fog.getFile.bind(fog);
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => { releaseRead = resolve; });
+    vi.spyOn(fog, "getFile").mockImplementation(async () => {
+      const file = await getFile();
+      const read = file.text.bind(file);
+      Object.defineProperty(file, "text", { value: async () => { await readGate; return read(); } });
+      return file;
+    });
     vi.stubGlobal("fetch", geminiTransport(GOOD_ANSWER).fetch);
     await mount(root);
-    await waitFor(() => previewHtml(FOG).includes("M2 2h20v20H2z"), "fog's artwork");
-    expect(previewHtml(ARCH)).toContain("M4 4h8v8H4z"); // never the neighbour's drawing
-    expect(previewHtml(ARCH)).not.toContain("M2 2h20v20H2z");
+    const unrelated = setTimeout(() => undefined, 8000);
+    void nodeSleep(40).then(releaseRead);
+    try {
+      await waitForFilePreview(FOG, "M2 2h20v20H2z");
+    } finally {
+      clearTimeout(unrelated);
+    }
+    expect(previewHtml(ARCH).includes("M4 4h8v8H4z")).toBe(true); // never the neighbour's drawing
+    expect(previewHtml(ARCH).includes("M2 2h20v20H2z")).toBe(false);
     // the user replaces the approved SVG on disk and rescans: only that row changes
     const dir = root.children.get(DIR) as BinDir;
     dir.children.set("arch_AI.svg", new BinFile("arch_AI.svg", distinctSvg("ARCH2"), 3600));
     await click("[data-testid=upload-rescan]");
-    await waitFor(() => previewHtml(ARCH).includes("M3 3h3v3H3z"), "the new artwork");
-    expect(previewHtml(FOG)).toContain("M2 2h20v20H2z"); // untouched
+    await waitForFilePreview(ARCH, "M3 3h3v3H3z");
+    expect(previewHtml(FOG).includes("M2 2h20v20H2z")).toBe(true); // untouched
   });
 
   itSlow("labels one preview per selected icon, and no image ever crosses rows", async () => {

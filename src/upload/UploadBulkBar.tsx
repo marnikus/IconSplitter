@@ -30,6 +30,7 @@ export interface UploadBulkBarProps {
   metaRegenerateCount: number;
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
+  shadowEpsUnsupported: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
   onDeselectAll: () => void;
@@ -99,8 +100,28 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
 function BulkActions({ p }: { p: UploadBulkBarProps }) {
   return (
     <>
+      {p.shadowEpsUnsupported > 0 && <span className="svg-warning" role="alert" data-testid="upload-shadow-eps-warning">
+        Built-in EPS cannot draw shadows for {p.shadowEpsUnsupported} selected icon(s): SVG/JPEG export; EPS reports partial.
+      </span>}
       <button type="button" className="svg-btn" data-testid="upload-apply-settings"
         disabled={p.checkedCount === 0} onClick={p.onApplySettings}>Apply settings to selected</button>
+      <MetadataActions p={p} />
+      <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
+        disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
+      <button type="button" className="svg-btn" data-testid="upload-download-selected"
+        disabled={p.checkedCount === 0} onClick={p.onDownload}
+        title={p.checkedCount === 0
+          ? "Select icons first"
+          : "Copies every committed SVG, JPG and EPS of the selection into one folder you choose — nothing is overwritten"}>
+        ⤓ Download all ({p.downloadFiles} file{p.downloadFiles === 1 ? "" : "s"})</button>
+    </>
+  );
+}
+
+/** Only these buttons can request paid metadata, behind the existing confirmation. */
+function MetadataActions({ p }: { p: UploadBulkBarProps }) {
+  return (
+    <>
       <button type="button" className="svg-btn" data-testid="upload-meta-selected"
         disabled={p.checkedCount === 0} onClick={p.onMetadata}
         title={p.checkedCount === 0
@@ -113,14 +134,6 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
           ? "Select icons with existing metadata first"
           : `${p.metaRegenerateCount} of ${p.checkedCount} selected already have metadata — one replacement request each`}>
         ↻ Regenerate metadata ({p.metaRegenerateCount})</button>
-      <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
-        disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
-      <button type="button" className="svg-btn" data-testid="upload-download-selected"
-        disabled={p.checkedCount === 0} onClick={p.onDownload}
-        title={p.checkedCount === 0
-          ? "Select icons first"
-          : "Copies every committed SVG, JPG and EPS of the selection into one folder you choose — nothing is overwritten"}>
-        ⤓ Download all ({p.downloadFiles} file{p.downloadFiles === 1 ? "" : "s"})</button>
     </>
   );
 }

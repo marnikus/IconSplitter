@@ -75,6 +75,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   output (`…_AI.svg`) and its versioned artifacts (`…_v1.svg`) are never sources
   and are never counted as AI sources in the audit — otherwise a second run
   would feed an artifact back into generation, and the counts would not add up.
+  The same applies to a canonical `_AI` stem + positive `_vN.png` only in its
+  immediate `AI source regeneration versions` folder (case-insensitive, with
+  picked-root fallback): not a new pair or reference; still walked/countable as
+  a file and resolvable via the pair's `imageVersions` / `mainImageOf`.
 
 <a id="i-64"></a>
 * **I-64 (one icon, its own code, RULE 3/4/13 — 2026-10-09):** in the

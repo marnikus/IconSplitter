@@ -152,6 +152,10 @@ function artboardLine(s: UploadSettings): string {
   return mp === null ? "" : ` · artboard ${mp} MP`;
 }
 
+function shadowLine(s: UploadSettings): string {
+  return s.shadowEnabled ? ` · shadow ${s.shadowWidthPct}% · gap ${s.shadowGapPct}%` : "";
+}
+
 /** The effective settings, one line, plus how many fields this icon pins. */
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
@@ -160,12 +164,19 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
       <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${effective.paddingPct === null ? "default" : `${effective.paddingPct}%`} · ${effective.background} · ${strokeLine(effective)}`}</small>
-      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}</small>
+      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}{shadowLine(effective)}</small>
+      <ShadowEpsNote settings={effective} id={id} />
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}
       </small>
     </div>
   );
+}
+
+/** Say why built-in EPS cannot reproduce the gradient before this row is exported. */
+function ShadowEpsNote({ settings, id }: { settings: UploadSettings; id: string }) {
+  if (!settings.shadowEnabled || !settings.includeEps || settings.epsConverter !== "builtin") return null;
+  return <small className="svg-warning" data-testid={`upload-shadow-eps-${id}`}>Built-in EPS cannot draw gradient shadow; EPS will be partial.</small>;
 }
 
 /** Metadata / Settings / Export — the row's own three actions. */

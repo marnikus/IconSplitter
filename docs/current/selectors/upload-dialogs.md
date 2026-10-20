@@ -4,12 +4,28 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
 **2026-10-19 — "default" for every visual setting** ([plan](../../archive/2026-10-19-upload-default-settings/README.md)):
-- `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default) + `upload-set-as-is-note`;
+- `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow is off) + `upload-set-as-is-note`; it turns Shadow off in the current scope;
 - `upload-set-padding-default` (toggles null ↔ 8; `upload-set-padding` then reads empty, placeholder `default`);
 - `upload-set-bg-default` (before `-transparent`);
 - `upload-set-stroke-color-artwork` now reads **Default**; both "none" choices are buttons;
 - the artboard select's first option is `source` ("Default (the SVG's own)").
 - `upload-set-paint-clash` (`.svg-warning`, `role=alert`): only while the stroke colour is unreadable on the background (`lib/upload/paintclash`).
+- `upload-set-shadow-section`: template-gradient settings. In the global popup,
+  `upload-shadow-controls` has the **Checked icons (N)** checkbox
+  `upload-set-shadow-selected` (disabled at N=0, native indeterminate when mixed,
+  checked when all on). Toggling on applies Shadow to every checked icon,
+  including hidden checks; toggling an all-on selection off removes it. The
+  separate selected-only `upload-shadow-width` / `upload-shadow-gap` fields are
+  disabled when no checked icon has Shadow; they commit on blur/Enter to only
+  checked icons with Shadow on (one undo entry, never enabling off icons).
+  `upload-set-shadow-width` / `upload-set-shadow-gap` under **Shadow defaults**
+  change only inherited numeric defaults, never opting unchecked icons in.
+  In the per-icon popup `upload-set-shadow` is the icon's on/off checkbox;
+  its width/gap fields are disabled when off. Width clamps 10–200%, gap 0–100%,
+  and `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.
+  `upload-shadow-eps-note` warns inside either dialog when the icon or any
+  shadowed checked icon requests built-in EPS (the global warning stays visible
+  above the bulk bar while the popup is open).
 
 `upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope** (follow-up 2026-10-19): that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 The older text below is kept for the other handles.

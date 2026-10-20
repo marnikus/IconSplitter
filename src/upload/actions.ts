@@ -13,12 +13,11 @@ import type { DirHandleLike } from "../lib/fs";
 import type { SelectIntent } from "../lib/reviewselect";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
-import { perIconFields } from "../lib/upload/asis";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import { parseGeminiConfig } from "../lib/upload/gemini";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
-  normalizeSettings, type SettingsOverrides, type UploadSettings,
+  normalizeSettings, overridesEqual, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
@@ -33,6 +32,7 @@ import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
 import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
+import { useOverrideApplyActions, useShadowActions } from "./shadowactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
   ALL_UPLOAD_FILTER,
@@ -76,6 +76,8 @@ export interface UploadActions extends PromptActions {
   setOverride: (id: string, patch: SettingsOverrides) => void;
   resetOverride: (id: string) => void;
   applyDefaultsToSelected: (ids: string[]) => void;
+  toggleShadowSelected: (ids: string[]) => void;
+  setShadowSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
   setGemini: (patch: Partial<GeminiConfig>) => void;
   checkModel: () => void;
   saveKey: (key: string) => void;
@@ -121,6 +123,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useOverrideActions(ctx),
     ...useOverrideResetActions(ctx),
     ...useOverrideApplyActions(ctx),
+    ...useShadowActions(ctx),
     ...useGeminiActions(ctx),
     ...useModelCheckActions(ctx),
     ...useKeyActions(ctx),
@@ -191,10 +194,11 @@ function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
     const c = latest.current;
     const before = c.m.overrides[id] ?? null;
     const after = Object.keys(patch).length === 0 ? null : patch;
-    if (before === after) return;
+    if (overridesEqual(before ?? {}, after ?? {})) return;
     c.dispatch({ type: "override", id, patch: after });
-    // One gesture-coalesced entry: a slider drag is one undo, not forty.
-    c.hist.pushGesture({
+    // A shadow toggle/number commit is separate from the next gesture; other drags still coalesce.
+    const push = changesShadow(before, after) ? c.hist.push : c.hist.pushGesture;
+    push({
       type: "uploadSettings",
       label: `Override settings — ${nameOf(c, id)}`,
       origin: "upload", ids: [id],
@@ -202,6 +206,12 @@ function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
     });
   }, []);
   return { setOverride };
+}
+
+function changesShadow(before: SettingsOverrides | null, after: SettingsOverrides | null): boolean {
+  return before?.shadowEnabled !== after?.shadowEnabled
+    || before?.shadowWidthPct !== after?.shadowWidthPct
+    || before?.shadowGapPct !== after?.shadowGapPct;
 }
 
 /** Reset one icon to the defaults — one undoable entry. */
@@ -222,31 +232,6 @@ function useOverrideResetActions(ctx: UploadCtx): Slice<"resetOverride"> {
     c.say("Reset to defaults — the icon inherits the global settings again");
   }, []);
   return { resetOverride };
-}
-
-/** Apply the current defaults to the selection — ONE undoable entry. */
-function useOverrideApplyActions(ctx: UploadCtx): Slice<"applyDefaultsToSelected"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const applyDefaultsToSelected = useCallback((ids: string[]) => {
-    const c = latest.current;
-    if (ids.length === 0) return c.say("Select at least one icon first", true);
-    const before: Record<string, SettingsOverrides | null> = {};
-    const after: Record<string, SettingsOverrides | null> = {};
-    for (const id of ids) {
-      before[id] = c.m.overrides[id] ?? null;
-      after[id] = perIconFields(c.m.defaults);
-    }
-    c.dispatch({ type: "overrides-patch", overrides: after });
-    c.hist.push({
-      type: "uploadSettings",
-      label: `Apply settings to ${ids.length} icon${ids.length === 1 ? "" : "s"}`,
-      origin: "upload", ids,
-      before: { overrides: before }, after: { overrides: after },
-    });
-    c.say(`Settings applied to ${ids.length} icon${ids.length === 1 ? "" : "s"} — one undo reverses the whole batch`);
-  }, []);
-  return { applyDefaultsToSelected };
 }
 
 /** The provider config (persisted locally, validated on read). */

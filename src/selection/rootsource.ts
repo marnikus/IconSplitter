@@ -7,6 +7,7 @@
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
+import { isImageRegenArtifact } from "../lib/imageartifact";
 import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
 import { pairIdOfMetaPath } from "../lib/pairmeta";
@@ -131,7 +132,8 @@ async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; sco
   const tree = await readDirTree(root, []);
   const rule = scopeOf(directoryNames(tree), root.name);
   const entries = walkTree(tree, []);
-  const { pairs, outside } = splitPairs(pairEntries(entries), rule);
+  const reviewEntries = entries.filter((e) => !isImageRegenArtifact(e, root.name));
+  const { pairs, outside } = splitPairs(pairEntries(reviewEntries), rule);
   return { pairs, scope: { split: rule.split, outside: outside.length }, entries };
 }
 

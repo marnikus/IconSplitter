@@ -6,6 +6,7 @@
 // rows (UploadPaintSettings) cannot drift apart.
 
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
+import type { SelectedShadow } from "./shadowselection";
 
 export interface UploadSettingsDialogProps {
   /** null = the global defaults; else the icon's file name. */
@@ -15,6 +16,10 @@ export interface UploadSettingsDialogProps {
   defaults: UploadSettings;
   /** The icon's current override ({} in the global scope). */
   overrides: SettingsOverrides;
+  selectedShadow: SelectedShadow;
+  selectedCount: number;
+  onSelectedShadowToggle: () => void;
+  onSelectedShadowDimensions: (patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
   onDefaults: (patch: Partial<UploadSettings>) => void;
   onOverride: (id: string, patch: SettingsOverrides) => void;
   onResetOverride: (id: string) => void;

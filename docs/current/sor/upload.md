@@ -23,6 +23,11 @@ opt-in class as Generate SVG → Requesty; design
   review decisions or shortcuts on this tab. Checked rows drive local
   export/download or explicitly confirmed metadata requests (RULE 20), never
   automatic sends.
+* In the Export settings popup, checked rows drive a local **Shadow** checkbox:
+  apply/remove the template gradient below selected icons, with checked-only
+  width/gap controls and a matching live export preview. The active unchecked
+  row and provider confirmation are untouched; [settings](upload-settings.md)
+  and [geometry](upload-geometry.md) own the detailed contract.
 
 ## Navigate by operation
 
