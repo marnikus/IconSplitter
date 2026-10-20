@@ -379,9 +379,9 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     await click("[data-testid=svg-regenerate-selected]");
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
-    // 2026-10-20: regeneration carries up to nine icons per request, so both
-    // eligible rows travel in ONE request with one manifest page.
-    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("1 × 9 max");
+    // 2026-10-20: the connection's Images / request sizes a regeneration too
+    // (here the default 4), so both eligible rows travel in ONE request.
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("1 × 4 max");
     expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
     expect(q("[data-testid=svg-confirm-prompt-select]")).not.toBeNull();
     const manifest = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])

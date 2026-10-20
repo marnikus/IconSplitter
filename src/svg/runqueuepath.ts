@@ -7,8 +7,7 @@
 import { log } from "../log/logstore";
 import { planOf } from "./runplan";
 import { resolveRegen } from "./regenstore";
-import { loadRegenBatchPref } from "./regenprefs";
-import { MAIN_PLAN, regenLabelOf, regenPlanFromPresetName, type RegenPlan } from "../lib/svgregen";
+import { MAIN_PLAN, clampRegenPerRequest, regenLabelOf, regenPlanFromPresetName, type RegenPlan } from "../lib/svgregen";
 import { resolveTaskPrompt, taskOf, type PromptChoice, type PromptWork } from "../lib/prompttasks";
 import { loadTaskPrompts } from "../state/prompttasksstore";
 import { loadRegenCodes, type RegenCode } from "./regencodes";
@@ -99,7 +98,7 @@ export function promptFor(ctx: RunCtx, count: number, work: PromptWork = "svg.re
  * prompt at the remembered size, else the legacy stored choice, else none.
  */
 function storedRegenPlan(ctx: RunCtx, count: number): RegenPlan {
-  const size = loadRegenBatchPref().count;
+  const size = clampRegenPerRequest(ctx.m.config.imagesPerRequest);
   const choice = promptFor(ctx, count);
   if (choice.kind === "preset") {
     const res = regenPlanFromPresetName(choice.name, ctx.m.presets, size);

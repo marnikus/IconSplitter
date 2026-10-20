@@ -16,14 +16,11 @@ export interface ConfirmOpts {
   presets?: PromptPreset[];
   prompt?: string;
   config?: Partial<SvgConfig>;
-  regenSize?: number;
-  regenSizeWarning?: boolean;
   taskEntries?: Partial<TaskPromptMap>;
   running?: boolean;
   onConfirm?: (batch: ConfirmedBatch) => void;
   onDismiss?: () => void;
   onTaskEntry?: (task: PromptTaskId, entry: TaskPromptEntry) => void;
-  onRegenSize?: (count: number) => void;
   root?: FakeDir;
 }
 
@@ -42,11 +39,8 @@ export function confirmProps(o: ConfirmOpts): SvgConfirmProps {
     running: o.running ?? false,
     presets: o.presets ?? [],
     prompt: o.prompt ?? "main prompt",
-    regenSize: o.regenSize ?? 9,
-    regenSizeWarning: o.regenSizeWarning ?? false,
     taskEntries: { ...DEFAULT_TASK_PROMPTS, ...o.taskEntries },
     onTaskEntry: o.onTaskEntry ?? (() => undefined),
-    onRegenSize: o.onRegenSize ?? (() => undefined),
     onConfirm: o.onConfirm ?? (() => undefined),
     onDismiss: o.onDismiss ?? (() => undefined),
   };

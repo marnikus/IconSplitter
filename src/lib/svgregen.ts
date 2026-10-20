@@ -1,10 +1,11 @@
 // svgregen.ts — how a regeneration is asked (2026-10-09, "Regenerate SVG from").
 // Owns: the stored choice (main prompt + first image, or the saved prompt +
-// the icon's current SVG code), its tolerant parser (RULE 13), the plan a run
+// the icons' current SVG codes), its tolerant parser (RULE 13), the plan a run
 // is given (a missing saved prompt is a named problem, never a guess), the
-// request size each plan implies (one icon per request in the current-SVG
-// mode) and the one prompt text that carries the SVG code. Pure: no storage,
-// no IO — src/svg/regenstore.ts reads the presets and hands them in.
+// request size the connection's "Images / request" implies, and the batch
+// prompt text. Pure: no storage, no IO — src/svg/regenstore.ts reads the
+// presets and hands them in, and the size is the one configured in the
+// provider card (2026-10-20: the popup no longer carries a second count).
 
 import { isRecord } from "./isrecord";
 import { clampImagesPerRequest } from "./svgconfig";
@@ -24,36 +25,15 @@ const RECORD_MAX_CHARS = 2_000;
 /** What a plan built without an explicit size carries: today's one-icon request. */
 const LEGACY_REGEN_SIZE = 1;
 
-/** The stored "icons per regeneration request" preference. */
-export const REGEN_BATCH_VERSION = 1;
-
-export interface RegenBatchPref {
-  count: number;
-}
-
-export const DEFAULT_REGEN_BATCH: RegenBatchPref = { count: DEFAULT_REGEN_PER_REQUEST };
-
+/**
+ * The connection's "Images / request", clamped to the regeneration range. One
+ * setting sizes both modes: the user configures it once, in the provider card,
+ * and the confirmation simply shows what that number does here.
+ */
 export function clampRegenPerRequest(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return DEFAULT_REGEN_PER_REQUEST;
   return Math.min(REGEN_PER_REQUEST_MAX, Math.max(REGEN_PER_REQUEST_MIN, Math.round(n)));
-}
-
-/** Stored value → preference: anything foreign costs one default (RULE 13). */
-export function parseRegenBatch(raw: unknown): RegenBatchPref {
-  if (!isRecord(raw) || raw.v !== REGEN_BATCH_VERSION) return DEFAULT_REGEN_BATCH;
-  return { count: clampRegenPerRequest(raw.count) };
-}
-
-export function serializeRegenBatch(pref: RegenBatchPref): string {
-  return JSON.stringify({ v: REGEN_BATCH_VERSION, count: clampRegenPerRequest(pref.count) });
-}
-
-/** One line under the size control: what the number really means. */
-export function regenBatchPrefText(count: number): string {
-  const n = clampRegenPerRequest(count);
-  if (n === 1) return "one icon per request — the same request as before, with a single code";
-  return `${n} icon(s) per request — one square sheet and ${n === REGEN_PER_REQUEST_MAX ? "a full 3×3 grid" : `a ${n}-cell batch`} of current SVG code`;
 }
 
 export type RegenMode = "main" | "current-svg";

@@ -18,7 +18,6 @@ import VersionsDialog from "./VersionsDialog";
 import type { ConfirmedBatch, Dialog, SvgRow } from "./types";
 import type { PromptTaskId, TaskPromptEntry } from "../lib/prompttasks";
 import { loadTaskPrompts, saveTaskEntry } from "../state/prompttasksstore";
-import { loadRegenBatchPref, saveRegenBatchPref } from "./regenprefs";
 import type { PromptPreset } from "../lib/promptpresets";
 
 export interface SvgDialogsProps {
@@ -49,19 +48,18 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   const dialog = p.dialog;
   // The task memory and the regen size are read when a dialog opens, so an
   // entry saved by another popup a moment ago is already in force (RULE 24).
-  const stored = useMemo(() => ({ tasks: loadTaskPrompts(), regen: loadRegenBatchPref() }), [dialog]);
+  const stored = useMemo(() => loadTaskPrompts(), [dialog]);
   if (dialog === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
-      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} taskEntries={stored.tasks}
-      regenSize={stored.regen.count} regenSizeWarning={stored.regen.warning} onRegenSize={saveRegenBatchPref}
+      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} taskEntries={stored}
       onTaskEntry={(task: PromptTaskId, entry: TaskPromptEntry) => { saveTaskEntry(task, entry); }}
       onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }
   if (dialog.kind === "image-regen") {
     if (p.imageConn === null) return null;
     return <SvgImgConfirm ids={dialog.ids} rows={p.rows} rootRef={p.rootRef} conn={p.imageConn} presets={p.presets}
-      prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)} taskEntries={stored.tasks}
+      prompt={p.prompt} waitMs={imageWaitMs(p.config.timeoutMs)} taskEntries={stored}
       onTaskEntry={(task: PromptTaskId, entry: TaskPromptEntry) => { saveTaskEntry(task, entry); }}
       onPrompt={p.onImagePrompt} onConfirm={p.onImageConfirm} onCancel={p.onDismiss} />;
   }

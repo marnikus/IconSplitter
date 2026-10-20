@@ -5,8 +5,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REGEN_PER_REQUEST, REGEN_CODE_MAX_CHARS, REGEN_PER_REQUEST_MAX, REGEN_PER_REQUEST_MIN,
-  clampRegenPerRequest, currentSvgPrompt, parseRegenBatch, regenBatchPrefText, regenBatchPrompt,
-  regenLabelOf, regenPlanFromPreset, regenPromptProblem, regenRecordText, requestSizeFor, serializeRegenBatch,
+  clampRegenPerRequest, currentSvgPrompt, regenBatchPrompt,
+  regenLabelOf, regenPlanFromPreset, regenPromptProblem, regenRecordText, requestSizeFor,
 } from "../src/lib/svgregen";
 import type { PromptPreset } from "../src/lib/promptpresets";
 
@@ -34,21 +34,18 @@ describe("clampRegenPerRequest — 1..9, default 9", () => {
   });
 });
 
-describe("parseRegenBatch / serializeRegenBatch — RULE 13", () => {
-  it("round-trips the stored count", () => {
-    expect(parseRegenBatch(JSON.parse(serializeRegenBatch({ count: 6 })))).toEqual({ count: 6 });
+describe("clampRegenPerRequest — the ONE configured size (2026-10-20)", () => {
+  it("clamps whatever the connection's Images / request holds into 1..9", () => {
+    expect(clampRegenPerRequest(9)).toBe(9);
+    expect(clampRegenPerRequest(4)).toBe(4);
+    expect(clampRegenPerRequest(99)).toBe(REGEN_PER_REQUEST_MAX);
+    expect(clampRegenPerRequest(0)).toBe(1);
+    expect(clampRegenPerRequest("6")).toBe(6);
   });
 
-  it("costs one default for junk, and clamps a hand-edited count", () => {
-    expect(parseRegenBatch(null)).toEqual({ count: DEFAULT_REGEN_PER_REQUEST });
-    expect(parseRegenBatch({ v: 2, count: 3 })).toEqual({ count: DEFAULT_REGEN_PER_REQUEST });
-    expect(parseRegenBatch({ v: 1, count: 99 })).toEqual({ count: REGEN_PER_REQUEST_MAX });
-    expect(parseRegenBatch({ v: 1, count: "x" })).toEqual({ count: DEFAULT_REGEN_PER_REQUEST });
-  });
-
-  it("describes the count for the note above the picker", () => {
-    expect(regenBatchPrefText(9)).toContain("9");
-    expect(regenBatchPrefText(1)).toContain("one icon");
+  it("costs one default for junk instead of guessing", () => {
+    expect(clampRegenPerRequest("x")).toBe(DEFAULT_REGEN_PER_REQUEST);
+    expect(clampRegenPerRequest(undefined)).toBe(DEFAULT_REGEN_PER_REQUEST);
   });
 });
 

@@ -12,11 +12,10 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 | `svg-confirm-prompt-default` | note | **above** the picker: "Default prompt for this task — …" (states a gone preset or the refusal) |
 | `svg-confirm-prompt-box` | wrapper | `data-task` names the task the selection itself decided (`…​.single` for one icon, `…​.batch` for two or more) — there is no tab or switch to choose it |
 | `svg-confirm-prompt-select` / `svg-confirm-prompt-note` | `select` / small | the detected task's prompt: main (generation) plus every saved preset; regeneration only lists presets. Choosing one is remembered for that task alone |
-| `svg-confirm-regen-size` | number input | icons per regeneration request (1..9, default 9): re-plans the pages live and is remembered for the tab |
 | `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for the current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + the task's prompt), regeneration = `regenBatchPrompt` (preset + ordered manifest + response contract + **every** carried icon's current SVG code; one icon keeps the single-icon text). One per request, built from the frozen codes |
 | `svg-confirm-full-prompt-note` | small | explains what full prompt contains |
 | `svg-confirm-full-prompt-loading` | note | shown while SVG code loads for regeneration preview |
-| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
+| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size, read from the connection's **Images / request** (no count control in the popup) ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
 | `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |

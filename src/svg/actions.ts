@@ -33,8 +33,7 @@ import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
-import { MAIN_PLAN, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
-import { loadRegenBatchPref } from "./regenprefs";
+import { MAIN_PLAN, clampRegenPerRequest, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
 export interface SvgCtx {
   m: SvgModel; dispatch: Dispatch<SvgAction>; refs: SvgRefs; hist: HistoryApi;
   rows: SvgRow[]; visible: SvgRow[]; checked: string[]; activeId: string | null;
@@ -254,6 +253,6 @@ function editChecked(c: SvgCtx, after: RowSelection, label: string, touched: str
 }
 function dummyRegen(c: SvgCtx): RegenPlan {
   const found = c.m.presets.find((p) => p.text.trim() !== "");
-  const plan = regenPlanFromPreset(found ?? null, loadRegenBatchPref().count);
+  const plan = regenPlanFromPreset(found ?? null, clampRegenPerRequest(c.m.config.imagesPerRequest));
   return plan.ok ? plan.plan : MAIN_PLAN;
 }

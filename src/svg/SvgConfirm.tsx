@@ -16,7 +16,6 @@ import type {
   PromptChoice, PromptTaskId, PromptWork, ResolvedTaskPrompt, TaskPromptEntry, TaskPromptMap,
 } from "../lib/prompttasks";
 import { resolveTaskPrompt, taskLabel, taskOf } from "../lib/prompttasks";
-import { clampRegenPerRequest } from "../lib/svgregen";
 import { inIdOrder } from "../lib/selectionorder";
 import { stallLabel, stallNote } from "../lib/effortlimits";
 import { paramsLabel, type ModelCaps, type SamplingParams } from "../lib/modelcaps";
@@ -41,14 +40,9 @@ export interface SvgConfirmProps {
   presets: PromptPreset[];
   /** The stored main prompt — never modified by this popup. */
   prompt: string;
-  /** Icons per regeneration request this tab remembers (1..9). */
-  regenSize: number;
-  /** The stored value was unreadable; the default is in use. */
-  regenSizeWarning?: boolean;
   /** The six tasks' remembered choices, read when the popup opened. */
   taskEntries: TaskPromptMap;
   onTaskEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void;
-  onRegenSize: (count: number) => void;
   onConfirm: (batch: ConfirmedBatch) => void;
   onDismiss: () => void;
 }
@@ -64,7 +58,6 @@ export default function SvgConfirm(p: SvgConfirmProps) {
           <QueueNote running={p.running} count={s.plan.picked.length} />
           <TaskPromptPicker testId="svg-confirm-prompt" work={s.work} count={p.ids.length}
             entries={s.entries} onEntry={s.chooseEntry} sources={s.sources} note={s.note} />
-          <SizeControl state={s} operation={p.operation} warning={p.regenSizeWarning === true} />
           <Facts plan={s.plan} p={p} choice={s.own.choice} />
           <ExclusionNote names={s.plan.excluded} />
           <PlanBody plan={s.plan} p={p} />
@@ -87,7 +80,6 @@ interface ConfirmState {
   own: ResolvedTaskPrompt;
   note: string;
   size: number;
-  chooseSize: (count: number) => void;
   codes: ReturnType<typeof useRegenCodes>;
   plan: ConfirmPlan;
 }
@@ -97,23 +89,17 @@ function useConfirmState(p: SvgConfirmProps): ConfirmState {
   const work: PromptWork = p.operation === "regenerate" ? "svg.regenerate" : "svg.generate";
   const ownTask = taskOf(work, p.ids.length);
   const [entries, setEntries] = useState<TaskPromptMap>(p.taskEntries);
-  const [size, setSize] = useState(clampRegenPerRequest(p.regenSize));
   const picked = useMemo(() => inIdOrder(p.rows, p.ids, (r) => r.source.id), [p.rows, p.ids]);
   const codes = useRegenCodes(p.operation, p.rootRef, picked);
   const sources = useMemo(() => ({ presets: p.presets, mainPrompt: p.prompt }), [p.presets, p.prompt]);
   const own = resolveTaskPrompt(ownTask, entries[ownTask], sources);
-  const plan = useConfirmPlan({ ids: p.ids, operation: p.operation, rows: p.rows, config: p.config, size, choice: own, codes });
+  const plan = useConfirmPlan({ ids: p.ids, operation: p.operation, rows: p.rows, config: p.config, choice: own, codes });
   const chooseEntry = (task: PromptTaskId, entry: TaskPromptEntry) => {
     setEntries((prev: TaskPromptMap) => ({ ...prev, [task]: entry }));
     p.onTaskEntry(task, entry);
   };
-  const chooseSize = (count: number) => {
-    const next = clampRegenPerRequest(count);
-    setSize(next);
-    p.onRegenSize(next);
-  };
-  const note = noteFor(ownTask, own, size);
-  return { work, ownTask, entries, chooseEntry, sources, own, note, size, chooseSize, codes, plan };
+  const note = noteFor(ownTask, own, plan.perRequest);
+  return { work, ownTask, entries, chooseEntry, sources, own, note, size: plan.perRequest, codes, plan };
 }
 
 /** What this task's prompt does for the batch in flight. */
@@ -157,20 +143,6 @@ function QueueNote({ running, count }: { running: boolean; count: number }) {
       A run is in flight — confirming adds these {count} image(s) to the queue.
       The run in flight is not interrupted, and nothing waits for the queue to be noticed.
     </p>
-  );
-}
-
-/** Icons one regeneration request carries: its own control, persisted at once. */
-function SizeControl({ state, operation, warning }: { state: ConfirmState; operation: SvgOperation; warning: boolean }) {
-  if (operation !== "regenerate") return null;
-  return (
-    <div className="svg-field svg-regen-size">
-      <label className="svg-label" htmlFor="svg-confirm-regen-size">Icons per regeneration request</label>
-      <input id="svg-confirm-regen-size" className="svg-input" type="number" min={1} max={9} step={1}
-        data-testid="svg-confirm-regen-size" value={state.size}
-        onChange={(e) => state.chooseSize(Number(e.target.value))} />
-      {warning && <small className="svg-note warn">The saved count was unreadable; 9 is in use.</small>}
-    </div>
   );
 }
 

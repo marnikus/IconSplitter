@@ -19,8 +19,6 @@ export interface ConfirmPlanInput {
   operation: SvgOperation;
   rows: SvgRow[];
   config: SvgConfig;
-  /** Icons per regeneration request, from the popup's own control (1..9). */
-  size: number;
   /** The prompt the BATCH uses (its own task, never the other tab's). */
   choice: ResolvedTaskPrompt;
   codes: RegenCodesState;
@@ -55,9 +53,13 @@ export function useConfirmPlan(input: ConfirmPlanInput): ConfirmPlan {
     () => (operation === "regenerate" ? picked.filter((r) => !codes.codes.has(r.source.id)).map((r) => r.source.name) : []),
     [operation, picked, codes],
   );
+  // ONE setting sizes both modes: the connection's "Images / request", clamped
+  // to the regeneration range (2026-10-20 — the popup has no count of its own).
   const perRequest = useMemo(
-    () => (operation === "regenerate" ? clampRegenPerRequest(input.size) : clampImagesPerRequest(input.config.imagesPerRequest)),
-    [operation, input.size, input.config.imagesPerRequest],
+    () => (operation === "regenerate"
+      ? clampRegenPerRequest(input.config.imagesPerRequest)
+      : clampImagesPerRequest(input.config.imagesPerRequest)),
+    [operation, input.config.imagesPerRequest],
   );
   const plans = useMemo(() => planBatches(eligible.map((r) => toBatchSource(r.source)), perRequest), [eligible, perRequest]);
   const problems = useMemo(

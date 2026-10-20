@@ -53,31 +53,21 @@ function fixture(n: number, missing: number[] = []): { rows: SvgRow[]; root: Fak
   return { rows, root };
 }
 
-async function mount(o: { n: number; size?: number; missing?: number[]; onConfirm?: (b: ConfirmedBatch) => void; onRegenSize?: (n: number) => void }) {
+/** `size` is the CONNECTION's "Images / request" — the popup has no count of its own. */
+async function mount(o: { n: number; size?: number; missing?: number[]; onConfirm?: (b: ConfirmedBatch) => void }) {
   const { rows, root } = fixture(o.n, o.missing);
   await act(async () => {
     ui = createRoot(host);
     ui.render(<SvgConfirm {...confirmProps({
       ids: rows.map((r) => r.source.id), rows, operation: "regenerate", presets: PRESETS,
-      regenSize: o.size ?? 9, taskEntries: BATCH, root,
-      onConfirm: o.onConfirm, onRegenSize: o.onRegenSize,
+      config: { imagesPerRequest: o.size ?? 9 }, taskEntries: BATCH, root,
+      onConfirm: o.onConfirm,
     })} />);
   });
   await settle();
   await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
   await settle();
   return rows;
-}
-
-/** React tracks its own value: the native setter is what makes onChange fire. */
-async function setSize(value: string) {
-  const input = q("[data-testid=svg-confirm-regen-size]") as HTMLInputElement;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  await act(async () => {
-    setter?.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await settle();
 }
 
 const items = () => Array.from(host.querySelectorAll("[data-testid=svg-batch-items] span")).map((s) => s.textContent ?? "");
@@ -104,24 +94,16 @@ describe("batch regeneration — one request carries a whole sheet", () => {
     expect(fullPrompt()).toContain("Here is a batch of 9 icons to regenerate");
   });
 
-  it("the size control re-plans live and reports the value it persisted", async () => {
-    const onRegenSize = vi.fn();
-    await mount({ n: 9, onRegenSize });
-    expect(q("[data-testid=svg-confirm-regen-size]")).not.toBeNull();
-    await setSize("4");
-    await settle();
-    expect(onRegenSize).toHaveBeenCalledWith(4);
+  it("takes the connection's Images / request — the popup has no count field", async () => {
+    await mount({ n: 9, size: 4 });
+    expect(q("[data-testid=svg-confirm-regen-size]")).toBeNull();
     expect(q("[data-testid=svg-confirm-requests]")?.textContent).toBe("3 × 4 max · prompt “Bolder”");
     expect(q("[data-testid=svg-batch-page]")?.textContent).toContain("Request 1 of 3");
     expect(items()).toHaveLength(4);
   });
 
-  it("a size above 9 is clamped, never planned", async () => {
-    const onRegenSize = vi.fn();
-    await mount({ n: 9, onRegenSize });
-    await setSize("42");
-    await settle();
-    expect(onRegenSize).toHaveBeenCalledWith(9);
+  it("a configured size above 9 is clamped to the maximum, never planned", async () => {
+    await mount({ n: 9, size: 42 });
     expect(q("[data-testid=svg-confirm-requests]")?.textContent).toBe("1 × 9 max · prompt “Bolder”");
   });
 
