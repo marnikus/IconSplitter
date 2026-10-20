@@ -46,7 +46,7 @@ export interface PreparedSvg {
   strokesNormalized: number;
   /** Elements whose stroke paint was set (0 when strokeColor = artwork). */
   strokesRecolored: number;
-  /** Visible strokes turned into filled shapes (2026-10-09; 0 unless `expandStrokes` is on). */
+  /** Visible strokes turned into filled shapes, the badge's handles included (0 unless `expandStrokes` is on). */
   strokesExpanded: number;
   /** The background the export paints: `transparent` or the normalized hex. */
   background: string;
@@ -104,28 +104,32 @@ function buildExport(doc: Document, root: Element, settings: UploadSettings, fra
   const globalStroke = unifyStrokes(placed.root); // the artboard rect included: it says `stroke="none"` only when the root hoists a paint
   // The shadow is explicitly stroke-free even if the source has no strokes to hoist.
   placed.shadow?.setAttribute("stroke", "none");
-  const badgeFailure = badgeFailureOf(placed.root, settings);
-  if (badgeFailure !== null) return badgeFailure;
+  const badge = badgeStageOf(placed.root, settings);
+  if (badge.failure !== null) return badge.failure;
   doc.replaceChild(placed.root, root);
   return {
     ok: true,
     svg: new XMLSerializer().serializeToString(doc),
     fit: placed.fit, bounds: placed.bounds, background, globalStroke, passes: placed.passes,
     shapesBaked: placed.shapesBaked, strokesNormalized: placed.widths, strokesRecolored: placed.colors,
-    strokesExpanded: placed.expanded, asIs: false,
+    strokesExpanded: placed.expanded + badge.expanded, asIs: false,
   };
 }
 
-/** An artboard decoration cannot affect the icon fit or the stroke hoist. */
-function badgeFailureOf(root: Element, settings: UploadSettings): PrepareFailure | null {
-  if (!settings.badgeEnabled) return null;
+interface BadgeStage { failure: PrepareFailure | null; expanded: number }
+
+/** An artboard decoration cannot affect the icon fit or the stroke hoist; its own handles expand when asked. */
+function badgeStageOf(root: Element, settings: UploadSettings): BadgeStage {
+  if (!settings.badgeEnabled) return { failure: null, expanded: 0 };
   const board = viewBoxOf(root);
-  if (board === null) return fail("no-fit", "the final artboard has no room for the corner badge");
+  if (board === null) return { failure: fail("no-fit", "the final artboard has no room for the corner badge"), expanded: 0 };
   const badge = appendCornerBadge(root, { width: board.width, height: board.height }, {
     corner: settings.badgeCorner, widthPct: settings.badgeWidthPct,
     offsetXPct: settings.badgeOffsetXPct, offsetYPct: settings.badgeOffsetYPct,
-  });
-  return badge.ok ? null : fail(badge.code, badge.detail);
+  }, settings.expandStrokes);
+  return badge.ok
+    ? { failure: null, expanded: badge.expanded }
+    : { failure: fail(badge.code, badge.detail), expanded: 0 };
 }
 
 /** As is: the source text itself, framed by its own viewBox (or px size); null = no readable frame, so the pipeline decides. */

@@ -112,4 +112,5 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
 * **Corner badge:** the [artboard-relative vector](upload-badge.md) is appended
   after the icon/Shadow fit, so it never changes icon geometry or artboard size.
   Exact edge percentages and a uniform aspect-preserving scale keep its paint
-  inside the final emitted viewBox, or preparation fails by name.
+  inside the final emitted viewBox, or preparation fails by name. With Expand
+  strokes on, its six outlined handles become fills before append.

@@ -116,6 +116,7 @@ with Shadow is still partial because the gradient remains unsupported.
   nonzero, what every non-boolean expander produces; the tests measure
   coverage, filled area and offset distance (`tests/helpers/outlinemath.ts`),
   never anchor counts. The record carries `tools.expand: { enabled, shapes
-  }`; `PrepareResult.strokesExpanded` is the count; the row line appends
+  }`; `PrepareResult.strokesExpanded` is the count (an enabled corner badge's
+  six outlined handles included when it expands); the row line appends
   `· strokes → fills`. `expandStrokes:false` is byte-identical to before
   (equivalence gate in `tests/upload_expand.test.ts`).

@@ -17,13 +17,16 @@ function el(markup: string): Element {
 
 const ops = (o: Outline | null) => (o === null ? null : o.ops.map((op) => op.op).join(""));
 
-describe("the supplied two-path filled badge", () => {
-  it("parses the exact stroke-free SVG as measurable vector paint inside its own viewport", () => {
+describe("the supplied seven-path editable-stroke badge", () => {
+  it("parses the exact SVG as measurable vector paint inside its own viewport", () => {
     const root = new DOMParser().parseFromString(badgeSvg, "image/svg+xml").documentElement;
-    expect(root.getAttribute("viewBox")).toBe("0 0 411 19");
+    expect(root.getAttribute("viewBox")).toBe("0 0 412 20");
     const paths = Array.from(root.querySelectorAll("path"));
-    expect(paths).toHaveLength(2);
-    expect(paths.every((path) => path.getAttribute("fill") === "black" && !path.hasAttribute("stroke"))).toBe(true);
+    expect(paths).toHaveLength(7);
+    expect(paths[0].getAttribute("fill")).toBe("black");
+    expect(paths[0].hasAttribute("stroke")).toBe(false);
+    expect(paths.slice(1).every((path) => path.getAttribute("stroke") === "black"
+      && path.getAttribute("stroke-width") === "1.5" && !path.hasAttribute("fill"))).toBe(true);
     expect(paths.every((path) => (pathOutline(path.getAttribute("d"))?.ops.length ?? 0) > 0)).toBe(true);
     expect(shippedBounds(root)).not.toBeNull();
     expect(insideArtboard(root)).toBe(true);

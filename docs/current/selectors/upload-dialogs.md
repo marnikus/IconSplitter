@@ -26,17 +26,18 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   `upload-shadow-eps-note` warns inside either dialog when the icon or any
   shadowed checked icon requests built-in EPS (the global warning stays visible
   above the bulk bar while the popup is open).
-- `upload-set-badge-section`: the supplied fixed 412×20 vector. Global scope
-  `upload-badge-controls` contains `upload-set-badge-selected` (native checkbox:
-  none/mixed/all, disabled with no checks) and selected-only
-  `upload-badge-{width,corner,offset-x,offset-y}`. These edit already-badged
-  checked icons, including hidden checks; the active unchecked icon is safe.
-  `upload-set-badge-{width,corner,offset-x,offset-y}` under **Badge defaults**
-  change inherited placement without opting icons in. Per-icon scope has the
-  `upload-set-badge` checkbox and override markers `upload-set-marker-badge*`.
-  Width 1–100% (default 40); X/Y insets 0–100% (default 3 each) are measured
-  from the selected left/right and top/bottom edges. The labels follow the
-  corner; `upload-badge-fit-note` explains uniform shrink/no-fit at 100%.
+- `upload-set-badge-section`: the supplied fixed 412×20 editable-stroke vector.
+  Global scope `upload-badge-controls` contains `upload-set-badge-selected`
+  (native checkbox: none/mixed/all, disabled with no checks) and the ONE
+  placement set `upload-set-badge-{width,corner,offset-x,offset-y}` under
+  **Badge defaults**; there is no second selected-only block.
+  `upload-badge-defaults-note` says those defaults never opt an unchecked icon
+  in, and a badge-on checked icon without a placement pin inherits them.
+  Per-icon scope has the `upload-set-badge` checkbox and override markers
+  `upload-set-marker-badge*`; its fields pin that icon. Width 1–100% (default
+  40); X/Y insets 0–100% (default 3 each) are measured from the selected
+  left/right and top/bottom edges. The labels follow the corner;
+  `upload-badge-fit-note` explains uniform shrink/no-fit at 100%.
 
 `upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope** (follow-up 2026-10-19): that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; blank field space does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 The older text below is kept for the other handles.

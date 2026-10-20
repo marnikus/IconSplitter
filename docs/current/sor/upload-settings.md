@@ -57,10 +57,12 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   the gradient: the bar, row and both dialog scopes warn that the result is
   partial with valid SVG/JPEG; the chosen local converter never switches silently.
 * **Artboard corner badge** (2026-10-20): the supplied fixed black vector is
-  selected-only/per-icon opt-in, with four corners, width % and two inward edge
-  distances %. Global placement defaults never opt unchecked icons in; badge-on
-  changes alone affect the fingerprint. The [corner badge contract](upload-badge.md)
-  owns placement, failure, EPS and undo details.
+  checked-only opt-in, with one **Badge defaults** block (four corners, width %
+  and two inward edge distances) plus per-icon overrides. Those defaults never
+  opt unchecked icons in, and a badge-on icon without placement pins inherits
+  them; badge-on changes alone affect the fingerprint. The
+  [corner badge contract](upload-badge.md) owns placement, failure, EPS and undo
+  details.
 * Settings: global defaults (padding %, background — `transparent` (the
   default) or one hex, stroke width in px — the file's own units, written as
   typed (2026-10-08; a stored `strokePt` from before reads as the same number

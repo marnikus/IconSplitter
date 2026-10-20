@@ -33,7 +33,7 @@ opt-in class as Generate SVG → Requesty; design
 * An independent **Corner badge** checkbox in that popup places the supplied
   vector graphic on checked icons' final artboards. Corner, width and X/Y edge
   insets are configurable without changing icon fit; [badge](upload-badge.md)
-  owns its selected-only/per-icon, preview and export contract.
+  owns its checked-only/per-icon, preview and export contract.
 
 ## Navigate by operation
 

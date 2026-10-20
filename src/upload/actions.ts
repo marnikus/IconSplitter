@@ -80,7 +80,6 @@ export interface UploadActions extends PromptActions {
   toggleShadowSelected: (ids: string[]) => void;
   setShadowSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
   toggleBadgeSelected: (ids: string[]) => void;
-  setBadgeSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct">>) => void;
   setGemini: (patch: Partial<GeminiConfig>) => void;
   checkModel: () => void;
   saveKey: (key: string) => void;

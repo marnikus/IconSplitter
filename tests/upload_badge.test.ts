@@ -23,11 +23,11 @@ describe("the corner badge in prepared Upload SVG", () => {
     expect(prepareExportSvg(ICON, asIs)).toMatchObject({ ok: true, svg: ICON, asIs: true });
     const { root, result } = prepared(ICON, { ...asIs, badgeEnabled: true });
     expect(result.asIs).toBe(false);
-    expect(root.querySelectorAll("path")).toHaveLength(2);
+    expect(root.querySelectorAll("path")).toHaveLength(7);
     expect(root.querySelector("text, image, [transform]")).toBeNull();
     expect(insideArtboard(root)).toBe(true);
-    expect(root.querySelectorAll("path[fill='#000000'][stroke='none']")).toHaveLength(2);
-    expect(root.querySelectorAll("path[stroke]:not([stroke='none'])")).toHaveLength(0);
+    expect(root.querySelectorAll("path[fill='#000000'][stroke='none']")).toHaveLength(1);
+    expect(root.querySelectorAll("path[stroke]:not([stroke='none'])")).toHaveLength(6);
   });
 
   it("places the badge above a fixed icon without changing its fitted coordinates or background order", () => {
@@ -45,8 +45,8 @@ describe("the corner badge in prepared Upload SVG", () => {
   it("keeps Expand strokes output free of painted badge strokes", () => {
     const source = `<svg ${NS} viewBox="0 0 100 100"><path d="M10 50h80" fill="none" stroke="#111" stroke-width="2"/></svg>`;
     const { root, result } = prepared(source, badge({ expandStrokes: true }));
-    expect(result.strokesExpanded).toBe(1);
-    expect(root.querySelectorAll("path[fill='#000000']")).toHaveLength(2);
+    expect(result.strokesExpanded).toBe(7); // one icon stroke + the badge's six handles
+    expect(root.querySelectorAll("path[fill='#000000']")).toHaveLength(8); // the icon stroke plus the badge
     expect(root.querySelectorAll("path[stroke]:not([stroke='none'])")).toHaveLength(0);
   });
 

@@ -1,4 +1,4 @@
-// UploadBadgeSettings.tsx — the supplied graphic's selected-only corner controls.
+// UploadBadgeSettings.tsx — the supplied graphic's corner controls: one placement set.
 import {
   BADGE_CORNERS, BADGE_OFFSET_MAX, BADGE_OFFSET_MIN, BADGE_WIDTH_MAX, BADGE_WIDTH_MIN,
   clampBadgeOffsetPct, clampBadgeWidthPct, parseBadgeCorner,
@@ -9,22 +9,24 @@ import { change, changeMany, Marker, type UploadSettingsDialogProps } from "./se
 
 type Placement = Pick<UploadSettings, "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct">;
 interface NumberField {
-  testid: string; label: string; value: number | null; min: number; max: number;
+  testid: string; label: string; value: number; min: number; max: number;
   onCommit: (n: number) => void; marker?: React.ReactNode;
 }
 
 export default function UploadBadgeSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-shadow-dialog" data-testid="upload-set-badge-section">
-      {p.id === null ? <SelectedBadgeControls p={p} /> : <PerIconBadgeToggle p={p} effective={effective} />}
-      {p.id === null && <small className="up-hint">Badge defaults below change size and placement, but never turn on an unchecked icon.</small>}
-      <BadgePlacementFields p={p} effective={effective} selected={false} />
+      {p.id === null ? <SelectedBadgeToggle p={p} /> : <PerIconBadgeToggle p={p} effective={effective} />}
+      {p.id === null && <small className="up-hint" data-testid="upload-badge-defaults-note">
+        Badge defaults below change size and placement, but never turn on an unchecked icon.
+      </small>}
+      <BadgePlacementFields p={p} effective={effective} />
     </div>
   );
 }
 
-/** Selected checkbox lives in the global popup, not among global on/off defaults. */
-function SelectedBadgeControls({ p }: { p: UploadSettingsDialogProps }) {
+/** Selected checkbox lives in the global popup; the one placement set below is its defaults. */
+function SelectedBadgeToggle({ p }: { p: UploadSettingsDialogProps }) {
   const state = p.selectedBadge.state;
   return (
     <div className="up-shadow-controls" data-testid="upload-badge-controls">
@@ -38,7 +40,6 @@ function SelectedBadgeControls({ p }: { p: UploadSettingsDialogProps }) {
         </label>
         <small className="up-hint">{p.selectedCount === 0 ? "Select icons to add a badge." : "Only checked icons, including checks hidden by a filter."}</small>
       </div>
-      <BadgePlacementFields p={p} effective={p.defaults} selected />
     </div>
   );
 }
@@ -57,28 +58,23 @@ function PerIconBadgeToggle({ p, effective }: { p: UploadSettingsDialogProps; ef
   );
 }
 
-/** Both placements use the same controls, but only the selected branch writes checked rows. */
-function BadgePlacementFields({ p, effective, selected }: {
-  p: UploadSettingsDialogProps; effective: UploadSettings; selected: boolean;
-}) {
-  const badge = p.selectedBadge;
-  const values = selected
-    ? { width: badge.width, corner: badge.corner, x: badge.offsetX, y: badge.offsetY }
-    : { width: effective.badgeWidthPct, corner: effective.badgeCorner, x: effective.badgeOffsetXPct, y: effective.badgeOffsetYPct };
-  const update = (patch: Partial<Placement>) => selected ? p.onSelectedBadgePlacement(patch) : changeMany(p, patch);
+/** One placement set: global defaults in the global popup, that icon's pins in the icon popup. */
+function BadgePlacementFields({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  const update = (patch: Partial<Placement>) => changeMany(p, patch);
   const marker = (field: keyof UploadSettings, testid: string) => <Marker p={p} field={field} testid={testid} />;
   return (
-    <fieldset className="up-shadow-fields" disabled={badgeFieldsDisabled(p, effective, selected)}>
-      {!selected && p.id === null && <legend className="svg-label">Badge defaults</legend>}
-      <BadgeNumber field={{ testid: selected ? "upload-badge-width" : "upload-set-badge-width", label: "Badge width % of artboard",
-        value: values.width, min: BADGE_WIDTH_MIN, max: BADGE_WIDTH_MAX, marker: marker("badgeWidthPct", "badge-width"),
+    <fieldset className="up-shadow-fields" disabled={p.id !== null && !effective.badgeEnabled}>
+      {p.id === null && <legend className="svg-label">Badge defaults</legend>}
+      <BadgeNumber field={{ testid: "upload-set-badge-width", label: "Badge width % of artboard",
+        value: effective.badgeWidthPct, min: BADGE_WIDTH_MIN, max: BADGE_WIDTH_MAX,
+        marker: marker("badgeWidthPct", "badge-width"),
         onCommit: (n) => update({ badgeWidthPct: clampBadgeWidthPct(n) }) }} />
-      <BadgeCornerField testid={selected ? "upload-badge-corner" : "upload-set-badge-corner"} value={values.corner}
+      <BadgeCornerField testid="upload-set-badge-corner" value={effective.badgeCorner}
         marker={marker("badgeCorner", "badge-corner")} onChange={(v) => {
           const corner = parseBadgeCorner(v);
           if (corner !== null) update({ badgeCorner: corner });
         }} />
-      <BadgeInsets p={p} selected={selected} corner={values.corner} x={values.x} y={values.y} onPatch={update} />
+      <BadgeInsets p={p} corner={effective.badgeCorner} x={effective.badgeOffsetXPct} y={effective.badgeOffsetYPct} onPatch={update} />
       <small className="up-hint" data-testid="upload-badge-fit-note">
         The badge may shrink to keep these insets inside the artboard; a 100% inset leaves no room and export reports it.
       </small>
@@ -88,37 +84,29 @@ function BadgePlacementFields({ p, effective, selected }: {
 
 interface BadgeInsetsProps {
   p: UploadSettingsDialogProps;
-  selected: boolean;
-  corner: BadgeCorner | null;
-  x: number | null;
-  y: number | null;
+  corner: BadgeCorner;
+  x: number;
+  y: number;
   onPatch: (patch: Partial<Placement>) => void;
 }
 
 /** Each inset is measured from the edge named by the current corner. */
-function BadgeInsets({ p, selected, corner, x, y, onPatch }: BadgeInsetsProps) {
+function BadgeInsets({ p, corner, x, y, onPatch }: BadgeInsetsProps) {
   return <>
-    <BadgeNumber field={{ testid: selected ? "upload-badge-offset-x" : "upload-set-badge-offset-x", label: insetLabel(corner, "x"),
+    <BadgeNumber field={{ testid: "upload-set-badge-offset-x", label: insetLabel(corner, "x"),
       value: x, min: BADGE_OFFSET_MIN, max: BADGE_OFFSET_MAX, marker: <Marker p={p} field="badgeOffsetXPct" testid="badge-offset-x" />,
       onCommit: (n) => onPatch({ badgeOffsetXPct: clampBadgeOffsetPct(n) }) }} />
-    <BadgeNumber field={{ testid: selected ? "upload-badge-offset-y" : "upload-set-badge-offset-y", label: insetLabel(corner, "y"),
+    <BadgeNumber field={{ testid: "upload-set-badge-offset-y", label: insetLabel(corner, "y"),
       value: y, min: BADGE_OFFSET_MIN, max: BADGE_OFFSET_MAX, marker: <Marker p={p} field="badgeOffsetYPct" testid="badge-offset-y" />,
       onCommit: (n) => onPatch({ badgeOffsetYPct: clampBadgeOffsetPct(n) }) }} />
   </>;
 }
 
 /** The percentages are measured inward from the edges the corner names. */
-function insetLabel(corner: BadgeCorner | null, axis: "x" | "y"): string {
-  if (corner === null) return axis === "x" ? "Inward X % from each chosen edge" : "Inward Y % from each chosen edge";
+function insetLabel(corner: BadgeCorner, axis: "x" | "y"): string {
   const edge = axis === "x" ? (corner.endsWith("left") ? "left" : "right")
     : (corner.startsWith("top") ? "top" : "bottom");
   return `Distance from ${edge} edge %`;
-}
-
-/** Editing placement never enables an off icon, whether selected or per-icon. */
-function badgeFieldsDisabled(p: UploadSettingsDialogProps, effective: UploadSettings, selected: boolean): boolean {
-  if (selected) return p.selectedCount === 0 || p.selectedBadge.state === "none";
-  return p.id !== null && !effective.badgeEnabled;
 }
 
 function BadgeNumber({ field }: { field: NumberField }) {
@@ -133,14 +121,13 @@ function BadgeNumber({ field }: { field: NumberField }) {
 }
 
 function BadgeCornerField({ testid, value, onChange, marker }: {
-  testid: string; value: BadgeCorner | null; onChange: (corner: string) => void; marker?: React.ReactNode;
+  testid: string; value: BadgeCorner; onChange: (corner: string) => void; marker?: React.ReactNode;
 }) {
   return (
     <div className="svg-field up-set-field">
       <label className="svg-label" htmlFor={testid}>Corner{marker}</label>
-      <select id={testid} className="svg-input" data-testid={testid} aria-label="Badge corner" value={value ?? ""}
+      <select id={testid} className="svg-input" data-testid={testid} aria-label="Badge corner" value={value}
         onChange={(e) => onChange(e.target.value)}>
-        {value === null && <option value="" disabled>mixed corners</option>}
         {BADGE_CORNERS.map((corner) => <option key={corner} value={corner}>{corner.replace("-", " ")}</option>)}
       </select>
     </div>

@@ -2909,3 +2909,11 @@ Measured on Node v22.14.0 / npm 10.9.2 (.nvmrc specifies v22.12.0): focused inte
 ## 2026-10-20 — Upload settings button hit areas
 
 Measured on Node v22.14.0 / npm 10.9.2 (.nvmrc specifies v22.12.0): padding Default and icon-stroke Bar blank-area clicks witnessed red then green; focused dialog/docs run 3 suites / 66 tests passed; TypeScript passed; lint 0 errors / 23 existing warnings; quality:changed passed. verify:fast passed 216 suites / 2274 tests, overall coverage 94.72% statements and 97.44% lines, build passed. Full verify passed: native perf 5 suites / 30 tests, coverage 216 suites / 2274 tests and build. Earlier coverage runs timed out unrelated suites under Drive-path load; isolated checks and the final fast/full gates passed.
+
+
+## 2026-10-20 — Editable-stroke corner badge finished + one badge control set
+
+- `npm run quality:changed` — PASS (8 changed production files; `cornerbadge.ts` 173 lines / 21 functions).
+- `npm run verify:fast` — PASS: tsc, eslint (0 errors), changed-quality, 713 tests / 55 files with coverage, single-file build (198 s).
+- `npm run verify` — PASS on the immediate rerun (2308 tests, coverage, native, build; 195 s). The first full run had two load-sensitive `upload_ui` metadata assertions fail (approval toast, row preview); both pass alone and in the rerun — recorded, not hidden.
+- Focused red→green: `upload_badge_geometry`, `upload_badge`, `upload_outline`, `upload_runexport`, `upload_live_preview`, `upload_ui` badge block.

@@ -2,6 +2,7 @@
 // A fixed vector badge: the user's seven paths, uniformly baked into a corner
 // of the FINAL artboard. It does not participate in fitting the icon.
 import badgeTemplate from "../../svg/templates/editable-stroke-width.svg?raw";
+import { expandStrokes } from "./expand";
 import { fmt } from "./geom";
 import { pathOutline, outlineToPathData, transformOutline, type Outline } from "./geom/outline";
 import type { Matrix } from "./geom/matrix";
@@ -20,28 +21,52 @@ export interface BadgePlacement {
   offsetYPct: number;
 }
 export interface BadgeBounds { x: number; y: number; width: number; height: number }
-export type BadgeResult = { ok: true; bounds: BadgeBounds; paths: Element[] }
+export type BadgeResult = { ok: true; bounds: BadgeBounds; paths: Element[]; expanded: number }
   | { ok: false; code: "no-fit" | "unsupported"; detail: string };
 
 interface SourcePath { outline: Outline; fill: boolean }
 
-/** Append the seven opaque paths last; on a refusal the export tree is untouched. */
+/** Append the seven supplied paths last; on a refusal the export tree is untouched. */
 export function appendCornerBadge(
-  root: Element, artboard: { width: number; height: number }, placement: BadgePlacement,
+  root: Element, artboard: { width: number; height: number }, placement: BadgePlacement, expand = false,
 ): BadgeResult {
   const source = readBadgeSource();
   if (source === null) return unsupported("the bundled corner badge is malformed or exceeds its own viewport");
-  if (!validArtboard(root, artboard) || !validPlacement(placement)) return unsupported("invalid corner badge artboard or percentages");
+  if (!validRequest(root, artboard, placement)) return unsupported("invalid corner badge artboard or percentages");
   if (rootOpacityBlocksBadge(root)) return unsupported("the source root opacity, display or visibility would hide or fade the corner badge");
   const bounds = badgeBounds(artboard, placement);
   if (bounds === null) return noFit();
-  const scale = bounds.width / SOURCE_W;
-  const stroke = Number(fmt(1.5 * scale));
-  if (!(stroke > 0)) return noFit();
-  const paths = source.map((item) => bakedPath(root, item, bounds, stroke));
-  if (!badgeFits(root, artboard, paths)) return noFit();
-  for (const path of paths) root.appendChild(path);
-  return { ok: true, bounds, paths };
+  const baked = bakeBadge(root, source, bounds, expand);
+  if (!baked.ok) return baked.reason === "no-fit" ? noFit() : unsupported("Expand strokes cannot draw the corner badge");
+  if (!badgeFits(root, artboard, baked.paths)) return noFit();
+  for (const path of baked.paths) root.appendChild(path);
+  return { ok: true, bounds, paths: baked.paths, expanded: baked.shapes };
+}
+
+type BakedBadge = { ok: true; paths: Element[]; shapes: number }
+  | { ok: false; reason: "no-fit" | "unsupported" };
+
+/** Uniformly bake the supplied paths; Expand strokes also outlines the six handles. */
+function bakeBadge(root: Element, source: SourcePath[], bounds: BadgeBounds, expand: boolean): BakedBadge {
+  const stroke = Number(fmt(1.5 * bounds.width / SOURCE_W));
+  if (!(stroke > 0)) return { ok: false, reason: "no-fit" };
+  const baked = source.map((item) => bakedPath(root, item, bounds, stroke));
+  if (!expand) return { ok: true, paths: baked, shapes: 0 };
+  const widened = expandBadge(baked);
+  return widened === null ? { ok: false, reason: "unsupported" } : { ok: true, ...widened };
+}
+
+/** The six outlined handles as fills when Expand strokes is on; null = the expander refused. */
+function expandBadge(paths: readonly Element[]): { paths: Element[]; shapes: number } | null {
+  const first = paths[0];
+  if (first === undefined) return null;
+  const probe = first.ownerDocument.createElementNS(SVG_NS, "svg");
+  for (const path of paths) probe.appendChild(path);
+  const expanded = expandStrokes(probe);
+  if (expanded.refused !== null) return null;
+  const expandedPaths = Array.from(probe.children);
+  for (const path of expandedPaths) path.setAttribute("stroke", "none");
+  return { paths: expandedPaths, shapes: expanded.shapes };
 }
 
 /** The template is deliberately narrow: exact viewport and seven known solid paths. */
@@ -79,7 +104,12 @@ function badgeBounds(board: { width: number; height: number }, p: BadgePlacement
   };
 }
 
-/** The root's viewport must be the one the caller measured, and have paintable area. */
+/** One validated request: a paintable artboard and four in-range placement values. */
+function validRequest(root: Element, board: { width: number; height: number }, placement: BadgePlacement): boolean {
+  return validArtboard(root, board) && validPlacement(placement);
+}
+
+/** The root's viewport must be the one the caller measured, and have paint-able area. */
 function validArtboard(root: Element, board: { width: number; height: number }): boolean {
   const vb = (root.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
   return root.nodeName === "svg" && vb.length === 4 && vb[0] === 0 && vb[1] === 0

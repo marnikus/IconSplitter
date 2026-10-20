@@ -44,9 +44,10 @@ Focused test inventory; [all tests](../TESTS.md).
   `upload_badge.test.ts` and `upload_outline.test.ts` — opt-in/default
   fingerprints, scientific-notation path parsing, exact four-corner insets,
   width/aspect and narrow-artboard fit, source/root-opacity/no-fit safety,
-  badge-off byte identity and icon coordinates unchanged. `upload_runexport`
-  verifies clean SVG, preview/JPEG prepared input and genuine built-in EPS for
-  opaque badge paths, with existing Shadow partial EPS unchanged.
+  expand-to-fills for the six outlined handles, badge-off byte identity and
+  icon coordinates unchanged. `upload_runexport` verifies clean SVG,
+  preview/JPEG prepared input and genuine built-in EPS for opaque badge
+  paths/outlines, with existing Shadow partial EPS unchanged.
 * `upload_expand.test.ts` — hidden strokes stay hidden when expanded, and a
   visible stroke under zero inherited fill opacity keeps its paint; source
   geometry and Shadow bounds agree with exported outlines
@@ -65,8 +66,9 @@ Focused test inventory; [all tests](../TESTS.md).
   entry; reset), the exact-request confirmation, editable/copiable metadata
   fields, invalid-answer refusal, cancel (never resent), interrupted after a
   restart, selected-only Shadow (hidden checks, mixed toggles, undo, general
-  bulk apply preserves it, popup EPS warning), selected-only badge (mixed/hidden
-  checks, four placement fields, undo, per-icon markers/reset), deferred source-file preview
+  bulk apply preserves it, popup EPS warning), selected-only badge opt-in
+  (mixed/hidden checks, undo, one shared defaults block, per-icon
+  markers/reset), deferred source-file preview
   read under unrelated timers and rescan, export → green committed package with
   the source untouched, stale →
   re-export, metadata embedded + verified, honest failure commits nothing.

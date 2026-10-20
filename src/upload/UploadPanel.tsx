@@ -225,7 +225,6 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
       selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides)}
       onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
-      onSelectedBadgePlacement={(patch) => g.setBadgeSelected(g.checked, patch)}
       onDefaults={g.setDefaults}
       onOverride={g.setOverride}
       onResetOverride={g.resetOverride}

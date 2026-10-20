@@ -763,7 +763,7 @@ describe("runExport — honest failures", () => {
     expect(committed).not.toBe(fileText(baselineRoot, `${DIR}/export/${ART}.svg`));
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps).not.toMatch(/^\s*stroke\s*$/m); // the supplied badge has filled shapes only
+    expect(eps).toMatch(/setlinewidth/); // the supplied badge's six handles are opaque black outlines
     expect(eps).not.toBe(fileText(baselineRoot, `${DIR}/export/${ART}.eps`));
     expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(SOURCE_SVG);
   });
