@@ -52,11 +52,10 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
   const checked = a.checked.includes(row.source.id);
   const ref = useActiveScroll(active);
   const id = row.source.id;
-  const shown = shownVersion(row);
   return (
     <div ref={ref} role="listitem" data-testid={`svg-row-${id}`} tabIndex={active ? 0 : -1}
       aria-current={active ? "true" : undefined}
-      className={`svg-row ${shown?.review ?? "pending"}${active ? " active" : ""}${checked ? " selected" : ""}${row.corrupt ? " corrupt" : ""}`}
+      className={`svg-row ${row.review}${active ? " active" : ""}${checked ? " selected" : ""}${row.corrupt ? " corrupt" : ""}`}
       onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
       onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") { e.preventDefault(); a.selectRow(id, "replace"); } }}>
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`} checked={checked}
@@ -184,12 +183,11 @@ function StatusCell({ row }: { row: SvgRow }) {
   );
 }
 
+/** The item's review status: ONE per row, so switching versions cannot change it. */
 function ReviewCell({ row }: { row: SvgRow }) {
-  const review = shownVersion(row)?.review ?? "pending";
   return (
     <div className="svg-cell" data-testid={`svg-review-${row.source.id}`}>
-      <span className={`svg-badge ${review}`}>{label(review)}</span>
-      {row.approved !== null && <small>approved v{row.approved.version}</small>}
+      <span className={`svg-badge ${row.review}`}>{label(row.review)}</span>
     </div>
   );
 }

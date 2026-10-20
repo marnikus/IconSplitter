@@ -86,6 +86,7 @@ Never edit existing archived designs to match later changes.
 | `archive/2026-10-20-regen-size-from-connection/design.md` | Why the regeneration confirmation has no icons-per-request field: the connection's `Images / request` is the one count, clamped to 1..9 and frozen in the plan; the stored `regenBatch` key is gone |
 | `archive/2026-10-20-task-prompt-detected/design.md` | Why the prompt picker has no Single icon / Batch switch: the selection already decides the task (`taskOf`), so each situation merely suggests and remembers its own prompt; the tab handles are gone |
 | `archive/2026-10-20-regen-batch-and-task-prompts/design.md` | Batch SVG regeneration (1..9 icons per request, matched back by `<title>` then position), the saved-prompt picker in every paying popup, and six task-scoped prompt defaults named above one shared picker — data model and handles in `contract.md`, exact strings in `prompts.md`, slices in `steps.md` |
+| `archive/2026-10-20-item-review-status/design.md` | Review is ONE status per icon row (the pair file's `review`), never per SVG version: the badge, filter, tally and approved count read the item, undo names no version, and old files migrate from their newest decided version (I-78) |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 

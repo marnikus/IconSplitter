@@ -38,7 +38,8 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   decision file), written tmp → verify → overwrite → cleanup. Missing sidecar
   = pending; a corrupt sidecar warns and never destroys the SVG files. Each
   version records the source path/fingerprint, the SVG path/version, the
-  generation and review status, the exact prompt, provider+model, request and
+  generation status (the review status is the item's ONE status, see below), the
+  exact prompt, provider+model, request and
   completion timestamps, input/output/total tokens when reported, the cost with
   its currency, basis and **pricing version**, the validation result and a
   redacted error.
@@ -67,10 +68,18 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   attribute on the root, written only when the document declares no colour of
   its own — exactly as the standalone file would. Copy/Code always hand over
   the saved bytes.
-* Review: a new valid SVG starts **pending**; Approve/Decline act on the
-  selection (one history entry per gesture, undoable). The approved version
-  is identified in the row; regenerating adds a new pending version without
-  deleting old decisions or history.
+* Review: **one status per item**, not per SVG version (2026-10-20,
+  `docs/archive/2026-10-20-item-review-status/`). A new valid SVG starts
+  **pending**; Approve/Decline act on the selection and write the pair's single
+  `review` (one history entry per gesture, undoable by source). Every version of
+  that row carries the same status, so switching the version you look at — the
+  newest, or one chosen from the history — never changes the badge, the review
+  filter, the tally or the approved count. Regenerating reopens the review for
+  the whole row (`needs-review`) without deleting a version; a failed attempt
+  changes neither the status nor the history. Files written before this change
+  have no item-level key: the newest decided version's status is read once and
+  upgraded on the next write, and a per-version `review` key stays in the stored
+  shape as a mirror so older builds read one consistent answer.
 * Regenerate SVG from (2026-10-09; batch 2026-10-20,
   `docs/archive/2026-10-20-regen-batch-and-task-prompts/`). A regeneration
   request carries the saved prompt **and** the current SVG code of every icon it

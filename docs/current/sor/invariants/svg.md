@@ -126,3 +126,16 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   changes only that task. A stored preset that no longer exists is named with its
   fallback, never silently replaced, and a regeneration task can never fall back
   to the main prompt.
+
+<a id="i-78"></a>
+* **I-78 (review belongs to the item, RULE 13/24 — 2026-10-20):** an icon row has
+  exactly ONE review status, stored once as the pair file's `review`. Approve /
+  Decline / Needs review write that one field (and mirror it into every version
+  record), so the row badge, its list row, the review filter, the tally and the
+  approved count read the item — switching the shown version, choosing another
+  in the history or renaming a file can never change them. A generated attempt
+  sets it (`pending`, or `needs-review` after a regeneration) and fails closed
+  for a failed attempt, which keeps the previous status. Undo records
+  `{ id, review }` — a version in an older entry is accepted and ignored — and a
+  file without the item-level key reads the newest decided version once
+  (`lib/pairmeta.derivedReview`), never per version.
