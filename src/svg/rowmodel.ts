@@ -3,7 +3,7 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
+import { chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { ALL_SVG_FILTER, applySvgFilters, pinOrder, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
@@ -25,7 +25,7 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
   const failed = versions.some((v) => v.status !== "generated");
   const row = withMeta({
     source, meta, corrupt, running: false, status: "not-generated", error: null, queued: false,
-    newest: null, preferred: null, approved: null,
+    newest: null, preferred: null, review: "pending",
   }, meta);
   return {
     ...row,
@@ -46,7 +46,7 @@ export function withMeta(row: SvgRow, meta: PairMeta | null): SvgRow {
     ...row, meta,
     newest: newestValid(versions),
     preferred: preferredVersion(versions, meta?.preferred ?? null),
-    approved: approvedVersion(versions),
+    review: meta?.review ?? "pending",
   };
 }
 
@@ -91,7 +91,7 @@ export function toListRow(row: SvgRow): SvgListRow {
   const v = shownVersion(row);
   return {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
-    generation: row.status, review: v?.review ?? "pending", ...versionFields(v),
+    generation: row.status, review: row.review, ...versionFields(v),
   };
 }
 

@@ -1,13 +1,21 @@
 // SvgImgConfirm.tsx — preview the precise image-edit payload before an
 // explicit provider send. Multi-icon edits show one square sheet per request;
 // the single-icon path keeps its existing prompt-and-reference behaviour.
+// 2026-10-20: the ad-hoc preset dropdown is replaced by the ONE task prompt
+// picker (`image.edit.single` / `image.edit.batch`), so this popup names its
+// default prompt, remembers it per shape, and can no longer mutate the shared
+// prompt by accident — a preset is read-only until it is loaded on purpose.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { connectionLabel, resolveSize, type Connection } from "../lib/svgconnections";
 import { imageEditLimit, MAX_EDIT_COUNT } from "../lib/svgimgbatch";
 import type { DirHandleLike } from "../lib/fs";
 import type { PromptPreset } from "../lib/promptpresets";
-import { Select } from "../ui/fields";
+import {
+  choiceText, resolveTaskPrompt, taskOf,
+  MAIN_ENTRY, type PromptTaskId, type ResolvedTaskPrompt, type TaskPromptEntry, type TaskPromptMap,
+} from "../lib/prompttasks";
+import TaskPromptPicker from "../ui/TaskPromptPicker";
 import { loadImageEditPref, saveImageEditPref } from "./imgprefs";
 import type { PreparedImageRun } from "./imgprepare";
 import type { SvgRow } from "./types";
@@ -15,6 +23,7 @@ import { useImgPreview, type ImagePreview } from "./useImgPreview";
 
 const EMPTY_ROWS: SvgRow[] = [];
 const EMPTY_ROOT: { current: DirHandleLike | null } = { current: null };
+const WORK = "image.edit" as const;
 
 export interface SvgImgConfirmProps {
   ids: readonly string[];
@@ -22,12 +31,16 @@ export interface SvgImgConfirmProps {
   rootRef?: { current: DirHandleLike | null };
   conn: Connection;
   presets: readonly PromptPreset[];
+  /** The stored main prompt — the task may use it or a saved preset instead. */
   prompt: string;
-  waitMs?: number;
+  /** The six tasks' remembered choices, read when the popup opened. */
+  taskEntries: TaskPromptMap;
+  onTaskEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void;
+  /** Writes the main prompt (the preset's text is loaded on purpose, never silently). */
   onPrompt: (prompt: string) => void;
-  onPickPreset: (name: string) => void;
   onConfirm: (prepared: PreparedImageRun | null) => void;
   onCancel: () => void;
+  waitMs?: number;
 }
 
 export default function SvgImgConfirm(p: SvgImgConfirmProps) {
@@ -46,7 +59,14 @@ export default function SvgImgConfirm(p: SvgImgConfirmProps) {
   );
 }
 
-interface ConfirmState {
+interface TaskState {
+  ownTask: PromptTaskId;
+  /** The task's resolved prompt — the one this edit really sends. */
+  own: ResolvedTaskPrompt; text: string; note: string; entries: TaskPromptMap;
+  chooseEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void; loadPreset: () => void;
+}
+
+interface ConfirmState extends TaskState {
   countText: string; count: number; limit: number; warning: boolean; multi: boolean;
   problem: string | null; preview: ImagePreview; ready: boolean;
   page: number; setPage: (page: number) => void; chooseCount: (text: string) => void;
@@ -56,16 +76,42 @@ function useImageConfirmState(p: SvgImgConfirmProps): ConfirmState {
   const [stored] = useState(loadImageEditPref);
   const [countText, setCountText] = useState(String(stored.count));
   const [page, setPage] = useState(0);
+  const prompt = useTaskState(p);
   const side = squareSide(p.conn);
   const count = Number(countText);
   const multi = p.ids.length > 1 && count > 1;
   const limit = imageEditLimit(side);
   const problem = countProblem(countText, p.ids.length, limit, side);
   const preview = useImgPreview({ rootRef: p.rootRef ?? EMPTY_ROOT, rows: p.rows ?? EMPTY_ROWS, ids: p.ids,
-    conn: p.conn, prompt: p.prompt, count, active: shouldPreview(multi, problem, p.prompt) });
+    conn: p.conn, prompt: prompt.text, count, active: shouldPreview(multi, problem, prompt.text) });
   const chooseCount = (text: string) => rememberCount(text, setCountText, setPage);
   return { countText, count, limit, warning: stored.warning, multi, problem, preview,
-    ready: canConfirm(p.prompt, problem, multi, preview), page, setPage, chooseCount };
+    ready: canConfirm(prompt.text, problem, multi, preview), page, setPage, chooseCount, ...prompt };
+}
+
+/** The picker's own state: which tab is shown, what that task will send. */
+function useTaskState(p: SvgImgConfirmProps): TaskState {
+  const ownTask = taskOf(WORK, p.ids.length);
+  const [entries, setEntries] = useState<TaskPromptMap>(p.taskEntries);
+  const sources = { presets: p.presets, mainPrompt: p.prompt };
+  const own = resolveTaskPrompt(ownTask, entries[ownTask], sources);
+  const chooseEntry = (id: PromptTaskId, entry: TaskPromptEntry) => {
+    setEntries((prev: TaskPromptMap) => ({ ...prev, [id]: entry }));
+    p.onTaskEntry(id, entry);
+  };
+  const loadPreset = () => {
+    if (own.choice.kind !== "preset") return;
+    p.onPrompt(own.choice.text);
+    chooseEntry(ownTask, MAIN_ENTRY);
+  };
+  return { ownTask, entries, chooseEntry, own, text: choiceText(own.choice, p.prompt),
+    note: noteFor(own), loadPreset };
+}
+
+/** What this task's prompt does for the edit in flight. */
+function noteFor(own: ResolvedTaskPrompt): string {
+  if (own.choice.kind === "preset") return "This saved prompt is used for this edit only — the prompt window is not changed.";
+  return "This edit sends the main prompt (currently loaded); editing it here changes the shared prompt.";
 }
 
 function countProblem(text: string, selected: number, limit: number, side: number): string | null {
@@ -98,7 +144,9 @@ function ConfirmBody({ p, state: s }: { p: SvgImgConfirmProps; state: ConfirmSta
       ? `each request sends one previewed square containing up to ${s.count} current main AI images to ${p.conn.name}. Review returned cells before saving their individual new versions. Nothing is overwritten.`
       : "each request sends this prompt together with that source’s current main AI image as the reference. One request per source; each result is saved as a new version and becomes the main AI source, which the SVG generation then uses. Nothing is overwritten."}</p>
     <PreviewPanel preview={s.preview} page={s.page} setPage={s.setPage} multi={s.multi} />
-    <PromptBlock presets={p.presets} prompt={p.prompt} onPickPreset={p.onPickPreset} onPrompt={p.onPrompt} />
+    <TaskPromptPicker testId="svg-img-prompt" work={WORK} count={p.ids.length}
+      entries={s.entries} onEntry={s.chooseEntry} sources={{ presets: p.presets, mainPrompt: p.prompt }} note={s.note} />
+    <PromptBox state={s} onPrompt={p.onPrompt} />
     <div className="svg-modal-actions">
       <button type="button" className="svg-btn primary" data-testid="svg-img-generate" disabled={!s.ready}
         title={!s.ready ? s.problem ?? "Write a prompt and wait for its exact reference preview" : undefined}
@@ -155,23 +203,21 @@ function ConfirmHead(p: { ids: number; conn: Connection; waitMs?: number; multi:
   </div>;
 }
 
-/** The shared prompt + its preset dropdown: preset on its own row, the prompt below at full width. */
-function PromptBlock({ presets, prompt, onPickPreset, onPrompt }: {
-  presets: readonly PromptPreset[]; prompt: string;
-  onPickPreset: (name: string) => void; onPrompt: (prompt: string) => void;
-}) {
+/** The prompt itself: editable only while the task uses the main prompt. */
+function PromptBox({ state: s, onPrompt }: { state: ConfirmState; onPrompt: (prompt: string) => void }) {
   const box = useRef<HTMLTextAreaElement | null>(null);
-  useFitToText(box, prompt);
+  const editable = s.own.choice.kind === "main";
+  useFitToText(box, s.text);
   return (
     <div className="svg-img-prompt-block">
-      <Select label="Prompt preset" testid="svg-img-preset" value=""
-        options={[["", "— pick a saved prompt —"], ...presets.map((x) => [x.name, x.name] as [string, string])]}
-        onChange={onPickPreset} />
       <label className="svg-field">
-        <span className="svg-label">Prompt</span>
+        <span className="svg-label">Prompt {editable ? "" : `— “${s.own.choice.kind === "preset" ? s.own.choice.name : ""}” is read-only`}</span>
         <textarea ref={box} className="svg-input svg-img-prompt" data-testid="svg-img-prompt" rows={3} aria-label="Image prompt"
-          value={prompt} onChange={(e) => onPrompt(e.target.value)} />
+          readOnly={!editable} value={s.text} onChange={(e) => editable && onPrompt(e.target.value)} />
       </label>
+      {!editable && <button type="button" className="svg-btn tiny" data-testid="svg-img-load-preset" onClick={s.loadPreset}>
+        Load into the main prompt editor
+      </button>}
     </div>
   );
 }

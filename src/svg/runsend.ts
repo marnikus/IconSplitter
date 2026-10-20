@@ -24,11 +24,18 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
   const text = await requestTextOf(state.args, items, plan);
   if (!text.ok) return { ok: false, error: text.error, failure: "payload", retryAfterMs: null };
   ctx.recorded = text.text.record;
+  ctx.records = text.text.records;
   const request = buildChatRequest({
     model: state.args.config.model, prompt: text.text.prompt, image: composite.dataUrl,
     caps: state.args.caps, params: state.args.params,
   });
   journalRequest(ctx);
+  return attemptSend(ctx, request);
+}
+
+/** The retry ladder: only a provider-confirmed failure is ever sent twice. */
+async function attemptSend(ctx: BatchCtx, request: ReturnType<typeof buildChatRequest>): Promise<SendOk | SendBad> {
+  const { state } = ctx;
   for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
     if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
     const out = await sendChatStreaming({

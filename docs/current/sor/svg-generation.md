@@ -63,6 +63,16 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   valid generated SVG never enter that batch. The shared confirmation says
   "Confirm SVG regeneration"; both actions keep the existing validation,
   versioned-save and confirmation gates.
+* Prompt tasks and batch regeneration (2026-10-20, I-74…I-77): a task is the
+  work (`svg.generate`, `svg.regenerate`, `image.edit`) × the selection's shape
+  (one icon = `single`, two or more = `batch`). Six tasks each remember their own
+  last prompt; the selection alone decides the task (one icon = single, two or
+  more = batch — nothing to switch) and the popup preselects and names it
+  **above** the picker (`svg-confirm-prompt-default`). Regeneration offers only
+  saved presets and carries each icon's current SVG code, up to nine (a 3×3
+  sheet) per request at the connection's **Images / request** (the popup shows
+  that number, it has no count of its own); a gone preset, a missing code or an
+  over-limit request is named and refuses the send.
 * Confirmation (nothing is sent by opening it): the selected count, the
   **total request count** and the configured per-request size, the
   provider/model, the sampling settings, the streaming fact and the effective

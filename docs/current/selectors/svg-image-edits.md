@@ -39,7 +39,10 @@ Opening the dialog sends nothing. Only an explicitly confirmed provider request 
 | `svg-img-preview-loading` / `svg-img-preview-error` / `svg-img-skipped` | states | the exact local composite is being prepared; a group that cannot be read/decoded is not sent, with named reason, while other valid groups remain available |
 | `svg-img-composite` / `svg-img-manifest` / `svg-img-effective-prompt` | preview | per-request square preview with numbered row-major filenames (relative path when names collide), blank-cell count, provider and **full** thin-line/grid prompt; `svg-img-prev` / `svg-img-next` page valid requests |
 | `svg-img-review` / `svg-img-apply` / `svg-img-discard` | returned-mosaic review dialog | returned mosaic beside proposed named cell crops; only Apply saves independent versions and changes each pair's main image; Discard changes no version and cannot refund a sent request |
-| `svg-img-preset` / `svg-img-prompt` | preset / editor | the SAME preset dropdown and prompt editor as SVG generation (the shared `PromptBlock`): picking a preset fills the editor with its text; the editor content is the prompt every request sends |
+| `svg-img-prompt` | editor | the same editable prompt box as before; editable only while the task uses the main prompt — a chosen preset is read-only and says so |
+| `svg-img-prompt-default` / `svg-img-prompt-box` | note / wrapper | the same picker as SVG generation (I-77): the selected count decides `image.edit.single` vs `image.edit.batch` (no tab), `data-task` names it, and its default prompt is stated above the list |
+| `svg-img-prompt-select` / `svg-img-prompt-effective` | `select` / small | main prompt plus every saved preset (`iconSplitter.svg.prompts.v1`); a preset notice says the prompt window is not changed |
+| `svg-img-load-preset` | button | explicit "Load into the main prompt editor": writes the preset's text into the shared prompt and returns this task to the main prompt |
 
 ## Image-edit interruption and status
 

@@ -8,12 +8,14 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 |---|---|
 | `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-title` is "Confirm SVG generation" or "Confirm SVG regeneration"; `svg-confirm-generate` says "Generate now" / "Regenerate now" while idle and "Add to queue" during a run, with `svg-confirm-cancel` / `svg-confirm-close` |
 | `svg-confirm-mode` | badge | "Generation batch now" vs "Regeneration now" — clearly says which prompt path this batch uses (2026-10-09) |
-| `svg-confirm-main-prompt` | note | generation only: "Uses the main currently loaded prompt" — main prompt not reloaded in popup |
-| `svg-confirm-regen-preset` / `svg-confirm-regen-note` / `svg-confirm-regen-label` | regeneration only: dropdown of saved prompts applied to full batch, plus note |
-| `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + main prompt), regeneration = `currentSvgPrompt(presetText, stem, code)` (preset + Icon name line for title detection + current SVG code verbatim). One per request; regeneration loads code via `readSvgText` |
+| `svg-confirm-task` | badge | the task in force: "Generate SVG · batch" / "Regenerate SVG · single icon" (I-77) |
+| `svg-confirm-prompt-default` | note | **above** the picker: "Default prompt for this task — …" (states a gone preset or the refusal) |
+| `svg-confirm-prompt-box` | wrapper | `data-task` names the task the selection itself decided (`…​.single` for one icon, `…​.batch` for two or more) — there is no tab or switch to choose it |
+| `svg-confirm-prompt-select` / `svg-confirm-prompt-note` | `select` / small | the detected task's prompt: main (generation) plus every saved preset; regeneration only lists presets. Choosing one is remembered for that task alone |
+| `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for the current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + the task's prompt), regeneration = `regenBatchPrompt` (preset + ordered manifest + response contract + **every** carried icon's current SVG code; one icon keeps the single-icon text). One per request, built from the frozen codes |
 | `svg-confirm-full-prompt-note` | small | explains what full prompt contains |
 | `svg-confirm-full-prompt-loading` | note | shown while SVG code loads for regeneration preview |
-| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
+| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size, read from the connection's **Images / request** (no count control in the popup) ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
 | `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
@@ -52,13 +54,12 @@ storage (`iconSplitter.svg.regen.v1`) is still honoured there.
 |---|---|---|
 | `svg-confirm-mode` | badge | "Generation batch now" (first generation, uses main prompt) vs "Regeneration now" (regeneration, uses chosen preset) |
 | `svg-confirm-main-prompt` | small note | shown only for generation — names that main prompt is used, not reloaded |
-| `svg-confirm-regen-preset` | `select` | shown only for regeneration — dropdown of saved SVG prompts (`iconSplitter.svg.prompts.v1`), applies selected prompt to full batch |
-| `svg-confirm-regen-note` | small | regeneration note: what chosen preset does, or "No saved prompts yet — save one in the prompt window" |
-| `svg-confirm-regen-label` | label | "Regeneration prompt" (aria for the select) |
+| `svg-confirm-prompt-select` | `select` | the task's saved prompts (`iconSplitter.svg.prompts.v1`); regeneration lists only presets and its default is the shape's remembered one |
+| `svg-confirm-prompt-note` | small | what the choice does to this batch, or that the other shape's default is not used by it |
 | `svg-confirm-problem` | p | when no presets, says why confirm is disabled |
 
-Generation popup shows `svg-confirm-main-prompt` and no preset dropdown.
-Regeneration popup shows `svg-confirm-regen-preset` + `svg-confirm-regen-note` and hides main-prompt note.
+Generation popup lists `Main prompt (currently loaded)` first; the regeneration
+popup lists only saved presets and disables confirm when none exists.
 `onConfirm` receives the selected preset name (`string`) for regeneration, `null` for generation.
 
 ## Legacy global window handles (still rendered only when `RegenSettingWindow` is used directly, not in main prompt zone)

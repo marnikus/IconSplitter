@@ -32,7 +32,7 @@ export async function runBatch(state: RunState, plan: BatchPlan, index: number):
   const ctx = newBatchCtx({
     state, plan, index, items, startedAt: Date.now(),
     hash: "", usage: null, share: null, error: null, requestId: null, unsettled: false,
-    recorded: state.args.prompt,
+    recorded: state.args.prompt, records: new Map(),
   });
   const composite = await tryComposite(ctx);
   if (composite === null) return finishBatch(ctx); // nothing was sent: every item is already failed
@@ -76,6 +76,8 @@ export interface BatchCtx {
   unsettled: boolean;
   /** The prompt text this request's versions record (never an SVG code). */
   recorded: string;
+  /** One record per source, when a batch member must name its own position (I-76). */
+  records: ReadonlyMap<string, string>;
 }
 
 interface Tally {
@@ -146,7 +148,7 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   const usage = ctx.share ?? zeroUsage();
   const isRegen = state.args.regen.kind === "current-svg";
   const args: SaveArgs = {
-    root: state.args.root, source: item, code, prompt: ctx.recorded,
+    root: state.args.root, source: item, code, prompt: ctx.records.get(item.id) ?? ctx.recorded,
     provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
     usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
     review: isRegen ? "needs-review" : "pending",

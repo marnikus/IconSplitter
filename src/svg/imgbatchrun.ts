@@ -12,6 +12,7 @@ import { NO_USAGE, type Usage } from "../lib/svgrequest";
 import { allocateUsage } from "../lib/svgusage";
 import type { SvgCtx } from "./actions";
 import { recordImageResult } from "./imgcommit";
+import { taskPromptOf } from "./taskprompt";
 import { loadImageJournal, removeImageRequest, saveImageJournal, upsertImageRequest, type ImageRequestEvidence } from "./imgjournal";
 import { imageGroupSpec, imageSpendSuffix } from "./imglog";
 import { sourceChangeReason } from "./imgstale";
@@ -85,7 +86,7 @@ function guardPrepared(c: SvgCtx, prepared: PreparedImageRun, key: string | null
   const dialog = c.m.dialog;
   if (dialog?.kind !== "image-regen" || !sameImageSelection(dialog.ids, prepared.ids)) return "Selection changed — review the image request again";
   if (c.refs.root.current !== prepared.root) return "Folder changed — review the image request again";
-  if (c.m.prompt !== prepared.prompt) return "Prompt changed — review the image request again";
+  if (taskPromptOf(c, "image.edit", prepared.ids.length) !== prepared.prompt) return "Prompt changed — review the image request again";
   const conn = c.m.connections.find((x) => x.id === c.m.activeConn);
   if (!sameConnection(conn, prepared.conn)) return "Image connection changed — review the image request again";
   if (key === null) return "Add the API key first";

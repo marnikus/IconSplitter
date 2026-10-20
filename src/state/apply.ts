@@ -58,9 +58,13 @@ function toReviewPatch(value: unknown): SvgReviewPatch {
   return { recs };
 }
 
+/**
+ * One review record. A `version` key is ACCEPTED and ignored: entries recorded
+ * before the status became the item's (2026-10-20) still name one.
+ */
 function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
   if (!isRecord(value)) return false;
-  return typeof value.id === "string" && Number.isInteger(value.version)
+  return typeof value.id === "string"
     && (value.review === "pending" || value.review === "approved" || value.review === "declined" || value.review === "needs-review");
 }
 

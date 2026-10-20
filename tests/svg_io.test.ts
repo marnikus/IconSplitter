@@ -344,7 +344,7 @@ describe("row model", () => {
     const row = toRow(source, null, false);
     expect(row.status).toBe("not-generated");
     expect(row.newest).toBeNull();
-    expect(row.approved).toBeNull();
+    expect(row.review).toBe("pending");
     expect(toListRow(row)).toMatchObject({ generation: "not-generated", review: "pending", version: 0, tokens: null, cost: null });
   });
 
@@ -639,16 +639,16 @@ describe("runner events and the review decision", () => {
       say: () => {}, hist: { push: (e: { label: string; ids: string[] }) => pushed.push(e) },
     };
     await decideReview(ctx, [FOG], "approved");
-    expect(rows[0].newest?.review).toBe("approved");
+    expect(rows[0].review).toBe("approved");
     expect(pushed).toHaveLength(1);
     expect(pushed[0].label).toBe("Approve 1 SVG");
     const onDisk = parsePairMeta(await (await (await root.getDirectoryHandle("architecture")).getFileHandle("fog_AI.svg.json")).getFile().then((f) => f.text()));
     expect(onDisk.ok && onDisk.meta.versions[0].review).toBe("approved");
     expect(onDisk.ok && onDisk.meta.decision).toBe("approved"); // the pair decision is untouched
 
-    const back = await applyReviewPatch(ctx, { recs: [{ id: FOG, version: 1, review: "declined" }] });
+    const back = await applyReviewPatch(ctx, { recs: [{ id: FOG, review: "declined" }] });
     expect(back).toBe(true);
-    expect(rows[0].newest?.review).toBe("declined");
+    expect(rows[0].review).toBe("declined");
   });
 
   it("refuses to review a source with no generated version", async () => {

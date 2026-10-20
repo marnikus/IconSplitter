@@ -142,7 +142,7 @@ function countsOf(g: SvgGenApi): SvgCounts {
   return {
     eligible: rows.length,
     generated: rows.filter((r) => r.status === "generated").length,
-    approved: rows.filter((r) => shownVersion(r)?.review === "approved").length,
+    approved: rows.filter((r) => r.review === "approved").length,
     failed: rows.filter((r) => r.status === "failed").length,
   };
 }

@@ -11,10 +11,11 @@ import { readPreferred } from "./pairpreferred";
 import { parseAiName } from "./naming";
 import { pairId } from "./pairing";
 import type { Decision } from "./reviewfilter";
+import type { ReviewStatus } from "./svgmodel";
 import type { ReviewRecord } from "./reviewfile";
 import { svgStem } from "./svgfile";
 import { aiSideName, baseName } from "./pairpath";
-import { parseVersion, type SvgVersion } from "./svgmodel";
+import { isReview, parseVersion, type SvgVersion } from "./svgmodel";
 import { parseImageVersions, type ImageVersion } from "./svgimgreg";
 import type { ReviewPair, SideRef } from "./pairing";
 
@@ -51,6 +52,13 @@ export interface PairMeta extends PairIdentity {
   source: PairSide | null;
   decision: Decision | null;
   reviewedAt: string | null;
+  /**
+   * The ITEM's review status (2026-10-20): one status for the whole row, shared
+   * by every version. Switching the version you look at never changes it; a
+   * decision writes it here. The versions' own `review` key stays in the stored
+   * shape for older readers and is kept in step with this one.
+   */
+  review: ReviewStatus;
   versions: SvgVersion[];
   /**
    * The version the user chose to show (I-54) — an ADDITIVE field, so `v` stays
@@ -77,7 +85,7 @@ export interface NewMetaArgs extends PairIdentity {
 }
 
 export function newPairMeta(args: NewMetaArgs): PairMeta {
-  return { v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null, versions: [], preferred: null, imageVersions: [], imagePreferred: null };
+  return { v: PAIR_META_VERSION, ...args, decision: null, reviewedAt: null, review: "pending", versions: [], preferred: null, imageVersions: [], imagePreferred: null };
 }
 
 /** A side as the pair file stores it; the path drives name and stem. */
@@ -134,11 +142,33 @@ export function withDecision(meta: PairMeta, decision: Decision, nowIso: string)
 /**
  * One generation attempt recorded into the pair's file. The pair half — its
  * identity, its faces, its own decision — is carried over untouched, because a
- * generation must never drop an approval (and vice versa, I-41).
+ * generation must never drop an approval (and vice versa, I-41). A GENERATED
+ * attempt sets the item's one review status (a fresh SVG needs reviewing); a
+ * failed one changes neither the status nor the versions' mirror.
  */
 export function withVersion(meta: PairMeta, rec: SvgVersion): PairMeta {
   const rest = meta.versions.filter((v) => v.version !== rec.version);
-  return { ...meta, versions: [...rest, rec].sort((a, b) => a.version - b.version) };
+  const review = rec.status === "generated" ? rec.review : meta.review;
+  const versions = [...rest, rec].sort((a, b) => a.version - b.version).map((v) => ({ ...v, review }));
+  return { ...meta, review, versions };
+}
+
+/**
+ * The item's review status changes — once, for every version it has (2026-10-20).
+ * The versions' own key is mirrored so a reader that predates the item-level
+ * field still sees one consistent answer.
+ */
+export function withReview(meta: PairMeta, review: ReviewStatus): PairMeta {
+  return { ...meta, review, versions: meta.versions.map((v) => (v.review === review ? v : { ...v, review })) };
+}
+
+/**
+ * The status of a file written before the item-level field existed: the last
+ * version anyone decided (the newest decision wins), else pending.
+ */
+export function derivedReview(versions: readonly SvgVersion[]): ReviewStatus {
+  const decided = versions.filter((v) => v.review !== "pending");
+  return decided.length > 0 ? decided[decided.length - 1].review : "pending";
 }
 
 /** The stored shape (design §2): identity under `pair`, faces beside it. */
@@ -154,6 +184,9 @@ function toJson(meta: PairMeta): Record<string, unknown> {
     source: meta.source,
     decision: meta.decision,
     reviewedAt: meta.reviewedAt,
+    // The item's ONE review status; older builds ignore it and read the mirror
+    // each version still carries (no version bump, additive like `preferred`).
+    review: meta.review,
     // Written even when null: the key's presence documents the choice, and a
     // reader that predates it ignores an unknown key (I-54, no version bump).
     preferred: meta.preferred,
@@ -187,6 +220,7 @@ function readV2(raw: Record<string, unknown>): MetaParse {
   const id = str(pair.id);
   const base = str(pair.base);
   if (id === "" || base === "") return { ok: false };
+  const versions = (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []);
   return {
     ok: true,
     meta: {
@@ -196,7 +230,8 @@ function readV2(raw: Record<string, unknown>): MetaParse {
       decision: toDecision(raw.decision),
       reviewedAt: nullableStr(raw.reviewedAt),
       preferred: readPreferred(raw.preferred),
-      versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
+      review: isReview(raw.review) ? raw.review : derivedReview(versions),
+      versions,
       imageVersions: parseImageVersions(raw.imageVersions),
       imagePreferred: typeof raw.imagePreferred === "number" && Number.isFinite(raw.imagePreferred) ? raw.imagePreferred : null,
     },
@@ -209,6 +244,7 @@ export function pairMetaFromLegacy(raw: Record<string, unknown>): MetaParse {
   if (ai.relPath === "") return { ok: false };
   const dirPath = dirOf(ai.relPath);
   const named = nameParts(ai.relPath);
+  const versions = (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []);
   return {
     ok: true,
     meta: {
@@ -216,7 +252,8 @@ export function pairMetaFromLegacy(raw: Record<string, unknown>): MetaParse {
       id: pairId(dirPath, named.base, named.suffix),
       ...named, dirPath,
       ai, source: null, decision: null, reviewedAt: null, preferred: null, imageVersions: [], imagePreferred: null,
-      versions: (raw.versions as unknown[]).flatMap((v) => parseVersion(v) ?? []),
+      review: derivedReview(versions),
+      versions,
     },
   };
 }
