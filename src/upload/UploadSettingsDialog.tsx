@@ -25,6 +25,7 @@ import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
 import UploadShadowSettings from "./UploadShadowSettings";
+import UploadBadgeSettings from "./UploadBadgeSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -50,7 +51,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
     <div className="svg-modal-body">
       <p className="svg-note" data-testid="upload-dialog-scope">
         {p.id === null
-          ? "General settings are inherited; the Checked icons Shadow checkbox below applies only to the current selection."
+          ? "General settings are inherited; the Checked icons Shadow and Badge checkboxes below apply only to the current selection."
           : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults."}
       </p>
       <AsIsRow p={p} effective={effective} />
@@ -76,6 +77,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <StrokeColorSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
       <UploadShadowSettings p={p} effective={effective} />
+      <UploadBadgeSettings p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
         min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
@@ -97,11 +99,11 @@ function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: Up
   return (
     <div className="up-set-footer">
       <button type="button" className={`svg-btn${on ? " on" : ""}`} data-testid="upload-set-as-is" aria-pressed={on}
-        onClick={() => changeMany(p, { ...AS_IS_SETTINGS, shadowEnabled: false })}>All default (export as is)</button>
+        onClick={() => changeMany(p, { ...AS_IS_SETTINGS, shadowEnabled: false, badgeEnabled: false })}>All default (export as is)</button>
       <span className="up-hint" data-testid="upload-set-as-is-note">
         {on ? "every visual setting is default: the approved SVG is exported exactly as it is"
-          : p.id === null ? "reset global visual defaults; checked icons keep their separately applied shadows"
-            : "stroke, background, artboard and padding back to the SVG's own; this icon's shadow off"}
+          : p.id === null ? "reset global visual defaults; checked icons keep their separately applied shadows and badges"
+            : "stroke, background, artboard and padding back to the SVG's own; this icon's shadow and badge off"}
       </span>
     </div>
   );

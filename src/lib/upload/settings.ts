@@ -16,9 +16,11 @@ import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
 import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
 import type { EpsConverterId } from "./epsconv/types";
+import type { BadgeCorner } from "./cornerbadge";
 import {
-  ARTBOARD_MP_DEFAULT, MP_DEFAULT, PADDING_DEFAULT, QUALITY_DEFAULT, SHADOW_GAP_DEFAULT,
-  SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT, clampArtboardMegapixels, clampMegapixels,
+  ARTBOARD_MP_DEFAULT, BADGE_OFFSET_DEFAULT, BADGE_WIDTH_DEFAULT, MP_DEFAULT, PADDING_DEFAULT,
+  QUALITY_DEFAULT, SHADOW_GAP_DEFAULT, SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT,
+  clampArtboardMegapixels, clampBadgeOffsetPct, clampBadgeWidthPct, clampMegapixels,
   clampPaddingPct, clampQuality, clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
 } from "./settingsnumbers";
 
@@ -28,6 +30,14 @@ export {
   artboardSize, artboardTarget, clampArtboard, megapixelTargetOf, type Artboard,
 } from "./artboard";
 export { settingsFingerprint } from "./settingsfingerprint";
+export type { BadgeCorner } from "./cornerbadge";
+
+export const BADGE_CORNERS: readonly BadgeCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+export const BADGE_CORNER_DEFAULT: BadgeCorner = "bottom-right";
+
+export function parseBadgeCorner(value: unknown): BadgeCorner | null {
+  return typeof value === "string" && BADGE_CORNERS.includes(value as BadgeCorner) ? value as BadgeCorner : null;
+}
 
 export interface UploadSettings {
   /** Uniform padding on all four sides, % of the fitted artwork's largest side; null = default (the source's own margins). */
@@ -80,6 +90,16 @@ export interface UploadSettings {
   shadowWidthPct: number;
   /** Clear gap below the final painted icon as a percentage of icon height. */
   shadowGapPct: number;
+  /** The fixed vector badge, opt-in per icon and drawn inside the final artboard. */
+  badgeEnabled: boolean;
+  /** Which artboard edges the badge's inward offsets reference. */
+  badgeCorner: BadgeCorner;
+  /** Requested badge width as a percentage of final artboard width. */
+  badgeWidthPct: number;
+  /** Inward distance from the chosen left/right edge, % of artboard width. */
+  badgeOffsetXPct: number;
+  /** Inward distance from the chosen top/bottom edge, % of artboard height. */
+  badgeOffsetYPct: number;
 }
 
 export type SettingsOverrides = Partial<UploadSettings>;
@@ -114,6 +134,11 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   shadowEnabled: false,
   shadowWidthPct: SHADOW_WIDTH_DEFAULT,
   shadowGapPct: SHADOW_GAP_DEFAULT,
+  badgeEnabled: false,
+  badgeCorner: BADGE_CORNER_DEFAULT,
+  badgeWidthPct: BADGE_WIDTH_DEFAULT,
+  badgeOffsetXPct: BADGE_OFFSET_DEFAULT,
+  badgeOffsetYPct: BADGE_OFFSET_DEFAULT,
 };
 
 /** A paint field: its sentinel word (`transparent` / `artwork`) or a normalized hex; null = unreadable. */
@@ -157,6 +182,11 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     shadowEnabled: false, // Only an icon override can opt in; persisted defaults must never enable unchecked icons.
     shadowWidthPct: clampShadowWidthPct(raw.shadowWidthPct),
     shadowGapPct: clampShadowGapPct(raw.shadowGapPct),
+    badgeEnabled: false, // The badge also opts in only through per-icon overrides.
+    badgeCorner: parseBadgeCorner(raw.badgeCorner) ?? BADGE_CORNER_DEFAULT,
+    badgeWidthPct: clampBadgeWidthPct(raw.badgeWidthPct),
+    badgeOffsetXPct: clampBadgeOffsetPct(raw.badgeOffsetXPct),
+    badgeOffsetYPct: clampBadgeOffsetPct(raw.badgeOffsetYPct),
   };
 }
 
@@ -168,6 +198,8 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   readFlags(raw, out);
   readPaints(raw, out);
   readArtboard(raw, out);
+  const corner = parseBadgeCorner(raw.badgeCorner);
+  if (corner !== null) out.badgeCorner = corner;
   if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
   return out;
 }
@@ -180,6 +212,9 @@ const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["artboardMegapixels", clampArtboardMegapixels],
   ["shadowWidthPct", clampShadowWidthPct],
   ["shadowGapPct", clampShadowGapPct],
+  ["badgeWidthPct", clampBadgeWidthPct],
+  ["badgeOffsetXPct", clampBadgeOffsetPct],
+  ["badgeOffsetYPct", clampBadgeOffsetPct],
 ];
 
 /** The paint fields and the word that means "none of ours". */
@@ -199,7 +234,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels", "shadowEnabled"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels", "shadowEnabled", "badgeEnabled"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -238,6 +273,7 @@ export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
   "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
+  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {

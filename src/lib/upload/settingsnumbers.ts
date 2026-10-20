@@ -18,6 +18,12 @@ export const SHADOW_WIDTH_MAX = 200;
 export const SHADOW_GAP_DEFAULT = 5;
 export const SHADOW_GAP_MIN = 0;
 export const SHADOW_GAP_MAX = 100;
+export const BADGE_WIDTH_DEFAULT = 40;
+export const BADGE_WIDTH_MIN = 1;
+export const BADGE_WIDTH_MAX = 100;
+export const BADGE_OFFSET_DEFAULT = 3;
+export const BADGE_OFFSET_MIN = 0;
+export const BADGE_OFFSET_MAX = 100;
 
 export const clampPaddingPct = (value: unknown) => clampNum(value, PADDING_MIN, PADDING_MAX, PADDING_DEFAULT);
 export const clampStrokePx = (value: unknown) => clampNum(value, STROKE_MIN, STROKE_MAX, STROKE_DEFAULT);
@@ -26,6 +32,8 @@ export const clampArtboardMegapixels = (value: unknown) => clampNum(value, MP_MI
 export const clampQuality = (value: unknown) => clampNum(value, QUALITY_MIN, QUALITY_MAX, QUALITY_DEFAULT);
 export const clampShadowWidthPct = (value: unknown) => clampNum(value, SHADOW_WIDTH_MIN, SHADOW_WIDTH_MAX, SHADOW_WIDTH_DEFAULT);
 export const clampShadowGapPct = (value: unknown) => clampNum(value, SHADOW_GAP_MIN, SHADOW_GAP_MAX, SHADOW_GAP_DEFAULT);
+export const clampBadgeWidthPct = (value: unknown) => clampNum(value, BADGE_WIDTH_MIN, BADGE_WIDTH_MAX, BADGE_WIDTH_DEFAULT);
+export const clampBadgeOffsetPct = (value: unknown) => clampNum(value, BADGE_OFFSET_MIN, BADGE_OFFSET_MAX, BADGE_OFFSET_DEFAULT);
 
 function clampNum(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);

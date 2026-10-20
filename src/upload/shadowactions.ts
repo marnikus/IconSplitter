@@ -3,41 +3,25 @@
 import { useCallback, useRef } from "react";
 import { perIconFields } from "../lib/upload/asis";
 import {
-  clampShadowGapPct, clampShadowWidthPct, effectiveSettings, overridesEqual,
+  clampShadowGapPct, clampShadowWidthPct, effectiveSettings,
   type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 import type { Slice, UploadCtx } from "./actions";
+import { commitBatch } from "./selectedsettings";
 
 type ShadowDimensions = Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">;
-type MakeOverride = (id: string, prior: SettingsOverrides) => SettingsOverrides | null;
 
-/** One selected-only edit, one discrete undo entry; skip rows that do not change. */
-function commitBatch(c: UploadCtx, ids: string[], label: string, make: MakeOverride): number {
-  const before: Record<string, SettingsOverrides | null> = {};
-  const after: Record<string, SettingsOverrides | null> = {};
-  const changed: string[] = [];
-  for (const id of ids) {
-    const prior = c.m.overrides[id] ?? {};
-    const next = make(id, prior);
-    if (next === null || overridesEqual(prior, next)) continue;
-    before[id] = c.m.overrides[id] ?? null;
-    after[id] = next;
-    changed.push(id);
-  }
-  if (changed.length === 0) return 0;
-  c.dispatch({ type: "overrides-patch", overrides: after });
-  c.hist.push({ type: "uploadSettings", label, origin: "upload", ids: changed,
-    before: { overrides: before }, after: { overrides: after } });
-  c.say(`${label} — ${changed.length} icon${changed.length === 1 ? "" : "s"}`);
-  return changed.length;
-}
+/** The general bulk apply leaves every separately applied decoration pin untouched. */
+const DECORATION_FIELDS = [
+  "shadowEnabled", "shadowWidthPct", "shadowGapPct",
+  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
+] as const;
 
-/** The normal bulk apply must not erase a separately pinned shadow. */
-function shadowPins(prior: SettingsOverrides): SettingsOverrides {
+function decorationPins(prior: SettingsOverrides): SettingsOverrides {
   const out: SettingsOverrides = {};
-  if (prior.shadowEnabled !== undefined) out.shadowEnabled = prior.shadowEnabled;
-  if (prior.shadowWidthPct !== undefined) out.shadowWidthPct = prior.shadowWidthPct;
-  if (prior.shadowGapPct !== undefined) out.shadowGapPct = prior.shadowGapPct;
+  for (const key of DECORATION_FIELDS) {
+    if (prior[key] !== undefined) Object.assign(out, { [key]: prior[key] });
+  }
   return out;
 }
 
@@ -48,7 +32,7 @@ export function useOverrideApplyActions(ctx: UploadCtx): Slice<"applyDefaultsToS
     const c = latest.current;
     if (ids.length === 0) return c.say("Select at least one icon first", true);
     commitBatch(c, ids, "Apply settings to selected", (_id, prior) => ({
-      ...perIconFields(c.m.defaults), ...shadowPins(prior),
+      ...perIconFields(c.m.defaults), ...decorationPins(prior),
     }));
   }, []);
   return { applyDefaultsToSelected };

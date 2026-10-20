@@ -737,6 +737,52 @@ describe("runExport — honest failures", () => {
     expect(readRecord(root).validation).toMatchObject({ svg: true, jpeg: true });
   });
 
+  it("commits the opaque corner badge through SVG, JPEG and the built-in EPS writer", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, badgeEnabled: true, badgeCorner: "bottom-left",
+      badgeWidthPct: 40, badgeOffsetXPct: 3, badgeOffsetYPct: 5, includeEps: true };
+    const rendered: string[] = [];
+    const raster: RasterDeps = {
+      render: async (svg, target) => { rendered.push(svg); return target as unknown as HTMLCanvasElement; },
+      encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
+    };
+    const result = await runExport(args(root, { settings, defaults: { ...settings, badgeEnabled: false },
+      overrides: { badgeEnabled: true }, deps: { raster } }));
+    expect(result.status, result.error?.detail).toBe("processed");
+    expect(result.outputs.eps).toBe(`${ART}.eps`);
+    const preview = prepareExportSvg(SOURCE_SVG, settings);
+    if (!preview.ok) throw new Error(preview.detail);
+    expect(rendered).toHaveLength(1);
+    expect(rendered[0].replace(/(<svg\b[^>]*?) width="\d+" height="\d+"/, "$1")).toBe(preview.svg);
+    const committed = fileText(root, `${DIR}/export/${ART}.svg`);
+    expect(verifyExportSvg(committed)).toEqual([]);
+    expect(committed).not.toContain("<text");
+    const baselineRoot = pairRoot();
+    const baseline = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    expect((await runExport(args(baselineRoot, { settings: baseline, defaults: baseline }))).status).toBe("processed");
+    expect(committed).not.toBe(fileText(baselineRoot, `${DIR}/export/${ART}.svg`));
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(eps).not.toMatch(/^\s*stroke\s*$/m); // the supplied badge has filled shapes only
+    expect(eps).not.toBe(fileText(baselineRoot, `${DIR}/export/${ART}.eps`));
+    expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(SOURCE_SVG);
+  });
+
+  it("a badge with a gradient shadow still reports only built-in EPS as partial", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, badgeEnabled: true, shadowEnabled: true, includeEps: true };
+    const result = await runExport(args(root, { settings, defaults: { ...settings, badgeEnabled: false, shadowEnabled: false },
+      overrides: { badgeEnabled: true, shadowEnabled: true }, deps: { raster: captureRaster().deps } }));
+    expect(result.status).toBe("partial");
+    expect(result.error?.klass).toBe("eps");
+    expect(readRecord(root).outputs.eps).toBeNull();
+    const prepared = prepareExportSvg(SOURCE_SVG, settings);
+    if (!prepared.ok) throw new Error(prepared.detail);
+    expect(new DOMParser().parseFromString(prepared.svg, "image/svg+xml").querySelectorAll("path").length).toBeGreaterThanOrEqual(7);
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("radialGradient");
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).not.toBe(SOURCE_SVG);
+  });
+
   it("turning EPS off removes the old output from the record and Download all", async () => {
     const root = pairRoot();
     const on: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };

@@ -1,11 +1,13 @@
 /// <reference types="vite/client" />
 // settingsfingerprint.ts — only output-affecting Upload settings enter the export fingerprint.
-// The shadow suffix is conditional: existing shadow-off packages retain their fingerprint.
+// Template suffixes are conditional: existing effects-off packages retain their fingerprint.
 import shadowTemplate from "../../svg/templates/shadow.svg?raw";
+import badgeTemplate from "../../svg/templates/editable-stroke-width.svg?raw";
 import { fnv1a32 } from "../pairing";
 import type { UploadSettings } from "./settings";
 
 const templateHash = fnv1a32(shadowTemplate).toString(16);
+const badgeTemplateHash = fnv1a32(badgeTemplate).toString(16);
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export function settingsFingerprint(s: UploadSettings): string {
@@ -18,6 +20,7 @@ export function settingsFingerprint(s: UploadSettings): string {
     ...(s.expandStrokes ? ["expand"] : []),
     ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, templateHash]] : []),
+    ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, badgeTemplateHash]] : []),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

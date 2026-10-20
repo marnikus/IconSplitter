@@ -23,6 +23,7 @@
 
 import { artboardTarget, BACKGROUND_SOURCE, isTransparent, megapixelTargetOf, readPaint, TRANSPARENT, type UploadSettings } from "./settings";
 import { isAsIs } from "./asis";
+import { appendCornerBadge } from "./cornerbadge";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
@@ -103,6 +104,8 @@ function buildExport(doc: Document, root: Element, settings: UploadSettings, fra
   const globalStroke = unifyStrokes(placed.root); // the artboard rect included: it says `stroke="none"` only when the root hoists a paint
   // The shadow is explicitly stroke-free even if the source has no strokes to hoist.
   placed.shadow?.setAttribute("stroke", "none");
+  const badgeFailure = badgeFailureOf(placed.root, settings);
+  if (badgeFailure !== null) return badgeFailure;
   doc.replaceChild(placed.root, root);
   return {
     ok: true,
@@ -111,6 +114,18 @@ function buildExport(doc: Document, root: Element, settings: UploadSettings, fra
     shapesBaked: placed.shapesBaked, strokesNormalized: placed.widths, strokesRecolored: placed.colors,
     strokesExpanded: placed.expanded, asIs: false,
   };
+}
+
+/** An artboard decoration cannot affect the icon fit or the stroke hoist. */
+function badgeFailureOf(root: Element, settings: UploadSettings): PrepareFailure | null {
+  if (!settings.badgeEnabled) return null;
+  const board = viewBoxOf(root);
+  if (board === null) return fail("no-fit", "the final artboard has no room for the corner badge");
+  const badge = appendCornerBadge(root, { width: board.width, height: board.height }, {
+    corner: settings.badgeCorner, widthPct: settings.badgeWidthPct,
+    offsetXPct: settings.badgeOffsetXPct, offsetYPct: settings.badgeOffsetYPct,
+  });
+  return badge.ok ? null : fail(badge.code, badge.detail);
 }
 
 /** As is: the source text itself, framed by its own viewBox (or px size); null = no readable frame, so the pipeline decides. */

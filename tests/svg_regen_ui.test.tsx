@@ -116,6 +116,8 @@ describe("Export settings — the regen window moved out", () => {
       <UploadSettingsDialog scope={null} id={null} defaults={normalizeSettings(null)} overrides={{}}
         selectedShadow={{ state: "none", width: 80, gap: 5, epsUnsupported: 0 }} selectedCount={0}
         onSelectedShadowToggle={() => undefined} onSelectedShadowDimensions={() => undefined}
+        selectedBadge={{ state: "none", width: 40, corner: "bottom-right", offsetX: 3, offsetY: 3 }}
+        onSelectedBadgeToggle={() => undefined} onSelectedBadgePlacement={() => undefined}
         onDefaults={() => undefined} onOverride={() => undefined} onResetOverride={() => undefined} onClose={() => undefined} />,
     );
     expect(q("[data-testid=svg-regen]")).toBeNull();

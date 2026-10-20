@@ -4,7 +4,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
 **2026-10-19 — "default" for every visual setting** ([plan](../../archive/2026-10-19-upload-default-settings/README.md)):
-- `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow is off) + `upload-set-as-is-note`; it turns Shadow off in the current scope;
+- `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow/badge are off) + `upload-set-as-is-note`; it turns both effects off in the icon scope;
 - `upload-set-padding-default` (toggles null ↔ 8 **only on the button**, never the blank field around it; `upload-set-padding` reads empty with placeholder `default`; its visible Padding label targets this number input);
 - `upload-set-bg-default` (before `-transparent`);
 - `upload-set-stroke-color-artwork` now reads **Default**; both "none" choices are buttons;
@@ -26,6 +26,17 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   `upload-shadow-eps-note` warns inside either dialog when the icon or any
   shadowed checked icon requests built-in EPS (the global warning stays visible
   above the bulk bar while the popup is open).
+- `upload-set-badge-section`: the supplied fixed 412×20 vector. Global scope
+  `upload-badge-controls` contains `upload-set-badge-selected` (native checkbox:
+  none/mixed/all, disabled with no checks) and selected-only
+  `upload-badge-{width,corner,offset-x,offset-y}`. These edit already-badged
+  checked icons, including hidden checks; the active unchecked icon is safe.
+  `upload-set-badge-{width,corner,offset-x,offset-y}` under **Badge defaults**
+  change inherited placement without opting icons in. Per-icon scope has the
+  `upload-set-badge` checkbox and override markers `upload-set-marker-badge*`.
+  Width 1–100% (default 40); X/Y insets 0–100% (default 3 each) are measured
+  from the selected left/right and top/bottom edges. The labels follow the
+  corner; `upload-badge-fit-note` explains uniform shrink/no-fit at 100%.
 
 `upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope** (follow-up 2026-10-19): that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; blank field space does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 The older text below is kept for the other handles.

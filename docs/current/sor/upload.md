@@ -30,10 +30,14 @@ opt-in class as Generate SVG → Requesty; design
   width/gap controls and a matching live export preview. The active unchecked
   row and provider confirmation are untouched; [settings](upload-settings.md)
   and [geometry](upload-geometry.md) own the detailed contract.
+* An independent **Corner badge** checkbox in that popup places the supplied
+  vector graphic on checked icons' final artboards. Corner, width and X/Y edge
+  insets are configurable without changing icon fit; [badge](upload-badge.md)
+  owns its selected-only/per-icon, preview and export contract.
 
 ## Navigate by operation
 
-- [Settings and artboard](upload-settings.md) · [output geometry](upload-geometry.md)
+- [Settings and artboard](upload-settings.md) · [output geometry](upload-geometry.md) · [corner badge](upload-badge.md)
 - [Metadata generation, validation and confirmation](upload-metadata.md)
 - [Clean SVG, JPEG and atomic export](upload-export.md)
 - [EPS conversion and stroke expansion](upload-eps.md)

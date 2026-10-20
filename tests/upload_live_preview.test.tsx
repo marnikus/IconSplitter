@@ -196,6 +196,26 @@ describe("per-icon shadow controls and exact live preview", () => {
   });
 });
 
+describe("per-icon corner badge in the live export preview", () => {
+  it("updates the same vector preview when the badge is enabled, resized and reset", async () => {
+    await mount();
+    expect(preview().shadowRoot?.querySelectorAll("path")).toHaveLength(1);
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-badge]");
+    await waitUntil(() => (preview().shadowRoot?.querySelectorAll("path").length ?? 0) >= 8,
+      "the artboard badge in the row preview", 8000);
+    const first = art();
+    await type("[data-testid=upload-set-badge-width]", "60");
+    await blur("[data-testid=upload-set-badge-width]");
+    await waitUntil(() => art() !== first, "the resized badge in the preview", 8000);
+    expect(loadUploadSettings().overrides[FOG]).toMatchObject({ badgeEnabled: true, badgeWidthPct: 60 });
+    await click("[data-testid=upload-set-as-is]");
+    expect(loadUploadSettings().overrides[FOG]?.badgeEnabled).toBe(false);
+    await waitUntil(() => preview().shadowRoot?.querySelectorAll("path").length === 1,
+      "the source preview without a badge", 8000);
+  });
+});
+
 describe("the preview box: the artboard's ratio inside the zoom square", () => {
   it("a 2:1 artboard draws full zoom width and half height", async () => {
     await mount({ artboard: { mode: "custom", size: 512, width: 200, height: 100 } });

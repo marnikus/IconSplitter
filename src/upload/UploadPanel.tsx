@@ -15,6 +15,7 @@ import { downloadPlanOf } from "./downloadactions";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
 import { selectedShadow } from "./shadowselection";
+import { selectedBadge } from "./badgeselection";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
 import UploadMetaDialog from "./UploadMetaDialog";
@@ -222,6 +223,9 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       selectedCount={g.checked.length}
       onSelectedShadowToggle={() => g.toggleShadowSelected(g.checked)}
       onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
+      selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides)}
+      onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
+      onSelectedBadgePlacement={(patch) => g.setBadgeSelected(g.checked, patch)}
       onDefaults={g.setDefaults}
       onOverride={g.setOverride}
       onResetOverride={g.resetOverride}

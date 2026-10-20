@@ -38,6 +38,12 @@ describe("toUploadSettingsPatch — the payload gate", () => {
     expect(toUploadSettingsPatch({ overrides: { pair_a: { shadowEnabled: "on", shadowWidthPct: NaN } } })).toBeNull();
   });
 
+  it("validates badge pins including a corrupt corner and out-of-range insets", () => {
+    expect(toUploadSettingsPatch({ overrides: { pair_a: { badgeEnabled: true, badgeCorner: "top-left", badgeWidthPct: 200, badgeOffsetXPct: -2, badgeOffsetYPct: 900 } } }))
+      .toEqual({ overrides: { pair_a: { badgeEnabled: true, badgeCorner: "top-left", badgeWidthPct: 100, badgeOffsetXPct: 0, badgeOffsetYPct: 100 } } });
+    expect(toUploadSettingsPatch({ overrides: { pair_a: { badgeEnabled: "yes", badgeCorner: "middle" } } })).toBeNull();
+  });
+
   it("refuses payloads that carry nothing usable", () => {
     expect(toUploadSettingsPatch(null)).toBeNull();
     expect(toUploadSettingsPatch("x")).toBeNull();
@@ -65,6 +71,10 @@ describe("overridesEqual", () => {
     expect(overridesEqual({ jpegMatchArtboard: false }, { jpegMatchArtboard: false })).toBe(true);
     expect(overridesEqual({ jpegMatchArtboard: true }, { jpegMatchArtboard: false })).toBe(false);
     expect(overridesEqual({ jpegMatchArtboard: true }, {})).toBe(false);
+    expect(overridesEqual({ badgeEnabled: true }, { badgeEnabled: false })).toBe(false);
+    expect(overridesEqual({ badgeCorner: "top-left" }, { badgeCorner: "bottom-right" })).toBe(false);
+    expect(overridesEqual({ badgeWidthPct: 40, badgeOffsetXPct: 3, badgeOffsetYPct: 3 },
+      { badgeWidthPct: 40, badgeOffsetXPct: 4, badgeOffsetYPct: 3 })).toBe(false);
   });
 });
 
@@ -117,6 +127,14 @@ describe("applyEntry — the uploadSettings route", () => {
     const withShadow = { overrides: { pair_a: { shadowEnabled: true, shadowWidthPct: 90, shadowGapPct: 12 } } };
     await expect(applyEntry(entry(), withShadow)).resolves.toBe(true);
     expect(loadOverrides().pair_a).toEqual(withShadow.overrides.pair_a);
+    await expect(applyEntry(entry(), { overrides: { pair_a: null } })).resolves.toBe(true);
+    expect(loadOverrides()).toEqual({});
+  });
+
+  it("restores a badge override and its placement while the Upload panel is unmounted", async () => {
+    const withBadge = { overrides: { pair_a: { badgeEnabled: true, badgeCorner: "bottom-left", badgeWidthPct: 51, badgeOffsetXPct: 7, badgeOffsetYPct: 8 } } };
+    await expect(applyEntry(entry(), withBadge)).resolves.toBe(true);
+    expect(loadOverrides().pair_a).toEqual(withBadge.overrides.pair_a);
     await expect(applyEntry(entry(), { overrides: { pair_a: null } })).resolves.toBe(true);
     expect(loadOverrides()).toEqual({});
   });
