@@ -163,12 +163,15 @@ export function withReview(meta: PairMeta, review: ReviewStatus): PairMeta {
 }
 
 /**
- * The status of a file written before the item-level field existed: the last
- * version anyone decided (the newest decision wins), else pending.
+ * The status of a file written before the item-level field existed: the
+ * highest-numbered decided version wins, regardless of stored array order.
  */
 export function derivedReview(versions: readonly SvgVersion[]): ReviewStatus {
-  const decided = versions.filter((v) => v.review !== "pending");
-  return decided.length > 0 ? decided[decided.length - 1].review : "pending";
+  let newest: SvgVersion | null = null;
+  for (const version of versions) {
+    if (version.review !== "pending" && (newest === null || version.version >= newest.version)) newest = version;
+  }
+  return newest?.review ?? "pending";
 }
 
 /** The stored shape (design §2): identity under `pair`, faces beside it. */

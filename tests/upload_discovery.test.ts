@@ -73,6 +73,39 @@ describe("discoverUploadSources — approved-only, one row per pair", () => {
     expect(row.approvedValid).toBe(2);
   });
 
+  it("does not export an older approved version when a legacy item's newest review is declined", async () => {
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    delete stored.review; // pre-item-review pair files recorded decisions on versions only
+    stored.versions[1].review = "declined";
+    const root = new FakeDir("test_processing");
+    pairDir(root, DIR, AI, { [`${STEM}.svg`]: "<svg/>", [`${STEM}_v2.svg`]: "<svg/>" }, JSON.stringify(stored));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(0);
+    expect(found.excluded[0]?.kind).toBe("no-approved-svg");
+  });
+
+  it("keeps a regenerated item out of Upload until the item is approved again", async () => {
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    stored.review = "needs-review";
+    const root = new FakeDir("test_processing");
+    pairDir(root, DIR, AI, { [`${STEM}.svg`]: "<svg/>", [`${STEM}_v2.svg`]: "<svg/>" }, JSON.stringify(stored));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(0);
+    expect(found.excluded[0]?.kind).toBe("no-approved-svg");
+  });
+
+  it("exports the newest valid version when the item is approved, regardless of old version reviews or preview choice", async () => {
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    stored.review = "approved";
+    stored.versions[1].review = "declined";
+    stored.preferred = 1; // preview choice does not change the Upload source
+    const root = new FakeDir("test_processing");
+    pairDir(root, DIR, AI, { [`${STEM}.svg`]: "<svg/>", [`${STEM}_v2.svg`]: "<svg/>" }, JSON.stringify(stored));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(1);
+    expect(found.rows[0]).toMatchObject({ version: 2, approvedValid: 2 });
+  });
+
   it("reports the unapproved pair, never lists it", async () => {
     const found = await discoverUploadSources(happyRoot());
     expect(found.excluded).toHaveLength(1);

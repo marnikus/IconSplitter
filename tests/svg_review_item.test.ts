@@ -78,6 +78,17 @@ describe("the item's review status", () => {
     expect(bogus.ok && bogus.meta.review).toBe("approved");
   });
 
+  it("derives a legacy review by version number even when records are out of order", () => {
+    const legacy = JSON.parse(serializePairMeta(metaWith(["pending", "pending"]))) as Record<string, unknown>;
+    delete legacy.review;
+    const records = legacy.versions as { version: number; review: string }[];
+    records[0].review = "approved";
+    records[1].review = "declined";
+    legacy.versions = [...records].reverse();
+    const parsed = parsePairMeta(JSON.stringify(legacy));
+    expect(parsed.ok && parsed.meta.review).toBe("declined");
+  });
+
   it("is written once per row with the versions kept in step", () => {
     const meta = withReview(metaWith(["pending", "pending"]), "needs-review");
     const onDisk = parsePairMeta(serializePairMeta(meta));

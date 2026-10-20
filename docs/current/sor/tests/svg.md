@@ -1,9 +1,6 @@
 # Generate SVG and image-edit tests
 
-Focused test inventory; [all tests](../TESTS.md).
-
-* `prompt_presets_shared.test.ts` — the one preset rule (pick, Quick load refusal, Save as snapshot and blank refusal, Delete keeps the editor) and the store round-trip per key (I-65); `svg_prompt_presets.test.ts` — the same rule through the real reducer, the SVG list separate from the metadata list; `svg_regen_ui.test.tsx` — the regen window over its real storage.
-* `svg_regen.test.ts`, `svg_regenprompt.test.ts`, `svgregen_batch.test.ts` and the regeneration block of `svg_runner.test.ts` (2026-10-09; batch 2026-10-20) — the stored choice and its refusals, the plan's own 1..9 request size (default 9), the batch text (prompt + manifest + contract + every carried code, size 1 unchanged), matching by `<title>` then position, the record without any code, and the row/global scope
+Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and review suites have their own [detail page](svg-prompt-review.md).
 * `svg_lib.test.ts` — also `clampTimeoutMs` / `clampRetries` (the card's own
   controls share the read path's clamps) including nonsense input.
 * `svg_batch.test.ts`, `svg_effort.test.ts` — the split and the tier rules:
@@ -110,4 +107,3 @@ Focused test inventory; [all tests](../TESTS.md).
   tokens/cost/outcome/elapsed **and** the provider request id, a stalled outcome
   is a warning that says "never retried" (never an error), and the composite's
   data URL travelling on the same event never reaches the entry
-* `prompttasks.test.ts`, `svg_taskprompt.test.ts`, `svg_confirm_task_prompt.test.tsx`, `svg_img_confirm_task_prompt.test.tsx`, `svg_confirm_regen_batch.test.tsx` (2026-10-20) — six tasks with separate memory, the default named above the picker, the gone-preset fallback, and the 1..9 size re-planning the pages.

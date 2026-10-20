@@ -149,4 +149,3 @@ function endLine(summary: Parameters<typeof summaryLine>[0], reason: unknown): s
   if (dropped === 0) return line;
   return `${line} · ${dropped} queued batch${dropped === 1 ? "" : "es"} dropped`;
 }
-

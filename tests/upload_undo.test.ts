@@ -32,6 +32,12 @@ describe("toUploadSettingsPatch — the payload gate", () => {
       .toEqual({ overrides: { pair_a: { paddingPct: 50 } } });
   });
 
+  it("validates shadow fields on history restore", () => {
+    expect(toUploadSettingsPatch({ overrides: { pair_a: { shadowEnabled: true, shadowWidthPct: 900, shadowGapPct: -10 } } }))
+      .toEqual({ overrides: { pair_a: { shadowEnabled: true, shadowWidthPct: 200, shadowGapPct: 0 } } });
+    expect(toUploadSettingsPatch({ overrides: { pair_a: { shadowEnabled: "on", shadowWidthPct: NaN } } })).toBeNull();
+  });
+
   it("refuses payloads that carry nothing usable", () => {
     expect(toUploadSettingsPatch(null)).toBeNull();
     expect(toUploadSettingsPatch("x")).toBeNull();
@@ -104,6 +110,14 @@ describe("applyEntry — the uploadSettings route", () => {
     await applyEntry(entry(), { overrides: { pair_a: { paddingPct: 30 } } });
     expect(loadOverrides()).toEqual({ pair_a: { paddingPct: 30 } });
     await applyEntry(entry(), { overrides: { pair_a: null } });
+    expect(loadOverrides()).toEqual({});
+  });
+
+  it("restores a shadow override while the Upload panel is unmounted", async () => {
+    const withShadow = { overrides: { pair_a: { shadowEnabled: true, shadowWidthPct: 90, shadowGapPct: 12 } } };
+    await expect(applyEntry(entry(), withShadow)).resolves.toBe(true);
+    expect(loadOverrides().pair_a).toEqual(withShadow.overrides.pair_a);
+    await expect(applyEntry(entry(), { overrides: { pair_a: null } })).resolves.toBe(true);
     expect(loadOverrides()).toEqual({});
   });
 

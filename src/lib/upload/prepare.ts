@@ -26,7 +26,7 @@ import { isAsIs } from "./asis";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
-import { placeArtwork } from "./place";
+import { overflowsSourceFrame, placeArtwork } from "./place";
 import { strokeStyleOf } from "./restyle";
 import { fmt, parseSvgLength, type ArtboardFit, type FitTarget } from "./geom";
 
@@ -71,27 +71,38 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
   if (same !== null) return same;
   const veto = sourceVeto(root);
   if (veto !== null) return veto;
+  const frame = viewBoxOf(root) ?? sizeOf(root); // capture width/height before clean removes them
   cleanExportDom(root as Element, { keepRootEmbeds: false });
   const vb = visibleBounds(root);
   if (vb !== null && vb.unsupported.length > 0) {
     return fail("unsupported", `unsupported content: ${vb.unsupported.join(", ")}`);
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
-  return buildExport(doc, root, settings);
+  const clipped = shadowClipFailure(root, frame, settings.shadowEnabled);
+  if (clipped !== null) return clipped;
+  return buildExport(doc, root, settings, frame);
+}
+
+/** A larger shadow artboard cannot retain the source viewport's implicit clip. */
+function shadowClipFailure(root: Element, frame: Bounds | null, enabled: boolean): PrepareFailure | null {
+  if (!enabled || frame === null || !overflowsSourceFrame(root, frame)) return null;
+  return fail("unsupported", "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping");
 }
 
 /** Place → artboard → strokes defined once → re-rooted: the export copy of a cleaned, measurable source. */
-function buildExport(doc: Document, root: Element, settings: UploadSettings): PrepareResult {
-  const frame = viewBoxOf(root);
+function buildExport(doc: Document, root: Element, settings: UploadSettings, frame: Bounds | null): PrepareResult {
   const placed = placeArtwork(root, {
     paddingPct: settings.paddingPct ?? 0, target: targetOf(settings, frame),
     style: strokeStyleOf(settings), expand: settings.expandStrokes,
     frame: settings.paddingPct === null ? frame : null,
+    shadow: settings.shadowEnabled ? { widthPct: settings.shadowWidthPct, gapPct: settings.shadowGapPct } : undefined,
   });
   if (!placed.ok) return fail(placed.code, placed.detail);
   const background = backgroundOf(settings.background);
   applyArtboard(placed.root, placed.fit, background);
   const globalStroke = unifyStrokes(placed.root); // the artboard rect included: it says `stroke="none"` only when the root hoists a paint
+  // The shadow is explicitly stroke-free even if the source has no strokes to hoist.
+  placed.shadow?.setAttribute("stroke", "none");
   doc.replaceChild(placed.root, root);
   return {
     ok: true,
@@ -131,7 +142,7 @@ function sizeOf(root: Element): Bounds | null {
   return w !== null && h !== null && w > 0 && h > 0 ? { minX: 0, minY: 0, width: w, height: h } : null;
 }
 
-/** A default artboard is the source viewBox size; otherwise the pinned px or the MP target. */
+/** A default artboard is the source viewport size (viewBox or px dimensions); otherwise pinned px or MP. */
 function targetOf(settings: UploadSettings, frame: Bounds | null): FitTarget | null {
   if (settings.artboard.mode === "source") return frame === null ? null : { width: frame.width, height: frame.height };
   return artboardTarget(settings.artboard, megapixelsOf(settings));

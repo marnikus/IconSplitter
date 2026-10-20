@@ -12,9 +12,11 @@ import {
 import { commitExport } from "../src/upload/exportcommit";
 import { DEFAULT_UPLOAD_SETTINGS, settingsFingerprint, type UploadSettings } from "../src/lib/upload/settings";
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
+import { planDownload } from "../src/lib/upload/download";
 import type { RasterDeps } from "../src/lib/upload/raster";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
 import { verifyExportSvg } from "../src/lib/upload/clean";
+import { prepareExportSvg } from "../src/lib/upload/prepare";
 import { verifyEps, verifyEpsDocument } from "../src/lib/upload/eps";
 import { readXmpMetadataFromEps } from "../src/lib/upload/epsmetadata";
 import { MANDATORY_TAGS, metadataFingerprint, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
@@ -681,7 +683,7 @@ describe("the rename migration is never allowed to lose a package", () => {
     });
   }
 
-  it("keeps an old-named file when this run wrote nothing to take its place", async () => {
+  it("keeps old EPS bytes without advertising them after a partial commit", async () => {
     const root = pairRoot();
     const dir = new BinDir("export"); // only the OLD package: no fog.eps at all
     (dirAt(root, DIR) as BinDir).children.set("export", dir);
@@ -690,8 +692,7 @@ describe("the rename migration is never allowed to lose a package", () => {
     const result = await bareCommit(root, null, record);
     expect(dir.children.has(`${STEM}.eps`)).toBe(true); // the only EPS there is stays
     expect(result.replaced).toEqual([]);
-    // and the record still names it, because it is still there
-    expect(result.record.outputs.eps?.path).toBe(`${DIR}/export/${STEM}.eps`);
+    expect(result.record.outputs.eps).toBeNull(); // the failed EPS stage produced no new EPS
   });
 
   it("stops naming a file it just removed", async () => {
@@ -711,6 +712,72 @@ describe("the rename migration is never allowed to lose a package", () => {
 });
 
 describe("runExport — honest failures", () => {
+  it("commits the selected shadow in SVG/JPEG and reports built-in EPS gradient as partial", async () => {
+    const root = pairRoot();
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, shadowEnabled: true, shadowWidthPct: 80, shadowGapPct: 5, includeEps: true };
+    const rendered: string[] = [];
+    const raster: RasterDeps = {
+      render: async (svg, target) => { rendered.push(svg); return target as unknown as HTMLCanvasElement; },
+      encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
+    expect(result.status).toBe("partial");
+    expect(result.error?.klass).toBe("eps");
+    expect(result.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: null });
+    const committed = fileText(root, `${DIR}/export/${ART}.svg`);
+    const final = new DOMParser().parseFromString(committed, "image/svg+xml").documentElement;
+    expect(final.querySelector("radialGradient stop[offset='1']")).not.toBeNull();
+    expect(final.querySelector("ellipse, path[fill^='url(']")).not.toBeNull();
+    expect(rendered).toHaveLength(1);
+    const preview = prepareExportSvg(SOURCE_SVG, settings);
+    if (!preview.ok) throw new Error(preview.detail);
+    // The rasterizer adds only render-size attributes to an in-memory copy of the prepared SVG.
+    expect(rendered[0].replace(/(<svg\b[^>]*?) width="\d+" height="\d+"/, "$1")).toBe(preview.svg);
+    expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(SOURCE_SVG);
+    expect(readRecord(root).validation).toMatchObject({ svg: true, jpeg: true });
+  });
+
+  it("turning EPS off removes the old output from the record and Download all", async () => {
+    const root = pairRoot();
+    const on: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    expect((await runExport(args(root, { settings: on, defaults: on }))).status).toBe("processed");
+    const previousEps = fileText(root, `${DIR}/export/${ART}.eps`);
+
+    const off = await runExport(args(root, { record: readRecord(root) }));
+    expect(off.status).toBe("processed");
+    const record = readRecord(root);
+    expect(record.tools.eps.enabled).toBe(false);
+    expect(record.outputs.eps).toBeNull();
+    expect(planDownload([{ id: ROW.id, base: ROW.base, record }]).items.map((item) => item.to))
+      .toEqual([`${ART}.svg`, `${ART}.jpg`]);
+    expect(fileText(root, `${DIR}/export/${ART}.eps`)).toBe(previousEps);
+  });
+
+  it("a shadowed partial export stops advertising a previously committed EPS", async () => {
+    const root = pairRoot();
+    const defaults: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const first = await runExport(args(root, { settings: defaults, defaults }));
+    expect(first.status).toBe("processed");
+    expect(first.outputs.eps).toBe(`${ART}.eps`);
+    const previousEps = fileText(root, `${DIR}/export/${ART}.eps`);
+
+    const settings: UploadSettings = { ...defaults, shadowEnabled: true };
+    const second = await runExport(args(root, {
+      record: readRecord(root), settings, defaults, overrides: { shadowEnabled: true },
+      deps: { raster: captureRaster().deps },
+    }));
+    expect(second.status, JSON.stringify(second.error)).toBe("partial");
+    expect(second.error?.klass).toBe("eps");
+    expect(second.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: null });
+    const record = readRecord(root);
+    expect(record.status).toBe("partial");
+    expect(record.outputs.eps).toBeNull();
+    expect(planDownload([{ id: ROW.id, base: ROW.base, record }]).items.map((item) => item.to))
+      .toEqual([`${ART}.svg`, `${ART}.jpg`]);
+    expect(fileText(root, `${DIR}/export/${ART}.eps`)).toBe(previousEps); // old bytes stay on disk
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("radialGradient");
+  });
+
   it("an EPS subset failure is `partial`: SVG/JPEG stay committed, no EPS", async () => {
     const gradient = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
       + `<defs><linearGradient id="g"><stop offset="0" stop-color="#000"/></linearGradient></defs>`

@@ -48,8 +48,8 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   const dialog = p.dialog;
   // The task memory and the regen size are read when a dialog opens, so an
   // entry saved by another popup a moment ago is already in force (RULE 24).
-  const stored = useMemo(() => loadTaskPrompts(), [dialog]);
-  if (dialog === null) return null;
+  const stored = useMemo(() => dialog === null ? null : loadTaskPrompts(), [dialog]);
+  if (dialog === null || stored === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
       rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} taskEntries={stored}

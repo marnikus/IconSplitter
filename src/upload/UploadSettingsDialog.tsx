@@ -24,6 +24,7 @@ import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./se
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import { ConverterSetting } from "./UploadEpsSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
+import UploadShadowSettings from "./UploadShadowSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
@@ -49,7 +50,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
     <div className="svg-modal-body">
       <p className="svg-note" data-testid="upload-dialog-scope">
         {p.id === null
-          ? "Every icon without its own override inherits these defaults."
+          ? "General settings are inherited; the Checked icons Shadow checkbox below applies only to the current selection."
           : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults."}
       </p>
       <AsIsRow p={p} effective={effective} />
@@ -74,6 +75,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       {p.id !== null && <IconStrokeSetting p={p} id={p.id} />}
       <StrokeColorSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
+      <UploadShadowSettings p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
         min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
@@ -95,9 +97,11 @@ function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: Up
   return (
     <div className="up-set-footer">
       <button type="button" className={`svg-btn${on ? " on" : ""}`} data-testid="upload-set-as-is" aria-pressed={on}
-        onClick={() => changeMany(p, AS_IS_SETTINGS)}>All default (export as is)</button>
+        onClick={() => changeMany(p, { ...AS_IS_SETTINGS, shadowEnabled: false })}>All default (export as is)</button>
       <span className="up-hint" data-testid="upload-set-as-is-note">
-        {on ? "every visual setting is default: the approved SVG is exported exactly as it is" : "stroke, background, artboard and padding back to the SVG's own"}
+        {on ? "every visual setting is default: the approved SVG is exported exactly as it is"
+          : p.id === null ? "reset global visual defaults; checked icons keep their separately applied shadows"
+            : "stroke, background, artboard and padding back to the SVG's own; this icon's shadow off"}
       </span>
     </div>
   );
@@ -113,7 +117,7 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
   const bar = p.defaults.strokePx > 0 ? `${p.defaults.strokePx} px` : "default";
   const inherit = () => { const { strokePx, ...rest } = p.overrides; void strokePx; p.onOverride(id, rest); };
   return (
-    <label className="svg-field up-set-field">
+    <div className="svg-field up-set-field">
       <span className="svg-label">Stroke width px<Marker p={p} field="strokePx" testid="stroke" /></span>
       <div className="up-bg-row">
         <button type="button" className={`svg-btn tiny up-default-btn${pinned === undefined ? " on" : ""}`} data-testid="upload-set-stroke-inherit"
@@ -123,7 +127,7 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
           onCommit={(n) => (n === null ? inherit() : change(p, "strokePx", clampStrokePx(n)))} />
       </div>
       <small className="up-hint">{pinned === undefined ? "follows the bar's STROKE" : pinned === 0 ? "this icon keeps the artwork's own widths" : "this icon only — the bar's STROKE no longer changes it"}</small>
-    </label>
+    </div>
   );
 }
 
@@ -137,17 +141,17 @@ function PaintClashNote({ effective }: { effective: UploadSettings }) {
 function PaddingSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   const value = effective.paddingPct;
   return (
-    <label className="svg-field up-set-field">
-      <span className="svg-label">Padding %<Marker p={p} field="paddingPct" testid="padding" /></span>
+    <div className="svg-field up-set-field">
+      <label className="svg-label" htmlFor="upload-set-padding">Padding %<Marker p={p} field="paddingPct" testid="padding" /></label>
       <div className="up-bg-row">
         <button type="button" className={`svg-btn tiny up-default-btn${value === null ? " on" : ""}`} data-testid="upload-set-padding-default"
           aria-pressed={value === null} onClick={() => change(p, "paddingPct", value === null ? PADDING_DEFAULT : null)}>Default</button>
-        <input className="svg-input" data-testid="upload-set-padding" type="number" aria-label="Padding %"
+        <input id="upload-set-padding" className="svg-input" data-testid="upload-set-padding" type="number" aria-label="Padding %"
           min={PADDING_MIN} max={PADDING_MAX} step={1} value={value ?? ""} placeholder="default"
           onChange={(e) => change(p, "paddingPct", e.target.value === "" ? null : clampPaddingPct(Number(e.target.value)))} />
       </div>
       <small className="up-hint">{value === null ? "default — the SVG's own margins" : "uniform, % of the fitted artwork's largest side"}</small>
-    </label>
+    </div>
   );
 }
 

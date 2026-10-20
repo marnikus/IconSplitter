@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { chosenVersion, newestValid } from "../src/lib/svgfile";
+import { mainImageOf, parseImageVersions } from "../src/lib/svgimgreg";
 import { metaFileName, parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
 import { saveSvgVersion, metaAfterFailure } from "../src/svg/saveversion";
 import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
@@ -267,6 +268,27 @@ describe("approved-source discovery", () => {
     const found = await discoverApprovedSources(root);
     expect(found.sources.map((s) => s.id)).toEqual([COURT, FOG]);
     expect(found.problems).toEqual([]);
+  });
+
+  it("omits only owned image versions from the reference audit while retaining main-image access", async () => {
+    const root = makeRoot();
+    const arch = await root.getDirectoryHandle("architecture");
+    const versions = new FakeDir("AI SOURCE REGENERATION VERSIONS");
+    const imagePath = `${FOG_SRC.dirPath}/${versions.name}/fog_AI_v1.png`;
+    versions.children.set("fog_AI_v1.png", new FakeFile("fog_AI_v1.png"));
+    versions.children.set("ordinary_v2.png", new FakeFile("ordinary_v2.png"));
+    arch.children.set(versions.name, versions);
+    arch.children.set("fog_AI_v2.png", new FakeFile("fog_AI_v2.png"));
+    await saveMetaAt(root, FOG_SRC.metaPath, {
+      ...pairMetaFor(FOG_SRC),
+      imageVersions: parseImageVersions([{ version: 1, file: imagePath, status: "done" }]),
+      imagePreferred: 1,
+    });
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([FOG]);
+    expect(found.audit).toEqual({ files: 10, aiSources: 3, references: 5, missing: 0, duplicates: 0, rows: 1 });
+    expect(found.fileIndex.has(imagePath)).toBe(true);
+    expect(mainImageOf(found.metas.get(FOG) ?? null, FOG_SRC.relPath)).toBe(imagePath);
   });
 
   it("maps a source onto its batch identity without touching the file id", () => {

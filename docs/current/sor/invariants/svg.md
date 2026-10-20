@@ -75,17 +75,21 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   output (`…_AI.svg`) and its versioned artifacts (`…_v1.svg`) are never sources
   and are never counted as AI sources in the audit — otherwise a second run
   would feed an artifact back into generation, and the counts would not add up.
+  The same applies to a canonical `_AI` stem + positive `_vN.png` only in its
+  immediate `AI source regeneration versions` folder (case-insensitive, with
+  picked-root fallback): not a new pair or reference; still walked/countable as
+  a file and resolvable via the pair's `imageVersions` / `mainImageOf`.
 
 <a id="i-64"></a>
-* **I-64 (one icon, its own code, RULE 3/4/13 — 2026-10-09):** in the
-  current-SVG regeneration every request carries exactly ONE icon: its composite
-  is that icon's AI image, its text is the saved prompt, the icon-name line and
-  the newest valid SVG file's text (`lib/svgregen.currentSvgPrompt`, built in
-  `svg/regenprompt.ts`). The pair file records the prompt text, never the code.
-  A stored choice that cannot run (no saved prompt picked, or the picked one is
-  gone or blank) starts no request; the window and the run both say why. The
-  drop-down lists the SVG prompt presets (`iconSplitter.svg.prompts.v1`), never
-  the metadata presets (2026-10-09 move; the window is `svg/RegenSetting.tsx`).
+* **I-64 (each icon, its own code, RULE 3/4/13 — 2026-10-09; batch revised
+  2026-10-20):** a current-SVG regeneration carries one icon's code at size 1,
+  or the code of every icon in a request sized by the connection's **Images /
+  request** (1..9, shipped default 4; I-74). The composite and ordered manifest
+  identify each AI image; the request text carries the saved task prompt and
+  each icon's current SVG code (`svg/regenprompt.ts`). The pair file records
+  that icon's prompt text and position, never another icon's code. A missing,
+  gone or blank saved prompt refuses the send with a reason; regeneration lists
+  SVG prompt presets (`iconSplitter.svg.prompts.v1`), never metadata presets.
 
 <a id="i-65"></a>
 * **I-65 (one preset rule for every prompt window, RULE 13/24 — 2026-10-09):**
@@ -98,8 +102,8 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
 
 <a id="i-74"></a>
 * **I-74 (a regeneration request carries its icons' codes, RULE 3/4 — 2026-10-20):**
-  a current-SVG regeneration request carries at most the configured
-  icons-per-request (1..9, default 9), one composite, the saved prompt, the
+  a current-SVG regeneration request carries at most the connection's
+  configured icons-per-request (1..9, shipped default 4), one composite, the saved prompt, the
   ordered manifest and **every** carried icon's current SVG code, all frozen when
   the batch was confirmed (`svg/regenprompt.ts`, `lib/svgregen.regenBatchPrompt`).
   It never mixes the main prompt into it: a missing prompt, a missing code or a
@@ -137,5 +141,5 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   sets it (`pending`, or `needs-review` after a regeneration) and fails closed
   for a failed attempt, which keeps the previous status. Undo records
   `{ id, review }` — a version in an older entry is accepted and ignored — and a
-  file without the item-level key reads the newest decided version once
-  (`lib/pairmeta.derivedReview`), never per version.
+  file without the item-level key reads the highest-numbered decided version
+  once (`lib/pairmeta.derivedReview`), regardless of stored order, never per version.

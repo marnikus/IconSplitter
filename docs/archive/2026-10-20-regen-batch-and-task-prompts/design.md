@@ -161,4 +161,3 @@ A **prompt task** is the unit that remembers a prompt choice. Six tasks:
   chosen, the text is shown read-only (the preset owns it) with an explicit
   "Load into the main prompt editor" action — a popup can no longer mutate the
   shared prompt by accident.
-

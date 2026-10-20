@@ -14,7 +14,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   - Artboard mode `source` is the SVG's own viewBox size and ratio ("Scale to N MP"
     applies only in `content`).
   - `strokePx` 0 = default.
-  - **All five default with Expand off = as is**: the export SVG is the approved file
+  - **All five default with Expand and Shadow off = as is**: the export SVG is the approved file
     byte for byte. It gets no clean, no bake and no SVGO, and the clean-SVG-1.1
     check is skipped (it must still parse); the JPEG and EPS are built from it.
   - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding
@@ -24,12 +24,12 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   - The global dialog has no width row. One icon MAY pin its own width (follow-up,
     same day): its dialog's `upload-set-stroke` (empty = the bar's, inherited;
     `upload-set-stroke-inherit` drops the pin), read by `parseOverrides` (with
-    the `strokePt` alias). "Apply settings to selected" pins every field except
-    it (13 fields), so the bar stays live for those icons.
+    the `strokePt` alias). "Apply settings to selected" pins the 13 general
+    fields, not the bar stroke or separately applied shadow pins.
   - The old preview-only `previewStroke` pref is gone from this tab.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
-  `prepareExportSvg(source, effective)`, debounced 120 ms and cached per source
-  and fingerprint. The box is `zoomBoxFit`.
+  `prepareExportSvg(source, effective)`, including its applied gradient shadow,
+  debounced 120 ms and cached per source and fingerprint. The box is `zoomBoxFit`.
 * **Typed numbers commit on leave** (2026-10-19, `ui/DraftNumberInput`): the
   custom artboard W×H and the icon's stroke width keep a local draft while
   typed; blur/Enter validates (clamps) and writes once, Escape restores.
@@ -38,6 +38,24 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   preview note and in the dialog (`upload-set-paint-clash`) — e.g. black on
   black exports a solid square. Default / transparent / artwork paint: no note.
 
+* **Selected-only Shadow** (2026-10-20): the global Export settings popup's
+  **Checked icons** checkbox adds or removes the bundled
+  `src/svg/templates/shadow.svg` radial-gradient oval on CHECKED icons,
+  including hidden checks, never the active unchecked row. Mixed checks add to
+  all; all-on removes from all. The separate selected-only Width/Gap fields
+  change only checked icons that already have Shadow on; an off icon is never
+  enabled by editing a dimension. Width 10–200% (default 80%) of the *final
+  painted* icon width and clear bottom gap 0–100% (default 5%) of its height
+  are not preview-only CSS. Inherited **Shadow defaults** in the same popup
+  change numeric defaults without opting icons in; stored global
+  `shadowEnabled:true` is ignored on read. One icon may override all three
+  fields in its own dialog. Each checked-set edit is one `uploadSettings` undo
+  entry and keeps unrelated overrides. Normal Apply settings to selected leaves
+  existing shadow pins alone. Enabled shadow fingerprints its full validated
+  dimensions and template hash; disabled/dormant values leave historic
+  fingerprints (and byte-for-byte as-is) unchanged. Built-in EPS cannot paint
+  the gradient: the bar, row and both dialog scopes warn that the result is
+  partial with valid SVG/JPEG; the chosen local converter never switches silently.
 * Settings: global defaults (padding %, background — `transparent` (the
   default) or one hex, stroke width in px — the file's own units, written as
   typed (2026-10-08; a stored `strokePt` from before reads as the same number
@@ -50,8 +68,8 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   overridden. "Apply settings to selected" pins the current defaults onto the
   selection as ONE undoable `uploadSettings` history entry; per-icon set/reset
   pushes one entry each; global-defaults edits are persisted but NOT undoable
-  (the same class as presets). The checkbox selection is session-persisted but
-  not on the undo timeline.
+  (the same class as presets). The checkbox selection is session-persisted and
+  its gestures are undoable through the separate `uploadChecked` history type.
 * **Scale to N MP** (2026-10-09, I-62, design
   `docs/archive/2026-10-09-eps-executable-artboard-megapixels/design.md` D5):
   two more settings fields, `scaleToMegapixels` (default off) and

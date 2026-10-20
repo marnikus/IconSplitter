@@ -80,4 +80,3 @@ export function preferredVersion(versions: readonly SvgVersion[], preferred: num
   if (preferred === null) return null;
   return versions.find((v) => v.version === preferred && v.status === "generated" && v.validation.ok) ?? null;
 }
-

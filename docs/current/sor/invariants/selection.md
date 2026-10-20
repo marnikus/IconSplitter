@@ -32,6 +32,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   file of its own is only missing (a source with no AI image is not a row at all
   — see I-31 — and is reported with its reason); a scan writes nothing into the
   scanned root; a superseded scan and an unchanged snapshot both commit nothing.
+  Image-regeneration history is not a new pair: only canonical positive `_AI_vN.png`
+  files directly in `AI source regeneration versions` (case-insensitive, including
+  when that folder is the picked root) are omitted from review; lookalikes elsewhere
+  and unrelated files in that folder are not hidden.
 
 <a id="i-40"></a>
 * **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the

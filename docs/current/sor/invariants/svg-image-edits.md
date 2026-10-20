@@ -20,7 +20,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   `imagePreferred` names the MAIN image and falls back to the original when
   null, dangling or failed; a failed request still appends an honest failed
   entry (its `file` is the path it would have had, never written) but never
-  moves the pointer. Parsed and written through `lib/svgimgreg` + `saveMetaAt`
+  moves the pointer. Discovery alone omits exact app-owned positive `_AI_vN.png`
+  files from the immediate version folder (or that folder as picked root), not
+  the folder or other lookalikes; the history and main-image readers still use
+  the stored file path directly. Parsed and written through `lib/svgimgreg` + `saveMetaAt`
   (tmp → verify → overwrite); the chips that re-point it are off the undo
   timeline, like I-54's. Binding since the 2026-10-19 fix
   (`archive/2026-10-19-image-regen-fix`):

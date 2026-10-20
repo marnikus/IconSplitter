@@ -12,16 +12,22 @@
 // fingerprint like every other field.
 
 import { normalizeHex } from "../svgbackground";
-import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
 import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
 import type { EpsConverterId } from "./epsconv/types";
+import {
+  ARTBOARD_MP_DEFAULT, MP_DEFAULT, PADDING_DEFAULT, QUALITY_DEFAULT, SHADOW_GAP_DEFAULT,
+  SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT, clampArtboardMegapixels, clampMegapixels,
+  clampPaddingPct, clampQuality, clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
+} from "./settingsnumbers";
 
+export * from "./settingsnumbers";
 export {
   ARTBOARD_MAX, ARTBOARD_MAX_PIXELS, ARTBOARD_MIN, ARTBOARD_PRESETS, CONTENT_ARTBOARD,
   artboardSize, artboardTarget, clampArtboard, megapixelTargetOf, type Artboard,
 } from "./artboard";
+export { settingsFingerprint } from "./settingsfingerprint";
 
 export interface UploadSettings {
   /** Uniform padding on all four sides, % of the fitted artwork's largest side; null = default (the source's own margins). */
@@ -68,24 +74,16 @@ export interface UploadSettings {
    * `jpegMegapixels` instead — a small artboard must never cap the resolution.
    */
   jpegMatchArtboard: boolean;
+  /** A template-based gradient ellipse centred below the painted icon. */
+  shadowEnabled: boolean;
+  /** Painted shadow width as a percentage of the final painted icon width. */
+  shadowWidthPct: number;
+  /** Clear gap below the final painted icon as a percentage of icon height. */
+  shadowGapPct: number;
 }
 
 export type SettingsOverrides = Partial<UploadSettings>;
 
-export const PADDING_MIN = 0;
-export const PADDING_MAX = 50;
-export const PADDING_DEFAULT = 8;
-export const STROKE_MIN = 0;
-export const STROKE_MAX = 50; // the bar's range: ONE stroke param (2026-10-19)
-export const STROKE_DEFAULT = 0;
-export const MP_MIN = 1;
-export const MP_MAX = 64;
-export const MP_DEFAULT = 15.1;
-/** The artboard's own megapixel target (I-62) — shares the 1…64 range with the JPEG. */
-export const ARTBOARD_MP_DEFAULT = 5;
-export const QUALITY_MIN = 0.5;
-export const QUALITY_MAX = 1;
-export const QUALITY_DEFAULT = 0.92;
 /** The background value that paints nothing in the SVG/EPS. */
 export const TRANSPARENT = "transparent";
 /** "default" (2026-10-19): the export adds no artboard rect — the source's own background. */
@@ -113,33 +111,10 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegMatchArtboard: true,
   scaleToMegapixels: false,
   artboardMegapixels: ARTBOARD_MP_DEFAULT,
+  shadowEnabled: false,
+  shadowWidthPct: SHADOW_WIDTH_DEFAULT,
+  shadowGapPct: SHADOW_GAP_DEFAULT,
 };
-
-export function clampPaddingPct(value: unknown): number {
-  return clampNum(value, PADDING_MIN, PADDING_MAX, PADDING_DEFAULT);
-}
-
-export function clampStrokePx(value: unknown): number {
-  return clampNum(value, STROKE_MIN, STROKE_MAX, STROKE_DEFAULT);
-}
-
-export function clampMegapixels(value: unknown): number {
-  return clampNum(value, MP_MIN, MP_MAX, MP_DEFAULT);
-}
-
-export function clampArtboardMegapixels(value: unknown): number {
-  return clampNum(value, MP_MIN, MP_MAX, ARTBOARD_MP_DEFAULT);
-}
-
-export function clampQuality(value: unknown): number {
-  return clampNum(value, QUALITY_MIN, QUALITY_MAX, QUALITY_DEFAULT);
-}
-
-function clampNum(value: unknown, min: number, max: number, fallback: number): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
-}
 
 /** A paint field: its sentinel word (`transparent` / `artwork`) or a normalized hex; null = unreadable. */
 export function readPaint(value: unknown, sentinel: string): string | null {
@@ -179,6 +154,9 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegMatchArtboard: raw.jpegMatchArtboard !== false,
     scaleToMegapixels: raw.scaleToMegapixels === true,
     artboardMegapixels: clampArtboardMegapixels(raw.artboardMegapixels),
+    shadowEnabled: false, // Only an icon override can opt in; persisted defaults must never enable unchecked icons.
+    shadowWidthPct: clampShadowWidthPct(raw.shadowWidthPct),
+    shadowGapPct: clampShadowGapPct(raw.shadowGapPct),
   };
 }
 
@@ -200,6 +178,8 @@ const NUMERIC_FIELDS: [string, (value: number) => number][] = [
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
   ["artboardMegapixels", clampArtboardMegapixels],
+  ["shadowWidthPct", clampShadowWidthPct],
+  ["shadowGapPct", clampShadowGapPct],
 ];
 
 /** The paint fields and the word that means "none of ours". */
@@ -211,7 +191,7 @@ const PAINT_FIELDS: ["background" | "strokeColor", string][] = [
 function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void {
   for (const [key, clamp] of NUMERIC_FIELDS) {
     const value = raw[key];
-    if (typeof value === "number") Object.assign(out, { [key]: clamp(value) });
+    if (typeof value === "number" && Number.isFinite(value)) Object.assign(out, { [key]: clamp(value) });
   }
   if (raw.paddingPct === null) out.paddingPct = null; // a pinned "default"
   const stroke = raw.strokePx ?? raw.strokePt; // strokePt: the pre-2026-10-08 name
@@ -219,7 +199,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels"]) {
+  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels", "shadowEnabled"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -257,7 +237,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
-  "scaleToMegapixels", "artboardMegapixels",
+  "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
 ];
 
 export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
@@ -273,25 +253,4 @@ export function overridesEqual(a: SettingsOverrides, b: SettingsOverrides): bool
 function fieldValuesEqual(a: unknown, b: unknown): boolean {
   if (!isRecord(a) || !isRecord(b)) return a === b;
   return artboardsEqual(clampArtboard(a), clampArtboard(b));
-}
-
-/** Stable fingerprint over the canonical field order — selective re-export keys on this. */
-export function settingsFingerprint(s: UploadSettings): string {
-  const canonical = JSON.stringify([
-    s.paddingPct === null ? "default" : round3(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
-    round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
-    s.jpegMatchArtboard,
-    [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
-    // appended ONLY when set (2026-10-09), so every package exported before the
-    // field existed keeps its fingerprint; the converter is a tool choice the
-    // planner compares against the record, not geometry — never in here.
-    ...(s.expandStrokes ? ["expand"] : []),
-    // the MP target is geometry only while the box is on (the number is dormant otherwise)
-    ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
-  ]);
-  return fnv1a32(canonical).toString(16).padStart(8, "0");
-}
-
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000;
 }

@@ -1028,6 +1028,8 @@
 }
 
 .svg-bulk-left, .svg-bulk-right { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.up-shadow-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.up-shadow-fields:disabled { opacity: 0.6; }
 .svg-selected-copy { font-size: 11px; font-weight: 700; }
 .svg-scope-copy { color: var(--v2-muted); font-size: 10px; }
 .svg-divider { width: 1px; height: 25px; background: var(--v2-line); }
@@ -1883,6 +1885,12 @@
 }
 
 .up-set-field .svg-input[type="number"] { height: 28px; font-size: 10px; }
+.up-shadow-dialog { grid-column: 1 / -1; border: 1px solid var(--v2-line); border-radius: 6px; padding: 10px; }
+.up-shadow-controls { display: grid; gap: 8px; border-bottom: 1px solid var(--v2-line); padding-bottom: 10px; margin-bottom: 10px; }
+.up-shadow-check { display: flex; align-items: center; gap: 7px; }
+.up-shadow-dialog .up-shadow-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.up-shadow-dialog .up-shadow-fields .svg-input { width: 100%; }
+.up-shadow-dialog .svg-warning { margin-top: 8px; }
 .up-set-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
 .up-marker {

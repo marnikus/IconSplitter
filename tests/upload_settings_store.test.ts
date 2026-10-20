@@ -46,6 +46,16 @@ describe("settingsstore — defaults + overrides", () => {
     expect(parsed.defaults.optimizeSvg).toBe(true);
   });
 
+  it("keeps Shadow opt-in per icon even when persisted defaults try to enable every icon", () => {
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
+      v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, shadowEnabled: true, shadowWidthPct: 115 },
+      overrides: { selected: { shadowEnabled: true }, other: { shadowEnabled: false } },
+    }));
+    const loaded = loadUploadSettings();
+    expect(loaded.defaults).toMatchObject({ shadowEnabled: false, shadowWidthPct: 115 });
+    expect(loaded.overrides).toEqual({ selected: { shadowEnabled: true }, other: { shadowEnabled: false } });
+  });
+
   it("drops invalid override fields and empty overrides on read", () => {
     const parsed = parseUploadSettingsState({
       v: 1, defaults: DEFAULT_UPLOAD_SETTINGS,
