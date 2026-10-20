@@ -24,14 +24,17 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { guard, perRequestOf, planOf } from "./runplan";
-import { busy, confirmRun, dropQueueForCancel, dropWaiting, regenerateNext, type CancelNote } from "./runcontrol";
+import { busy, confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
+import { nextGenerate, regenerateNext } from "./runqueuepath";
+import type { CancelNote } from "./runcontext";
+import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
-import { MAIN_PLAN, type RegenPlan } from "../lib/svgregen";
-import { findPreset } from "../lib/promptpresets";
+import { MAIN_PLAN, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
+import { loadRegenBatchPref } from "./regenprefs";
 export interface SvgCtx {
   m: SvgModel; dispatch: Dispatch<SvgAction>; refs: SvgRefs; hist: HistoryApi;
   rows: SvgRow[]; visible: SvgRow[]; checked: string[]; activeId: string | null;
@@ -61,7 +64,7 @@ export interface SvgActions extends SvgPromptActions {
   setImageVersion: (id: string, version: number | null) => void;
   applyImageReview: () => void; discardImageReview: () => void;
   dismissImageJournal: (id: string) => void; retryImageUnknown: (id: string) => void;
-  regenerateSelected: (ids: string[]) => void; cancelRun: () => void; confirmGenerate: (regenPresetName: string | null) => void;
+  regenerateSelected: (ids: string[]) => void; cancelRun: () => void; confirmGenerate: (batch: ConfirmedBatch) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
@@ -199,7 +202,11 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
     const perReq = perRequestOf(c, regenForGuard);
     const problems = validateBatchPlan(planOf(c, ids, regenForGuard), perReq);
     if (problems.length > 0) return c.say(problems[0], true);
-    if (placement === "front" && busy(c)) return regenerateNext(c, ids);
+    if (placement === "front" && busy(c)) {
+      if (operation === "regenerate") void regenerateNext(c, ids);
+      else nextGenerate(c, ids);
+      return;
+    }
     const dialog: Dialog = { kind: "confirm", ids, operation };
     log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} · ${operation}` });
     c.dispatch({ type: "dialog", dialog });
@@ -215,7 +222,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
 }
 function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "dropQueued"> {
   const latest = useRef(ctx); latest.current = ctx;
-  const confirmGenerate = useCallback((regenPresetName: string | null) => { void confirmRun(latest.current, regenPresetName); }, []);
+  const confirmGenerate = useCallback((batch: ConfirmedBatch) => { void confirmRun(latest.current, batch); }, []);
   const cancelRun = useCallback(() => {
     const c = latest.current;
     log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "cancel — keep finished" });
@@ -246,10 +253,7 @@ function editChecked(c: SvgCtx, after: RowSelection, label: string, touched: str
   });
 }
 function dummyRegen(c: SvgCtx): RegenPlan {
-  const presets = c.m.presets;
-  if (presets.length === 0) return MAIN_PLAN;
-  const first = presets[0];
-  const found = findPreset(presets, first.name);
-  if (found === null || found.text.trim() === "") return MAIN_PLAN;
-  return { kind: "current-svg", presetName: found.name, presetText: found.text };
+  const found = c.m.presets.find((p) => p.text.trim() !== "");
+  const plan = regenPlanFromPreset(found ?? null, loadRegenBatchPref().count);
+  return plan.ok ? plan.plan : MAIN_PLAN;
 }

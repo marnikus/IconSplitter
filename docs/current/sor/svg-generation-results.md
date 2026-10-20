@@ -71,15 +71,18 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   selection (one history entry per gesture, undoable). The approved version
   is identified in the row; regenerating adds a new pending version without
   deleting old decisions or history.
-* Regenerate SVG from (2026-10-09; design `docs/archive/2026-10-09-regenerate-from-svg/design.md`).
-  Feature 1 (the default, locked by tests): a row's Regenerate sends the FULL
-  main prompt plus the source's first image alone, one request. Feature 2:
-  the Generate SVG tab's window **Regenerate SVG from** (global, directly above
-  the prompt window; moved here from Export settings on 2026-10-09) →
-  **Regenerate from current SVG** sends the saved prompt picked from the SVG
-  prompt presets, the icon's newest valid SVG code and the same first image,
-  one icon per request (I-64). A missing or blank saved prompt refuses the run
-  before any byte leaves; an icon with no valid SVG yet gets the main prompt.
+* Regenerate SVG from (2026-10-09; batch 2026-10-20,
+  `docs/archive/2026-10-20-regen-batch-and-task-prompts/`). A regeneration
+  request carries the saved prompt **and** the current SVG code of every icon it
+  carries — one icon per request at size 1 (the single-icon task), up to nine
+  (a full 3×3 sheet) at the default size. The text is the prompt, the ordered
+  `position — name` manifest, the response contract and each carried icon's code;
+  the answer is matched back by `<title>` first and declared position second
+  (I-74/I-75). The popup's own control sizes the request (1..9, default 9,
+  stored per tab); a stored preset that is gone or a request over the size or
+  prompt ceiling is refused in words before any byte leaves. Regeneration never
+  falls back to the main prompt, and an icon without a readable current SVG is
+  named and left out instead of being guessed (I-76).
 * Failures: a failed request keeps the previous SVG; a rate limit reports its
   retry-after; cancellation stops unsent requests and keeps completed
   results; a restart marks an interrupted request as interrupted/unknown and

@@ -9,8 +9,8 @@ import {
   dropAll, dropIdFrom, dropQueued, enqueue, enqueueFront, nextRun, queuedCount, queuedIds, queueItem, shiftQueue,
 } from "../src/svg/runqueue";
 
-const first = queueItem(["a"], 1, "fog_AI.png");
-const second = queueItem(["b", "c"], 2, "court_AI.png + 1 more");
+const first = queueItem({ ids: ["a"], requests: 1, label: "fog_AI.png" });
+const second = queueItem({ ids: ["b", "c"], requests: 2, label: "court_AI.png + 1 more" });
 
 describe("the generation queue", () => {
   it("appends: new work waits behind what is already there, in order", () => {
@@ -47,17 +47,17 @@ describe("the generation queue", () => {
   });
 
   it("names every batch uniquely and keeps the user's count and request size", () => {
-    const again = queueItem(["b", "c"], 2, "court_AI.png + 1 more");
+    const again = queueItem({ ids: ["b", "c"], requests: 2, label: "court_AI.png + 1 more" });
     expect(again.id).not.toBe(second.id); // a drop can name the exact batch
     expect(again.count).toBe(2);
     expect(again.requests).toBe(2); // the user's images-per-request, not a tier cap
     expect(again.label).toBe("court_AI.png + 1 more"); // the waiting list can name it
-    expect(queueItem([], 0, "").requests).toBe(1); // never "zero requests"
+    expect(queueItem({ ids: [], requests: 0, label: "" }).requests).toBe(1); // never "zero requests"
   });
 });
 
 describe("the front of the queue (2026-10-08: Regenerate is the NEXT attempt)", () => {
-  const retry = queueItem(["b"], 1, "court_AI.png");
+  const retry = queueItem({ ids: ["b"], requests: 1, label: "court_AI.png" });
 
   it("enqueueFront puts the item first and displaces nothing behind it", () => {
     const queue = enqueueFront([first, second], retry);

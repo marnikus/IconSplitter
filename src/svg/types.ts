@@ -72,6 +72,8 @@ export interface RunProgress {
 }
 
 import type { QueueItem } from "./runqueue";
+import type { PromptChoice } from "../lib/prompttasks";
+import type { RegenCode } from "./regencodes";
 
 export type { QueueItem } from "./runqueue";
 
@@ -81,6 +83,18 @@ export interface ImageReview {
   mosaic: string;
   cells: { id: string; name: string; url: string }[];
   busy: boolean;
+}
+
+/**
+ * What one confirmation hands the queue (2026-10-20): the prompt the popup
+ * showed, the icons-per-request size it planned with, and the exact current SVG
+ * code of every icon it previewed. Frozen, so the queue cannot drift from what
+ * the user approved (I-76).
+ */
+export interface ConfirmedBatch {
+  choice: PromptChoice;
+  size: number;
+  codes: ReadonlyMap<string, RegenCode>;
 }
 
 export type Dialog =

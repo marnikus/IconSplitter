@@ -1,52 +1,82 @@
-// regenprompt.ts — the text and image ONE request of a run carries (2026-10-09).
-// Owns the choice between the two regeneration modes per request: the main
-// prompt (every request that is not one regenerated icon) or the saved prompt
-// + the icon's newest valid SVG code, read from its file, with the same image.
-// The version record keeps the prompt text but never the code — the code is the
-// previous version's own file. A code that cannot be read fails that icon;
-// an icon with no valid SVG yet is a first generation and gets the main prompt.
+// regenprompt.ts — the text and image ONE request of a run carries (2026-10-09,
+// batch regeneration 2026-10-20). Owns the choice between the two modes per
+// request: the batch's own prompt (the stored main prompt or a saved preset's
+// text), or the saved prompt + the current SVG code of EVERY icon the request
+// carries, all frozen when the batch was confirmed. The version record keeps
+// the prompt text and its position, never another icon's code — the code is the
+// previous version's own file. A code that is not in the frozen map fails that
+// request; there is no silent main-prompt fallback any more.
 
 import { batchManifest, type BatchPlan } from "../lib/svgbatch";
 import { batchPrompt, singlePrompt } from "../lib/svgprompt";
-import { currentSvgPrompt, type CurrentSvgPlan } from "../lib/svgregen";
-import { newestValid } from "../lib/svgfile";
-import { log } from "../log/logstore";
-import { readSvgText } from "./svgfiles";
+import { choiceText, type PromptChoice } from "../lib/prompttasks";
+import {
+  regenBatchPrompt, regenPromptProblem, regenRecordText, type RegenCodeItem,
+} from "../lib/svgregen";
 import type { RunArgs } from "./runtypes";
 import type { SvgSource } from "./sources";
 
-/** `prompt` is sent; `record` is what the pair file keeps as this version's prompt. */
+/** `prompt` is sent; `record` is what the pair file keeps when no per-icon one exists. */
 export interface RequestText {
   prompt: string;
   record: string;
+  /** One record per source, so a batch member names its own position (I-76). */
+  records: Map<string, string>;
 }
 
 export type RequestTextResult = { ok: true; text: RequestText } | { ok: false; error: string };
 
 export async function requestTextOf(args: RunArgs, items: readonly SvgSource[], plan: BatchPlan): Promise<RequestTextResult> {
-  const only = items.length === 1 ? items[0] : undefined;
-  if (args.regen.kind === "current-svg" && only !== undefined) return regenTextOf(args, args.regen, only, plan);
-  return { ok: true, text: mainTextOf(args.prompt, items, plan) };
+  if (args.regen.kind === "current-svg") return regenTextOf(args, items, plan);
+  const prompt = choiceText(args.promptChoice ?? { kind: "main" }, args.prompt);
+  return { ok: true, text: mainTextOf(prompt, items, plan) };
 }
 
 function mainTextOf(prompt: string, items: readonly SvgSource[], plan: BatchPlan): RequestText {
   const text = items.length === 1 ? singlePrompt(prompt, items[0].stem) : batchPrompt(prompt, batchManifest(plan.items));
-  return { prompt: text, record: prompt };
+  return { prompt: text, record: prompt, records: new Map() };
 }
 
-async function regenTextOf(args: RunArgs, regen: CurrentSvgPlan, item: SvgSource, plan: BatchPlan): Promise<RequestTextResult> {
-  const current = newestValid(args.metas.get(item.id)?.versions ?? []);
-  if (current === null) {
-    log({ level: "warn", feature: "svg", action: "regen-no-svg", detail: `${item.name}: no valid SVG yet — sent with the main prompt` });
-    return { ok: true, text: mainTextOf(args.prompt, [item], plan) };
+/** Every carried icon's code, in manifest order, or the named reason nothing is sent. */
+interface Carry {
+  codes: RegenCodeItem[];
+  /** The source id of each code, same index — the record of a batch member. */
+  ids: string[];
+}
+
+function codesOf(args: RunArgs, items: readonly SvgSource[], plan: BatchPlan): Carry | string {
+  const codes: RegenCodeItem[] = [];
+  const ids: string[] = [];
+  for (const item of items) {
+    const code = args.regenCodes?.get(item.id);
+    if (code === undefined || code.code === null) return `${item.name}: its current SVG could not be read — nothing was sent`;
+    codes.push({ position: positionOf(plan, item.id, codes.length + 1), name: item.stem, code: code.code });
+    ids.push(item.id);
   }
-  const code = await readSvgText(args.root, current.svgPath);
-  if (code === null) return { ok: false, error: `${item.name}: the current SVG could not be read — nothing was sent` };
+  return { codes, ids };
+}
+
+function positionOf(plan: BatchPlan, sourceId: string, fallback: number): number {
+  return plan.items.find((i) => i.sourceId === sourceId)?.position ?? fallback;
+}
+
+function regenTextOf(args: RunArgs, items: readonly SvgSource[], plan: BatchPlan): RequestTextResult {
+  if (args.regen.kind !== "current-svg") return { ok: false, error: "no regeneration plan — nothing was sent" };
+  const carry = codesOf(args, items, plan);
+  if (typeof carry === "string") return { ok: false, error: carry };
+  const { presetText } = args.regen;
+  const why = regenPromptProblem(presetText, carry.codes);
+  if (why !== null) return { ok: false, error: why };
+  const records = new Map(carry.codes.map((c, i) => [carry.ids[i], regenRecordText(presetText, carry.codes.length, c.position)]));
   return {
     ok: true,
     text: {
-      prompt: currentSvgPrompt(regen.presetText, item.stem, code),
-      record: singlePrompt(regen.presetText, item.stem),
+      prompt: regenBatchPrompt(presetText, carry.codes),
+      record: regenRecordText(presetText, carry.codes.length, carry.codes[0].position),
+      records,
     },
   };
 }
+
+/** Re-exported for the confirmation preview: the same choice every reader makes. */
+export type { PromptChoice };

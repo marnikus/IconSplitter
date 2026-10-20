@@ -6,14 +6,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { capsFor, type SamplingParams } from "../src/lib/modelcaps";
+import type { SamplingParams } from "../src/lib/modelcaps";
 import { compositeLayout } from "../src/lib/svgcomposite";
-import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
 import { toRow } from "../src/svg/rowmodel";
 import SvgConfirm from "../src/svg/SvgConfirm";
+import { confirmProps } from "./helpers/svgconfirm";
 import type { SvgRow } from "../src/svg/types";
 import type { SvgSource } from "../src/svg/sources";
-import { FakeDir } from "./helpers/fakefs";
 import { svgSource } from "./helpers/svgpair";
 import type { PromptPreset } from "../src/lib/promptpresets";
 import { settle as quietSettle } from "./helpers/quiet";
@@ -69,22 +68,10 @@ async function mount(opts: MountOpts): Promise<SvgRow[]> {
   const all = rows(opts.count);
   await act(async () => {
     ui = createRoot(host);
-    ui.render(
-      <SvgConfirm
-        ids={all.map((r) => r.source.id)}
-        operation={opts.operation ?? "generate"}
-        rows={all}
-        config={{ ...DEFAULT_CONFIG, imagesPerRequest: opts.perRequest ?? 4 }}
-        caps={capsFor(DEFAULT_CONFIG.model)}
-        params={{ temperature: null, maxTokens: 8_000, effort: opts.effort ?? null }}
-        rootRef={{ current: new FakeDir("split_root") }}
-        running={false}
-        presets={opts.presets ?? []}
-        prompt="main prompt"
-        onConfirm={() => undefined}
-        onDismiss={() => undefined}
-      />,
-    );
+    ui.render(<SvgConfirm {...confirmProps({
+        ids: all.map((r) => r.source.id), rows: all, operation: opts.operation ?? "generate",
+        config: { imagesPerRequest: opts.perRequest ?? 4 }, presets: opts.presets ?? [],
+      })} params={{ temperature: null, maxTokens: 8_000, effort: opts.effort ?? null }} />);
   });
   await settle();
   return all;
@@ -128,7 +115,8 @@ describe("SvgConfirm — the whole plan before any request", () => {
   it("generation shows Generation batch now and main prompt note", async () => {
     await mount({ count: 2, operation: "generate" });
     expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Generation batch now");
-    expect(q("[data-testid=svg-confirm-main-prompt]")?.textContent).toContain("main prompt");
+    expect(q("[data-testid=svg-confirm-prompt-default]")?.textContent).toContain("main prompt");
+    expect(q("[data-testid=svg-confirm-prompt-select]")).not.toBeNull();
   });
 
   it("paginates every batch with its own composite and exact ordered filenames", async () => {
@@ -186,17 +174,13 @@ describe("SvgConfirm — the whole plan before any request", () => {
     const all = rows(3);
     await act(async () => {
       ui = createRoot(host);
-      ui.render(
-        <SvgConfirm ids={all.map((r) => r.source.id)} operation="generate" rows={all} config={DEFAULT_CONFIG}
-          caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-          rootRef={{ current: new FakeDir("split_root") }} running={false} presets={[]} prompt="main" onConfirm={onConfirm} onDismiss={onDismiss} />,
-      );
+      ui.render(<SvgConfirm {...confirmProps({ ids: all.map((r) => r.source.id), rows: all, onConfirm, onDismiss })} />);
     });
     await settle();
     expect(onConfirm).not.toHaveBeenCalled();
     await click("[data-testid=svg-confirm-generate]");
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    expect(onConfirm).toHaveBeenCalledWith(null);
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ choice: { kind: "main" } }));
     await click("[data-testid=svg-confirm-cancel]");
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(compositeCalls).toHaveBeenCalledTimes(1);
@@ -208,11 +192,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
     const shown = ids.map((id) => all.find((r) => r.source.id === id)!);
     await act(async () => {
       ui = createRoot(host);
-      ui.render(
-        <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
-          caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-          rootRef={{ current: new FakeDir("split_root") }} running={false} presets={[]} prompt="main" onConfirm={() => undefined} onDismiss={() => undefined} />,
-      );
+      ui.render(<SvgConfirm {...confirmProps({ ids, rows: all, config: { imagesPerRequest: 4 } })} />);
     });
     await settle();
     expect(items()).toEqual(["1 — icon-3_AI", "2 — icon-1_AI", "3 — icon-2_AI"]);
@@ -222,11 +202,7 @@ describe("SvgConfirm — the whole plan before any request", () => {
 
   it("never shows a previous selection's sheet just because the page label repeats", async () => {
     const all = rows(4);
-    const render = (ids: string[]) => (
-      <SvgConfirm ids={ids} operation="generate" rows={all} config={{ ...DEFAULT_CONFIG, imagesPerRequest: 4 }}
-        caps={capsFor(DEFAULT_CONFIG.model)} params={{ temperature: null, maxTokens: 8_000, effort: null }}
-        rootRef={{ current: new FakeDir("split_root") }} running={false} presets={[]} prompt="main" onConfirm={() => undefined} onDismiss={() => undefined} />
-    );
+    const render = (ids: string[]) => <SvgConfirm {...confirmProps({ ids, rows: all, config: { imagesPerRequest: 4 } })} />;
     await act(async () => { ui = createRoot(host); ui.render(render(["pair_1"])); });
     await settle();
     expect((q("[data-testid=svg-composite-img]") as HTMLImageElement).src).toContain(all[0].source.relPath);
