@@ -4,26 +4,20 @@ The optional EPS path in [SVG to upload](upload.md); exports are local and valid
 
 ## Converter choices
 
-An enabled Upload template shadow is a radial-gradient SVG paint; the built-in
-EPS subset cannot write gradient fills. The selected bulk bar, row and Export
-settings popup (both scopes) warn **before export**; the EPS stage reports
-`partial` with its
-reason while validated SVG/JPEG commit. An EPS from an earlier, unshadowed
-package remains on disk without being named in the new partial `export.json` or
-Download all: it cannot masquerade as the requested shadowed EPS. Choosing the
-local Inkscape converter remains explicit; the app never switches converters
-or launches the helper for Shadow. The optional [corner badge](upload-badge.md)
-uses solid black paths that the built-in writer can emit as EPS; a badge combined
-with Shadow is still partial because the gradient remains unsupported. The
-[S/L size guide](upload-sizeguide.md) is likewise ordinary filled paths, valid
-in built-in EPS.
+The built-in browser writer supports native Level 3 vector gradients, including
+Upload template shadows. See [vector gradients and the no-raster gate](upload-eps-gradients.md)
+for supported paints, alpha/backdrop restrictions and owner/test files. No
+separate program is needed. Badge and S/L paths remain vector geometry.
+Unsupported compositing is a failed EPS stage (`partial` package, SVG/JPEG may
+commit), never a bitmap fallback; an older EPS is detached from that package's
+record and Download all. Converter selection remains explicit.
 
 * EPS converters (2026-10-09, design
   `docs/archive/2026-10-09-eps-converters-inkscape-expand/design.md`): the
   EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`
   (`src/lib/upload/epsconv/registry.ts`) is the one table the drop list, the
-  settings parser and the EPS stage read: `builtin` (the subset writer above,
-  `writer: "builtin-subset-2"`) and `inkscape` (Inkscape on this machine
+  settings parser and the EPS stage read: `builtin` (the native vector writer above,
+  `writer: "builtin-vector-3"`) and `inkscape` (Inkscape on this machine
   through the local helper at `http://127.0.0.1:47391` — `GET /health` to
   probe, `POST /convert/eps` with the prepared SVG to convert, `writer:
   "inkscape-cli@<version>"` from the `x-inkscape-version` header). The
@@ -38,8 +32,8 @@ in built-in EPS.
   using the HiRes dimensions (the AI5 order is height before width). Its upright
   transform is anchored to that same exact rectangle. No `%%PageBoundingBox` is
   added because this writer emits EPS, not a page-structured PostScript document.
-  The writer ID is `builtin-subset-2`; planning compares it as well as the
-  converter so existing packages refresh the EPS only after this metadata change.
+  The writer ID is `builtin-vector-3`; planning compares it as well as the
+  converter so existing packages refresh the EPS only after a writer change.
   After conversion, accepted metadata is embedded as the same Dublin Core XMP
   packet used by JPEG (`dc:title`, `dc:description`, `dc:subject`), using
   `%ADO_ContainsXMP: MainFirst` and an EPS pdfmark metadata stream with BDC/EMC
@@ -47,7 +41,8 @@ in built-in EPS.
   a metadata edit refreshes requested EPS without rasterizing again. Every EPS
   — whoever wrote it — passes the SAME converter-neutral gate before commit
   (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`, a `%%BoundingBox`,
-  `%%EOF`); the stricter EPS 10 markers (`verifyEps`) are
+  `%%EOF`, AND the closed vector-program audit; unverifiable external programs
+  fail closed); the stricter EPS 10 markers (`verifyEps`) are
   the built-in writer's own contract — and since 2026-10-09 `verifyEps` also
   runs the subset stack checker (`lib/upload/epscheck`, I-61), which the
   built-in converter applies to its own output before it answers ok. A helper that is down / an Inkscape

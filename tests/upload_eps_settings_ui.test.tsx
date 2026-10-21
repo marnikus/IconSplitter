@@ -128,7 +128,7 @@ describe("the EPS converter drop list", () => {
     await click("[data-testid=upload-settings-open]");
     const select = q("[data-testid=upload-set-eps-converter]") as HTMLSelectElement;
     expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
-      ["builtin", "Built-in (PostScript subset)"], ["inkscape", "Inkscape CLI (local helper)"],
+      ["builtin", "Built-in (vector gradients, Level 3)"], ["inkscape", "Inkscape CLI (local helper)"],
     ]);
     expect(select.value).toBe("builtin");
     expect(q("[data-testid=upload-eps-helper]")).toBeNull(); // the helper row belongs to the Inkscape choice only

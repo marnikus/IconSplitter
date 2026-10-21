@@ -196,3 +196,13 @@ function lineText(line: string): string {
 function lineEndingOf(text: string): string {
   return /\r\n|\n|\r/.exec(text)?.[0] ?? "\n";
 }
+
+/** Only our byte-for-byte canonical metadata program may be excluded from the
+ * vector grammar audit. Marker comments alone are never a bypass. */
+export function verifiedEpsArtwork(eps: string): string {
+  if (!eps.includes(SETUP_BEGIN) && !eps.includes(TRAILER_BEGIN)) return eps;
+  const metadata = readXmpMetadataFromEps(eps);
+  const clean = stripPreviousEmbedding(eps);
+  if (metadata === null || embedXmpMetadataInEps(clean, metadata) !== eps) throw new Error("unverified EPS metadata envelope");
+  return clean;
+}

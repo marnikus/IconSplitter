@@ -3,6 +3,7 @@
 // planner's rebuild flags. The artifacts are built BEFORE any validation or
 // commit, so a failed stage never touches the last valid package.
 
+import { verifyEpsDocument } from "../lib/upload/eps";
 import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
 import { pinnedDimensions, targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
@@ -107,8 +108,8 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
 /**
  * SVG → EPS 10, from the text the optimize/clean stages produced (never the
  * source): that is the "convert after the SVG was optimized" order. PostScript
- * has no alpha, so opacity mixes onto the flatten colour (white when the
- * background is transparent) — no background shape is painted either way.
+ * has no alpha: native gradient functions flatten onto a proven uniform
+ * backdrop, with no bitmap intermediate. Every final EPS is audited.
  */
 async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   const converter = CONVERTERS[ctx.settings.epsConverter]; // the setting's choice (2026-10-09)
@@ -118,6 +119,11 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
     art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
+    const checked = verifyEpsDocument(art.epsText);
+    if (!checked.ok) {
+      art.epsText = null;
+      art.epsFailure = `EPS vector-only verification failed: ${checked.errors[0]}`;
+    }
     art.epsFixes = eps.fixes;
     art.epsWriter = eps.writer;
   } else art.epsFailure = describeFailure(eps); // honest: the EPS stage failed → partial

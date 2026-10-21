@@ -67,8 +67,9 @@ function jpegCheck(art: Artifacts, metadata: IconMetadata | null, errors: string
 
 function epsCheck(epsText: string | null, errors: string[]): boolean {
   if (epsText === null) return true;
-  const ok = verifyEpsDocument(epsText).ok; // converter-neutral (2026-10-09): Inkscape's EPS passes too
-  if (!ok) errors.push("the EPS does not verify");
+  const verdict = verifyEpsDocument(epsText);
+  const ok = verdict.ok;
+  if (!ok) errors.push(`EPS vector-only verification failed: ${verdict.errors[0]}`);
   return ok;
 }
 

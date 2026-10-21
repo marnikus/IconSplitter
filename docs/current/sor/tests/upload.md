@@ -82,3 +82,9 @@ Focused test inventory; [all tests](../TESTS.md).
   re-export, metadata embedded + verified, honest failure commits nothing.
 * `upload_row_gestures.test.tsx` — RULE 25: Batch modifiers, visible header,
   arrows, modal isolation and global selection undo; no A/D or provider calls.
+
+Native vector EPS: `upload_epsgradient`, `upload_epsvectorcheck` cover axial/radial
+shading, template alpha, restricted data/stack grammar, nonlinear color error
+bounds and raster rejection. `upload_runexport` verifies saved EPS/XMP bytes,
+cached raster rejection, Download all and corruption after tmp verification.
+See `sor/upload-eps-gradients.md` for support limits and missing input fixtures.

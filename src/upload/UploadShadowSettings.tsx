@@ -7,7 +7,7 @@ import DraftNumberInput from "../ui/DraftNumberInput";
 import { change, Marker, type UploadSettingsDialogProps } from "./settingsfield";
 
 export default function UploadShadowSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const epsWarning = p.id === null ? p.selectedShadow.epsUnsupported > 0
+  const epsWarning = p.id === null ? p.selectedShadow.epsVectorCount > 0
     : effective.shadowEnabled && effective.includeEps && effective.epsConverter === "builtin";
   return (
     <div className="up-shadow-dialog" data-testid="upload-set-shadow-section">
@@ -24,7 +24,7 @@ export default function UploadShadowSettings({ p, effective }: { p: UploadSettin
       {p.id === null && <small className="up-hint">Shadow defaults for icon settings; changing these numbers does not enable unchecked icons.</small>}
       {epsWarning &&
         <p className="svg-warning" role="alert" data-testid="upload-shadow-eps-note">
-          The built-in EPS writer cannot draw gradient shadows: SVG and JPEG export, EPS reports partial. Choose Inkscape locally for EPS.
+          Built-in EPS exports gradient shadows as vectors. Unsupported overlaps fail EPS verification; raster fallback is forbidden.
         </p>}
     </div>
   );

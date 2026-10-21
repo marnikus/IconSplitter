@@ -66,7 +66,7 @@ every swatch carrying `aria-pressed`, the per-field marker
 background (`transparent` or the hex) and appends `· stroke #hex` when a
 stroke colour is pinned.
 The EPS converter row (2026-10-09) is `upload-set-eps-converter` (`<select>`
-whose options ARE the registry: `builtin` "Built-in (PostScript subset)",
+whose options ARE the registry: `builtin` "Built-in (vector gradients, Level 3)",
 `inkscape` "Inkscape CLI (local helper)"; marker
 `upload-set-marker-eps-converter`; choosing one never toggles
 `upload-set-eps`). Only for `inkscape` the helper row `upload-eps-helper`

@@ -139,6 +139,11 @@ async function commitFile(dir: DirHandleLike, name: string, content: Uint8Array,
   const back = new Uint8Array(await (await fh.getFile()).arrayBuffer());
   if (!verify(back)) throw new Error(`tmp verify failed for ${name}`);
   await writeFileOverwrite(dir, name, new Blob([content as BlobPart]));
+  const saved = await readBytesAt(dir, name);
+  if (saved === null || !verify(saved) || !sameBytes(saved, content)) {
+    await dir.removeEntry?.(name);
+    throw new Error(`saved-file verify failed for ${name}`);
+  }
   try {
     await dir.removeEntry?.(tmp);
   } catch {
@@ -180,3 +185,7 @@ function svgParses(svg: string): boolean {
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}

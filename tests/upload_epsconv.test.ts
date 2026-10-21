@@ -25,7 +25,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 describe("the registry — one table", () => {
   it("lists the two converters in order, with labels the drop list shows", () => {
     expect(CONVERTER_IDS).toEqual(["builtin", "inkscape"]);
-    expect(CONVERTERS.builtin.label).toBe("Built-in (PostScript subset)");
+    expect(CONVERTERS.builtin.label).toBe("Built-in (vector gradients, Level 3)");
     expect(CONVERTERS.inkscape.label).toBe("Inkscape CLI (local helper)");
     for (const id of CONVERTER_IDS) expect(converterOf(id).id).toBe(id);
   });
@@ -50,9 +50,9 @@ describe("the built-in converter IS writeEps", () => {
     expect(viaRegistry.ok).toBe(true);
     if (!direct.ok || !viaRegistry.ok) return;
     expect(viaRegistry.eps).toBe(direct.eps);
-    expect(viaRegistry.writer).toBe("builtin-subset-2");
+    expect(viaRegistry.writer).toBe("builtin-vector-3");
     expect(viaRegistry.fixes).toEqual([]);
-    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-subset-2" });
+    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-vector-3" });
   });
 
   it("the built-in converter verifies its own program before it answers ok (I-61)", async () => {

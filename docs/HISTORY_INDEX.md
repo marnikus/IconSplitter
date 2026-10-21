@@ -8,6 +8,8 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-21-vector-only-eps/implementation.md` / `verification.md` | Native Level 3 vector gradient implementation and measured results: strict no-raster final-byte gates, 2396 passing coverage tests, independent interpreter checks; full perf lane remains blocked |
+| `archive/2026-10-21-vector-only-eps/research.md` | Research only: browser-native Level 3 vector gradients, rejected raster-producing PDF intermediary probe, strict no-raster audit and actual-file export test design; supplied SVG fixtures absent, no implementation claimed |
 | `archive/2026-10-01-batch-processing/design.md` | Batch folders: module map, browser constraints, negative tests |
 | `archive/2026-10-01-history-session/design.md` | Shared app-state store above the tabs, the single global undo timeline (RULE 12), session restore snapshot |
 | `archive/2026-10-01-selection-review/design.md` | Selection V1: pairing model, atomic decision protocol, hotkeys, a11y |

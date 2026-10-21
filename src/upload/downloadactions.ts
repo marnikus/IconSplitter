@@ -11,6 +11,7 @@ import { useCallback, useRef } from "react";
 import { pickDirectory } from "../batch/picker";
 import { nameExists, readBytesAt, writeFileNew, type DirHandleLike } from "../lib/fs";
 import { downloadLine, planDownload, type DownloadItem, type DownloadPlan, type DownloadResult } from "../lib/upload/download";
+import { verifyEpsDocument } from "../lib/upload/eps";
 import { log } from "../log/logstore";
 import { downloadedSpec } from "./uploadlog";
 import type { Latest } from "./types";
@@ -74,9 +75,10 @@ async function copyPlanned(root: DirHandleLike, dest: DirHandleLike, plan: Downl
 }
 
 /** One file: read, refuse to overwrite, write, read back and compare. */
-async function copyOne(root: DirHandleLike, dest: DirHandleLike, item: DownloadItem): Promise<"saved" | "kept" | "missing" | "failed"> {
+export async function copyOne(root: DirHandleLike, dest: DirHandleLike, item: DownloadItem): Promise<"saved" | "kept" | "missing" | "failed"> {
   const bytes = await readBytesAt(root, item.from);
   if (bytes === null) return "missing";
+  if (item.to.toLowerCase().endsWith(".eps") && !verifyEpsDocument(new TextDecoder().decode(bytes)).ok) return "failed";
   if (await nameExists("file", dest, item.to)) return "kept";
   try {
     await writeFileNew(dest, item.to, new Blob([bytes as BlobPart]));

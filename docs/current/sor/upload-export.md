@@ -47,8 +47,8 @@ byte-for-byte as-is shortcut remain unchanged. The optional [corner badge](uploa
 adds the supplied opaque paths above the artwork **after** fitting; preview,
 JPEG, optimized SVG and built-in EPS share that vector. Badge-off files keep
 their previous bytes/fingerprints, while enabled placement and template changes
-mark only affected packages stale. Badge plus Shadow retains Shadow's honest
-partial-EPS result. The optional [S/L size guide](upload-sizeguide.md) adds its
+mark only affected packages stale. Badge plus Shadow supports native vector EPS; unsupported alpha overlaps fail
+closed, never rasterize. The optional [S/L size guide](upload-sizeguide.md) adds its
 two baked repeats and letter paths the same way: off by default, shared with
 every renderer, and fingerprinting only while enabled.
 
@@ -106,3 +106,8 @@ every renderer, and fingerprinting only while enabled.
   at. One line says it all — toast and the log's `downloaded` entry (counts in
   text, no data): `Saved 9 files (3 icons) to stock-drop · 2 kept (already
   there) · 1 icon not exported yet`.
+
+EPS delivery also enforces the [vector-only grammar and shading gate](upload-eps-gradients.md)
+after metadata, on temporary and final readback, before cached reuse, and before
+Download all. Any raster or unverified program fails the EPS stage/test; a header
+or a matching old export fingerprint alone never certifies it.

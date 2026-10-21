@@ -188,8 +188,8 @@ describe("per-icon shadow controls and exact live preview", () => {
     expect(loadUploadSettings().overrides[FOG]).toMatchObject({ shadowEnabled: true, shadowWidthPct: 130, shadowGapPct: 10 });
     expect(q(`[data-testid=upload-settings-${FOG}]`)?.textContent).toContain("shadow 130% · gap 10%");
     await click("[data-testid=upload-set-eps]");
-    expect(q("[data-testid=upload-shadow-eps-note]")?.textContent).toMatch(/EPS.*partial/);
-    expect(q(`[data-testid=upload-shadow-eps-${FOG}]`)?.textContent).toMatch(/EPS.*partial/);
+    expect(q("[data-testid=upload-shadow-eps-note]")?.textContent).toMatch(/EPS.*vector/);
+    expect(q(`[data-testid=upload-shadow-eps-${FOG}]`)?.textContent).toMatch(/EPS.*vector/);
     await click("[data-testid=upload-set-as-is]");
     expect(loadUploadSettings().overrides[FOG].shadowEnabled).toBe(false);
     expect(art()).not.toContain("radialGradient");

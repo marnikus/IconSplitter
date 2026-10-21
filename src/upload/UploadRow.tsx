@@ -189,10 +189,10 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   );
 }
 
-/** Say why built-in EPS cannot reproduce the gradient before this row is exported. */
+/** Explain native vector shading before this row is exported. */
 function ShadowEpsNote({ settings, id }: { settings: UploadSettings; id: string }) {
   if (!settings.shadowEnabled || !settings.includeEps || settings.epsConverter !== "builtin") return null;
-  return <small className="svg-warning" data-testid={`upload-shadow-eps-${id}`}>Built-in EPS cannot draw gradient shadow; EPS will be partial.</small>;
+  return <small className="svg-warning" data-testid={`upload-shadow-eps-${id}`}>Built-in EPS uses vector gradient shadows; no raster fallback.</small>;
 }
 
 /** Metadata / Settings / Export — the row's own three actions. */

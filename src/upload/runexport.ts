@@ -9,6 +9,7 @@
 // previous package stays), a cancel → `cancelled` (nothing new committed).
 
 import { fileExistsAt, readTextAt, type DirHandleLike } from "../lib/fs";
+import { verifyEpsDocument } from "../lib/upload/eps";
 import type { RasterDeps } from "../lib/upload/raster";
 import type { ConverterDeps } from "../lib/upload/epsconv/types";
 import { readJpegDimensions } from "../lib/upload/jpeg";
@@ -109,7 +110,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
   const outputs = {
     svg: await fileExistsAt(args.root, `${exportDir}/${stem}.svg`),
     jpg: await fileExistsAt(args.root, `${exportDir}/${stem}.jpg`),
-    eps: await fileExistsAt(args.root, `${exportDir}/${stem}.eps`),
+    eps: await reusableVectorEps(args.root, `${exportDir}/${stem}.eps`),
   };
   const metadataOutputs = await metadataOutputsAt({
     root: args.root, exportDir, stem, metadata: args.metadata,
@@ -269,4 +270,9 @@ function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {
 
 function passthroughOptimize(): OptimizeRecord {
   return { enabled: false, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" };
+}
+
+async function reusableVectorEps(root: DirHandleLike, path: string): Promise<boolean> {
+  const eps = await readTextAt(root, path);
+  return eps !== null && verifyEpsDocument(eps).ok;
 }
