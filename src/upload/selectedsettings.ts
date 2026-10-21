@@ -1,12 +1,14 @@
 // selectedsettings.ts — one validated per-icon settings batch, one global undo entry.
 // Three batches live here: a field edit (`commitBatch`, the selected-only
-// dimensions), a decoration opt-in (`commitDecoration`) and the ONE global
-// reset (`resetBatch`). EVERY write is recorded in the `applied` marks map, so
-// the row and the icon's dialog read it as `inherited` and the reset never
-// undoes it — only a local edit in that row's own dialog pins (2026-10-21,
-// row settings isolation + applied decorations).
+// dimensions), a decoration opt-in (`commitDecoration`) and the ONE reset to
+// inherited (`resetBatch`). Writes a global control makes are recorded in the
+// `applied` marks map, so the row and the icon's dialog read them as
+// `inherited`. The reset drops the rows' LOCAL general pins only: a decoration
+// (flag and geometry) always stays, so the Checked-icons boxes never untick
+// and the stored defaults are never written (2026-10-21, row settings
+// isolation + applied decorations + reset-to-inherited).
 import {
-  appliedEqual, isApplied, localKeys, marksOf, withApplied, withoutLocalPins, DECORATION_FIELD,
+  appliedEqual, isApplied, localResetKeys, marksOf, withApplied, withoutLocalPins, DECORATION_FIELD,
   type AppliedFields, type DecorationKey,
 } from "../lib/upload/decorations";
 import {
@@ -80,17 +82,18 @@ function marksAfterWrite(
   return out;
 }
 
-/** The checked ids a reset would really change: those that PIN at least one field locally. */
+/** The checked ids a reset would really change: those that pin at least one general setting locally. */
 export function resettableIds(
   ids: readonly string[], overrides: Record<string, SettingsOverrides>, applied: Record<string, AppliedFields>,
 ): string[] {
-  return ids.filter((id) => localKeys(overrideKeys(overrides[id] ?? {}), applied[id]).length > 0);
+  return ids.filter((id) => localResetKeys(overrideKeys(overrides[id] ?? {}), applied[id]).length > 0);
 }
 
 /**
- * Clear the selection's LOCAL pins — ONE undo entry. Values a global control
- * applied to the icon are not local settings and stay (2026-10-21, the user's
- * correction): the stored global defaults are not touched either.
+ * Reset the selection to inherited — ONE undo entry. It drops the rows' LOCAL
+ * general pins; a shadow / corner badge / size guide (and every field a global
+ * control applied) always stays, so the Checked-icons boxes keep their state
+ * (2026-10-21, the user's correction). The stored defaults are never written.
  */
 export function resetBatch(c: UploadCtx, ids: string[], label: string): number {
   const patch = emptyPatch();

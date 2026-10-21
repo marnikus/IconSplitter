@@ -4,8 +4,8 @@
 // STROKE width (Generate SVG's PreviewStroke control, here the ONE strokePx of
 // the export defaults — 2026-10-19, RULE 10) with the global Export settings button beside
 // them (the reference puts the tools here, not in the provider card), the live
-// progress line, and the bulk controls: Reset to defaults (clears the
-// selection's own pins — never writes the global values into a row, 2026-10-21),
+// progress line, and the bulk controls: Reset to inherited (clears the
+// selection's own general pins — never a decoration, never a default, 2026-10-21),
 // Generate metadata, Regenerate metadata, Export selected, Download all (the
 // selection's committed packages into one folder the user picks, 2026-10-08),
 // and Cancel while a run is in flight. Every bulk action applies to the
@@ -33,7 +33,7 @@ export interface UploadBulkBarProps {
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
   shadowEpsUnsupported: number;
-  /** How many checked icons pin at least one setting in their own dialog. */
+  /** How many checked icons pin at least one general setting in their own dialog. */
   overriddenCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
@@ -110,9 +110,9 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
       <button type="button" className="svg-btn" data-testid="upload-reset-settings"
         disabled={p.overriddenCount === 0} onClick={p.onResetSettings}
         title={p.overriddenCount === 0
-          ? "No checked icon pins a local setting — they inherit the defaults and keep the decorations this popup applied"
-          : `Clears the local settings the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} pinned in their own dialogs — ONE undoable step; decorations applied from this popup and the global defaults are never touched`}>
-        ↺ Reset to defaults ({p.overriddenCount})</button>
+          ? "No checked icon pins a local setting — they already follow the global defaults, and decorations are never reset here"
+          : `Drops the local settings the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} pinned in their own dialogs so they follow the global defaults again — ONE undoable step; Shadow, corner badge, size guide and the global defaults are never touched`}>
+        ↺ Reset to inherited ({p.overriddenCount})</button>
       <MetadataActions p={p} />
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>

@@ -11,6 +11,7 @@
 
 import { isRecord } from "../isrecord";
 import { SETTINGS_FIELDS, type SettingsOverrides, type UploadSettings } from "./settings";
+import { SIZE_GUIDE_FIELDS } from "./settingssizeguide";
 
 export const DECORATION_KEYS = ["shadow", "badge", "sizeGuide"] as const;
 export type DecorationKey = (typeof DECORATION_KEYS)[number];
@@ -19,6 +20,24 @@ export type DecorationKey = (typeof DECORATION_KEYS)[number];
 export const DECORATION_FIELD = {
   shadow: "shadowEnabled", badge: "badgeEnabled", sizeGuide: "sizeGuideEnabled",
 } as const;
+
+/**
+ * Every field a decoration owns — its enable flag and its geometry. A reset to
+ * inherited never removes one of these: the decoration is a selection-level
+ * choice with its own checkbox, not a general setting (2026-10-21).
+ */
+export const DECORATION_FIELDS: (keyof UploadSettings)[] = [
+  "shadowEnabled", "shadowWidthPct", "shadowGapPct",
+  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
+  ...SIZE_GUIDE_FIELDS,
+];
+
+const DECORATION_SET: ReadonlySet<string> = new Set(DECORATION_FIELDS);
+
+/** True for a decoration flag or one of its geometry fields. */
+export function isDecorationField(field: keyof UploadSettings): boolean {
+  return DECORATION_SET.has(field as string);
+}
 
 /** One icon's applied fields; an absent key means "this icon pinned it itself". */
 export type AppliedFields = Partial<Record<keyof UploadSettings, true>>;
@@ -78,15 +97,27 @@ export function localKeys(
   return keys.filter((field) => !isApplied(marks, field));
 }
 
-/** The override map with every LOCAL pin removed — globally applied fields stay. */
+/**
+ * The override map a reset-to-inherited leaves: every decoration field stays
+ * (flag and geometry, whatever its provenance) and so does any field a global
+ * control applied; every other LOCAL pin is dropped.
+ */
 export function withoutLocalPins(
   patch: SettingsOverrides, marks: AppliedFields | null | undefined,
 ): SettingsOverrides {
   const kept: SettingsOverrides = {};
   for (const field of Object.keys(patch) as (keyof SettingsOverrides)[]) {
-    if (isApplied(marks, field as keyof UploadSettings)) Object.assign(kept, { [field]: patch[field] });
+    const key = field as keyof UploadSettings;
+    if (isDecorationField(key) || isApplied(marks, key)) Object.assign(kept, { [field]: patch[field] });
   }
   return kept;
+}
+
+/** The local, resettable pins a row carries: not a decoration, not applied by a global control. */
+export function localResetKeys(
+  keys: readonly (keyof UploadSettings)[], marks: AppliedFields | null | undefined,
+): (keyof UploadSettings)[] {
+  return localKeys(keys, marks).filter((field) => !isDecorationField(field));
 }
 
 /** The marks whose field survived in `kept`; null when none did. */

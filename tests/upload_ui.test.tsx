@@ -625,46 +625,66 @@ describe("selection + the bulk bar", () => {
     expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toEqual({ shadowEnabled: true });
   });
 
-  it("the bulk reset clears local pins only — a decoration applied to the selection stays", async () => {
+  it("reset to inherited never unticks the Checked-icons Shadow, badge and size-guide boxes", async () => {
     await mount(makeRoot());
     await check(FOG);
-    // a GLOBAL control applies the shadow to the checked icon …
+    // the popup applies all three decorations to the checked selection
     await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-shadow-selected]");
-    await click("[data-testid=upload-set-close]");
-    // … a later global default change lands in the DEFAULTS only …
-    await click("[data-testid=upload-settings-open]");
-    await type("[data-testid=upload-set-shadow-width]", "150");
+    await click("[data-testid=upload-set-badge-selected]");
+    await click("[data-testid=upload-set-sizeguide-selected]");
+    // and the user changes a global default in the same popup
+    await type("[data-testid=upload-set-shadow-width]", "130");
     await act(async () => { input("[data-testid=upload-set-shadow-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await click("[data-testid=upload-set-close]");
-    // … and only a LOCAL edit in the row's own dialog pins a field
+    // one LOCAL general pin is what the button resets
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
-    await type("[data-testid=upload-set-shadow-width]", "60");
-    await act(async () => { input("[data-testid=upload-set-shadow-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-set-padding]", "17");
+    await act(async () => { input("[data-testid=upload-set-padding]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await click("[data-testid=upload-set-close]");
-    let saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.defaults.shadowWidthPct).toBe(150);
-    expect(saved.overrides[FOG]).toEqual({ shadowEnabled: true, shadowWidthPct: 60 });
-    expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("1 field overridden");
-    // ONE global reset: the local pin goes, the applied shadow and the defaults stay
+    expect(text("[data-testid=upload-reset-settings]")).toContain("Reset to inherited (1)");
     await click("[data-testid=upload-reset-settings]");
-    saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.overrides[FOG]).toEqual({ shadowEnabled: true });
-    expect(saved.applied[FOG]).toEqual({ shadowEnabled: true });
-    expect(saved.defaults.shadowWidthPct).toBe(150); // the user's global default is never reset
+    // the general pin went; every decoration and the global default stayed
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    const decorations = { shadowEnabled: true, badgeEnabled: true, sizeGuideEnabled: true };
+    expect(saved.overrides[FOG]).toEqual(decorations);
+    expect(saved.applied[FOG]).toEqual(decorations);
+    expect(saved.defaults.shadowWidthPct).toBe(130);
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
-    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("shadow");
-    // the popup's own Checked-icons state is untouched too — the shadow is still applied
+    // … and the three boxes in the popup still read checked
     await click("[data-testid=upload-settings-open]");
     expect(input("[data-testid=upload-set-shadow-selected]").checked).toBe(true);
+    expect(input("[data-testid=upload-set-badge-selected]").checked).toBe(true);
+    expect(input("[data-testid=upload-set-sizeguide-selected]").checked).toBe(true);
     await click("[data-testid=upload-set-close]");
-    // undo restores the local pin; a second undo drops that edit and keeps the applied shadow
+    // one undo brings the padding pin back and leaves the decorations alone
     await click("[data-testid=hist-undo]");
     expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG])
-      .toEqual({ shadowEnabled: true, shadowWidthPct: 60 });
-    await click("[data-testid=hist-undo]");
-    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG])
-      .toEqual({ shadowEnabled: true });
+      .toEqual({ ...decorations, paddingPct: 17 });
+  });
+
+  it("keeps decorations stored by an earlier build (no applied marks) through the reset", async () => {
+    // the migration case: the flags are plain overrides — the reset must not read them as pins
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
+      v: 1,
+      overrides: { [FOG]: { shadowEnabled: true, badgeEnabled: true, sizeGuideEnabled: true, paddingPct: 17 } },
+    }));
+    await mount(makeRoot());
+    await check(FOG);
+    await click("[data-testid=upload-settings-open]");
+    expect(input("[data-testid=upload-set-shadow-selected]").checked).toBe(true);
+    expect(input("[data-testid=upload-set-badge-selected]").checked).toBe(true);
+    expect(input("[data-testid=upload-set-sizeguide-selected]").checked).toBe(true);
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=upload-reset-settings]");
+    const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG]).toEqual({ shadowEnabled: true, badgeEnabled: true, sizeGuideEnabled: true });
+    expect(saved.applied?.[FOG]).toBeUndefined();
+    await click("[data-testid=upload-settings-open]");
+    expect(input("[data-testid=upload-set-shadow-selected]").checked).toBe(true);
+    expect(input("[data-testid=upload-set-badge-selected]").checked).toBe(true);
+    expect(input("[data-testid=upload-set-sizeguide-selected]").checked).toBe(true);
+    await click("[data-testid=upload-set-close]");
   });
 
   it("warns before a shadowed selection is exported with the built-in EPS writer", async () => {
@@ -785,7 +805,7 @@ describe("selection + the bulk bar", () => {
     expect(JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries).toHaveLength(before);
   });
 
-  it("shows per-icon badge pins and resets them; the global reset clears badge and Shadow pins together", async () => {
+  it("keeps per-icon badge pins and an applied Shadow through both resets; only general pins go", async () => {
     await mount(makeRoot());
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
     expect(text("[data-testid=upload-set-marker-badge]")).toBe("inherited");
@@ -808,6 +828,9 @@ describe("selection + the bulk bar", () => {
     await act(async () => { input("[data-testid=upload-set-badge-offset-y]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     expect(text("[data-testid=upload-set-marker-badge-offset-x]")).toBe("overridden");
     expect(text("[data-testid=upload-set-marker-badge-offset-y]")).toBe("overridden");
+    // one general pin gives the resets something to clear
+    await type("[data-testid=upload-set-padding]", "17");
+    await act(async () => { input("[data-testid=upload-set-padding]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await click("[data-testid=upload-set-close]");
     await check(FOG);
     await click("[data-testid=upload-settings-open]");
@@ -815,20 +838,25 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=upload-set-close]");
     // a bulk global action never rewrites these pins …
     expect(q("[data-testid=upload-apply-settings]")).toBeNull();
-    // … the global reset clears the LOCAL pins in one step (the applied shadow stays), one undo brings them back
+    // … the reset drops the padding pin and keeps the badge pins and the applied shadow
     await click("[data-testid=upload-reset-settings]");
-    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toEqual({ shadowEnabled: true });
+    const decorations = { badgeEnabled: true, badgeWidthPct: 55, badgeCorner: "top-left",
+      badgeOffsetXPct: 6, badgeOffsetYPct: 9, shadowEnabled: true };
+    let saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG]).toEqual(decorations);
+    expect(saved.applied[FOG]).toEqual({ shadowEnabled: true });
     await click("[data-testid=hist-undo]");
-    const pinned = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG];
-    expect(pinned).toMatchObject({ badgeEnabled: true, badgeWidthPct: 55, badgeCorner: "top-left", badgeOffsetXPct: 6, badgeOffsetYPct: 9, shadowEnabled: true });
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG])
+      .toEqual({ ...decorations, paddingPct: 17 });
+    // the row's own reset follows the same rule
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
     await click("[data-testid=upload-set-reset]");
-    expect(text("[data-testid=upload-set-marker-badge]")).toBe("inherited");
-    // the row's own reset also keeps the decoration the selection applied
-    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toEqual({ shadowEnabled: true });
+    saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
+    expect(saved.overrides[FOG]).toEqual(decorations);
     await click("[data-testid=upload-set-close]");
     await click("[data-testid=hist-undo]");
-    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toMatchObject({ badgeEnabled: true, shadowEnabled: true });
+    expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG])
+      .toEqual({ ...decorations, paddingPct: 17 });
   });
 
   it("reads a decoration applied to the selection as inherited until this row changes it", async () => {

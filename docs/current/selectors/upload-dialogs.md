@@ -19,14 +19,13 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   Shadow; they commit on blur/Enter to only shadowed checks (one undo entry,
   never enabling off icons). `upload-set-shadow-width` / `-gap` under **Shadow
   defaults** change inherited numbers only, never opting unchecked icons in.
-  A field the popup applied reads `inherited` and does not count as a pin
-  (2026-10-21); only a change in this icon's own dialog does, and the bar's
-  reset leaves the applied value alone.
+  A field the popup applied reads `inherited` and is no pin (2026-10-21); only
+  a change in this icon's own dialog is, and the resets leave it alone.
   In the per-icon popup `upload-set-shadow` is the on/off checkbox (the one
   `.up-shadow-check` label, width/gap disabled when off). Width 10–200%, gap 0–100%;
   `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.
-  `upload-shadow-eps-note` warns inside either dialog when the icon or a
-  shadowed check requests built-in EPS.
+  `upload-shadow-eps-note` warns when the icon or a shadowed check wants
+  built-in EPS.
 - `upload-set-badge-section`: the supplied fixed 412×20 editable-stroke vector.
   `upload-badge-controls` holds `upload-set-badge-selected` (none/mixed/all) and
   ONE `upload-set-badge-*` placement set under **Badge defaults**; no second
@@ -61,7 +60,7 @@ the default: ONE global `stroke="#000"` in the file) +
 reads the hex or `artwork`; its marker is `upload-set-marker-stroke-color`),
 every swatch carrying `aria-pressed`, the per-field marker
 `upload-set-marker-{field}` ("inherited" / "overridden", icon scope only),
-`upload-set-reset` (icon scope: deletes the override — one undoable entry),
+`upload-set-reset` (icon scope: "Reset to inherited" — drops the icon's own general settings in one undoable entry; Shadow, corner badge and size guide stay),
 `upload-set-close`. The row's settings cell `upload-settings-{id}` names the
 background (`transparent` or the hex) and appends `· stroke #hex` when a
 stroke colour is pinned.

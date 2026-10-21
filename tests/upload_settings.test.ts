@@ -192,7 +192,7 @@ describe("global defaults + per-icon overrides", () => {
     expect(parseOverrides({ paddingPct: "x" })).toEqual({});
   });
 
-  it("reset to defaults is an empty override — the global base stays", () => {
+  it("inheriting is an empty override — the global base stays", () => {
     const eff = effectiveSettings(changed({ paddingPct: 20 }), {});
     expect(eff.paddingPct).toBe(20);
     expect(overrideKeys({})).toEqual([]);

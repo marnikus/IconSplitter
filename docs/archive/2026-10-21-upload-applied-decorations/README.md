@@ -43,11 +43,11 @@ local edit. The user had made no local change in that row.
    fields the user never touched.
 5. Turning a decoration OFF for the selection deletes the flag and the mark:
    "off" is the absence of a pin, never a `false` pin.
-6. `↺ Reset to defaults (N)` clears the selected rows' LOCAL pins only, in ONE
-   `uploadSettings` entry. A field the popup applied is not a local setting and
-   STAYS (2026-10-21, the user's correction: "the reset should apply to local
-   setting but not to global … shadow should not be removed from global
-   preset"); N counts a row with a local pin; the stored global defaults are
+6. The bulk reset (now **"↺ Reset to inherited"**, see
+   [reset-to-inherited](../2026-10-21-reset-to-inherited/README.md)) clears the
+   selected rows' LOCAL general pins only, in ONE `uploadSettings` entry. A
+   decoration and any field the popup applied stay — the Checked-icons boxes
+   never untick — N counts real local pins, and the stored global defaults are
    never written. The row's own reset follows the same rule.
 
 ## 4. Plan and steps
@@ -89,10 +89,12 @@ local edit. The user had made no local change in that row.
   `overridden`; the other two stay `inherited`; undo restores the applied state
   and its `inherited` word.
 * Turning a decoration off for the selection leaves no `false` pin behind.
-* `↺ Reset to defaults (N)` clears the selected rows' LOCAL pins only, in one
-  entry: a shadow/badge/size guide (and a width) the popup applied to the
-  selection is still on, its checkbox is still checked, and the stored global
-  defaults are byte-identical afterwards, including the values the user changed.
+* The bulk reset clears the selected rows' LOCAL pins only, in one entry: a
+  shadow/badge/size guide (and a width) the popup applied to the selection is
+  still on, its checkbox is still checked, and the stored global defaults are
+  byte-identical afterwards, including the values the user changed. (The
+  stricter "never touch a decoration at all" rule landed the same day:
+  [reset to inherited](../2026-10-21-reset-to-inherited/README.md).)
 * An older payload without `applied` loads as "nothing applied"; junk marks are
   dropped field by field.
 
@@ -113,8 +115,9 @@ Measured on 2026-10-21, branch `arena/cf992ba5-iconsplitter`:
   three marks and the `inherited` word.
 * **Reset scope (the correction).** FOG: applied shadow (plus a 120% width) and
   a local 17% padding pin; ARCH: applied shadow only. Checked = FOG.
-  `↺ Reset to defaults (1)` → `overrides.FOG = { shadowEnabled: true,
-  shadowWidthPct: 120 }`, `applied.FOG` unchanged, the Checked-icons SHADOW box
+  the bulk reset (then labelled "Reset to defaults") → `overrides.FOG =
+  { shadowEnabled: true, shadowWidthPct: 120 }`, `applied.FOG` unchanged, the
+  Checked-icons SHADOW box
   still checked, `overrides.ARCH` untouched, `defaults` still
   `{ shadowWidthPct: 130, badgeWidthPct: 32 }` as the user set them.
 * Undo of that reset restores the padding pin; the next undo drops the local

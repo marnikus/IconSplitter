@@ -8,15 +8,15 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
 
 * **"Default" for every visual setting** (2026-10-19,
   [plan](../../archive/2026-10-19-upload-default-settings/README.md); `lib/upload/asis`):
-  - `paddingPct: null` keeps the SVG's own margins: its viewBox is fitted, in one pass.
+  - `paddingPct: null` keeps the SVG's own margins (one fit pass).
   - Background `default` adds no artboard rect.
   - Stroke colour `artwork` is labelled Default.
-  - Artboard mode `source` is the SVG's own viewBox size and ratio ("Scale to N MP"
-    applies only in `content`).
+  - Artboard mode `source` is the SVG's own viewBox size and ratio (N MP applies
+    only in `content`).
   - `strokePx` 0 = default.
   - **All five default with Expand, Shadow, corner badge and size guide off = as is**: the export SVG is the approved file
-    byte for byte. It gets no clean, no bake and no SVGO, and the clean-SVG-1.1
-    check is skipped (it must still parse); the JPEG and EPS are built from it.
+    byte for byte — no clean, no bake, no SVGO, and the clean-SVG-1.1 check is
+    skipped (it must still parse); JPEG and EPS build from it.
   - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding
     null fingerprints as `"default"`.
 * **One stroke width** (2026-10-19): the bar's STROKE (`upload-stroke`) IS the
@@ -31,8 +31,8 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   `prepareExportSvg(source, effective)` — decorations included — debounced
   120 ms, cached per source and fingerprint in a `zoomBoxFit` box.
 * **Typed numbers commit on leave** (2026-10-19, `ui/DraftNumberInput`): the
-  custom artboard W×H and the icon's stroke width keep a draft while typed;
-  blur/Enter clamps and writes once, Escape restores.
+  custom artboard W×H and the icon's stroke width keep a draft; blur/Enter
+  clamps and writes once, Escape restores.
 * **Paint clash** (2026-10-19, `lib/upload/paintclash`): a hex stroke colour on
   a hex background below WCAG non-text contrast (3:1) is named in the row's
   preview note and in the dialog (`upload-set-paint-clash`) — e.g. black on
@@ -70,9 +70,12 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   the payload's `applied: { pairId: { [field]?: true } }` names the fields the
   selection set, the marker reads `inherited`, the row's count ignores them,
   and only that row's own dialog drops the mark when the value really moves.
-  The bar's "↺ Reset to defaults (N)" clears the checked icons' LOCAL pins
-  only — never an applied field, never the stored defaults — as ONE undoable
-  `uploadSettings` entry (N counts local pins only); per-icon set/reset pushes one entry each;
+  Decoration fields (the three flags and their geometry) are never reset, so
+  the Checked-icons boxes cannot untick from a reset. The bar's **"↺ Reset to
+  inherited (N)"** drops the checked icons' LOCAL GENERAL pins only — never a
+  decoration, never an applied field, never the stored defaults — as ONE
+  undoable `uploadSettings` entry (N counts those local pins); the row
+  dialog's own "Reset to inherited" follows the same rule;
   global-defaults edits are persisted but NOT undoable, like presets. The
   checkbox selection is session-persisted and
   its gestures are undoable through the separate `uploadChecked` history type.
@@ -83,12 +86,10 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   and only in `content` mode, the artboard is the content fit (icon + padding)
   scaled uniformly so `artW × artH = N × 10⁶` (`fitArtboard` with a
   `{ megapixels }` target; `artboardTarget` makes a pinned size win) — the
-  padding keeps its meaning (how small the icon sits in the artboard), strokes
-  keep their verbatim px (the placement loop re-measures, so the area lands
-  within the file's precision; exact in one pass when the artwork is all
-  fills), and the JPEG is untouched (it still renders at `jpegMegapixels` in
-  the artboard's ratio — the MP target is about the vector's artboard, which
-  is what a stock measures). The fingerprint appends `["mp", N]` ONLY while the
+  padding keeps its meaning, strokes keep their verbatim px (the placement loop
+  re-measures), and the JPEG still renders at `jpegMegapixels` in the
+  artboard's ratio (the MP target is the vector's artboard, what a stock
+  measures). The fingerprint appends `["mp", N]` ONLY while the
   box is on, so the defaults' fingerprint (`36232c04`) and existing packages
   stay as they are; the dormant number moves `settingsEqual` only. The record's
   `tools.artboard.scaledTo` is N while it applies and null otherwise (a pinned

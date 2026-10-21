@@ -22,9 +22,8 @@ markers and reset. Stored global `sizeGuideEnabled: true` is ignored on read;
 only a validated icon override opts in. No global control writes a guide VALUE
 into a row (2026-10-21): the checkbox stores `sizeGuideEnabled` plus an
 `applied` mark (`lib/upload/decorations`), so the row and its guide row read
-`inherited` until that row's own dialog changes the flag; the bar's reset clears a
-selection's LOCAL pins only — a guide the checkbox applied stays until that
-checkbox (or the icon's own checkbox) turns it off.
+`inherited` until that row's own dialog changes the flag; the bar's reset never
+touches the guide (nor its geometry): only the checkbox itself turns it off.
 
 Defaults: off; corner **bottom-left** (the reference artboard, opposite the
 badge's default corner); S logo **6%** and L logo **12%** of the artboard width
