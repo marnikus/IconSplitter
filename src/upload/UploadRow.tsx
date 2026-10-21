@@ -14,6 +14,7 @@ import {
   effectiveSettings, megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 import { isAsIs } from "../lib/upload/asis";
+import { localKeys, type AppliedMap } from "../lib/upload/decorations";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -31,6 +32,8 @@ export interface UploadRowActions {
   rootRef: { current: DirHandleLike | null };
   defaults: UploadSettings;
   overrides: Record<string, SettingsOverrides>;
+  /** Decorations the selection control applied — they never count as pins. */
+  applied: AppliedMap;
   toggleCheck: (id: string) => void;
   selectRow: (id: string, intent: SelectIntent) => void;
   openSettings: (id: string | null) => void;
@@ -173,7 +176,7 @@ function decorationLine(s: UploadSettings): string {
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
   const effective = effectiveSettings(a.defaults, a.overrides[id] ?? {});
-  const pinned = overrideKeys(a.overrides[id] ?? {}).length;
+  const pinned = localKeys(overrideKeys(a.overrides[id] ?? {}), a.applied[id]).length;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
       <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${effective.paddingPct === null ? "default" : `${effective.paddingPct}%`} · ${effective.background} · ${strokeLine(effective)}`}</small>

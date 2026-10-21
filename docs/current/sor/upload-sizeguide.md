@@ -19,9 +19,11 @@ defaults and never turns on an unchecked icon or pins a checked one. Checked
 guide-on icons without a placement override follow those defaults; a per-icon
 override stays pinned. The per-icon popup offers its own checkbox, override
 markers and reset. Stored global `sizeGuideEnabled: true` is ignored on read;
-only a validated icon override opts in. No global control writes a guide field
-into a row (2026-10-21): the bar's reset clears a selection's guide and other
-decoration pins together.
+only a validated icon override opts in. No global control writes a guide VALUE
+into a row (2026-10-21): the checkbox stores `sizeGuideEnabled` plus an
+`applied` mark (`lib/upload/decorations`), so the row and its guide row read
+`inherited` until that row's own dialog changes the flag; the bar's reset clears
+a selection's guide and other decoration pins and marks together.
 
 Defaults: off; corner **bottom-left** (the reference artboard, opposite the
 badge's default corner); S logo **6%** and L logo **12%** of the artboard width

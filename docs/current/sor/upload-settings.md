@@ -27,13 +27,12 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
     the `strokePt` alias). Nothing global pins a row (2026-10-21): the bulk bar
     only CLEARS a selection's pins, so the bar stroke and the decorations keep
     their own rules.
-  - The old preview-only `previewStroke` pref is gone from this tab.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
-  `prepareExportSvg(source, effective)`, including applied Shadow, corner badge and size guide vectors,
-  debounced 120 ms and cached per source and fingerprint. The box is `zoomBoxFit`.
+  `prepareExportSvg(source, effective)` — decorations included — debounced
+  120 ms, cached per source and fingerprint in a `zoomBoxFit` box.
 * **Typed numbers commit on leave** (2026-10-19, `ui/DraftNumberInput`): the
-  custom artboard W×H and the icon's stroke width keep a local draft while
-  typed; blur/Enter validates (clamps) and writes once, Escape restores.
+  custom artboard W×H and the icon's stroke width keep a draft while typed;
+  blur/Enter clamps and writes once, Escape restores.
 * **Paint clash** (2026-10-19, `lib/upload/paintclash`): a hex stroke colour on
   a hex background below WCAG non-text contrast (3:1) is named in the row's
   preview note and in the dialog (`upload-set-paint-clash`) — e.g. black on
@@ -41,22 +40,19 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
 
 * **Selected-only Shadow** (2026-10-20): the global Export settings popup's
   **Checked icons** checkbox adds or removes the bundled
-  `src/svg/templates/shadow.svg` radial-gradient oval on CHECKED icons,
-  including hidden checks, never the active unchecked row. Mixed checks add to
-  all; all-on removes from all. The separate selected-only Width/Gap fields
-  change only checked icons that already have Shadow on; an off icon is never
-  enabled by editing a dimension. Width 10–200% (default 80%) of the *final
-  painted* icon width and clear bottom gap 0–100% (default 5%) of its height
-  are not preview-only CSS. Inherited **Shadow defaults** in the same popup
-  change numeric defaults without opting icons in; stored global
-  `shadowEnabled:true` is ignored on read. One icon may override all three
-  fields in its own dialog. Each checked-set edit is one `uploadSettings` undo
-  entry and keeps unrelated overrides; the bar's Reset clears them all. Enabled
-  shadow fingerprints its full validated
-  dimensions and template hash; disabled/dormant values leave historic
-  fingerprints (and byte-for-byte as-is) unchanged. Built-in EPS cannot paint
-  the gradient: the bar, row and both dialog scopes warn that the result is
-  partial with valid SVG/JPEG; the chosen local converter never switches silently.
+  `src/svg/templates/shadow.svg` radial-gradient oval on CHECKED icons, hidden
+  checks included, never the active unchecked row; mixed adds, all-on removes. Width/Gap change only checked icons that already have
+  Shadow on — a dimension never enables one. Width 10–200% (80%) of the *final
+  painted* icon width and bottom gap 0–100% (5%) of its height are not
+  preview-only CSS. **Shadow defaults** in the same popup change numbers
+  without opting icons in; stored global
+  `shadowEnabled:true` is ignored on read. One icon may override all three in
+  its own dialog. Each checked-set edit is one `uploadSettings` undo
+  entry and keeps unrelated overrides; the Reset clears them all. An
+  enabled shadow fingerprints its dimensions and template hash; dormant values
+  leave historic fingerprints (and as-is bytes) unchanged. Built-in EPS cannot paint
+  the gradient: the bar, row and both dialog scopes warn it is partial while
+  SVG/JPEG still commit; the chosen local converter never switches silently.
 * **Artboard corner badge** (2026-10-20): the supplied fixed black vector is
   checked-only opt-in, with one **Badge defaults** block (corner, width %, two
   inward insets) plus per-icon overrides; those defaults never opt unchecked
@@ -68,11 +64,16 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   quality, SVGO optimize on, optional EPS, artboard) plus per-icon overrides;
   the effective settings are defaults under, overrides on top, and every field
   is marked inherited or overridden. Only a local edit pins a field (2026-10-21,
-  row settings isolation); a global edit never writes a row. The bar's
-  "↺ Reset to defaults (N)" clears every checked icon's pins as ONE undoable
-  `uploadSettings` entry; per-icon set/reset pushes one entry each;
-  global-defaults edits are persisted but NOT undoable
-  (the same class as presets). The checkbox selection is session-persisted and
+  row settings isolation); a global edit never writes a row. A decoration the
+  Checked-icons checkbox adds is *applied*, not pinned (2026-10-21, [plan](../../archive/2026-10-21-upload-applied-decorations/README.md)):
+  the same payload's `applied: { pairId: { shadow?, badge?, sizeGuide? } }`
+  names the flags the selection set, the marker reads `inherited`, the row's
+  count ignores them, and only that row's own dialog (on a real value change)
+  drops the mark. The bar's "↺ Reset to defaults (N)" clears every checked
+  icon's pins AND applied marks as ONE undoable `uploadSettings` entry (N
+  counts a row with either; the stored defaults are never touched); per-icon set/reset pushes one entry each;
+  global-defaults edits are persisted but NOT undoable, like presets. The
+  checkbox selection is session-persisted and
   its gestures are undoable through the separate `uploadChecked` history type.
 * **Scale to N MP** (2026-10-09, I-62, design
   `docs/archive/2026-10-09-eps-executable-artboard-megapixels/design.md` D5):
@@ -87,9 +88,8 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   fills), and the JPEG is untouched (it still renders at `jpegMegapixels` in
   the artboard's ratio — the MP target is about the vector's artboard, which
   is what a stock measures). The fingerprint appends `["mp", N]` ONLY while the
-  box is on, so the defaults' fingerprint (`36232c04`) and every existing
-  package stay as they are; the number is dormant while the box is off (it
-  does not move the fingerprint, but `settingsEqual` sees it). The record's
+  box is on, so the defaults' fingerprint (`36232c04`) and existing packages
+  stay as they are; the dormant number moves `settingsEqual` only. The record's
   `tools.artboard.scaledTo` is N while it applies and null otherwise (a pinned
   artboard with the box on records null — the px decided); the row's settings
   line appends `· artboard N MP` under the same rule. UI: the row under the
@@ -98,7 +98,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   box is off) and the note `upload-set-mp-scale-note` (`the artboard (icon +
   padding) is scaled to N MP · strokes keep their px`; with a pinned artboard
   the checkbox is disabled and the note reads `the pinned size decides the
-  megapixels`). "N fields overridden" after a bulk apply is 14.
+  megapixels`).
 * The artboard (2026-10-08) is one more settings field, with three modes:
   `content` (the artboard hugs the artwork, as before), a square px preset
   (256/512/1024/2048/4096 — "512×512 and other popular") or an exact CUSTOM

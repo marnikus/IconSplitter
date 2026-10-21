@@ -27,8 +27,32 @@ describe("settingsstore — defaults + overrides", () => {
     expect(loaded.overrides).toEqual({ pair_a: { paddingPct: 30 }, pair_b: { includeEps: true } });
   });
 
+  it("round-trips the applied decoration marks beside the overrides", () => {
+    saveUploadSettings({
+      defaults: DEFAULT_UPLOAD_SETTINGS,
+      overrides: { pair_a: { badgeEnabled: true } },
+      applied: { pair_a: { badge: true }, pair_b: { shadow: true, sizeGuide: true } },
+    });
+    expect(loadUploadSettings().applied).toEqual({
+      pair_a: { badge: true }, pair_b: { shadow: true, sizeGuide: true },
+    });
+    // an override written without marks (the unmounted undo path) keeps the stored marks
+    saveOverrides({ pair_a: { badgeEnabled: true, paddingPct: 12 } });
+    expect(loadUploadSettings().applied).toEqual({ pair_a: { badge: true }, pair_b: { shadow: true, sizeGuide: true } });
+  });
+
+  it("drops junk marks and a missing map instead of trusting them", () => {
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
+      v: 1, defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {},
+      applied: { pair_a: { badge: "yes", shadow: true, logo: true }, pair_b: {}, "": { badge: true } },
+    }));
+    expect(loadUploadSettings().applied).toEqual({ pair_a: { shadow: true } });
+    localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({ v: 1, defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {} }));
+    expect(loadUploadSettings().applied).toEqual({}); // an older payload reads as "nothing applied"
+  });
+
   it("defaults when nothing was saved", () => {
-    expect(loadUploadSettings()).toEqual({ defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {} });
+    expect(loadUploadSettings()).toEqual({ defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, applied: {} });
   });
 
   it("rejects a corrupt payload and a wrong version instead of throwing", () => {

@@ -15,7 +15,7 @@ import { downloadPlanOf } from "./downloadactions";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
 import { selectedShadow } from "./shadowselection";
-import { overriddenIds } from "./selectedsettings";
+import { resettableIds } from "./selectedsettings";
 import { selectedBadge } from "./badgeselection";
 import { selectedSizeGuide } from "./sizeguideselection";
 import UploadControls from "./UploadControls";
@@ -68,7 +68,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
   const actions: UploadRowActions = {
     activeId: g.activeId, checked: g.checked, thumb: g.thumb, bg: g.bg,
     rootToken: g.rootToken, rootRef,
-    defaults: g.defaults, overrides: g.overrides,
+    defaults: g.defaults, overrides: g.overrides, applied: g.applied,
     toggleCheck: g.toggleCheck, selectRow: g.selectRow, openSettings: g.openSettings,
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
     editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
@@ -93,7 +93,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
         shadowEpsUnsupported={selectedShadow(g.checked, g.defaults, g.overrides).epsUnsupported}
-        overriddenCount={overriddenIds(g.checked, g.overrides).length}
+        overriddenCount={resettableIds(g.checked, g.overrides, g.applied).length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
@@ -221,7 +221,8 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       scope={id === null ? null : row?.source.svgName ?? id}
       id={id}
       defaults={g.defaults}
-      overrides={id === null ? {} : g.overrides[id] ?? {}}
+      overrides={ownMap(g.overrides, id)}
+      applied={ownMap(g.applied, id)}
       selectedShadow={selectedShadow(g.checked, g.defaults, g.overrides)}
       selectedCount={g.checked.length}
       onSelectedShadowToggle={() => g.toggleShadowSelected(g.checked)}
@@ -235,6 +236,11 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       onResetOverride={g.resetOverride}
       onClose={g.dismissDialog} />
   );
+}
+
+/** A dialog's own maps: the row's entry in the icon scope, the empty map globally. */
+function ownMap<T>(map: Record<string, T>, id: string | null): Partial<T> {
+  return (id === null ? undefined : map[id]) ?? {};
 }
 
 /** The status bar's one word about the key — never "no key" when unreadable. */

@@ -6,7 +6,7 @@ import {
   clampShadowGapPct, clampShadowWidthPct, effectiveSettings, type UploadSettings,
 } from "../lib/upload/settings";
 import type { Slice, UploadCtx } from "./actions";
-import { commitBatch } from "./selectedsettings";
+import { commitBatch, commitDecoration } from "./selectedsettings";
 
 type ShadowDimensions = Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">;
 
@@ -19,8 +19,7 @@ export function useShadowActions(ctx: UploadCtx): Slice<"toggleShadowSelected" |
     if (ids.length === 0) return;
     const allOn = ids.every((id) => effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {}).shadowEnabled);
     const on = !allOn;
-    commitBatch(c, ids, on ? "Apply shadow" : "Remove shadow", (_id, prior) =>
-      effectiveSettings(c.m.defaults, prior).shadowEnabled === on ? null : { ...prior, shadowEnabled: on });
+    commitDecoration(c, ids, { key: "shadow", on, label: on ? "Apply shadow" : "Remove shadow" });
   }, []);
   const setShadowSelected = useCallback((ids: string[], patch: Partial<ShadowDimensions>) => {
     const c = latest.current;

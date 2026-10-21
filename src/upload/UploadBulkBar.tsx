@@ -33,7 +33,7 @@ export interface UploadBulkBarProps {
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
   shadowEpsUnsupported: number;
-  /** How many checked icons pin at least one field — the reset's count and its enablement. */
+  /** How many checked icons would change: a local pin or an applied decoration. */
   overriddenCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
@@ -111,7 +111,7 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
         disabled={p.overriddenCount === 0} onClick={p.onResetSettings}
         title={p.overriddenCount === 0
           ? "No checked icon pins anything — every row already inherits the global settings"
-          : `Clears every override on the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} that pin one — one undoable step, then they inherit the global defaults`}>
+          : `Clears the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} that pin settings or carry a decoration applied to the selection — one undoable step; the global defaults are never changed`}>
         ↺ Reset to defaults ({p.overriddenCount})</button>
       <MetadataActions p={p} />
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"

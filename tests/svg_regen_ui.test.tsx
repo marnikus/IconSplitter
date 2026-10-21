@@ -113,7 +113,7 @@ describe("the Generate SVG prompt zone — now only main prompt (regen in popup)
 describe("Export settings — the regen window moved out", () => {
   it("the global dialog no longer carries the regen row", async () => {
     await render(
-      <UploadSettingsDialog scope={null} id={null} defaults={normalizeSettings(null)} overrides={{}}
+      <UploadSettingsDialog scope={null} id={null} defaults={normalizeSettings(null)} overrides={{}} applied={{}}
         selectedShadow={{ state: "none", width: 80, gap: 5, epsUnsupported: 0 }} selectedCount={0}
         onSelectedShadowToggle={() => undefined} onSelectedShadowDimensions={() => undefined}
         selectedBadge={{ state: "none" }}

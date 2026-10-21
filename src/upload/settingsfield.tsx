@@ -5,6 +5,7 @@
 // Owned here so the number/toggle rows (UploadSettingsDialog) and the paint
 // rows (UploadPaintSettings) cannot drift apart.
 
+import { decorationOf, isApplied, type AppliedDecorations } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { SelectedShadow } from "./shadowselection";
 import type { SelectedBadge } from "./badgeselection";
@@ -18,6 +19,8 @@ export interface UploadSettingsDialogProps {
   defaults: UploadSettings;
   /** The icon's current override ({} in the global scope). */
   overrides: SettingsOverrides;
+  /** Decorations the checked-set control applied to this icon ({} in the global scope). */
+  applied: AppliedDecorations;
   selectedShadow: SelectedShadow;
   selectedCount: number;
   onSelectedShadowToggle: () => void;
@@ -38,9 +41,15 @@ export interface SettingsFieldProps {
   effective: UploadSettings;
 }
 
-/** The marker a field carries in the icon scope: pinned, or inherited. */
+/**
+ * The marker a field carries in the icon scope: pinned, or inherited. A
+ * decoration the checked-set control applied is NOT a pin — the icon got it
+ * from the selection, not from its own dialog (2026-10-21).
+ */
 export function markerOf(p: UploadSettingsDialogProps, field: keyof UploadSettings): string | null {
   if (p.id === null) return null;
+  const key = decorationOf(field);
+  if (key !== null && isApplied(p.applied, key)) return "inherited";
   return p.overrides[field] !== undefined ? "overridden" : "inherited";
 }
 

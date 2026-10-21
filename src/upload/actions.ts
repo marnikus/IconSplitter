@@ -17,7 +17,7 @@ import type { GeminiConfig } from "../lib/upload/gemini";
 import { parseGeminiConfig } from "../lib/upload/gemini";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
-  normalizeSettings, overridesEqual, type SettingsOverrides, type UploadSettings,
+  normalizeSettings, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 import type { HistoryApi } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
@@ -35,8 +35,8 @@ import { useUiActions } from "./uiactions";
 import { useShadowActions } from "./shadowactions";
 import { useBadgeActions } from "./badgeactions";
 import { useSizeGuideActions } from "./sizeguideactions";
-import { discreteSettingsChange } from "./settingsgestures";
 import { useSettingsResetActions } from "./settingsreset";
+import { useOverrideActions, useOverrideResetActions } from "./overrideactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
   ALL_UPLOAD_FILTER,
@@ -195,48 +195,6 @@ function useDefaultsActions(ctx: UploadCtx): Slice<"setDefaults"> {
   return { setDefaults };
 }
 
-/** One field pinned per icon — a gesture-coalesced undo entry per drag. */
-function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const setOverride = useCallback((id: string, patch: SettingsOverrides) => {
-    const c = latest.current;
-    const before = c.m.overrides[id] ?? null;
-    const after = Object.keys(patch).length === 0 ? null : patch;
-    if (overridesEqual(before ?? {}, after ?? {})) return;
-    c.dispatch({ type: "override", id, patch: after });
-    // Decoration toggles and committed numbers are discrete; other drags still coalesce.
-    const push = discreteSettingsChange(before, after) ? c.hist.push : c.hist.pushGesture;
-    push({
-      type: "uploadSettings",
-      label: `Override settings — ${nameOf(c, id)}`,
-      origin: "upload", ids: [id],
-      before: { overrides: { [id]: before } }, after: { overrides: { [id]: after } },
-    });
-  }, []);
-  return { setOverride };
-}
-
-/** Reset one icon to the defaults — one undoable entry. */
-function useOverrideResetActions(ctx: UploadCtx): Slice<"resetOverride"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const resetOverride = useCallback((id: string) => {
-    const c = latest.current;
-    const before = c.m.overrides[id] ?? null;
-    if (before === null) return c.say("This icon already inherits the defaults");
-    c.dispatch({ type: "override", id, patch: null });
-    c.hist.push({
-      type: "uploadSettings",
-      label: `Reset to defaults — ${nameOf(c, id)}`,
-      origin: "upload", ids: [id],
-      before: { overrides: { [id]: before } }, after: { overrides: { [id]: null } },
-    });
-    c.say("Reset to defaults — the icon inherits the global settings again");
-  }, []);
-  return { resetOverride };
-}
-
 /** The provider config (persisted locally, validated on read). */
 function useGeminiActions(ctx: UploadCtx): Slice<"setGemini"> {
   const latest = useRef(ctx);
@@ -281,7 +239,3 @@ function useKeyActions(ctx: UploadCtx): Slice<"saveKey" | "forgetKey"> {
   return { saveKey, forgetKey };
 }
 
-/** The row's display name for history labels — its file name, else the id. */
-function nameOf(c: UploadCtx, id: string): string {
-  return c.rows.find((r) => r.source.id === id)?.source.svgName ?? id;
-}

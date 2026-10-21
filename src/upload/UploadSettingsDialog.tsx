@@ -53,7 +53,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
       <p className="svg-note" data-testid="upload-dialog-scope">
         {p.id === null
           ? "General settings are inherited; the Checked icons Shadow and Badge checkboxes below apply only to the current selection."
-          : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults."}
+          : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults. A decoration added to the selection is applied to this icon, not pinned by it."}
       </p>
       <AsIsRow p={p} effective={effective} />
       <PaintClashNote effective={effective} />
