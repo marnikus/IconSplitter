@@ -9,7 +9,7 @@ import {
   SIZE_GUIDE_GAP_DEFAULT, SIZE_GUIDE_LARGE_DEFAULT, SIZE_GUIDE_OFFSET_DEFAULT,
   SIZE_GUIDE_SMALL_DEFAULT, SIZE_GUIDE_STROKE_DEFAULT,
   clampSizeGuideGapPct, clampSizeGuideLargePct, clampSizeGuideOffsetPct, clampSizeGuideSmallPct,
-  clampSizeGuideStrokePct,
+  clampSizeGuideStrokePx,
 } from "./settingsnumbers";
 
 export const SIZE_GUIDE_CORNERS: readonly SizeGuideCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
@@ -20,7 +20,7 @@ export function parseSizeGuideCorner(value: unknown): SizeGuideCorner | null {
   return typeof value === "string" && SIZE_GUIDE_CORNERS.includes(value as SizeGuideCorner) ? value as SizeGuideCorner : null;
 }
 
-/** The size guide's own settings: the decoration is opt-in per icon and sized in artboard percentages. */
+/** The size guide's own settings: opt-in per icon, placement/logo widths in % and strokes in px. */
 export interface SizeGuideSettings {
   /** The S/L size guide: the finished icon repeated at two smaller sizes inside the artboard, opt-in per icon. */
   sizeGuideEnabled: boolean;
@@ -30,10 +30,10 @@ export interface SizeGuideSettings {
   sizeGuideSmallPct: number;
   /** The L logo's width, % of artboard width. */
   sizeGuideLargePct: number;
-  /** The S logo's own stroke width, % of artboard width (0 = the artwork's own widths, scaled with it). */
-  sizeGuideSmallStrokePct: number;
-  /** The L logo's own stroke width, % of artboard width (0 = the artwork's own widths, scaled with it). */
-  sizeGuideLargeStrokePct: number;
+  /** The S logo's own stroke width in px, written verbatim on the repeat (0 = the artwork's own widths, scaled with it). */
+  sizeGuideSmallStrokePx: number;
+  /** The L logo's own stroke width in px, written verbatim on the repeat (0 = the artwork's own widths, scaled with it). */
+  sizeGuideLargeStrokePx: number;
   /** Clear distance between the two logos, % of artboard width. */
   sizeGuideGapPct: number;
   /** Inward distance from the chosen left/right edge, % of artboard width. */
@@ -47,8 +47,8 @@ export const SIZE_GUIDE_DEFAULTS: SizeGuideSettings = {
   sizeGuideCorner: SIZE_GUIDE_CORNER_DEFAULT,
   sizeGuideSmallPct: SIZE_GUIDE_SMALL_DEFAULT,
   sizeGuideLargePct: SIZE_GUIDE_LARGE_DEFAULT,
-  sizeGuideSmallStrokePct: SIZE_GUIDE_STROKE_DEFAULT,
-  sizeGuideLargeStrokePct: SIZE_GUIDE_STROKE_DEFAULT,
+  sizeGuideSmallStrokePx: SIZE_GUIDE_STROKE_DEFAULT,
+  sizeGuideLargeStrokePx: SIZE_GUIDE_STROKE_DEFAULT,
   sizeGuideGapPct: SIZE_GUIDE_GAP_DEFAULT,
   sizeGuideOffsetXPct: SIZE_GUIDE_OFFSET_DEFAULT,
   sizeGuideOffsetYPct: SIZE_GUIDE_OFFSET_DEFAULT,
@@ -57,25 +57,29 @@ export const SIZE_GUIDE_DEFAULTS: SizeGuideSettings = {
 /** Every size-guide field in canonical order (undo equality, markers, offline checks). */
 export const SIZE_GUIDE_FIELDS: (keyof SizeGuideSettings)[] = [
   "sizeGuideEnabled", "sizeGuideCorner", "sizeGuideSmallPct", "sizeGuideLargePct",
-  "sizeGuideSmallStrokePct", "sizeGuideLargeStrokePct", "sizeGuideGapPct",
+  "sizeGuideSmallStrokePx", "sizeGuideLargeStrokePx", "sizeGuideGapPct",
   "sizeGuideOffsetXPct", "sizeGuideOffsetYPct",
 ];
 
-/** The numbers and their clamps, in one list the defaults read and the overrides share. */
-const NUMBERS: [keyof SizeGuideSettings, (value: unknown) => number][] = [
+/** The numbers, their clamps and any retired key accepted on read only (RULE 13). */
+const NUMBERS: [keyof SizeGuideSettings, (value: unknown) => number, string?][] = [
   ["sizeGuideSmallPct", clampSizeGuideSmallPct],
   ["sizeGuideLargePct", clampSizeGuideLargePct],
-  ["sizeGuideSmallStrokePct", clampSizeGuideStrokePct],
-  ["sizeGuideLargeStrokePct", clampSizeGuideStrokePct],
+  ["sizeGuideSmallStrokePx", clampSizeGuideStrokePx, "sizeGuideSmallStrokePct"],
+  ["sizeGuideLargeStrokePx", clampSizeGuideStrokePx, "sizeGuideLargeStrokePct"],
   ["sizeGuideGapPct", clampSizeGuideGapPct],
   ["sizeGuideOffsetXPct", clampSizeGuideOffsetPct],
   ["sizeGuideOffsetYPct", clampSizeGuideOffsetPct],
 ];
 
+function rawNumber(raw: Record<string, unknown>, key: string, alias?: string): unknown {
+  return raw[key] ?? (alias === undefined ? undefined : raw[alias]);
+}
+
 /** A stored defaults payload → validated guide fields; one bad field costs one default. */
 export function normalizeSizeGuide(raw: unknown): SizeGuideSettings {
   if (!isRecord(raw)) return { ...SIZE_GUIDE_DEFAULTS };
-  const numbers = Object.fromEntries(NUMBERS.map(([key, clamp]) => [key, clamp(raw[key as string])]));
+  const numbers = Object.fromEntries(NUMBERS.map(([key, clamp, alias]) => [key, clamp(rawNumber(raw, key, alias))]));
   return {
     sizeGuideEnabled: false, // Only an icon override can opt in; persisted defaults must never enable unchecked icons.
     sizeGuideCorner: parseSizeGuideCorner(raw.sizeGuideCorner) ?? SIZE_GUIDE_CORNER_DEFAULT,
@@ -87,8 +91,8 @@ export function normalizeSizeGuide(raw: unknown): SizeGuideSettings {
 export function readSizeGuideOverrides(raw: unknown): Partial<SizeGuideSettings> {
   if (!isRecord(raw)) return {};
   const out: Partial<SizeGuideSettings> = {};
-  for (const [key, clamp] of NUMBERS) {
-    const value = raw[key];
+  for (const [key, clamp, alias] of NUMBERS) {
+    const value = rawNumber(raw, key, alias);
     if (typeof value === "number" && Number.isFinite(value)) Object.assign(out, { [key]: clamp(value) });
   }
   if (typeof raw.sizeGuideEnabled === "boolean") out.sizeGuideEnabled = raw.sizeGuideEnabled;

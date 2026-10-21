@@ -36,8 +36,9 @@ opt-in class as Generate SVG → Requesty; design
   owns its checked-only/per-icon, preview and export contract.
 * An independent **S/L size guide** checkbox repeats the finished icon smaller
   in one corner, with its supplied S and L letter outlines underneath; corner,
-  both sizes, both stroke widths, the gap and X/Y edge insets are configurable.
-  The [size guide](upload-sizeguide.md) owns the layout and failure contract.
+  both sizes, both stroke widths (px), the gap and X/Y edge insets are
+  configurable. The [size guide](upload-sizeguide.md) owns the layout and
+  failure contract.
 
 ## Navigate by operation
 

@@ -26,17 +26,17 @@ export function perIconFields(s: UploadSettings): Omit<UploadSettings,
   "strokePx" | "shadowEnabled" | "shadowWidthPct" | "shadowGapPct" |
   "badgeEnabled" | "badgeCorner" | "badgeWidthPct" | "badgeOffsetXPct" | "badgeOffsetYPct" |
   "sizeGuideEnabled" | "sizeGuideCorner" | "sizeGuideSmallPct" | "sizeGuideLargePct" |
-  "sizeGuideSmallStrokePct" | "sizeGuideLargeStrokePct" | "sizeGuideGapPct" |
+  "sizeGuideSmallStrokePx" | "sizeGuideLargeStrokePx" | "sizeGuideGapPct" |
   "sizeGuideOffsetXPct" | "sizeGuideOffsetYPct"> {
   const { strokePx, shadowEnabled, shadowWidthPct, shadowGapPct,
     badgeEnabled, badgeCorner, badgeWidthPct, badgeOffsetXPct, badgeOffsetYPct,
     sizeGuideEnabled, sizeGuideCorner, sizeGuideSmallPct, sizeGuideLargePct,
-    sizeGuideSmallStrokePct, sizeGuideLargeStrokePct, sizeGuideGapPct,
+    sizeGuideSmallStrokePx, sizeGuideLargeStrokePx, sizeGuideGapPct,
     sizeGuideOffsetXPct, sizeGuideOffsetYPct, ...rest } = s;
   void strokePx; void shadowEnabled; void shadowWidthPct; void shadowGapPct;
   void badgeEnabled; void badgeCorner; void badgeWidthPct; void badgeOffsetXPct; void badgeOffsetYPct;
   void sizeGuideEnabled; void sizeGuideCorner; void sizeGuideSmallPct; void sizeGuideLargePct;
-  void sizeGuideSmallStrokePct; void sizeGuideLargeStrokePct; void sizeGuideGapPct;
+  void sizeGuideSmallStrokePx; void sizeGuideLargeStrokePx; void sizeGuideGapPct;
   void sizeGuideOffsetXPct; void sizeGuideOffsetYPct;
   return rest;
 }

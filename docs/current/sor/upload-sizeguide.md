@@ -24,8 +24,9 @@ preserves separately pinned size-guide and other decoration fields.
 
 Defaults: off; corner **bottom-left** (the reference artboard, opposite the
 badge's default corner); S logo **6%** and L logo **12%** of the artboard width
-(1–100%); each logo's own stroke **0%** (0–20% of artboard width, 0 = the
-artwork's own widths); gap between the logos **2%** of artboard width (0–100%);
+(1–100%); each logo's own stroke **0 px** (0–50 px verbatim in the final file,
+0 = the artwork's own scaled widths; stored `*StrokePct` keys carry their number
+over on read); gap between the logos **2%** of artboard width (0–100%);
 X and Y insets **3%** each (0–100%). X is measured from the selected left or
 right edge as a percentage of artboard width, Y from the selected top or bottom
 edge as a percentage of artboard height; the labels follow the corner.
@@ -46,8 +47,9 @@ letter is 28% of its logo's width tall and sits in a clear 10% gap below the
 widest logo. The whole group is then anchored by the chosen corner and the two
 inward insets. If the requested pair (or an applied stroke's reach) would escape
 the artboard, the entire group shrinks **uniformly**, keeping the requested
-insets; a 100% inset or a placement with no measurable room fails preparation
-as `no-fit` rather than clipping or moving the group.
+insets; a 100% inset, an un-shrinkable fixed-px stroke, or a placement with no
+measurable room fails preparation as `no-fit` rather than clipping or moving the
+group.
 
 Each repeat carries its own stroke definition: `unifyStrokes` runs per repeat and
 the paint is written on its wrapper `<g>`, so a hoisted root `stroke` can never
@@ -69,7 +71,7 @@ its proportions.
 Preview and JPEG render the same prepared vector; optimized clean SVG and
 built-in EPS contain the guide as ordinary filled paths. Guide-off/default
 fingerprints and byte-for-byte as-is exports are unchanged. Only an enabled
-guide fingerprints its corner, both logo percentages, both stroke percentages,
+guide fingerprints its corner, both logo percentages, both stroke widths (px),
 the gap, both insets and both supplied template contents, so edits mark affected
 packages stale. Tests: `upload_sizeguide_geometry`, `upload_sizeguide`,
 `upload_sizeguide_settings` and the size-guide block of `upload_ui`.

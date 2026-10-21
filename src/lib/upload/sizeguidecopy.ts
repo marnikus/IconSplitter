@@ -23,7 +23,7 @@ export interface CopyWant {
   bounds: Bounds;
   /** Where the repeat goes: its painted box in artboard px. */
   rect: Bounds;
-  /** The repeat's own stroke width in final px (null = the icon's own, scaled by the bake). */
+  /** The repeat's own stroke width in final px (null or 0 = the icon's own, scaled by the bake). */
   strokeWidthPx: number | null;
   /** The repeat's own stroke paint (null = the artwork's own). */
   color: string | null;
@@ -37,7 +37,8 @@ export function buildCopy(root: Element, icon: Element, want: CopyWant): CopyRes
   const group = cloneIcon(root, icon);
   const baked = bakeGeometry(group, matrixOf(want.rect, want.bounds));
   if (baked.unsupported.length > 0) return { ok: false, detail: `unsupported content: ${baked.unsupported.join(", ")}` };
-  restyleStrokes(group, { widthPx: want.strokeWidthPx, color: want.color });
+  const widthPx = want.strokeWidthPx !== null && want.strokeWidthPx > 0 ? want.strokeWidthPx : null;
+  restyleStrokes(group, { widthPx, color: want.color });
   const expanded = want.expand ? expandStrokes(group) : { shapes: 0, refused: null };
   if (expanded.refused !== null) return { ok: false, detail: `unsupported: ${expanded.refused}` };
   return { ok: true, group, expanded: expanded.shapes };

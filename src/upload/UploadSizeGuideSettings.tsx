@@ -1,10 +1,10 @@
 // UploadSizeGuideSettings.tsx — the S/L size guide: the finished icon repeated
 // at two smaller sizes in one artboard corner, each labelled with the supplied
 // S and L letter outlines. ONE control set: the selected-only checkbox in the
-// global popup and the placement percentages below it (2026-10-20).
+// global popup and the defaults below it — placement/logo widths in %, strokes in px.
 import {
   clampSizeGuideGapPct, clampSizeGuideLargePct, clampSizeGuideOffsetPct, clampSizeGuideSmallPct,
-  clampSizeGuideStrokePct, parseSizeGuideCorner, SIZE_GUIDE_CORNERS,
+  clampSizeGuideStrokePx, parseSizeGuideCorner, SIZE_GUIDE_CORNERS,
   SIZE_GUIDE_GAP_MAX, SIZE_GUIDE_GAP_MIN, SIZE_GUIDE_LARGE_MAX, SIZE_GUIDE_LARGE_MIN,
   SIZE_GUIDE_OFFSET_MAX, SIZE_GUIDE_OFFSET_MIN, SIZE_GUIDE_SMALL_MAX, SIZE_GUIDE_SMALL_MIN,
   SIZE_GUIDE_STROKE_MAX, SIZE_GUIDE_STROKE_MIN,
@@ -14,8 +14,8 @@ import DraftNumberInput from "../ui/DraftNumberInput";
 import { change, changeMany, Marker, type SettingsFieldProps } from "./settingsfield";
 
 type Placement = Pick<UploadSettings,
-  "sizeGuideCorner" | "sizeGuideSmallPct" | "sizeGuideLargePct" | "sizeGuideSmallStrokePct"
-  | "sizeGuideLargeStrokePct" | "sizeGuideGapPct" | "sizeGuideOffsetXPct" | "sizeGuideOffsetYPct">;
+  "sizeGuideCorner" | "sizeGuideSmallPct" | "sizeGuideLargePct" | "sizeGuideSmallStrokePx"
+  | "sizeGuideLargeStrokePx" | "sizeGuideGapPct" | "sizeGuideOffsetXPct" | "sizeGuideOffsetYPct">;
 
 interface NumberWant {
   testid: string; label: string; hint?: string;
@@ -136,7 +136,7 @@ interface LogoSide {
   strokeMarker: React.ReactNode;
 }
 
-/** ONE logo: its width and its OWN stroke width together, so the pair cannot be mistaken for the other logo's. */
+/** ONE logo: its width (% of artboard) and its OWN stroke width (px) together. */
 function SizeGuideLogo({ effective, update, marker, side }: FieldsProps & { side: "S" | "L" }) {
   const want = logoSideOf(effective, side, marker);
   return (
@@ -151,8 +151,8 @@ function SizeGuideLogo({ effective, update, marker, side }: FieldsProps & { side
         marker: want.widthMarker, onCommit: (n) => update(widthPatchOf(want, n)),
       }} />
       <SizeGuideNumber field={{
-        testid: `upload-set-sizeguide-${want.name}-stroke`, label: "Stroke width %",
-        aria: `${want.side} logo stroke width as percent of artboard width`,
+        testid: `upload-set-sizeguide-${want.name}-stroke`, label: "Stroke width px",
+        aria: `${want.side} logo stroke width in px`,
         hint: "0 keeps the artwork's scaled widths", value: want.stroke,
         min: SIZE_GUIDE_STROKE_MIN, max: SIZE_GUIDE_STROKE_MAX, step: 0.1,
         marker: want.strokeMarker, onCommit: (n) => update(strokePatchOf(want, n)),
@@ -166,14 +166,14 @@ function logoSideOf(effective: UploadSettings, side: "S" | "L", marker: FieldsPr
   return {
     side, name: small ? "small" : "large",
     width: small ? effective.sizeGuideSmallPct : effective.sizeGuideLargePct,
-    stroke: small ? effective.sizeGuideSmallStrokePct : effective.sizeGuideLargeStrokePct,
+    stroke: small ? effective.sizeGuideSmallStrokePx : effective.sizeGuideLargeStrokePx,
     widthClamp: small ? clampSizeGuideSmallPct : clampSizeGuideLargePct,
-    strokeClamp: clampSizeGuideStrokePct,
+    strokeClamp: clampSizeGuideStrokePx,
     limits: small ? { widthMin: SIZE_GUIDE_SMALL_MIN, widthMax: SIZE_GUIDE_SMALL_MAX }
       : { widthMin: SIZE_GUIDE_LARGE_MIN, widthMax: SIZE_GUIDE_LARGE_MAX },
     widthMarker: small ? marker("sizeGuideSmallPct", "sizeguide-small") : marker("sizeGuideLargePct", "sizeguide-large"),
-    strokeMarker: small ? marker("sizeGuideSmallStrokePct", "sizeguide-small-stroke")
-      : marker("sizeGuideLargeStrokePct", "sizeguide-large-stroke"),
+    strokeMarker: small ? marker("sizeGuideSmallStrokePx", "sizeguide-small-stroke")
+      : marker("sizeGuideLargeStrokePx", "sizeguide-large-stroke"),
   };
 }
 
@@ -185,8 +185,8 @@ function widthPatchOf(want: LogoSide, n: number): Partial<Placement> {
 
 function strokePatchOf(want: LogoSide, n: number): Partial<Placement> {
   return want.name === "small"
-    ? { sizeGuideSmallStrokePct: want.strokeClamp(n) }
-    : { sizeGuideLargeStrokePct: want.strokeClamp(n) };
+    ? { sizeGuideSmallStrokePx: want.strokeClamp(n) }
+    : { sizeGuideLargeStrokePx: want.strokeClamp(n) };
 }
 
 /** The user-defined clear distance between S and L. */

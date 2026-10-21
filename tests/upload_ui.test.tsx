@@ -837,10 +837,16 @@ describe("selection + the bulk bar", () => {
     expect(block("spacing")?.contains(input("[data-testid=upload-set-sizeguide-gap]"))).toBe(true);
     // short visible labels inside a named block; the full sentence stays the accessible name
     expect(block("small")?.querySelector(".svg-label")?.textContent).toBe("S — small logo");
+    expect(block("small")?.textContent).toContain("Stroke width px");
+    expect(block("small")?.textContent).not.toContain("Stroke width %");
+    expect(block("large")?.textContent).toContain("Stroke width px");
     expect(input("[data-testid=upload-set-sizeguide-small-width]").getAttribute("aria-label"))
       .toBe("S logo width as percent of artboard width");
     expect(input("[data-testid=upload-set-sizeguide-small-stroke]").getAttribute("aria-label"))
-      .toBe("S logo stroke width as percent of artboard width");
+      .toBe("S logo stroke width in px");
+    expect(input("[data-testid=upload-set-sizeguide-large-stroke]").getAttribute("aria-label"))
+      .toBe("L logo stroke width in px");
+    expect(input("[data-testid=upload-set-sizeguide-small-stroke]").getAttribute("max")).toBe("50");
     expect(input("[data-testid=upload-set-sizeguide-gap]").getAttribute("aria-label"))
       .toMatch(/clear distance between the S and L logos/i);
   });
@@ -895,11 +901,11 @@ describe("selection + the bulk bar", () => {
     expect(text("[data-testid=upload-set-marker-sizeguide]")).toBe("inherited");
     await click("[data-testid=upload-set-sizeguide]");
     expect(text("[data-testid=upload-set-marker-sizeguide]")).toBe("overridden");
-    await type("[data-testid=upload-set-sizeguide-small-stroke]", "0.5");
+    await type("[data-testid=upload-set-sizeguide-small-stroke]", "2");
     await act(async () => { input("[data-testid=upload-set-sizeguide-small-stroke]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     expect(text("[data-testid=upload-set-marker-sizeguide-small-stroke]")).toBe("overridden");
     const pinned = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(pinned.overrides[FOG]).toMatchObject({ sizeGuideEnabled: true, sizeGuideSmallStrokePct: 0.5 });
+    expect(pinned.overrides[FOG]).toMatchObject({ sizeGuideEnabled: true, sizeGuideSmallStrokePx: 2 });
   });
 });
 
@@ -1084,7 +1090,7 @@ describe("settings — defaults, overrides, one undoable bulk apply", () => {
       badgeEnabled: _badge, badgeCorner: _corner, badgeWidthPct: _badgeWidth,
       badgeOffsetXPct: _insetX, badgeOffsetYPct: _insetY,
       sizeGuideEnabled: _guide, sizeGuideCorner: _guideCorner, sizeGuideSmallPct: _small,
-      sizeGuideLargePct: _large, sizeGuideSmallStrokePct: _smallStroke, sizeGuideLargeStrokePct: _largeStroke,
+      sizeGuideLargePct: _large, sizeGuideSmallStrokePx: _smallStroke, sizeGuideLargeStrokePx: _largeStroke,
       sizeGuideGapPct: _guideGap, sizeGuideOffsetXPct: _guideX, sizeGuideOffsetYPct: _guideY,
       ...perIcon } = saved.defaults; // general apply leaves decoration pins and bar stroke alone
     expect(saved.overrides[FOG]).toEqual(perIcon);

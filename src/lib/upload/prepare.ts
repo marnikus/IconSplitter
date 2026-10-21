@@ -136,15 +136,14 @@ function sizeGuideStageOf(root: Element, settings: UploadSettings, shadow: Eleme
   if (bounds === null || bounds.width <= 0) {
     return { failure: fail("no-fit", "the placed icon has no measurable geometry to repeat"), expanded: 0 };
   }
-  const widthPx = (pct: number) => (pct > 0 ? (board.width * pct) / 100 : null);
+  const widthPx = (px: number) => (px > 0 ? px : null);
   const guide = appendSizeGuide(root, { width: board.width, height: board.height }, {
     icon, bounds, expand: settings.expandStrokes, color: null,
-    strokePx: { small: widthPx(settings.sizeGuideSmallStrokePct), large: widthPx(settings.sizeGuideLargeStrokePct) },
+    strokePx: { small: widthPx(settings.sizeGuideSmallStrokePx), large: widthPx(settings.sizeGuideLargeStrokePx) },
   }, {
     corner: settings.sizeGuideCorner,
     offsetXPct: settings.sizeGuideOffsetXPct, offsetYPct: settings.sizeGuideOffsetYPct,
     smallPct: settings.sizeGuideSmallPct, largePct: settings.sizeGuideLargePct,
-    smallStrokePct: settings.sizeGuideSmallStrokePct, largeStrokePct: settings.sizeGuideLargeStrokePct,
     gapPct: settings.sizeGuideGapPct,
   });
   return guide.ok

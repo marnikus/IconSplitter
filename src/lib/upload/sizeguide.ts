@@ -1,16 +1,18 @@
 // sizeguide.ts — the S/L size guide: the finished icon repeated at two smaller
 // sizes in one artboard corner, each with its supplied S/L label underneath
 // (2026-10-20, archive/2026-10-20-upload-size-guide). Pure layout + vector
-// composition: the repeats are baked into artboard px, the guide never changes
-// the icon fit, and a placement with no room fails by name.
+// composition: the repeats are baked into artboard px, strokes are verbatim px,
+// the guide never changes the icon fit, and a placement with no room fails by name.
 import { fmt } from "./geom";
 import { visibleBounds, type Bounds } from "./geom/bounds";
+import { SIZE_GUIDE_STROKE_MAX, SIZE_GUIDE_STROKE_MIN } from "./settingsnumbers";
 import { buildCopy, defineCopyStroke, isolateIds, translateCopy } from "./sizeguidecopy";
 import { labelAspect, labelPath, readLabels, type Labels } from "./sizeguidelabel";
 
 const TOL = 0.002;
-/** A fixed stroke width does not shrink with the geometry, so re-measure a few times. */
-const SHRINK_PASSES = 3;
+const FIT_TOL = 1e-6;
+/** Fixed px strokes add a constant reach while geometry scales; two samples solve it, extra passes guard switches. */
+const SHRINK_PASSES = 6;
 const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"];
 /** The label height as a share of its logo's width, and the clear gap under the logos. */
 export const SIZE_GUIDE_LABEL_RATIO = 0.28;
@@ -25,9 +27,6 @@ export interface SizeGuidePlacement {
   /** S and L logo widths as percentages of the artboard WIDTH. */
   smallPct: number;
   largePct: number;
-  /** Each logo's stroke width as a percentage of the artboard width (0 = the icon's own). */
-  smallStrokePct: number;
-  largeStrokePct: number;
   /** Clear distance between the two logos, % of the artboard width. */
   gapPct: number;
 }
@@ -37,7 +36,7 @@ export interface SizeGuideSource {
   icon: Element;
   /** Its shipped bounds in artboard px. */
   bounds: Bounds;
-  /** Each repeat's own stroke width in final px (null = the icon's own, scaled by the bake). */
+  /** Each repeat's own stroke width in final px (null or 0 = the icon's own, scaled by the bake). */
   strokePx: { small: number | null; large: number | null };
   expand: boolean;
   /** The repeats' stroke paint (null = the artwork's own). */
@@ -53,14 +52,15 @@ export type SizeGuideResult =
 
 interface Logo { width: number; icon: Bounds; label: Bounds }
 interface Plan { logos: [Logo, Logo]; width: number; height: number }
+interface Probe { scale: number; box: Bounds }
 type Compose = { ok: true; copies: SizeGuideCopyResult[]; box: Bounds; expanded: number } | SizeGuideFailure;
 
 /** Place the S/L guide in the chosen corner; on a refusal the export tree stays untouched. */
 export function appendSizeGuide(
   root: Element, artboard: { width: number; height: number }, source: SizeGuideSource, placement: SizeGuidePlacement,
 ): SizeGuideResult {
-  if (!validRequest(root, artboard, placement) || !(source.bounds.width > 0) || !(source.bounds.height > 0)) {
-    return unsupported("invalid size guide artboard, bounds or percentages");
+  if (!validRequest(root, artboard, source, placement)) {
+    return unsupported("invalid size guide artboard, bounds, stroke widths or percentages");
   }
   const labels = readLabels();
   if (labels === null) return unsupported("the bundled S/L size labels are malformed");
@@ -82,16 +82,23 @@ interface BuildRequest {
   labels: Labels;
 }
 
-/** The requested plan first; a stroke reach that escapes the artboard shrinks the whole guide once. */
+/** The requested plan first; fixed px strokes add a constant reach, solved from two measurements. */
 function fittedBuild(request: BuildRequest, wanted: Plan): Compose {
   const { root, source, labels, artboard, placement } = request;
-  let plan = wanted;
+  const avail = roomOf(artboard, placement);
+  if (avail === null) return noFit();
+  let scale = 1;
+  let prev: Probe | null = null;
   for (let pass = 0; pass < SHRINK_PASSES; pass++) {
-    const built = compose(root, source, labels, plan);
+    const built = compose(root, source, labels, scale === 1 ? wanted : shrink(wanted, scale));
     if (built.ok === false) return built;
-    const fit = fitFactor(built.box, artboard, placement);
-    if (fit >= 1) return placeParts(built, artboard, placement);
-    plan = shrink(plan, fit);
+    if (built.box.width <= avail.width + FIT_TOL && built.box.height <= avail.height + FIT_TOL) {
+      return placeParts(built, artboard, placement);
+    }
+    const next = nextScale(scale, built.box, prev, avail);
+    if (!(next > 0) || !(next < scale)) return noFit();
+    prev = { scale, box: built.box };
+    scale = next;
   }
   return noFit();
 }
@@ -180,8 +187,10 @@ function unsupported(detail: string): SizeGuideFailure {
   return { ok: false, code: "unsupported", detail };
 }
 
-function validRequest(root: Element, artboard: { width: number; height: number }, p: SizeGuidePlacement): boolean {
-  return artboardValid(root, artboard) && placementValid(p);
+function validRequest(
+  root: Element, artboard: { width: number; height: number }, source: SizeGuideSource, p: SizeGuidePlacement,
+): boolean {
+  return artboardValid(root, artboard) && sourceValid(source) && placementValid(p);
 }
 
 /** The root really carries the artboard the caller measured. */
@@ -192,13 +201,17 @@ function artboardValid(root: Element, artboard: { width: number; height: number 
     && [artboard.width, artboard.height].every((n) => Number.isFinite(n) && n > 0);
 }
 
+function sourceValid(source: SizeGuideSource): boolean {
+  const strokeOk = (n: number | null) => n === null || (Number.isFinite(n) && n >= SIZE_GUIDE_STROKE_MIN && n <= SIZE_GUIDE_STROKE_MAX);
+  return source.bounds.width > 0 && source.bounds.height > 0 && strokeOk(source.strokePx.small) && strokeOk(source.strokePx.large);
+}
+
 /** Every percentage is finite and inside the range its clamp enforces. */
 function placementValid(p: SizeGuidePlacement): boolean {
-  const numbers = [p.offsetXPct, p.offsetYPct, p.smallPct, p.largePct, p.smallStrokePct, p.largeStrokePct, p.gapPct];
+  const numbers = [p.offsetXPct, p.offsetYPct, p.smallPct, p.largePct, p.gapPct];
   return CORNERS.includes(p.corner) && numbers.every(Number.isFinite)
     && [p.offsetXPct, p.offsetYPct, p.gapPct].every((n) => n >= 0 && n <= 100)
-    && [p.smallPct, p.largePct].every((n) => n > 0 && n <= 100)
-    && [p.smallStrokePct, p.largeStrokePct].every((n) => n >= 0 && n <= 20);
+    && [p.smallPct, p.largePct].every((n) => n > 0 && n <= 100);
 }
 
 function unionOf(copies: readonly SizeGuideCopyResult[]): Bounds | null {
@@ -225,12 +238,26 @@ function round(n: number): number {
   return Number(fmt(n));
 }
 
-/** How much of the requested guide fits (1 = all of it), measured inward from the chosen edges. */
-function fitFactor(box: Bounds, artboard: { width: number; height: number }, p: SizeGuidePlacement): number {
-  const availW = artboard.width * (1 - p.offsetXPct / 100);
-  const availH = artboard.height * (1 - p.offsetYPct / 100);
-  const factor = Math.min(1, availW / box.width, availH / box.height);
-  return Number.isFinite(factor) && factor > 0 ? factor : 0;
+/** Available room inside the artboard after the chosen edge insets; null when none remains. */
+function roomOf(artboard: { width: number; height: number }, p: SizeGuidePlacement): { width: number; height: number } | null {
+  const width = artboard.width * (1 - p.offsetXPct / 100);
+  const height = artboard.height * (1 - p.offsetYPct / 100);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/** Secant step on `size(k) = slope·k + strokeReach`: solves fixed px stroke reach in one pass after the first shrink. */
+function nextScale(scale: number, box: Bounds, prev: Probe | null, avail: { width: number; height: number }): number {
+  const sx = axisScale(scale, box.width, prev === null ? null : { scale: prev.scale, size: prev.box.width }, avail.width);
+  const sy = axisScale(scale, box.height, prev === null ? null : { scale: prev.scale, size: prev.box.height }, avail.height);
+  return Math.min(sx, sy);
+}
+
+function axisScale(scale: number, size: number, prev: { scale: number; size: number } | null, limit: number): number {
+  if (size <= limit) return scale;
+  if (prev === null || prev.scale === scale) return scale * (limit / size);
+  const slope = (size - prev.size) / (scale - prev.scale);
+  const reach = size - slope * scale;
+  return slope > 0 && limit > reach ? (limit - reach) / slope : 0;
 }
 
 function shrink(plan: Plan, factor: number): Plan {

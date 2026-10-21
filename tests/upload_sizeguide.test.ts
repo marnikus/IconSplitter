@@ -75,15 +75,18 @@ describe("the S/L size guide in prepared Upload SVG", () => {
     }
   });
 
-  it("gives each repeat its own stroke width from the artboard width", () => {
-    const { root } = prepared(STROKED, guide({ sizeGuideSmallStrokePct: 0.5, sizeGuideLargeStrokePct: 1 }));
-    const [small, large] = copies(root);
-    expect(small.getAttribute("stroke-width")).toBe("2.56");
-    expect(large.getAttribute("stroke-width")).toBe("5.12");
+  it("writes each repeat's stroke width verbatim in final px, independent of artboard width", () => {
+    const smallBoard = prepared(STROKED, guide({ sizeGuideSmallStrokePx: 1.5, sizeGuideLargeStrokePx: 3 }));
+    const largeBoard = prepared(STROKED, guide({
+      artboard: { mode: "custom", size: 1024, width: 1024, height: 512 },
+      sizeGuideSmallStrokePx: 1.5, sizeGuideLargeStrokePx: 3,
+    }));
+    expect(copies(smallBoard.root).map((g) => g.getAttribute("stroke-width"))).toEqual(["1.5", "3"]);
+    expect(copies(largeBoard.root).map((g) => g.getAttribute("stroke-width"))).toEqual(["1.5", "3"]);
   });
 
   it("scales the placed icon's own stroke width with each repeat when the width is 0", () => {
-    const { root } = prepared(STROKED, guide({ sizeGuideSmallStrokePct: 0, sizeGuideLargeStrokePct: 0 }));
+    const { root } = prepared(STROKED, guide({ sizeGuideSmallStrokePx: 0, sizeGuideLargeStrokePx: 0 }));
     const iconWidth = Number(root.getAttribute("stroke-width")); // hoisted once on the root
     const widths = copies(root).map((copy) => Number(copy.getAttribute("stroke-width")));
     expect(iconWidth).toBeGreaterThan(0);
@@ -119,17 +122,17 @@ describe("the S/L size guide in prepared Upload SVG", () => {
     const asIs = { ...DEFAULT_UPLOAD_SETTINGS, ...AS_IS_SETTINGS };
     expect(settingsFingerprint(asIs)).toBe(settingsFingerprint({ ...asIs, sizeGuideSmallPct: 9 }));
     expect(settingsFingerprint(guide())).not.toBe(settingsFingerprint(guide({ sizeGuideCorner: "top-left" })));
-    expect(settingsFingerprint(guide())).not.toBe(settingsFingerprint(guide({ sizeGuideSmallStrokePct: 1 })));
+    expect(settingsFingerprint(guide())).not.toBe(settingsFingerprint(guide({ sizeGuideSmallStrokePx: 2 })));
   });
 
   it("validates the stored numbers and keeps the guide's own corner vocabulary", () => {
     const read = parseOverrides({
       sizeGuideCorner: "top-right", sizeGuideSmallPct: 400, sizeGuideLargePct: -3,
-      sizeGuideSmallStrokePct: 99, sizeGuideGapPct: 7, sizeGuideOffsetXPct: "12",
+      sizeGuideSmallStrokePx: 99, sizeGuideGapPct: 7, sizeGuideOffsetXPct: "12",
     });
     expect(read).toMatchObject({
       sizeGuideCorner: "top-right", sizeGuideSmallPct: 100, sizeGuideLargePct: 1,
-      sizeGuideSmallStrokePct: 20, sizeGuideGapPct: 7,
+      sizeGuideSmallStrokePx: 50, sizeGuideGapPct: 7,
     });
     expect(read.sizeGuideOffsetXPct).toBeUndefined();
     const normalized = normalizeSettings({ sizeGuideCorner: "nowhere", sizeGuideLargePct: 30 });
