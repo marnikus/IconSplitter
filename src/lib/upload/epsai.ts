@@ -1,20 +1,21 @@
-// epsai.ts — pure TypeScript Adobe Illustrator 10 native vector stream writer
-// (`%AI9_PrivateDataBegin … %AI9_DataStream … %AI9_PrivateDataEnd`, compressed
-// via `epszlib.ts`). Gives Illustrator / CorelDRAW / Affinity / microstock
-// validators 100% live editable vector paths + native Gradient Swatches
-// (`%AI5_BeginGradient`, `Bb`/`Bh`/`Bg`/`Xm`/`BB`) with ZERO raster objects.
+// epsai.ts — pure TypeScript Adobe Illustrator native vector editing stream
+// (`%AI9_PrivateDataBegin … %AI9_DataStream … %AI9_PrivateDataEnd`), byte-faithful
+// to `Adobe Illustrator(R) 30.8.2` (`icon-award-ribbon_8_02.eps`): live translucent
+// Gradient Swatches, 13-arg `Bg` + `Xm` + `Bm` + `Bh`, `Xy` opacity, live strokes.
 
 import { fmt } from "./geom";
 import { multiply, type Matrix } from "./geom/matrix";
 import type { Outline } from "./geom/outline";
 import type { Rgb } from "./epsgradient";
 import type { EpsBoundingBox, EpsOptions } from "./epsdoc";
-import type { FlatStop, ResolvedGradient } from "./epsshading";
+import type { LiveStop, ResolvedGradient } from "./epsshading";
 import { encodeAiDataStream } from "./epszlib";
 
 type PathOp = Outline["ops"][number];
 
-export type AiFill = { kind: "solid"; color: Rgb } | Extract<ResolvedGradient, { kind: "linear" | "radial" }>;
+export type AiFill =
+  | { kind: "solid"; color: Rgb }
+  | Extract<ResolvedGradient, { kind: "linear" | "radial" }>;
 
 export interface AiStroke {
   color: Rgb;
@@ -30,6 +31,7 @@ export interface AiShapeInput {
   outline: Outline;
   toArt: Matrix;
   evenOdd: boolean;
+  opacity: number;
   fill: AiFill | null;
   stroke: AiStroke | null;
 }
@@ -41,52 +43,53 @@ export class AiStreamBuilder {
 
   addShape(shape: AiShapeInput): void {
     const subs = splitSubpaths(shape.outline.ops);
-    if (subs.length === 0) return;
-    if (shape.fill === null && shape.stroke === null) return;
+    if (subs.length === 0 || (shape.fill === null && shape.stroke === null)) return;
     const grad = shape.fill !== null && shape.fill.kind !== "solid"
       ? this.gradientInstance(shape.fill, shape.toArt)
       : null;
     this.shapes.push(renderPathObject(shape, subs, grad));
   }
 
-  private defineSwatch(kind: "linear" | "radial", stops: FlatStop[]): string {
-    const key = `${kind}:${stops.map((s) => `${fmt(s.offset)}:${aiInk(s.color)}`).join("|")}`;
+  private defineSwatch(kind: "linear" | "radial", stops: LiveStop[]): string {
+    const key = `${kind}:${stops.map((s) => `${fmt(s.offset)}:${fmt(s.opacity)}:${aiInk(s.color)}`).join("|")}`;
     const existing = this.byKey.get(key);
     if (existing !== undefined) return existing;
     const name = `Gradient ${this.defs.length + 1}`;
     this.byKey.set(key, name);
     const ordered = kind === "linear" ? [...stops].reverse() : stops;
-    const lines = ordered.map((s) => `${aiInk(s.color)} 2 50 ${fmt(s.offset * 100)} %_Bs`);
+    const lines = ordered.map((s) => `%_${aiInk(s.color)} 2 ${fmt(s.opacity)} 6 50 ${fmt(s.offset * 100)} Bs`);
     this.defs.push(
-      `%AI5_BeginGradient: (${name})\n(${name}) ${kind === "radial" ? 1 : 0} ${stops.length} Bd\n[\n`
-      + `${lines.join("\n")}\nBD\n%AI5_EndGradient`,
+      `%AI5_BeginGradient: (${name})\n(${name}) ${kind === "radial" ? 1 : 0} ${stops.length} Bd\n`
+      + `[\n<00FF>\n0\n${lines.join("\n")}\nBD\n%AI5_EndGradient`,
     );
     return name;
   }
 
   private gradientInstance(fill: Extract<AiFill, { kind: "linear" | "radial" }>, toArt: Matrix): string {
-    const name = this.defineSwatch(fill.kind, fill.stops);
+    const name = this.defineSwatch(fill.kind, fill.liveStops);
     const t = multiply(toArt, fill.mat);
     return fill.kind === "radial" ? radialInstance(name, fill, t) : linearInstance(name, fill, t);
   }
 
   /** Complete `%AI9_PrivateDataBegin … %AI9_PrivateDataEnd` trailer section. */
   buildPrivateSection(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptions): string {
-    const stream = this.buildDocument(box, hires);
-    return [
+    const header = [
       "%AI9_PrivateDataBegin",
       "%!PS-Adobe-3.0 EPSF-3.0",
-      "%%Creator: IconSplitter (SVG to upload)",
-      "%%AI8_CreatorVersion: 10.0.0",
+      "%%Creator: Adobe Illustrator(R) 10.0",
+      "%%AI8_CreatorVersion: 24.0.0",
+      "%%For: (IconSplitter) ()",
       `%%Title: (${escapeParens(opts.title ?? "export.eps")})`,
-      "%AI9_DataStream",
-      encodeAiDataStream(stream),
-      "%AI9_PrivateDataEnd",
-    ].join("\n");
+    ];
+    if (opts.createdAt !== undefined) header.push(`%%CreationDate: ${escapeParens(opts.createdAt)}`);
+    header.push("%%Canvassize: 16383", "%AI9_DataStream", encodeAiDataStream(this.buildDocument(box, hires)), "%AI9_PrivateDataEnd");
+    return header.join("\n");
   }
 
   private buildDocument(box: EpsBoundingBox, hires: EpsBoundingBox): string {
-    const setup = this.defs.length === 0 ? "" : `${this.defs.length} Bn\n${this.defs.join("\n")}\n`;
+    const setup = this.defs.length === 0
+      ? ""
+      : `%AI5_Begin_NonPrinting\nNp\n${this.defs.length} Bn\n${this.defs.join("\n")}\n%AI5_End_NonPrinting--\n`;
     const body = this.shapes.length === 0 ? "" : `${this.shapes.join("\n")}\n`;
     return [
       ...aiHeaderLines(box, hires),
@@ -99,6 +102,11 @@ export class AiStreamBuilder {
       "(Layer 1) Ln",
       "0 A",
       "0 Xw",
+      "0 O",
+      "0 R",
+      "0 1 0 0 0 Xy",
+      "0 J 0 j 1 w 10 M []0 d",
+      "0 XR",
       `${body}LB`,
       "%AI5_EndLayer--",
       "%%PageTrailer",
@@ -115,20 +123,25 @@ function aiHeaderLines(box: EpsBoundingBox, hires: EpsBoundingBox): string[] {
   const cx = (hires.llx + hires.urx) / 2;
   const cy = (hires.lly + hires.ury) / 2;
   return [
-    "%!PS-Adobe-3.0",
-    "%%Creator: IconSplitter (SVG to upload)",
     `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
     `%%HiResBoundingBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     "%%DocumentProcessColors: Cyan Magenta Yellow Black",
-    "%AI5_FileFormat 6.0",
+    "%AI5_FileFormat 14.0",
     "%AI3_ColorUsage: Color",
+    "%AI7_ImageSettings: 0",
+    "%%RGBProcessColor: 0 0 0 ([Registration])",
     `%AI3_Cropmarks: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     `%AI3_TemplateBox: ${fmt(cx)} ${fmt(cy)} ${fmt(cx)} ${fmt(cy)}`,
     `%AI3_TileBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     `%AI5_ArtSize: ${fmt(w)} ${fmt(h)}`,
     "%AI5_RulerUnits: 2",
     "%AI9_ColorModel: 1",
+    "%AI5_ArtFlags: 0 0 0 1 0 0 1 0 0",
+    "%AI5_TargetResolution: 800",
     "%AI5_NumLayers: 1",
+    "%AI5_OpenViewLayers: 7",
+    "%%PageOrigin:0 0",
+    "%AI9_Flatten: 1",
   ];
 }
 
@@ -155,9 +168,9 @@ function splitSubpaths(ops: PathOp[]): Sub[] {
 }
 
 function renderPathObject(shape: AiShapeInput, subs: Sub[], grad: string | null): string {
-  const lines: string[] = [];
+  const lines = [`0 ${fmt(shape.opacity)} 0 0 0 Xy`];
   if (shape.fill !== null) {
-    const base = shape.fill.kind === "solid" ? shape.fill.color : shape.fill.stops[0].color;
+    const base = shape.fill.kind === "solid" ? shape.fill.color : shape.fill.liveStops[0].color;
     lines.push(`${aiInk(base)} Xa`, "0 O");
   }
   if (shape.stroke !== null) {
@@ -176,8 +189,7 @@ function renderSubpath(sub: Sub, shape: AiShapeInput, grad: string | null): stri
     const bb = shape.stroke === null ? "0 BB" : sub.closed ? "2 BB" : "1 BB";
     return `${segs}\n${grad}\n${sub.closed ? "f" : "F"}\n${bb}`;
   }
-  const op = paintOp(shape.fill !== null, shape.stroke !== null, sub.closed);
-  return `${segs}\n${op}`;
+  return `${segs}\n${paintOp(shape.fill !== null, shape.stroke !== null, sub.closed)}`;
 }
 
 function subpathCoords(sub: Sub, m: Matrix): string {
@@ -190,12 +202,12 @@ function subpathCoords(sub: Sub, m: Matrix): string {
     if (op.op === "C") {
       const [x1, y1] = mapPt(m, op.x1, op.y1);
       const [x2, y2] = mapPt(m, op.x2, op.y2);
-      lines.push(`${fmt(x1)} ${fmt(y1)} ${fmt(x2)} ${fmt(y2)} ${fmt(x)} ${fmt(y)} C`);
-    } else lines.push(`${fmt(x)} ${fmt(y)} L`);
+      lines.push(`${fmt(x1)} ${fmt(y1)} ${fmt(x2)} ${fmt(y2)} ${fmt(x)} ${fmt(y)} c`);
+    } else lines.push(`${fmt(x)} ${fmt(y)} l`);
     lx = x;
     ly = y;
   }
-  if (sub.closed && Math.hypot(lx - sx, ly - sy) > 1e-6) lines.push(`${fmt(sx)} ${fmt(sy)} L`);
+  if (sub.closed && Math.hypot(lx - sx, ly - sy) > 1e-6) lines.push(`${fmt(sx)} ${fmt(sy)} l`);
   return lines.join("\n");
 }
 
@@ -207,27 +219,47 @@ function paintOp(hasFill: boolean, hasStroke: boolean, closed: boolean): string 
 function linearInstance(name: string, fill: Extract<AiFill, { kind: "linear" }>, t: Matrix): string {
   const dx = fill.x2 - fill.x1;
   const dy = fill.y2 - fill.y1;
-  const u: Matrix = { a: dx, b: dy, c: -dy, d: dx, e: fill.x1, f: fill.y1 };
-  const m = multiply(t, u);
+  const m = multiply(t, { a: dx, b: dy, c: -dy, d: dx, e: fill.x1, f: fill.y1 });
   const angle = (Math.atan2(m.b, m.a) * 180) / Math.PI;
   const len = Math.max(1e-6, Math.hypot(m.a, m.b));
-  return `Bb\n1 (${name}) ${fmt(m.e)} ${fmt(m.f)} ${fmt(angle)} ${fmt(len)} 1 0 0 1 0 0 Bg\n${mat6(m)} Xm`;
+  const bms: string[] = [];
+  for (let i = 0; i + 1 < fill.liveStops.length; i++) {
+    const s0 = fill.liveStops[i].offset;
+    const span = Math.max(1e-6, fill.liveStops[i + 1].offset - s0);
+    bms.push(`${mat6(multiply(m, { a: span, b: 0, c: 0, d: 1, e: s0, f: 0 }))} Bm`);
+  }
+  return [`Bb`, `1 (${name}) ${fmt(m.e)} ${fmt(m.f)} ${fmt(angle)} ${fmt(len)} 1 0 0 1 0 0 1 Bg`, `${mat6(m)} Xm`, ...bms].join("\n");
 }
 
 function radialInstance(name: string, fill: Extract<AiFill, { kind: "radial" }>, t: Matrix): string {
-  const u: Matrix = { a: fill.r, b: 0, c: 0, d: fill.r, e: fill.cx, f: fill.cy };
-  const m = multiply(t, u);
+  const m = multiply(t, { a: fill.r, b: 0, c: 0, d: fill.r, e: fill.cx, f: fill.cy });
   const [fcx, fcy] = mapPt(t, fill.cx, fill.cy);
   const [ffx, ffy] = mapPt(t, fill.fx, fill.fy);
   const hx = ffx - fcx;
   const hy = ffy - fcy;
-  const major = Math.max(1e-6, Math.hypot(m.a, m.b), Math.hypot(m.c, m.d));
+  const [major, minor, angle] = ellipseAxes(m);
   const hDist = Math.hypot(hx, hy);
   const hAngle = hDist > 1e-9 ? (Math.atan2(hy, hx) * 180) / Math.PI : 0;
   const hFrac = Math.min(1, hDist / major);
-  const angle = (Math.atan2(m.b, m.a) * 180) / Math.PI;
-  return `Bb\n${fmt(hx)} ${fmt(hy)} ${fmt(hAngle)} ${fmt(hFrac)} Bh\n`
-    + `1 (${name}) ${fmt(m.e)} ${fmt(m.f)} ${fmt(angle)} ${fmt(major)} 1 0 0 1 0 0 Bg\n${mat6(m)} Xm`;
+  const aspect = Math.min(100, Math.max(0.01, minor / major));
+  return [
+    "Bb",
+    `${fmt(hx)} ${fmt(hy)} ${fmt(hAngle)} ${fmt(hFrac)} Bh`,
+    `1 (${name}) ${fmt(m.e)} ${fmt(m.f)} ${fmt(angle)} ${fmt(major)} 1 0 0 1 0 0 ${fmt(aspect)} Bg`,
+    `${mat6(m)} Xm`,
+    `${mat6(m)} Bm`,
+  ].join("\n");
+}
+
+function ellipseAxes(m: Matrix): [number, number, number] {
+  const xx = m.a * m.a + m.c * m.c;
+  const yy = m.b * m.b + m.d * m.d;
+  const xy = m.a * m.b + m.c * m.d;
+  const theta = 0.5 * Math.atan2(2 * xy, xx - yy);
+  const spread = Math.hypot(0.5 * (xx - yy), xy);
+  const major = Math.max(1e-6, Math.sqrt(Math.max(0, 0.5 * (xx + yy) + spread)));
+  const minor = Math.max(1e-6, Math.sqrt(Math.max(0, 0.5 * (xx + yy) - spread)));
+  return [major, minor, (theta * 180) / Math.PI];
 }
 
 function strokeLineStyle(st: AiStroke, toArt: Matrix): string {
@@ -241,10 +273,7 @@ function aiInk(c: Rgb): string {
   const k = 1 - Math.max(c.r, c.g, c.b);
   if (k >= 1 - 1e-9) return `0 0 0 1 ${fmt(c.r)} ${fmt(c.g)} ${fmt(c.b)}`;
   const inv = 1 / (1 - k);
-  const cyan = (1 - c.r - k) * inv;
-  const mag = (1 - c.g - k) * inv;
-  const yel = (1 - c.b - k) * inv;
-  return `${fmt(cyan)} ${fmt(mag)} ${fmt(yel)} ${fmt(k)} ${fmt(c.r)} ${fmt(c.g)} ${fmt(c.b)}`;
+  return `${fmt((1 - c.r - k) * inv)} ${fmt((1 - c.g - k) * inv)} ${fmt((1 - c.b - k) * inv)} ${fmt(k)} ${fmt(c.r)} ${fmt(c.g)} ${fmt(c.b)}`;
 }
 
 function mapPt(m: Matrix, x: number, y: number): [number, number] {

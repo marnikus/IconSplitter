@@ -1,7 +1,7 @@
 // algo_efficiency.test.ts — TDD for 80% faster per-image pipeline
 // Verifies fast-count redesign: rMax capped 35, grid-bounds filter, merged mask+downsample
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { PNG } from "pngjs";
@@ -92,6 +92,13 @@ describe("algo efficiency — 80% faster per-image", () => {
   const syntheticBudget = coverageRun ? 4_000 : 200;
   const sparseBudget = coverageRun ? 1_500 : 300;
   const exactPath = join(__dirname, "..", "design temp", "image_to_split", "61e06fee-142a-450e-ad33-7fb48fa905f0.png");
+
+  beforeAll(() => {
+    // Warm V8 TurboFan past its OSR threshold before timing under multi-worker contention.
+    const warm = new Uint8Array(600 * 600);
+    warm.fill(1, 50 * 600 + 50, 200 * 600 + 200);
+    detect({ w: 600, h: 600, scale: 1, mask: warm, bg: [255, 255, 255], ink: [0, 0, 0], inkDiff: 200, threshold: 60 }, null);
+  });
 
   it("detect on exact 1254px image finishes <400ms and finds >=4 boxes (80% faster than old ~1500ms)", () => {
     const a = loadPngAnalysis(exactPath);

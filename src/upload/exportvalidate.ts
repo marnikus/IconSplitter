@@ -67,9 +67,9 @@ function jpegCheck(art: Artifacts, metadata: IconMetadata | null, errors: string
 
 function epsCheck(epsText: string | null, errors: string[]): boolean {
   if (epsText === null) return true;
-  const ok = verifyEpsDocument(epsText).ok; // converter-neutral (2026-10-09): Inkscape's EPS passes too
-  if (!ok) errors.push("the EPS does not verify");
-  return ok;
+  const verdict = verifyEpsDocument(epsText); // converter-neutral (2026-10-09): Inkscape's EPS passes too
+  if (!verdict.ok) errors.push(`the EPS does not verify (${verdict.errors.join("; ")})`);
+  return verdict.ok;
 }
 
 function epsMetadataCheck(epsText: string | null, metadata: IconMetadata | null, errors: string[]): boolean {

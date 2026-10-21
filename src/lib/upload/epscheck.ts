@@ -1,15 +1,17 @@
-// epscheck.ts — executable stack verification (I-61) AND hard zero-raster
-// enforcement across all EPS exports ("raster is forbidden in artworks").
+// epscheck.ts — executable stack verification (I-61) AND hard zero-raster +
+// zero-`shfill` enforcement across all EPS exports ("raster is forbidden in
+// artworks", including PostScript `shfill` which Illustrator `MPSParser.aip`
+// rasterizes into a bitmap `<Image>`).
 
 type Kind = "number" | "array" | "dict";
 type DictVal = { kind: "dict" } | { kind: "lit" };
 type Operand = number | Operand[] | DictVal;
 interface Frame { kind: "array" | "dict"; items: Operand[] }
 
-/** What each operator pops, in stack order (last entry = top of stack). */
+/** What each allowed pure-vector Level-2 PS operator pops (last = top of stack). */
 const POPS: Record<string, Kind[]> = {
   newpath: [], closepath: [], fill: [], eofill: [], stroke: [], gsave: [], grestore: [],
-  clip: [], eoclip: [], strokepath: [], shfill: ["dict"],
+  clip: [], eoclip: [], strokepath: [],
   moveto: ["number", "number"], lineto: ["number", "number"],
   curveto: ["number", "number", "number", "number", "number", "number"],
   concat: ["array"], setrgbcolor: ["number", "number", "number"],
@@ -21,6 +23,7 @@ const FORBIDDEN_RASTER_TOKENS = new Set([
   "image", "colorimage", "imagemask", "cairo_image", "cairo_imagemask",
   "/ImageType", "/DCTDecode", "/JPXDecode", "/CCITTFaxDecode", "/JBIG2Decode",
   "XI", "XG", "Xh", "XH",
+  "shfill", "/ShadingType",
 ]);
 
 interface State {
@@ -40,16 +43,17 @@ export function checkPostScript(program: string): string[] {
   return st.errors.length > 0 ? st.errors : atEnd(st);
 }
 
-/** Hard zero-raster scanner: returns an error for any PS/AI bitmap construct. */
+/** Hard zero-raster & zero-`shfill` scanner across PostScript / AI streams. */
 export function findRasterOperators(program: string): string[] {
-  const cleaned = stripXmpPackets(program);
+  const cleaned = stripNonDrawingBlocks(program);
   const errors: string[] = [];
-  for (const rawLine of cleaned.split(/\r?\n/)) {
-    if (/^%AI5_BeginRaster\b/.test(rawLine.trim())) {
-      errors.push("forbidden raster image block (%AI5_BeginRaster)");
+  for (const rawLine of cleaned.split(/\r\n|\r|\n/)) {
+    const trimmed = rawLine.trim();
+    if (/^%(AI5_BeginRaster|AI5_BeginPlace|AI26_BeginPlacedObjectPreview)\b/.test(trimmed)) {
+      errors.push(`forbidden raster image block (${trimmed.split(/\s+/)[0]})`);
       break;
     }
-    const hit = scanLineForRaster(rawLine);
+    const hit = scanLineForRaster(rawLine.startsWith("%_") ? rawLine.slice(2) : rawLine);
     if (hit !== null) {
       errors.push(`forbidden raster operator (${hit})`);
       break;
@@ -58,8 +62,10 @@ export function findRasterOperators(program: string): string[] {
   return errors;
 }
 
-function stripXmpPackets(text: string): string {
-  return text.replace(/<\?xpacket begin=[\s\S]*?\?>[\s\S]*?<\?xpacket end=[\s\S]*?\?>/g, "");
+function stripNonDrawingBlocks(text: string): string {
+  return text
+    .replace(/<\?xpacket begin=[\s\S]*?\?>[\s\S]*?<\?xpacket end=[\s\S]*?\?>/g, "")
+    .replace(/%%BeginResource:\s*procset\s+Adobe_[\s\S]*?%%EndResource/g, "");
 }
 
 function scanLineForRaster(line: string): string | null {
@@ -123,11 +129,7 @@ function delimiter(tok: string, st: State, line: number): boolean {
   return false;
 }
 
-function token(tok: string, line: number, st: State): void;
-function token(tok: string, st: State, line: number): void;
-function token(tok: string, b: State | number, c: number | State): void {
-  const st = typeof b === "number" ? (c as State) : b;
-  const line = typeof b === "number" ? b : (c as number);
+function token(tok: string, st: State, line: number): void {
   if (delimiter(tok, st, line)) return;
   if (/^-?(\d+\.?\d*|\.\d+)$/.test(tok)) { pushVal(st, Number(tok)); return; }
   if (dictToken(tok, st)) { pushVal(st, { kind: "lit" }); return; }

@@ -3,6 +3,8 @@
 // `%AI9_DataStream` private vector streams. Zero external dependencies, works
 // identically in browsers, single-file `dist/index.html`, and Node.
 
+export { ascii85Decode, decodeAiDataStream, zlibDecompress } from "./epsinflate";
+
 const LEN_BASE = [
   3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
   35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258,
@@ -29,10 +31,11 @@ interface BitWriter {
 /** Compress UTF-8/ASCII text as `%`-prefixed Clean7Bit `%AI9_DataStream` lines. */
 export function encodeAiDataStream(text: string): string {
   const raw = new TextEncoder().encode(text);
-  const packed = zlibCompress(raw);
-  const a85 = ascii85Encode(packed);
+  const body = ascii85Encode(zlibCompress(raw)).slice(0, -2);
   const lines: string[] = [];
-  for (let i = 0; i < a85.length; i += 72) lines.push(`%${a85.slice(i, i + 72)}`);
+  for (let i = 0; i < body.length; i += 72) lines.push(`%${body.slice(i, i + 72)}`);
+  if (lines.length === 0) return "%~>";
+  lines[lines.length - 1] += "~>";
   return lines.join("\n");
 }
 

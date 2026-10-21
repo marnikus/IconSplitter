@@ -91,8 +91,8 @@ describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 + N
     const epsOut = writeEps(cleaned.svg, flattenColor(settings.background), { title: "shadowed.eps" });
     if (!epsOut.ok) throw new Error(epsOut.reason);
     expect(verifyEps(epsOut.eps).ok).toBe(true);
-    expect(epsOut.eps).toContain("/ShadingType 3");
-    expect(epsOut.eps).toContain("shfill");
+    expect(epsOut.eps).not.toContain("/ShadingType");
+    expect(epsOut.eps).not.toContain("shfill");
     expect(findRasterOperators(epsOut.eps)).toEqual([]);
 
     const ai = decodeAiStream(epsOut.eps);

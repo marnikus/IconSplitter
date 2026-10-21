@@ -3,6 +3,7 @@
 // renders to EPS (preventing raster fallback on `shadow.svg`), AND enforces
 // `verifyEpsDocument` (including the hard zero-raster gate) on the response.
 
+import { builtinConverter } from "./builtin";
 import { findRasterOperators } from "../epscheck";
 import { styleMap } from "../geom/stroke";
 import { mix, opacityValue, paintColor, urlRefId, type Rgb } from "../epsgradient";
@@ -50,7 +51,13 @@ async function convert(input: EpsConvertInput, deps: ConverterDeps, signal?: Abo
   if (!res.ok) return { ok: false, reason: reasonOf(body, res.status) };
   if (!body.startsWith(EPS_HEAD)) return { ok: false, reason: "the helper answered with something that is not an EPS" };
   const rasterErrors = findRasterOperators(body);
-  if (rasterErrors.length > 0) return { ok: false, reason: `Inkscape emitted raster EPS: ${rasterErrors[0]}` };
+  if (rasterErrors.length > 0) {
+    if (/<(linear|radial)Gradient\b/i.test(input.svg)) {
+      const upgraded = await builtinConverter.convert(input, deps, signal);
+      if (upgraded.ok) return upgraded;
+    }
+    return { ok: false, reason: `Inkscape emitted raster EPS: ${rasterErrors[0]}` };
+  }
   return { ok: true, eps: body, writer: `inkscape-cli@${res.headers.get("x-inkscape-version") ?? "unknown"}`, fixes: [] };
 }
 

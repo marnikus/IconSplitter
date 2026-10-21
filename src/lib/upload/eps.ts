@@ -1,8 +1,7 @@
-// eps.ts — built-in pure-vector EPS 10 writer (0 external binaries, 0 raster):
-// emits BOTH (1) executable PostScript Level 3 smooth-shaded vector page code
-// (`shfill`, with gradient strokes expanded in pure TS to closed cubic-Bezier
-// outlines) AND (2) native Adobe Illustrator 10 vector editing data (`%AI9_DataStream`)
-// with live editable Gradient Swatches (`%AI5_BeginGradient`, `Bb`/`Bh`/`Bg`/`Xm`/`BB`).
+// eps.ts — built-in 100%-vector EPS writer (`builtin-subset-5`, 0 raster, 0 `shfill`):
+//  1) Layer 1: pure Level-2 vector paths + clipped Bezier gradient bands (`epsbands.ts`)
+//  2) Layer 2: native Adobe Illustrator vector editing stream (`%AI9_DataStream`)
+//     with live translucent Gradient Swatches, `Xy` opacity, and live strokes.
 
 import { identity, multiply, parseTransform, type Matrix } from "./geom/matrix";
 import { shapeOutline, type Outline } from "./geom/outline";
@@ -19,6 +18,8 @@ import { outlineToPs } from "./epspath";
 import { expandGradientStroke, gradientFillPs, resolveGradientSpec } from "./epsshading";
 
 export { EPS10_MARKERS, verifyEps, verifyEpsDocument } from "./epsdoc";
+export { inspectAiEps, verifyAiPrivateStream } from "./epsaicheck";
+export type { AiGradientInfo, AiInspection, AiObjectInfo, AiStopInfo } from "./epsaicheck";
 export type { EpsBoundingBox, EpsOptions, EpsVerification } from "./epsdoc";
 
 const SHAPES = ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"];
@@ -60,7 +61,7 @@ interface WalkCtx {
   count: { shapes: number; roundedRects: number };
 }
 
-/** The export SVG → a genuine 100%-vector EPS 10 document, or an honest subset failure. */
+/** The export SVG → a genuine 100%-vector Illustrator EPS document, or an honest subset failure. */
 export function writeEps(svgText: string, background: string, opts: EpsOptions = {}): EpsResult {
   try {
     return writeEpsUnsafe(svgText, background, opts);
@@ -151,37 +152,56 @@ function emitStrokePs(el: Element, outline: Outline, ctx: WalkCtx): { kind: "pat
   }
   const expanded = expandGradientStroke(outline, strokeSpecOf(ctx.paint));
   if (expanded.ops.length === 0) return null;
-  const fillPs = gradientFillPs(stroke, { el, viewBox: ctx.viewBox, bg: ctx.bg, alpha: strokeOpacity, evenOdd: false });
+  const fillPs = gradientFillPs(stroke, {
+    el, viewBox: ctx.viewBox, bg: ctx.bg, alpha: strokeOpacity, evenOdd: false, targetOutline: expanded,
+  });
   return fillPs === "" ? null : { kind: "expanded", ps: `${outlineToPs(expanded)}${fillPs}` };
 }
 
 function emitAiShape(el: Element, outline: Outline, ctx: WalkCtx): void {
   const toArt = multiply(ctx.upright, ctx.ctm);
-  const fill = resolveAiFill(el, ctx.paint.fill, ctx.paint.fillOpacity, ctx);
-  const solidStroke = resolveSolidStroke(ctx.paint, ctx.bg);
-  if (fill !== null || solidStroke !== null) {
-    ctx.ai.addShape({ outline, toArt, evenOdd: ctx.paint.evenOdd, fill, stroke: solidStroke });
-  }
+  const fillSpec = resolveAiFill(el, ctx.paint.fill, ctx.paint.fillOpacity, ctx);
+  const solidStroke = resolveSolidStroke(ctx.paint);
+  addAiFillAndStroke(outline, toArt, ctx, { fillSpec, solidStroke });
   if (ctx.paint.stroke !== null && "kind" in ctx.paint.stroke && ctx.paint.strokeWidth > 0) {
     const strokeFill = resolveAiFill(el, ctx.paint.stroke, ctx.paint.strokeOpacity, ctx);
     const expanded = expandGradientStroke(outline, strokeSpecOf(ctx.paint));
     if (strokeFill !== null && expanded.ops.length > 0) {
-      ctx.ai.addShape({ outline: expanded, toArt, evenOdd: false, fill: strokeFill, stroke: null });
+      ctx.ai.addShape({ outline: expanded, toArt, evenOdd: false, opacity: strokeFill.opacity, fill: strokeFill.fill, stroke: null });
     }
   }
 }
 
-function resolveAiFill(el: Element, paint: PaintFill, alpha: number, ctx: WalkCtx): AiFill | null {
-  if (paint === null) return null;
-  if (!("kind" in paint)) return { kind: "solid", color: mix(paint, ctx.bg, alpha) };
-  const spec = resolveGradientSpec(paint, { el, viewBox: ctx.viewBox, bg: ctx.bg, alpha });
-  return spec.kind === "none" ? null : spec;
+function addAiFillAndStroke(
+  outline: Outline, toArt: Matrix, ctx: WalkCtx,
+  parts: { fillSpec: { fill: AiFill; opacity: number } | null; solidStroke: AiStroke | null },
+): void {
+  const { fillSpec, solidStroke } = parts;
+  const strokeOp = ctx.paint.strokeOpacity;
+  if (fillSpec !== null && solidStroke !== null && Math.abs(fillSpec.opacity - strokeOp) > 1e-6) {
+    ctx.ai.addShape({ outline, toArt, evenOdd: ctx.paint.evenOdd, opacity: fillSpec.opacity, fill: fillSpec.fill, stroke: null });
+    ctx.ai.addShape({ outline, toArt, evenOdd: ctx.paint.evenOdd, opacity: strokeOp, fill: null, stroke: solidStroke });
+    return;
+  }
+  if (fillSpec !== null || solidStroke !== null) {
+    const opacity = fillSpec !== null ? fillSpec.opacity : strokeOp;
+    ctx.ai.addShape({ outline, toArt, evenOdd: ctx.paint.evenOdd, opacity, fill: fillSpec?.fill ?? null, stroke: solidStroke });
+  }
 }
 
-function resolveSolidStroke(paint: Paint, bg: Rgb): AiStroke | null {
+function resolveAiFill(el: Element, paint: PaintFill, alpha: number, ctx: WalkCtx): { fill: AiFill; opacity: number } | null {
+  if (paint === null) return null;
+  if (!("kind" in paint)) return { fill: { kind: "solid", color: paint }, opacity: alpha };
+  const spec = resolveGradientSpec(paint, { el, viewBox: ctx.viewBox, bg: ctx.bg, alpha });
+  if (spec.kind === "none") return null;
+  if (spec.kind === "solid") return { fill: { kind: "solid", color: spec.liveColor }, opacity: spec.opacity };
+  return { fill: spec, opacity: spec.opacity };
+}
+
+function resolveSolidStroke(paint: Paint): AiStroke | null {
   if (paint.stroke === null || "kind" in paint.stroke || paint.strokeWidth <= 0) return null;
   return {
-    color: mix(paint.stroke, bg, paint.strokeOpacity), width: paint.strokeWidth,
+    color: paint.stroke, width: paint.strokeWidth,
     cap: paint.cap, join: paint.join, miter: paint.miter, dash: paint.dash, dashOffset: paint.dashOffset,
   };
 }
@@ -270,7 +290,7 @@ function joinOf(raw: string | null, inherited: string): number {
 function viewBoxOf(root: Element): number[] | null {
   const raw = root.getAttribute("viewBox");
   if (raw === null) return null;
-  const nums = raw.trim().split(/[\s,]+/).map(Number);
-  if (nums.length !== 4 || nums.some((n) => !Number.isFinite(n)) || nums[2] <= 0 || nums[3] <= 0) return null;
-  return nums;
+  const parts = raw.trim().split(/[\s,]+/).map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  return parts[2] > 0 && parts[3] > 0 ? parts : null;
 }

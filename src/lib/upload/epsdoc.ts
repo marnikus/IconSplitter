@@ -1,7 +1,8 @@
-// epsdoc.ts — the document layer of the EPS writer (design §2.5): the DSC
-// comment block, the EPS and Illustrator artboard bounds, the uprighting CTM
-// and structural + hard zero-raster verification.
+// epsdoc.ts — the document layer of the EPS writer (design.md §3–§4): outer
+// Illustrator-compatible DSC headers (`AI11EPS` + `%AI9_PrintingDataBegin`),
+// uprighting CTM, and fail-closed zero-raster + native AI stream verification.
 
+import { verifyAiPrivateStream } from "./epsaicheck";
 import { checkPostScript, findRasterOperators } from "./epscheck";
 import { fmt } from "./geom";
 import type { Matrix } from "./geom/matrix";
@@ -16,7 +17,7 @@ export function integerBounds(box: EpsBoundingBox): EpsBoundingBox {
   return { llx: Math.floor(box.llx), lly: Math.floor(box.lly), urx: Math.ceil(box.urx), ury: Math.ceil(box.ury) };
 }
 
-/** The document identity the DSC comments carry (never invented, never Adobe's). */
+/** Document metadata written into DSC headers. */
 export interface EpsOptions {
   /** `%%Title` — the artifact's own file name, by convention `${stem}.eps`. */
   title?: string;
@@ -24,7 +25,7 @@ export interface EpsOptions {
   createdAt?: string;
 }
 
-/** What every valid EPS 10 document must carry (checked by `verifyEps`). */
+/** What every valid EPS document from the built-in writer carries. */
 export const EPS10_MARKERS = [
   "%%HiResBoundingBox:",
   "%%DocumentData: Clean7Bit",
@@ -39,15 +40,10 @@ export interface EpsVerification {
 
 /** Everything one finished document is assembled from. */
 export interface EpsDoc {
-  /** The root viewBox — its origin and size place the artwork. */
   viewBox: number[];
-  /** The integer DSC box (`%%BoundingBox`), what a Level-1 reader uses. */
   box: EpsBoundingBox;
-  /** The exact box (`%%HiResBoundingBox`), in points. */
   hires: EpsBoundingBox;
-  /** The emitted PostScript body, one operator group per shape. */
   body: string[];
-  /** Optional `%%Trailer` section (native Illustrator 10 vector editing stream). */
   trailer?: string;
   opts: EpsOptions;
 }
@@ -61,7 +57,7 @@ export function uprightMatrix(viewBox: number[], hires: EpsBoundingBox): Matrix 
   };
 }
 
-/** The EPS 10 document: DSC comments, the uprighting CTM, body, trailer, %%EOF. */
+/** Assemble the EPS document: Illustrator DSC header, CTM, pure-vector body, trailer, %%EOF. */
 export function assemble({ viewBox, box, hires, body, trailer, opts }: EpsDoc): string {
   const header = [
     "%!PS-Adobe-3.0 EPSF-3.0",
@@ -79,24 +75,31 @@ export function assemble({ viewBox, box, hires, body, trailer, opts }: EpsDoc): 
   return `${parts.join("\n")}\n%%EOF\n`;
 }
 
-/** The documented DSC comment order (Creator, Title, date, boxes, data, level). */
+/** Outer DSC headers matching `Adobe Illustrator(R) 30.8.2` (`icon-award-ribbon_8_02.eps`). */
 function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptions): string[] {
   const lines = [
-    "%%Creator: IconSplitter (SVG to upload)",
+    "%%Creator: Adobe Illustrator(R) 24.0",
+    "%%For: (IconSplitter) ()",
     `%%Title: ${dscString(opts.title ?? "export.eps")}`,
   ];
   if (opts.createdAt !== undefined) lines.push(`%%CreationDate: ${dscString(opts.createdAt)}`);
   lines.push(
     `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
     `%%HiResBoundingBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
+    `%%CropBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     "%%DocumentData: Clean7Bit",
     "%%LanguageLevel: 3",
+    "%ADOBeginClientInjection: DocumentHeader \"AI11EPS\"",
+    "%%AI8_CreatorVersion: 24.0.0",
+    "%AI9_PrintingDataBegin",
+    "%ADOEndClientInjection: DocumentHeader \"AI11EPS\"",
+    "%%Pages: 1",
     ...illustratorArtboard(hires),
   );
   return lines;
 }
 
-/** Illustrator's AI5 comment stores height then width and a centered template point. */
+/** Illustrator's outer AI5 comment stores height then width and a centered template point. */
 function illustratorArtboard(box: EpsBoundingBox): string[] {
   const width = box.urx - box.llx;
   const height = box.ury - box.lly;
@@ -108,14 +111,14 @@ function illustratorArtboard(box: EpsBoundingBox): string[] {
   ];
 }
 
-/** A DSC `(…)` string: backslash and parentheses escaped, newlines flattened. */
+/** Escape backslashes, parentheses, and line breaks inside a DSC comment value. */
 function dscString(value: string): string {
   return value.replace(/[\\()]/g, (ch) => `\\${ch}`).replace(/\s+/g, " ");
 }
 
 /**
- * Verifies an EPS 10 document — the built-in writer's own contract: header, the
- * DSC markers, bounding box, %%EOF, executable PS subset, AND zero raster ops.
+ * Verifies a built-in EPS document: DSC markers, executable PS stack check,
+ * hard zero-raster & zero-`shfill` gate, AND native AI private-stream check.
  */
 export function verifyEps(eps: string): EpsVerification {
   const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker)).map((marker) => `missing ${marker.replace(/:$/, "")}`);
@@ -123,8 +126,8 @@ export function verifyEps(eps: string): EpsVerification {
 }
 
 /**
- * The converter-neutral gate every EPS passes before commit (2026-10-09):
- * header, a declared LanguageLevel, a bounding box, %%EOF, AND zero raster ops.
+ * Converter-neutral gate enforced before commit: header, LanguageLevel,
+ * BoundingBox, %%EOF, hard zero-raster + zero-`shfill` gate, AND native AI check.
  */
 export function verifyEpsDocument(eps: string): EpsVerification {
   return verifyDsc(eps, /^%%LanguageLevel:\s*\d/m.test(eps) ? [] : ["missing %%LanguageLevel"]);
@@ -135,7 +138,7 @@ function verifyDsc(eps: string, errors: string[]): EpsVerification {
   const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
   if (m === null) errors.push("missing or malformed %%BoundingBox");
   if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");
-  errors.push(...findRasterOperators(eps));
+  errors.push(...findRasterOperators(eps), ...verifyAiPrivateStream(eps));
   const box = m === null ? null : { llx: +m[1], lly: +m[2], urx: +m[3], ury: +m[4] };
   return { ok: errors.length === 0, errors, boundingBox: box };
 }

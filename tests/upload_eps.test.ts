@@ -20,7 +20,10 @@ describe("writeEps — a genuine EPS document", () => {
     if (!result.ok) throw new Error(result.reason);
     const head = result.eps.split("%%EndComments")[0];
     expect(head.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(head).toContain("%%Creator: IconSplitter");
+    expect(head).toContain("%%Creator: Adobe Illustrator(R) 24.0");
+    expect(head).toContain("%%For: (IconSplitter) ()");
+    expect(head).toContain("%ADOBeginClientInjection: DocumentHeader \"AI11EPS\"");
+    expect(head).toContain("%AI9_PrintingDataBegin");
     expect(head).toContain("%%Title: fog_AI.eps");
     expect(head).toContain("%%CreationDate: 2026-10-08T00:00:00.000Z");
     expect(head).toContain("%%BoundingBox: 0 0 70 70");
@@ -267,7 +270,7 @@ describe("writeEps — Level-3 vector gradients + Native Illustrator 10 stream +
     return inflateSync(Uint8Array.from(out)).toString("latin1");
   }
 
-  it("emits pure vector PS Level 3 shfill AND zlib-compressed native AI 10 editable gradients (0 strokepath, 0 raster)", () => {
+  it("emits pure vector Level-2 bands + native Illustrator 30.x vector gradients (0 shfill, 0 strokepath, 0 raster)", () => {
     const svg = art(`<defs>`
       + `<radialGradient id="s" gradientUnits="objectBoundingBox" cx="0.5" cy="0.5" r="0.5">`
       + `<stop offset="0" stop-color="#000" stop-opacity="1"/>`
@@ -279,10 +282,9 @@ describe("writeEps — Level-3 vector gradients + Native Illustrator 10 stream +
       + `<rect x="20" y="15" width="60" height="55" fill="url(#g)" stroke="url(#g)" stroke-width="2"/>`);
     const result = writeEps(svg, "#ffffff");
     if (!result.ok) throw new Error(result.reason);
-    expect(result.eps).toContain("/ShadingType 3");
-    expect(result.eps).toContain("/ShadingType 2");
+    expect(result.eps).not.toContain("/ShadingType");
+    expect(result.eps).not.toContain("shfill");
     expect(result.eps).not.toContain("strokepath");
-    expect(result.eps).toContain("shfill");
     expect(verifyEps(result.eps).ok).toBe(true);
     const run = runPostScript(result.eps);
     expect(run.errors).toEqual([]);
@@ -291,13 +293,14 @@ describe("writeEps — Level-3 vector gradients + Native Illustrator 10 stream +
     expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
 
     const ai = decodeAiStream(result.eps);
-    expect(ai).toContain("%AI5_FileFormat 6.0");
+    expect(ai).not.toMatch(/^\s*%!PS-Adobe/);
+    expect(ai).toContain("%AI5_FileFormat 14.0");
     expect(ai).toContain("%AI9_ColorModel: 1");
     expect(ai).toContain("2 Bn");
     expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\n(Gradient 1) 1 3 Bd");
     expect(ai).toContain("%AI5_BeginGradient: (Gradient 2)\n(Gradient 2) 0 2 Bd");
     expect(ai).toContain("Bh\n1 (Gradient 1)");
-    expect(ai).toContain("Xm\nf\n0 BB");
+    expect(ai).toContain("Xm\n22.5 0 0 -4.5 37.5 11.25 Bm\nf\n0 BB");
     expect(ai).toContain("*u");
     expect(ai).toContain("*U");
   });
@@ -388,6 +391,6 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 15: concat expects an array, found number"); // the two AI artboard comments precede the CTM
+    expect(verdict.errors).toContain("line 22: concat expects an array, found number");
   });
 });

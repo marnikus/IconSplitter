@@ -120,7 +120,10 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
     art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
     art.epsFixes = eps.fixes;
     art.epsWriter = eps.writer;
-  } else art.epsFailure = describeFailure(eps); // honest: the EPS stage failed → partial
+    return;
+  }
+  if (/raster|verification/i.test(eps.reason)) throw new StageError("eps", eps.reason);
+  art.epsFailure = describeFailure(eps); // honest: non-subset SVG → partial
 }
 
 /** A fresh render, or the committed JPEG re-embedded (metadata edit only). */

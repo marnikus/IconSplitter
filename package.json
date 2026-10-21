@@ -45,6 +45,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "fake-indexeddb": "^6.0.0",
     "happy-dom": "^20.14.5",
+    "jpeg-js": "^0.4.4",
     "jscpd": "^5.4.0",
     "knip": "^6.39.0",
     "pngjs": "^7.0.0",

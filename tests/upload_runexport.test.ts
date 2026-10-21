@@ -428,7 +428,7 @@ describe("runExport — the full package commits per icon", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
     expect(result.status).toBe("processed");
-    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-4" });
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-5" });
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 
@@ -729,8 +729,8 @@ describe("runExport — honest failures", () => {
     expect(final.querySelector("ellipse, path[fill^='url(']")).not.toBeNull();
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps).toContain("/ShadingType 3");
-    expect(eps).toContain("shfill");
+    expect(eps).not.toContain("/ShadingType");
+    expect(eps).not.toContain("shfill");
     expect(rendered).toHaveLength(1);
     const preview = prepareExportSvg(SOURCE_SVG, settings);
     if (!preview.ok) throw new Error(preview.detail);

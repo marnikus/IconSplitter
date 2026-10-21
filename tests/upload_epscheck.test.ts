@@ -53,13 +53,11 @@ describe("checkPostScript — operand arity and types", () => {
     expect(checkPostScript(program)).toEqual(["line 5: stroke has no current path"]);
   });
 
-  it("checks Level-3 smooth shading dictionaries, clip, strokepath and shfill", () => {
+  it("checks pure-vector clip/strokepath and rejects shfill as a forbidden MPSParser-rasterizing op", () => {
     const ok = "gsave\nnewpath 0 0 moveto 4 0 lineto 4 4 lineto closepath\nclip newpath\n"
-      + "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 4 4] /Extend [true true] "
-      + "/Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1 >> >> shfill\ngrestore";
+      + "0.5 0.5 0.5 setrgbcolor 0 0 moveto 4 0 lineto 4 4 lineto closepath fill\ngrestore";
     expect(checkPostScript(ok)).toEqual([]);
-    expect(checkPostScript("1 shfill")).toEqual(["line 1: shfill expects a dict, found number"]);
-    expect(checkPostScript("shfill")).toEqual(["line 1: shfill expects 1 operand, found 0"]);
+    expect(checkPostScript("1 shfill")).toEqual(["line 1: unknown operator shfill"]);
     expect(checkPostScript("newpath clip")).toEqual(["line 1: clip has no current path"]);
     expect(checkPostScript("newpath strokepath")).toEqual(["line 1: strokepath has no current path"]);
     expect(checkPostScript("<< /ShadingType 2")).toEqual(["end: a dictionary is never closed"]);
