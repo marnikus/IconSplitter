@@ -32,7 +32,6 @@ export interface UploadBulkBarProps {
   metaRegenerateCount: number;
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
-  shadowEpsVectorCount: number;
   /** How many checked icons pin at least one general setting in their own dialog. */
   overriddenCount: number;
   onToggleAll: (on: boolean) => void;
@@ -104,9 +103,6 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
 function BulkActions({ p }: { p: UploadBulkBarProps }) {
   return (
     <>
-      {p.shadowEpsVectorCount > 0 && <span className="svg-warning" role="alert" data-testid="upload-shadow-eps-warning">
-        Built-in EPS uses vector gradient shadows for {p.shadowEpsVectorCount} selected icon(s); unsupported overlaps fail, never rasterize.
-      </span>}
       <button type="button" className="svg-btn" data-testid="upload-reset-settings"
         disabled={p.overriddenCount === 0} onClick={p.onResetSettings}
         title={p.overriddenCount === 0

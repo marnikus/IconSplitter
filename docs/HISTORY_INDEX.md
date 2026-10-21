@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-21-eps-no-routine-warning/README.md` | Remove misleading supported-shadow EPS warnings in bulk, rows and both settings scopes; actual export errors and no-raster gate unchanged; full verification passed |
 | `archive/2026-10-21-vector-only-eps/implementation.md` / `verification.md` | Native Level 3 vector gradient implementation and measured results: strict no-raster final-byte gates, 2396 passing coverage tests, independent interpreter checks; full perf lane remains blocked |
 | `archive/2026-10-21-vector-only-eps/research.md` | Research only: browser-native Level 3 vector gradients, rejected raster-producing PDF intermediary probe, strict no-raster audit and actual-file export test design; supplied SVG fixtures absent, no implementation claimed |
 | `archive/2026-10-01-batch-processing/design.md` | Batch folders: module map, browser constraints, negative tests |

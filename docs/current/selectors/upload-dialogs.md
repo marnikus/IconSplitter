@@ -25,8 +25,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   In the per-icon popup `upload-set-shadow` is the on/off checkbox (the one
   `.up-shadow-check` label, width/gap disabled when off). Width 10–200%, gap 0–100%;
   `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.
-  `upload-shadow-eps-note` warns when the icon or a shadowed check wants
-  built-in EPS.
+  Supported built-in EPS shadows show no routine warning in either scope.
 - `upload-set-badge-section`: the supplied fixed 412×20 editable-stroke vector.
   `upload-badge-controls` holds `upload-set-badge-selected` (none/mixed/all) and
   ONE `upload-set-badge-*` placement set under **Badge defaults**; no second

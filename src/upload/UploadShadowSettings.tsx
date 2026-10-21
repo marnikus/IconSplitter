@@ -7,8 +7,6 @@ import DraftNumberInput from "../ui/DraftNumberInput";
 import { change, Marker, type UploadSettingsDialogProps } from "./settingsfield";
 
 export default function UploadShadowSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const epsWarning = p.id === null ? p.selectedShadow.epsVectorCount > 0
-    : effective.shadowEnabled && effective.includeEps && effective.epsConverter === "builtin";
   return (
     <div className="up-shadow-dialog" data-testid="upload-set-shadow-section">
       {p.id === null ? <SelectedShadowControls p={p} /> : <div className="svg-field up-set-field">
@@ -22,10 +20,6 @@ export default function UploadShadowSettings({ p, effective }: { p: UploadSettin
       </div>}
       <ShadowDimensions p={p} effective={effective} />
       {p.id === null && <small className="up-hint">Shadow defaults for icon settings; changing these numbers does not enable unchecked icons.</small>}
-      {epsWarning &&
-        <p className="svg-warning" role="alert" data-testid="upload-shadow-eps-note">
-          Built-in EPS exports gradient shadows as vectors. Unsupported overlaps fail EPS verification; raster fallback is forbidden.
-        </p>}
     </div>
   );
 }

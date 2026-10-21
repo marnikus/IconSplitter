@@ -693,7 +693,7 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=upload-set-close]");
   });
 
-  it("explains vector-only EPS shadows before a shadowed selection is exported", async () => {
+  it("does not warn for supported vector EPS shadows in bulk or either settings scope", async () => {
     await mount(makeRoot());
     await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-eps]");
@@ -701,8 +701,14 @@ describe("selection + the bulk bar", () => {
     await check(FOG);
     await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-shadow-selected]");
-    expect(q("[data-testid=upload-shadow-eps-warning]")?.textContent).toMatch(/EPS.*vector.*never rasterize/);
-    expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")?.textContent).toMatch(/EPS.*vector/);
+    expect(q("[data-testid=upload-shadow-eps-warning]")).toBeNull();
+    expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")).toBeNull();
+    expect(q(`[data-testid=upload-shadow-eps-${FOG}]`)).toBeNull();
+    await click("[data-testid=upload-set-close]");
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(q("[data-testid=upload-shadow-eps-note]")).toBeNull();
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-shadow-selected]");
     expect(q("[data-testid=upload-shadow-eps-warning]")).toBeNull();
     expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")).toBeNull();

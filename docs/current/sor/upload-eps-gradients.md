@@ -18,8 +18,9 @@ and a separate solid stroke preserve the original path across fill/clip.
 
 The supplied template shadow is supported as vector shading, including its
 varying stop alpha, ellipse fill opacity, and affine transform. Badge and S/L
-paths remain vectors and may accompany it. UI notes explain vector-only EPS
-instead of falsely declaring all gradient shadows partial.
+paths remain vectors and may accompany it. Supported shadows show no routine
+EPS warning in the toolbar, rows or either settings scope. Actual EPS failures
+retain their normal stage error and partial-package reporting.
 
 Unsupported input fails explicitly, never rasterizes: repeat/reflect spreads,
 linearRGB, external/missing/cyclic/ambiguous references, duplicate/decreasing
