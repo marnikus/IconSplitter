@@ -15,6 +15,7 @@ import { downloadPlanOf } from "./downloadactions";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadBulkBar from "./UploadBulkBar";
 import { selectedShadow } from "./shadowselection";
+import { overriddenIds } from "./selectedsettings";
 import { selectedBadge } from "./badgeselection";
 import { selectedSizeGuide } from "./sizeguideselection";
 import UploadControls from "./UploadControls";
@@ -92,10 +93,11 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
         shadowEpsUnsupported={selectedShadow(g.checked, g.defaults, g.overrides).epsUnsupported}
+        overriddenCount={overriddenIds(g.checked, g.overrides).length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
-        onApplySettings={() => g.applyDefaultsToSelected(g.checked)}
+        onResetSettings={() => g.resetOverridesSelected(g.checked)}
         onMetadata={() => g.generateMetadataSelected(g.checked)}
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
         onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}

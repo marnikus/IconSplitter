@@ -24,8 +24,9 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   - The global dialog has no width row. One icon MAY pin its own width (follow-up,
     same day): its dialog's `upload-set-stroke` (empty = the bar's, inherited;
     `upload-set-stroke-inherit` drops the pin), read by `parseOverrides` (with
-    the `strokePt` alias). "Apply settings to selected" pins the 13 general
-    fields, not the bar stroke or separately applied Shadow/badge/size-guide pins.
+    the `strokePt` alias). Nothing global pins a row (2026-10-21): the bulk bar
+    only CLEARS a selection's pins, so the bar stroke and the decorations keep
+    their own rules.
   - The old preview-only `previewStroke` pref is gone from this tab.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
   `prepareExportSvg(source, effective)`, including applied Shadow, corner badge and size guide vectors,
@@ -50,8 +51,8 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   change numeric defaults without opting icons in; stored global
   `shadowEnabled:true` is ignored on read. One icon may override all three
   fields in its own dialog. Each checked-set edit is one `uploadSettings` undo
-  entry and keeps unrelated overrides. Normal Apply settings to selected leaves
-  existing shadow pins alone. Enabled shadow fingerprints its full validated
+  entry and keeps unrelated overrides; the bar's Reset clears them all. Enabled
+  shadow fingerprints its full validated
   dimensions and template hash; disabled/dormant values leave historic
   fingerprints (and byte-for-byte as-is) unchanged. Built-in EPS cannot paint
   the gradient: the bar, row and both dialog scopes warn that the result is
@@ -66,9 +67,11 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   one hex, `#000000` by default, or the artwork's own, JPEG target MP, JPEG
   quality, SVGO optimize on, optional EPS, artboard) plus per-icon overrides;
   the effective settings are defaults under, overrides on top, and every field
-  is marked inherited or overridden. "Apply settings to selected" pins the current defaults onto the
-  selection as ONE undoable `uploadSettings` history entry; per-icon set/reset
-  pushes one entry each; global-defaults edits are persisted but NOT undoable
+  is marked inherited or overridden. Only a local edit pins a field (2026-10-21,
+  row settings isolation); a global edit never writes a row. The bar's
+  "↺ Reset to defaults (N)" clears every checked icon's pins as ONE undoable
+  `uploadSettings` entry; per-icon set/reset pushes one entry each;
+  global-defaults edits are persisted but NOT undoable
   (the same class as presets). The checkbox selection is session-persisted and
   its gestures are undoable through the separate `uploadChecked` history type.
 * **Scale to N MP** (2026-10-09, I-62, design

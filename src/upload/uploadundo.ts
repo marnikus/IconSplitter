@@ -1,7 +1,8 @@
 // uploadundo.ts — the upload-settings history entry's apply path (design §6,
 // RULE 12). One entry type `uploadSettings` carries `{ overrides: { [pairId]:
-// Overrides | null } }` before/after: "Apply settings to selected" pushes ONE
-// entry for the whole selection, a per-icon override set/reset pushes one each.
+// Overrides | null } }` before/after: the bulk bar's reset clears the whole
+// selection in ONE entry (null = that row inherits again), a per-icon
+// override set/reset pushes one each.
 // A mounted panel binds itself here first, so a click and an undo both land in
 // the same code path (the panel's persist effect writes localStorage); with no
 // panel mounted an undo writes the store directly, which the next mount reads.

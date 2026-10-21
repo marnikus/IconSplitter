@@ -32,10 +32,11 @@ import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
 import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
-import { useOverrideApplyActions, useShadowActions } from "./shadowactions";
+import { useShadowActions } from "./shadowactions";
 import { useBadgeActions } from "./badgeactions";
 import { useSizeGuideActions } from "./sizeguideactions";
 import { discreteSettingsChange } from "./settingsgestures";
+import { useSettingsResetActions } from "./settingsreset";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
   ALL_UPLOAD_FILTER,
@@ -78,7 +79,8 @@ export interface UploadActions extends PromptActions {
   setDefaults: (patch: Partial<UploadSettings>) => void;
   setOverride: (id: string, patch: SettingsOverrides) => void;
   resetOverride: (id: string) => void;
-  applyDefaultsToSelected: (ids: string[]) => void;
+  /** Bulk: clear every checked icon's overrides — one undoable entry. */
+  resetOverridesSelected: (ids: string[]) => void;
   toggleShadowSelected: (ids: string[]) => void;
   setShadowSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
   toggleBadgeSelected: (ids: string[]) => void;
@@ -127,7 +129,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useDefaultsActions(ctx),
     ...useOverrideActions(ctx),
     ...useOverrideResetActions(ctx),
-    ...useOverrideApplyActions(ctx),
+    ...useSettingsResetActions(ctx),
     ...useShadowActions(ctx),
     ...useBadgeActions(ctx),
     ...useSizeGuideActions(ctx),

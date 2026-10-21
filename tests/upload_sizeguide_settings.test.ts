@@ -1,6 +1,6 @@
 // upload_sizeguide_settings.test.ts — S/L size-guide defaults, validation and opt-in fingerprints.
 import { describe, expect, it } from "vitest";
-import { AS_IS_SETTINGS, isAsIs, perIconFields } from "../src/lib/upload/asis";
+import { AS_IS_SETTINGS, isAsIs } from "../src/lib/upload/asis";
 import {
   DEFAULT_UPLOAD_SETTINGS, normalizeSettings, overridesEqual, parseOverrides,
   SETTINGS_FIELDS, settingsFingerprint,
@@ -55,10 +55,9 @@ describe("S/L size-guide settings", () => {
       sizeGuideGapPct: NaN, sizeGuideOffsetYPct: null })).toEqual({});
   });
 
-  it("includes every guide pin in undo equality but not in general bulk settings apply", () => {
+  it("includes every guide pin in undo equality", () => {
     for (const field of GUIDE_FIELDS) {
       expect(SETTINGS_FIELDS).toContain(field);
-      expect(perIconFields(enabled())).not.toHaveProperty(field);
     }
     expect(overridesEqual({ sizeGuideCorner: "top-left" }, { sizeGuideCorner: "bottom-left" })).toBe(false);
     expect(overridesEqual({ sizeGuideSmallStrokePct: 0.2 }, { sizeGuideSmallStrokePct: 0.3 })).toBe(false);
