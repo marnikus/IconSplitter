@@ -94,3 +94,5 @@ See `sor/upload-eps-gradients.md` for support limits and missing input fixtures.
 Metadata/export progress, cancellation, handoff and hidden-tab tests: [process progress](../process-progress.md#tests-and-safety).
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
+
+Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [validation guide](../upload-adobe-validation.md).

@@ -93,3 +93,10 @@ and a Chromium file upload with the actual supplied artwork.
 - Independent test page reader/UI: `reader.mjs`, `page.mjs` beside the HTML;
   `upload_metadata_page.test.ts` exercises actual exported file uploads,
   escaping, long fields, carrier fallbacks, errors and fixture discovery.
+
+## Adobe-specific acceptance
+
+The local reader and independent codecs are NOT a live Adobe upload pass.
+[Adobe validation](upload-adobe-validation.md) owns the supplied Adobe page
+fixture findings, actual server/UI acceptance command and explicit NOT RUN
+status until a new upload is verified in a real authenticated session.

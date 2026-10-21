@@ -18,3 +18,5 @@ source-faithful EPS inheritance: [stroke endpoints](../upload-stroke-endpoints.m
 Upload progress runner/reducer/header owners: [shared process progress](../process-progress.md#upload-lifecycle).
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
+
+Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [validation guide](../upload-adobe-validation.md).

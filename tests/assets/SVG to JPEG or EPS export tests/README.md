@@ -61,3 +61,5 @@ Temporary test text uses "Temporary community & café test icon", a Unicode
 description and 10 keywords. No model call is needed. `reader.mjs` and
 `page.mjs` import no production metadata writers or readers. The automated test
 checks XMP and IPTC independently, not merely the displayed preferred fields.
+
+Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [validation guide](../../../../docs/current/sor/upload-adobe-validation.md).

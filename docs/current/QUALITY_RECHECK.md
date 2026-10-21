@@ -3049,3 +3049,27 @@ Plan/outcome: `docs/archive/2026-10-21-eps-no-routine-warning/README.md`. Remove
   2454/2454tests,230files,no skips; library lines97.96%. Current docs and test
   folder README now identify the actual SVG/EPS instead of missing fixtures.
   Generated dist remains excluded; no dependency or threshold changes.
+
+## 2026-10-21 — Adobe snapshot contract and real-ingestion validation boundary
+
+- Integrated user fixture commit451dcc9 without modifying the captured page or
+  assets. Actual Adobe bundles use /uploads/presign and multipart file upload;
+  a saved frontend lacks Adobe's server importer. Serialized textarea markup
+  is empty while saved Redux already holds Title/Keywords for both EPS names;
+  this cannot establish automatic-import provenance. Original EPS has no packets.
+- Plan/results: docs/archive/2026-10-21-adobe-upload-validation/README.md;
+  current guide: sor/upload-adobe-validation.md. No speculative writer change.
+- TDD missing modules red →10 Adobe contract/tool tests green;23 focused tests
+  with existing page/doc suites pass. Only inert form controls parsed; no saved
+  scripts/resources/session state executed. Live check requires explicit upload
+  permission, local authenticated CDP, unique draft filenames, fresh trusted
+  Adobe response and exact selected UI fields. Never fills metadata, never
+  submits/deletes. Missing metadata/timeouts/offline/login failures are not skips.
+- Actual-original-EPS preflight failed as expected before any browser connection
+  or upload. This is NOT live ingestion evidence. Actual new Adobe upload is
+  NOT RUN/BLOCKED here: no Adobe reachability/authenticated session and no exact
+  fresh failing JPEG/EPS supplied. No claim the user's import issue is fixed.
+- verify:fast all5lanes; verify all6lanes PASS: types14.0s/lint10.8s/quality0.5s/
+  native2.6s/coverage178.7s/build7.8s. 2464tests/231files, lib lines97.96%.
+  No production changes, dependencies, threshold reductions or original-fixture
+  edits. Reports omit account/session data; generated dist excluded from commit.
