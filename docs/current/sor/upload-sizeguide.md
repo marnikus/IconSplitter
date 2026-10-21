@@ -41,9 +41,11 @@ file). Aspect ratio is preserved at both sizes; S sits left of L, both icons
 share one baseline, and each letter outline is centred under its own logo,
 bottom-aligned with the other.
 
-Layout in artboard px: logo widths are percentages of artboard WIDTH; each
-letter is 28% of its logo's width tall and sits in a clear 10% gap below the
-widest logo. The whole group is then anchored by the chosen corner and the two
+Layout in artboard px: logo widths are percentages of artboard WIDTH. The two
+letters are **one legend size** — `S` and `L` are both 28% of the *smaller*
+logo's width tall (so L's letter never comes out twice S's, as the reference
+artboard draws them; only the glyph widths differ, 8:12 vs 7:11) — and the
+labels sit in a clear 10% gap below the widest logo. The whole group is then anchored by the chosen corner and the two
 inward insets. If the requested pair (or an applied stroke's reach) would escape
 the artboard, the entire group shrinks **uniformly**, keeping the requested
 insets; a 100% inset or a placement with no measurable room fails preparation
