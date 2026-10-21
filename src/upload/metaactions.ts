@@ -8,21 +8,19 @@
 // confirmation live in `metaselect.ts`.
 
 import { useCallback, useRef } from "react";
-import { log } from "../log/logstore";
-import { cleanMetadata, validateMetadata, type IconMetadata } from "../lib/upload/meta";
-import { rememberMeta } from "./metacache";
+import type { IconMetadata } from "../lib/upload/meta";
+import { acceptMetadataRow, acceptSelectedMetadata } from "./metaaccept";
 import { idsWithMetadata } from "./rowmodel";
-import { namedSpec } from "./uploadlog";
-import type { Latest, UploadMetaState } from "./types";
+import type { Latest } from "./types";
 import type { UploadActions, UploadCtx } from "./actions";
-import { refOf, runMetadataBatch } from "./metabatch";
+import { runMetadataBatch } from "./metabatch";
 import { rowOf, runExportBatch } from "./exportactions";
 import { openMetaDialog, useMetaSelectionActions } from "./metaselect";
 
 /** The metadata hooks' share of the action surface (composition stays typed). */
 type MetaSlice = Pick<UploadActions,
   "requestMetadata" | "generateMetadataSelected" | "regenerateMetadataSelected" | "exportSelected"
-  | "confirmMetadata" | "cancelMetadata" | "acceptMetadata" | "editMetadata">;
+  | "confirmMetadata" | "cancelMetadata" | "acceptMetadata" | "acceptMetadataSelected" | "editMetadata">;
 
 export function useMetaActions(ctx: UploadCtx): MetaSlice {
   const latest = useRef(ctx);
@@ -58,38 +56,25 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
 
 // --- accept + edit ----------------------------------------------------------------
 
-function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | "editMetadata"> {
+function useMetaEditActions(latest: Latest): Pick<MetaSlice, "acceptMetadata" | "acceptMetadataSelected" | "editMetadata"> {
   const acceptMetadata = useCallback((id: string) => acceptOne(latest, id), [latest]);
+  const acceptMetadataSelected = useCallback((ids: string[]) => { void acceptSelectedMetadata(latest, ids); }, [latest]);
   const editMetadata = useCallback((id: string, patch: Partial<IconMetadata>) => {
     const c = latest.current;
     const row = rowOf(c, id);
     if (row === null || row.meta.metadata === null) return;
     c.dispatch({ type: "meta", id, meta: { ...row.meta, metadata: { ...row.meta.metadata, ...patch }, edited: true } });
   }, [latest]);
-  return { acceptMetadata, editMetadata };
+  return { acceptMetadata, acceptMetadataSelected, editMetadata };
 }
 
-/** The accept gate: title and description become ONE clean phrase each (stock review, 2026-10-08), then validate, remember, re-embed. */
-// ideal-size: 22 lines reason=one gate in its documented order (clean → validate → dispatch → remember → re-export); splitting would hide the order
+/** Row Accept uses exactly the same validation/persistence gate as bulk Accept. */
 function acceptOne(latest: Latest, id: string): void {
   const c = latest.current;
   const row = rowOf(c, id);
-  if (row === null || row.meta.metadata === null) return c.say("Nothing to accept — generate metadata first", true);
-  const metadata = cleanMetadata(row.meta.metadata);
-  const validation = validateMetadata(metadata);
-  if (!validation.ok) {
-    c.dispatch({ type: "meta", id, meta: { ...row.meta, validation } });
-    return c.say(validation.errors.join("; "), true);
-  }
-  const accepted: UploadMetaState = { ...row.meta, metadata, state: "accepted", validation, edited: false };
-  c.dispatch({ type: "meta", id, meta: accepted });
-  // Accepted here, remembered for the fingerprint: the next session (or a
-  // crash) never pays for this source again (CP-15).
-  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: metadata });
-  log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: metadata.tags.length }));
+  if (row === null) return c.say("Nothing to accept — generate metadata first", true);
+  const accepted = acceptMetadataRow(c, row);
+  if (accepted === null) return;
   c.say("Metadata accepted");
-  // The acceptance persists in export.json: a committed record re-embeds (no
-  // AI, no render); a never-exported row keeps it until its first export. The
-  // accepted state travels with the call — React has not re-rendered yet.
   if (row.record !== null) void runExportBatch(latest, [id], new Map([[id, accepted]]));
 }

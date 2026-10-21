@@ -109,6 +109,8 @@ export interface UploadActions extends PromptActions {
   confirmMetadata: () => void;
   cancelMetadata: () => void;
   acceptMetadata: (id: string) => void;
+  /** Bulk: validate/accept selected drafts locally, then re-embed existing exports. */
+  acceptMetadataSelected: (ids: string[]) => void;
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
   /** Bulk: the selection's committed SVG/JPG/EPS copied into one folder the user picks (2026-10-08). */

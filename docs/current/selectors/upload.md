@@ -60,3 +60,7 @@ Optional identity inputs (2026-10-22), owned by `UploadMetaRights.tsx`:
 inputs under the active row's metadata fields. Blank by default, user-entered
 only, not AI-generated; use `upload-meta-accept-{id}` to persist/re-embed edits.
 They retain their values when descriptive metadata is regenerated.
+
+Global **✓ Accept metadata (N)**: `upload-meta-accept-selected` accepts existing
+metadata for checked icons only (invalid drafts stay unaccepted, no paid calls).
+[Acceptance handles](upload-list.md#global-metadata-acceptance).

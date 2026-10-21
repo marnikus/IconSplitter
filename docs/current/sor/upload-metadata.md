@@ -46,6 +46,28 @@ Only explicit confirmation sends the displayed prompt/input to Gemini; export re
   previous text. Empty rows are never part of this
   regeneration batch; `Export selected` remains unchanged.
 
+## Accept metadata for the selection
+
+The global **✓ Accept metadata (N)** button beside Generate/Regenerate accepts
+existing metadata on checked icons only, including selected icons hidden by a
+filter. N counts drafts, fixable invalid drafts and accepted-but-edited fields;
+empty, pending/interrupted and unchanged accepted rows are excluded. The button
+is disabled at zero and while a metadata/export run or other busy work is active.
+
+It uses the SAME clean → validate → accept/cache/log gate as each row's Accept.
+Valid metadata becomes accepted; invalid metadata stays unaccepted with its exact
+validation errors. Empty/already accepted rows are skipped. The outcome line
+reports accepted, invalid and skipped counts. There is no AI request, no new
+metadata generation, and no additional paid confirmation.
+
+Accepting unexported rows stores their metadata without creating files. Rows
+with existing packages are re-embedded together through ONE sequential export
+batch, carrying the newly accepted states directly rather than waiting for a
+React render. This prevents parallel per-row runs from skipping selected files.
+User-entered Creator/Copyright survive, and edited accepted fields can be
+accepted again. Acceptance persists in cache/export records through reload;
+a sibling pair's shared-folder record cannot make an unchecked row accepted.
+
 ## Optional user identity
 
 Creator and Copyright inputs appear below each row’s generated metadata. They

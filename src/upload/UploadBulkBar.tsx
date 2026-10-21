@@ -30,6 +30,8 @@ export interface UploadBulkBarProps {
   metaNeeded: number;
   /** How many checked icons have metadata text available to replace. */
   metaRegenerateCount: number;
+  metaAcceptCount: number;
+  metaAcceptBusy: boolean;
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
   /** How many checked icons pin at least one general setting in their own dialog. */
@@ -44,6 +46,7 @@ export interface UploadBulkBarProps {
   onResetSettings: () => void;
   onMetadata: () => void;
   onRegenerateMetadata: () => void;
+  onAcceptMetadata: () => void;
   onExport: () => void;
   onDownload: () => void;
   onCancel: () => void;
@@ -110,6 +113,10 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
           : `Drops the local settings the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} pinned in their own dialogs so they follow the global defaults again — ONE undoable step; Shadow, corner badge, size guide and the global defaults are never touched`}>
         ↺ Reset to inherited ({p.overriddenCount})</button>
       <MetadataActions p={p} />
+      <button type="button" className="svg-btn success" data-testid="upload-meta-accept-selected"
+        disabled={p.metaAcceptCount === 0 || p.metaAcceptBusy} onClick={p.onAcceptMetadata}
+        title="Accept existing metadata for selected icons only; invalid drafts stay unaccepted. No AI requests.">
+        ✓ Accept metadata ({p.metaAcceptCount})</button>
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
       <button type="button" className="svg-btn" data-testid="upload-download-selected"

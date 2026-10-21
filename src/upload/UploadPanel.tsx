@@ -12,6 +12,7 @@ import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
 import { downloadPlanOf } from "./downloadactions";
+import { idsAwaitingAcceptance } from "./metaaccept";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadProgressHeaders from "./UploadProgressHeaders";
 import UploadBulkBar from "./UploadBulkBar";
@@ -93,6 +94,8 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         onStroke={(px) => g.setDefaults({ strokePx: px ?? 0 })} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
+        metaAcceptCount={idsAwaitingAcceptance(g.rows, g.checked).length}
+        metaAcceptBusy={g.busy !== null || g.runningMeta + g.runningExport > 0}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
         overriddenCount={resettableIds(g.checked, g.overrides).length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
@@ -101,6 +104,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         onResetSettings={() => g.resetOverridesSelected(g.checked)}
         onMetadata={() => g.generateMetadataSelected(g.checked)}
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
+        onAcceptMetadata={() => g.acceptMetadataSelected(g.checked)}
         onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
         onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
     </div>

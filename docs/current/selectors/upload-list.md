@@ -48,6 +48,16 @@ lists start unchecked; there are no A/D review shortcuts.
 | `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
 | `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
 
+## Global metadata acceptance
+
+`upload-meta-accept-selected` is the green **✓ Accept metadata (N)** button in
+`upload-bulk-right`, beside Generate/Regenerate. It operates on checked IDs only,
+not the active row or the visible filter subset. N counts drafts/invalid drafts
+and accepted-but-edited values; disabled with none or while work is running.
+Click validates each candidate locally; invalid fields stay unaccepted and show
+`upload-meta-validation-{id}`. The toast summarizes accepted/invalid/skipped.
+Existing packages re-embed as one sequential batch; no new AI requests.
+
 ## Metadata fields (`upload-detail-{id}`, empty until generated)
 `upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
 `upload-meta-title-{id}` / `upload-meta-description-{id}` (2026-10-08: both

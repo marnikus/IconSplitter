@@ -230,7 +230,8 @@ async function assembleOne(
   return toRow(source, {
     record,
     sourceHash,
-    meta: restoredRowMeta(record, sourceHash, opts.interrupted.has(source.id)),
+    // A sibling pair in the same folder must never confer its acceptance.
+    meta: restoredRowMeta(record?.pair.id === source.id ? record : null, sourceHash, opts.interrupted.has(source.id)),
     effective: rowSettings(opts.defaults, source.id, opts.overrides, opts.applied ?? {}),
     interruptedJob: opts.interruptedJobs?.has(source.id) === true,
   });
