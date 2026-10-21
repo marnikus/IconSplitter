@@ -110,3 +110,17 @@ it("handles IPTC-only and XMP-only files without inventing a second metadata car
   expect(readStockFile(new TextEncoder().encode(xmpOnly)).carriers).toEqual(["XMP"]);
   expect(() => readStockFile(new TextEncoder().encode(iptcOnly.replace(/^%%BeginPhotoshop:[\s\S]*?^%%EndPhotoshop/m, "")))).toThrow(/No complete/);
 });
+
+it("displays optional Creator/Copyright read directly from real user SVG JPEG AND EPS bytes", async () => {
+  const metadata = { ...STOCK_TEST_META, creator: "User <author> café", copyright: "© User & studio" };
+  const { args, root } = stockExportArgs(readFileSync(`${fixtureDir}/icon-handshake-heart_7_03_v2.svg`, "utf8"));
+  expect((await runExport({ ...args, metadata })).status).toBe("processed");
+  const files = await Promise.all(["jpg", "eps"].map(async (ext) => new File([await readBytesAt(root, `export/temporary.${ext}`) as BlobPart], `rights.${ext}`)));
+  mount(); upload(files);
+  await vi.waitFor(() => expect(document.querySelectorAll('[data-state="ready"]')).toHaveLength(2));
+  for (const card of document.querySelectorAll("article")) {
+    expect(card.querySelector('[data-field="creator"]')?.textContent).toBe(metadata.creator);
+    expect(card.querySelector('[data-field="copyright"]')?.textContent).toBe(metadata.copyright);
+    expect(card.querySelector("author")).toBeNull();
+  }
+});

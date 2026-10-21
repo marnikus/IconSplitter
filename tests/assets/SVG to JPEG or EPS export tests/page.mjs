@@ -11,6 +11,9 @@ function metadataFields(doc, meta) {
   for (const [name, value] of [["Title", meta.title], ["Description", meta.description]]) {
     list.append(node(doc, "dt", name), node(doc, "dd", value, name.toLowerCase()));
   }
+  for (const [name, value] of [["Creator", meta.creator], ["Copyright", meta.copyright]]) {
+    if (value) list.append(node(doc, "dt", name), node(doc, "dd", value, name.toLowerCase()));
+  }
   list.append(node(doc, "dt", "Tags"));
   const tags = node(doc, "ul", "", "tags");
   for (const tag of meta.tags) tags.append(node(doc, "li", tag));

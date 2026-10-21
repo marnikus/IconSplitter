@@ -1,4 +1,5 @@
 // Probe actual embedded metadata before reusing any committed stock file.
+import { sameMetadata } from "../lib/upload/rights";
 import type { DirHandleLike } from "../lib/fs";
 import { readTextAt, readBytesAt } from "../lib/fs";
 import { readXmpMetadata } from "../lib/upload/jpeg";
@@ -38,9 +39,4 @@ function svgHasMetadata(text: string | null, expected: IconMetadata): boolean {
 
 function epsHasMetadata(text: string | null, expected: IconMetadata, includeEps: boolean): boolean {
   return !includeEps || (text !== null && verifyEpsMetadata(text, expected));
-}
-
-function sameMetadata(actual: IconMetadata | null, expected: IconMetadata): boolean {
-  return actual !== null && actual.title === expected.title && actual.description === expected.description
-    && actual.tags.length === expected.tags.length && actual.tags.every((tag, i) => tag === expected.tags[i]);
 }

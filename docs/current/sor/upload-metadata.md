@@ -46,6 +46,15 @@ Only explicit confirmation sends the displayed prompt/input to Gemini; export re
   previous text. Empty rows are never part of this
   regeneration batch; `Export selected` remains unchanged.
 
+## Optional user identity
+
+Creator and Copyright inputs appear below each row’s generated metadata. They
+are optional explicit user claims, not Gemini output. Accept persists them in
+the cache and export record; reload and regeneration retain them. Clearing and
+accepting removes them from subsequent exports. Editing either field re-embeds
+accepted SVG/JPEG/EPS metadata without re-rendering JPEG pixels or calling AI.
+[File metadata](upload-file-metadata.md) defines XMP/IIM mappings and byte limits.
+
 ## Title and description normalization
 
 * Metadata title AND description (2026-10-08, stock review; corrected the

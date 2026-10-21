@@ -1518,6 +1518,10 @@ describe("metadata — the exact request, editable fields, accept", () => {
       && text(`[data-testid=upload-meta-cell-${FOG}]`).includes("generated")
       && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("generated"), "the initial metadata to land");
 
+    await click(`[data-testid=upload-row-${FOG}]`);
+    await type(`[data-testid=upload-meta-creator-${FOG}]`, "User test author");
+    await type(`[data-testid=upload-meta-copyright-${FOG}]`, "© User test rights");
+
     await check(COURT); // selected, approved SVG, but no metadata yet
     expect(text("[data-testid=upload-meta-selected]")).toContain("Generate metadata (1)");
     expect(text("[data-testid=upload-meta-regenerate-selected]")).toContain("Regenerate metadata (2)");
@@ -1537,6 +1541,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).toContain("generated");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
+    expect(input(`[data-testid=upload-meta-creator-${FOG}]`).value).toBe("User test author");
+    expect(input(`[data-testid=upload-meta-copyright-${FOG}]`).value).toBe("© User test rights");
   });
 
   itSlow("export selected generates metadata FIRST, then exports everything", async () => {

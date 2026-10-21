@@ -1,4 +1,6 @@
 // The bounded metadata batch: real runner outcomes publish reusable progress.
+import { metadataRights } from "../lib/upload/rights";
+import { metadataFingerprint } from "../lib/upload/meta";
 import type { UploadCtx } from "./actions";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
@@ -133,14 +135,14 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
   // sent unchanged; when there is none (or the file changed since), the runner
   // renders that icon's own SVG here instead of sending a stranger's picture.
   const prepared = previewFor(ctx.previews, id, row.source.fingerprint);
-  const result = await generateMetadata({
+  const result = keepUserRights(await generateMetadata({
     rowId: id, svgText, config: c.m.gemini, apiKey: ctx.key, signal: ctx.signal,
     // The prompt the editor shows is the prompt that is sent (and, later, the
     // prompt the export record names) — never a default the user cannot see.
     prompt: c.m.prompt,
     ...(prepared === null ? {} : { image: prepared.image }),
     deps: { journal: c.refs.journal.current },
-  });
+  }), row.meta);
   applyMetaResult(ctx.latest, id, row.meta, result);
   const validation = result.validation;
   if (ctx.accept && result.outcome === "generated" && validation !== null && validation.ok) {
@@ -216,4 +218,11 @@ function metaFromResult(base: UploadMetaState, result: MetadataResult): UploadMe
     detail: result.detail,
     edited: false,
   };
+}
+
+/** Regeneration replaces descriptive text, never the user's ownership claims. */
+function keepUserRights(result: MetadataResult, base: UploadMetaState): MetadataResult {
+  if (result.metadata === null) return result;
+  const metadata = { ...result.metadata, ...metadataRights(base.metadata ?? {}) };
+  return { ...result, metadata, fingerprint: metadataFingerprint(metadata) };
 }

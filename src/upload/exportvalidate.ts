@@ -5,6 +5,7 @@
 // recorded dimensions (and its XMP/IPTC must read back), and EPS must
 // verify with both XMP and IPTC fields reading back when metadata was accepted.
 
+import { sameMetadata } from "../lib/upload/rights";
 import { readEmbeddedMetadata } from "../lib/upload/embed";
 import { verifyExportSvg } from "../lib/upload/clean";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
@@ -48,8 +49,7 @@ function svgCheck(svgOut: string | null, errors: string[], asIs: boolean): boole
 function readbackCheck(svgOut: string | null, metadata: IconMetadata | null, errors: string[]): boolean {
   if (svgOut === null || metadata === null) return true;
   const back = readEmbeddedMetadata(svgOut);
-  const ok = back !== null && back.title === metadata.title && back.description === metadata.description
-    && back.tags.join("\u0000") === metadata.tags.join("\u0000");
+  const ok = sameMetadata(back, metadata);
   if (!ok) errors.push("the embedded SVG metadata does not read back");
   return ok;
 }

@@ -7,6 +7,7 @@
 // Tolerant on read (RULE 13: a corrupt payload costs one ignored load) and
 // bounded in size (the cache must not grow without limit on a 400-icon folder).
 
+import { metadataRights } from "../lib/upload/rights";
 import { isRecord } from "../lib/isrecord";
 import { cleanMetadata, validateMetadata, type IconMetadata } from "../lib/upload/meta";
 import { readKey, writeKey } from "../state/safestorage";
@@ -48,7 +49,7 @@ function metadataOf(value: unknown): IconMetadata | null {
   if (!isRecord(value)) return null;
   if (typeof value.title !== "string" || typeof value.description !== "string") return null;
   if (!Array.isArray(value.tags) || !value.tags.every((t) => typeof t === "string")) return null;
-  return { title: value.title, description: value.description, tags: value.tags };
+  return { title: value.title, description: value.description, tags: value.tags, ...metadataRights(value) };
 }
 
 export function loadMetaCache(): MetaCache {

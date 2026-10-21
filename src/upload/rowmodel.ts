@@ -5,6 +5,7 @@
 // header checkbox state, the counts and dropping checked ids a rescan removed.
 // Pure except for the store write and the two file reads.
 
+import { metadataRights } from "../lib/upload/rights";
 import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import { sha256HexText } from "../lib/upload/hash";
 import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
@@ -126,7 +127,7 @@ function metadataMoved(record: ExportRecord, meta: UploadMetaState): boolean {
 export function metaFromRecord(record: ExportRecord | null, interrupted: boolean): UploadMetaState {
   if (interrupted) return { ...EMPTY_META, state: "interrupted", detail: "a metadata request was in flight when the app closed — its outcome is unknown; generate again to retry" };
   const block = record?.metadata ?? null;
-  const metadata = block === null ? null : cleanMetadata({ title: block.title, description: block.description, tags: [...block.tags] });
+  const metadata = block === null ? null : cleanMetadata({ title: block.title, description: block.description, tags: [...block.tags], ...metadataRights(block) });
   if (block === null || metadata === null || block.state !== "accepted" || metadata.title === "") return EMPTY_META;
   return {
     state: "accepted",

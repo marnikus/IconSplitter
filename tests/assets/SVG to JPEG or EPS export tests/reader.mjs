@@ -18,7 +18,7 @@ function xmpMetadata(xml) {
   const title = dc("title")?.textContent;
   const description = dc("description")?.textContent;
   const tags = Array.from(dc("subject")?.getElementsByTagName("*") ?? []).filter((el) => el.namespaceURI === "http://www.w3.org/1999/02/22-rdf-syntax-ns#" && el.localName === "li").map((el) => el.textContent);
-  return title && description && tags.length ? { title, description, tags } : null;
+  return title && description && tags.length ? { title, description, tags, ...identity(dc("creator")?.textContent, dc("rights")?.textContent) } : null;
 }
 function iimMetadata(b) {
   const fields = new Map();
@@ -32,7 +32,7 @@ function iimMetadata(b) {
   }
   if (text(fields.get("1:90")?.[0] ?? new Uint8Array()) !== "\u001b%G") throw new Error("IPTC charset is not UTF-8");
   const first = (id) => text(fields.get(`2:${id}`)?.[0] ?? new Uint8Array());
-  return { title: first(105) || first(5), description: first(120), tags: (fields.get("2:25") ?? []).map(text) };
+  return { title: first(105) || first(5), description: first(120), tags: (fields.get("2:25") ?? []).map(text), ...identity(first(80), first(116)) };
 }
 function photoshopMetadata(b) {
   let result = null;
@@ -88,4 +88,8 @@ export function readStockFile(bytes) {
   const metadata = fields.xmp ?? fields.iptc;
   if (!metadata?.title || !metadata.description || !metadata.tags.length) throw new Error("No complete embedded Title, Description and Tags found");
   return { kind, metadata, iptc: fields.iptc, carriers: [fields.xmp && "XMP", fields.iptc && "IPTC-IIM"].filter(Boolean) };
+}
+
+function identity(creator, copyright) {
+  return { ...(creator ? { creator } : {}), ...(copyright ? { copyright } : {}) };
 }

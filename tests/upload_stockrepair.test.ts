@@ -59,3 +59,17 @@ it("repairs legacy XMP-only EPS without rewriting the intact JPEG or SVG", async
   expect(await readBytesAt(root, "export/temporary.jpg")).toEqual(jpg);
   expect(new TextDecoder().decode(await readBytesAt(root, "export/temporary.eps") as Uint8Array)).toContain("%%BeginPhotoshop:");
 });
+
+it("repairs wrong identity in a JPEG despite matching record fingerprint, then safely reuses", async () => {
+  const { args, root, renders } = stockExportArgs(STOCK_TEST_SVGS[0]);
+  const metadata = { ...STOCK_TEST_META, creator: "User author", copyright: "© User rights" };
+  const first = await runExport({ ...args, metadata });
+  const out = root.children.get("export") as BinDir;
+  out.children.set("temporary.jpg", new BinFile("temporary.jpg", embedXmpMetadata(minimalJpeg(100, 100), { ...metadata, creator: "Wrong owner" })));
+  const second = await runExport({ ...args, metadata, record: first.record });
+  expect(second.status).toBe("processed");
+  expect(second.stages).toEqual(["embed", "validate", "commit"]);
+  expect(renders.count).toBe(1);
+  expect(readJpegIptc(await readBytesAt(root, "export/temporary.jpg") as Uint8Array)).toEqual(metadata);
+  expect((await runExport({ ...args, metadata, record: second.record })).stages).toEqual([]);
+});

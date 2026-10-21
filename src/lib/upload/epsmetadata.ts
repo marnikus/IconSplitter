@@ -1,9 +1,10 @@
 // epsmetadata.ts — document-level XMP for EPS (Adobe XMP Part 3, §1.6.2.1.3).
-// IPTC-IIM is also mirrored in a Photoshop resource comment block.
+// Photoshop comments contain IPTC-IIM0404 and the same XMP packet in0424.
 // The converter output is left intact; a pdfmark metadata stream is attached
 // before drawing and the drawing is bracketed by BDC/EMC, for both EPS writers.
 
-import { embedIptcInEps, readEpsIptc, stripEpsIptc } from "./epsiptc";
+import { embedIptcInEps, readEpsIptc, readEpsPhotoshopXmp, stripEpsIptc } from "./epsiptc";
+import { sameMetadata } from "./rights";
 import { sameLegacyMetadata } from "./iptc";
 import { fnv1a32 } from "../pairing";
 import type { IconMetadata } from "./meta";
@@ -52,8 +53,7 @@ export function readXmpMetadataFromEps(eps: string): IconMetadata | null {
 /** Whether both EPS metadata carriers match accepted fields (legacy limits only in IIM). */
 export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean {
   const actual = readXmpMetadataFromEps(eps);
-  return actual !== null && actual.title === expected.title && actual.description === expected.description
-    && actual.tags.join("\u0000") === expected.tags.join("\u0000")
+  return sameMetadata(actual, expected) && sameMetadata(readEpsPhotoshopXmp(eps), expected)
     && sameLegacyMetadata(readEpsIptc(eps), expected);
 }
 

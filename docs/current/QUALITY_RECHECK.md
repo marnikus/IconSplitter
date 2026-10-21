@@ -3073,3 +3073,7 @@ Plan/outcome: `docs/archive/2026-10-21-eps-no-routine-warning/README.md`. Remove
   native2.6s/coverage178.7s/build7.8s. 2464tests/231files, lib lines97.96%.
   No production changes, dependencies, threshold reductions or original-fixture
   edits. Reports omit account/session data; generated dist excluded from commit.
+
+## 2026-10-22 — Both-format XMP/IIM contract and optional identity
+
+Plan: docs/archive/2026-10-22-metadata-carrier-contract/README.md before implementation. TDD:7 initial failures -> green; independent-reader/regeneration failures -> green;102 focused tests pass. JPEG exact APP1/APP13 identifiers; EPS0404+0424 plus canonical XMP; optional Creator/Copyright survive edit/accept/cache/record/reload/regeneration, clearing removes claims. Actual user SVG exports to both formats, original EPS preserved. ExifTool13.59 reads five fields in both protocols on7 exports; guarded Ghostscript9.56 executes4 EPS without raster calls; Chromium file-input reads7 exports,5 fields,390px no overflow. Initial overlapping full gate failed (coverage lock/native timing), not counted; fast5 lanes and sequential full6 lanes PASS,2479 tests/233 files,97.99% lines. Full timings: types14.5s/lint11.4s/quality0.7s/native2.6s/coverage183.6s/build7.1s. No threshold changes. Adobe live ingestion NOT RUN; no Adobe fix claim. Generated dist and probe artifacts excluded.

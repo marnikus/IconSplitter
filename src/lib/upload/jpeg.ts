@@ -1,5 +1,6 @@
 // JPEG XMP + IPTC-IIM metadata; pixel data is preserved, APP1/APP13 replaced.
 
+import { sameMetadata } from "./rights";
 import { joinBytes, utf8 } from "./metadatabytes";
 import type { IconMetadata } from "./meta";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
@@ -80,8 +81,7 @@ function checkMetadata(jpeg: Uint8Array, expected: { metadata: IconMetadata }, e
     errors.push("no XMP metadata found");
     return;
   }
-  const same = meta.title === expected.metadata.title && meta.description === expected.metadata.description
-    && meta.tags.join("\u0000") === expected.metadata.tags.join("\u0000");
+  const same = sameMetadata(meta, expected.metadata);
   if (!same) errors.push("XMP metadata does not match the accepted fields");
 }
 

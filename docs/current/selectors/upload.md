@@ -54,3 +54,9 @@ card — never inside it) and the provider card:
 Progress header and cross-tab shell handles: [shared process progress](../sor/process-progress.md#handles).
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../sor/upload-file-metadata.md).
+
+Optional identity inputs (2026-10-22), owned by `UploadMetaRights.tsx`:
+`upload-meta-creator-{id}` and `upload-meta-copyright-{id}` are labeled text
+inputs under the active row's metadata fields. Blank by default, user-entered
+only, not AI-generated; use `upload-meta-accept-{id}` to persist/re-embed edits.
+They retain their values when descriptive metadata is regenerated.
