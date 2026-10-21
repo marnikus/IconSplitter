@@ -2,6 +2,7 @@
 // A fixed vector badge: the user's seven paths, uniformly baked into a corner
 // of the FINAL artboard. It does not participate in fitting the icon.
 import badgeTemplate from "../../svg/templates/editable-stroke-width.svg?raw";
+import { normalizeStrokeLinecap, setStrokeCap, type StrokeLinecap } from "./strokecaps";
 import { expandStrokes } from "./expand";
 import { fmt } from "./geom";
 import { pathOutline, outlineToPathData, transformOutline, type Outline } from "./geom/outline";
@@ -16,6 +17,7 @@ const SOURCE_H = 20;
 export type BadgeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export interface BadgePlacement {
   corner: BadgeCorner;
+  strokeLinecap?: StrokeLinecap;
   widthPct: number;
   offsetXPct: number;
   offsetYPct: number;
@@ -36,7 +38,7 @@ export function appendCornerBadge(
   if (rootOpacityBlocksBadge(root)) return unsupported("the source root opacity, display or visibility would hide or fade the corner badge");
   const bounds = badgeBounds(artboard, placement);
   if (bounds === null) return noFit();
-  const baked = bakeBadge(root, source, bounds, expand);
+  const baked = bakeBadge(root, source, bounds, { expand, linecap: placement.strokeLinecap });
   if (!baked.ok) return baked.reason === "no-fit" ? noFit() : unsupported("Expand strokes cannot draw the corner badge");
   if (!badgeFits(root, artboard, baked.paths)) return noFit();
   for (const path of baked.paths) root.appendChild(path);
@@ -47,11 +49,13 @@ type BakedBadge = { ok: true; paths: Element[]; shapes: number }
   | { ok: false; reason: "no-fit" | "unsupported" };
 
 /** Uniformly bake the supplied paths; Expand strokes also outlines the six handles. */
-function bakeBadge(root: Element, source: SourcePath[], bounds: BadgeBounds, expand: boolean): BakedBadge {
+function bakeBadge(root: Element, source: SourcePath[], bounds: BadgeBounds, style: { expand: boolean; linecap?: StrokeLinecap }): BakedBadge {
   const stroke = Number(fmt(1.5 * bounds.width / SOURCE_W));
   if (!(stroke > 0)) return { ok: false, reason: "no-fit" };
   const baked = source.map((item) => bakedPath(root, item, bounds, stroke));
-  if (!expand) return { ok: true, paths: baked, shapes: 0 };
+  const cap = normalizeStrokeLinecap(style.linecap);
+  if (cap !== "source") for (const path of baked.slice(1)) setStrokeCap(path, cap);
+  if (!style.expand) return { ok: true, paths: baked, shapes: 0 };
   const widened = expandBadge(baked);
   return widened === null ? { ok: false, reason: "unsupported" } : { ok: true, ...widened };
 }

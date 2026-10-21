@@ -2,6 +2,8 @@
 
 Focused test inventory; [all tests](../TESTS.md).
 
+Endpoint inheritance/settings/preview/final-package tests: [stroke endpoints](../upload-stroke-endpoints.md#owners-and-tests).
+
 * `keyvault.test.ts` — the key rules on their own: a save that storage refused
   is reported `session` (and the key still loads), `save("")` is `empty` and
   erases nothing, an unreadable store answers `unreadable` — never `none` — and

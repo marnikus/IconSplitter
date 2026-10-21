@@ -2956,3 +2956,25 @@ Plan/research and measured outcomes: `docs/archive/2026-10-21-vector-only-eps/{i
 ### 2026-10-21 — Remove misleading routine EPS shadow warnings
 
 Plan/outcome: `docs/archive/2026-10-21-eps-no-routine-warning/README.md`. Removed supported-shadow capability messages from the amber bulk alert, row and both settings scopes, plus unused EPS-shadow selection count and props. Actual EPS stage errors, partial-status reporting and zero-raster audit remain unchanged. TDD: 2 regressions failed before implementation; focused UI/live-preview/export/docs 129/129 passed afterward. `tsc` clean; full `npm run verify` ALL SIX LANES PASSED, including native performance, lint, quality, tests/coverage and build. No production export logic or performance budget changed.
+
+## 2026-10-21 — source-faithful stroke endpoints and export controls
+
+- Plan/results: `docs/archive/2026-10-21-stroke-endpoints/README.md`;
+  current contract/owners/handles: `sor/upload-stroke-endpoints.md`.
+- TDD: inherited caps/joins, lifecycle, forced endpoints and decorated
+  expansion initially 17 red/1 green; final focused suites 133/133 green.
+- Source cap/join inheritance corrected in native EPS. Source/butt/round
+  controls apply before measurement/expansion across preview and exports,
+  including decorations. Settings validation/persistence/equality/undo,
+  as-is, fingerprints and writer cache identity covered. Row redo now records
+  the actual setting rather than null; endpoint selects are discrete gestures.
+- Types/lint/changed quality pass; new mode module 25 lines, UI 22 lines,
+  settings domain 299 lines; no new threshold violations. Fast verification
+  all five lanes pass. First full run hit unrelated native detection timing
+  260.03 ms vs unchanged 200 ms; standalone 4/4 then full recheck ALL SIX
+  LANES PASSED (native 2.6 s; coverage 166.5 s; build 6.8 s).
+- Full coverage 2419/2419 tests in 225 files, 97.81% library lines;
+  strokecaps/restyle/settings each 100% statements/branches/functions/lines.
+- Independent GS9.56 raster traps exit 0 for inherited butt/round/square EPS;
+  15 endpoint/interior samples match resvg. Rasters are test-only; no runtime
+  dependencies added, EPS remains vector only. User fixtures still absent.

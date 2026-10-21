@@ -5,7 +5,7 @@ Owner: the native EPS path in [upload-eps](upload-eps.md). Design/research:
 
 ## Native conversion
 
-The built-in browser writer (`builtin-vector-3`) emits PostScript Level 3
+The built-in browser writer (`builtin-vector-4`) emits PostScript Level 3
 `ShadingType 2` axial and `ShadingType 3` radial gradients, clipped to the original
 vector path (`clip`/`eoclip`). No canvas, image encoder, PDF intermediary, external
 application, local helper or production WASM dependency is used for EPS.

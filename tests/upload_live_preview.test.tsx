@@ -13,6 +13,7 @@ import { clearKnownRoots } from "../src/lib/knownroots";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
 import { ZOOM_DEFAULT } from "../src/lib/zoom";
 import { resetAppStore } from "../src/state/appstore";
+import HistoryBar from "../src/ui/HistoryBar";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import UploadPanel from "../src/upload/UploadPanel";
 import { loadUploadSettings, saveUploadSettings } from "../src/upload/settingsstore";
@@ -62,7 +63,7 @@ async function mount(defaults: Partial<UploadSettings> = {}): Promise<void> {
   stored.set("__upload__", { source: makeRoot() });
   await act(async () => {
     ui = createRoot(host);
-    ui.render(<HistoryProvider><UploadPanel /></HistoryProvider>);
+    ui.render(<HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
   });
   await waitUntil(() => q(`[data-testid=upload-prev-${FOG}]`)?.shadowRoot != null, "the row preview", 8000);
   await settle(250); // past the preview debounce
@@ -297,5 +298,58 @@ describe("the custom artboard size is checked when the field is left, not per ke
     await blur("[data-testid=upload-set-artboard-w]");
     expect(loadUploadSettings().defaults.artboard.width).toBeGreaterThan(3); // clamped to the minimum on leave
     expect(w().value).toBe(String(loadUploadSettings().defaults.artboard.width));
+  });
+});
+
+// Endpoints change the same prepared SVG the exporter and JPEG renderer use.
+async function chooseCap(value: string): Promise<void> {
+  await act(async () => {
+    const el = q("[data-testid=upload-set-linecap]") as HTMLSelectElement;
+    el.value = value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle(250);
+}
+
+describe("export stroke endpoint controls", () => {
+  it("global choice updates the preview live and persists without creating row pins", async () => {
+    await mount(AS_IS);
+    await click("[data-testid=upload-settings-open]");
+    const el = q("[data-testid=upload-set-linecap]") as HTMLSelectElement;
+    expect([...el.options].map((o) => [o.value, o.textContent])).toEqual([
+      ["source", "Keep source"], ["butt", "Cut (butt)"], ["round", "Rounded"],
+    ]);
+    expect(el.value).toBe("source");
+    await chooseCap("round");
+    expect(loadUploadSettings().defaults.strokeLinecap).toBe("round");
+    expect(loadUploadSettings().overrides).toEqual({});
+    expect(art()).toContain('stroke-linecap="round"');
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=upload-settings-open]");
+    expect((q("[data-testid=upload-set-linecap]") as HTMLSelectElement).value).toBe("round");
+  });
+
+  it("only a direct row choice pins caps; reset inherits and All default restores source", async () => {
+    await mount({ ...AS_IS, strokeLinecap: "round" });
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(q("[data-testid=upload-set-marker-linecap]")?.textContent).toBe("inherited");
+    await chooseCap("butt");
+    expect(loadUploadSettings().defaults.strokeLinecap).toBe("round");
+    expect(loadUploadSettings().overrides[FOG]).toMatchObject({ strokeLinecap: "butt" });
+    expect(q("[data-testid=upload-set-marker-linecap]")?.textContent).toBe("overridden");
+    expect(art()).toContain('stroke-linecap="butt"');
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    expect(loadUploadSettings().overrides[FOG]).toBeUndefined();
+    expect(art()).toContain('stroke-linecap="round"');
+    await click("[data-testid=hist-redo]");
+    expect(art()).toContain('stroke-linecap="butt"');
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-reset]");
+    expect(loadUploadSettings().overrides[FOG]).toBeUndefined();
+    expect(art()).toContain('stroke-linecap="round"');
+    await click("[data-testid=upload-set-as-is]");
+    expect(loadUploadSettings().overrides[FOG].strokeLinecap).toBe("source");
+    expect(art()).not.toContain("stroke-linecap");
   });
 });

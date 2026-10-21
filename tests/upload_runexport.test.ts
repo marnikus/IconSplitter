@@ -17,6 +17,8 @@ import { planDownload } from "../src/lib/upload/download";
 import type { RasterDeps } from "../src/lib/upload/raster";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
 import { verifyExportSvg } from "../src/lib/upload/clean";
+import { AS_IS_SETTINGS } from "../src/lib/upload/asis";
+import { isShape, strokeHits } from "../src/lib/upload/geom/bounds";
 import { prepareExportSvg } from "../src/lib/upload/prepare";
 import { verifyEps, verifyEpsDocument } from "../src/lib/upload/eps";
 import { readXmpMetadataFromEps } from "../src/lib/upload/epsmetadata";
@@ -429,7 +431,7 @@ describe("runExport — the full package commits per icon", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
     expect(result.status).toBe("processed");
-    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-vector-3" });
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-vector-4" });
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 
@@ -1015,5 +1017,36 @@ describe("vector-only EPS delivery gates", () => {
     expect(result.error?.detail).toContain("saved-file verify failed");
     expect(target.children.has(`${ART}.eps`)).toBe(false);
     expect(target.children.has("export.json")).toBe(false);
+  });
+});
+
+
+describe("committed package stroke endpoints", () => {
+  it.each(["source", "butt", "round"] as const)("%s caps agree in the saved SVG/EPS and actual JPEG input", async (strokeLinecap) => {
+    const source = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" stroke="#000" stroke-width="6" fill="none" stroke-linecap="round"><g><path d="M20 30h50"/><path d="M20 60h50" style="stroke-linecap:butt"/></g></svg>';
+    const root = pairRoot(source);
+    const settings = { ...DEFAULT_UPLOAD_SETTINGS, ...AS_IS_SETTINGS, strokeLinecap, includeEps: true };
+    const rendered: string[] = [];
+    const raster: RasterDeps = {
+      render: async (text, target) => { rendered.push(text); return target as unknown as HTMLCanvasElement; },
+      encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
+    expect(result.status).toBe("processed");
+    const savedSvg = fileText(root, `${DIR}/export/${ART}.svg`);
+    const savedEps = fileText(root, `${DIR}/export/${ART}.eps`);
+    const readCaps = (text: string) => {
+      const el = new DOMParser().parseFromString(text, "image/svg+xml").documentElement;
+      return new Set(strokeHits(el).filter((h) => !h.stroke.none && isShape(h.el)).map((h) => h.stroke.cap));
+    };
+    const expected = new Set(strokeLinecap === "source" ? ["round", "butt"] : [strokeLinecap]);
+    expect(readCaps(savedSvg)).toEqual(expected);
+    expect(rendered).toHaveLength(1);
+    expect(readCaps(rendered[0])).toEqual(expected);
+    const emitted = new Set([...savedEps.matchAll(/(\d) setlinecap/g)].map((m) => m[1] === "1" ? "round" : "butt"));
+    expect(emitted).toEqual(expected);
+    expect(verifyEps(savedEps).ok).toBe(true);
+    expect(readRecord(root).settings.effective.strokeLinecap).toBe(strokeLinecap);
+    expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(source);
   });
 });

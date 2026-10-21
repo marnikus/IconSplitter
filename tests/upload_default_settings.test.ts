@@ -25,7 +25,7 @@ function ok(source: string, over: SettingsOverrides = {}) {
 
 describe("the settings know 'default'", () => {
   it("AS_IS_SETTINGS is the five visual defaults; isAsIs needs all of them and no stroke expansion", () => {
-    expect(AS_IS_SETTINGS).toEqual({ paddingPct: null, background: BACKGROUND_SOURCE, strokePx: 0, strokeColor: "artwork", artboard: { mode: "source", size: 512, width: 512, height: 512 } });
+    expect(AS_IS_SETTINGS).toEqual({ paddingPct: null, background: BACKGROUND_SOURCE, strokePx: 0, strokeColor: "artwork", strokeLinecap: "source", artboard: { mode: "source", size: 512, width: 512, height: 512 } });
     expect(isAsIs(asIs())).toBe(true);
     expect(isAsIs(asIs({ strokePx: 2 }))).toBe(false);
     expect(isAsIs(asIs({ paddingPct: 0 }))).toBe(false);

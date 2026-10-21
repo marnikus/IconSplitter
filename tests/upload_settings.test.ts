@@ -35,7 +35,7 @@ const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAUL
 describe("defaults and clamps", () => {
   it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
-      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000",
+      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000", strokeLinecap: "source",
       jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,

@@ -26,6 +26,7 @@ import { ConverterSetting } from "./UploadEpsSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
 import UploadShadowSettings from "./UploadShadowSettings";
 import UploadBadgeSettings from "./UploadBadgeSettings";
+import UploadStrokeCapsSetting from "./UploadStrokeCapsSetting";
 import UploadSizeGuideSettings from "./UploadSizeGuideSettings";
 
 export type { UploadSettingsDialogProps } from "./settingsfield";
@@ -77,6 +78,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <PaddingSetting p={p} effective={effective} />
       {p.id !== null && <IconStrokeSetting p={p} id={p.id} />}
       <StrokeColorSetting p={p} effective={effective} />
+      <UploadStrokeCapsSetting p={p} effective={effective} />
       <ArtboardSetting p={p} effective={effective} />
       <UploadShadowSettings p={p} effective={effective} />
       <UploadBadgeSettings p={p} effective={effective} />
@@ -96,7 +98,7 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
   );
 }
 
-/** "All default": the five visual fields at once (one gesture; in the icon scope a pinned stroke width of 0). */
+/** "All default": the six visual fields at once (one gesture; in the icon scope a pinned stroke width of 0). */
 function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   const on = isAsIs(effective);
   return (

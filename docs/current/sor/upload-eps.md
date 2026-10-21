@@ -2,6 +2,8 @@
 
 The optional EPS path in [SVG to upload](upload.md); exports are local and validated.
 
+Inherited caps/joins and forced endpoint modes: [stroke endpoints](upload-stroke-endpoints.md).
+
 ## Converter choices
 
 The built-in browser writer supports native Level 3 vector gradients, including
@@ -17,7 +19,7 @@ record and Download all. Converter selection remains explicit.
   EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`
   (`src/lib/upload/epsconv/registry.ts`) is the one table the drop list, the
   settings parser and the EPS stage read: `builtin` (the native vector writer above,
-  `writer: "builtin-vector-3"`) and `inkscape` (Inkscape on this machine
+  `writer: "builtin-vector-4"`) and `inkscape` (Inkscape on this machine
   through the local helper at `http://127.0.0.1:47391` — `GET /health` to
   probe, `POST /convert/eps` with the prepared SVG to convert, `writer:
   "inkscape-cli@<version>"` from the `x-inkscape-version` header). The
@@ -32,7 +34,7 @@ record and Download all. Converter selection remains explicit.
   using the HiRes dimensions (the AI5 order is height before width). Its upright
   transform is anchored to that same exact rectangle. No `%%PageBoundingBox` is
   added because this writer emits EPS, not a page-structured PostScript document.
-  The writer ID is `builtin-vector-3`; planning compares it as well as the
+  The writer ID is `builtin-vector-4`; planning compares it as well as the
   converter so existing packages refresh the EPS only after a writer change.
   After conversion, accepted metadata is embedded as the same Dublin Core XMP
   packet used by JPEG (`dc:title`, `dc:description`, `dc:subject`), using

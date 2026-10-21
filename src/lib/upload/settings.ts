@@ -4,13 +4,9 @@
 // the fingerprint selective re-export keys on. The artboard lives in
 // lib/upload/artboard (re-exported here). Thumbnail zoom is NOT here — it is
 // display-only (design §2.12) and lives in lib/zoom.
-//
-// Paints (2026-10-08, stock review): the background is `transparent` or a hex
-// — transparent means no background in the SVG/EPS, and the JPEG (no alpha)
-// flattens onto white; the stroke colour is the artwork's own or one hex that
-// every visible stroke gets. Both are plain strings so they store, compare and
-// fingerprint like every other field.
+// Paints are source/transparent/artwork sentinels or a normalized hex.
 
+import { normalizeStrokeLinecap, readStrokeCapOverride, type StrokeLinecap } from "./strokecaps";
 import { normalizeHex } from "../svgbackground";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
@@ -58,6 +54,8 @@ export interface UploadSettings extends SizeGuideSettings {
   strokePx: number;
   /** The hex every visible stroke gets, defined ONCE on the root (default `#000000`), or `artwork` (the strokes keep their own paint). */
   strokeColor: string;
+  /** Source caps, or one endpoint shape for every exported stroke. */
+  strokeLinecap: StrokeLinecap;
   /** JPEG target resolution in megapixels (default 15.1). */
   jpegMegapixels: number;
   /** JPEG quality 0..1. */
@@ -127,6 +125,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   background: BACKGROUND_DEFAULT,
   strokePx: STROKE_DEFAULT,
   strokeColor: STROKE_COLOR_DEFAULT,
+  strokeLinecap: "source",
   jpegMegapixels: MP_DEFAULT,
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
@@ -176,6 +175,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     background: readBackground(raw.background) ?? BACKGROUND_DEFAULT,
     strokePx: clampStrokePx(raw.strokePx ?? raw.strokePt), // strokePt: the pre-2026-10-08 name, same number
     strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_DEFAULT,
+    strokeLinecap: normalizeStrokeLinecap(raw.strokeLinecap),
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
@@ -204,6 +204,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   const out: SettingsOverrides = {};
   readNumbers(raw, out);
   readFlags(raw, out);
+  Object.assign(out, readStrokeCapOverride(raw));
   readPaints(raw, out);
   readArtboard(raw, out);
   const corner = parseBadgeCorner(raw.badgeCorner);
@@ -274,7 +275,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 
 /** Every overrideable field, in canonical order — the ONE list undo equality and `settingsEqual` derive from. */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
-  "paddingPct", "background", "strokePx", "strokeColor", "jpegMegapixels", "jpegQuality",
+  "paddingPct", "background", "strokePx", "strokeColor", "strokeLinecap", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
   "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
   "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",

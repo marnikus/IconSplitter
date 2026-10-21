@@ -20,6 +20,7 @@ export function settingsFingerprint(s: UploadSettings): string {
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
     // The converter is a tool choice, not geometry. Older fingerprints must not move.
+    ...(s.strokeLinecap !== "source" ? [["linecap", s.strokeLinecap]] : []),
     ...(s.expandStrokes ? ["expand"] : []),
     ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, templateHash]] : []),

@@ -29,7 +29,7 @@ export function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
       label: `Override settings — ${nameOf(c, id)}`,
       origin: "upload", ids: [id],
       before: { overrides: { [id]: before } },
-      after: { overrides: { [id]: null } },
+      after: { overrides: { [id]: after } },
     });
   }, []);
   return { setOverride };

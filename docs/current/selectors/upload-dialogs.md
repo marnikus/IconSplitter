@@ -1,6 +1,8 @@
 # SVG to upload — settings and metadata dialogs
 
-Selector priority and object shape: [shared conventions](shared.md#i-selector-object-structure--for-every-element). Part of [SVG to upload selectors](upload.md).
+See [conventions](shared.md#i-selector-object-structure--for-every-element) and [Upload selectors](upload.md).
+
+[Stroke endpoints](../sor/upload-stroke-endpoints.md#selectors).
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
 **2026-10-19 — "default" for every visual setting** ([plan](../../archive/2026-10-19-upload-default-settings/README.md)):

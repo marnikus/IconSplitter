@@ -1,8 +1,8 @@
 # Upload settings, artboard and geometry
 
-The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I-62](invariants/upload.md).
+For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
 
-**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md).
+**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [stroke endpoints](upload-stroke-endpoints.md).
 
 ## Current settings and output geometry
 
@@ -13,8 +13,8 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   - Stroke colour `artwork` is labelled Default.
   - Artboard mode `source` is the SVG's own viewBox size and ratio (N MP applies
     only in `content`).
-  - `strokePx` 0 = default.
-  - **All five default with Expand, Shadow, corner badge and size guide off = as is**: the export SVG is the approved file
+  - `strokePx` 0 and `strokeLinecap: source` = default.
+  - **All six default with Expand, Shadow, corner badge and size guide off = as is**: the export SVG is the approved file
     byte for byte — no clean, no bake, no SVGO, and the clean-SVG-1.1 check is
     skipped (it must still parse); JPEG and EPS build from it.
   - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding

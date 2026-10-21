@@ -11,3 +11,6 @@ Choose the row for your change, then open that source file. Part of the [owner m
 Native gradient EPS owner modules and vector-only delivery gates are indexed in
 [upload-eps-gradients](../upload-eps-gradients.md). Path and stroke geometry continue
 to use the shared outline model; no EPS artwork rasterizer is introduced.
+
+Endpoint policy/validation, pre-expansion application, shared settings UI and
+source-faithful EPS inheritance: [stroke endpoints](../upload-stroke-endpoints.md#owners-and-tests).

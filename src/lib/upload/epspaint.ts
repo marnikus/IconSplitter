@@ -60,7 +60,10 @@ export function resolvePaint(el: Element, parent: Paint): Paint {
 /** The EPS keeps its own RGB paints; the inheritance only needs to know whether it strokes (and fills). */
 function strokeOf(p: Paint): Stroke {
   const none = p.stroke === null;
-  return { width: p.strokeWidth, paint: none ? "none" : "rgb", none, fillNone: p.fill === null, cap: "butt", join: "miter", miter: p.miter };
+  return {
+    width: p.strokeWidth, paint: none ? "none" : "rgb", none, fillNone: p.fill === null,
+    cap: ["butt", "round", "square"][p.cap], join: ["miter", "round", "bevel"][p.join], miter: p.miter,
+  };
 }
 
 /** A paint keyword → RGB; "none" → null; anything else → Unsupported. */
