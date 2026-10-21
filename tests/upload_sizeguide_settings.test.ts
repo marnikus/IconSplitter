@@ -3,26 +3,27 @@ import { describe, expect, it } from "vitest";
 import { AS_IS_SETTINGS, isAsIs } from "../src/lib/upload/asis";
 import {
   DEFAULT_UPLOAD_SETTINGS, normalizeSettings, overridesEqual, parseOverrides,
-  SETTINGS_FIELDS, settingsFingerprint,
+  SETTINGS_FIELDS, settingsFingerprint, SIZE_GUIDE_STROKE_MAX,
 } from "../src/lib/upload/settings";
 
 const enabled = () => ({
   ...DEFAULT_UPLOAD_SETTINGS, sizeGuideEnabled: true, sizeGuideCorner: "bottom-left" as const,
-  sizeGuideSmallPct: 6, sizeGuideLargePct: 12, sizeGuideSmallStrokePct: 0, sizeGuideLargeStrokePct: 0,
+  sizeGuideSmallPct: 6, sizeGuideLargePct: 12, sizeGuideSmallStrokePx: 0, sizeGuideLargeStrokePx: 0,
   sizeGuideGapPct: 2, sizeGuideOffsetXPct: 3, sizeGuideOffsetYPct: 3,
 });
 
 const GUIDE_FIELDS = [
   "sizeGuideEnabled", "sizeGuideCorner", "sizeGuideSmallPct", "sizeGuideLargePct",
-  "sizeGuideSmallStrokePct", "sizeGuideLargeStrokePct", "sizeGuideGapPct",
+  "sizeGuideSmallStrokePx", "sizeGuideLargeStrokePx", "sizeGuideGapPct",
   "sizeGuideOffsetXPct", "sizeGuideOffsetYPct",
 ] as const;
 
 describe("S/L size-guide settings", () => {
-  it("starts off bottom-left and keeps the historic fingerprint while off", () => {
+  it("starts off bottom-left with stroke widths in px (0–50) and keeps the historic fingerprint while off", () => {
+    expect(SIZE_GUIDE_STROKE_MAX).toBe(50);
     expect(DEFAULT_UPLOAD_SETTINGS).toMatchObject({
       sizeGuideEnabled: false, sizeGuideCorner: "bottom-left", sizeGuideSmallPct: 6, sizeGuideLargePct: 12,
-      sizeGuideSmallStrokePct: 0, sizeGuideLargeStrokePct: 0, sizeGuideGapPct: 2,
+      sizeGuideSmallStrokePx: 0, sizeGuideLargeStrokePx: 0, sizeGuideGapPct: 2,
       sizeGuideOffsetXPct: 3, sizeGuideOffsetYPct: 3,
     });
     expect(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS)).toBe("36232c04");
@@ -34,21 +35,28 @@ describe("S/L size-guide settings", () => {
     expect(isAsIs({ ...enabled(), ...AS_IS_SETTINGS })).toBe(false);
   });
 
-  it("keeps the guide opt-in per icon and clamps each stored number independently", () => {
+  it("keeps the guide opt-in per icon, clamps strokes to 0–50 px and migrates stored *StrokePct numbers", () => {
     expect(normalizeSettings({ sizeGuideEnabled: true, sizeGuideCorner: "top-right", sizeGuideSmallPct: 0,
-      sizeGuideLargePct: 400, sizeGuideSmallStrokePct: -2, sizeGuideLargeStrokePct: 99,
+      sizeGuideLargePct: 400, sizeGuideSmallStrokePx: -2, sizeGuideLargeStrokePx: 99,
       sizeGuideGapPct: 130, sizeGuideOffsetXPct: -4, sizeGuideOffsetYPct: 123 })).toMatchObject({
       sizeGuideEnabled: false, sizeGuideCorner: "top-right", sizeGuideSmallPct: 1, sizeGuideLargePct: 100,
-      sizeGuideSmallStrokePct: 0, sizeGuideLargeStrokePct: 20, sizeGuideGapPct: 100,
+      sizeGuideSmallStrokePx: 0, sizeGuideLargeStrokePx: 50, sizeGuideGapPct: 100,
       sizeGuideOffsetXPct: 0, sizeGuideOffsetYPct: 100,
     });
+    expect(normalizeSettings({ sizeGuideSmallStrokePx: 32 }).sizeGuideSmallStrokePx).toBe(32);
+    const migrated = normalizeSettings({ sizeGuideSmallStrokePct: 2, sizeGuideLargeStrokePct: 3.5 });
+    expect(migrated).toMatchObject({ sizeGuideSmallStrokePx: 2, sizeGuideLargeStrokePx: 3.5 });
+    expect(Object.keys(migrated)).not.toContain("sizeGuideSmallStrokePct");
+    expect(normalizeSettings({ sizeGuideSmallStrokePx: 4, sizeGuideSmallStrokePct: 2 }).sizeGuideSmallStrokePx).toBe(4);
+    expect(parseOverrides({ sizeGuideSmallStrokePct: 1.5, sizeGuideLargeStrokePct: 2.5 }))
+      .toEqual({ sizeGuideSmallStrokePx: 1.5, sizeGuideLargeStrokePx: 2.5 });
     expect(normalizeSettings({ sizeGuideCorner: "middle", sizeGuideSmallPct: "bad", sizeGuideOffsetXPct: Infinity }))
       .toMatchObject({ sizeGuideEnabled: false, sizeGuideCorner: "bottom-left", sizeGuideSmallPct: 6, sizeGuideOffsetXPct: 3 });
     expect(parseOverrides({ sizeGuideEnabled: true, sizeGuideCorner: "bottom-right", sizeGuideSmallPct: 9,
-      sizeGuideLargePct: 18, sizeGuideSmallStrokePct: 0.4, sizeGuideLargeStrokePct: 0.6, sizeGuideGapPct: 4,
+      sizeGuideLargePct: 18, sizeGuideSmallStrokePx: 1.5, sizeGuideLargeStrokePx: 2.5, sizeGuideGapPct: 4,
       sizeGuideOffsetXPct: 5, sizeGuideOffsetYPct: 6 })).toEqual({
       sizeGuideEnabled: true, sizeGuideCorner: "bottom-right", sizeGuideSmallPct: 9,
-      sizeGuideLargePct: 18, sizeGuideSmallStrokePct: 0.4, sizeGuideLargeStrokePct: 0.6,
+      sizeGuideLargePct: 18, sizeGuideSmallStrokePx: 1.5, sizeGuideLargeStrokePx: 2.5,
       sizeGuideGapPct: 4, sizeGuideOffsetXPct: 5, sizeGuideOffsetYPct: 6,
     });
     expect(parseOverrides({ sizeGuideEnabled: "yes", sizeGuideCorner: "middle", sizeGuideSmallPct: "9",
@@ -60,7 +68,7 @@ describe("S/L size-guide settings", () => {
       expect(SETTINGS_FIELDS).toContain(field);
     }
     expect(overridesEqual({ sizeGuideCorner: "top-left" }, { sizeGuideCorner: "bottom-left" })).toBe(false);
-    expect(overridesEqual({ sizeGuideSmallStrokePct: 0.2 }, { sizeGuideSmallStrokePct: 0.3 })).toBe(false);
+    expect(overridesEqual({ sizeGuideSmallStrokePx: 1.5 }, { sizeGuideSmallStrokePx: 2.5 })).toBe(false);
     expect(overridesEqual({ sizeGuideGapPct: 2 }, { sizeGuideGapPct: 2 })).toBe(true);
   });
 
@@ -70,7 +78,7 @@ describe("S/L size-guide settings", () => {
     expect(fingerprint).not.toBe(settingsFingerprint(DEFAULT_UPLOAD_SETTINGS));
     for (const changed of [
       { sizeGuideCorner: "top-left" as const }, { sizeGuideSmallPct: 7 }, { sizeGuideLargePct: 13 },
-      { sizeGuideSmallStrokePct: 0.2 }, { sizeGuideLargeStrokePct: 0.3 }, { sizeGuideGapPct: 3 },
+      { sizeGuideSmallStrokePx: 1.5 }, { sizeGuideLargeStrokePx: 2.5 }, { sizeGuideGapPct: 3 },
       { sizeGuideOffsetXPct: 4 }, { sizeGuideOffsetYPct: 5 },
     ]) expect(settingsFingerprint({ ...base, ...changed })).not.toBe(fingerprint);
   });

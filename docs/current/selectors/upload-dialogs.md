@@ -32,16 +32,13 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   labelled from the selected edges. `upload-badge-defaults-note` says the
   defaults never opt an unchecked icon in; `upload-badge-fit-note` explains
   shrink/no-fit.
-- `upload-set-sizeguide-section`: the S/L size guide, same shape:
-  `upload-sizeguide-controls` (native `upload-set-sizeguide-selected`) and ONE
-  `upload-set-sizeguide-*` placement set under **Size guide defaults**, in four
-  `.up-guide-block` groups — `upload-sizeguide-placement`, `-small`, `-large`
-  (each logo's width + its own stroke) and `-spacing`. Widths 6/12%, strokes 0,
-  gap 2%, corner `bottom-left`, X/Y insets 3%, labelled from those edges.
-  Per-icon scope adds `upload-set-sizeguide` and `upload-set-marker-sizeguide*`;
-  `upload-sizeguide-defaults-note` says the defaults never opt a check in,
-  `upload-sizeguide-fit-note` says shrink/no-fit, and
-  `upload-sizeguide-expand-note` names the outline-only Expand case.
+- `upload-set-sizeguide-section`: S/L size guide — `upload-sizeguide-controls`
+  (`upload-set-sizeguide-selected`) and ONE `upload-set-sizeguide-*` set under
+  **Size guide defaults** in four `.up-guide-block` groups (`upload-sizeguide-placement`,
+  `-small`, `-large`, `-spacing`). Widths 6/12%, strokes 0–50 px, gap 2%,
+  corner `bottom-left`, X/Y insets 3% from those edges. Per-icon scope adds
+  `upload-set-sizeguide` and `upload-set-marker-sizeguide*`; notes:
+  `upload-sizeguide-{defaults,fit,expand}-note`.
 
 `upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope** (follow-up 2026-10-19): that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; blank field space does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 The older text below is kept for the other handles.

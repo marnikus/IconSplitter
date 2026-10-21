@@ -9,22 +9,26 @@ const FILLED = `<svg ${NS} viewBox="0 0 100 100"><path d="M20 20H80V80H20Z" fill
 const STROKED = `<svg ${NS} viewBox="0 0 100 100"><path d="M20 20H80V80H20Z" fill="none" stroke="#111" stroke-width="4"/></svg>`;
 
 const guide = (patch: Partial<SizeGuidePlacement> = {}): SizeGuidePlacement => ({
-  corner: "bottom-left", offsetXPct: 3, offsetYPct: 3, smallPct: 4, largePct: 8,
-  smallStrokePct: 0.2, largeStrokePct: 0.3, gapPct: 2, ...patch,
+  corner: "bottom-left", offsetXPct: 3, offsetYPct: 3, smallPct: 4, largePct: 8, gapPct: 2, ...patch,
 });
 const icon = (markup = FILLED) => new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
 const artboard = (w = 512, h = 256) => new DOMParser().parseFromString(
   `<svg ${NS} viewBox="0 0 ${w} ${h}"><rect x="0" y="0" width="${w}" height="${h}" fill="none"/></svg>`, "image/svg+xml").documentElement;
 const box = (el: Element) => visibleBounds(el)?.bounds ?? null;
 
-function placed(placement: Partial<SizeGuidePlacement> = {}, markup = FILLED, extra: { expand?: boolean; color?: string | null } = {}) {
+function placed(
+  placement: Partial<SizeGuidePlacement> = {},
+  markup = FILLED,
+  extra: { expand?: boolean; color?: string | null; strokePx?: { small: number | null; large: number | null }; size?: [number, number] } = {},
+) {
   const source = icon(markup);
   const bounds = shippedBounds(source);
   if (bounds === null) throw new Error("the fixture icon has no bounds");
-  const root = artboard();
-  const result = appendSizeGuide(root, { width: 512, height: 256 }, {
+  const [width, height] = extra.size ?? [512, 256];
+  const root = artboard(width, height);
+  const result = appendSizeGuide(root, { width, height }, {
     icon: source, bounds, expand: extra.expand ?? false, color: extra.color ?? null,
-    strokePx: { small: (512 * (placement.smallStrokePct ?? 0.2)) / 100, large: (512 * (placement.largeStrokePct ?? 0.3)) / 100 },
+    strokePx: extra.strokePx ?? { small: 1.5, large: 3 },
   }, guide(placement));
   return { root, result, bounds };
 }
@@ -82,13 +86,19 @@ describe("the S/L size guide on the final artboard", () => {
     expect(largeBox?.height).toBeCloseTo(136.5333, 2);
   });
 
-  it("gives each copy its own stroke width and colour", () => {
-    const { result } = placed({}, STROKED, { color: "#ff0000" });
-    const guide = ok(result);
-    expect(strokeWidth(guide.copies[0].group)).toBeCloseTo(1.024, 3);
-    expect(strokeWidth(guide.copies[1].group)).toBeCloseTo(1.536, 3);
-    expect(strokePaint(guide.copies[0].group)).toBe("#ff0000");
-    expect(strokePaint(guide.copies[1].group)).toBe("#ff0000");
+  it("gives each copy its own verbatim pixel stroke width independent of artboard width", () => {
+    const narrowRes = placed({}, STROKED, { color: "#ff0000", strokePx: { small: 1.5, large: 3 }, size: [512, 256] });
+    expect(narrowRes.result).toMatchObject({ ok: true });
+    const narrow = ok(narrowRes.result);
+    const wideRes = placed({}, STROKED, { color: "#ff0000", strokePx: { small: 1.5, large: 3 }, size: [1024, 512] });
+    expect(wideRes.result).toMatchObject({ ok: true });
+    const wide = ok(wideRes.result);
+    expect(strokeWidth(narrow.copies[0].group)).toBe(1.5);
+    expect(strokeWidth(narrow.copies[1].group)).toBe(3);
+    expect(strokeWidth(wide.copies[0].group)).toBe(1.5);
+    expect(strokeWidth(wide.copies[1].group)).toBe(3);
+    expect(strokePaint(narrow.copies[0].group)).toBe("#ff0000");
+    expect(strokePaint(narrow.copies[1].group)).toBe("#ff0000");
   });
 
   it("expands both copies' strokes when Expand strokes is on", () => {
@@ -126,19 +136,22 @@ describe("the S/L size guide on the final artboard", () => {
     expect(largeLabel?.height).toBeCloseTo(smallLabel?.height ?? 0, 3);
   });
 
-  it("shrinks the pair uniformly when the requested sizes cannot fit, never moving the inset", () => {
-    const { result } = placed({ smallPct: 60, largePct: 60, gapPct: 40 });
+  it("shrinks the pair uniformly — even with a fixed pixel stroke — never moving the inset", () => {
+    const { result } = placed({ smallPct: 60, largePct: 60, gapPct: 40 }, STROKED, { strokePx: { small: 12, large: 24 }, size: [120, 80] });
     const guide = ok(result);
-    expect(guide.bounds.x).toBeCloseTo(15.36, 3);
-    expect(guide.bounds.x + guide.bounds.width).toBeLessThanOrEqual(512 - 15.36 + 1e-6);
-    expect(guide.bounds.y + guide.bounds.height).toBeLessThanOrEqual(256 - 7.68 + 1e-6);
-    expect(box(guide.copies[0].group)?.width).toBeLessThan(307.2);
+    expect(guide.bounds.x).toBeCloseTo(3.6, 3);
+    expect(guide.bounds.x + guide.bounds.width).toBeLessThanOrEqual(120 + 1e-6);
+    expect(guide.bounds.y + guide.bounds.height).toBeLessThanOrEqual(80 - 2.4 + 1e-6);
+    expect(strokeWidth(guide.copies[0].group)).toBe(12);
+    expect(strokeWidth(guide.copies[1].group)).toBe(24);
   });
 
-  it("refuses a 100% inset without appending anything", () => {
+  it("refuses a 100% inset or an out-of-range stroke without appending anything", () => {
     const { root, result } = placed({ offsetXPct: 100 });
     expect(result).toMatchObject({ ok: false, code: "no-fit" });
     expect(root.querySelectorAll("path")).toHaveLength(0);
+    const badStroke = placed({}, STROKED, { strokePx: { small: 80, large: 2 } });
+    expect(badStroke.result).toMatchObject({ ok: false, code: "unsupported" });
   });
 
   it("refuses an artboard that is not the one measured, without touching it", () => {

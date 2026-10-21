@@ -25,7 +25,7 @@ export function settingsFingerprint(s: UploadSettings): string {
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, templateHash]] : []),
     ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, badgeTemplateHash]] : []),
     ...(s.sizeGuideEnabled ? [["sizeguide", s.sizeGuideCorner, s.sizeGuideSmallPct, s.sizeGuideLargePct,
-      s.sizeGuideSmallStrokePct, s.sizeGuideLargeStrokePct, s.sizeGuideGapPct,
+      round3(s.sizeGuideSmallStrokePx), round3(s.sizeGuideLargeStrokePx), s.sizeGuideGapPct,
       s.sizeGuideOffsetXPct, s.sizeGuideOffsetYPct, sizeGuideTemplateHash]] : []),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
