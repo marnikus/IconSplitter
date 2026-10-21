@@ -61,8 +61,8 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
       {p.id !== null && (
         <div className="up-set-footer">
           <button type="button" className="svg-btn" data-testid="upload-set-reset"
-            onClick={() => p.onResetOverride(p.id as string)}>Reset to defaults</button>
-          <span className="up-hint">deletes this icon's override — it inherits the global defaults again</span>
+            onClick={() => p.onResetOverride(p.id as string)}>Reset to inherited</button>
+          <span className="up-hint">drops this icon's own settings — it follows the global defaults again; Shadow, corner badge and size guide stay</span>
         </div>
       )}
     </div>

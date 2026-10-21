@@ -8,14 +8,14 @@
 // the same code path (the panel's persist effect writes localStorage); with no
 // panel mounted an undo writes the store directly, which the next mount reads.
 
-import { appliedEqual, parseApplied, type AppliedDecorations, type AppliedMap } from "../lib/upload/decorations";
+import { appliedEqual, parseApplied, type AppliedFields, type AppliedMap } from "../lib/upload/decorations";
 import { overridesEqual, parseOverrides, type SettingsOverrides } from "../lib/upload/settings";
 import { loadOverrides, loadApplied, saveOverrides, type OverridesMap } from "./settingsstore";
 
 /** The payload one `uploadSettings` entry carries, on either side. */
 export interface UploadSettingsPatch {
   overrides: Record<string, SettingsOverrides | null>;
-  applied?: Record<string, AppliedDecorations | null>;
+  applied?: Record<string, AppliedFields | null>;
 }
 
 export type UploadSettingsApplier = (patch: UploadSettingsPatch) => void;
@@ -70,7 +70,7 @@ function applyOne(map: OverridesMap, id: string, value: SettingsOverrides | null
   return true;
 }
 
-function applyMarks(map: AppliedMap, id: string, value: AppliedDecorations | null): boolean {
+function applyMarks(map: AppliedMap, id: string, value: AppliedFields | null): boolean {
   const current = map[id];
   if (value === null || Object.keys(value).length === 0) {
     if (current === undefined) return false;
@@ -103,9 +103,9 @@ export function toUploadSettingsPatch(value: unknown): UploadSettingsPatch | nul
 }
 
 /** The `applied` half: validated marks, null = clear; undefined when nothing usable. */
-function parseAppliedPatch(raw: unknown): Record<string, AppliedDecorations | null> | undefined {
+function parseAppliedPatch(raw: unknown): Record<string, AppliedFields | null> | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
-  const out: Record<string, AppliedDecorations | null> = {};
+  const out: Record<string, AppliedFields | null> = {};
   for (const [id, value] of Object.entries(raw)) {
     const marks = value === null ? null : parseApplied(value);
     if (marks === null || Object.keys(marks).length > 0) out[id] = marks;

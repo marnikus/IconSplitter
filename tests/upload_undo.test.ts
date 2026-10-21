@@ -140,18 +140,18 @@ describe("applyEntry — the uploadSettings route", () => {
   });
 
   it("restores a decoration mark with its flag, and clears both on the undo side", async () => {
-    const applied = { overrides: { pair_a: { badgeEnabled: true } }, applied: { pair_a: { badge: true } } };
+    const applied = { overrides: { pair_a: { badgeEnabled: true } }, applied: { pair_a: { badgeEnabled: true } } };
     await expect(applyEntry(entry(), applied)).resolves.toBe(true);
     expect(loadOverrides().pair_a).toEqual({ badgeEnabled: true });
-    expect(loadApplied().pair_a).toEqual({ badge: true });
+    expect(loadApplied().pair_a).toEqual({ badgeEnabled: true });
     await expect(applyEntry(entry(), { overrides: { pair_a: null }, applied: { pair_a: null } })).resolves.toBe(true);
     expect(loadOverrides()).toEqual({});
     expect(loadApplied()).toEqual({});
   });
 
   it("validates the applied half and ignores junk marks", async () => {
-    expect(toUploadSettingsPatch({ overrides: {}, applied: { pair_a: { badge: "yes" }, pair_b: { shadow: true } } }))
-      .toEqual({ overrides: {}, applied: { pair_b: { shadow: true } } });
+    expect(toUploadSettingsPatch({ overrides: {}, applied: { pair_a: { badgeEnabled: "yes" }, pair_b: { shadowEnabled: true } } }))
+      .toEqual({ overrides: {}, applied: { pair_b: { shadowEnabled: true } } });
     expect(toUploadSettingsPatch({ overrides: {}, applied: {} })).toBeNull();
   });
 
