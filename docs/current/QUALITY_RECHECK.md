@@ -3001,3 +3001,29 @@ Plan/outcome: `docs/archive/2026-10-21-eps-no-routine-warning/README.md`. Remove
   100% statements/branches/functions/lines. Existing SVG test teardown stops
   unfinished runners before restoring transports; shell discovery is stubbed.
   No dependencies added; generated dist excluded from staging.
+
+## 2026-10-21 — embedded stock JPEG/EPS metadata and independent upload test page
+
+- Plan/results: `docs/archive/2026-10-21-stock-file-metadata/README.md`;
+  current contract, owners, limits and page handles: `sor/upload-file-metadata.md`.
+- JPEG now has XMP APP1 + UTF-8 IPTC Photoshop APP13; EPS keeps canonical XMP
+  and adds a verified IPTC hex-comment resource without raster content. Shared
+  binary/IIM/resource rules; unrelated JPEG resources and scan bytes retained.
+  Full text remains exact in XMP, legacy mirrors have UTF-8-safe byte limits.
+- TDD: both carrier assertions red before integration; both JPEG metadata repair
+  scenarios red before planner changes. Final focused 129 passed + 1 skipped,
+  8 files. The independent local upload page reads committed file bytes only,
+  displays Title/Description/Tags, and checks both carriers without app readers.
+- Fast ALL FIVE LANES PASSED; full ALL SIX LANES PASSED: types14.6s, lint11.0s,
+  quality0.7s, native2.6s, coverage174.1s, build7.0s. 2451 tests passed, 1 skipped,
+  230 files. Library line coverage97.96%; six new lib modules100% lines/functions.
+  No quality/performance thresholds changed; no repository dependencies added.
+- Independent probes: Resvg2.6.2→jpeg-js0.4.4 real raster/encode/decode and real
+  export commits for two labeled supplementary SVGs. Chromium153 uploaded all
+  four exported files via the page and read exact fields/carriers; malformed-file
+  replacement/no page errors/390px no overflow passed. ExifTool13.59 read every
+  XMP/IPTC field and UTF8 charset exactly from all four. GS9.56 raster traps:
+  both EPS execute exit0 without image/colorimage/imagemask. Tools stayed in /tmp.
+- Exact two requested source SVGs absent: one user-fixture acceptance explicitly
+  skipped, never replaced by a claimed synthetic pass. Fixture suite discovers
+  them in the requested asset folder when supplied. Generated dist excluded.

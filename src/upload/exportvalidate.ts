@@ -2,8 +2,8 @@
 // §3.2): everything is checked BEFORE anything commits, so a failed check
 // leaves the last valid package untouched. The SVG must parse (and its
 // embedded metadata must read back exactly), the JPEG must decode to the
-// recorded dimensions (and its XMP must read back exactly), and EPS must
-// verify with its XMP fields reading back exactly when metadata was accepted.
+// recorded dimensions (and its XMP/IPTC must read back), and EPS must
+// verify with both XMP and IPTC fields reading back when metadata was accepted.
 
 import { readEmbeddedMetadata } from "../lib/upload/embed";
 import { verifyExportSvg } from "../lib/upload/clean";
@@ -76,7 +76,7 @@ function epsCheck(epsText: string | null, errors: string[]): boolean {
 function epsMetadataCheck(epsText: string | null, metadata: IconMetadata | null, errors: string[]): boolean {
   if (epsText === null || metadata === null) return true;
   const ok = verifyEpsMetadata(epsText, metadata);
-  if (!ok) errors.push("the embedded EPS XMP metadata does not read back");
+  if (!ok) errors.push("the embedded EPS XMP/IPTC metadata does not read back");
   return ok;
 }
 

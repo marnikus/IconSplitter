@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-21-stock-file-metadata/README.md` | Plan/results for stock-readable embedded JPEG/EPS metadata and independent local upload test webpage |
 | `archive/2026-10-21-shared-process-progress/README.md` | Plan/results for shared batch progress UI and persistent Upload metadata/export progress |
 | `archive/2026-10-21-stroke-endpoints/README.md` | Plan and verification for source-faithful EPS cap/join inheritance and all-stroke endpoint controls |
 | `archive/2026-10-21-eps-no-routine-warning/README.md` | Remove misleading supported-shadow EPS warnings in bulk, rows and both settings scopes; actual export errors and no-raster gate unchanged; full verification passed |

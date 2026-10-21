@@ -58,11 +58,11 @@ every renderer, and fingerprinting only while enabled.
   without AI or raster render; when EPS is requested it also refreshes the EPS
   and its metadata; a missing output rebuilds just that output; nothing changed
   → no work). Before reusing a package whose accepted-metadata fingerprint still
-  matches, it reads the existing SVG and requested EPS and compares Title,
+  matches, it reads the existing SVG, JPEG and requested EPS and compares Title,
   Description, and Tags; missing, unreadable, or mismatched metadata rebuilds
-  only that SVG/EPS, never the JPEG. Every output validates before it commits
-  (SVG parses + metadata readback; JPEG decodes at the recorded dims + XMP
-  readback; EPS header and bounding box, plus accepted XMP readback) and commits
+  only the affected file; a stripped JPEG is re-embedded without rendering. Every output validates before it commits
+  (SVG parses + metadata readback; JPEG decodes at the recorded dims + XMP/IPTC
+  readback; EPS header and bounding box, plus accepted XMP/IPTC readback) and commits
   atomically (tmp → verify → overwrite → cleanup, `export.json` LAST as the commit marker).
   A partial EPS stage or disabling EPS detaches any earlier EPS from the new
   record and Download all without deleting its old bytes, so a stale EPS
@@ -113,3 +113,6 @@ Download all. Any raster or unverified program fails the EPS stage/test; a heade
 or a matching old export fingerprint alone never certifies it.
 
 Export runner progress, terminal cleanup and cross-tab headers: [shared process progress](process-progress.md).
+
+[Embedded stock file metadata](upload-file-metadata.md) owns the JPEG/EPS XMP +
+IPTC carriers, incremental upgrades, limits and independent upload test page.

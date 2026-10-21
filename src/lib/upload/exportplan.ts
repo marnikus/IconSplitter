@@ -22,8 +22,8 @@ export interface PlanInput {
   epsConverter: EpsConverterId;
   /** Which output file handles exist on disk right now. */
   outputs: { svg: boolean; jpg: boolean; eps: boolean };
-  /** Whether SVG/EPS read back to the accepted metadata; JPEG is deliberately unchanged. */
-  metadataOutputs: { svg: boolean; eps: boolean };
+  /** Whether every file reads back to accepted metadata in its required carriers. */
+  metadataOutputs: { svg: boolean; jpg: boolean; eps: boolean };
 }
 
 /** The plan: which stages re-run, and which OUTPUT files rebuild. */
@@ -38,10 +38,10 @@ export interface StagePlan {
  * raster render (and refreshes EPS when EPS is requested); an optimize toggle
  * re-optimizes (JPEG kept); an EPS toggle is EPS-only; a missing/corrupt
  * output rebuilds just that file, while absent accepted metadata rebuilds only
- * the affected SVG/EPS; no change means no work at all. `rebuild` disambiguates
+ * the affected file; no change means no work at all. `rebuild` disambiguates
  * the shared stages: `embed`
- * touches the SVG and the JPEG's XMP on an explicit metadata change, but
- * repairing an SVG/EPS readback never rewrites the JPEG.
+ * touches the SVG and the JPEG's XMP/IPTC on a metadata change, but
+ * repairing an SVG/EPS readback never rewrites an intact JPEG.
  */
 export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
   const need = new Set<Stage>();
@@ -109,7 +109,7 @@ export function recordConverter(record: ExportRecord): EpsConverterId {
 
 function planMissingOutputs(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   if (!input.outputs.svg || (input.hasMetadata && !input.metadataOutputs.svg)) planSvgRebuild(input, need, rebuild);
-  if (!input.outputs.jpg) planJpegRebuild(input, need, rebuild);
+  planJpegRepair(input, need, rebuild);
   const epsNeedsRebuild = !input.outputs.eps || (input.hasMetadata && !input.metadataOutputs.eps);
   if (epsNeedsRebuild && input.includeEps) {
     need.add("eps");
@@ -128,4 +128,13 @@ function planJpegRebuild(input: PlanInput, need: Set<Stage>, rebuild: StagePlan[
   need.add("render");
   if (input.hasMetadata) need.add("embed");
   rebuild.jpg = true;
+}
+
+/** Missing pixels require render; stripped compatibility metadata requires only embed. */
+function planJpegRepair(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
+  if (!input.outputs.jpg) planJpegRebuild(input, need, rebuild);
+  else if (input.hasMetadata && !input.metadataOutputs.jpg) {
+    need.add("embed");
+    rebuild.jpg = true;
+  }
 }

@@ -45,8 +45,8 @@ export function checkPostScript(program: string): string[] {
   let artwork: string;
   try { artwork = verifiedEpsArtwork(program); }
   catch { return ["EPS metadata envelope is not verified vector-only content"]; }
-  if (/^\s*%%(?:BeginPreview|BeginBinary|BeginData)\b/m.test(artwork)) return ["embedded raster preview or opaque data is forbidden in EPS"];
-  const lines = artwork.split(/\r?\n/);
+  if (/^\s*%%(?:BeginPreview|BeginBinary|BeginData|BeginPhotoshop)\b/m.test(artwork)) return ["embedded raster preview or opaque data is forbidden in EPS"];
+  const lines = artwork.split(/\r\n|\r|\n/);
   for (let i = 0; i < lines.length && st.errors.length === 0; i++) {
     if (!lines[i].startsWith("%")) runLine(lines[i], st, i + 1); // DSC comments and %%EOF are skipped
   }

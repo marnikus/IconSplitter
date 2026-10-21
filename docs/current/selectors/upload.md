@@ -52,3 +52,5 @@ card — never inside it) and the provider card:
 | `upload-provider-note` | note | endpoint · the key travels in the `x-goog-api-key` header only · each icon's image is sent only inside the one request you confirm · nothing is ever uploaded automatically |
 
 Progress header and cross-tab shell handles: [shared process progress](../sor/process-progress.md#handles).
+
+Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../sor/upload-file-metadata.md).

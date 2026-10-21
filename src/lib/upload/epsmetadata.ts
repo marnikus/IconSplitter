@@ -1,7 +1,10 @@
 // epsmetadata.ts — document-level XMP for EPS (Adobe XMP Part 3, §1.6.2.1.3).
+// IPTC-IIM is also mirrored in a Photoshop resource comment block.
 // The converter output is left intact; a pdfmark metadata stream is attached
 // before drawing and the drawing is bracketed by BDC/EMC, for both EPS writers.
 
+import { embedIptcInEps, readEpsIptc, stripEpsIptc } from "./epsiptc";
+import { sameLegacyMetadata } from "./iptc";
 import { fnv1a32 } from "../pairing";
 import type { IconMetadata } from "./meta";
 import { metadataFingerprint } from "./meta";
@@ -20,7 +23,7 @@ export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata): stri
   const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
     .replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "");
   const id = `${metadataFingerprint(metadata)}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
-  const header = addXmpHeader(clean, eol);
+  const header = embedIptcInEps(addXmpHeader(clean, eol), metadata);
   const setup = setupBlock(id, packet, eol);
   const trailer = trailerBlock(id, eol);
   const setupAt = afterSetup(header);
@@ -46,11 +49,12 @@ export function readXmpMetadataFromEps(eps: string): IconMetadata | null {
   return null;
 }
 
-/** Whether an EPS packet reads back exactly the accepted Title, Description, and Tags. */
+/** Whether both EPS metadata carriers match accepted fields (legacy limits only in IIM). */
 export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean {
   const actual = readXmpMetadataFromEps(eps);
   return actual !== null && actual.title === expected.title && actual.description === expected.description
-    && actual.tags.join("\u0000") === expected.tags.join("\u0000");
+    && actual.tags.join("\u0000") === expected.tags.join("\u0000")
+    && sameLegacyMetadata(readEpsIptc(eps), expected);
 }
 
 function setupBlock(id: string, packet: string, eol: string): string {
@@ -91,7 +95,7 @@ function uniquePacketMarker(id: string, packet: string): string {
 }
 
 function stripPreviousEmbedding(eps: string): string {
-  let clean = stripMarkedBlock(eps, SETUP_BEGIN, SETUP_END);
+  let clean = stripMarkedBlock(stripEpsIptc(eps), SETUP_BEGIN, SETUP_END);
   clean = stripMarkedBlock(clean, TRAILER_BEGIN, TRAILER_END);
   return clean;
 }
@@ -200,7 +204,7 @@ function lineEndingOf(text: string): string {
 /** Only our byte-for-byte canonical metadata program may be excluded from the
  * vector grammar audit. Marker comments alone are never a bypass. */
 export function verifiedEpsArtwork(eps: string): string {
-  if (!eps.includes(SETUP_BEGIN) && !eps.includes(TRAILER_BEGIN)) return eps;
+  if (!eps.includes(SETUP_BEGIN) && !eps.includes(TRAILER_BEGIN) && !eps.includes("% IconSplitter IPTC begin")) return eps;
   const metadata = readXmpMetadataFromEps(eps);
   const clean = stripPreviousEmbedding(eps);
   if (metadata === null || embedXmpMetadataInEps(clean, metadata) !== eps) throw new Error("unverified EPS metadata envelope");
