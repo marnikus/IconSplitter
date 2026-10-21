@@ -11,8 +11,8 @@ import {
   DEFAULT_UPLOAD_SETTINGS,
   type UploadSettings,
 } from "../src/lib/upload/settings";
-import { readJpegDimensions, readXmpMetadata, verifyJpeg } from "../src/lib/upload/jpeg";
-import { readXmpMetadataFromEps, verifyEpsMetadata } from "../src/lib/upload/epsmetadata";
+import { readIptcMetadata, readJpegDimensions, readXmpMetadata, verifyJpeg } from "../src/lib/upload/jpeg";
+import { readIptcMetadataFromEps, readXmpMetadataFromEps, verifyEpsMetadata } from "../src/lib/upload/epsmetadata";
 import {
   metadataFingerprint,
   validateMetadata,
@@ -291,6 +291,8 @@ describe("SVG asset → exported JPEG and EPS carry readable metadata", () => {
     expect(dims).not.toBeNull();
     expect(verifyJpeg(bytes, { width: dims!.width, height: dims!.height, metadata: JPEG_META }).ok).toBe(true);
     expect(readXmpMetadata(bytes)).toEqual(JPEG_META);
+    // IPTC-IIM APP13 carries the same Title / Description / Tags and reads back exactly.
+    expect(readIptcMetadata(bytes)).toEqual(JPEG_META);
 
     const record = readRecord(root);
     expect(record.metadata?.state).toBe("accepted");
@@ -314,6 +316,8 @@ describe("SVG asset → exported JPEG and EPS carry readable metadata", () => {
     expect(eps).toContain("%ADO_ContainsXMP: MainFirst");
     expect(eps).toContain("%%DocumentData: Clean8Bit");
     expect(readXmpMetadataFromEps(eps)).toEqual(EPS_META);
+    // IPTC-IIM hex comment block carries the same Title / Description / Tags and reads back exactly.
+    expect(readIptcMetadataFromEps(eps)).toEqual(EPS_META);
     expect(verifyEpsMetadata(eps, EPS_META)).toBe(true);
 
     const record = readRecord(root);

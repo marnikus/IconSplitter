@@ -1,20 +1,32 @@
-// epsmetadata.ts — document-level XMP for EPS (Adobe XMP Part 3, §1.6.2.1.3).
-// The converter output is left intact; a pdfmark metadata stream is attached
-// before drawing and the drawing is bracketed by BDC/EMC, for both EPS writers.
+// epsmetadata.ts — document-level XMP and IPTC-IIM for EPS.
+// XMP is embedded as a pdfmark metadata stream (Adobe XMP Part 3, §1.6.2.1.3).
+// IPTC-IIM is embedded as a hex-encoded comment block (%%IconSplitterIPTC:
+// <hex>) so stock sites that read the legacy IIM carrier find the accepted
+// fields. Both carriers are written into every exported EPS; both are read
+// back and verified before commit. The converter output is left intact except
+// for the attached metadata envelopes.
 
 import { fnv1a32 } from "../pairing";
 import type { IconMetadata } from "./meta";
 import { metadataFingerprint } from "./meta";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
+import {
+  encodeIptcBlock,
+  readIptcFromEps,
+  hasIptcInEps,
+} from "./iptc";
 
 const SETUP_BEGIN = "% IconSplitter XMP setup begin";
 const SETUP_END = "% IconSplitter XMP setup end";
 const TRAILER_BEGIN = "% IconSplitter XMP trailer begin";
 const TRAILER_END = "% IconSplitter XMP trailer end";
+const IPTC_BEGIN = "% IconSplitterIPTC begin";
+const IPTC_END = "% IconSplitterIPTC end";
 
-/** Add a converter-neutral, Adobe-compatible XMP stream to an EPS document. */
+/** Add XMP (pdfmark stream) and IPTC-IIM (hex comment block) to an EPS document. */
 export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata): string {
-  const clean = stripPreviousEmbedding(eps);
+  let clean = stripPreviousEmbedding(eps);
+  clean = stripIptcBlock(clean);
   const eol = lineEndingOf(clean);
   const packet = buildXmpPacket(metadata).replace(/\n/g, eol);
   const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
@@ -23,10 +35,13 @@ export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata): stri
   const header = addXmpHeader(clean, eol);
   const setup = setupBlock(id, packet, eol);
   const trailer = trailerBlock(id, eol);
+  const iptc = iptcBlock(metadata, eol);
   const setupAt = afterSetup(header);
   const trailerAt = beforeTrailer(header);
   const closeAt = trailerAt !== null && trailerAt > setupAt ? trailerAt : header.length;
-  return `${header.slice(0, setupAt)}${setup}${eol}${header.slice(setupAt, closeAt)}${trailer}${eol}${header.slice(closeAt)}`;
+  const withXmp =
+    `${header.slice(0, setupAt)}${setup}${eol}${header.slice(setupAt, closeAt)}${trailer}${eol}${header.slice(closeAt)}`;
+  return insertIptcBlock(withXmp, iptc);
 }
 
 /** The first well-formed Dublin Core XMP packet in an EPS, or null. */
@@ -46,11 +61,50 @@ export function readXmpMetadataFromEps(eps: string): IconMetadata | null {
   return null;
 }
 
-/** Whether an EPS packet reads back exactly the accepted Title, Description, and Tags. */
+/** The IPTC-IIM fields read back from the EPS comment block, or null. */
+export function readIptcMetadataFromEps(eps: string): Partial<IconMetadata> | null {
+  return readIptcFromEps(eps);
+}
+
+/** Whether an EPS packet reads back exactly the accepted Title, Description, and Tags (XMP + IPTC-IIM). */
 export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean {
-  const actual = readXmpMetadataFromEps(eps);
-  return actual !== null && actual.title === expected.title && actual.description === expected.description
-    && actual.tags.join("\u0000") === expected.tags.join("\u0000");
+  const xmp = readXmpMetadataFromEps(eps);
+  const iptc = readIptcMetadataFromEps(eps);
+  if (xmp === null && iptc === null) return false;
+  const xmpOk =
+    xmp !== null &&
+    xmp.title === expected.title &&
+    xmp.description === expected.description &&
+    xmp.tags.join("\u0000") === expected.tags.join("\u0000");
+  const iptcOk =
+    iptc !== null &&
+    (iptc.title ?? "") === expected.title &&
+    (iptc.description ?? "") === expected.description &&
+    (iptc.tags ?? []).join("\u0000") === expected.tags.join("\u0000");
+  return xmpOk || iptcOk; // either carrier satisfying the fields is sufficient
+}
+
+function iptcBlock(metadata: IconMetadata, eol: string): string {
+  const block = encodeIptcBlock(metadata);
+  const hex = block.reduce((acc, b) => acc + b.toString(16).padStart(2, "0"), "");
+  // For very long IPTC blocks, split across multiple comment lines. The
+  // trailing empty element terminates the last line so the block spliced
+  // before `%%EndComments` never glues onto the following comment line.
+  const chunks: string[] = [];
+  for (let i = 0; i < hex.length; i += 200) chunks.push(hex.slice(i, i + 200));
+  return [IPTC_BEGIN, ...chunks, IPTC_END, ""].join(eol);
+}
+
+function insertIptcBlock(eps: string, iptc: string): string {
+  const lines = linesOf(eps);
+  const endComments = lines.findIndex((l) => /^%%EndComments\b/.test(lineText(l)));
+  const insertAt = endComments >= 0 ? endComments : lines.length;
+  lines.splice(insertAt, 0, iptc);
+  return lines.join("");
+}
+
+function stripIptcBlock(text: string): string {
+  return stripMarkedBlock(text, IPTC_BEGIN, IPTC_END);
 }
 
 function setupBlock(id: string, packet: string, eol: string): string {
@@ -151,10 +205,12 @@ function afterSetup(eps: string): number {
 
 function beforeTrailer(eps: string): number | null {
   const eof = eps.lastIndexOf("%%EOF");
-  return findLineSpan(eps, /^%%PageTrailer\b/)?.start
-    ?? findLineSpan(eps, /^%%Trailer\b/)?.start
-    ?? findLineSpan(eps, /^%%EOF\b/)?.start
-    ?? (eof < 0 ? null : eof);
+  return (
+    findLineSpan(eps, /^%%PageTrailer\b/)?.start ??
+    findLineSpan(eps, /^%%Trailer\b/)?.start ??
+    findLineSpan(eps, /^%%EOF\b/)?.start ??
+    (eof < 0 ? null : eof)
+  );
 }
 
 interface LineSpan { start: number; end: number }
@@ -200,9 +256,33 @@ function lineEndingOf(text: string): string {
 /** Only our byte-for-byte canonical metadata program may be excluded from the
  * vector grammar audit. Marker comments alone are never a bypass. */
 export function verifiedEpsArtwork(eps: string): string {
-  if (!eps.includes(SETUP_BEGIN) && !eps.includes(TRAILER_BEGIN)) return eps;
-  const metadata = readXmpMetadataFromEps(eps);
+  const hasXmp = eps.includes(SETUP_BEGIN) || eps.includes(TRAILER_BEGIN);
+  const hasIptc = hasIptcInEps(eps);
+  if (!hasXmp && !hasIptc) return eps;
+  const xmp = readXmpMetadataFromEps(eps);
   const clean = stripPreviousEmbedding(eps);
-  if (metadata === null || embedXmpMetadataInEps(clean, metadata) !== eps) throw new Error("unverified EPS metadata envelope");
-  return clean;
+  const cleanNoIptc = stripIptcBlock(clean);
+  if (xmp !== null) {
+    const rebuilt = embedXmpMetadataInEps(cleanNoIptc, xmp);
+    if (rebuilt !== eps) throw new Error("unverified EPS metadata envelope");
+  } else if (hasIptc) {
+    // IPTC-only envelope: re-embed IPTC into the clean document and compare.
+    const iptc = readIptcMetadataFromEps(eps);
+    if (iptc === null) throw new Error("unverified EPS metadata envelope");
+    const eol = lineEndingOf(cleanNoIptc);
+    const iptcBlockStr = iptcBlockFromPartial(iptc, eol);
+    const rebuilt = insertIptcBlock(cleanNoIptc, iptcBlockStr);
+    if (rebuilt !== eps) throw new Error("unverified EPS metadata envelope");
+  }
+  return cleanNoIptc;
+}
+
+/** Build an IPTC comment block from partial metadata (IPTC-only envelope). */
+function iptcBlockFromPartial(partial: Partial<IconMetadata>, eol: string): string {
+  const meta: IconMetadata = {
+    title: partial.title ?? "",
+    description: partial.description ?? "",
+    tags: partial.tags ?? [],
+  };
+  return iptcBlock(meta, eol);
 }

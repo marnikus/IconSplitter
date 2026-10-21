@@ -119,7 +119,7 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
     art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
-    const checked = verifyEpsDocument(art.epsText);
+    const checked = verifyEpsDocument(art.epsText!);
     if (!checked.ok) {
       art.epsText = null;
       art.epsFailure = `EPS vector-only verification failed: ${checked.errors[0]}`;

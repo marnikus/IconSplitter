@@ -4,9 +4,12 @@
 
 When the user exports icons for stock upload (the **SVG to upload** tab), the accepted
 metadata — Title, Description, Tags — must be written **directly into** the exported
-JPEG (XMP APP1 segment) and the exported EPS (XMP pdfmark stream), so that when the
-file is uploaded to a stock website the stock reader can read the metadata straight
-from the file itself — from the EPS at upload, or from the JPEG likewise.
+JPEG **and** the exported EPS in **both** carriers stock sites read: XMP **and**
+IPTC-IIM. Adobe Stock does not reliably read XMP pdfmark from inside an EPS — it
+generates its own JPEG preview and reads that preview's metadata — so IPTC-IIM must
+be embedded in both carriers for both file types: JPEG gets XMP in APP1 plus IPTC-IIM
+in APP13; EPS gets XMP in the pdfmark stream plus IPTC-IIM in a hex-encoded comment
+block. The file, not a sidecar, is what gets read at upload.
 
 The library writers (`src/lib/upload/jpeg.ts`, `src/lib/upload/epsmetadata.ts`,
 `src/lib/upload/embed.ts`) and the end-to-end pipeline (`src/upload/runexport.ts`,
@@ -36,8 +39,10 @@ This change adds exactly that: test assets, two test webpages, and tests.
 5. Tests also replicate the **exact XMP parsing logic used by the webpages**
    (raw JPEG APP1 segment scan; raw EPS xpacket scan) and validate it against
    real exported bytes — so the webpages are proven to work, not just the library.
-6. JPEG read-back uses the XMP APP1 segment; EPS read-back uses the XMP pdfmark
-   stream. Both must return exactly the accepted fields.
+6. JPEG read-back uses the XMP APP1 segment **and** the IPTC-IIM APP13 segment;
+   EPS read-back uses the XMP pdfmark stream **and** the IPTC-IIM hex comment block.
+   Every carrier must return exactly the accepted Title/Description/Tags, and
+   `verifyJpeg` / `verifyEpsMetadata` must pass on the committed file bytes.
 
 ## Critical implementation detail
 
@@ -51,8 +56,8 @@ and the validation test use this exact constant.
 
 | Piece | Path | What it does |
 |---|---|---|
-| JPEG XMP write + read | `src/lib/upload/jpeg.ts` | `embedXmpMetadata`, `readXmpMetadata`, `verifyJpeg` |
-| EPS XMP write + read | `src/lib/upload/epsmetadata.ts` | `embedXmpMetadataInEps`, `readXmpMetadataFromEps`, `verifyEpsMetadata` |
+| JPEG XMP + IPTC-IIM write + read | `src/lib/upload/jpeg.ts` | `embedXmpMetadata` (APP1 XMP + APP13 IPTC-IIM), `readXmpMetadata`, `readIptcMetadata`, `verifyJpeg` (checks both carriers) |
+| EPS XMP + IPTC-IIM write + read | `src/lib/upload/epsmetadata.ts` | `embedXmpMetadataInEps` (pdfmark XMP + hex-comment IPTC-IIM), `readXmpMetadataFromEps`, `readIptcMetadataFromEps`, `verifyEpsMetadata` (either carrier sufficient) |
 | SVG XMP write + read | `src/lib/upload/embed.ts` | `embedMetadataInSvg`, `readEmbeddedMetadata` |
 | End-to-end export | `src/upload/runexport.ts` | `runExport` over a fake folder, commits JPEG+EPS+SVG |
 | Fake binary FS | `tests/helpers/binfakefs.ts` | `BinDir`/`BinFile` — byte-exact JPEG round-trip |
@@ -89,8 +94,8 @@ For each of the 2 SVG assets:
 1. Build a fake folder containing the SVG source + its approved sidecar (as `runExport` expects).
 2. Call `runExport` with accepted metadata and `includeEps: true`, using a fake raster that encodes a real minimal JPEG of the target size.
 3. Assert status `processed` and outputs `{ svg, jpg, eps }` all present.
-4. Read the committed JPEG bytes; `readXmpMetadata(jpeg)` must equal the test metadata; `verifyJpeg(...).ok` must be true.
-5. Read the committed EPS text; `readXmpMetadataFromEps(eps)` must equal the test metadata; `verifyEpsMetadata(eps, meta)` must be true.
+4. Read the committed JPEG bytes; `readXmpMetadata(jpeg)` and `readIptcMetadata(jpeg)` must each equal the test metadata; `verifyJpeg(...).ok` must be true (both carriers checked).
+5. Read the committed EPS text; `readXmpMetadataFromEps(eps)` and `readIptcMetadataFromEps(eps)` must each equal the test metadata; `verifyEpsMetadata(eps, meta)` must be true (either carrier sufficient).
 6. Replicate the webpage's exact XMP parsing (raw APP1 segment scan for JPEG; raw xpacket scan for EPS) against the committed bytes — asserts the webpages will read the metadata correctly.
 7. Negative cases: JPEG without XMP → null; EPS without XMP → null.
 8. (Metadata edit) Re-export with a changed title; assert the JPEG and EPS read back the **edited** title without re-rendering.

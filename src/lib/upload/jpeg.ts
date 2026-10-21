@@ -1,19 +1,23 @@
 // jpeg.ts — JPEG metadata and verification for the "SVG to upload" tab
-// (design §2.6): XMP APP1 carries dc:title / dc:description / dc:subject, the
-// modern compatible carrier (IPTC-IIM is legacy binary). The packet is
-// embedded as the first APP1 segment after SOI, replacing any previous XMP
-// packet (idempotent), and read back for verification. Dimensions come from
-// the SOF segment itself — never from the encode call (RULE 15: verify by
-// decoding, and here by parsing, what was actually written).
+// (design §2.6): XMP APP1 carries dc:title / dc:description / dc:subject,
+// IPTC-IIM APP13 carries Object Name / Caption / Keywords / Byline /
+// Copyright. Both carriers are written into every exported JPEG so stock
+// sites that read either carrier find the accepted fields. Each packet is
+// embedded idempotently (replacing any previous packet of the same carrier),
+// and read back for verification. Dimensions come from the SOF segment
+// itself — never from the encode call (RULE 15: verify by decoding, and here
+// by parsing, what was actually written).
 
 import type { IconMetadata } from "./meta";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
+import { encodeIptcApp13, readIptcFromJpeg } from "./iptc";
 
 export { buildXmpPacket } from "./xmp";
 
 const SOI = [0xff, 0xd8];
 const EOI = [0xff, 0xd9];
 const APP1 = 0xe1;
+const APP13 = 0xed;
 const XMP_ID = "http://ns.adobe.com/xap/1.0/\0";
 
 export interface JpegDimensions {
@@ -28,18 +32,25 @@ export interface JpegVerification {
   height: number | null;
 }
 
-/** The JPEG with the XMP APP1 packet embedded (idempotent; input untouched). */
+/** The JPEG with XMP (APP1) and IPTC-IIM (APP13) embedded, idempotent per carrier. */
 export function embedXmpMetadata(jpeg: Uint8Array, meta: IconMetadata): Uint8Array {
-  const withoutXmp = stripXmp(jpeg);
-  const payload = concat(ascii(XMP_ID), new TextEncoder().encode(buildXmpPacket(meta)));
-  const segment = concat(new Uint8Array([0xff, APP1]), u16(payload.length + 2), payload);
-  return concat(concat(new Uint8Array(SOI), segment), withoutXmp.slice(2));
+  let out = stripXmp(jpeg);
+  out = stripIptc(out);
+  const xmpPayload = concat(ascii(XMP_ID), new TextEncoder().encode(buildXmpPacket(meta)));
+  const xmpSegment = concat(new Uint8Array([0xff, APP1]), u16(xmpPayload.length + 2), xmpPayload);
+  const iptcSegment = encodeIptcApp13(meta);
+  return concat(concat(new Uint8Array(SOI), xmpSegment, iptcSegment), out.slice(2));
 }
 
-/** The embedded metadata read back; null when no valid XMP packet is present. */
+/** The embedded XMP metadata read back; null when no valid XMP packet is present. */
 export function readXmpMetadata(jpeg: Uint8Array): IconMetadata | null {
   const xml = xmpPayload(jpeg);
   return xml === null ? null : readXmpPacket(xml);
+}
+
+/** The embedded IPTC-IIM metadata read back; null when no valid APP13 block is present. */
+export function readIptcMetadata(jpeg: Uint8Array): Partial<IconMetadata> | null {
+  return readIptcFromJpeg(jpeg);
 }
 
 /** The decoded dimensions from the SOF segment (baseline or progressive). */
@@ -52,12 +63,13 @@ export function readJpegDimensions(jpeg: Uint8Array): JpegDimensions | null {
   return null;
 }
 
-/** Full verification: SOI/EOI, decoded dimensions, XMP readback equals. */
+/** Full verification: SOI/EOI, decoded dimensions, XMP readback equals, IPTC-IIM readback equals. */
 export function verifyJpeg(jpeg: Uint8Array, expected: { width: number; height: number; metadata: IconMetadata }): JpegVerification {
   const errors: string[] = [];
   checkFrame(jpeg, errors);
   const dims = checkDimensions(jpeg, expected, errors);
-  checkMetadata(jpeg, expected, errors);
+  checkXmpMetadata(jpeg, expected, errors);
+  checkIptcMetadata(jpeg, expected, errors);
   return { ok: errors.length === 0, errors, width: dims?.width ?? null, height: dims?.height ?? null };
 }
 
@@ -75,7 +87,7 @@ function checkDimensions(jpeg: Uint8Array, expected: { width: number; height: nu
   return dims;
 }
 
-function checkMetadata(jpeg: Uint8Array, expected: { metadata: IconMetadata }, errors: string[]): void {
+function checkXmpMetadata(jpeg: Uint8Array, expected: { metadata: IconMetadata }, errors: string[]): void {
   const meta = readXmpMetadata(jpeg);
   if (meta === null) {
     errors.push("no XMP metadata found");
@@ -84,6 +96,19 @@ function checkMetadata(jpeg: Uint8Array, expected: { metadata: IconMetadata }, e
   const same = meta.title === expected.metadata.title && meta.description === expected.metadata.description
     && meta.tags.join("\u0000") === expected.metadata.tags.join("\u0000");
   if (!same) errors.push("XMP metadata does not match the accepted fields");
+}
+
+function checkIptcMetadata(jpeg: Uint8Array, expected: { metadata: IconMetadata }, errors: string[]): void {
+  const iptc = readIptcFromJpeg(jpeg);
+  if (iptc === null) {
+    errors.push("no IPTC-IIM metadata found");
+    return;
+  }
+  const same =
+    (iptc.title ?? "") === expected.metadata.title &&
+    (iptc.description ?? "") === expected.metadata.description &&
+    (iptc.tags ?? []).join("\u0000") === expected.metadata.tags.join("\u0000");
+  if (!same) errors.push("IPTC-IIM metadata does not match the accepted fields");
 }
 
 // --- segment plumbing ---------------------------------------------------------
@@ -142,8 +167,35 @@ function stripXmp(jpeg: Uint8Array): Uint8Array {
   return concat(...parts);
 }
 
+/** The JPEG without any IPTC-IIM APP13 segment (for idempotent re-embedding). */
+function stripIptc(jpeg: Uint8Array): Uint8Array {
+  const parts: Uint8Array[] = [jpeg.slice(0, 2)];
+  let at = 2;
+  while (at + 4 <= jpeg.length) {
+    if (jpeg[at] !== 0xff) break;
+    const marker = jpeg[at + 1];
+    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      parts.push(jpeg.slice(at, at + 2));
+      at += 2;
+      continue;
+    }
+    const length = (jpeg[at + 2] << 8) | jpeg[at + 3];
+    const end = at + 2 + length;
+    const isIptc = marker === APP13 && startsWithIptcId(jpeg.slice(at + 4, end));
+    if (!isIptc) parts.push(jpeg.slice(at, end));
+    at = end;
+  }
+  parts.push(jpeg.slice(at));
+  return concat(...parts);
+}
+
 function startsWithId(data: Uint8Array): boolean {
   const id = ascii(XMP_ID);
+  return data.length > id.length && id.every((byte, i) => data[i] === byte);
+}
+
+function startsWithIptcId(data: Uint8Array): boolean {
+  const id = new TextEncoder().encode("Photoshop 3.0\0");
   return data.length > id.length && id.every((byte, i) => data[i] === byte);
 }
 
