@@ -32,20 +32,23 @@ local edit. The user had made no local change in that row.
 ## 3. The rule
 
 1. The enable flag STAYS in the icon's `overrides` (the pipeline is untouched).
-2. A new persisted map records which flags the checked-icons control applied:
-   `applied: { [pairId]: { shadow?, badge?, sizeGuide? } }` in the same `v: 1`
-   payload as `defaults`/`overrides`; a payload without it reads `{}`.
+2. A new persisted map records which FIELDS a global control applied:
+   `applied: { [pairId]: { [field]?: true } }` in the same `v: 1` payload as
+   `defaults`/`overrides`; a payload without it reads `{}`. It covers the three
+   enable flags and the selected-only dimensions (shadow width/gap).
 3. The marker and the pin count subtract applied flags: applied → `inherited`.
-4. A change to that flag in the row's OWN dialog clears the mark, so it becomes
-   a real local pin from then on. The comparison is by VALUE — the dialog hands
-   over the whole merged override, and presence alone would demote decorations
-   the user never touched.
+4. A change to that field in the row's OWN dialog clears the mark, so it
+   becomes a real local pin from then on. The comparison is by VALUE — the
+   dialog hands over the whole merged override, and presence alone would demote
+   fields the user never touched.
 5. Turning a decoration OFF for the selection deletes the flag and the mark:
    "off" is the absence of a pin, never a `false` pin.
-6. `↺ Reset to defaults (N)` clears the selected rows' local pins **and** their
-   applied marks in ONE `uploadSettings` entry; N counts a row with either, so
-   the button can always undo a decoration it applied; the stored global
-   defaults are never written by it.
+6. `↺ Reset to defaults (N)` clears the selected rows' LOCAL pins only, in ONE
+   `uploadSettings` entry. A field the popup applied is not a local setting and
+   STAYS (2026-10-21, the user's correction: "the reset should apply to local
+   setting but not to global … shadow should not be removed from global
+   preset"); N counts a row with a local pin; the stored global defaults are
+   never written. The row's own reset follows the same rule.
 
 ## 4. Plan and steps
 
@@ -61,13 +64,14 @@ local edit. The user had made no local change in that row.
 5. **Undo** — `uploadundo.UploadSettingsPatch` gains `applied?`;
    `toUploadSettingsPatch` validates it; the persist-only path writes both maps.
 6. **Writes** — `commitDecoration(c, ids, { key, on, label })` in
-   `selectedsettings` replaces the three ad-hoc decoration writers (one history
+   `selectedsettings` replaces the three ad-hoc decoration writers, and
+   `commitBatch` marks every field a selected-only dimension moved (one history
    entry per gesture, both maps in before/after). The per-row
-   `setOverride`/`resetOverride` move to `overrideactions.ts` and drop a mark
-   only when the flag's value really moved.
-7. **Reads** — `markerOf` reads an applied flag as `inherited`; `UploadRow`
-   counts `localKeys`; `UploadPanel` passes the row's marks; the bar's N uses
-   `resettableIds` (a local pin **or** an applied mark).
+   `setOverride`/`resetOverride` move to `overrideactions.ts`; a mark is dropped
+   only when that field's value really moved, and the reset keeps applied fields.
+7. **Reads** — `markerOf` reads an applied field as `inherited`; `UploadRow`
+   counts `localKeys`; `UploadPanel` passes the row's marks; the bar's N counts
+   local pins only (`resettableIds`), and `resetBatch` keeps applied fields.
 8. **Docs** — `sor/upload-settings.md` (owner), `sor/upload-badge.md`,
    `sor/upload-sizeguide.md`, `sor/storage/upload.md`, `sor/upload.md`,
    `selectors/upload-dialogs.md`, `selectors/upload-list.md`; one measured
@@ -85,9 +89,10 @@ local edit. The user had made no local change in that row.
   `overridden`; the other two stay `inherited`; undo restores the applied state
   and its `inherited` word.
 * Turning a decoration off for the selection leaves no `false` pin behind.
-* `↺ Reset to defaults (N)` clears the selected rows' local pins and applied
-  decorations only, in one entry; the stored global defaults are byte-identical
-  afterwards, including the values the user changed.
+* `↺ Reset to defaults (N)` clears the selected rows' LOCAL pins only, in one
+  entry: a shadow/badge/size guide (and a width) the popup applied to the
+  selection is still on, its checkbox is still checked, and the stored global
+  defaults are byte-identical afterwards, including the values the user changed.
 * An older payload without `applied` loads as "nothing applied"; junk marks are
   dropped field by field.
 
@@ -96,27 +101,30 @@ local edit. The user had made no local change in that row.
 Measured on 2026-10-21, branch `arena/cf992ba5-iconsplitter`:
 
 * Red first (mutation check on the finished code): taking the applied branch out
-  of `markerOf` fails the first case with `expected 'overridden' to be
-  'inherited'`; dropping the marks from `resetBatch` fails the second with
-  `expected { shadow: true } to be undefined`. Restored: both pass.
+  of `markerOf` fails the first UI case with `expected 'overridden' to be
+  'inherited'`; dropping the kept fields from `resetBatch` fails the reset case
+  with `expected { shadowEnabled: true } to be undefined`.
 * The same row's stored payload after the three checkboxes:
   `overrides: { shadowEnabled: true, badgeEnabled: true, sizeGuideEnabled: true }`,
-  `applied: { shadow: true, badge: true, sizeGuide: true }` — the flags stayed
-  where the pipeline reads them, the provenance is beside them.
-* After the row's own badge toggle: `applied` keeps `shadow` and `sizeGuide`
-  only; the row reads `1 field overridden`; undo restores all three marks and
-  the `inherited` word.
-* Reset with FOG checked: `overrides.FOG`/`applied.FOG` gone, `overrides.ARCH`/
-  `applied.ARCH` untouched, `defaults` still `{ shadowWidthPct: 130,
-  badgeWidthPct: 32 }` as the user set them.
-* `tests/upload_ui.test.tsx` 63 passed; `tests/upload_settings_store.test.ts` 14
-  passed (including the new round-trip and junk cases); `tests/upload_undo.test.ts`
-  19 passed (including the applied half).
+  `applied: { shadowEnabled: true, badgeEnabled: true, sizeGuideEnabled: true }`
+  — the values stayed where the pipeline reads them, provenance beside them.
+* After the row's own badge toggle: `applied` keeps `shadowEnabled` and
+  `sizeGuideEnabled` only; the row reads `1 field overridden`; undo restores all
+  three marks and the `inherited` word.
+* **Reset scope (the correction).** FOG: applied shadow (plus a 120% width) and
+  a local 17% padding pin; ARCH: applied shadow only. Checked = FOG.
+  `↺ Reset to defaults (1)` → `overrides.FOG = { shadowEnabled: true,
+  shadowWidthPct: 120 }`, `applied.FOG` unchanged, the Checked-icons SHADOW box
+  still checked, `overrides.ARCH` untouched, `defaults` still
+  `{ shadowWidthPct: 130, badgeWidthPct: 32 }` as the user set them.
+* Undo of that reset restores the padding pin; the next undo drops the local
+  edit and leaves the applied shadow.
+* `tests/upload_ui.test.tsx` 64 passed; `tests/upload_settings_store.test.ts` 14
+  (round-trip and junk marks); `tests/upload_undo.test.ts` 19 (the applied half);
+  full suite 2351 passed.
 * `npx tsc --noEmit` clean; `npm run lint` 0 errors / 23 warnings;
-  `node tools/quality.mjs --changed --allow-legacy` GATE PASSED (the new
-  `lib/upload/decorations.ts` is 93 lines; `commitDecoration` takes one object
-  spec so it stays at 3 parameters); `npm run verify` ALL LANES PASSED (tests +
-  coverage + build).
+  `node tools/quality.mjs --changed --allow-legacy` GATE PASSED; `npm run verify`
+  ALL LANES PASSED (tests + coverage + build).
 
 ## 7. Result
 

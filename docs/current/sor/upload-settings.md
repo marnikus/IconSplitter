@@ -36,7 +36,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
 * **Paint clash** (2026-10-19, `lib/upload/paintclash`): a hex stroke colour on
   a hex background below WCAG non-text contrast (3:1) is named in the row's
   preview note and in the dialog (`upload-set-paint-clash`) — e.g. black on
-  black exports a solid square. Default / transparent / artwork paint: no note.
+  black. Default / transparent / artwork paint: no note.
 
 * **Selected-only Shadow** (2026-10-20): the global Export settings popup's
   **Checked icons** checkbox adds or removes the bundled
@@ -48,7 +48,7 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   without opting icons in; stored global
   `shadowEnabled:true` is ignored on read. One icon may override all three in
   its own dialog. Each checked-set edit is one `uploadSettings` undo
-  entry and keeps unrelated overrides; the Reset clears them all. An
+  entry and keeps unrelated overrides. An
   enabled shadow fingerprints its dimensions and template hash; dormant values
   leave historic fingerprints (and as-is bytes) unchanged. Built-in EPS cannot paint
   the gradient: the bar, row and both dialog scopes warn it is partial while
@@ -64,14 +64,15 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   quality, SVGO optimize on, optional EPS, artboard) plus per-icon overrides;
   the effective settings are defaults under, overrides on top, and every field
   is marked inherited or overridden. Only a local edit pins a field (2026-10-21,
-  row settings isolation); a global edit never writes a row. A decoration the
-  Checked-icons checkbox adds is *applied*, not pinned (2026-10-21, [plan](../../archive/2026-10-21-upload-applied-decorations/README.md)):
-  the same payload's `applied: { pairId: { shadow?, badge?, sizeGuide? } }`
-  names the flags the selection set, the marker reads `inherited`, the row's
-  count ignores them, and only that row's own dialog (on a real value change)
-  drops the mark. The bar's "↺ Reset to defaults (N)" clears every checked
-  icon's pins AND applied marks as ONE undoable `uploadSettings` entry (N
-  counts a row with either; the stored defaults are never touched); per-icon set/reset pushes one entry each;
+  row settings isolation); a global edit never writes a row. Anything this
+  popup writes — a Checked-icons decoration or a selected-only dimension — is
+  *applied*, not pinned (2026-10-21, [plan](../../archive/2026-10-21-upload-applied-decorations/README.md)):
+  the payload's `applied: { pairId: { [field]?: true } }` names the fields the
+  selection set, the marker reads `inherited`, the row's count ignores them,
+  and only that row's own dialog drops the mark when the value really moves.
+  The bar's "↺ Reset to defaults (N)" clears the checked icons' LOCAL pins
+  only — never an applied field, never the stored defaults — as ONE undoable
+  `uploadSettings` entry (N counts local pins only); per-icon set/reset pushes one entry each;
   global-defaults edits are persisted but NOT undoable, like presets. The
   checkbox selection is session-persisted and
   its gestures are undoable through the separate `uploadChecked` history type.

@@ -19,8 +19,9 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   Shadow; they commit on blur/Enter to only shadowed checks (one undo entry,
   never enabling off icons). `upload-set-shadow-width` / `-gap` under **Shadow
   defaults** change inherited numbers only, never opting unchecked icons in.
-  A decoration the Checked-icons control applied reads `inherited` and does not
-  count as a pin (2026-10-21); only a change in this icon's own dialog does.
+  A field the popup applied reads `inherited` and does not count as a pin
+  (2026-10-21); only a change in this icon's own dialog does, and the bar's
+  reset leaves the applied value alone.
   In the per-icon popup `upload-set-shadow` is the on/off checkbox (the one
   `.up-shadow-check` label, width/gap disabled when off). Width 10–200%, gap 0–100%;
   `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.
