@@ -3027,3 +3027,25 @@ Plan/outcome: `docs/archive/2026-10-21-eps-no-routine-warning/README.md`. Remove
 - Exact two requested source SVGs absent: one user-fixture acceptance explicitly
   skipped, never replaced by a claimed synthetic pass. Fixture suite discovers
   them in the requested asset folder when supplied. Generated dist excluded.
+
+## 2026-10-21 — stock metadata actual-user-fixture acceptance follow-up
+
+- Remote user commit61cc804 arrived during the feature: one SVG
+  icon-handshake-heart_7_03_v2.svg and one EPS icon-handshake-heart_7_01_v2.eps.
+  Merged without overwrite/force-push; both original files remain byte-identical.
+  The initial missing-fixture skip above is now RESOLVED, not left deferred.
+- Page suite asserts both exact originals, exports actual SVG to JPEG AND EPS,
+  uploads committed bytes through the page input, then embeds metadata into the
+  supplied EPS and checks unchanged vector instructions and page readback.
+  All9 page tests, final132 focused tests/8files pass; no skip remains.
+- Independent real-codec/Chromium probe repeated with the actual SVG: real
+  Resvg→JPEG encode/decode and SVG→EPS atomic commits. All7 uploaded files
+  (4supplementary + user SVG JPEG/EPS + supplied EPS with metadata) read exact
+  fields and both carriers in Chromium153 and ExifTool13.59. Ghostscript9.56
+  raster traps passed all4 EPS, including actual user artifacts. No artwork
+  bitmap was introduced; only JPEG is rasterized by design.
+- Post-merge verify:fast ALL FIVE LANES PASSED; verify ALL SIX LANES PASSED:
+  types13.9s/lint10.9s/quality0.5s/native2.6s/coverage172.6s/build6.7s.
+  2454/2454tests,230files,no skips; library lines97.96%. Current docs and test
+  folder README now identify the actual SVG/EPS instead of missing fixtures.
+  Generated dist remains excluded; no dependency or threshold changes.

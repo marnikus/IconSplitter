@@ -30,20 +30,28 @@ HTML. Files remain in the browser. XMP carries complete fields; legacy IIM
 copies use UTF-8 byte limits (Title ObjectName 64 / Headline 256, Description
 2000, each keyword 64). Actual stock import behavior varies by site.
 
-## The two source SVGs
+## The two supplied source files
 
-**Not present in the checkout when this task was implemented.** Put the exact
-two user-provided `.svg` files directly in THIS folder. Do not replace them
-with synthetic fixtures and call that acceptance testing.
+The user's fixture commit supplies these exact originals (kept unchanged):
 
-`tests/upload_metadata_page.test.ts` discovers them automatically and runs
-both through the real export pipeline, commits JPEG **and** EPS, then supplies
-the committed bytes as `File`s to this page's actual input event. Its raster
-transport is injected, as in other repository pipeline tests; this verifies
-metadata/delivery, not source-specific JPEG visual fidelity. The suite requires
-exactly two SVGs once any are supplied; until then its user-fixture acceptance
-case is explicitly skipped. Two clearly labeled synthetic SVGs in the test
-helper provide supplementary coverage, never substitute acceptance.
+- `icon-handshake-heart_7_03_v2.svg`
+- `icon-handshake-heart_7_01_v2.eps`
+
+`tests/upload_metadata_page.test.ts` exports the actual supplied SVG through
+both JPEG **and** EPS, commits the outputs and supplies their bytes as `File`s
+to this page's actual input event. It also embeds temporary metadata into the
+actual supplied EPS using the production EPS writer, verifies the executable
+vector artwork is unchanged, and uploads that result to the same page. The
+fixture inventory is asserted; there is no missing-fixture skip. The original
+EPS has no metadata, so uploading THAT original instead of a newly embedded
+export correctly reports missing fields.
+
+As in other repository pipeline tests, the automated raster transport is
+injected: this tests metadata and delivery rather than fixture pixel fidelity.
+Separate independent acceptance probes use the actual supplied SVG with a
+real Resvg/JPEG codec, then upload its actual JPEG/EPS (and the supplied EPS
+with embedded metadata) through Chromium. Two labeled synthetic helper SVGs
+provide additional edge-case coverage, not substitute acceptance.
 
 ```sh
 npx vitest run tests/upload_metadata_page.test.ts tests/upload_stockmetadata.test.ts tests/upload_stockrepair.test.ts

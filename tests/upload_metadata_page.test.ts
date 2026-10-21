@@ -5,6 +5,7 @@ import { mountReader } from "./assets/SVG to JPEG or EPS export tests/page.mjs";
 import { readStockFile } from "./assets/SVG to JPEG or EPS export tests/reader.mjs";
 import { runExport } from "../src/upload/runexport";
 import { readBytesAt } from "../src/lib/fs";
+import { embedXmpMetadataInEps, verifiedEpsArtwork } from "../src/lib/upload/epsmetadata";
 import { verifyEpsDocument } from "../src/lib/upload/eps";
 import { stockExportArgs, STOCK_TEST_META, STOCK_TEST_SVGS } from "./helpers/stockexport";
 
@@ -60,11 +61,30 @@ describe("independent file upload webpage", () => {
   });
 });
 
-const supplied = readdirSync(fixtureDir).filter((n) => n.toLowerCase().endsWith(".svg"));
-describe.skipIf(supplied.length === 0)("user-supplied SVG export acceptance (files currently absent)", () => {
-  it("has exactly the two requested source SVGs", () => expect(supplied).toHaveLength(2));
-  it.each(supplied)("exports and uploads %s as JPEG AND EPS", async (name) => {
-    await testExportAndUpload(readFileSync(`${fixtureDir}/${name}`, "utf8"));
+const suppliedSvg = "icon-handshake-heart_7_03_v2.svg";
+const suppliedEps = "icon-handshake-heart_7_01_v2.eps";
+describe("user-supplied SVG and EPS fixture acceptance", () => {
+  it("uses both actual user files, not synthetic replacements", () => {
+    expect(readdirSync(fixtureDir).filter((n) => /\.(svg|eps)$/i.test(n)).sort()).toEqual([suppliedEps, suppliedSvg]);
+  });
+  it("exports the supplied SVG as JPEG AND EPS and reads both through the webpage", async () => {
+    await testExportAndUpload(readFileSync(`${fixtureDir}/${suppliedSvg}`, "utf8"));
+  });
+  it("embeds metadata into the supplied EPS, preserves its vector drawing and uploads it to the webpage", async () => {
+    const original = readFileSync(`${fixtureDir}/${suppliedEps}`, "utf8");
+    expect(verifyEpsDocument(original).ok).toBe(true);
+    expect(() => readStockFile(new TextEncoder().encode(original))).toThrow(/No complete/);
+    const tagged = embedXmpMetadataInEps(original, STOCK_TEST_META);
+    expect(verifyEpsDocument(tagged).ok).toBe(true);
+    const code = (s: string) => s.split(/\r?\n/).filter((l) => l.trim() && !l.startsWith("%"));
+    expect(code(verifiedEpsArtwork(tagged))).toEqual(code(original));
+    expect(readStockFile(new TextEncoder().encode(tagged)).metadata).toEqual(STOCK_TEST_META);
+    mount();
+    upload([new File([tagged], suppliedEps, { type: "application/postscript" })]);
+    await vi.waitFor(() => expect(document.querySelectorAll('[data-state="ready"]')).toHaveLength(1));
+    expect(document.querySelector('[data-field="title"]')?.textContent).toBe(STOCK_TEST_META.title);
+    expect(document.querySelector('[data-field="description"]')?.textContent).toBe(STOCK_TEST_META.description);
+    expect(Array.from(document.querySelector('[data-field="tags"]')!.querySelectorAll("li"), (el) => el.textContent)).toEqual(STOCK_TEST_META.tags);
   });
 });
 

@@ -68,13 +68,15 @@ Handles: `#files` (`input[type=file]`, multiple), `#results` (`aria-live=polite`
 `article[data-state=reading|ready|error]`, `[data-field=title|description|tags]`;
 legacy fields live inside `details`, the main canonical fields precede it.
 
-The exact two requested user SVGs were absent at implementation. Add them to
-that folder: `upload_metadata_page.test.ts` automatically exports both JPEG
-AND EPS and uploads the committed bytes through the page's real input event.
-It requires two files once supplied; absent-fixture acceptance is explicitly
-skipped. Synthetic supplementary fixtures are labeled, not misrepresented.
-The pipeline tests inject the raster transport; they verify metadata/delivery,
-not fixture-specific rendered-pixel fidelity.
+The supplied fixtures are `icon-handshake-heart_7_03_v2.svg` and
+`icon-handshake-heart_7_01_v2.eps`, preserved unchanged in that folder.
+`upload_metadata_page.test.ts` exports the supplied SVG to BOTH JPEG and EPS
+and uploads committed bytes through the real input event. It also embeds the
+same temporary metadata into the supplied EPS, verifies its vector program
+is unchanged and uploads the result. Fixture inventory is asserted; no skip.
+Synthetic supplementary fixtures remain labeled. Automated tests inject the
+raster transport; independent acceptance also uses real Resvg/JPEG encoding
+and a Chromium file upload with the actual supplied artwork.
 
 ## Owners and tests
 

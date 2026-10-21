@@ -85,7 +85,7 @@ strict, and unverified Photoshop opaque blocks are rejected.
   independent page suite could not load its not-yet-created modules, then
   exposed an XML namespace lookup incompatibility in the happy-dom harness;
   namespace-aware element traversal now works in both harness and Chromium.
-- Final focused run: **129 passed + 1 skipped in 8 files**. New coverage includes
+- Initial focused run before fixture arrival: **129 passed + 1 skipped in 8 files**. New coverage includes
   Unicode, XML/HTML escaping, long fields, duplicate/update/idempotence,
   unrelated APP resources and pixel scan preservation, malformed/oversized
   segments, LF/CRLF/CR, tampered EPS metadata and metadata-only reuse repair.
@@ -118,12 +118,35 @@ strict, and unverified Photoshop opaque blocks are rejected.
 - Current contract/owners/tests/handles/router updated in the same change;
   generated dist remains excluded. No production or repository dependency added.
 
-### Remaining user-fixture acceptance
+### Fixture arrival and final acceptance follow-up
 
-The exact two SVGs at the user's Windows-relative path are **still absent** in
-this checkout. This is the one explicitly skipped acceptance case, not a passing
-substitute. The implementation and independent probes use labeled supplementary
-fixtures only. Add the two actual `.svg` files to
-`tests/assets/SVG to JPEG or EPS export tests/`; the suite automatically exports
-both formats and uploads their committed bytes to the test page. The real
-stock site's ingestion still requires that site's own workflow check.
+The first feature push encountered remote commit `61cc804` while this task was
+running. It supplied **one SVG and one EPS**, not two SVGs. The commit was
+merged without overwriting either file or force-pushing. Exact originals:
+
+- `icon-handshake-heart_7_03_v2.svg`
+- `icon-handshake-heart_7_01_v2.eps`
+
+The missing-fixture skip is now removed. Automated tests assert the supplied
+inventory, export the actual SVG through the real pipeline to JPEG **and** EPS,
+then upload both committed files through the independent webpage. They also
+embed the temporary metadata into the supplied EPS, compare its vector
+instructions unchanged, verify the vector-only gate and upload it to the page.
+All **9 page tests passed** with the real fixtures present.
+
+The independent real-codec probe was repeated with the actual supplied SVG:
+Resvg render → JPEG encode/decode → real atomic commit, plus SVG→EPS commit.
+The supplied EPS was independently metadata-embedded. Chromium then uploaded
+**7 files total** (4 supplementary + actual user SVG JPEG/EPS + metadata-bearing
+supplied EPS), confirming exact fields and BOTH carriers from every file.
+ExifTool independently read all seven files with exact Unicode metadata;
+Ghostscript raster traps executed all four EPS outputs successfully (including
+both actual-user artifacts). Original fixture files were never changed.
+
+Final post-merge verification: **132/132 focused tests in 8 files**, no skips.
+`npm run verify:fast` passed all five lanes. `npm run verify` passed all six:
+types **13.9 s**, lint **10.9 s**, changed quality **0.5 s**, native performance
+**2.6 s**, coverage **172.6 s**, build **6.7 s**. Full suite: **2454/2454 tests
+in 230 files, no skips**, library line coverage **97.96%**. The original user
+fixture bytes match commit `61cc804` exactly. No original-file edits,
+dependency changes, threshold relaxations or generated build files staged.
