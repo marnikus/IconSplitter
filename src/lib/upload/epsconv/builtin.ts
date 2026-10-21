@@ -5,7 +5,7 @@
 import { verifyEps, writeEps } from "../eps";
 import type { ConvertResult, EpsConverter, EpsConvertInput } from "./types";
 
-export const BUILTIN_WRITER = "builtin-subset-5";
+export const BUILTIN_WRITER = "builtin-subset-6";
 
 export const builtinConverter: EpsConverter = {
   id: "builtin",

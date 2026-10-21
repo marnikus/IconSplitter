@@ -1,13 +1,12 @@
 // epspath.ts — geometry to PostScript path construction (RULE 3): the
 // documented EPS subset's shapes (rect, circle, ellipse, line, polyline,
-// polygon, path) as `newpath … moveto/lineto/curveto/closepath` sequences.
-// The shape itself comes from the ONE outline model (geom/outline.ts) that
-// the export bake also reads, so the EPS and the SVG can never disagree about
-// a shape; this file is only the PostScript writer. No paint here —
-// uploadeps wraps these with the CTM and the paint state.
+// polygon, path) as `newpath … moveto/lineto/curveto/closepath` sequences,
+// wrapped strictly within DSC line-length limits (`<= 200` chars/line).
 
 import { fmt } from "./geom";
 import { pathOutline, shapeOutline, type Outline } from "./geom/outline";
+
+const MAX_LINE_LEN = 140;
 
 /** PS path construction for one shape element; null when outside the subset. */
 export function shapePathPs(el: Element): string | null {
@@ -21,13 +20,23 @@ export function pathDataPs(d: string | null): string | null {
   return outline === null ? null : outlineToPs(outline);
 }
 
-/** Pre-parsed outline → PS path construction. */
+/** Pre-parsed outline → DSC-safe line-wrapped PS path construction. */
 export function outlineToPs(o: Outline): string {
-  let ps = "newpath";
+  const lines: string[] = [];
+  let cur = "newpath";
   for (const op of o.ops) {
-    if (op.op === "Z") ps += " closepath";
-    else if (op.op === "C") ps += ` ${fmt(op.x1)} ${fmt(op.y1)} ${fmt(op.x2)} ${fmt(op.y2)} ${fmt(op.x)} ${fmt(op.y)} curveto`;
-    else ps += ` ${fmt(op.x)} ${fmt(op.y)} ${op.op === "M" ? "moveto" : "lineto"}`;
+    const seg = formatOp(op);
+    if (cur.length + 1 + seg.length > MAX_LINE_LEN) {
+      lines.push(cur);
+      cur = seg;
+    } else cur += ` ${seg}`;
   }
-  return ps;
+  lines.push(cur);
+  return lines.join("\r\n");
+}
+
+function formatOp(op: Outline["ops"][number]): string {
+  if (op.op === "Z") return "closepath";
+  if (op.op === "C") return `${fmt(op.x1)} ${fmt(op.y1)} ${fmt(op.x2)} ${fmt(op.y2)} ${fmt(op.x)} ${fmt(op.y)} curveto`;
+  return `${fmt(op.x)} ${fmt(op.y)} ${op.op === "M" ? "moveto" : "lineto"}`;
 }

@@ -48,9 +48,9 @@ async function renderEpsWithGhostscript(eps: string, dpi = 72): Promise<Rendered
 }
 
 function decodeAiStream(eps: string): string {
-  const m = /%AI9_DataStream\n([\s\S]*?)~>\n%AI9_PrivateDataEnd/.exec(eps);
+  const m = /%AI9_DataStream\r?\n([\s\S]*?)~>\r?\n%AI9_PrivateDataEnd/.exec(eps);
   expect(m).not.toBeNull();
-  const raw = m![1].split("\n").map((l) => l.replace(/^%/, "")).join("");
+  const raw = m![1].split(/\r?\n/).map((l) => l.replace(/^%/, "")).join("");
   const out: number[] = [];
   let tuple = 0;
   let count = 0;
@@ -97,7 +97,7 @@ describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 + N
 
     const ai = decodeAiStream(epsOut.eps);
     expect(findRasterOperators(ai)).toEqual([]);
-    expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\n(Gradient 1) 1 3 Bd");
+    expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\r\n(Gradient 1) 1 3 Bd");
 
     const meta = { title: "Shadow Icon", description: "Vector image icon with smooth radial shadow", tags: ["icon", "shadow", "vector", "image", "eps"] };
     const withXmp = embedXmpMetadataInEps(epsOut.eps, meta);

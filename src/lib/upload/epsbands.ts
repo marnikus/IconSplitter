@@ -1,6 +1,6 @@
-// epsbands.ts — pure Level-2 PostScript vector gradient geometry (`clip`/`eoclip`
-// + exact Sutherland-Hodgman slabs and painter's-order cubic-Bezier ellipses).
-// Zero `shfill`, zero `/ShadingType`, zero raster operators in any EPS viewer.
+// epsbands.ts — compact, optimized Level-2 PostScript vector gradient preview
+// (`<= 16` pure 4-anchor cubic-Bezier ellipses for radial, `<= 20` convex slabs
+// for linear; `0` 48-gon tessellation, `0` `shfill`, `0` raster operators).
 
 import { fmt } from "./geom";
 import type { Bounds } from "./geom/bounds";
@@ -10,6 +10,8 @@ import type { FlatStop } from "./epsshading";
 
 type Pt = [number, number];
 const KAPPA = 0.5522847498;
+const MAX_RADIAL_BANDS = 16;
+const MAX_LINEAR_SLABS = 20;
 
 export interface LinearBandInput {
   mat: Matrix;
@@ -44,18 +46,22 @@ export function linearBandsPs(spec: LinearBandInput, box: Bounds): string {
 }
 
 export function radialBandsPs(spec: RadialBandInput, box: Bounds): string {
-  const n = bandCount(spec.stops);
-  const out = [polyFillPs(rectCorners(box), spec.stops[spec.stops.length - 1].color)];
+  const n = stepCount(spec.stops, MAX_RADIAL_BANDS);
+  const outer = spec.stops[spec.stops.length - 1].color;
+  const out = [polyFillPs(rectCorners(box), outer)];
+  let prev = outer;
   for (let k = n - 1; k >= 0; k--) {
+    const color = sampleStops(spec.stops, k / Math.max(1, n - 1));
+    if (k > 0 && colorDelta(color, prev) < 1 / 255) continue;
     const s = (k + 1) / n;
-    const cx = spec.fx + s * (spec.cx - spec.fx);
-    const cy = spec.fy + s * (spec.cy - spec.fy);
     const r = spec.fr + s * (spec.r - spec.fr);
     if (r <= 1e-9) continue;
-    const line = radialRingPs([cx, cy, r], spec.mat, box, sampleStops(spec.stops, (k + 0.5) / n));
-    if (line !== "") out.push(line);
+    prev = color;
+    const cx = spec.fx + s * (spec.cx - spec.fx);
+    const cy = spec.fy + s * (spec.cy - spec.fy);
+    out.push(bezierCirclePs(circleBezierPoints(cx, cy, r).map(([x, y]) => mapMat(spec.mat, x, y)), color));
   }
-  return out.join("\n");
+  return out.join("\r\n");
 }
 
 function emitLinearSlabs(stops: FlatStop[], box: Bounds, field: (x: number, y: number) => number): string {
@@ -63,7 +69,7 @@ function emitLinearSlabs(stops: FlatStop[], box: Bounds, field: (x: number, y: n
   const ts = corners.map(([x, y]) => field(x, y));
   const tMin = Math.min(...ts);
   const tMax = Math.max(...ts);
-  const n = bandCount(stops);
+  const n = stepCount(stops, MAX_LINEAR_SLABS);
   const out: string[] = [];
   if (tMin < 0) out.push(slabPs(corners, field, [tMin - 1, 1e-4], stops[0].color));
   for (let k = 0; k < n; k++) {
@@ -73,19 +79,12 @@ function emitLinearSlabs(stops: FlatStop[], box: Bounds, field: (x: number, y: n
     out.push(slabPs(corners, field, [lo, hi], sampleStops(stops, (k + 0.5) / n)));
   }
   if (tMax > 1) out.push(slabPs(corners, field, [1 - 1e-4, tMax + 1], stops[stops.length - 1].color));
-  return out.filter((s) => s !== "").join("\n");
+  return out.filter((s) => s !== "").join("\r\n");
 }
 
 function slabPs(corners: Pt[], field: (x: number, y: number) => number, [lo, hi]: [number, number], color: Rgb): string {
   const low = clipHalf(corners, (x, y) => field(x, y) - lo);
   const poly = clipHalf(low, (x, y) => hi - field(x, y));
-  return poly.length < 3 ? "" : polyFillPs(poly, color);
-}
-
-function radialRingPs([cx, cy, r]: [number, number, number], mat: Matrix, box: Bounds, color: Rgb): string {
-  const bez = circleBezierPoints(cx, cy, r).map(([x, y]) => mapMat(mat, x, y));
-  if (bez.every(([x, y]) => insideBounds(box, x, y))) return bezierCirclePs(bez, color);
-  const poly = clipRect(sampleCircle(cx, cy, r, 48).map(([x, y]) => mapMat(mat, x, y)), box);
   return poly.length < 3 ? "" : polyFillPs(poly, color);
 }
 
@@ -101,29 +100,12 @@ function circleBezierPoints(cx: number, cy: number, r: number): Pt[] {
 }
 
 function bezierCirclePs(pts: Pt[], color: Rgb): string {
-  const segs = [`${fmt(pts[0][0])} ${fmt(pts[0][1])} moveto`];
+  const segs = [`${psColor(color)} setrgbcolor ${fmt(pts[0][0])} ${fmt(pts[0][1])} moveto`];
   for (let i = 1; i < pts.length; i += 3) {
     segs.push(`${fmt(pts[i][0])} ${fmt(pts[i][1])} ${fmt(pts[i + 1][0])} ${fmt(pts[i + 1][1])} ${fmt(pts[i + 2][0])} ${fmt(pts[i + 2][1])} curveto`);
   }
-  return `${psColor(color)} setrgbcolor ${segs.join(" ")} closepath fill`;
-}
-
-function sampleCircle(cx: number, cy: number, r: number, count: number): Pt[] {
-  const pts: Pt[] = [];
-  for (let i = 0; i < count; i++) {
-    const a = (2 * Math.PI * i) / count;
-    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
-  }
-  return pts;
-}
-
-function clipRect(poly: Pt[], box: Bounds): Pt[] {
-  const maxX = box.minX + box.width;
-  const maxY = box.minY + box.height;
-  let cur = clipHalf(poly, (x) => x - box.minX);
-  cur = clipHalf(cur, (x) => maxX - x);
-  cur = clipHalf(cur, (_x, y) => y - box.minY);
-  return clipHalf(cur, (_x, y) => maxY - y);
+  segs[segs.length - 1] += " closepath fill";
+  return segs.join("\r\n");
 }
 
 function clipHalf(poly: Pt[], evalSide: (x: number, y: number) => number): Pt[] {
@@ -144,9 +126,15 @@ function clipHalf(poly: Pt[], evalSide: (x: number, y: number) => number): Pt[] 
 }
 
 function polyFillPs(poly: Pt[], color: Rgb): string {
-  const head = `${fmt(poly[0][0])} ${fmt(poly[0][1])} moveto`;
-  const rest = poly.slice(1).map(([x, y]) => `${fmt(x)} ${fmt(y)} lineto`).join(" ");
-  return `${psColor(color)} setrgbcolor ${head} ${rest} closepath fill`;
+  const lines = [`${psColor(color)} setrgbcolor ${fmt(poly[0][0])} ${fmt(poly[0][1])} moveto`];
+  for (const [x, y] of poly.slice(1)) {
+    const seg = `${fmt(x)} ${fmt(y)} lineto`;
+    const cur = lines[lines.length - 1];
+    if (cur.length + 1 + seg.length > 180) lines.push(seg);
+    else lines[lines.length - 1] = `${cur} ${seg}`;
+  }
+  lines[lines.length - 1] += " closepath fill";
+  return lines.join("\r\n");
 }
 
 function rectCorners(b: Bounds): Pt[] {
@@ -155,23 +143,18 @@ function rectCorners(b: Bounds): Pt[] {
   return [[b.minX, b.minY], [maxX, b.minY], [maxX, maxY], [b.minX, maxY]];
 }
 
-function insideBounds(b: Bounds, x: number, y: number): boolean {
-  return x >= b.minX - 1e-5 && x <= b.minX + b.width + 1e-5
-    && y >= b.minY - 1e-5 && y <= b.minY + b.height + 1e-5;
-}
-
 function mapMat(m: Matrix, x: number, y: number): Pt {
   return [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f];
 }
 
-function bandCount(stops: FlatStop[]): number {
+function colorDelta(a: Rgb, b: Rgb): number {
+  return Math.max(Math.abs(b.r - a.r), Math.abs(b.g - a.g), Math.abs(b.b - a.b));
+}
+
+function stepCount(stops: FlatStop[], cap: number): number {
   let span = 0;
-  for (let i = 1; i < stops.length; i++) {
-    const a = stops[i - 1].color;
-    const b = stops[i].color;
-    span += Math.max(Math.abs(b.r - a.r), Math.abs(b.g - a.g), Math.abs(b.b - a.b));
-  }
-  return Math.min(128, Math.max(24, Math.ceil(span * 255) + 2));
+  for (let i = 1; i < stops.length; i++) span += colorDelta(stops[i - 1].color, stops[i].color);
+  return Math.min(cap, Math.max(8, Math.ceil(span * 32)));
 }
 
 function sampleStops(stops: FlatStop[], t: number): Rgb {

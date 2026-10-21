@@ -18,7 +18,9 @@ type Ctm = [number, number, number, number, number, number];
 export function runPostScript(eps: string): PsRun {
   const errors = checkPostScript(eps);
   const run = new Painter();
-  for (const line of eps.split("\n")) {
+  const cut = eps.indexOf("%AI9_PrintingDataEnd");
+  const outer = cut >= 0 ? eps.slice(0, cut) : eps;
+  for (const line of outer.split(/\r\n|\r|\n/)) {
     if (line.startsWith("%")) continue;
     run.line(line);
   }

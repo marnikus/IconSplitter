@@ -28,15 +28,15 @@ interface BitWriter {
   bits: number;
 }
 
-/** Compress UTF-8/ASCII text as `%`-prefixed Clean7Bit `%AI9_DataStream` lines. */
+/** Compress UTF-8/ASCII text as `%`-prefixed Clean7Bit `%AI9_DataStream` CRLF lines (`<= 67` bytes/line). */
 export function encodeAiDataStream(text: string): string {
   const raw = new TextEncoder().encode(text);
   const body = ascii85Encode(zlibCompress(raw)).slice(0, -2);
   const lines: string[] = [];
-  for (let i = 0; i < body.length; i += 72) lines.push(`%${body.slice(i, i + 72)}`);
+  for (let i = 0; i < body.length; i += 64) lines.push(`%${body.slice(i, i + 64)}`);
   if (lines.length === 0) return "%~>";
   lines[lines.length - 1] += "~>";
-  return lines.join("\n");
+  return lines.join("\r\n");
 }
 
 /** RFC 1950 zlib wrapper (`0x78 0x9C`) + RFC 1951 fixed-Huffman stream + Adler-32. */
@@ -54,36 +54,48 @@ export function zlibCompress(src: Uint8Array): Uint8Array {
 
 function deflateBody(bw: BitWriter, src: Uint8Array): void {
   const head = new Int32Array(4096).fill(-1);
+  const prev = new Int32Array(src.length).fill(-1);
   let i = 0;
   while (i < src.length) {
-    const match = findMatch(src, i, head);
+    const match = findMatch(src, i, head, prev);
     if (match === null) {
-      writeSym(bw, src[i]);
-      i++;
+      writeSym(bw, src[i++]);
     } else {
       emitMatch(bw, match.len, match.dist);
-      for (let k = 1; k < match.len && i + k + 2 < src.length; k++) recordHash(src, i + k, head);
+      for (let k = 1; k < match.len && i + k + 2 < src.length; k++) insertHash(src, i + k, head, prev);
       i += match.len;
     }
   }
 }
 
-function recordHash(src: Uint8Array, pos: number, head: Int32Array): number {
+function insertHash(src: Uint8Array, pos: number, head: Int32Array, prev: Int32Array): number {
   const h = ((src[pos] << 8) ^ (src[pos + 1] << 4) ^ src[pos + 2]) & 4095;
-  const prev = head[h];
+  const first = head[h];
+  prev[pos] = first;
   head[h] = pos;
-  return prev;
+  return first;
 }
 
-function findMatch(src: Uint8Array, pos: number, head: Int32Array): { len: number; dist: number } | null {
+function findMatch(src: Uint8Array, pos: number, head: Int32Array, prev: Int32Array): { len: number; dist: number } | null {
   if (pos + 2 >= src.length) return null;
-  const cand = recordHash(src, pos, head);
-  const dist = pos - cand;
-  if (cand < 0 || dist > 32768) return null;
   const maxLen = Math.min(258, src.length - pos);
+  let best: { len: number; dist: number } | null = null;
+  for (let steps = 0, cand = insertHash(src, pos, head, prev); steps < 24 && isNear(pos, cand); steps++, cand = prev[cand]) {
+    const len = spanMatch(src, cand, pos, maxLen);
+    if (len >= 3 && (best === null || len > best.len)) best = { len, dist: pos - cand };
+    if (len === maxLen) break;
+  }
+  return best;
+}
+
+function isNear(pos: number, cand: number): boolean {
+  return cand >= 0 && pos - cand <= 32768;
+}
+
+function spanMatch(src: Uint8Array, a: number, b: number, maxLen: number): number {
   let len = 0;
-  while (len < maxLen && src[cand + len] === src[pos + len]) len++;
-  return len >= 4 ? { len, dist } : null;
+  while (len < maxLen && src[a + len] === src[b + len]) len++;
+  return len;
 }
 
 function emitMatch(bw: BitWriter, len: number, dist: number): void {

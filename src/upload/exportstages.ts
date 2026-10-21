@@ -17,6 +17,7 @@ import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
+import { verifyEpsDocument } from "../lib/upload/epsdoc";
 import { enforceExportSvg } from "../lib/upload/clean";
 
 /** A stage failure carries its class, so the log names the failing stage. */
@@ -117,12 +118,15 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
-    art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
+    const finalEps = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
+    const check = verifyEpsDocument(finalEps);
+    if (!check.ok) throw new StageError("eps", `EPS verification failed: ${check.errors[0]}`);
+    art.epsText = finalEps;
     art.epsFixes = eps.fixes;
     art.epsWriter = eps.writer;
     return;
   }
-  if (/raster|verification/i.test(eps.reason)) throw new StageError("eps", eps.reason);
+  if (/raster|verification|unoptimized|MPSParser|executable/i.test(eps.reason)) throw new StageError("eps", eps.reason);
   art.epsFailure = describeFailure(eps); // honest: non-subset SVG → partial
 }
 

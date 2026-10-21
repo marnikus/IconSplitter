@@ -101,6 +101,15 @@ describe("Native Illustrator 30.8.2 + Zero-Raster EPS Verification (icon-handsha
     expect(eps).not.toBeNull();
     const epsText = eps!;
 
+    // Compact, DSC-compliant, lag-free file budget: 22-glyph text-outlined SVG -> 36.9 KB total EPS
+    // (pure icon + radial shadow without outlined text banner -> ~6 KB total EPS!)
+    // with EVERY line strictly <= 255 chars (Adobe DSC v3.0 §4.2 & AI9_read_buffer limit)!
+    expect(epsText.length).toBeLessThan(40_000);
+    expect(Math.max(...epsText.split("\r\n").map((l) => l.length))).toBeLessThanOrEqual(255);
+    expect(epsText).toContain("\r\n");
+    expect(epsText).toContain("%AI9_PrintingDataEnd\r\n");
+    expect(epsText).toContain("userdict /ai9_skip_data get exec\r\n");
+
     expect(verifyEps(epsText)).toEqual({ ok: true, errors: [], boundingBox: { llx: 0, lly: 0, urx: 900, ury: 488 } });
     expect(verifyEpsDocument(epsText).ok).toBe(true);
     expect(runPostScript(epsText).errors).toEqual([]);
@@ -114,6 +123,8 @@ describe("Native Illustrator 30.8.2 + Zero-Raster EPS Verification (icon-handsha
     expect(report.ok).toBe(true);
     expect(report.mpsParserFallback).toBe(false);
     expect(report.embeddedRasterCount).toBe(0);
+    expect(report.maxClippedFillsPerClip).toBeLessThanOrEqual(17);
+    expect(report.objects).toHaveLength(14);
 
     // Exact 3-stop translucent radial gradient swatch from <radialGradient id="a">
     expect(report.gradients).toHaveLength(1);
@@ -194,12 +205,27 @@ describe("Native Illustrator 30.8.2 + Zero-Raster EPS Verification (icon-handsha
       + `%AI5_BeginLayer\n%AI5_BeginRaster\nXI\n%AI5_EndRaster\nLB\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n`,
     );
 
+    const bloatedBands = Array.from({ length: 30 }, () => "0.9 0.9 0.9 setrgbcolor 0 0 moveto 10 0 lineto 10 10 lineto closepath fill").join("\r\n");
+    const unopt48Gon = `0.9 0.9 0.9 setrgbcolor 0 0 moveto ${Array.from({ length: 24 }, (_, k) => `${k} ${k} lineto`).join(" ")} closepath fill`;
+    const orphanStackStream = encodeAiDataStream(
+      `%%BoundingBox: 0 0 900 488\r\n%%HiResBoundingBox: 0 0 900 487.5\r\n%AI5_FileFormat 6.0\r\n%%EndComments\r\n`
+      + `%%BeginProlog\r\n%%EndProlog\r\n%%BeginSetup\r\n%AI5_Begin_NonPrinting\r\nNp\r\n1 Bn\r\n`
+      + `%AI5_BeginGradient: (Gradient 1)\r\n(Gradient 1) 1 2 Bd\r\n[\r\n<00FF>\r\n0\r\n`
+      + `%_0 0 0 1 0 0 0 2 1 6 50 0 Bs\r\n%_0 0 0 0 1 1 1 2 0 6 50 100 Bs\r\nBD\r\n%AI5_EndGradient\r\n%AI5_End_NonPrinting--\r\n`
+      + `%AI5_BeginPalette\r\n0 0 Pb\r\nPB\r\n%AI5_EndPalette\r\n%%EndSetup\r\n`
+      + `%AI5_BeginLayer\r\nLB\r\n%AI5_EndLayer--\r\n%%PageTrailer\r\nshowpage\r\n%%Trailer\r\n%%EOF\r\n`,
+    );
+
     const rasterCases: [string, string][] = [
-      ["outer PostScript colorimage", good.eps.replace("%%Trailer", "10 10 8 [1 0 0 1 0 0] { () } false 3 colorimage\n%%Trailer")],
-      ["Cairo EPS cairo_image", good.eps.replace("%%Trailer", "q 10 10 8 [1 0 0 1 0 0] cairo_image Q\n%%Trailer")],
-      ["2769702d MPSParser shfill fallback", good.eps.replace("%%Trailer", "<< /ShadingType 3 >> shfill\n%%Trailer")],
+      ["outer PostScript colorimage", good.eps.replace("%%PageTrailer", "10 10 8 [1 0 0 1 0 0] { () } false 3 colorimage\r\n%%PageTrailer")],
+      ["Cairo EPS cairo_image", good.eps.replace("%%PageTrailer", "q 10 10 8 [1 0 0 1 0 0] cairo_image Q\r\n%%PageTrailer")],
+      ["2769702d MPSParser shfill fallback", good.eps.replace("%%PageTrailer", "<< /ShadingType 3 >> shfill\r\n%%PageTrailer")],
       ["2769702d missing Adobe Illustrator outer header", good.eps.replace("%%Creator: Adobe Illustrator(R) 24.0", "%%Creator: IconSplitter")],
-      ["compressed %AI5_BeginRaster / XI inside %AI9_DataStream", good.eps.replace(/%AI9_DataStream[\s\S]*?%AI9_PrivateDataEnd/, `%AI9_DataStream\n${compressedRasterStream}\n%AI9_PrivateDataEnd`)],
+      ["bc29975d missing %AI9_PrintingDataEnd before private stream", good.eps.replace("%AI9_PrintingDataEnd", "% missing")],
+      ["bc29975d unoptimized >24 stacked bands inside clip group", good.eps.replace("clip newpath", `clip newpath\r\n${bloatedBands}`)],
+      ["bc29975d unoptimized 48-gon polyline tessellation inside clip group", good.eps.replace("clip newpath", `clip newpath\r\n${unopt48Gon}`)],
+      ["bc29975d orphan <00FF> stack inside %AI5_BeginGradient", good.eps.replace(/%AI9_DataStream[\s\S]*?%AI9_PrivateDataEnd/, `%AI9_DataStream\r\n${orphanStackStream}\r\n%AI9_PrivateDataEnd`)],
+      ["compressed %AI5_BeginRaster / XI inside %AI9_DataStream", good.eps.replace(/%AI9_DataStream[\s\S]*?%AI9_PrivateDataEnd/, `%AI9_DataStream\r\n${compressedRasterStream}\r\n%AI9_PrivateDataEnd`)],
     ];
 
     for (const [label, poisonedEps] of rasterCases) {
@@ -245,5 +271,40 @@ describe("Native Illustrator 30.8.2 + Zero-Raster EPS Verification (icon-handsha
     expect(upgraded.ok).toBe(true);
     if (!upgraded.ok) throw new Error(upgraded.reason);
     expect(inspectAiEps(upgraded.eps)).toMatchObject({ ok: true, mpsParserFallback: false, embeddedRasterCount: 0 });
+  });
+
+  it("preserves compact native AI 30.8.2 validity when XMP metadata is embedded in full runExport", async () => {
+    const svg = readFileSync(ASSET_SVG_PATH, "utf8");
+    const root = makeFixtureRoot(svg);
+    const settings: UploadSettings = {
+      ...DEFAULT_UPLOAD_SETTINGS,
+      paddingPct: -1,
+      includeEps: true,
+      epsConverter: "builtin",
+    };
+    const result = await runExport({
+      root,
+      row: ROW,
+      settings,
+      defaults: settings,
+      overrides: {},
+      metadata: {
+        title: "Handshake heart line icon",
+        description: "Two hands forming a heart symbol with editable stroke width",
+        tags: ["handshake", "heart", "partnership", "vector", "icon"],
+      },
+      metadataInfo: null,
+      record: null,
+      deps: { raster: rasterStub, now: () => "2026-10-21T12:00:00.000Z" },
+    });
+    expect(result.status).toBe("processed");
+    const epsText = (await readTextAt(root, `${DIR}/export/${ROW.base}.eps`))!;
+    expect(epsText.length).toBeLessThan(42_000);
+    expect(verifyEps(epsText).ok).toBe(true);
+    expect(inspectAiEps(epsText)).toMatchObject({
+      ok: true,
+      mpsParserFallback: false,
+      embeddedRasterCount: 0,
+    });
   });
 });

@@ -23,13 +23,13 @@ const FIXED_DIST = buildTree(new Array<number>(32).fill(5));
 
 /** Decode `%`-prefixed ASCII85 + RFC 1950 zlib `%AI9_DataStream` lines into Latin-1/UTF-8 text. */
 export function decodeAiDataStream(encoded: string): string {
-  const body = encoded
+  const stripped = encoded
     .split(/\r\n|\r|\n/)
     .map((line) => (line.startsWith("%") ? line.slice(1) : line))
     .join("");
-  const end = body.indexOf("~>");
-  const packed = ascii85Decode(end >= 0 ? body.slice(0, end) : body);
-  const raw = zlibDecompress(packed);
+  const end = stripped.indexOf("~>");
+  if (end < 0) throw new Error("missing ASCII85 ~> terminator in %AI9_DataStream");
+  const raw = zlibDecompress(ascii85Decode(stripped.slice(0, end)));
   return new TextDecoder("utf-8", { fatal: false }).decode(raw);
 }
 

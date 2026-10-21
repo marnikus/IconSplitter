@@ -10,8 +10,8 @@ interface Frame { kind: "array" | "dict"; items: Operand[] }
 
 /** What each allowed pure-vector Level-2 PS operator pops (last = top of stack). */
 const POPS: Record<string, Kind[]> = {
-  newpath: [], closepath: [], fill: [], eofill: [], stroke: [], gsave: [], grestore: [],
-  clip: [], eoclip: [], strokepath: [],
+  newpath: [], closepath: [], fill: [], eofill: [], stroke: [],
+  gsave: [], grestore: [], clip: [], eoclip: [], strokepath: [],
   moveto: ["number", "number"], lineto: ["number", "number"],
   curveto: ["number", "number", "number", "number", "number", "number"],
   concat: ["array"], setrgbcolor: ["number", "number", "number"],
@@ -36,11 +36,20 @@ interface State {
 
 export function checkPostScript(program: string): string[] {
   const st: State = { stack: [], open: [], hasPath: false, saved: [], errors: [] };
-  const lines = program.split("\n");
+  const lines = drawingLines(program);
   for (let i = 0; i < lines.length && st.errors.length === 0; i++) {
     if (!lines[i].startsWith("%")) runLine(lines[i], st, i + 1);
   }
   return st.errors.length > 0 ? st.errors : atEnd(st);
+}
+
+function drawingLines(program: string): string[] {
+  const cut = program.indexOf("%AI9_PrintingDataEnd");
+  const outer = cut >= 0 ? program.slice(0, cut) : program;
+  return outer
+    .replace(/% IconSplitter XMP setup begin[\s\S]*?% IconSplitter XMP setup end/g, "")
+    .replace(/% IconSplitter XMP trailer begin[\s\S]*?% IconSplitter XMP trailer end/g, "")
+    .split(/\r\n|\r|\n/);
 }
 
 /** Hard zero-raster & zero-`shfill` scanner across PostScript / AI streams. */
@@ -200,7 +209,6 @@ function kindOf(v: Operand): Kind {
   return Array.isArray(v) ? "array" : "dict";
 }
 
-function article(kind: Kind): string {
-  if (kind === "array") return "an array";
-  return kind === "dict" ? "a dict" : "a number";
+function article(k: Kind): string {
+  return k === "array" ? "an array" : `a ${k}`;
 }

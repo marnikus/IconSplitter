@@ -1,10 +1,6 @@
-// epsaicheck.ts — full outer-DSC + compressed `%AI9_DataStream` Illustrator
-// format & zero-raster inspector (`design.md` §4 Tier 1). Detects:
-//  1) ANY raster operator or `shfill` in outer PostScript OR inflated `%AI9_DataStream`
-//  2) Missing outer `Adobe Illustrator(R)` / `AI11EPS` / `%AI9_PrintingDataBegin`
-//     headers (which cause Illustrator 30.x to dispatch to `MPSParser.aip`)
-//  3) Malformed `%AI9_PrivateDataBegin` concatenation, duplicate `%!PS-Adobe-3.0`,
-//     corrupt ASCII85/zlib, or any AI 9–30.x stack/block error (`epsaistate.ts`).
+// epsaicheck.ts — full outer-DSC + compressed `%AI9_DataStream` + outer-PS
+// optimization & zero-raster inspector (`design.md` §2–§4). Calibrated directly
+// against real `Adobe Illustrator(R) 30.8.2` (`icon-award-ribbon_8_02.eps`).
 
 import { findRasterOperators } from "./epscheck";
 import { decodeAiDataStream } from "./epsinflate";
@@ -16,6 +12,7 @@ export interface AiInspection {
   ok: boolean;
   mpsParserFallback: boolean;
   embeddedRasterCount: number;
+  maxClippedFillsPerClip: number;
   errors: string[];
   gradients: AiGradientInfo[];
   objects: AiObjectInfo[];
@@ -29,39 +26,90 @@ const OUTER_AI_REQUIRED = [
   "%ADOEndClientInjection: DocumentHeader \"AI11EPS\"",
 ];
 
-/** Inspect an EPS (`string` or raw `Uint8Array`, including DOS binary EPS) for raster & AI native validity. */
+const MAX_CLIPPED_FILLS = 24;
+const MAX_CLIPPED_LINETOS = 12;
+
+/** Inspect an EPS (`string` or raw `Uint8Array`, including DOS binary EPS) for raster, AI parity, & optimization. */
 export function inspectAiEps(epsOrBytes: string | Uint8Array): AiInspection {
-  const rawText = typeof epsOrBytes === "string" ? epsOrBytes : latin1FromBytes(epsOrBytes);
-  const ps = unwrapDosEpsIfPresent(rawText);
-  const errors: string[] = [];
-  const outerRasters = findRasterOperators(ps);
-  errors.push(...outerRasters);
-  const head = ps.split("%%EndComments")[0] ?? "";
-  const mpsFallback = OUTER_AI_REQUIRED.some((marker) => !head.includes(marker));
-  if (mpsFallback) errors.push("missing outer Adobe Illustrator native format signature (would invoke MPSParser.aip)");
+  const ps = unwrapDosEpsIfPresent(typeof epsOrBytes === "string" ? epsOrBytes : latin1FromBytes(epsOrBytes));
+  const errors: string[] = [...findRasterOperators(ps)];
+  const mpsFallback = checkOuterAiWrapper(ps, errors);
+  const maxClippedFillsPerClip = checkOuterPsOptimization(ps, errors);
   const priv = extractAiPrivateStream(ps, errors);
   if (priv === null) {
-    return { ok: false, mpsParserFallback: mpsFallback, embeddedRasterCount: outerRasters.length, errors, gradients: [], objects: [] };
+    return {
+      ok: false, mpsParserFallback: mpsFallback, embeddedRasterCount: countRasterErrs(errors),
+      maxClippedFillsPerClip, errors, gradients: [], objects: [],
+    };
   }
-  const innerRasters = findRasterOperators(priv.inflated);
-  errors.push(...innerRasters);
+  errors.push(...findRasterOperators(priv.inflated));
   const vm = runAiStreamCheck(priv.concatenated);
   errors.push(...vm.errors);
-  const embeddedRasterCount = outerRasters.length + innerRasters.length;
   return {
     ok: errors.length === 0,
     mpsParserFallback: mpsFallback,
-    embeddedRasterCount,
+    embeddedRasterCount: countRasterErrs(errors),
+    maxClippedFillsPerClip,
     errors,
     gradients: vm.gradients,
     objects: vm.objects,
   };
 }
 
-/** Verify `%AI9_PrivateDataBegin` when present (or required); returns human-readable errors. */
+/** Verify `%AI9_PrivateDataBegin` when present; returns human-readable errors. */
 export function verifyAiPrivateStream(eps: string): string[] {
   if (!eps.includes("%AI9_PrivateDataBegin")) return [];
   return inspectAiEps(eps).errors;
+}
+
+function countRasterErrs(errors: string[]): number {
+  return errors.filter((e) => e.startsWith("forbidden raster ")).length;
+}
+
+function checkOuterAiWrapper(ps: string, errors: string[]): boolean {
+  const head = ps.split("%%EndComments")[0] ?? "";
+  if (OUTER_AI_REQUIRED.some((marker) => !head.includes(marker))) {
+    errors.push("missing outer Adobe Illustrator native format signature (would invoke MPSParser.aip)");
+    return true;
+  }
+  const endPrint = ps.indexOf("%AI9_PrintingDataEnd");
+  const beginPriv = ps.indexOf("%AI9_PrivateDataBegin");
+  if (endPrint < 0 || (beginPriv >= 0 && endPrint > beginPriv) || !ps.includes("/ai9_skip_data")) {
+    errors.push("missing %AI9_PrintingDataEnd / ai9_skip_data transition before %AI9_PrivateDataBegin (triggers MPSParser.aip)");
+    return true;
+  }
+  return false;
+}
+
+function checkOuterPsOptimization(ps: string, errors: string[]): number {
+  const cut = ps.indexOf("%AI9_PrintingDataEnd");
+  const outer = cut >= 0 ? ps.slice(0, cut) : ps;
+  let clipDepth = 0;
+  let clippedFills = 0;
+  let worst = 0;
+  for (const line of outer.split(/\r\n|\r|\n/)) {
+    if (line.startsWith("%")) continue;
+    [clipDepth, clippedFills, worst] = stepOptLine(line, [clipDepth, clippedFills, worst], errors);
+  }
+  return worst;
+}
+
+function stepOptLine(line: string, [depth, fills, worst]: [number, number, number], errors: string[]): [number, number, number] {
+  if (/\bgrestore\b/.test(line) && depth > 0) return [depth - 1, 0, Math.max(worst, fills)];
+  if (/\b(?:eoclip|clip)\b/.test(line)) return [depth + 1, 0, worst];
+  if (depth === 0 || !/\bfill\b/.test(line)) return [depth, fills, worst];
+  auditClippedFill(line, fills + 1, errors);
+  return [depth, fills + 1, Math.max(worst, fills + 1)];
+}
+
+function auditClippedFill(line: string, count: number, errors: string[]): void {
+  const linetos = (line.match(/\blineto\b/g) ?? []).length;
+  if (linetos > MAX_CLIPPED_LINETOS) pushOnce(errors, `unoptimized outer PS polyline tessellation (${linetos} lineto vertices in clipped band)`);
+  if (count > MAX_CLIPPED_FILLS) pushOnce(errors, `unoptimized outer PS clip group (>${MAX_CLIPPED_FILLS} stacked bands causes lag in PostScript importers)`);
+}
+
+function pushOnce(errors: string[], msg: string): void {
+  if (!errors.includes(msg)) errors.push(msg);
 }
 
 function unwrapDosEpsIfPresent(raw: string): string {
@@ -96,6 +144,10 @@ function extractAiPrivateStream(ps: string, errors: string[]): { inflated: strin
   if (dataAt < 0 || end < 0) { errors.push("malformed %AI9_PrivateDataBegin / %AI9_DataStream section"); return null; }
   const preHeader = ps.slice(begin + "%AI9_PrivateDataBegin".length, dataAt).trim();
   checkPrivateHeader(preHeader, errors);
+  const privSection = ps.slice(begin, end + "%AI9_PrivateDataEnd".length);
+  if (privSection.split(/\r\n|\r|\n/).some((l) => l.length > 255)) {
+    errors.push("private section line exceeds 255-byte AI9_read_buffer limit");
+  }
   const rawLines = ps.slice(dataAt + "%AI9_DataStream".length, end).trim();
   let inflated: string;
   try {
@@ -105,7 +157,7 @@ function extractAiPrivateStream(ps: string, errors: string[]): { inflated: strin
     return null;
   }
   checkInflatedHead(inflated, errors);
-  return { inflated, concatenated: `${preHeader}\n${inflated}` };
+  return { inflated, concatenated: `${preHeader}\r\n${inflated}` };
 }
 
 function checkPrivateHeader(preHeader: string, errors: string[]): void {
@@ -122,6 +174,9 @@ function checkInflatedHead(inflated: string, errors: string[]): void {
   }
   if (!trimmed.startsWith("%%BoundingBox:")) errors.push("inflated %AI9_DataStream must begin with %%BoundingBox:");
   if (!inflated.includes("%%HiResBoundingBox:")) errors.push("inflated %AI9_DataStream missing %%HiResBoundingBox:");
-  if (!inflated.includes("%AI5_FileFormat")) errors.push("inflated %AI9_DataStream missing %AI5_FileFormat");
+  if (!inflated.includes("%AI5_FileFormat 6.0")) errors.push("inflated %AI9_DataStream missing %AI5_FileFormat 6.0");
+  if (!inflated.includes("%AI5_BeginPalette") || !inflated.includes("%AI5_EndPalette")) {
+    errors.push("inflated %AI9_DataStream missing %AI5_BeginPalette swatch table");
+  }
   if (!inflated.trimEnd().endsWith("%%EOF")) errors.push("inflated %AI9_DataStream missing terminal %%EOF");
 }

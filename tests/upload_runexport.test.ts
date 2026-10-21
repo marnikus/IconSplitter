@@ -428,7 +428,7 @@ describe("runExport — the full package commits per icon", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
     expect(result.status).toBe("processed");
-    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-5" });
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-6" });
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 

@@ -1,6 +1,7 @@
-// epsdoc.ts — the document layer of the EPS writer (design.md §3–§4): outer
-// Illustrator-compatible DSC headers (`AI11EPS` + `%AI9_PrintingDataBegin`),
-// uprighting CTM, and fail-closed zero-raster + native AI stream verification.
+// epsdoc.ts — the document layer of the EPS writer (design.md §3): CRLF outer
+// Illustrator 30.8.2 DSC wrapper (`AI11EPS`, `%AI9_PrintingDataBegin`,
+// `%%PageTrailer`, `%%EOF`, `%AI9_PrintingDataEnd`, `ai9_skip_data`), uprighting
+// CTM, and fail-closed zero-raster + native AI + optimization verification.
 
 import { verifyAiPrivateStream } from "./epsaicheck";
 import { checkPostScript, findRasterOperators } from "./epscheck";
@@ -9,6 +10,37 @@ import type { Matrix } from "./geom/matrix";
 
 /** SVG user units (px at 96 DPI) → PostScript points. */
 export const PX_TO_PT = 0.75;
+
+const EOL = "\r\n";
+
+const AI9_SKIP_DATA = [
+  "%AI9_PrintingDataEnd",
+  "",
+  "userdict /AI9_read_buffer 256 string put",
+  "userdict begin",
+  "/ai9_skip_data",
+  "{",
+  "\tmark",
+  "\t{",
+  "\t\tcurrentfile AI9_read_buffer { readline } stopped",
+  "\t\t{",
+  "\t\t}",
+  "\t\t{",
+  "\t\t\tnot",
+  "\t\t\t{",
+  "\t\t\t\texit",
+  "\t\t\t} if",
+  "\t\t\t(%AI9_PrivateDataEnd) eq",
+  "\t\t\t{",
+  "\t\t\t\texit",
+  "\t\t\t} if",
+  "\t\t} ifelse",
+  "\t} loop",
+  "\tcleartomark",
+  "} def",
+  "end",
+  "userdict /ai9_skip_data get exec",
+].join(EOL);
 
 export interface EpsBoundingBox { llx: number; lly: number; urx: number; ury: number }
 
@@ -28,7 +60,7 @@ export interface EpsOptions {
 /** What every valid EPS document from the built-in writer carries. */
 export const EPS10_MARKERS = [
   "%%HiResBoundingBox:",
-  "%%DocumentData: Clean7Bit",
+  "%%DocumentData: Clean",
   "%%LanguageLevel: 3",
 ];
 
@@ -57,7 +89,7 @@ export function uprightMatrix(viewBox: number[], hires: EpsBoundingBox): Matrix 
   };
 }
 
-/** Assemble the EPS document: Illustrator DSC header, CTM, pure-vector body, trailer, %%EOF. */
+/** Assemble the EPS document matching real `Adobe Illustrator(R) 30.8.2` structure. */
 export function assemble({ viewBox, box, hires, body, trailer, opts }: EpsDoc): string {
   const header = [
     "%!PS-Adobe-3.0 EPSF-3.0",
@@ -67,12 +99,18 @@ export function assemble({ viewBox, box, hires, body, trailer, opts }: EpsDoc): 
     "%%EndProlog",
     "%%BeginSetup",
     "%%EndSetup",
-  ].join("\n");
+    "%%Page: 1 1",
+    "%%BeginPageSetup",
+    "%%EndPageSetup",
+  ].join(EOL);
   const u = uprightMatrix(viewBox, hires);
   const upright = `[${fmt(u.a)} 0 0 ${fmt(u.d)} ${fmt(u.e)} ${fmt(u.f)}] concat`;
-  const parts = [header, upright, ...body];
-  if (trailer !== undefined && trailer !== "") parts.push(`%%Trailer\n${trailer}`);
-  return `${parts.join("\n")}\n%%EOF\n`;
+  const drawn = body.map((chunk) => chunk.replace(/\r?\n/g, EOL));
+  const closePrint = ["%%PageTrailer", "%%Trailer", "%%EOF"].join(EOL);
+  if (trailer === undefined || trailer === "") {
+    return `${[header, upright, ...drawn, closePrint].join(EOL)}${EOL}`;
+  }
+  return `${[header, upright, ...drawn, closePrint, AI9_SKIP_DATA, trailer, "%%EOF"].join(EOL)}${EOL}`;
 }
 
 /** Outer DSC headers matching `Adobe Illustrator(R) 30.8.2` (`icon-award-ribbon_8_02.eps`). */
@@ -118,10 +156,12 @@ function dscString(value: string): string {
 
 /**
  * Verifies a built-in EPS document: DSC markers, executable PS stack check,
- * hard zero-raster & zero-`shfill` gate, AND native AI private-stream check.
+ * hard zero-raster & zero-`shfill` gate, AND native AI + optimization check.
  */
 export function verifyEps(eps: string): EpsVerification {
-  const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker)).map((marker) => `missing ${marker.replace(/:$/, "")}`);
+  const errors = EPS10_MARKERS
+    .filter((marker) => !eps.includes(marker))
+    .map((marker) => `missing ${marker === "%%DocumentData: Clean" ? "%%DocumentData: Clean7Bit" : marker.replace(/:$/, "")}`);
   return verifyDsc(eps, [...errors, ...checkPostScript(eps)]);
 }
 
@@ -134,10 +174,11 @@ export function verifyEpsDocument(eps: string): EpsVerification {
 }
 
 function verifyDsc(eps: string, errors: string[]): EpsVerification {
-  if (!eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")) errors.unshift("missing %!PS-Adobe-3.0 EPSF-3.0 header");
+  if (!/^%!PS-Adobe-3\.[01] EPSF-3\.0/.test(eps)) errors.unshift("missing %!PS-Adobe-3.0 EPSF-3.0 header");
   const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
   if (m === null) errors.push("missing or malformed %%BoundingBox");
-  if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");
+  const trimmed = eps.trimEnd();
+  if (!trimmed.endsWith("%%EOF") && !trimmed.endsWith("%AI9_PrivateDataEnd")) errors.push("missing %%EOF");
   errors.push(...findRasterOperators(eps), ...verifyAiPrivateStream(eps));
   const box = m === null ? null : { llx: +m[1], lly: +m[2], urx: +m[3], ury: +m[4] };
   return { ok: errors.length === 0, errors, boundingBox: box };

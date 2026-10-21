@@ -102,7 +102,7 @@ describe("writeEps — a genuine EPS document", () => {
     // Illustrator, and the program stopped before the artwork
     const result = writeEps(PREPARED, "#ffffff");
     expect(result.ok && result.eps).toContain("[0.75 0 0 -0.75 0 69.6] concat");
-    const lines = (result.ok ? result.eps : "").split("\n").filter((l) => l.endsWith("concat"));
+    const lines = (result.ok ? result.eps : "").split(/\r?\n/).filter((l) => l.endsWith("concat"));
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) expect(line).toMatch(/^\[(-?\d+(\.\d+)? ){5}-?\d+(\.\d+)?\] concat$/);
   });
@@ -244,9 +244,9 @@ describe("writeEps — a rounded <rect> is written, exactly, and the fix is repo
 
 describe("writeEps — Level-3 vector gradients + Native Illustrator 10 stream + Zero-Raster gate", () => {
   function decodeAiStream(eps: string): string {
-    const m = /%AI9_DataStream\n([\s\S]*?)~>\n%AI9_PrivateDataEnd/.exec(eps);
+    const m = /%AI9_DataStream\r?\n([\s\S]*?)~>\r?\n%AI9_PrivateDataEnd/.exec(eps);
     expect(m).not.toBeNull();
-    const raw = m![1].split("\n").map((l) => l.replace(/^%/, "")).join("");
+    const raw = m![1].split(/\r?\n/).map((l) => l.replace(/^%/, "")).join("");
     const out: number[] = [];
     let tuple = 0;
     let count = 0;
@@ -294,13 +294,13 @@ describe("writeEps — Level-3 vector gradients + Native Illustrator 10 stream +
 
     const ai = decodeAiStream(result.eps);
     expect(ai).not.toMatch(/^\s*%!PS-Adobe/);
-    expect(ai).toContain("%AI5_FileFormat 14.0");
+    expect(ai).toContain("%AI5_FileFormat 6.0");
     expect(ai).toContain("%AI9_ColorModel: 1");
     expect(ai).toContain("2 Bn");
-    expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\n(Gradient 1) 1 3 Bd");
-    expect(ai).toContain("%AI5_BeginGradient: (Gradient 2)\n(Gradient 2) 0 2 Bd");
-    expect(ai).toContain("Bh\n1 (Gradient 1)");
-    expect(ai).toContain("Xm\n22.5 0 0 -4.5 37.5 11.25 Bm\nf\n0 BB");
+    expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\r\n(Gradient 1) 1 3 Bd");
+    expect(ai).toContain("%AI5_BeginGradient: (Gradient 2)\r\n(Gradient 2) 0 2 Bd");
+    expect(ai).toContain("Bh\r\n1 (Gradient 1)");
+    expect(ai).toContain("Xm\r\n22.5 0 0 -4.5 37.5 11.25 Bm\r\nf\r\n0 BB");
     expect(ai).toContain("*u");
     expect(ai).toContain("*U");
   });
@@ -391,6 +391,6 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 22: concat expects an array, found number");
+    expect(verdict.errors).toContain("line 25: concat expects an array, found number");
   });
 });

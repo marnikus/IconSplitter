@@ -50,9 +50,9 @@ describe("the built-in converter IS writeEps", () => {
     expect(viaRegistry.ok).toBe(true);
     if (!direct.ok || !viaRegistry.ok) return;
     expect(viaRegistry.eps).toBe(direct.eps);
-    expect(viaRegistry.writer).toBe("builtin-subset-5");
+    expect(viaRegistry.writer).toBe("builtin-subset-6");
     expect(viaRegistry.fixes).toEqual([]);
-    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-subset-5" });
+    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-subset-6" });
   });
 
   it("the built-in converter verifies its own program before it answers ok (I-61)", async () => {

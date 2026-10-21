@@ -1,5 +1,6 @@
 // epsaistate.ts — strict table-driven stack & block interpreter for native
-// Adobe Illustrator 9–30.x editing streams (`%AI9_DataStream`).
+// Adobe Illustrator 9–30.x editing streams (`%AI9_DataStream`), calibrated
+// against real `Adobe Illustrator(R) 30.8.2` (`icon-award-ribbon_8_02.eps`).
 
 import { lexAiLine, type AiVal } from "./epsailex";
 
@@ -7,46 +8,28 @@ export interface AiStopInfo { offset: number; opacity: number; color: [number, n
 export interface AiGradientInfo { name: string; kind: "linear" | "radial"; stops: AiStopInfo[] }
 
 export interface AiObjectInfo {
-  kind: "path" | "compound";
-  subpaths: number;
-  opacity: number;
-  evenOdd: boolean;
-  fillKind: "none" | "solid" | "gradient";
-  gradientName: string | null;
+  kind: "path" | "compound"; subpaths: number; opacity: number; evenOdd: boolean;
+  fillKind: "none" | "solid" | "gradient"; gradientName: string | null;
   xm: [number, number, number, number, number, number] | null;
-  aspect: number | null;
-  focalOffset: [number, number] | null;
-  hasStroke: boolean;
-  strokeWidthPt: number | null;
-  closedFlags: boolean[];
+  aspect: number | null; focalOffset: [number, number] | null;
+  hasStroke: boolean; strokeWidthPt: number | null; closedFlags: boolean[];
 }
 
-interface GradBuild { name: string; kind: "linear" | "radial"; expected: number; inArray: boolean; stops: AiStopInfo[] }
+interface GradBuild {
+  name: string; kind: "linear" | "radial"; expected: number;
+  arrays: number; brCount: number; bsUpper: number; stops: AiStopInfo[];
+}
 interface PendingGrad {
-  name: string | null;
-  xm: [number, number, number, number, number, number] | null;
-  aspect: number | null;
-  focal: [number, number] | null;
+  name: string | null; xm: [number, number, number, number, number, number] | null;
+  aspect: number | null; focal: [number, number] | null;
 }
 
 interface AiVm {
-  stack: AiVal[];
-  openArr: AiVal[][] | null;
-  inNonPrinting: boolean;
-  inGradBlock: boolean;
-  dictDepth: number;
-  inLayer: boolean;
-  inCompound: boolean;
-  hasPath: boolean;
-  inBb: PendingGrad | null;
-  gradBuild: GradBuild | null;
-  opacity: number;
-  evenOdd: boolean;
-  strokeWidth: number;
-  curSubs: AiObjectInfo | null;
-  gradients: Map<string, AiGradientInfo>;
-  objects: AiObjectInfo[];
-  errors: string[];
+  stack: AiVal[]; openArr: AiVal[][] | null; inNonPrinting: boolean; inGradBlock: boolean;
+  dictDepth: number; inLayer: boolean; inCompound: boolean; hasPath: boolean;
+  inBb: PendingGrad | null; gradBuild: GradBuild | null; opacity: number; evenOdd: boolean;
+  strokeWidth: number; curSubs: AiObjectInfo | null;
+  gradients: Map<string, AiGradientInfo>; objects: AiObjectInfo[]; errors: string[];
 }
 
 type OpHandler = (lineNo: number, vm: AiVm) => void;
@@ -65,13 +48,9 @@ const HANDLERS: Record<string, OpHandler> = {
   Xy: (n, vm) => { const v = popNums(vm, 5, "Xy", n); if (v !== null) vm.opacity = v[1]; },
   XR: (n, vm) => { const v = popNums(vm, 1, "XR", n); if (v !== null) vm.evenOdd = v[0] === 1; },
   w: (n, vm) => { const v = popNums(vm, 1, "w", n); if (v !== null) vm.strokeWidth = v[0]; },
-  d: opDash,
-  Bd: beginGradDef,
-  Bs: pushGradStop,
-  BD: endGradDef,
+  d: opDash, Bd: beginGradDef, Br: pushGradRampSeg, BS: pushLegacyGradStop, Bs: pushGradStop, BD: endGradDef,
   "*u": (n, vm) => { if (vm.inCompound) vm.errors.push(`line ${n}: nested *u`); vm.inCompound = true; vm.curSubs = null; },
-  "*U": finishCompound,
-  m: opMoveTo,
+  "*U": finishCompound, m: opMoveTo,
   Bb: (_n, vm) => { vm.inBb = { name: null, xm: null, aspect: null, focal: null }; },
   Bh: (n, vm) => { const v = popNums(vm, 4, "Bh", n); if (v !== null && vm.inBb !== null) vm.inBb.focal = [v[0], v[1]]; },
   Bg: parseBgOp,
@@ -153,7 +132,11 @@ function stepToken(tok: AiVal, lineNo: number, vm: AiVm): void {
 
 function stepBracket(op: "[" | "]", lineNo: number, vm: AiVm): void {
   if (op === "[") {
-    if (vm.gradBuild !== null && !vm.gradBuild.inArray) { vm.gradBuild.inArray = true; return; }
+    if (vm.gradBuild !== null) {
+      if (vm.stack.length > 0) vm.errors.push(`line ${lineNo}: orphan stack operand before [ in gradient`);
+      vm.gradBuild.arrays++;
+      return;
+    }
     vm.openArr = [...(vm.openArr ?? []), []];
     return;
   }
@@ -202,11 +185,21 @@ function beginGradDef(lineNo: number, vm: AiVm): void {
   const nums = popNums(vm, 2, "Bd", lineNo);
   const name = vm.stack.pop();
   if (nums === null || name?.kind !== "str") { vm.errors.push(`line ${lineNo}: invalid Bd header`); return; }
-  vm.gradBuild = { name: name.s, kind: nums[0] === 1 ? "radial" : "linear", expected: nums[1], inArray: false, stops: [] };
+  vm.gradBuild = { name: name.s, kind: nums[0] === 1 ? "radial" : "linear", expected: nums[1], arrays: 0, brCount: 0, bsUpper: 0, stops: [] };
+}
+
+function pushGradRampSeg(lineNo: number, vm: AiVm): void {
+  if (vm.gradBuild === null || vm.gradBuild.arrays !== 1) { vm.errors.push(`line ${lineNo}: Br outside ramp array`); return; }
+  if (popNums(vm, 8, "Br", lineNo) !== null) vm.gradBuild.brCount++;
+}
+
+function pushLegacyGradStop(lineNo: number, vm: AiVm): void {
+  if (vm.gradBuild === null || vm.gradBuild.arrays !== 2) { vm.errors.push(`line ${lineNo}: BS outside stop array`); return; }
+  if (popNums(vm, 12, "BS", lineNo) !== null) vm.gradBuild.bsUpper++;
 }
 
 function pushGradStop(lineNo: number, vm: AiVm): void {
-  if (vm.gradBuild === null || !vm.gradBuild.inArray) { vm.errors.push(`line ${lineNo}: Bs outside gradient ramp`); return; }
+  if (vm.gradBuild === null || vm.gradBuild.arrays !== 2) { vm.errors.push(`line ${lineNo}: Bs outside stop array`); return; }
   const n = popNums(vm, 12, "Bs", lineNo);
   if (n === null) return;
   if (n[7] !== 2 || n[9] !== 6) { vm.errors.push(`line ${lineNo}: Bs expected RGB+opacity style (2, 6)`); return; }
@@ -216,18 +209,12 @@ function pushGradStop(lineNo: number, vm: AiVm): void {
 function endGradDef(lineNo: number, vm: AiVm): void {
   const g = vm.gradBuild;
   if (g === null) { vm.errors.push(`line ${lineNo}: unexpected BD`); return; }
-  dropRampPreamble(vm);
-  if (g.stops.length !== g.expected) vm.errors.push(`line ${lineNo}: gradient (${g.name}) stop count mismatch`);
+  if (vm.stack.length > 0) vm.errors.push(`line ${lineNo}: orphan operands left on stack before BD`);
+  if (g.brCount !== g.expected - 1 || g.bsUpper !== g.expected || g.stops.length !== g.expected) {
+    vm.errors.push(`line ${lineNo}: gradient (${g.name}) incomplete Br/BS/Bs ramp table`);
+  }
   vm.gradients.set(g.name, { name: g.name, kind: g.kind, stops: [...g.stops].sort((a, b) => a.offset - b.offset) });
   vm.gradBuild = null;
-}
-
-function dropRampPreamble(vm: AiVm): void {
-  while (vm.stack.length > 0) {
-    const k = vm.stack[vm.stack.length - 1].kind;
-    if (k !== "hex" && k !== "num") break;
-    vm.stack.pop();
-  }
 }
 
 function parseBgOp(lineNo: number, vm: AiVm): void {
@@ -243,10 +230,7 @@ function parseBgOp(lineNo: number, vm: AiVm): void {
 function finishBbOp(lineNo: number, vm: AiVm): void {
   const n = popNums(vm, 1, "BB", lineNo);
   if (vm.inBb === null) vm.errors.push(`line ${lineNo}: BB without Bb`);
-  if (n !== null && n[0] > 0 && vm.curSubs !== null) {
-    vm.curSubs.hasStroke = true;
-    vm.curSubs.strokeWidthPt = vm.strokeWidth;
-  }
+  if (n !== null && n[0] > 0 && vm.curSubs !== null) { vm.curSubs.hasStroke = true; vm.curSubs.strokeWidthPt = vm.strokeWidth; }
   vm.inBb = null;
 }
 
@@ -273,14 +257,8 @@ function fillInfoOf(g: PendingGrad | null, hasFill: boolean) {
 
 function buildObjectInfo(vm: AiVm, hasFill: boolean, hasStroke: boolean): AiObjectInfo {
   return {
-    kind: vm.inCompound ? "compound" : "path",
-    subpaths: 0,
-    opacity: vm.opacity,
-    evenOdd: vm.evenOdd,
-    ...fillInfoOf(vm.inBb, hasFill),
-    hasStroke,
-    strokeWidthPt: hasStroke ? vm.strokeWidth : null,
-    closedFlags: [],
+    kind: vm.inCompound ? "compound" : "path", subpaths: 0, opacity: vm.opacity, evenOdd: vm.evenOdd,
+    ...fillInfoOf(vm.inBb, hasFill), hasStroke, strokeWidthPt: hasStroke ? vm.strokeWidth : null, closedFlags: [],
   };
 }
 
