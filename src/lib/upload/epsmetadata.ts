@@ -87,11 +87,11 @@ export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean 
 function iptcBlock(metadata: IconMetadata, eol: string): string {
   const block = encodeIptcBlock(metadata);
   const hex = block.reduce((acc, b) => acc + b.toString(16).padStart(2, "0"), "");
-  // For very long IPTC blocks, split across multiple comment lines. The
-  // trailing empty element terminates the last line so the block spliced
-  // before `%%EndComments` never glues onto the following comment line.
+  // For very long IPTC blocks, split across multiple comment lines. Each hex
+  // line must start with `%` so it is a PostScript comment, not executable
+  // code in the EPS header (raw hex tokens break Illustrator's parser).
   const chunks: string[] = [];
-  for (let i = 0; i < hex.length; i += 200) chunks.push(hex.slice(i, i + 200));
+  for (let i = 0; i < hex.length; i += 200) chunks.push(`% ${hex.slice(i, i + 200)}`);
   return [IPTC_BEGIN, ...chunks, IPTC_END, ""].join(eol);
 }
 

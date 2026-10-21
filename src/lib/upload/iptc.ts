@@ -167,8 +167,10 @@ function hexEncode(bytes: Uint8Array): string {
 export function embedIptcInEps(eps: string, meta: IconMetadata): string {
   const block = encodeIptcBlock(meta);
   const hex = hexEncode(block);
+  // Each hex line must start with `%` so it is a PostScript comment, not
+  // executable code in the EPS header (raw hex tokens break the parser).
   const chunks: string[] = [];
-  for (let i = 0; i < hex.length; i += 200) chunks.push(hex.slice(i, i + 200));
+  for (let i = 0; i < hex.length; i += 200) chunks.push(`% ${hex.slice(i, i + 200)}`);
   const comment = [`% IconSplitterIPTC begin`, ...chunks, "% IconSplitterIPTC end", ""].join("\n");
   const lines = eps.split(/(?:\r\n|\r|\n)/);
   const insertAt = lines.findIndex((l) => /^%%EndComments\b/.test(l));
@@ -184,7 +186,8 @@ export function readIptcFromEps(eps: string): Partial<IconMetadata> | null {
     if (!/^% IconSplitterIPTC begin$/.test(lines[i])) continue;
     const endAt = lines.findIndex((line, j) => j > i && /^% IconSplitterIPTC end$/.test(line));
     if (endAt < 0) continue;
-    const hex = lines.slice(i + 1, endAt).join("");
+    // Hex lines carry a `% ` comment prefix; strip non-hex chars before decoding.
+    const hex = lines.slice(i + 1, endAt).join("").replace(/[^0-9a-fA-F]/g, "");
     if (hex.length % 2 !== 0) continue;
     const bytes = new Uint8Array(hex.length / 2);
     for (let k = 0; k < bytes.length; k++) bytes[k] = parseInt(hex.slice(k * 2, k * 2 + 2), 16);
