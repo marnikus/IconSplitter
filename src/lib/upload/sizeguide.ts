@@ -14,7 +14,11 @@ const FIT_TOL = 1e-6;
 /** Fixed px strokes add a constant reach while geometry scales; two samples solve it, extra passes guard switches. */
 const SHRINK_PASSES = 6;
 const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"];
-/** The label height as a share of its logo's width, and the clear gap under the logos. */
+/**
+ * The letters' shared height as a share of the SMALLER logo's width — one
+ * legend size for both, as the reference artboard draws them — and the clear
+ * gap under the logos.
+ */
 export const SIZE_GUIDE_LABEL_RATIO = 0.28;
 export const SIZE_GUIDE_LABEL_GAP_RATIO = 0.1;
 
@@ -151,13 +155,15 @@ function planOf(artboard: { width: number; height: number }, p: SizeGuidePlaceme
   const aspect = box.height / box.width;
   const aspects = [labelAspect(labels.small), labelAspect(labels.large)];
   if (aspects.some((ratio) => ratio === null)) return null;
-  const labelHeights = widths.map((width) => width * SIZE_GUIDE_LABEL_RATIO);
+  // ONE legend size: S and L are the same letter size whatever the logos are
+  // (the reference artboard draws both labels at one height, 2026-10-20).
+  const labelHeight = SIZE_GUIDE_LABEL_RATIO * Math.min(widths[0], widths[1]);
   const icons = widths.map((width) => width * aspect);
   const labelGap = SIZE_GUIDE_LABEL_GAP_RATIO * Math.max(widths[0], widths[1]);
-  const height = Math.max(icons[0], icons[1]) + labelGap + Math.max(labelHeights[0], labelHeights[1]);
+  const height = Math.max(icons[0], icons[1]) + labelGap + labelHeight;
   const logos = [0, 1].map((i) => logoAt({
     x: i === 0 ? 0 : widths[0] + gap, width: widths[i], iconHeight: icons[i],
-    labelHeight: labelHeights[i], labelAspect: aspects[i] as number, iconBottom: Math.max(icons[0], icons[1]), bottom: height,
+    labelHeight, labelAspect: aspects[i] as number, iconBottom: Math.max(icons[0], icons[1]), bottom: height,
   })) as [Logo, Logo];
   return { logos, width: widths[0] + gap + widths[1], height };
 }

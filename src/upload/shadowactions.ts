@@ -1,42 +1,14 @@
-// shadowactions.ts — selected-only shadow edits and the general bulk settings apply.
-// Both write per-icon overrides through the same validated uploadSettings history path.
+// shadowactions.ts — selected-only shadow edits (the global popup's one control
+// set). Every write goes through the shared validated uploadSettings history
+// path; no global control copies a defaults value into a row (2026-10-21).
 import { useCallback, useRef } from "react";
-import { perIconFields } from "../lib/upload/asis";
 import {
-  clampShadowGapPct, clampShadowWidthPct, effectiveSettings,
-  type SettingsOverrides, type UploadSettings,
+  clampShadowGapPct, clampShadowWidthPct, effectiveSettings, type UploadSettings,
 } from "../lib/upload/settings";
 import type { Slice, UploadCtx } from "./actions";
-import { commitBatch } from "./selectedsettings";
+import { commitBatch, commitDecoration } from "./selectedsettings";
 
 type ShadowDimensions = Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">;
-
-/** The general bulk apply leaves every separately applied decoration pin untouched. */
-const DECORATION_FIELDS = [
-  "shadowEnabled", "shadowWidthPct", "shadowGapPct",
-  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
-] as const;
-
-function decorationPins(prior: SettingsOverrides): SettingsOverrides {
-  const out: SettingsOverrides = {};
-  for (const key of DECORATION_FIELDS) {
-    if (prior[key] !== undefined) Object.assign(out, { [key]: prior[key] });
-  }
-  return out;
-}
-
-export function useOverrideApplyActions(ctx: UploadCtx): Slice<"applyDefaultsToSelected"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const applyDefaultsToSelected = useCallback((ids: string[]) => {
-    const c = latest.current;
-    if (ids.length === 0) return c.say("Select at least one icon first", true);
-    commitBatch(c, ids, "Apply settings to selected", (_id, prior) => ({
-      ...perIconFields(c.m.defaults), ...decorationPins(prior),
-    }));
-  }, []);
-  return { applyDefaultsToSelected };
-}
 
 /** Mixed selection means Add; only an all-on selection means Remove. */
 export function useShadowActions(ctx: UploadCtx): Slice<"toggleShadowSelected" | "setShadowSelected"> {
@@ -47,8 +19,7 @@ export function useShadowActions(ctx: UploadCtx): Slice<"toggleShadowSelected" |
     if (ids.length === 0) return;
     const allOn = ids.every((id) => effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {}).shadowEnabled);
     const on = !allOn;
-    commitBatch(c, ids, on ? "Apply shadow" : "Remove shadow", (_id, prior) =>
-      effectiveSettings(c.m.defaults, prior).shadowEnabled === on ? null : { ...prior, shadowEnabled: on });
+    commitDecoration(c, ids, { key: "shadow", on, label: on ? "Apply shadow" : "Remove shadow" });
   }, []);
   const setShadowSelected = useCallback((ids: string[], patch: Partial<ShadowDimensions>) => {
     const c = latest.current;

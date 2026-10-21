@@ -74,9 +74,10 @@ opt-in class as Generate SVG → Requesty; design
   Gemini card is one contained grid (Model, Endpoint on its own full-width row,
   Timeout, Retries, Parallel, then the check row) so no control can overlap or
   leave its box.
-* Undo: `uploadSettings` (`{ overrides: { [pairId]: Overrides | null } }`
+* Undo: `uploadSettings` (`{ overrides: { [pairId]: Overrides | null }, applied?: { [pairId]: { shadow?, badge?, sizeGuide? } | null } }`
   before/after) and changed selection gestures both join the **same global**
-  timeline. Selection restores checked ids/anchor/active as one entry, even
+  timeline; the bulk bar's Reset to defaults is one such entry for the whole
+  selection. Selection restores checked ids/anchor/active as one entry, even
   across tab switches; validated apply with a failed step leaves the cursor
   unchanged. `src/upload/uploadundo.ts` applies settings live when mounted and
   writes the store directly when unmounted. Neither local files/downloads nor

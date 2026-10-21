@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { applyEntry, ENTRY_TYPES } from "../src/state/apply";
 import { HISTORY_VERSION, type HistoryEntry } from "../src/lib/history";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
-import { loadOverrides } from "../src/upload/settingsstore";
+import { loadApplied, loadOverrides } from "../src/upload/settingsstore";
 import {
   applyUploadSettingsPatch, bindUploadSettingsApplier, overridesEqual, toUploadSettingsPatch,
   type UploadSettingsPatch,
@@ -137,6 +137,22 @@ describe("applyEntry — the uploadSettings route", () => {
     expect(loadOverrides().pair_a).toEqual(withBadge.overrides.pair_a);
     await expect(applyEntry(entry(), { overrides: { pair_a: null } })).resolves.toBe(true);
     expect(loadOverrides()).toEqual({});
+  });
+
+  it("restores a decoration mark with its flag, and clears both on the undo side", async () => {
+    const applied = { overrides: { pair_a: { badgeEnabled: true } }, applied: { pair_a: { badge: true } } };
+    await expect(applyEntry(entry(), applied)).resolves.toBe(true);
+    expect(loadOverrides().pair_a).toEqual({ badgeEnabled: true });
+    expect(loadApplied().pair_a).toEqual({ badge: true });
+    await expect(applyEntry(entry(), { overrides: { pair_a: null }, applied: { pair_a: null } })).resolves.toBe(true);
+    expect(loadOverrides()).toEqual({});
+    expect(loadApplied()).toEqual({});
+  });
+
+  it("validates the applied half and ignores junk marks", async () => {
+    expect(toUploadSettingsPatch({ overrides: {}, applied: { pair_a: { badge: "yes" }, pair_b: { shadow: true } } }))
+      .toEqual({ overrides: {}, applied: { pair_b: { shadow: true } } });
+    expect(toUploadSettingsPatch({ overrides: {}, applied: {} })).toBeNull();
   });
 
   it("refuses a corrupt payload — the cursor stays where it was", async () => {

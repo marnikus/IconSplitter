@@ -44,9 +44,9 @@ describe("the S/L size guide on the final artboard", () => {
     const guide = ok(result);
     const [small, large] = guide.copies;
     expect(box(small.group)?.minX).toBeCloseTo(15.36, 3);
-    expect(box(small.group)?.minY).toBeCloseTo(212.2752, 3);
+    expect(box(small.group)?.minY).toBeCloseTo(218.0096, 3);
     expect(box(large.group)?.minX).toBeCloseTo(46.08, 3);
-    expect(box(large.group)?.minY).toBeCloseTo(191.7952, 3);
+    expect(box(large.group)?.minY).toBeCloseTo(197.5296, 3);
     const smallBox = box(small.group);
     const largeBox = box(large.group);
     expect(smallBox?.width).toBeCloseTo(20.48, 3);
@@ -60,7 +60,7 @@ describe("the S/L size guide on the final artboard", () => {
 
   it.each([
     ["top-left", 15.36, 7.68],
-    ["bottom-right", 512 - 15.36 - 71.68, 256 - 7.68 - 56.5248],
+    ["bottom-right", 512 - 15.36 - 71.68, 256 - 7.68 - 50.7904],
   ] as const)("anchors %s using the chosen edges only", (corner, x, y) => {
     const { result } = placed({ corner });
     const guide = ok(result);
@@ -110,19 +110,30 @@ describe("the S/L size guide on the final artboard", () => {
     }
   });
 
-  it("draws the supplied S and L label paths under their own logo", () => {
+  it("draws the supplied S and L letters at ONE size, centred under their own logo", () => {
     const { result } = placed();
     const guide = ok(result);
     const [smallLabel, largeLabel] = guide.copies.map((copy) => box(copy.label));
     const [smallIcon, largeIcon] = guide.copies.map((copy) => box(copy.group));
     expect((smallLabel?.width ?? 0) / (smallLabel?.height ?? 1)).toBeCloseTo(7.84434 / 11.0918, 2);
     expect((largeLabel?.width ?? 0) / (largeLabel?.height ?? 1)).toBeCloseTo(6.54684 / 10.7952, 2);
+    // One legend size for both letters (the reference artboard): the SMALLER
+    // logo sets it, so L's letter never comes out twice S's.
     expect(smallLabel?.height).toBeCloseTo(0.28 * 20.48, 2);
-    expect(largeLabel?.height).toBeCloseTo(0.28 * 40.96, 2);
+    expect(largeLabel?.height).toBeCloseTo(0.28 * 20.48, 2);
+    expect(largeLabel?.height).toBeCloseTo(smallLabel?.height ?? 0, 3);
     expect(center(smallLabel)).toBeCloseTo(center(smallIcon), 2);
     expect(center(largeLabel)).toBeCloseTo(center(largeIcon), 2);
     expect((smallLabel?.minY ?? 0) + (smallLabel?.height ?? 0)).toBeCloseTo(256 - 7.68, 2);
     expect((largeLabel?.minY ?? 0) + (largeLabel?.height ?? 0)).toBeCloseTo(256 - 7.68, 2);
+  });
+
+  it("keeps both letters one size even when the S logo is the larger one", () => {
+    const { result } = placed({ smallPct: 8, largePct: 4 });
+    const built = ok(result);
+    const [smallLabel, largeLabel] = built.copies.map((copy) => box(copy.label));
+    expect(smallLabel?.height).toBeCloseTo(0.28 * (512 * 0.04), 2);
+    expect(largeLabel?.height).toBeCloseTo(smallLabel?.height ?? 0, 3);
   });
 
   it("shrinks the pair uniformly — even with a fixed pixel stroke — never moving the inset", () => {

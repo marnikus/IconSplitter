@@ -10,6 +10,7 @@ import { useReducer, type Dispatch } from "react";
 import { maskKey } from "../lib/svgsecret";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import type { PreviewBackground } from "../lib/svgbackground";
+import { mergeApplied, type AppliedDecorations, type AppliedMap } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { UploadDiscovery } from "./discovery";
 import { staleOf } from "./rowmodel";
@@ -33,6 +34,8 @@ export interface UploadModel {
   defaults: UploadSettings;
   /** Per-icon overrides (pair id → pinned fields); absent = inherited. */
   overrides: OverridesMap;
+  /** Decorations the checked-set control applied — read as inherited, never counted as pins. */
+  applied: AppliedMap;
   gemini: GeminiConfig;
   /** The last provider-verified model check (CP-8) — never a silent swap. */
   modelCheck: ModelCheck;
@@ -76,8 +79,8 @@ export type UploadAction =
   | { type: "busy"; busy: string | null }
   | { type: "toast"; toast: Toast | null }
   | { type: "defaults"; defaults: UploadSettings }
-  | { type: "override"; id: string; patch: SettingsOverrides | null }
-  | { type: "overrides-patch"; overrides: Record<string, SettingsOverrides | null> }
+  | { type: "override"; id: string; patch: SettingsOverrides | null; applied?: AppliedDecorations | null }
+  | { type: "overrides-patch"; overrides: Record<string, SettingsOverrides | null>; applied?: Record<string, AppliedDecorations | null> }
   | { type: "gemini"; gemini: GeminiConfig }
   | { type: "model-check"; check: ModelCheck }
   | { type: "prompt"; prompt: string }
@@ -112,14 +115,18 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   toast: (m, a) => ({ ...m, toast: (a as { toast: Toast | null }).toast }),
   defaults: (m, a) => restaleAll({ ...m, defaults: (a as { defaults: UploadSettings }).defaults }, (a as { defaults: UploadSettings }).defaults),
   override: (m, a) => {
-    const act = a as { id: string; patch: SettingsOverrides | null };
-    return restaleAll({ ...m, overrides: setOverride(m.overrides, act.id, act.patch) }, m.defaults);
+    const act = a as { id: string; patch: SettingsOverrides | null; applied?: AppliedDecorations | null };
+    const applied = act.applied === undefined ? m.applied : mergeApplied(m.applied, { [act.id]: act.applied });
+    return restaleAll({ ...m, overrides: setOverride(m.overrides, act.id, act.patch), applied }, m.defaults);
   },
   "overrides-patch": (m, a) => {
-    const overrides = (a as { overrides: Record<string, SettingsOverrides | null> }).overrides;
+    const act = a as {
+      overrides: Record<string, SettingsOverrides | null>;
+      applied?: Record<string, AppliedDecorations | null>;
+    };
     let map = m.overrides;
-    for (const [id, patch] of Object.entries(overrides)) map = setOverride(map, id, patch);
-    return restaleAll({ ...m, overrides: map }, m.defaults);
+    for (const [id, patch] of Object.entries(act.overrides)) map = setOverride(map, id, patch);
+    return restaleAll({ ...m, overrides: map, applied: mergeApplied(m.applied, act.applied) }, m.defaults);
   },
   gemini: (m, a) => ({ ...m, gemini: (a as { gemini: GeminiConfig }).gemini }),
   "model-check": (m, a) => ({ ...m, modelCheck: (a as { check: ModelCheck }).check }),
@@ -214,7 +221,7 @@ export interface Boot {
 export function initialModel(boot: Boot): UploadModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
-    defaults: boot.settings.defaults, overrides: boot.settings.overrides,
+    defaults: boot.settings.defaults, overrides: boot.settings.overrides, applied: boot.settings.applied,
     gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, prompt: boot.prompt, presets: boot.presets,
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,

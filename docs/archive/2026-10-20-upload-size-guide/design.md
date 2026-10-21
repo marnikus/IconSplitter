@@ -21,8 +21,11 @@ supplied the two label outlines (7×11 `L`, 8×12 `S`) as plain filled paths.
    them with the geometry, so a repeat at 6 % carries 6 % of the icon's own
    weight. Any value above 0 writes that width verbatim in final px.
 3. **Group layout:** S then L left-to-right, icon bottoms aligned, labels
-   baseline-aligned under their icon (label height 28 % of that logo's width,
-   clear gap 10 % of the widest logo). Gap between the logos defaults to 2 % of
+   baseline-aligned under their icon. Both letters share ONE height — 28 % of
+   the SMALLER logo's width (measured against the reference artboard, whose two
+   letters are both 9 px tall while its logos are 27 px and 62 px wide) — so
+   `S` and `L` read as one legend; a per-logo ratio made `L` twice as large.
+   Clear gap 10 % of the widest logo. Gap between the logos defaults to 2 % of
    artboard width. Corner (default `bottom-left`) + inward X/Y distances
    (default 3 % each) anchor the whole group, exactly like the badge. A group
    that does not fit shrinks uniformly, re-measured up to three times because a

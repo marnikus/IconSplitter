@@ -160,8 +160,8 @@ function reportRestore(dispatch: Dispatch<UploadAction>): void {
 /** Settings, provider config and view prefs are remembered locally (RULE 6). */
 function usePersist(model: UploadModel): void {
   useEffect(() => {
-    saveUploadSettings({ defaults: model.defaults, overrides: model.overrides });
-  }, [model.defaults, model.overrides]);
+    saveUploadSettings({ defaults: model.defaults, overrides: model.overrides, applied: model.applied });
+  }, [model.defaults, model.overrides, model.applied]);
   useEffect(() => saveGeminiConfig(model.gemini), [model.gemini]);
   // The prompt is text the user owns: every keystroke persists (RULE 13).
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
@@ -173,7 +173,7 @@ function usePersist(model: UploadModel): void {
 /** A mounted panel claims the uploadSettings undo path; unmount releases it. */
 function useUndoBinding(dispatch: Dispatch<UploadAction>): void {
   useEffect(() => bindUploadSettingsApplier((patch) => {
-    dispatch({ type: "overrides-patch", overrides: patch.overrides });
+    dispatch({ type: "overrides-patch", overrides: patch.overrides, applied: patch.applied });
   }), [dispatch]);
 }
 

@@ -4,10 +4,12 @@
 // STROKE width (Generate SVG's PreviewStroke control, here the ONE strokePx of
 // the export defaults — 2026-10-19, RULE 10) with the global Export settings button beside
 // them (the reference puts the tools here, not in the provider card), the live
-// progress line, and the bulk controls: Apply settings, Generate metadata,
-// Regenerate metadata, Export selected, Download all (the selection's committed
-// packages into one folder the user picks, 2026-10-08), and Cancel while a run
-// is in flight. Every bulk action applies to the SELECTION only.
+// progress line, and the bulk controls: Reset to defaults (clears the
+// selection's own pins — never writes the global values into a row, 2026-10-21),
+// Generate metadata, Regenerate metadata, Export selected, Download all (the
+// selection's committed packages into one folder the user picks, 2026-10-08),
+// and Cancel while a run is in flight. Every bulk action applies to the
+// SELECTION only.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import PreviewStroke from "../svg/PreviewStroke";
@@ -31,6 +33,8 @@ export interface UploadBulkBarProps {
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
   shadowEpsUnsupported: number;
+  /** How many checked icons would change: a local pin or an applied decoration. */
+  overriddenCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
   onDeselectAll: () => void;
@@ -38,7 +42,7 @@ export interface UploadBulkBarProps {
   onBg: (bg: PreviewBackground) => void;
   onStroke: (px: number | null) => void;
   onSettings: () => void;
-  onApplySettings: () => void;
+  onResetSettings: () => void;
   onMetadata: () => void;
   onRegenerateMetadata: () => void;
   onExport: () => void;
@@ -103,8 +107,12 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
       {p.shadowEpsUnsupported > 0 && <span className="svg-warning" role="alert" data-testid="upload-shadow-eps-warning">
         Built-in EPS cannot draw shadows for {p.shadowEpsUnsupported} selected icon(s): SVG/JPEG export; EPS reports partial.
       </span>}
-      <button type="button" className="svg-btn" data-testid="upload-apply-settings"
-        disabled={p.checkedCount === 0} onClick={p.onApplySettings}>Apply settings to selected</button>
+      <button type="button" className="svg-btn" data-testid="upload-reset-settings"
+        disabled={p.overriddenCount === 0} onClick={p.onResetSettings}
+        title={p.overriddenCount === 0
+          ? "No checked icon pins anything — every row already inherits the global settings"
+          : `Clears the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} that pin settings or carry a decoration applied to the selection — one undoable step; the global defaults are never changed`}>
+        ↺ Reset to defaults ({p.overriddenCount})</button>
       <MetadataActions p={p} />
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
