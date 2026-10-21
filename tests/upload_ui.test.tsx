@@ -823,6 +823,52 @@ describe("selection + the bulk bar", () => {
     expect(stored.overrides).toEqual({});
   });
 
+  it("groups the size guide as placement, S, L and spacing, one block per logo", async () => {
+    await mount(makeRoot());
+    await click("[data-testid=upload-settings-open]");
+    const block = (id: string) => q(`[data-testid=upload-sizeguide-${id}]`);
+    for (const id of ["placement", "small", "large", "spacing"]) expect(block(id)?.classList.contains("up-guide-block")).toBe(true);
+    // each logo's width AND its own stroke width live in that logo's block
+    expect(block("small")?.contains(input("[data-testid=upload-set-sizeguide-small-width]"))).toBe(true);
+    expect(block("small")?.contains(input("[data-testid=upload-set-sizeguide-small-stroke]"))).toBe(true);
+    expect(block("small")?.contains(input("[data-testid=upload-set-sizeguide-large-width]"))).toBe(false);
+    expect(block("large")?.contains(input("[data-testid=upload-set-sizeguide-large-stroke]"))).toBe(true);
+    expect(block("placement")?.contains(q("[data-testid=upload-set-sizeguide-corner]"))).toBe(true);
+    expect(block("spacing")?.contains(input("[data-testid=upload-set-sizeguide-gap]"))).toBe(true);
+    // short visible labels inside a named block; the full sentence stays the accessible name
+    expect(block("small")?.querySelector(".svg-label")?.textContent).toBe("S — small logo");
+    expect(input("[data-testid=upload-set-sizeguide-small-width]").getAttribute("aria-label"))
+      .toBe("S logo width as percent of artboard width");
+    expect(input("[data-testid=upload-set-sizeguide-small-stroke]").getAttribute("aria-label"))
+      .toBe("S logo stroke width as percent of artboard width");
+    expect(input("[data-testid=upload-set-sizeguide-gap]").getAttribute("aria-label"))
+      .toMatch(/clear distance between the S and L logos/i);
+  });
+
+  it("marks badge and size guide in the row summary only while they are on", async () => {
+    await mount(makeRoot());
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).not.toMatch(/badge|size guide/);
+    await click("[data-testid=upload-set-badge]");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("badge");
+    await click("[data-testid=upload-set-sizeguide]");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("size guide 6/12%");
+    await click("[data-testid=upload-set-badge]");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).not.toContain("· badge");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("size guide");
+  });
+
+  it("keeps the shadow and badge checkboxes clickable without swallowing the whole row", async () => {
+    await mount(makeRoot());
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    for (const id of ["upload-set-shadow", "upload-set-sizeguide", "upload-set-badge"]) {
+      const box = input(`[data-testid=${id}]`);
+      expect(box.closest("label")?.classList.contains("up-shadow-check"), id).toBe(true);
+      expect(box.closest("label")?.className).not.toContain("up-set-field");
+    }
+    expect(input("[data-testid=upload-set-shadow]").getAttribute("aria-label")).toBe("Shadow on this icon");
+  });
+
   it("toggles the size guide only for checked icons and names the Expand strokes interaction", async () => {
     await mount(makeRoot());
     await activate(ARCH);

@@ -156,6 +156,19 @@ function shadowLine(s: UploadSettings): string {
   return s.shadowEnabled ? ` · shadow ${s.shadowWidthPct}% · gap ${s.shadowGapPct}%` : "";
 }
 
+/**
+ * The artboard decorations this row will ship — the list has to say that the
+ * export adds something the artwork does not have (2026-10-20 review: a row
+ * with a badge or a size guide looked identical to one without).
+ */
+function decorationLine(s: UploadSettings): string {
+  const parts = [
+    ...(s.badgeEnabled ? ["badge"] : []),
+    ...(s.sizeGuideEnabled ? [`size guide ${s.sizeGuideSmallPct}/${s.sizeGuideLargePct}%`] : []),
+  ];
+  return parts.length === 0 ? "" : ` · ${parts.join(" · ")}`;
+}
+
 /** The effective settings, one line, plus how many fields this icon pins. */
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
@@ -164,7 +177,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
       <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${effective.paddingPct === null ? "default" : `${effective.paddingPct}%`} · ${effective.background} · ${strokeLine(effective)}`}</small>
-      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}{shadowLine(effective)}</small>
+      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}{shadowLine(effective)}{decorationLine(effective)}</small>
       <ShadowEpsNote settings={effective} id={id} />
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}

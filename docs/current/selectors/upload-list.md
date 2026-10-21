@@ -45,7 +45,7 @@ lists start unchecked; there are no A/D review shortcuts.
 | `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |
 | `upload-note-{id}` | small | (2026-10-08) the amber `.svg-note` "EPS auto-fixed: …" line from `record.tools.eps.fixes` — present only when the EPS writer adjusted something on its own (a rounded `<rect>` drawn as an exact outline); the row stays Processed, nothing is asked |
 | `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
-| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | effective settings including `shadow W% · gap G%` when on, plus "inherits defaults" / "N fields overridden"; `upload-shadow-eps-{id}` warns built-in EPS partial before row export |
+| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | effective settings including `shadow W% · gap G%`, `badge` and `size guide S/L%` when on, plus "inherits defaults" / "N fields overridden"; `upload-shadow-eps-{id}` warns built-in EPS partial before row export |
 | `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
 | `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
 

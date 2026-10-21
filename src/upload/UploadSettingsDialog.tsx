@@ -104,7 +104,7 @@ function AsIsRow({ p, effective }: { p: UploadSettingsDialogProps; effective: Up
         onClick={() => changeMany(p, { ...AS_IS_SETTINGS, shadowEnabled: false, badgeEnabled: false, sizeGuideEnabled: false })}>All default (export as is)</button>
       <span className="up-hint" data-testid="upload-set-as-is-note">
         {on ? "every visual setting is default: the approved SVG is exported exactly as it is"
-          : p.id === null ? "reset global visual defaults; checked icons keep their separately applied shadows and badges"
+          : p.id === null ? "reset global visual defaults; checked icons keep their separately applied shadows, badges and size guides"
             : "stroke, background, artboard and padding back to the SVG's own; this icon's shadow, badge and size guide off"}
       </span>
     </div>

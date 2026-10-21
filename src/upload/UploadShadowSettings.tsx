@@ -11,12 +11,15 @@ export default function UploadShadowSettings({ p, effective }: { p: UploadSettin
     : effective.shadowEnabled && effective.includeEps && effective.epsConverter === "builtin";
   return (
     <div className="up-shadow-dialog" data-testid="upload-set-shadow-section">
-      {p.id === null ? <SelectedShadowControls p={p} /> : <label className="svg-field up-set-field">
+      {p.id === null ? <SelectedShadowControls p={p} /> : <div className="svg-field up-set-field">
         <span className="svg-label">Shadow<Marker p={p} field="shadowEnabled" testid="shadow" /></span>
-        <input type="checkbox" data-testid="upload-set-shadow" checked={effective.shadowEnabled}
-          onChange={(e) => change(p, "shadowEnabled", e.target.checked)} />
-        <small className="up-hint">the template gradient below this icon, centred on its painted bounds</small>
-      </label>}
+        <label className="up-shadow-check">
+          <input type="checkbox" data-testid="upload-set-shadow" aria-label="Shadow on this icon" checked={effective.shadowEnabled}
+            onChange={(e) => change(p, "shadowEnabled", e.target.checked)} />
+          the template gradient below this icon
+        </label>
+        <small className="up-hint">centred on the icon&apos;s painted bounds; the numbers below size it</small>
+      </div>}
       <ShadowDimensions p={p} effective={effective} />
       {p.id === null && <small className="up-hint">Shadow defaults for icon settings; changing these numbers does not enable unchecked icons.</small>}
       {epsWarning &&
@@ -32,16 +35,16 @@ function SelectedShadowControls({ p }: { p: UploadSettingsDialogProps }) {
   const state = p.selectedShadow.state;
   return (
     <div className="up-shadow-controls" data-testid="upload-shadow-controls">
-      <label className="svg-field up-set-field">
+      <div className="svg-field up-set-field">
         <span className="svg-label">Checked icons ({p.selectedCount})</span>
-        <span className="up-shadow-check">
+        <label className="up-shadow-check">
           <input type="checkbox" data-testid="upload-set-shadow-selected" aria-label="Shadow on checked icons"
             checked={state === "all"} disabled={p.selectedCount === 0} onChange={p.onSelectedShadowToggle}
             ref={(el) => { if (el) el.indeterminate = state === "mixed"; }} />
           Shadow {state === "mixed" ? "(some on)" : state === "all" ? "(all on)" : "(off)"}
-        </span>
+        </label>
         <small className="up-hint">{p.selectedCount === 0 ? "Select icons to apply a shadow." : "Only checked icons, including checks hidden by a filter."}</small>
-      </label>
+      </div>
       <SelectedDimensions p={p} />
     </div>
   );

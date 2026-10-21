@@ -19,6 +19,8 @@ type Placement = Pick<UploadSettings,
 
 interface NumberWant {
   testid: string; label: string; hint?: string;
+  /** The screen-reader name; defaults to the visible label. */
+  aria?: string;
   value: number; min: number; max: number; step: number;
   onCommit: (n: number) => void; marker?: React.ReactNode;
 }
@@ -28,7 +30,7 @@ export default function UploadSizeGuideSettings({ p, effective }: SettingsFieldP
     <div className="up-shadow-dialog" data-testid="upload-set-sizeguide-section">
       {p.id === null ? <SelectedSizeGuideToggle p={p} /> : <PerIconSizeGuideToggle p={p} effective={effective} />}
       {p.id === null && <small className="up-hint" data-testid="upload-sizeguide-defaults-note">
-        Size guide defaults change the two logos' sizes and placement, but never turn on an unchecked icon.
+        These defaults change the two logos' sizes and placement, but never turn on an unchecked icon.
       </small>}
       <SizeGuideFields p={p} effective={effective} />
     </div>
@@ -74,18 +76,14 @@ function PerIconSizeGuideToggle({ p, effective }: SettingsFieldProps) {
 function SizeGuideFields({ p, effective }: SettingsFieldProps) {
   const update = (patch: Partial<Placement>) => changeMany(p, patch);
   const marker = (field: keyof UploadSettings, testid: string) => <Marker p={p} field={field} testid={testid} />;
+  const fields: FieldsProps = { p, effective, update, marker };
   return (
     <fieldset className="up-shadow-fields" disabled={p.id !== null && !effective.sizeGuideEnabled}>
       {p.id === null && <legend className="svg-label">Size guide defaults</legend>}
-      <SizeGuideCornerField testid="upload-set-sizeguide-corner" value={effective.sizeGuideCorner}
-        marker={marker("sizeGuideCorner", "sizeguide-corner")} onChange={(v) => {
-          const corner = parseSizeGuideCorner(v);
-          if (corner !== null) update({ sizeGuideCorner: corner });
-        }} />
-      <SizeGuideInsets p={p} corner={effective.sizeGuideCorner}
-        x={effective.sizeGuideOffsetXPct} y={effective.sizeGuideOffsetYPct} onPatch={update} />
-      <SizeGuideLogos effective={effective} update={update} marker={marker} />
-      <SizeGuideSpacing effective={effective} update={update} marker={marker} />
+      <SizeGuidePlacement {...fields} />
+      <SizeGuideLogo {...fields} side="S" />
+      <SizeGuideLogo {...fields} side="L" />
+      <SizeGuideSpacing {...fields} />
       <small className="up-hint" data-testid="upload-sizeguide-fit-note">
         The pair shrinks uniformly to keep these insets inside the artboard; a 100% inset leaves no room and export reports it.
       </small>
@@ -97,63 +95,112 @@ function SizeGuideFields({ p, effective }: SettingsFieldProps) {
 }
 
 interface FieldsProps {
+  p: SettingsFieldProps["p"];
   effective: UploadSettings;
   update: (patch: Partial<Placement>) => void;
   marker: (field: keyof UploadSettings, testid: string) => React.ReactNode;
 }
 
-/** Each logo's width, then its own stroke width — the user's per-logo percentages. */
-function SizeGuideLogos({ effective, update, marker }: FieldsProps) {
-  return <>
-    <SizeGuideNumber field={{ testid: "upload-set-sizeguide-small-width", label: "S logo width % of artboard",
-      hint: "% of the artboard width; S sits first, left of L", value: effective.sizeGuideSmallPct,
-      min: SIZE_GUIDE_SMALL_MIN, max: SIZE_GUIDE_SMALL_MAX, step: 1, marker: marker("sizeGuideSmallPct", "sizeguide-small"),
-      onCommit: (n) => update({ sizeGuideSmallPct: clampSizeGuideSmallPct(n) }) }} />
-    <SizeGuideNumber field={{ testid: "upload-set-sizeguide-small-stroke", label: "S stroke width % of artboard",
-      hint: "this logo's own stroke weight; 0 keeps the artwork's scaled widths", value: effective.sizeGuideSmallStrokePct,
-      min: SIZE_GUIDE_STROKE_MIN, max: SIZE_GUIDE_STROKE_MAX, step: 0.1,
-      marker: marker("sizeGuideSmallStrokePct", "sizeguide-small-stroke"),
-      onCommit: (n) => update({ sizeGuideSmallStrokePct: clampSizeGuideStrokePct(n) }) }} />
-    <SizeGuideNumber field={{ testid: "upload-set-sizeguide-large-width", label: "L logo width % of artboard",
-      hint: "% of the artboard width; both logos share one baseline", value: effective.sizeGuideLargePct,
-      min: SIZE_GUIDE_LARGE_MIN, max: SIZE_GUIDE_LARGE_MAX, step: 1, marker: marker("sizeGuideLargePct", "sizeguide-large"),
-      onCommit: (n) => update({ sizeGuideLargePct: clampSizeGuideLargePct(n) }) }} />
-    <SizeGuideNumber field={{ testid: "upload-set-sizeguide-large-stroke", label: "L stroke width % of artboard",
-      hint: "this logo's own stroke weight; 0 keeps the artwork's scaled widths", value: effective.sizeGuideLargeStrokePct,
-      min: SIZE_GUIDE_STROKE_MIN, max: SIZE_GUIDE_STROKE_MAX, step: 0.1,
-      marker: marker("sizeGuideLargeStrokePct", "sizeguide-large-stroke"),
-      onCommit: (n) => update({ sizeGuideLargeStrokePct: clampSizeGuideStrokePct(n) }) }} />
-  </>;
+/** Where the group sits: the corner and both inward distances, labelled from those edges. */
+function SizeGuidePlacement({ p, effective, update, marker }: FieldsProps) {
+  return (
+    <div className="up-guide-block" data-testid="upload-sizeguide-placement" role="group" aria-label="Size guide placement">
+      <span className="svg-label">Placement</span>
+      <SizeGuideCornerField testid="upload-set-sizeguide-corner" value={effective.sizeGuideCorner}
+        marker={marker("sizeGuideCorner", "sizeguide-corner")} onChange={(v) => {
+          const corner = parseSizeGuideCorner(v);
+          if (corner !== null) update({ sizeGuideCorner: corner });
+        }} />
+      <SizeGuideNumber field={{ testid: "upload-set-sizeguide-offset-x", label: insetLabel(effective.sizeGuideCorner, "x"),
+        value: effective.sizeGuideOffsetXPct, min: SIZE_GUIDE_OFFSET_MIN, max: SIZE_GUIDE_OFFSET_MAX, step: 1,
+        marker: <Marker p={p} field="sizeGuideOffsetXPct" testid="sizeguide-offset-x" />,
+        onCommit: (n) => update({ sizeGuideOffsetXPct: clampSizeGuideOffsetPct(n) }) }} />
+      <SizeGuideNumber field={{ testid: "upload-set-sizeguide-offset-y", label: insetLabel(effective.sizeGuideCorner, "y"),
+        value: effective.sizeGuideOffsetYPct, min: SIZE_GUIDE_OFFSET_MIN, max: SIZE_GUIDE_OFFSET_MAX, step: 1,
+        marker: <Marker p={p} field="sizeGuideOffsetYPct" testid="sizeguide-offset-y" />,
+        onCommit: (n) => update({ sizeGuideOffsetYPct: clampSizeGuideOffsetPct(n) }) }} />
+    </div>
+  );
 }
 
-/** The user-defined distance between S and L. */
+/** One logo's own two numbers, kept in one place so the labels cannot cross. */
+interface LogoSide {
+  side: "S" | "L";
+  name: "small" | "large";
+  width: number;
+  stroke: number;
+  widthClamp: (v: number) => number;
+  strokeClamp: (v: number) => number;
+  limits: { widthMin: number; widthMax: number };
+  widthMarker: React.ReactNode;
+  strokeMarker: React.ReactNode;
+}
+
+/** ONE logo: its width and its OWN stroke width together, so the pair cannot be mistaken for the other logo's. */
+function SizeGuideLogo({ effective, update, marker, side }: FieldsProps & { side: "S" | "L" }) {
+  const want = logoSideOf(effective, side, marker);
+  return (
+    <div className="up-guide-block" data-testid={`upload-sizeguide-${want.name}`} role="group"
+      aria-label={`${want.side} — ${want.name} logo`}>
+      <span className="svg-label">{want.side} — {want.name} logo</span>
+      <SizeGuideNumber field={{
+        testid: `upload-set-sizeguide-${want.name}-width`, label: "Width % of artboard",
+        aria: `${want.side} logo width as percent of artboard width`,
+        hint: want.side === "S" ? "S sits first, left of L" : "both logos share one baseline",
+        value: want.width, min: want.limits.widthMin, max: want.limits.widthMax, step: 1,
+        marker: want.widthMarker, onCommit: (n) => update(widthPatchOf(want, n)),
+      }} />
+      <SizeGuideNumber field={{
+        testid: `upload-set-sizeguide-${want.name}-stroke`, label: "Stroke width %",
+        aria: `${want.side} logo stroke width as percent of artboard width`,
+        hint: "0 keeps the artwork's scaled widths", value: want.stroke,
+        min: SIZE_GUIDE_STROKE_MIN, max: SIZE_GUIDE_STROKE_MAX, step: 0.1,
+        marker: want.strokeMarker, onCommit: (n) => update(strokePatchOf(want, n)),
+      }} />
+    </div>
+  );
+}
+
+function logoSideOf(effective: UploadSettings, side: "S" | "L", marker: FieldsProps["marker"]): LogoSide {
+  const small = side === "S";
+  return {
+    side, name: small ? "small" : "large",
+    width: small ? effective.sizeGuideSmallPct : effective.sizeGuideLargePct,
+    stroke: small ? effective.sizeGuideSmallStrokePct : effective.sizeGuideLargeStrokePct,
+    widthClamp: small ? clampSizeGuideSmallPct : clampSizeGuideLargePct,
+    strokeClamp: clampSizeGuideStrokePct,
+    limits: small ? { widthMin: SIZE_GUIDE_SMALL_MIN, widthMax: SIZE_GUIDE_SMALL_MAX }
+      : { widthMin: SIZE_GUIDE_LARGE_MIN, widthMax: SIZE_GUIDE_LARGE_MAX },
+    widthMarker: small ? marker("sizeGuideSmallPct", "sizeguide-small") : marker("sizeGuideLargePct", "sizeguide-large"),
+    strokeMarker: small ? marker("sizeGuideSmallStrokePct", "sizeguide-small-stroke")
+      : marker("sizeGuideLargeStrokePct", "sizeguide-large-stroke"),
+  };
+}
+
+function widthPatchOf(want: LogoSide, n: number): Partial<Placement> {
+  return want.name === "small"
+    ? { sizeGuideSmallPct: want.widthClamp(n) }
+    : { sizeGuideLargePct: want.widthClamp(n) };
+}
+
+function strokePatchOf(want: LogoSide, n: number): Partial<Placement> {
+  return want.name === "small"
+    ? { sizeGuideSmallStrokePct: want.strokeClamp(n) }
+    : { sizeGuideLargeStrokePct: want.strokeClamp(n) };
+}
+
+/** The user-defined clear distance between S and L. */
 function SizeGuideSpacing({ effective, update, marker }: FieldsProps) {
-  return <SizeGuideNumber field={{ testid: "upload-set-sizeguide-gap", label: "Distance between logos %",
-    hint: "clear space between S and L, % of the artboard width", value: effective.sizeGuideGapPct,
-    min: SIZE_GUIDE_GAP_MIN, max: SIZE_GUIDE_GAP_MAX, step: 1, marker: marker("sizeGuideGapPct", "sizeguide-gap"),
-    onCommit: (n) => update({ sizeGuideGapPct: clampSizeGuideGapPct(n) }) }} />;
-}
-
-interface InsetsProps {
-  p: SettingsFieldProps["p"];
-  corner: SizeGuideCorner;
-  x: number;
-  y: number;
-  onPatch: (patch: Partial<Placement>) => void;
-}
-
-/** Each inset is measured inward from the edge the current corner names. */
-function SizeGuideInsets({ p, corner, x, y, onPatch }: InsetsProps) {
-  return <>
-    <SizeGuideNumber field={{ testid: "upload-set-sizeguide-offset-x", label: insetLabel(corner, "x"),
-      value: x, min: SIZE_GUIDE_OFFSET_MIN, max: SIZE_GUIDE_OFFSET_MAX, step: 1,
-      marker: <Marker p={p} field="sizeGuideOffsetXPct" testid="sizeguide-offset-x" />,
-      onCommit: (n) => onPatch({ sizeGuideOffsetXPct: clampSizeGuideOffsetPct(n) }) }} />
-    <SizeGuideNumber field={{ testid: "upload-set-sizeguide-offset-y", label: insetLabel(corner, "y"),
-      value: y, min: SIZE_GUIDE_OFFSET_MIN, max: SIZE_GUIDE_OFFSET_MAX, step: 1,
-      marker: <Marker p={p} field="sizeGuideOffsetYPct" testid="sizeguide-offset-y" />,
-      onCommit: (n) => onPatch({ sizeGuideOffsetYPct: clampSizeGuideOffsetPct(n) }) }} />
-  </>;
+  return (
+    <div className="up-guide-block" data-testid="upload-sizeguide-spacing" role="group" aria-label="Size guide spacing">
+      <span className="svg-label">Spacing</span>
+      <SizeGuideNumber field={{ testid: "upload-set-sizeguide-gap", label: "Between logos %",
+        aria: "Clear distance between the S and L logos as percent of artboard width",
+        hint: "clear space between S and L", value: effective.sizeGuideGapPct,
+        min: SIZE_GUIDE_GAP_MIN, max: SIZE_GUIDE_GAP_MAX, step: 1, marker: marker("sizeGuideGapPct", "sizeguide-gap"),
+        onCommit: (n) => update({ sizeGuideGapPct: clampSizeGuideGapPct(n) }) }} />
+    </div>
+  );
 }
 
 /** The percentages are measured inward from the edges the corner names. */
@@ -167,7 +214,7 @@ function SizeGuideNumber({ field }: { field: NumberWant }) {
   return (
     <div className="svg-field up-set-field">
       <span className="svg-label">{field.label}{field.marker}</span>
-      <DraftNumberInput testid={field.testid} label={field.label} value={field.value}
+      <DraftNumberInput testid={field.testid} label={field.aria ?? field.label} value={field.value}
         min={field.min} max={field.max} step={field.step} placeholder="mixed"
         onCommit={(n) => { if (n !== null) field.onCommit(n); }} />
       {field.hint !== undefined && <small className="up-hint">{field.hint}</small>}

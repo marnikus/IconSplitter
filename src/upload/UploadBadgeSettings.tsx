@@ -18,7 +18,7 @@ export default function UploadBadgeSettings({ p, effective }: { p: UploadSetting
     <div className="up-shadow-dialog" data-testid="upload-set-badge-section">
       {p.id === null ? <SelectedBadgeToggle p={p} /> : <PerIconBadgeToggle p={p} effective={effective} />}
       {p.id === null && <small className="up-hint" data-testid="upload-badge-defaults-note">
-        Badge defaults below change size and placement, but never turn on an unchecked icon.
+        These defaults change size and placement, but never turn on an unchecked icon.
       </small>}
       <BadgePlacementFields p={p} effective={effective} />
     </div>

@@ -1890,7 +1890,24 @@
 .up-shadow-check { display: flex; align-items: center; gap: 7px; }
 .up-shadow-dialog .up-shadow-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .up-shadow-dialog .up-shadow-fields .svg-input { width: 100%; }
+/* A note inside a decoration fieldset is a sentence for the whole block, not
+   one 160 px grid cell (2026-10-20 review: the fit notes wrapped in a column). */
+.up-shadow-dialog .up-shadow-fields > .up-hint,
+.up-shadow-dialog .up-shadow-fields > .svg-warning { grid-column: 1 / -1; margin-top: 0; }
 .up-shadow-dialog .svg-warning { margin-top: 8px; }
+/* The size guide reads as its placement and one block per logo: that logo's
+   width AND its own stroke width together, plus the spacing between them. */
+.up-guide-block {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: var(--v2-surface);
+}
+.up-guide-block > .svg-label { margin-bottom: 0; }
+.up-guide-block .up-hint { margin-top: 0; }
 .up-set-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
 .up-marker {
