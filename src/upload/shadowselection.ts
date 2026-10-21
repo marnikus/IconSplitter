@@ -1,5 +1,6 @@
 // shadowselection.ts — checked icons' shadow state for Export settings and the EPS warning.
-import { effectiveSettings, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
+import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 
 export interface SelectedShadow {
   state: "none" | "mixed" | "all";
@@ -8,9 +9,11 @@ export interface SelectedShadow {
   epsUnsupported: number;
 }
 
-export function selectedShadow(ids: string[], defaults: UploadSettings, overrides: Record<string, SettingsOverrides>): SelectedShadow {
+export function selectedShadow(
+  ids: string[], defaults: UploadSettings, overrides: Record<string, SettingsOverrides>, applied: AppliedMap,
+): SelectedShadow {
   if (ids.length === 0) return { state: "none", width: defaults.shadowWidthPct, gap: defaults.shadowGapPct, epsUnsupported: 0 };
-  const settings = ids.map((id) => effectiveSettings(defaults, overrides[id] ?? {}));
+  const settings = ids.map((id) => rowSettings(defaults, id, overrides, applied));
   const active = settings.filter((s) => s.shadowEnabled);
   const enabled = active.length;
   const width = active.length === 0 ? defaults.shadowWidthPct

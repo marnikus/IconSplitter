@@ -27,21 +27,19 @@ describe("settingsstore — defaults + overrides", () => {
     expect(loaded.overrides).toEqual({ pair_a: { paddingPct: 30 }, pair_b: { includeEps: true } });
   });
 
-  it("round-trips the applied decoration marks beside the overrides", () => {
-    saveUploadSettings({
-      defaults: DEFAULT_UPLOAD_SETTINGS,
-      overrides: { pair_a: { badgeEnabled: true } },
-      applied: { pair_a: { badgeEnabled: true }, pair_b: { shadowEnabled: true, sizeGuideEnabled: true } },
-    });
-    expect(loadUploadSettings().applied).toEqual({
-      pair_a: { badgeEnabled: true }, pair_b: { shadowEnabled: true, sizeGuideEnabled: true },
-    });
-    // an override written without marks (the unmounted undo path) keeps the stored marks
-    saveOverrides({ pair_a: { badgeEnabled: true, paddingPct: 12 } });
-    expect(loadUploadSettings().applied).toEqual({ pair_a: { badgeEnabled: true }, pair_b: { shadowEnabled: true, sizeGuideEnabled: true } });
+  it("round-trips the applied decoration values beside the overrides", () => {
+    const applied = { pair_a: { shadowEnabled: true, shadowGapPct: 12 }, pair_b: { badgeEnabled: true, badgeWidthPct: 40 } };
+    saveUploadSettings({ defaults: DEFAULT_UPLOAD_SETTINGS, overrides: { pair_a: { paddingPct: 30 } }, applied });
+    const loaded = loadUploadSettings();
+    expect(loaded.overrides).toEqual({ pair_a: { paddingPct: 30 } });
+    expect(loaded.applied).toEqual(applied);
+    // the undo path writes only the overrides and keeps the stored decorations
+    saveOverrides({ pair_a: { paddingPct: 22 } });
+    expect(loadUploadSettings().applied).toEqual(applied);
+    expect(loadUploadSettings().overrides).toEqual({ pair_a: { paddingPct: 22 } });
   });
 
-  it("drops junk marks and a missing map instead of trusting them", () => {
+  it("drops junk decoration fields and a missing map instead of trusting them", () => {
     localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
       v: 1, defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {},
       applied: { pair_a: { badgeEnabled: "yes", shadowEnabled: true, logo: true }, pair_b: {}, "": { badgeEnabled: true } },
@@ -70,14 +68,17 @@ describe("settingsstore — defaults + overrides", () => {
     expect(parsed.defaults.optimizeSvg).toBe(true);
   });
 
-  it("keeps Shadow opt-in per icon even when persisted defaults try to enable every icon", () => {
+  it("keeps Shadow opt-in per icon: persisted defaults never decorate, the applied map does", () => {
     localStorage.setItem("iconSplitter.upload.settings.v1", JSON.stringify({
       v: 1, defaults: { ...DEFAULT_UPLOAD_SETTINGS, shadowEnabled: true, shadowWidthPct: 115 },
       overrides: { selected: { shadowEnabled: true }, other: { shadowEnabled: false } },
     }));
     const loaded = loadUploadSettings();
+    // the persisted default flag is ignored; the numbers survive for the opt-in to use
     expect(loaded.defaults).toMatchObject({ shadowEnabled: false, shadowWidthPct: 115 });
-    expect(loaded.overrides).toEqual({ selected: { shadowEnabled: true }, other: { shadowEnabled: false } });
+    // an earlier payload's decoration fields move into `applied` on read, not into the overrides
+    expect(loaded.overrides).toEqual({});
+    expect(loaded.applied).toEqual({ selected: { shadowEnabled: true }, other: { shadowEnabled: false } });
   });
 
   it("keeps the corner badge opt-in per icon while preserving numeric global defaults", () => {
@@ -90,7 +91,9 @@ describe("settingsstore — defaults + overrides", () => {
     const loaded = loadUploadSettings();
     expect(loaded.defaults).toMatchObject({ badgeEnabled: false, badgeCorner: "top-left",
       badgeWidthPct: 65, badgeOffsetXPct: 8, badgeOffsetYPct: 11 });
-    expect(loaded.overrides).toEqual({ selected: { badgeEnabled: true, badgeCorner: "bottom-left", badgeOffsetXPct: 12 } });
+    // badge fields read back as applied decorations; the unticked `other` row keeps nothing
+    expect(loaded.overrides).toEqual({});
+    expect(loaded.applied).toEqual({ selected: { badgeEnabled: true, badgeCorner: "bottom-left", badgeOffsetXPct: 12 } });
   });
 
   it("drops invalid override fields and empty overrides on read", () => {

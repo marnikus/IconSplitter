@@ -74,7 +74,7 @@ opt-in class as Generate SVG → Requesty; design
   Gemini card is one contained grid (Model, Endpoint on its own full-width row,
   Timeout, Retries, Parallel, then the check row) so no control can overlap or
   leave its box.
-* Undo: `uploadSettings` (`{ overrides: { [pairId]: Overrides | null }, applied?: { [pairId]: { [field]?: true } | null } }`
+* Undo: `uploadSettings` (`{ overrides: { [pairId]: Overrides | null }, applied?: { [pairId]: DecorationValues | null } }`
   before/after) and changed selection gestures both join the **same global**
   timeline; the bulk bar's Reset to inherited is one such entry for the whole
   selection. Selection restores checked ids/anchor/active as one entry, even

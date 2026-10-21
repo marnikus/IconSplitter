@@ -31,7 +31,8 @@ import UploadSizeGuideSettings from "./UploadSizeGuideSettings";
 export type { UploadSettingsDialogProps } from "./settingsfield";
 
 export default function UploadSettingsDialog(p: UploadSettingsDialogProps) {
-  const effective = { ...p.defaults, ...p.overrides };
+  // defaults ← the decorations a global control applied ← this icon's own pins
+  const effective = { ...p.defaults, ...p.applied, ...p.overrides };
   return (
     <div className="svg-backdrop" data-testid="upload-dialog-backdrop" onClick={p.onClose}>
       <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="upload-dialog-title"

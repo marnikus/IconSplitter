@@ -1,14 +1,16 @@
 // settingsstore.ts — local persistence for the "SVG to upload" settings domain
-// (design §4.1, RULE 6/13). Owns BOTH halves of the settings state: the global
-// defaults every icon inherits, the per-icon overrides map (pair id →
-// Overrides) and the decorations the checked-set control applied to an icon. One storage key, one writer pair, validated on read by the lib
-// parsers — a corrupt or hand-edited payload costs one ignored load and the
-// documented defaults, never a broken tab. Undo's persist-only path
-// (uploadundo) writes through the same two functions, so a mounted panel and
-// an unmounted undo can never leave two maps that disagree.
+// (design §4.1, RULE 6/13). Owns the three maps the tab reads: the global
+// defaults every icon inherits, the per-icon overrides (what that icon's own
+// dialog pinned) and the decorations a global control applied to an icon. One
+// storage key, one writer pair, validated on read by the lib parsers — a
+// corrupt or hand-edited payload costs one ignored load and the documented
+// defaults, never a broken tab. Undo's persist-only path (uploadundo) writes
+// through the same functions, so a mounted panel and an unmounted undo can
+// never leave maps that disagree. A decoration never lives in `overrides`
+// (older payloads migrate on read, 2026-10-21).
 
 import { isRecord } from "../lib/isrecord";
-import { parseAppliedMap, type AppliedMap } from "../lib/upload/decorations";
+import { migrateOverrides, parseAppliedMap, type AppliedMap } from "../lib/upload/decorations";
 import {
   normalizeSettings, parseOverrides, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
@@ -23,11 +25,11 @@ export type OverridesMap = Record<string, SettingsOverrides>;
 export interface UploadSettingsState {
   defaults: UploadSettings;
   overrides: OverridesMap;
-  /** Decorations the selection control applied — an `inherited` flag, not a pin (2026-10-21). */
+  /** Decorations a global control applied — values, kept apart from the overrides (2026-10-21). */
   applied: AppliedMap;
 }
 
-/** What a writer may hand over; the applied marks default to none. */
+/** What a writer may hand over; the applied decorations default to none. */
 export interface UploadSettingsSave {
   defaults: UploadSettings;
   overrides: OverridesMap;
@@ -37,9 +39,14 @@ export interface UploadSettingsSave {
 /** A stored payload → validated state; one bad field costs one default (RULE 13). */
 export function parseUploadSettingsState(raw: unknown): UploadSettingsState {
   if (!isRecord(raw) || raw.v !== VERSION) return { defaults: normalizeSettings(null), overrides: {}, applied: {} };
+  // A payload written before this build has no `applied` key and stored decorations
+  // as ordinary overrides: move them across once. A payload that HAS the key is
+  // current — its overrides are the user's own dialog pins and must stay pinned.
+  const overrides = parseOverridesMap(raw.overrides);
+  const applied = parseAppliedMap(raw.applied);
+  const migrated = "applied" in raw ? { overrides, applied } : migrateOverrides(overrides, applied);
   return {
-    defaults: normalizeSettings(raw.defaults), overrides: parseOverridesMap(raw.overrides),
-    applied: parseAppliedMap(raw.applied),
+    defaults: normalizeSettings(raw.defaults), overrides: migrated.overrides, applied: migrated.applied,
   };
 }
 
@@ -75,7 +82,7 @@ export function loadOverrides(): OverridesMap {
   return loadUploadSettings().overrides;
 }
 
-/** The applied marks alone — the row dialog and the reset read them. */
+/** The applied decorations alone — the row's effective settings read them. */
 export function loadApplied(): AppliedMap {
   return loadUploadSettings().applied;
 }

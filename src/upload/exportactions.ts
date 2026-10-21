@@ -12,7 +12,7 @@ import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { publishedJpegPath } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
-import { effectiveSettings } from "../lib/upload/settings";
+import { rowSettings } from "../lib/upload/decorations";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
 import { rememberJob } from "./jobstore";
@@ -136,7 +136,7 @@ function browserConverterDeps(): ConverterDeps {
  */
 async function probeEpsNote(c: UploadCtx, ids: string[]): Promise<string | null> {
   const wanting = ids.filter((id) => {
-    const s = effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {});
+    const s = rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied);
     return s.includeEps && s.epsConverter === "inkscape";
   });
   if (wanting.length === 0) return null;
@@ -166,7 +166,7 @@ async function exportOne(args: ExportOneArgs): Promise<number> {
   const meta = acceptedOf(args.freshMeta.get(args.id) ?? row.meta);
   const result = await runExport({
     root: args.root, row: row.source,
-    settings: effectiveSettings(c.m.defaults, overrides),
+    settings: rowSettings(c.m.defaults, args.id, c.m.overrides, c.m.applied),
     defaults: c.m.defaults, overrides,
     metadata: meta === null ? null : meta.metadata,
     metadataInfo: metadataInfoOf(c, meta),

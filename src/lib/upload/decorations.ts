@@ -1,16 +1,18 @@
-// decorations.ts — which settings a GLOBAL control wrote into an icon (2026-10-21,
-// archive/2026-10-21-upload-applied-decorations).
+// decorations.ts — the decorations a GLOBAL control gave an icon (2026-10-21,
+// archive/2026-10-21-decorations-are-not-overrides).
 //
-// The values still live in the icon's settings overrides: the export, the
-// preview, the fingerprint and the staleness check already read them there.
-// But a field written by the Export settings popup (a Checked-icons decoration
-// checkbox or a selected-only dimension) is not a local pin — it is an
-// application from the selection, recorded here so the icon's dialog can say
-// `inherited`, the row's pin count ignores it, and the global Reset never
-// undoes it. Only a change made inside that icon's own dialog is a real pin.
+// A decoration (Shadow, corner badge, S/L size guide) is a selection-level
+// choice made in the Export settings popup. A row override is a local edit made
+// in that icon's own Settings dialog. They are different things, so they live in
+// different maps: `applied: { pairId: DecorationValues }` carries the VALUES a
+// global control wrote, and the icon's overrides carry only what the user
+// pinned locally. The effective settings merge defaults ← applied ← overrides,
+// so a decoration renders and exports as before, the dialog reads it as
+// `inherited`, and "Reset to inherited" can delete a row's whole override map
+// without ever removing a decoration.
 
 import { isRecord } from "../isrecord";
-import { SETTINGS_FIELDS, type SettingsOverrides, type UploadSettings } from "./settings";
+import { overridesEqual, parseOverrides, type SettingsOverrides, type UploadSettings } from "./settings";
 import { SIZE_GUIDE_FIELDS } from "./settingssizeguide";
 
 export const DECORATION_KEYS = ["shadow", "badge", "sizeGuide"] as const;
@@ -21,16 +23,17 @@ export const DECORATION_FIELD = {
   shadow: "shadowEnabled", badge: "badgeEnabled", sizeGuide: "sizeGuideEnabled",
 } as const;
 
-/**
- * Every field a decoration owns — its enable flag and its geometry. A reset to
- * inherited never removes one of these: the decoration is a selection-level
- * choice with its own checkbox, not a general setting (2026-10-21).
- */
+/** Every field a decoration owns: its enable flag and its geometry. */
 export const DECORATION_FIELDS: (keyof UploadSettings)[] = [
   "shadowEnabled", "shadowWidthPct", "shadowGapPct",
   "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
   ...SIZE_GUIDE_FIELDS,
 ];
+
+/** The fields of ONE decoration (flag + geometry) — "remove the shadow" clears these. */
+export function fieldsOf(key: DecorationKey): (keyof UploadSettings)[] {
+  return DECORATION_FIELDS.filter((field) => field.startsWith(key));
+}
 
 const DECORATION_SET: ReadonlySet<string> = new Set(DECORATION_FIELDS);
 
@@ -39,25 +42,17 @@ export function isDecorationField(field: keyof UploadSettings): boolean {
   return DECORATION_SET.has(field as string);
 }
 
-/** One icon's applied fields; an absent key means "this icon pinned it itself". */
-export type AppliedFields = Partial<Record<keyof UploadSettings, true>>;
-/** pair id → the fields a global control wrote into that icon. */
-export type AppliedMap = Record<string, AppliedFields>;
+/** The values a global control wrote into one icon; absent = it applied nothing. */
+export type DecorationValues = SettingsOverrides;
+/** pair id → the decorations a global control applied to that icon. */
+export type AppliedMap = Record<string, DecorationValues>;
 
-const FIELD_SET: ReadonlySet<string> = new Set(SETTINGS_FIELDS);
-
-export function isApplied(
-  marks: AppliedFields | null | undefined, field: keyof UploadSettings,
-): boolean {
-  return marks?.[field] === true;
-}
-
-/** A stored mark payload → only `true` entries for real settings fields survive (RULE 13). */
-export function parseApplied(raw: unknown): AppliedFields {
-  if (!isRecord(raw)) return {};
-  const out: AppliedFields = {};
-  for (const [field, value] of Object.entries(raw)) {
-    if (FIELD_SET.has(field) && value === true) out[field as keyof UploadSettings] = true;
+/** A stored applied payload → validated decoration values (RULE 13: junk is dropped). */
+export function parseApplied(raw: unknown): DecorationValues {
+  const parsed = parseOverrides(raw);
+  const out: DecorationValues = {};
+  for (const field of DECORATION_FIELDS) {
+    if (parsed[field] !== undefined) Object.assign(out, { [field]: parsed[field] });
   }
   return out;
 }
@@ -66,78 +61,98 @@ export function parseAppliedMap(raw: unknown): AppliedMap {
   if (!isRecord(raw)) return {};
   const out: AppliedMap = {};
   for (const [id, value] of Object.entries(raw)) {
-    const marks = parseApplied(value);
-    if (id !== "" && Object.keys(marks).length > 0) out[id] = marks;
+    const decorations = parseApplied(value);
+    if (id !== "" && Object.keys(decorations).length > 0) out[id] = decorations;
   }
   return out;
 }
 
-/** Add or drop one mark; null when nothing is left — an empty map entry is never stored. */
-export function withApplied(
-  marks: AppliedFields | null | undefined, field: keyof UploadSettings, on: boolean,
-): AppliedFields | null {
-  const next: AppliedFields = { ...(marks ?? {}) };
-  if (on) next[field] = true;
-  else delete next[field];
-  return Object.keys(next).length === 0 ? null : next;
+/** One icon's applied decorations ({} when a global control never wrote any). */
+export function decorationsOf(map: AppliedMap, id: string): DecorationValues {
+  return map[id] ?? {};
 }
 
-export function appliedEqual(
-  a: AppliedFields | null | undefined, b: AppliedFields | null | undefined,
+export function decorationsEqual(
+  a: DecorationValues | null | undefined, b: DecorationValues | null | undefined,
 ): boolean {
-  const fields = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
-  for (const field of fields) if (isApplied(a, field as keyof UploadSettings) !== isApplied(b, field as keyof UploadSettings)) return false;
-  return true;
+  return overridesEqual(a ?? {}, b ?? {});
 }
 
-/** The fields a row really pins: its override keys minus the globally applied ones. */
-export function localKeys(
-  keys: readonly (keyof UploadSettings)[], marks: AppliedFields | null | undefined,
-): (keyof UploadSettings)[] {
-  return keys.filter((field) => !isApplied(marks, field));
+/** Replace one icon's applied decorations; an empty result removes its entry. */
+export function setDecorations(
+  map: AppliedMap, id: string, values: DecorationValues,
+): AppliedMap {
+  const next = { ...map };
+  if (Object.keys(values).length === 0) delete next[id];
+  else next[id] = values;
+  return next;
 }
 
-/**
- * The override map a reset-to-inherited leaves: every decoration field stays
- * (flag and geometry, whatever its provenance) and so does any field a global
- * control applied; every other LOCAL pin is dropped.
- */
-export function withoutLocalPins(
-  patch: SettingsOverrides, marks: AppliedFields | null | undefined,
-): SettingsOverrides {
-  const kept: SettingsOverrides = {};
-  for (const field of Object.keys(patch) as (keyof SettingsOverrides)[]) {
-    const key = field as keyof UploadSettings;
-    if (isDecorationField(key) || isApplied(marks, key)) Object.assign(kept, { [field]: patch[field] });
-  }
-  return kept;
+/** Drop every field of one decoration (the popup's "remove" gesture). */
+export function withoutDecoration(values: DecorationValues, key: DecorationKey): DecorationValues {
+  const next: DecorationValues = { ...values };
+  for (const field of fieldsOf(key)) delete next[field];
+  return next;
 }
 
-/** The local, resettable pins a row carries: not a decoration, not applied by a global control. */
-export function localResetKeys(
-  keys: readonly (keyof UploadSettings)[], marks: AppliedFields | null | undefined,
-): (keyof UploadSettings)[] {
-  return localKeys(keys, marks).filter((field) => !isDecorationField(field));
-}
-
-/** The marks whose field survived in `kept`; null when none did. */
-export function marksOf(kept: SettingsOverrides, marks: AppliedFields | null | undefined): AppliedFields | null {
-  const next: AppliedFields = {};
-  for (const field of Object.keys(marks ?? {}) as (keyof UploadSettings)[]) {
-    if (kept[field] !== undefined) next[field] = true;
-  }
-  return Object.keys(next).length === 0 ? null : next;
-}
-
-/** Apply an `applied` patch onto the map; null (or empty) clears that row's marks. */
+/** Apply a patch of per-icon decoration values; null (or empty) clears that row. */
 export function mergeApplied(
-  map: AppliedMap, patch: Record<string, AppliedFields | null> | undefined,
+  map: AppliedMap, patch: Record<string, DecorationValues | null> | undefined,
 ): AppliedMap {
   if (patch === undefined) return map;
   const next = { ...map };
-  for (const [id, marks] of Object.entries(patch)) {
-    if (marks === null || Object.keys(marks).length === 0) delete next[id];
-    else next[id] = marks;
+  for (const [id, values] of Object.entries(patch)) {
+    if (values === null || Object.keys(values).length === 0) delete next[id];
+    else next[id] = values;
   }
   return next;
+}
+
+/** The fields a global control must leave for an icon to take an applied value. */
+export function clearedFor(key: DecorationKey, overrides: SettingsOverrides): SettingsOverrides {
+  const next: SettingsOverrides = { ...overrides };
+  for (const field of fieldsOf(key)) delete next[field];
+  return next;
+}
+
+/**
+ * The settings one icon exports with: defaults under, the decorations a global
+ * control applied, then the icon's own local overrides on top.
+ */
+export function rowSettings(
+  defaults: UploadSettings, id: string, overrides: Record<string, SettingsOverrides>, applied: AppliedMap,
+): UploadSettings {
+  return { ...defaults, ...decorationsOf(applied, id), ...(overrides[id] ?? {}) };
+}
+
+/**
+ * Move decoration fields that older builds stored as ordinary overrides into
+ * the applied map, so a decoration never reads `overridden` and a reset can
+ * never delete it (2026-10-21).
+ */
+export function migrateDecorations(
+  overrides: SettingsOverrides, applied: DecorationValues,
+): { overrides: SettingsOverrides; applied: DecorationValues } {
+  const keptOverrides: SettingsOverrides = { ...overrides };
+  const merged: DecorationValues = { ...applied };
+  for (const field of DECORATION_FIELDS) {
+    if (keptOverrides[field] === undefined) continue;
+    if (merged[field] === undefined) Object.assign(merged, { [field]: keptOverrides[field] });
+    delete keptOverrides[field];
+  }
+  return { overrides: keptOverrides, applied: merged };
+}
+
+/** The whole stored maps, migrated: every row's decoration fields move to `applied`. */
+export function migrateOverrides(
+  overrides: Record<string, SettingsOverrides>, applied: AppliedMap,
+): { overrides: Record<string, SettingsOverrides>; applied: AppliedMap } {
+  const nextOverrides: Record<string, SettingsOverrides> = {};
+  let nextApplied: AppliedMap = { ...applied };
+  for (const [id, row] of Object.entries(overrides)) {
+    const moved = migrateDecorations(row, decorationsOf(nextApplied, id));
+    if (Object.keys(moved.overrides).length > 0) nextOverrides[id] = moved.overrides;
+    nextApplied = setDecorations(nextApplied, id, moved.applied);
+  }
+  return { overrides: nextOverrides, applied: nextApplied };
 }

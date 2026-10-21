@@ -117,7 +117,7 @@ async function assembleAndCommit(
   const interruptedJobs = new Set(interruptedIds());
   const m = modelRef.current;
   const rows = await assembleRows(root, sources, {
-    defaults: m.defaults, overrides: m.overrides, interrupted, interruptedJobs,
+    defaults: m.defaults, overrides: m.overrides, applied: m.applied, interrupted, interruptedJobs,
   });
   dispatch({ type: "rows", rows });
   pruneChecked(rows);

@@ -1,113 +1,115 @@
 // selectedsettings.ts — one validated per-icon settings batch, one global undo entry.
-// Three batches live here: a field edit (`commitBatch`, the selected-only
-// dimensions), a decoration opt-in (`commitDecoration`) and the ONE reset to
-// inherited (`resetBatch`). Writes a global control makes are recorded in the
-// `applied` marks map, so the row and the icon's dialog read them as
-// `inherited`. The reset drops the rows' LOCAL general pins only: a decoration
-// (flag and geometry) always stays, so the Checked-icons boxes never untick
-// and the stored defaults are never written (2026-10-21, row settings
-// isolation + applied decorations + reset-to-inherited).
+// Two batches live here: a decoration gesture from the Export settings popup
+// (`commitDecoration`, values into the `applied` map, and the selected-only
+// dimensions in `commitBatch`) and the ONE "Reset to inherited", which deletes
+// the selection's whole override maps. A decoration is not an override, so the
+// reset can clear every parameter and the decoration still applies
+// (2026-10-21, archive/2026-10-21-decorations-are-not-overrides).
 import {
-  appliedEqual, isApplied, localResetKeys, marksOf, withApplied, withoutLocalPins, DECORATION_FIELD,
-  type AppliedFields, type DecorationKey,
+  clearedFor, decorationsOf, rowSettings, withoutDecoration, DECORATION_FIELD,
+  type DecorationKey, type DecorationValues,
 } from "../lib/upload/decorations";
 import {
-  effectiveSettings, overrideKeys, overridesEqual, type SettingsOverrides, type UploadSettings,
+  overrideKeys, overridesEqual, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 import type { UploadCtx } from "./actions";
 
-export type MakeOverride = (id: string, prior: SettingsOverrides) => SettingsOverrides | null;
-
 type OverridesSide = Record<string, SettingsOverrides | null>;
-type AppliedSide = Record<string, AppliedFields | null>;
+type AppliedSide = Record<string, DecorationValues | null>;
 
 /** One history entry's two halves, in the exact shape `uploadundo` applies. */
 interface MapsPatch { ids: string[]; before: { overrides: OverridesSide; applied: AppliedSide }; after: { overrides: OverridesSide; applied: AppliedSide } }
 
-/** Shadow, badge and size-guide numeric edits share the checked-row undo path. */
-export function commitBatch(c: UploadCtx, ids: string[], label: string, make: MakeOverride): number {
-  const patch = emptyPatch();
-  for (const id of ids) {
-    const prior = c.m.overrides[id] ?? {};
-    const next = make(id, prior);
-    if (next === null || overridesEqual(prior, next)) continue;
-    const marks = c.m.applied[id] ?? null;
-    patch.before.overrides[id] = c.m.overrides[id] ?? null;
-    patch.after.overrides[id] = next;
-    patch.before.applied[id] = marks;
-    patch.after.applied[id] = marksAfterWrite(marks, prior, next);
-    patch.ids.push(id);
-  }
-  return patch.ids.length === 0 ? 0 : pushEntry(c, label, patch);
-}
-
-/** A decoration opt-in for the selection: the flag plus the mark that reads as inherited. */
+/** The decoration a popup gesture writes: on = the flag on, off = the whole group gone. */
 export function commitDecoration(
   c: UploadCtx, ids: readonly string[], spec: { key: DecorationKey; on: boolean; label: string },
 ): number {
-  const { key, on, label } = spec;
-  const field = DECORATION_FIELD[key];
   const patch = emptyPatch();
   for (const id of ids) {
     const prior = c.m.overrides[id] ?? {};
-    const marks = c.m.applied[id] ?? null;
-    if (effectiveSettings(c.m.defaults, prior)[field] === on) continue; // already there; keep its provenance
-    const next = decoratedOverrides(prior, field, on);
-    patch.before.overrides[id] = c.m.overrides[id] ?? null;
-    patch.after.overrides[id] = next;
-    patch.before.applied[id] = marks;
-    const nextMarks = withApplied(marks, field, on);
-    patch.after.applied[id] = nextMarks === null ? null : marksOf(next ?? {}, nextMarks);
+    const before = decorationsOf(c.m.applied, id);
+    if (rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied)[DECORATION_FIELD[spec.key]] === spec.on) continue;
+    patch.before.applied[id] = nullIfEmpty(before);
+    patch.after.applied[id] = decorationAfter(before, spec.key, spec.on);
+    // A selection-level gesture also removes that decoration's local pins, so it takes effect.
+    const cleared = clearedFor(spec.key, prior);
+    if (!overridesEqual(prior, cleared)) {
+      patch.before.overrides[id] = c.m.overrides[id] ?? null;
+      patch.after.overrides[id] = Object.keys(cleared).length === 0 ? null : cleared;
+    }
     patch.ids.push(id);
   }
-  return patch.ids.length === 0 ? 0 : pushEntry(c, label, patch);
+  return patch.ids.length === 0 ? 0 : pushEntry(c, spec.label, patch);
 }
 
-/** On = one `true` flag; off = the key is gone ("off" is the absence of a pin). */
-function decoratedOverrides(prior: SettingsOverrides, field: keyof UploadSettings, on: boolean): SettingsOverrides | null {
-  if (on) return { ...prior, [field]: true };
-  const { [field]: _off, ...rest } = prior;
-  return Object.keys(rest).length === 0 ? null : rest;
+function decorationAfter(before: DecorationValues, key: DecorationKey, on: boolean): DecorationValues | null {
+  const next = on ? { ...before, [DECORATION_FIELD[key]]: true } : withoutDecoration(before, key);
+  return Object.keys(next).length === 0 ? null : next;
 }
 
-/** A global write marks every field whose value it moved — inherited, never a row pin. */
-function marksAfterWrite(
-  marks: AppliedFields | null, prior: SettingsOverrides, next: SettingsOverrides,
-): AppliedFields | null {
-  let out = marks;
-  for (const field of Object.keys(next) as (keyof SettingsOverrides)[]) {
-    if (Object.is(prior[field], next[field])) continue;
-    out = withApplied(out, field as keyof UploadSettings, true);
+/** The selected-only numbers (shadow width/gap): applied values on the rows that already have it on. */
+export function commitBatch(
+  c: UploadCtx, ids: string[], spec: { patch: Partial<UploadSettings>; label: string },
+): number {
+  const fields = Object.keys(spec.patch) as (keyof UploadSettings)[];
+  if (fields.length === 0) return 0;
+  const patch = emptyPatch();
+  for (const id of ids) {
+    if (!wantsBatch(c, id, fields, spec.patch)) continue;
+    const stored = c.m.overrides[id] ?? null;
+    const before = decorationsOf(c.m.applied, id);
+    const cleared = clearFields(stored ?? {}, fields);
+    patch.before.applied[id] = nullIfEmpty(before);
+    patch.after.applied[id] = { ...before, ...spec.patch };
+    if (!overridesEqual(stored ?? {}, cleared)) {
+      patch.before.overrides[id] = stored;
+      patch.after.overrides[id] = Object.keys(cleared).length === 0 ? null : cleared;
+    }
+    patch.ids.push(id);
   }
-  return out;
+  return patch.ids.length === 0 ? 0 : pushEntry(c, spec.label, patch);
 }
 
-/** The checked ids a reset would really change: those that pin at least one general setting locally. */
+/** A dimension never enables an icon, and a row already showing the same numbers changes nothing. */
+function wantsBatch(
+  c: UploadCtx, id: string, fields: readonly (keyof UploadSettings)[], next: Partial<UploadSettings>,
+): boolean {
+  const effective = rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied);
+  return effective.shadowEnabled && fields.some((field) => effective[field] !== next[field]);
+}
+
+function clearFields(overrides: SettingsOverrides, fields: readonly (keyof UploadSettings)[]): SettingsOverrides {
+  const next: SettingsOverrides = { ...overrides };
+  for (const field of fields) delete next[field];
+  return next;
+}
+
+/** The checked ids a reset would really change: those that pin at least one parameter locally. */
 export function resettableIds(
-  ids: readonly string[], overrides: Record<string, SettingsOverrides>, applied: Record<string, AppliedFields>,
+  ids: readonly string[], overrides: Record<string, SettingsOverrides>,
 ): string[] {
-  return ids.filter((id) => localResetKeys(overrideKeys(overrides[id] ?? {}), applied[id]).length > 0);
+  return ids.filter((id) => overrideKeys(overrides[id] ?? {}).length > 0);
 }
 
 /**
- * Reset the selection to inherited — ONE undo entry. It drops the rows' LOCAL
- * general pins; a shadow / corner badge / size guide (and every field a global
- * control applied) always stays, so the Checked-icons boxes keep their state
- * (2026-10-21, the user's correction). The stored defaults are never written.
+ * "Reset to inherited": delete the selection's whole override maps — every
+ * parameter reads inherited again — as ONE undo entry. Decorations live in the
+ * `applied` map, so they keep applying and the Checked-icons boxes keep their
+ * state; the stored global defaults are never written (2026-10-21).
  */
 export function resetBatch(c: UploadCtx, ids: string[], label: string): number {
   const patch = emptyPatch();
-  for (const id of resettableIds(ids, c.m.overrides, c.m.applied)) {
-    const prior = c.m.overrides[id] ?? {};
-    const marks = c.m.applied[id] ?? null;
-    const kept = withoutLocalPins(prior, marks);
+  for (const id of resettableIds(ids, c.m.overrides)) {
     patch.before.overrides[id] = c.m.overrides[id] ?? null;
-    patch.after.overrides[id] = Object.keys(kept).length === 0 ? null : kept;
-    patch.before.applied[id] = marks;
-    patch.after.applied[id] = marksOf(kept, marks);
+    patch.after.overrides[id] = null;
     patch.ids.push(id);
   }
   return patch.ids.length === 0 ? 0 : pushEntry(c, label, patch);
+}
+
+/** An empty map entry is stored as null so a patch can clear it. */
+function nullIfEmpty(values: DecorationValues): DecorationValues | null {
+  return Object.keys(values).length === 0 ? null : values;
 }
 
 function emptyPatch(): MapsPatch {
@@ -122,6 +124,3 @@ function pushEntry(c: UploadCtx, label: string, patch: MapsPatch): number {
   c.say(`${label} — ${patch.ids.length} icon${patch.ids.length === 1 ? "" : "s"}`);
   return patch.ids.length;
 }
-
-/** Exported for the tests that assert the "applied is not a pin" rule directly. */
-export { isApplied, appliedEqual };

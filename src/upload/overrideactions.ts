@@ -1,31 +1,12 @@
 // overrideactions.ts — the ONE place a row's settings may be pinned (2026-10-21):
-// that icon's own Settings dialog. A field written here is a real local pin, so
-// it drops the `applied` mark a global control may have set on that field; the
-// row's "Reset to inherited" clears its LOCAL general pins only, leaves every
-// decoration (and any applied value, and the stored defaults) alone.
+// that icon's own Settings dialog. A field written here is a real local pin; the
+// row's "Reset to inherited" deletes the WHOLE override map, so every parameter
+// reads inherited again. The decorations a global control applied live in their
+// own map and keep applying (archive/2026-10-21-decorations-are-not-overrides).
 import { useCallback, useRef } from "react";
-import {
-  appliedEqual, marksOf, withApplied, withoutLocalPins,
-  type AppliedFields,
-} from "../lib/upload/decorations";
-import { overridesEqual, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import { overridesEqual, type SettingsOverrides } from "../lib/upload/settings";
 import type { Slice, UploadCtx } from "./actions";
 import { discreteSettingsChange } from "./settingsgestures";
-
-/**
- * A local edit drops the applied mark of a field whose value really moved. The
- * dialog hands over the whole merged override, so presence alone would demote
- * fields the user never touched.
- */
-export function marksAfterLocalEdit(
-  marks: AppliedFields | null, before: SettingsOverrides | null, after: SettingsOverrides | null,
-): AppliedFields | null {
-  let next = marks;
-  for (const field of Object.keys(marks ?? {}) as (keyof UploadSettings)[]) {
-    if (!Object.is(before?.[field], after?.[field])) next = withApplied(next, field, false);
-  }
-  return next;
-}
 
 function nameOf(c: UploadCtx, id: string): string {
   return c.rows.find((r) => r.source.id === id)?.source.svgName ?? id;
@@ -39,18 +20,16 @@ export function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
     const c = latest.current;
     const before = c.m.overrides[id] ?? null;
     const after = Object.keys(patch).length === 0 ? null : patch;
-    const marksBefore = c.m.applied[id] ?? null;
-    const marksAfter = marksAfterLocalEdit(marksBefore, before, after);
-    if (overridesEqual(before ?? {}, after ?? {}) && appliedEqual(marksBefore, marksAfter)) return;
-    c.dispatch({ type: "override", id, patch: after, applied: marksAfter });
+    if (overridesEqual(before ?? {}, after ?? {})) return;
+    c.dispatch({ type: "override", id, patch: after });
     // Decoration toggles and committed numbers are discrete; other drags still coalesce.
     const push = discreteSettingsChange(before, after) ? c.hist.push : c.hist.pushGesture;
     push({
       type: "uploadSettings",
       label: `Override settings — ${nameOf(c, id)}`,
       origin: "upload", ids: [id],
-      before: { overrides: { [id]: before }, applied: { [id]: marksBefore } },
-      after: { overrides: { [id]: after }, applied: { [id]: marksAfter } },
+      before: { overrides: { [id]: before } },
+      after: { overrides: { [id]: null } },
     });
   }, []);
   return { setOverride };
@@ -63,20 +42,14 @@ export function useOverrideResetActions(ctx: UploadCtx): Slice<"resetOverride"> 
   const resetOverride = useCallback((id: string) => {
     const c = latest.current;
     const before = c.m.overrides[id] ?? null;
-    const marksBefore = c.m.applied[id] ?? null;
-    const kept = withoutLocalPins(before ?? {}, marksBefore);
-    if (Object.keys(kept).length === Object.keys(before ?? {}).length) {
-      return c.say("This icon pins no local settings — it already inherits the rest");
-    }
-    const after = Object.keys(kept).length === 0 ? null : kept;
-    const marksAfter = marksOf(kept, marksBefore);
-    c.dispatch({ type: "override", id, patch: after, applied: marksAfter });
+    if (before === null) return c.say("This icon pins no local settings — it already inherits everything");
+    c.dispatch({ type: "override", id, patch: null });
     c.hist.push({
       type: "uploadSettings",
       label: `Reset to inherited — ${nameOf(c, id)}`,
       origin: "upload", ids: [id],
-      before: { overrides: { [id]: before }, applied: { [id]: marksBefore } },
-      after: { overrides: { [id]: after }, applied: { [id]: marksAfter } },
+      before: { overrides: { [id]: before } },
+      after: { overrides: { [id]: null } },
     });
     c.say("Reset to inherited — the icon follows the global settings again; its decorations stay");
   }, []);

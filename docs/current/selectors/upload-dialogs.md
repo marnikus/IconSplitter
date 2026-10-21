@@ -5,7 +5,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
 **2026-10-19 — "default" for every visual setting** ([plan](../../archive/2026-10-19-upload-default-settings/README.md)):
 - `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow/badge/size guide are off) + `upload-set-as-is-note` (turns them off in the icon scope);
-- `upload-set-padding-default` (toggles null ↔ 8 **only on the button**, never the blank field around it; `upload-set-padding` reads empty with placeholder `default`; its visible Padding label targets this number input);
+- `upload-set-padding-default` (toggles null ↔ 8 **only on the button**, never the blank field around it; `upload-set-padding` reads empty with placeholder `default`, its label targets this input);
 - `upload-set-bg-default` (before `-transparent`);
 - `upload-set-stroke-color-artwork` now reads **Default**; both "none" choices are buttons;
 - the artboard select's first option is `source` ("Default (the SVG's own)").
@@ -20,7 +20,8 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   never enabling off icons). `upload-set-shadow-width` / `-gap` under **Shadow
   defaults** change inherited numbers only, never opting unchecked icons in.
   A field the popup applied reads `inherited` and is no pin (2026-10-21); only
-  a change in this icon's own dialog is, and the resets leave it alone.
+  a change in this icon's own dialog pins one, and a reset deletes only those
+  pins — the applied values keep applying.
   In the per-icon popup `upload-set-shadow` is the on/off checkbox (the one
   `.up-shadow-check` label, width/gap disabled when off). Width 10–200%, gap 0–100%;
   `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.
@@ -42,7 +43,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
   `upload-set-sizeguide` and `upload-set-marker-sizeguide*`; notes:
   `upload-sizeguide-{defaults,fit,expand}-note`.
 
-`upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope** (follow-up 2026-10-19): that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; blank field space does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
+`upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope**: that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; a blank field does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 The older text below is kept for the other handles.
 
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
@@ -60,7 +61,7 @@ the default: ONE global `stroke="#000"` in the file) +
 reads the hex or `artwork`; its marker is `upload-set-marker-stroke-color`),
 every swatch carrying `aria-pressed`, the per-field marker
 `upload-set-marker-{field}` ("inherited" / "overridden", icon scope only),
-`upload-set-reset` (icon scope: "Reset to inherited" — drops the icon's own general settings in one undoable entry; Shadow, corner badge and size guide stay),
+`upload-set-reset` (icon scope: "Reset to inherited" — deletes the icon's whole override map in one undoable entry; applied decorations keep applying),
 `upload-set-close`. The row's settings cell `upload-settings-{id}` names the
 background (`transparent` or the hex) and appends `· stroke #hex` when a
 stroke colour is pinned.

@@ -8,7 +8,8 @@
 import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import { sha256HexText } from "../lib/upload/hash";
 import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
-import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
+import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { cleanMetadata, metadataFingerprint } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
 import { rememberListTargets } from "../state/listtargets";
@@ -200,6 +201,8 @@ export async function assembleRows(
   root: DirHandleLike, sources: readonly UploadRowSource[],
   opts: {
     defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
+    /** Decorations a global control applied (they are not overrides). */
+    applied?: AppliedMap;
     /** Metadata requests a restart left outcome-unknown (the journal). */
     interrupted: ReadonlySet<string>;
     /** Runs a restart left unresolved (the job store, CP-2). */
@@ -217,6 +220,7 @@ async function assembleOne(
   root: DirHandleLike, source: UploadRowSource,
   opts: {
     defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
+    applied?: AppliedMap;
     interrupted: ReadonlySet<string>; interruptedJobs?: ReadonlySet<string>;
   },
 ): Promise<UploadRow> {
@@ -226,7 +230,7 @@ async function assembleOne(
     record,
     sourceHash,
     meta: restoredRowMeta(record, sourceHash, opts.interrupted.has(source.id)),
-    effective: effectiveSettings(opts.defaults, opts.overrides[source.id] ?? {}),
+    effective: rowSettings(opts.defaults, source.id, opts.overrides, opts.applied ?? {}),
     interruptedJob: opts.interruptedJobs?.has(source.id) === true,
   });
 }

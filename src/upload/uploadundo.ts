@@ -8,14 +8,16 @@
 // the same code path (the panel's persist effect writes localStorage); with no
 // panel mounted an undo writes the store directly, which the next mount reads.
 
-import { appliedEqual, parseApplied, type AppliedFields, type AppliedMap } from "../lib/upload/decorations";
+import {
+  decorationsEqual, parseApplied, type AppliedMap, type DecorationValues,
+} from "../lib/upload/decorations";
 import { overridesEqual, parseOverrides, type SettingsOverrides } from "../lib/upload/settings";
 import { loadOverrides, loadApplied, saveOverrides, type OverridesMap } from "./settingsstore";
 
 /** The payload one `uploadSettings` entry carries, on either side. */
 export interface UploadSettingsPatch {
   overrides: Record<string, SettingsOverrides | null>;
-  applied?: Record<string, AppliedFields | null>;
+  applied?: Record<string, DecorationValues | null>;
 }
 
 export type UploadSettingsApplier = (patch: UploadSettingsPatch) => void;
@@ -70,14 +72,14 @@ function applyOne(map: OverridesMap, id: string, value: SettingsOverrides | null
   return true;
 }
 
-function applyMarks(map: AppliedMap, id: string, value: AppliedFields | null): boolean {
+function applyMarks(map: AppliedMap, id: string, value: DecorationValues | null): boolean {
   const current = map[id];
   if (value === null || Object.keys(value).length === 0) {
     if (current === undefined) return false;
     delete map[id];
     return true;
   }
-  if (current !== undefined && appliedEqual(current, value)) return false;
+  if (current !== undefined && decorationsEqual(current, value)) return false;
   map[id] = value;
   return true;
 }
@@ -89,7 +91,7 @@ export { overridesEqual };
 export function toUploadSettingsPatch(value: unknown): UploadSettingsPatch | null {
   if (!isOverridesRecord(value)) return null;
   const overrides: Record<string, SettingsOverrides | null> = {};
-  for (const [id, raw] of Object.entries(value.overrides)) {
+  for (const [id, raw] of Object.entries(value.overrides ?? {})) {
     if (raw === null) {
       overrides[id] = null;
       continue;
@@ -103,9 +105,9 @@ export function toUploadSettingsPatch(value: unknown): UploadSettingsPatch | nul
 }
 
 /** The `applied` half: validated marks, null = clear; undefined when nothing usable. */
-function parseAppliedPatch(raw: unknown): Record<string, AppliedFields | null> | undefined {
+function parseAppliedPatch(raw: unknown): Record<string, DecorationValues | null> | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
-  const out: Record<string, AppliedFields | null> = {};
+  const out: Record<string, DecorationValues | null> = {};
   for (const [id, value] of Object.entries(raw)) {
     const marks = value === null ? null : parseApplied(value);
     if (marks === null || Object.keys(marks).length > 0) out[id] = marks;
@@ -113,8 +115,10 @@ function parseAppliedPatch(raw: unknown): Record<string, AppliedFields | null> |
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function isOverridesRecord(value: unknown): value is { overrides: Record<string, unknown> } {
-  return typeof value === "object" && value !== null
-    && typeof (value as { overrides?: unknown }).overrides === "object"
-    && (value as { overrides?: unknown }).overrides !== null;
+/** A payload carries overrides, applied decorations, or both (a decoration-only entry is valid). */
+function isOverridesRecord(value: unknown): value is { overrides?: Record<string, unknown>; applied?: Record<string, unknown> } {
+  if (typeof value !== "object" || value === null) return false;
+  const raw = value as { overrides?: unknown; applied?: unknown };
+  const ok = (part: unknown) => typeof part === "object" && part !== null;
+  return ok(raw.overrides) || ok(raw.applied);
 }

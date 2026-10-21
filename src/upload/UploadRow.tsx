@@ -11,10 +11,10 @@ import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
-  effectiveSettings, megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
+  megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
 import { isAsIs } from "../lib/upload/asis";
-import { localKeys, type AppliedMap } from "../lib/upload/decorations";
+import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -32,7 +32,7 @@ export interface UploadRowActions {
   rootRef: { current: DirHandleLike | null };
   defaults: UploadSettings;
   overrides: Record<string, SettingsOverrides>;
-  /** Decorations the selection control applied — they never count as pins. */
+  /** Decorations a global control applied — they are not pins. */
   applied: AppliedMap;
   toggleCheck: (id: string) => void;
   selectRow: (id: string, intent: SelectIntent) => void;
@@ -63,7 +63,7 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
       <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
         thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
         label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
-        settings={effectiveSettings(a.defaults, a.overrides[id] ?? {})} />
+        settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
       <FileCell row={row} />
       <StatusCell row={row} status={status} />
       <MetaCell row={row} />
@@ -175,8 +175,8 @@ function decorationLine(s: UploadSettings): string {
 /** The effective settings, one line, plus how many fields this icon pins. */
 function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
-  const effective = effectiveSettings(a.defaults, a.overrides[id] ?? {});
-  const pinned = localKeys(overrideKeys(a.overrides[id] ?? {}), a.applied[id]).length;
+  const effective = rowSettings(a.defaults, id, a.overrides, a.applied);
+  const pinned = overrideKeys(a.overrides[id] ?? {}).length;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
       <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${effective.paddingPct === null ? "default" : `${effective.paddingPct}%`} · ${effective.background} · ${strokeLine(effective)}`}</small>

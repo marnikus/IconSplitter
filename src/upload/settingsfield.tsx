@@ -5,7 +5,7 @@
 // Owned here so the number/toggle rows (UploadSettingsDialog) and the paint
 // rows (UploadPaintSettings) cannot drift apart.
 
-import { isApplied, type AppliedFields } from "../lib/upload/decorations";
+import type { DecorationValues } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { SelectedShadow } from "./shadowselection";
 import type { SelectedBadge } from "./badgeselection";
@@ -19,8 +19,8 @@ export interface UploadSettingsDialogProps {
   defaults: UploadSettings;
   /** The icon's current override ({} in the global scope). */
   overrides: SettingsOverrides;
-  /** Fields a global control applied to this icon ({} in the global scope). */
-  applied: AppliedFields;
+  /** Decorations a global control applied to this icon — values, not pins ({} in the global scope). */
+  applied: DecorationValues;
   selectedShadow: SelectedShadow;
   selectedCount: number;
   onSelectedShadowToggle: () => void;
@@ -42,13 +42,12 @@ export interface SettingsFieldProps {
 }
 
 /**
- * The marker a field carries in the icon scope: pinned, or inherited. A field a
- * global control applied is NOT a pin — the icon got it from the selection, not
- * from its own dialog (2026-10-21).
+ * The marker a field carries in the icon scope: pinned by THIS icon's dialog,
+ * or inherited. Decorations a global control applied are not overrides, so
+ * they read `inherited` here (2026-10-21).
  */
 export function markerOf(p: UploadSettingsDialogProps, field: keyof UploadSettings): string | null {
   if (p.id === null) return null;
-  if (isApplied(p.applied, field)) return "inherited";
   return p.overrides[field] !== undefined ? "overridden" : "inherited";
 }
 

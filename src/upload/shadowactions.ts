@@ -2,9 +2,8 @@
 // set). Every write goes through the shared validated uploadSettings history
 // path; no global control copies a defaults value into a row (2026-10-21).
 import { useCallback, useRef } from "react";
-import {
-  clampShadowGapPct, clampShadowWidthPct, effectiveSettings, type UploadSettings,
-} from "../lib/upload/settings";
+import { rowSettings } from "../lib/upload/decorations";
+import { clampShadowGapPct, clampShadowWidthPct, type UploadSettings } from "../lib/upload/settings";
 import type { Slice, UploadCtx } from "./actions";
 import { commitBatch, commitDecoration } from "./selectedsettings";
 
@@ -17,7 +16,7 @@ export function useShadowActions(ctx: UploadCtx): Slice<"toggleShadowSelected" |
   const toggleShadowSelected = useCallback((ids: string[]) => {
     const c = latest.current;
     if (ids.length === 0) return;
-    const allOn = ids.every((id) => effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {}).shadowEnabled);
+    const allOn = ids.every((id) => rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied).shadowEnabled);
     const on = !allOn;
     commitDecoration(c, ids, { key: "shadow", on, label: on ? "Apply shadow" : "Remove shadow" });
   }, []);
@@ -27,12 +26,7 @@ export function useShadowActions(ctx: UploadCtx): Slice<"toggleShadowSelected" |
     const next = validatedDimensions(patch);
     if (Object.keys(next).length === 0) return;
     const label = "shadowWidthPct" in next ? "Set shadow width" : "Set shadow gap";
-    commitBatch(c, ids, label, (_id, prior) => {
-      const effective = effectiveSettings(c.m.defaults, prior);
-      if (!effective.shadowEnabled) return null;
-      const same = Object.entries(next).every(([key, value]) => effective[key as keyof ShadowDimensions] === value);
-      return same ? null : { ...prior, ...next };
-    });
+    commitBatch(c, ids, { patch: next, label });
   }, []);
   return { toggleShadowSelected, setShadowSelected };
 }

@@ -1,6 +1,6 @@
-// sizeguideactions.ts — the checked-only size-guide opt-in: the flag plus its applied mark.
+// sizeguideactions.ts — the checked-only size-guide opt-in: the applied guide values (not row overrides).
 import { useCallback, useRef } from "react";
-import { effectiveSettings } from "../lib/upload/settings";
+import { rowSettings } from "../lib/upload/decorations";
 import type { Slice, UploadCtx } from "./actions";
 import { commitDecoration } from "./selectedsettings";
 
@@ -11,7 +11,7 @@ export function useSizeGuideActions(ctx: UploadCtx): Slice<"toggleSizeGuideSelec
   const toggleSizeGuideSelected = useCallback((ids: string[]) => {
     const c = latest.current;
     if (ids.length === 0) return;
-    const allOn = ids.every((id) => effectiveSettings(c.m.defaults, c.m.overrides[id] ?? {}).sizeGuideEnabled);
+    const allOn = ids.every((id) => rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied).sizeGuideEnabled);
     const on = !allOn;
     commitDecoration(c, ids, { key: "sizeGuide", on, label: on ? "Apply size guide" : "Remove size guide" });
   }, []);

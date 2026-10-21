@@ -62,21 +62,22 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   typed (2026-10-08; a stored `strokePt` reads as `strokePx`), stroke colour —
   one hex, `#000000` by default, or the artwork's own, JPEG target MP, JPEG
   quality, SVGO optimize on, optional EPS, artboard) plus per-icon overrides;
-  the effective settings are defaults under, overrides on top, and every field
-  is marked inherited or overridden. Only a local edit pins a field (2026-10-21,
-  row settings isolation); a global edit never writes a row. Anything this
-  popup writes — a Checked-icons decoration or a selected-only dimension — is
-  *applied*, not pinned (2026-10-21, [plan](../../archive/2026-10-21-upload-applied-decorations/README.md)):
-  the payload's `applied: { pairId: { [field]?: true } }` names the fields the
-  selection set, the marker reads `inherited`, the row's count ignores them,
-  and only that row's own dialog drops the mark when the value really moves.
-  Decoration fields (the three flags and their geometry) are never reset, so
-  the Checked-icons boxes cannot untick from a reset. The bar's **"↺ Reset to
-  inherited (N)"** drops the checked icons' LOCAL GENERAL pins only — never a
-  decoration, never an applied field, never the stored defaults — as ONE
-  undoable `uploadSettings` entry (N counts those local pins); the row
-  dialog's own "Reset to inherited" follows the same rule;
-  global-defaults edits are persisted but NOT undoable, like presets. The
+  the effective settings are defaults under, the applied decorations, then the
+  icon's own overrides on top, and every field is marked inherited or
+  overridden. Only a local edit pins a field (2026-10-21, row settings
+  isolation); a global edit never writes a row. A decoration — a Checked-icons
+  flag or a selected-only dimension — is *applied*, not pinned (2026-10-21,
+  [plan](../../archive/2026-10-21-decorations-are-not-overrides/README.md)):
+  `applied: { pairId: DecorationValues }` holds the values the selection set,
+  so the marker reads `inherited` and the decoration survives any reset. A
+  payload an earlier build stored in `overrides` is migrated once on read.
+  **"↺ Reset to inherited (N)"** deletes the checked icons' whole override
+  map — every parameter its own dialog pinned — as ONE undoable
+  `uploadSettings` entry (N counts the icons that pin something); applied
+  decorations keep applying and the stored defaults and Checked-icons boxes
+  are never touched. The row dialog's own "Reset to inherited" does the same
+  for that row; global-defaults edits are persisted but NOT undoable, like
+  presets. The
   checkbox selection is session-persisted and
   its gestures are undoable through the separate `uploadChecked` history type.
 * **Scale to N MP** (2026-10-09, I-62, design

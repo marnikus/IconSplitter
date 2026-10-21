@@ -123,30 +123,30 @@ describe("applyEntry — the uploadSettings route", () => {
     expect(loadOverrides()).toEqual({});
   });
 
-  it("restores a shadow override while the Upload panel is unmounted", async () => {
-    const withShadow = { overrides: { pair_a: { shadowEnabled: true, shadowWidthPct: 90, shadowGapPct: 12 } } };
-    await expect(applyEntry(entry(), withShadow)).resolves.toBe(true);
-    expect(loadOverrides().pair_a).toEqual(withShadow.overrides.pair_a);
-    await expect(applyEntry(entry(), { overrides: { pair_a: null } })).resolves.toBe(true);
-    expect(loadOverrides()).toEqual({});
-  });
-
-  it("restores a badge override and its placement while the Upload panel is unmounted", async () => {
-    const withBadge = { overrides: { pair_a: { badgeEnabled: true, badgeCorner: "bottom-left", badgeWidthPct: 51, badgeOffsetXPct: 7, badgeOffsetYPct: 8 } } };
-    await expect(applyEntry(entry(), withBadge)).resolves.toBe(true);
-    expect(loadOverrides().pair_a).toEqual(withBadge.overrides.pair_a);
-    await expect(applyEntry(entry(), { overrides: { pair_a: null } })).resolves.toBe(true);
-    expect(loadOverrides()).toEqual({});
-  });
-
-  it("restores a decoration mark with its flag, and clears both on the undo side", async () => {
-    const applied = { overrides: { pair_a: { badgeEnabled: true } }, applied: { pair_a: { badgeEnabled: true } } };
-    await expect(applyEntry(entry(), applied)).resolves.toBe(true);
-    expect(loadOverrides().pair_a).toEqual({ badgeEnabled: true });
-    expect(loadApplied().pair_a).toEqual({ badgeEnabled: true });
-    await expect(applyEntry(entry(), { overrides: { pair_a: null }, applied: { pair_a: null } })).resolves.toBe(true);
-    expect(loadOverrides()).toEqual({});
+  it("restores a shadow decoration while the Upload panel is unmounted", async () => {
+    const shadow = { shadowEnabled: true, shadowWidthPct: 90, shadowGapPct: 12 } as const;
+    await expect(applyEntry(entry(), { applied: { pair_a: shadow } })).resolves.toBe(true);
+    expect(loadApplied().pair_a).toEqual(shadow);
+    expect(loadOverrides().pair_a).toBeUndefined(); // a decoration is never an override
+    await expect(applyEntry(entry(), { applied: { pair_a: null } })).resolves.toBe(true);
     expect(loadApplied()).toEqual({});
+  });
+
+  it("restores a badge decoration and its placement while the Upload panel is unmounted", async () => {
+    const badge = { badgeEnabled: true, badgeCorner: "bottom-left", badgeWidthPct: 51, badgeOffsetXPct: 7, badgeOffsetYPct: 8 } as const;
+    await expect(applyEntry(entry(), { applied: { pair_a: badge } })).resolves.toBe(true);
+    expect(loadApplied().pair_a).toEqual(badge);
+    await expect(applyEntry(entry(), { applied: { pair_a: null } })).resolves.toBe(true);
+    expect(loadApplied()).toEqual({});
+  });
+
+  it("applies a decoration patch and clears it again", async () => {
+    const applied = { applied: { pair_a: { badgeEnabled: true, badgeWidthPct: 51 } } };
+    await expect(applyEntry(entry(), applied)).resolves.toBe(true);
+    expect(loadApplied().pair_a).toEqual({ badgeEnabled: true, badgeWidthPct: 51 });
+    await expect(applyEntry(entry(), { applied: { pair_a: null } })).resolves.toBe(true);
+    expect(loadApplied()).toEqual({});
+    expect(loadOverrides()).toEqual({});
   });
 
   it("validates the applied half and ignores junk marks", async () => {

@@ -92,8 +92,8 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
-        shadowEpsUnsupported={selectedShadow(g.checked, g.defaults, g.overrides).epsUnsupported}
-        overriddenCount={resettableIds(g.checked, g.overrides, g.applied).length}
+        shadowEpsUnsupported={selectedShadow(g.checked, g.defaults, g.overrides, g.applied).epsUnsupported}
+        overriddenCount={resettableIds(g.checked, g.overrides).length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
@@ -223,13 +223,13 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       defaults={g.defaults}
       overrides={ownMap(g.overrides, id)}
       applied={ownMap(g.applied, id)}
-      selectedShadow={selectedShadow(g.checked, g.defaults, g.overrides)}
+      selectedShadow={selectedShadow(g.checked, g.defaults, g.overrides, g.applied)}
       selectedCount={g.checked.length}
       onSelectedShadowToggle={() => g.toggleShadowSelected(g.checked)}
       onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
-      selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides)}
+      selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides, g.applied)}
       onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
-      selectedSizeGuide={selectedSizeGuide(g.checked, g.defaults, g.overrides)}
+      selectedSizeGuide={selectedSizeGuide(g.checked, g.defaults, g.overrides, g.applied)}
       onSelectedSizeGuideToggle={() => g.toggleSizeGuideSelected(g.checked)}
       onDefaults={g.setDefaults}
       onOverride={g.setOverride}
