@@ -2,6 +2,7 @@
 // real PostScript (%!PS-Adobe-3.0 EPSF-3.0 + %%BoundingBox, y flipped, px→pt),
 // and anything outside the subset fails honestly (design §2.5) — never a
 // renamed PS/PDF, never a guessed rendering.
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { verifyEps, verifyEpsDocument, writeEps } from "../src/lib/upload/eps";
 import { hiResBox, runPostScript } from "./helpers/psrun";
@@ -238,8 +239,35 @@ describe("writeEps — a rounded <rect> is written, exactly, and the fix is repo
   });
 });
 
-describe("writeEps — Level-3 vector gradients (linear + radial + shadow)", () => {
-  it("emits pure vector ShadingType 2 / 3 shfill with stop opacity mixed onto the background", () => {
+describe("writeEps — Level-3 vector gradients + Native Illustrator 10 stream + Zero-Raster gate", () => {
+  function decodeAiStream(eps: string): string {
+    const m = /%AI9_DataStream\n([\s\S]*?)~>\n%AI9_PrivateDataEnd/.exec(eps);
+    expect(m).not.toBeNull();
+    const raw = m![1].split("\n").map((l) => l.replace(/^%/, "")).join("");
+    const out: number[] = [];
+    let tuple = 0;
+    let count = 0;
+    for (const ch of raw) {
+      if (ch === "z" && count === 0) { out.push(0, 0, 0, 0); continue; }
+      const v = ch.charCodeAt(0) - 33;
+      if (v < 0 || v > 84) continue;
+      tuple = tuple * 85 + v;
+      count++;
+      if (count === 5) {
+        out.push((tuple >>> 24) & 0xff, (tuple >>> 16) & 0xff, (tuple >>> 8) & 0xff, tuple & 0xff);
+        tuple = 0;
+        count = 0;
+      }
+    }
+    if (count > 1) {
+      for (let i = count; i < 5; i++) tuple = tuple * 85 + 84;
+      const bytes = [(tuple >>> 24) & 0xff, (tuple >>> 16) & 0xff, (tuple >>> 8) & 0xff, tuple & 0xff];
+      for (let i = 0; i < count - 1; i++) out.push(bytes[i]);
+    }
+    return inflateSync(Uint8Array.from(out)).toString("latin1");
+  }
+
+  it("emits pure vector PS Level 3 shfill AND zlib-compressed native AI 10 editable gradients (0 strokepath, 0 raster)", () => {
     const svg = art(`<defs>`
       + `<radialGradient id="s" gradientUnits="objectBoundingBox" cx="0.5" cy="0.5" r="0.5">`
       + `<stop offset="0" stop-color="#000" stop-opacity="1"/>`
@@ -253,7 +281,7 @@ describe("writeEps — Level-3 vector gradients (linear + radial + shadow)", () 
     if (!result.ok) throw new Error(result.reason);
     expect(result.eps).toContain("/ShadingType 3");
     expect(result.eps).toContain("/ShadingType 2");
-    expect(result.eps).toContain("strokepath clip newpath");
+    expect(result.eps).not.toContain("strokepath");
     expect(result.eps).toContain("shfill");
     expect(verifyEps(result.eps).ok).toBe(true);
     const run = runPostScript(result.eps);
@@ -261,6 +289,39 @@ describe("writeEps — Level-3 vector gradients (linear + radial + shadow)", () 
     const box = hiResBox(result.eps);
     expect(run.painted!.urx).toBeLessThanOrEqual(box.urx + 1e-6);
     expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
+
+    const ai = decodeAiStream(result.eps);
+    expect(ai).toContain("%AI5_FileFormat 6.0");
+    expect(ai).toContain("%AI9_ColorModel: 1");
+    expect(ai).toContain("2 Bn");
+    expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\n(Gradient 1) 1 3 Bd");
+    expect(ai).toContain("%AI5_BeginGradient: (Gradient 2)\n(Gradient 2) 0 2 Bd");
+    expect(ai).toContain("Bh\n1 (Gradient 1)");
+    expect(ai).toContain("Xm\nf\n0 BB");
+    expect(ai).toContain("*u");
+    expect(ai).toContain("*U");
+  });
+
+  it("hard-blocks all PS/AI raster operators in both verifyEps and verifyEpsDocument without XMP false positives", () => {
+    const clean = writeEps(PREPARED, "#ffffff");
+    if (!clean.ok) throw new Error(clean.reason);
+    for (const bad of [
+      "10 10 8 [1 0 0 1 0 0] { () } image",
+      "10 10 8 [1 0 0 1 0 0] { () } false 3 colorimage",
+      "<< /ImageType 1 /Width 4 /Height 4 >> image",
+      "/DCTDecode filter",
+      "%AI5_BeginRaster",
+      "XI",
+    ]) {
+      const poisoned = clean.eps.replace("%%EOF", `${bad}\n%%EOF`);
+      expect(verifyEps(poisoned).ok).toBe(false);
+      expect(verifyEpsDocument(poisoned).ok).toBe(false);
+    }
+    const withXmpImageWord = clean.eps.replace(
+      "%%EndSetup",
+      "%%EndSetup\n<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><dc:title>vector image colorimage icon</dc:title><?xpacket end=\"w\"?>",
+    );
+    expect(verifyEpsDocument(withXmpImageWord).ok).toBe(true);
   });
 
   it("handles 0-stop (none), 1-stop (solid), coincident stop offsets and rejects non-pad spreadMethod", () => {

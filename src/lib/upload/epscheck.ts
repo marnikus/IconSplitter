@@ -1,13 +1,5 @@
-// epscheck.ts — is the built-in EPS an executable program? (I-61, 2026-10-09)
-// An EPS is PostScript: if one instruction is invalid the interpreter stops
-// before it reaches the artwork. The report that made this file: the uprighting
-// CTM was written as bare numbers (`0.75 0 0 -0.75 0 750 concat`), `concat`
-// takes ONE array, Illustrator raised /typecheck and opened nothing. This is an
-// operand-stack model of the writer's OWN operator subset: numbers, `[…]`
-// arrays, `<< … >>` shading dictionaries, and the operators `lib/upload/eps`
-// emits — each pops what PostScript documents and leaves what PostScript leaves.
-// A converter's PostScript (Inkscape/cairo: procedures, custom dicts) is outside
-// its vocabulary and is NOT checked by it (`verifyEpsDocument` stays neutral).
+// epscheck.ts — executable stack verification (I-61) AND hard zero-raster
+// enforcement across all EPS exports ("raster is forbidden in artworks").
 
 type Kind = "number" | "array" | "dict";
 type DictVal = { kind: "dict" } | { kind: "lit" };
@@ -16,8 +8,8 @@ interface Frame { kind: "array" | "dict"; items: Operand[] }
 
 /** What each operator pops, in stack order (last entry = top of stack). */
 const POPS: Record<string, Kind[]> = {
-  newpath: [], closepath: [], fill: [], stroke: [], gsave: [], grestore: [],
-  clip: [], strokepath: [], shfill: ["dict"],
+  newpath: [], closepath: [], fill: [], eofill: [], stroke: [], gsave: [], grestore: [],
+  clip: [], eoclip: [], strokepath: [], shfill: ["dict"],
   moveto: ["number", "number"], lineto: ["number", "number"],
   curveto: ["number", "number", "number", "number", "number", "number"],
   concat: ["array"], setrgbcolor: ["number", "number", "number"],
@@ -25,10 +17,15 @@ const POPS: Record<string, Kind[]> = {
   setlinecap: ["number"], setlinejoin: ["number"], setmiterlimit: ["number"],
 };
 
+const FORBIDDEN_RASTER_TOKENS = new Set([
+  "image", "colorimage", "imagemask", "cairo_image", "cairo_imagemask",
+  "/ImageType", "/DCTDecode", "/JPXDecode", "/CCITTFaxDecode", "/JBIG2Decode",
+  "XI", "XG", "Xh", "XH",
+]);
+
 interface State {
   stack: Operand[];
   open: Frame[];
-  /** The current path has a current point (a `moveto` happened, nothing consumed it since). */
   hasPath: boolean;
   saved: boolean[];
   errors: string[];
@@ -41,6 +38,46 @@ export function checkPostScript(program: string): string[] {
     if (!lines[i].startsWith("%")) runLine(lines[i], st, i + 1);
   }
   return st.errors.length > 0 ? st.errors : atEnd(st);
+}
+
+/** Hard zero-raster scanner: returns an error for any PS/AI bitmap construct. */
+export function findRasterOperators(program: string): string[] {
+  const cleaned = stripXmpPackets(program);
+  const errors: string[] = [];
+  for (const rawLine of cleaned.split(/\r?\n/)) {
+    if (/^%AI5_BeginRaster\b/.test(rawLine.trim())) {
+      errors.push("forbidden raster image block (%AI5_BeginRaster)");
+      break;
+    }
+    const hit = scanLineForRaster(rawLine);
+    if (hit !== null) {
+      errors.push(`forbidden raster operator (${hit})`);
+      break;
+    }
+  }
+  return errors;
+}
+
+function stripXmpPackets(text: string): string {
+  return text.replace(/<\?xpacket begin=[\s\S]*?\?>[\s\S]*?<\?xpacket end=[\s\S]*?\?>/g, "");
+}
+
+function scanLineForRaster(line: string): string | null {
+  const code = stripStringsAndComments(line);
+  if (code === "") return null;
+  const spaced = code.replace(/<<|>>|[[\]{}()]/g, " $& ");
+  for (const tok of spaced.trim().split(/\s+/)) {
+    if (FORBIDDEN_RASTER_TOKENS.has(tok)) return tok;
+  }
+  return null;
+}
+
+function stripStringsAndComments(line: string): string {
+  let text = line.replace(/\\./g, " ");
+  while (/\([^()]*\)/.test(text)) text = text.replace(/\([^()]*\)/g, " ");
+  const cut = text.indexOf("%");
+  if (cut >= 0) text = text.slice(0, cut);
+  return text.replace(/(?<!<)<(?!<)[^>]*>/g, " ");
 }
 
 function runLine(line: string, st: State, n: number): void {
@@ -86,7 +123,11 @@ function delimiter(tok: string, st: State, line: number): boolean {
   return false;
 }
 
-function token(tok: string, st: State, line: number): void {
+function token(tok: string, line: number, st: State): void;
+function token(tok: string, st: State, line: number): void;
+function token(tok: string, b: State | number, c: number | State): void {
+  const st = typeof b === "number" ? (c as State) : b;
+  const line = typeof b === "number" ? b : (c as number);
   if (delimiter(tok, st, line)) return;
   if (/^-?(\d+\.?\d*|\.\d+)$/.test(tok)) { pushVal(st, Number(tok)); return; }
   if (dictToken(tok, st)) { pushVal(st, { kind: "lit" }); return; }
@@ -125,8 +166,10 @@ const EFFECTS: Record<string, (st: State, args: Operand[]) => string | null> = {
   lineto: (st) => (st.hasPath ? null : "lineto has no current point"),
   curveto: (st) => (st.hasPath ? null : "curveto has no current point"),
   clip: (st) => (st.hasPath ? null : "clip has no current path"),
+  eoclip: (st) => (st.hasPath ? null : "eoclip has no current path"),
   strokepath: (st) => (st.hasPath ? null : "strokepath has no current path"),
   fill: (st) => paint("fill", st),
+  eofill: (st) => paint("eofill", st),
   stroke: (st) => paint("stroke", st),
   gsave: (st) => { st.saved.push(st.hasPath); return null; },
   grestore: (st) => restore(st),

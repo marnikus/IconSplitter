@@ -21,7 +21,8 @@ export function pathDataPs(d: string | null): string | null {
   return outline === null ? null : outlineToPs(outline);
 }
 
-function outlineToPs(o: Outline): string {
+/** Pre-parsed outline → PS path construction. */
+export function outlineToPs(o: Outline): string {
   let ps = "newpath";
   for (const op of o.ops) {
     if (op.op === "Z") ps += " closepath";

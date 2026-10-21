@@ -1,9 +1,12 @@
-// Real PostScript Level 3 execution + pixel verification via GPL Ghostscript 10.06 WASM
-// (@okathira/ghostpdl-wasm — devDependency only; zero bytes enter dist/index.html).
+// Real PostScript Level 3 execution + Native Illustrator 10 vector stream audit
+// via GPL Ghostscript 10.06 WASM (@okathira/ghostpdl-wasm — devDependency only;
+// zero bytes enter dist/index.html).
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import initGhostscript from "@okathira/ghostpdl-wasm";
 import { enforceExportSvg } from "../src/lib/upload/clean";
 import { verifyEps, writeEps } from "../src/lib/upload/eps";
+import { findRasterOperators } from "../src/lib/upload/epscheck";
 import { embedXmpMetadataInEps, verifyEpsMetadata } from "../src/lib/upload/epsmetadata";
 import { optimizeSvg } from "../src/lib/upload/optimize";
 import { prepareExportSvg } from "../src/lib/upload/prepare";
@@ -44,7 +47,34 @@ async function renderEpsWithGhostscript(eps: string, dpi = 72): Promise<Rendered
   };
 }
 
-describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 interpreter", () => {
+function decodeAiStream(eps: string): string {
+  const m = /%AI9_DataStream\n([\s\S]*?)~>\n%AI9_PrivateDataEnd/.exec(eps);
+  expect(m).not.toBeNull();
+  const raw = m![1].split("\n").map((l) => l.replace(/^%/, "")).join("");
+  const out: number[] = [];
+  let tuple = 0;
+  let count = 0;
+  for (const ch of raw) {
+    if (ch === "z" && count === 0) { out.push(0, 0, 0, 0); continue; }
+    const v = ch.charCodeAt(0) - 33;
+    if (v < 0 || v > 84) continue;
+    tuple = tuple * 85 + v;
+    count++;
+    if (count === 5) {
+      out.push((tuple >>> 24) & 0xff, (tuple >>> 16) & 0xff, (tuple >>> 8) & 0xff, tuple & 0xff);
+      tuple = 0;
+      count = 0;
+    }
+  }
+  if (count > 1) {
+    for (let i = count; i < 5; i++) tuple = tuple * 85 + 84;
+    const bytes = [(tuple >>> 24) & 0xff, (tuple >>> 16) & 0xff, (tuple >>> 8) & 0xff, tuple & 0xff];
+    for (let i = 0; i < count - 1; i++) out.push(bytes[i]);
+  }
+  return inflateSync(Uint8Array.from(out)).toString("latin1");
+}
+
+describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 + Native AI 10 audit", () => {
   it("renders the prepared + SVGO-optimized Upload shadow template cleanly with exact vector gradient falloff", async () => {
     const icon = `<svg ${NS} viewBox="0 0 100 100"><rect x="20" y="15" width="60" height="55" rx="8" fill="#1e293b"/></svg>`;
     const settings = {
@@ -63,17 +93,20 @@ describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 int
     expect(verifyEps(epsOut.eps).ok).toBe(true);
     expect(epsOut.eps).toContain("/ShadingType 3");
     expect(epsOut.eps).toContain("shfill");
-    expect(/\b(colorimage|image)\b/.test(epsOut.eps)).toBe(false);
+    expect(findRasterOperators(epsOut.eps)).toEqual([]);
 
-    // Also embed XMP metadata and confirm real Ghostscript executes both pdfmark + shfill cleanly
-    const meta = { title: "Shadow Icon", description: "Vector icon with smooth radial shadow", tags: ["icon", "shadow", "vector", "clean", "eps"] };
+    const ai = decodeAiStream(epsOut.eps);
+    expect(findRasterOperators(ai)).toEqual([]);
+    expect(ai).toContain("%AI5_BeginGradient: (Gradient 1)\n(Gradient 1) 1 3 Bd");
+
+    const meta = { title: "Shadow Icon", description: "Vector image icon with smooth radial shadow", tags: ["icon", "shadow", "vector", "image", "eps"] };
     const withXmp = embedXmpMetadataInEps(epsOut.eps, meta);
     expect(verifyEpsMetadata(withXmp, meta)).toBe(true);
+    expect(findRasterOperators(withXmp)).toEqual([]);
 
     const bmp = await renderEpsWithGhostscript(withXmp, 72);
     expect([bmp.width, bmp.height]).toEqual([384, 384]);
 
-    // Locate the shadow ellipse in the cleaned SVG and sample center vs mid-radius vs outside in rendered pixels
     const doc = new DOMParser().parseFromString(cleaned.svg, "image/svg+xml");
     const ell = doc.querySelector("ellipse")!;
     const cxPt = Math.round(Number(ell.getAttribute("cx")) * 0.75);
@@ -82,7 +115,6 @@ describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 int
     const center = bmp.pixel(cxPt, cyPt);
     const mid = bmp.pixel(Math.round(cxPt + rxPt * 0.5), cyPt);
     const out = bmp.pixel(Math.min(382, Math.round(cxPt + rxPt * 1.15)), cyPt);
-    // Center: #000 at 0.2 alpha over #fff -> ~204; mid darker than white and lighter than center; outside pure white 255
     expect(center[0]).toBeGreaterThanOrEqual(200);
     expect(center[0]).toBeLessThanOrEqual(212);
     expect(mid[0]).toBeGreaterThan(center[0]);
@@ -90,8 +122,8 @@ describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 int
     expect(out).toEqual([255, 255, 255]);
   });
 
-  it("renders multi-stop linear, focal radial, href-inherited and stroked gradients accurately in Ghostscript", async () => {
-    const svg = enforceExportSvg(`<svg ${NS} viewBox="0 0 200 200">
+  it("renders multi-stop linear, focal radial, href-inherited, stroked, and evenodd compound gradients accurately", async () => {
+    const svg = enforceExportSvg(`<svg ${NS} viewBox="0 0 200 240">
       <defs>
         <linearGradient id="stops">
           <stop offset="0%" stop-color="#ff0000"/>
@@ -104,25 +136,34 @@ describe("writeEps — verified by real Ghostscript 10.06 PostScript Level 3 int
           <stop offset="1" stop-color="#000080"/>
         </radialGradient>
       </defs>
+      <rect width="200" height="240" fill="#ffffff"/>
       <rect x="20" y="20" width="160" height="40" fill="url(#linked)"/>
       <circle cx="100" cy="115" r="35" fill="url(#focal)"/>
       <line x1="20" y1="175" x2="180" y2="175" stroke="url(#linked)" stroke-width="12" stroke-linecap="butt"/>
+      <path fill-rule="evenodd" fill="url(#linked)" d="M20 196H180V232H20ZM70 204H130V224H70Z"/>
     </svg>`).svg;
     const out = writeEps(svg, "#ffffff");
     if (!out.ok) throw new Error(out.reason);
     expect(verifyEps(out.eps).ok).toBe(true);
-    const bmp = await renderEpsWithGhostscript(out.eps, 96);
-    expect([bmp.width, bmp.height]).toEqual([200, 200]);
+    expect(out.eps).not.toContain("strokepath");
 
-    // At 96 DPI, 1 pt * (96/72) = 1/0.75 -> pixel coordinates equal SVG viewBox coordinates 1:1!
-    expect(bmp.pixel(22, 40)[0]).toBeGreaterThan(240);   // near x=20: pure red
-    expect(bmp.pixel(100, 40)[1]).toBeGreaterThan(240);  // midpoint x=100: pure green
-    expect(bmp.pixel(178, 40)[2]).toBeGreaterThan(240);  // near x=180: pure blue
-    // Stroked line at y=175 has the exact same red -> green -> blue gradient!
+    const bmp = await renderEpsWithGhostscript(out.eps, 96);
+    expect([bmp.width, bmp.height]).toEqual([200, 240]);
+
+    expect(bmp.pixel(22, 40)[0]).toBeGreaterThan(240);
+    expect(bmp.pixel(100, 40)[1]).toBeGreaterThan(240);
+    expect(bmp.pixel(178, 40)[2]).toBeGreaterThan(240);
+
+    // Expanded cubic-Bezier gradient stroke at y=175: red -> green -> blue with 0 strokepath
     expect(bmp.pixel(25, 175)[0]).toBeGreaterThan(235);
     expect(bmp.pixel(100, 175)[1]).toBeGreaterThan(235);
     expect(bmp.pixel(175, 175)[2]).toBeGreaterThan(235);
-    // Focal radial gradient peaks yellow near fx=0.25 -> x = 100 - 35 + 0.5*35 = 82.5
+
+    // Even-odd compound path at y=214: outer bar red/blue, inner hole pure white
+    expect(bmp.pixel(25, 214)[0]).toBeGreaterThan(235);
+    expect(bmp.pixel(100, 214)).toEqual([255, 255, 255]);
+    expect(bmp.pixel(175, 214)[2]).toBeGreaterThan(235);
+
     const nearFocus = bmp.pixel(83, 115);
     expect(nearFocus[0]).toBeGreaterThan(230);
     expect(nearFocus[1]).toBeGreaterThan(230);

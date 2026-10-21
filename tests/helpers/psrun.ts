@@ -71,8 +71,10 @@ class Painter {
       const half = this.strokeClip ? (this.lineWidth / 2) * Math.hypot(this.ctm[0], this.ctm[1]) : 0;
       this.paint(half);
       this.strokeClip = false;
+    } else if (op === "eoclip") {
+      this.paint(0);
     } else if (op === "shfill") this.stack.pop();
-    else if (op === "fill") this.paint(0);
+    else if (op === "fill" || op === "eofill") this.paint(0);
     else if (op === "stroke") this.paint((this.lineWidth / 2) * Math.hypot(this.ctm[0], this.ctm[1]));
   }
 

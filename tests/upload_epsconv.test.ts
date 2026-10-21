@@ -50,9 +50,9 @@ describe("the built-in converter IS writeEps", () => {
     expect(viaRegistry.ok).toBe(true);
     if (!direct.ok || !viaRegistry.ok) return;
     expect(viaRegistry.eps).toBe(direct.eps);
-    expect(viaRegistry.writer).toBe("builtin-subset-3");
+    expect(viaRegistry.writer).toBe("builtin-subset-4");
     expect(viaRegistry.fixes).toEqual([]);
-    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-subset-3" });
+    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-subset-4" });
   });
 
   it("the built-in converter verifies its own program before it answers ok (I-61)", async () => {
@@ -130,6 +130,27 @@ describe("the Inkscape converter — a client to the local helper", () => {
     });
     await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff", title: "t" }, deps(f), ctl.signal);
     expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("pre-flattens translucent gradient stops before posting to Inkscape AND rejects any raster EPS response", async () => {
+    let sentSvg = "";
+    const gradSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
+      + `<defs><radialGradient id="s"><stop offset="0" stop-color="#000" stop-opacity="1"/>`
+      + `<stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>`
+      + `<ellipse cx="50" cy="80" rx="40" ry="6" fill="url(#s)" fill-opacity="0.25"/></svg>`;
+    const okOut = await CONVERTERS.inkscape.convert({ svg: gradSvg, background: "#ffffff", title: "s.eps" }, deps(async (_u, init) => {
+      sentSvg = String(init?.body ?? "");
+      return new Response(EPS_OK, { status: 200 });
+    }));
+    expect(okOut.ok).toBe(true);
+    expect(sentSvg).not.toContain("stop-opacity");
+    expect(sentSvg).not.toContain("fill-opacity");
+    expect(sentSvg).toContain("#ffffff");
+
+    const rasterEps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 70 70\n10 10 8 [1 0 0 1 0 0] { () } false 3 colorimage\n%%EOF\n";
+    const rejected = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#ffffff", title: "r.eps" }, deps(async () => new Response(rasterEps, { status: 200 })));
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) expect(rejected.reason).toContain("raster");
   });
 });
 

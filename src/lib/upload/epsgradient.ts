@@ -46,8 +46,9 @@ export function collectGradients(root: Element): Map<string, Element> {
   return raw;
 }
 
-/** Extract `id` from `url(#id)` if present; null for non-url paints. */
-export function urlRefId(raw: string): string | null {
+/** Extract `id` from `url(#id)` if present; null for non-url or empty paints. */
+export function urlRefId(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
   const m = /^url\(\s*#([^)\s"']+)\s*\)$/i.exec(raw.trim());
   return m === null ? null : m[1];
 }

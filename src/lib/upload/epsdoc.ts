@@ -1,11 +1,10 @@
 // epsdoc.ts — the document layer of the EPS writer (design §2.5): the DSC
 // comment block, the EPS and Illustrator artboard bounds, the uprighting CTM
-// and structural verification. Split out of `eps.ts` (RULE 18) so the
-// shape walker there stays about SVG, and every fact about what makes the file
-// an **EPS 10 / Illustrator-10-compatible** document lives in ONE place here.
+// and structural + hard zero-raster verification.
 
-import { checkPostScript } from "./epscheck";
+import { checkPostScript, findRasterOperators } from "./epscheck";
 import { fmt } from "./geom";
+import type { Matrix } from "./geom/matrix";
 
 /** SVG user units (px at 96 DPI) → PostScript points. */
 export const PX_TO_PT = 0.75;
@@ -48,11 +47,22 @@ export interface EpsDoc {
   hires: EpsBoundingBox;
   /** The emitted PostScript body, one operator group per shape. */
   body: string[];
+  /** Optional `%%Trailer` section (native Illustrator 10 vector editing stream). */
+  trailer?: string;
   opts: EpsOptions;
 }
 
-/** The EPS 10 document: DSC comments, the uprighting CTM, then the body. */
-export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
+/** Exact matrix mapping SVG root user units to y-up PostScript / Illustrator art points. */
+export function uprightMatrix(viewBox: number[], hires: EpsBoundingBox): Matrix {
+  return {
+    a: PX_TO_PT, b: 0, c: 0, d: -PX_TO_PT,
+    e: hires.llx - PX_TO_PT * viewBox[0],
+    f: hires.ury + PX_TO_PT * viewBox[1],
+  };
+}
+
+/** The EPS 10 document: DSC comments, the uprighting CTM, body, trailer, %%EOF. */
+export function assemble({ viewBox, box, hires, body, trailer, opts }: EpsDoc): string {
   const header = [
     "%!PS-Adobe-3.0 EPSF-3.0",
     ...commentLines(box, hires, opts),
@@ -62,13 +72,11 @@ export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
     "%%BeginSetup",
     "%%EndSetup",
   ].join("\n");
-  // Anchor the artwork to the exact HiRes artboard; the integer DSC box only
-  // rounds outward for legacy readers (AI5_ArtSize preserves the exact size).
-  // `concat` takes ONE matrix, never six bare numbers (I-61 / Illustrator).
-  const tx = fmt(hires.llx - PX_TO_PT * viewBox[0]);
-  const ty = fmt(hires.ury + PX_TO_PT * viewBox[1]);
-  const upright = `[${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${tx} ${ty}] concat`;
-  return `${header}\n${upright}\n${body.join("\n")}\n%%EOF\n`;
+  const u = uprightMatrix(viewBox, hires);
+  const upright = `[${fmt(u.a)} 0 0 ${fmt(u.d)} ${fmt(u.e)} ${fmt(u.f)}] concat`;
+  const parts = [header, upright, ...body];
+  if (trailer !== undefined && trailer !== "") parts.push(`%%Trailer\n${trailer}`);
+  return `${parts.join("\n")}\n%%EOF\n`;
 }
 
 /** The documented DSC comment order (Creator, Title, date, boxes, data, level). */
@@ -107,8 +115,7 @@ function dscString(value: string): string {
 
 /**
  * Verifies an EPS 10 document — the built-in writer's own contract: header, the
- * DSC markers, bounding box, %%EOF, AND an executable program (I-61): the
- * subset stack checker names the first instruction PostScript would stop at.
+ * DSC markers, bounding box, %%EOF, executable PS subset, AND zero raster ops.
  */
 export function verifyEps(eps: string): EpsVerification {
   const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker)).map((marker) => `missing ${marker.replace(/:$/, "")}`);
@@ -117,8 +124,7 @@ export function verifyEps(eps: string): EpsVerification {
 
 /**
  * The converter-neutral gate every EPS passes before commit (2026-10-09):
- * the EPSF-3.0 header, a declared LanguageLevel (any), a bounding box, %%EOF.
- * Inkscape's cairo output has these and NOT the EPS 10 markers above.
+ * header, a declared LanguageLevel, a bounding box, %%EOF, AND zero raster ops.
  */
 export function verifyEpsDocument(eps: string): EpsVerification {
   return verifyDsc(eps, /^%%LanguageLevel:\s*\d/m.test(eps) ? [] : ["missing %%LanguageLevel"]);
@@ -129,6 +135,7 @@ function verifyDsc(eps: string, errors: string[]): EpsVerification {
   const m = /^%%BoundingBox:\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*$/m.exec(eps);
   if (m === null) errors.push("missing or malformed %%BoundingBox");
   if (!eps.trimEnd().endsWith("%%EOF")) errors.push("missing %%EOF");
+  errors.push(...findRasterOperators(eps));
   const box = m === null ? null : { llx: +m[1], lly: +m[2], urx: +m[3], ury: +m[4] };
   return { ok: errors.length === 0, errors, boundingBox: box };
 }

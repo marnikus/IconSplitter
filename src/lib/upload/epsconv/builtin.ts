@@ -1,11 +1,11 @@
-// builtin.ts — the built-in PostScript-subset writer as a converter (2026-10-09):
-// `writeEps` behind the common contract. Always available; the writer id tracks
-// output changes so the planner can refresh stale EPS files selectively.
+// builtin.ts — the built-in PostScript-subset + native Illustrator 10 vector
+// EPS writer behind the common converter contract. Always available, 100% pure
+// browser TypeScript, zero external binaries, zero raster elements allowed.
 
 import { verifyEps, writeEps } from "../eps";
 import type { ConvertResult, EpsConverter, EpsConvertInput } from "./types";
 
-export const BUILTIN_WRITER = "builtin-subset-3";
+export const BUILTIN_WRITER = "builtin-subset-4";
 
 export const builtinConverter: EpsConverter = {
   id: "builtin",
@@ -16,8 +16,6 @@ export const builtinConverter: EpsConverter = {
       title: input.title, ...(input.createdAt === undefined ? {} : { createdAt: input.createdAt }),
     });
     if (!out.ok) return { ok: false, reason: out.reason };
-    // The program is checked before it is answered (I-61): a document the
-    // interpreter would stop in is an honest stage failure, never a file.
     const verdict = verifyEps(out.eps);
     if (!verdict.ok) return { ok: false, reason: `the EPS is not executable: ${verdict.errors[0]}` };
     return { ok: true, eps: out.eps, writer: BUILTIN_WRITER, fixes: out.fixes };
