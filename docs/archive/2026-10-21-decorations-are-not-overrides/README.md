@@ -119,11 +119,12 @@ each subtraction broke the other requirement.
 * **Model** — `DecorationValues = SettingsOverrides`; `rowSettings = { ...defaults,
   ...applied[id], ...overrides[id] }`; the row dialog computes `{ ...defaults,
   ...applied, ...overrides }`, so an applied value reads `inherited` and still
-  renders. `migrateOverrides` moves a legacy payload's decoration fields into
-  `applied` **once**, and only when the stored payload has no `applied` key —
-  a payload this build wrote keeps every dialog pin an override (found by the
-  live-preview suite: migrating on every read deleted `shadowEnabled` from
-  `overrides` right after the dialog wrote it).
+  renders. The stored payload is now `v: 2`: `migrateOverrides` moves a `v: 1`
+  payload's decoration fields into `applied` once, while a `v: 2` payload keeps
+  every dialog pin an override (found by the live-preview suite: migrating on
+  every read deleted `shadowEnabled` from `overrides` right after the dialog
+  wrote it; a marks-era `v: 1` payload carries both `true` marks and the values
+  in `overrides`, and the version is the only honest discriminator).
 * **Reset** — `resetBatch`/`resetOverride` delete the whole override map;
   `resettableIds` counts rows with any override key; decorations in `applied`
   keep applying; stored defaults and the three Checked-icons boxes untouched.
@@ -133,8 +134,9 @@ each subtraction broke the other requirement.
   `toUploadSettingsPatch` accepts a decoration-only payload (an `applied` key
   with no `overrides`).
 * **Tests** — `upload_ui` 65/65 (reset clears all parameters, markers read
-  inherited, migration, undo), `upload_settings_store` 14/14 (legacy migration
-  gated on the missing key, values round-trip beside the overrides),
+  inherited, migration, undo), `upload_settings_store` 15/15 (a `v: 1`
+  payload migrates, a `v: 2` one keeps its pins; values round-trip beside the
+  overrides),
   `upload_undo` 19/19 (decoration-only payloads), `upload_live_preview` 14/14,
   full suite 2352 tests with only the known wall-clock
   `algo_efficiency` case red under load (standalone 4/4 green).

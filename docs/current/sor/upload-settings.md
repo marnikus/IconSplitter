@@ -69,8 +69,9 @@ The settings and output geometry for [SVG to upload](upload.md); see [I-60 and I
   flag or a selected-only dimension — is *applied*, not pinned (2026-10-21,
   [plan](../../archive/2026-10-21-decorations-are-not-overrides/README.md)):
   `applied: { pairId: DecorationValues }` holds the values the selection set,
-  so the marker reads `inherited` and the decoration survives any reset. A
-  payload an earlier build stored in `overrides` is migrated once on read.
+  so the marker reads `inherited` and the decoration survives any reset
+  (payload `v: 2`; a `v: 1` payload's marks and decoration overrides migrate
+  once on read).
   **"↺ Reset to inherited (N)"** deletes the checked icons' whole override
   map — every parameter its own dialog pinned — as ONE undoable
   `uploadSettings` entry (N counts the icons that pin something); applied

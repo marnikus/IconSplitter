@@ -17,7 +17,9 @@ import {
 import { readKey, writeKey } from "../state/safestorage";
 
 const KEY = "iconSplitter.upload.settings.v1";
-const VERSION = 1;
+/** 2 = `applied` holds decoration VALUES (2026-10-21); 1 stored them as overrides + `true` marks. */
+const VERSION = 2;
+const LEGACY_VERSION = 1;
 
 /** pair id → the fields that icon pins (absent = inherited from the defaults). */
 export type OverridesMap = Record<string, SettingsOverrides>;
@@ -38,13 +40,16 @@ export interface UploadSettingsSave {
 
 /** A stored payload → validated state; one bad field costs one default (RULE 13). */
 export function parseUploadSettingsState(raw: unknown): UploadSettingsState {
-  if (!isRecord(raw) || raw.v !== VERSION) return { defaults: normalizeSettings(null), overrides: {}, applied: {} };
-  // A payload written before this build has no `applied` key and stored decorations
-  // as ordinary overrides: move them across once. A payload that HAS the key is
-  // current — its overrides are the user's own dialog pins and must stay pinned.
+  if (!isRecord(raw) || (raw.v !== VERSION && raw.v !== LEGACY_VERSION)) {
+    return { defaults: normalizeSettings(null), overrides: {}, applied: {} };
+  }
+  // A v1 payload stored decorations as ordinary overrides (the marks era): move
+  // them across once, so the row's dialog reads them inherited and a reset can
+  // never delete a decoration. A v2 payload's overrides are the user's own
+  // dialog pins and must stay pinned.
   const overrides = parseOverridesMap(raw.overrides);
   const applied = parseAppliedMap(raw.applied);
-  const migrated = "applied" in raw ? { overrides, applied } : migrateOverrides(overrides, applied);
+  const migrated = raw.v === LEGACY_VERSION ? migrateOverrides(overrides, applied) : { overrides, applied };
   return {
     defaults: normalizeSettings(raw.defaults), overrides: migrated.overrides, applied: migrated.applied,
   };
