@@ -39,11 +39,15 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   nothing emits nothing (an unpainted path is not an object; the DSC box
   carries the artboard). And the program is CHECKED: `lib/upload/epscheck.
   checkPostScript` is an operand-stack model of the writer's own subset
-  (numbers, `[…]`, `newpath moveto lineto curveto closepath concat setrgbcolor
-  setlinewidth setdash setlinecap setlinejoin setmiterlimit fill stroke gsave
-  grestore`) — arity, operand types, a current point before `lineto`/`curveto`,
-  a path before `fill`/`stroke`, balanced `gsave`, an empty stack at the end —
-  stopping at the first error like the interpreter and naming its line.
+  (numbers, `[…]`, `<< … >>` shading dictionaries, `newpath moveto lineto curveto
+  closepath clip strokepath shfill concat setrgbcolor setlinewidth setdash
+  setlinecap setlinejoin setmiterlimit fill stroke gsave grestore`) — arity,
+  operand types, a current point before `lineto`/`curveto`, a path before
+  `fill`/`stroke`/`clip`/`strokepath`, balanced `gsave` and containers, an empty
+  stack at the end — stopping at the first error like the interpreter and naming
+  its line. Built-in EPS outputs are also verified end-to-end in real GPL
+  Ghostscript 10.06 WASM (`tests/upload_eps_ghostscript.test.ts`,
+  `@okathira/ghostpdl-wasm` in `devDependencies`).
   `verifyEps` runs it, and the built-in converter runs `verifyEps` on its own
   output before answering ok, so a non-executable EPS is an EPS-stage failure
   (`partial`, SVG/JPEG committed), never a file. The converter-neutral commit

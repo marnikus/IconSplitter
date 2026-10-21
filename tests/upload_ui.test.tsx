@@ -648,7 +648,7 @@ describe("selection + the bulk bar", () => {
     expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG]).toBeUndefined();
   });
 
-  it("warns before a shadowed selection is exported with the built-in EPS writer", async () => {
+  it("shows no partial warning when a shadowed selection exports with the built-in EPS writer", async () => {
     await mount(makeRoot());
     await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-eps]");
@@ -656,8 +656,8 @@ describe("selection + the bulk bar", () => {
     await check(FOG);
     await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-shadow-selected]");
-    expect(q("[data-testid=upload-shadow-eps-warning]")?.textContent).toMatch(/SVG\/JPEG.*EPS.*partial/);
-    expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")?.textContent).toMatch(/EPS.*partial/);
+    expect(q("[data-testid=upload-shadow-eps-warning]")).toBeNull();
+    expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")).toBeNull();
     await click("[data-testid=upload-set-shadow-selected]");
     expect(q("[data-testid=upload-shadow-eps-warning]")).toBeNull();
     expect(q("[role=dialog] [data-testid=upload-shadow-eps-note]")).toBeNull();
@@ -1703,6 +1703,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
       throw new Error("no request may leave the tab on restore");
     });
     await mount(makeRoot());
+    await waitUntil(() => text("[data-testid=upload-warn-interrupted]").includes("never resent automatically"), "interrupted restore");
     // the LAST run of each icon is shown as interrupted — not as quietly pending
     expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Interrupted");
     expect(text(`[data-testid=upload-status-${ARCH}]`)).toContain("Interrupted");

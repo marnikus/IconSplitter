@@ -428,7 +428,7 @@ describe("runExport — the full package commits per icon", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
     expect(result.status).toBe("processed");
-    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-2" });
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-subset-3" });
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 
@@ -712,7 +712,7 @@ describe("the rename migration is never allowed to lose a package", () => {
 });
 
 describe("runExport — honest failures", () => {
-  it("commits the selected shadow in SVG/JPEG and reports built-in EPS gradient as partial", async () => {
+  it("commits the selected shadow in SVG, JPEG AND genuine Level-3 vector built-in EPS", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, shadowEnabled: true, shadowWidthPct: 80, shadowGapPct: 5, includeEps: true };
     const rendered: string[] = [];
@@ -721,20 +721,23 @@ describe("runExport — honest failures", () => {
       encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
     };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
-    expect(result.status).toBe("partial");
-    expect(result.error?.klass).toBe("eps");
-    expect(result.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: null });
+    expect(result.status, result.error?.detail).toBe("processed");
+    expect(result.outputs).toEqual({ svg: `${ART}.svg`, jpg: `${ART}.jpg`, eps: `${ART}.eps` });
     const committed = fileText(root, `${DIR}/export/${ART}.svg`);
     const final = new DOMParser().parseFromString(committed, "image/svg+xml").documentElement;
     expect(final.querySelector("radialGradient stop[offset='1']")).not.toBeNull();
     expect(final.querySelector("ellipse, path[fill^='url(']")).not.toBeNull();
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyEps(eps).ok).toBe(true);
+    expect(eps).toContain("/ShadingType 3");
+    expect(eps).toContain("shfill");
     expect(rendered).toHaveLength(1);
     const preview = prepareExportSvg(SOURCE_SVG, settings);
     if (!preview.ok) throw new Error(preview.detail);
     // The rasterizer adds only render-size attributes to an in-memory copy of the prepared SVG.
     expect(rendered[0].replace(/(<svg\b[^>]*?) width="\d+" height="\d+"/, "$1")).toBe(preview.svg);
     expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(SOURCE_SVG);
-    expect(readRecord(root).validation).toMatchObject({ svg: true, jpeg: true });
+    expect(readRecord(root).validation).toMatchObject({ svg: true, jpeg: true, eps: true });
   });
 
   it("commits the opaque corner badge through SVG, JPEG and the built-in EPS writer", async () => {
@@ -768,14 +771,15 @@ describe("runExport — honest failures", () => {
     expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(SOURCE_SVG);
   });
 
-  it("a badge with a gradient shadow still reports only built-in EPS as partial", async () => {
+  it("commits a badge combined with a gradient shadow cleanly across SVG, JPEG and built-in EPS", async () => {
     const root = pairRoot();
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, badgeEnabled: true, shadowEnabled: true, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: { ...settings, badgeEnabled: false, shadowEnabled: false },
       overrides: { badgeEnabled: true, shadowEnabled: true }, deps: { raster: captureRaster().deps } }));
-    expect(result.status).toBe("partial");
-    expect(result.error?.klass).toBe("eps");
-    expect(readRecord(root).outputs.eps).toBeNull();
+    expect(result.status, result.error?.detail).toBe("processed");
+    expect(result.outputs.eps).toBe(`${ART}.eps`);
+    expect(readRecord(root).outputs.eps).not.toBeNull();
+    expect(verifyEps(fileText(root, `${DIR}/export/${ART}.eps`)).ok).toBe(true);
     const prepared = prepareExportSvg(SOURCE_SVG, settings);
     if (!prepared.ok) throw new Error(prepared.detail);
     expect(new DOMParser().parseFromString(prepared.svg, "image/svg+xml").querySelectorAll("path").length).toBeGreaterThanOrEqual(7);
@@ -799,7 +803,7 @@ describe("runExport — honest failures", () => {
     expect(fileText(root, `${DIR}/export/${ART}.eps`)).toBe(previousEps);
   });
 
-  it("a shadowed partial export stops advertising a previously committed EPS", async () => {
+  it("a partial export stops advertising a previously committed EPS while leaving old bytes untouched", async () => {
     const root = pairRoot();
     const defaults: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const first = await runExport(args(root, { settings: defaults, defaults }));
@@ -807,9 +811,11 @@ describe("runExport — honest failures", () => {
     expect(first.outputs.eps).toBe(`${ART}.eps`);
     const previousEps = fileText(root, `${DIR}/export/${ART}.eps`);
 
-    const settings: UploadSettings = { ...defaults, shadowEnabled: true };
+    const brokenEpsSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
+      + `<rect x="10" y="10" width="80" height="80" fill="url(#missing)"/></svg>`;
+    dirAt(root, DIR).children.set(`${STEM}.svg`, new BinFile(`${STEM}.svg`, brokenEpsSvg, 2));
     const second = await runExport(args(root, {
-      record: readRecord(root), settings, defaults, overrides: { shadowEnabled: true },
+      record: readRecord(root), settings: defaults, defaults,
       deps: { raster: captureRaster().deps },
     }));
     expect(second.status, JSON.stringify(second.error)).toBe("partial");
@@ -821,14 +827,12 @@ describe("runExport — honest failures", () => {
     expect(planDownload([{ id: ROW.id, base: ROW.base, record }]).items.map((item) => item.to))
       .toEqual([`${ART}.svg`, `${ART}.jpg`]);
     expect(fileText(root, `${DIR}/export/${ART}.eps`)).toBe(previousEps); // old bytes stay on disk
-    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("radialGradient");
   });
 
   it("an EPS subset failure is `partial`: SVG/JPEG stay committed, no EPS", async () => {
-    const gradient = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
-      + `<defs><linearGradient id="g"><stop offset="0" stop-color="#000"/></linearGradient></defs>`
-      + `<rect x="10" y="10" width="80" height="80" fill="url(#g)"/></svg>`;
-    const root = pairRoot(gradient);
+    const unresolved = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
+      + `<rect x="10" y="10" width="80" height="80" fill="url(#missing)"/></svg>`;
+    const root = pairRoot(unresolved);
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings }));
     expect(result.status).toBe("partial");

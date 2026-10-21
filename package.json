@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@okathira/ghostpdl-wasm": "^1.1.0",
     "@tailwindcss/vite": "4.1.17",
     "@types/node": "22.19.17",
     "@types/pngjs": "^6.0.5",

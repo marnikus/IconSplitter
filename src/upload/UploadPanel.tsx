@@ -92,7 +92,6 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         runningMeta={g.runningMeta} runningExport={g.runningExport}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         downloadFiles={downloadPlanOf(g, g.checked).items.length}
-        shadowEpsUnsupported={selectedShadow(g.checked, g.defaults, g.overrides).epsUnsupported}
         overriddenCount={resettableIds(g.checked, g.overrides, g.applied).length}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}

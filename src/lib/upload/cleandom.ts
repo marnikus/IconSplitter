@@ -26,7 +26,7 @@ export const EMBED_TAGS = ["title", "desc", "metadata"];
 export const INLINE_PROPS = [
   "color", "fill", "fill-opacity", "fill-rule", "clip-rule", "opacity",
   "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
-  "stroke-dasharray", "stroke-dashoffset", "stroke-opacity",
+  "stroke-dasharray", "stroke-dashoffset", "stroke-opacity", "stop-color", "stop-opacity",
 ];
 
 export interface CleanOptions {

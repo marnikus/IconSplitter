@@ -30,15 +30,21 @@ class Painter {
   private ctm: Ctm = [1, 0, 0, 1, 0, 0];
   private saved: Ctm[] = [];
   private path: Pt[] = [];
-  private stack: (number | number[])[] = [];
+  private stack: (number | number[] | "dict")[] = [];
   private lineWidth = 1;
   private array: number[] | null = null;
+  private dictDepth = 0;
+  private strokeClip = false;
 
   line(text: string): void {
-    for (const tok of text.replace(/[[\]]/g, " $& ").trim().split(/\s+/).filter((t) => t !== "")) this.token(tok);
+    const spaced = text.replace(/<<|>>|[[\]]/g, " $& ");
+    for (const tok of spaced.trim().split(/\s+/).filter((t) => t !== "")) this.token(tok);
   }
 
   private token(tok: string): void {
+    if (tok === "<<") { this.dictDepth++; return; }
+    if (tok === ">>") { this.dictDepth--; if (this.dictDepth === 0) this.stack.push("dict"); return; }
+    if (this.dictDepth > 0) return;
     if (tok === "[") { this.array = []; return; }
     if (tok === "]") { this.stack.push(this.array ?? []); this.array = null; return; }
     if (/^-?\d/.test(tok)) { (this.array ?? this.stack).push(Number(tok)); return; }
@@ -51,7 +57,7 @@ class Painter {
 
   private operator(op: string): void {
     if (op === "gsave") this.saved.push([...this.ctm]);
-    else if (op === "grestore") this.ctm = this.saved.pop() ?? this.ctm;
+    else if (op === "grestore") { this.ctm = this.saved.pop() ?? this.ctm; this.strokeClip = false; }
     else if (op === "concat") this.ctm = multiply(this.ctm, (this.stack.pop() as number[]) as Ctm);
     else if (op === "newpath") this.path = [];
     else if (op === "moveto" || op === "lineto") this.path.push(this.point(this.nums(2)));
@@ -60,6 +66,12 @@ class Painter {
     else if (op === "setrgbcolor") this.nums(3);
     else if (op === "setdash") { this.stack.pop(); this.stack.pop(); }
     else if (op === "setlinecap" || op === "setlinejoin" || op === "setmiterlimit") this.nums(1);
+    else if (op === "strokepath") this.strokeClip = true;
+    else if (op === "clip") {
+      const half = this.strokeClip ? (this.lineWidth / 2) * Math.hypot(this.ctm[0], this.ctm[1]) : 0;
+      this.paint(half);
+      this.strokeClip = false;
+    } else if (op === "shfill") this.stack.pop();
     else if (op === "fill") this.paint(0);
     else if (op === "stroke") this.paint((this.lineWidth / 2) * Math.hypot(this.ctm[0], this.ctm[1]));
   }

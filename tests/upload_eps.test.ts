@@ -238,9 +238,55 @@ describe("writeEps — a rounded <rect> is written, exactly, and the fix is repo
   });
 });
 
+describe("writeEps — Level-3 vector gradients (linear + radial + shadow)", () => {
+  it("emits pure vector ShadingType 2 / 3 shfill with stop opacity mixed onto the background", () => {
+    const svg = art(`<defs>`
+      + `<radialGradient id="s" gradientUnits="objectBoundingBox" cx="0.5" cy="0.5" r="0.5">`
+      + `<stop offset="0" stop-color="#000" stop-opacity="1"/>`
+      + `<stop offset="0.65" stop-color="#1f1f1f" stop-opacity="0.25"/>`
+      + `<stop offset="1" stop-color="#474747" stop-opacity="0"/></radialGradient>`
+      + `<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">`
+      + `<stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient></defs>`
+      + `<ellipse cx="50" cy="85" rx="30" ry="6" fill="url(#s)" fill-opacity="0.2" stroke="none"/>`
+      + `<rect x="20" y="15" width="60" height="55" fill="url(#g)" stroke="url(#g)" stroke-width="2"/>`);
+    const result = writeEps(svg, "#ffffff");
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.eps).toContain("/ShadingType 3");
+    expect(result.eps).toContain("/ShadingType 2");
+    expect(result.eps).toContain("strokepath clip newpath");
+    expect(result.eps).toContain("shfill");
+    expect(verifyEps(result.eps).ok).toBe(true);
+    const run = runPostScript(result.eps);
+    expect(run.errors).toEqual([]);
+    const box = hiResBox(result.eps);
+    expect(run.painted!.urx).toBeLessThanOrEqual(box.urx + 1e-6);
+    expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
+  });
+
+  it("handles 0-stop (none), 1-stop (solid), coincident stop offsets and rejects non-pad spreadMethod", () => {
+    const edge = art(`<defs>`
+      + `<linearGradient id="empty"/>`
+      + `<linearGradient id="one"><stop stop-color="#ff0000" stop-opacity="0.5"/></linearGradient>`
+      + `<linearGradient id="step"><stop offset="0.5" stop-color="#f00"/><stop offset="0.5" stop-color="#0f0"/></linearGradient>`
+      + `</defs>`
+      + `<rect x="0" y="0" width="10" height="10" fill="url(#empty)"/>`
+      + `<rect x="10" y="10" width="10" height="10" fill="url(#one)"/>`
+      + `<rect x="20" y="20" width="10" height="10" fill="url(#step)"/>`);
+    const ok = writeEps(edge, "#ffffff");
+    if (!ok.ok) throw new Error(ok.reason);
+    expect(ok.shapes).toBe(2);
+    expect(verifyEps(ok.eps).ok).toBe(true);
+
+    const reflect = art(`<defs><linearGradient id="r" spreadMethod="reflect"><stop stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>`
+      + `<rect x="1" y="1" width="10" height="10" fill="url(#r)"/>`);
+    expect(writeEps(reflect, "#ffffff").ok).toBe(false);
+  });
+});
+
 describe("writeEps — honest subset failures (never guessed)", () => {
   const failures: [string, string][] = [
-    ["gradient fill", `<rect x="1" y="1" width="4" height="4" fill="url(#g)"/>`],
+    ["unresolved paint server", `<rect x="1" y="1" width="4" height="4" fill="url(#missing)"/>`],
+    ["pattern fill", `<defs><pattern id="p" width="4" height="4"/></defs><rect x="1" y="1" width="4" height="4" fill="url(#p)"/>`],
     ["text", `<text x="1" y="9">hi</text>`],
     ["image", `<image href="x.png" x="0" y="0" width="4" height="4"/>`],
     ["use", `<use href="#x"/>`],

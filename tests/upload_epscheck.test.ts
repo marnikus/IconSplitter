@@ -52,4 +52,16 @@ describe("checkPostScript — operand arity and types", () => {
     const program = "gsave\n[1 0 0 1 0 0] concat\nnewpath 0 0 moveto 2 2 lineto 0 0 0 setrgbcolor fill\ngrestore\n1 0 0 setrgbcolor stroke";
     expect(checkPostScript(program)).toEqual(["line 5: stroke has no current path"]);
   });
+
+  it("checks Level-3 smooth shading dictionaries, clip, strokepath and shfill", () => {
+    const ok = "gsave\nnewpath 0 0 moveto 4 0 lineto 4 4 lineto closepath\nclip newpath\n"
+      + "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 4 4] /Extend [true true] "
+      + "/Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1 >> >> shfill\ngrestore";
+    expect(checkPostScript(ok)).toEqual([]);
+    expect(checkPostScript("1 shfill")).toEqual(["line 1: shfill expects a dict, found number"]);
+    expect(checkPostScript("shfill")).toEqual(["line 1: shfill expects 1 operand, found 0"]);
+    expect(checkPostScript("newpath clip")).toEqual(["line 1: clip has no current path"]);
+    expect(checkPostScript("newpath strokepath")).toEqual(["line 1: strokepath has no current path"]);
+    expect(checkPostScript("<< /ShadingType 2")).toEqual(["end: a dictionary is never closed"]);
+  });
 });

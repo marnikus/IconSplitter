@@ -109,6 +109,12 @@ function shapeBounds(el: Element, stroke: Stroke, ctm: Matrix, strokeVisible: bo
   return grow(device, extra);
 }
 
+/** Local unstroked geometry bounds for SVG `objectBoundingBox` gradient units. */
+export function localShapeBounds(el: Element): Bounds | null {
+  const g = shapeGeometry(el);
+  return g === null ? null : hullOf(g.hull, { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+}
+
 /** The stroke extension in local units: the largest cap/join reach. */
 function strokeExtraOf(g: ShapeGeom, stroke: Stroke, strokeVisible: boolean): number {
   if (!strokeVisible || stroke.none || stroke.width <= 0) return 0;
