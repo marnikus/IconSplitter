@@ -1,6 +1,8 @@
 // BatchProgress.ts — persistent progress model for batch split (reuses SVG progress pattern)
 // Pure arithmetic, no React, testable (RULE 3)
 
+import { processTotals } from "../lib/processprogress";
+
 export interface BatchProgress {
   runId: string;
   startedAt: number;
@@ -21,10 +23,8 @@ export interface BatchTotals {
 }
 
 export function batchTotals(p: BatchProgress | null): BatchTotals {
-  if (!p) return { done: 0, left: 0, percent: 0, images: 0 };
-  const left = Math.max(0, p.total - p.done);
-  const percent = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-  return { done: p.done, left, percent, images: p.total };
+  const { done, left, percent, total } = processTotals(p);
+  return { done, left, percent, images: total };
 }
 
 export function makeBatchProgress(total: number, runId: string): BatchProgress {

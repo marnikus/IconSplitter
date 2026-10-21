@@ -2,6 +2,7 @@
 // Portalled to #batch-progress-mount so it stays visible when switching tabs
 
 import { useEffect, useState } from "react";
+import ProcessProgressBar from "../ui/ProcessProgressBar";
 import { createPortal } from "react-dom";
 import { batchTotals, type BatchProgress } from "./BatchProgress";
 import type { Row } from "./useBatchTypes";
@@ -60,70 +61,32 @@ function useCurrent(props: Props) {
 }
 
 function RunningBar(props: Props & { mode: Mode; onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const mode = props.mode ?? "split";
-  const { done, left, percent, total, currentRow } = useCurrent(props) as ReturnType<typeof useCurrent> & { done: number };
+  const mode = props.mode;
+  const { done, left, percent, total, currentRow } = useCurrent(props);
   const currentName = props.progress?.currentName ?? currentRow?.name ?? "";
   const title = mode === "preview" ? `Previewing splits · ${total} files` : `Splitting icons · ${total} files`;
   return (
-    <div className="batch-progress-header" data-testid={testId(mode, "progress-header")}>
-      <div className="batch-progress-left">
-        <ProgressThumb thumbFor={props.thumbFor} relPath={props.progress?.currentRelPath ?? null} name={currentName} mode={mode} />
-        <div className="batch-progress-text">
-          <strong data-testid={testId(mode, "progress-title")}>{title}</strong>
-          <span className="batch-progress-file" data-testid={testId(mode, "progress-file")} title={currentName}>{currentName}</span>
-        </div>
-      </div>
-      <div className="batch-progress-center">
-        <Track percent={percent} testid={testId(mode, "progress-track")} />
-        <div className="batch-progress-stats">
-          <span data-testid={testId(mode, "progress-completed")}>{done} completed / {total}</span>
-          <span data-testid={testId(mode, "progress-remaining")}>{left} remaining</span>
-        </div>
-      </div>
-      <div className="batch-progress-right">
-        <span className="batch-progress-percent" data-testid={testId(mode, "progress-percent")}>{percent}%</span>
-        <button type="button" className="svg-btn tiny" data-testid={testId(mode, "progress-cancel")} onClick={props.onCancelClick}>✕ Cancel {mode === "preview" ? "preview" : "batch"}</button>
-      </div>
-    </div>
+    <ProcessProgressBar prefix={mode === "preview" ? "batch-preview" : "batch"} theme="batch" title={title} detail={currentName}
+      done={done} total={total} remaining={left} percent={percent}
+      leading={<ProgressThumb thumbFor={props.thumbFor} relPath={props.progress?.currentRelPath ?? null} name={currentName} mode={mode} />}
+      actions={<button type="button" className="svg-btn tiny" data-testid={testId(mode, "progress-cancel")} onClick={props.onCancelClick}>✕ Cancel {mode === "preview" ? "preview" : "batch"}</button>} />
   );
 }
 
 function CompleteBar(props: Props & { mode: Mode; onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const mode = props.mode ?? "split";
-  const { done, total } = useCurrent(props) as ReturnType<typeof useCurrent> & { done: number; total: number };
+  const mode = props.mode;
+  const { done, total } = useCurrent(props);
   const saved = props.progress?.saved ?? done;
   const title = mode === "preview" ? "Preview complete" : "Batch split complete";
   const sub = mode === "preview" ? `${saved} previews · ready` : `${saved} processed · ready`;
   return (
-    <div className="batch-progress-header complete" data-testid={testId(mode, "progress-header")}>
-      <div className="batch-progress-left">
-        <span className="batch-progress-check" aria-hidden="true">✓</span>
-        <div className="batch-progress-text">
-          <strong className="success" data-testid={testId(mode, "progress-title")}>{title}</strong>
-          <span data-testid={testId(mode, "progress-file")}>{sub}</span>
-        </div>
-      </div>
-      <div className="batch-progress-center">
-        <Track percent={100} testid={testId(mode, "progress-track")} />
-        <div className="batch-progress-stats">
-          <span data-testid={testId(mode, "progress-completed")}>{done} completed / {total}</span>
-          <span data-testid={testId(mode, "progress-remaining")}>0 remaining</span>
-        </div>
-      </div>
-      <div className="batch-progress-right">
-        <span className="batch-progress-percent">100%</span>
+    <ProcessProgressBar prefix={mode === "preview" ? "batch-preview" : "batch"} theme="batch" title={title} detail={sub}
+      done={done} total={total} remaining={0} percent={100} complete
+      leading={<span className="batch-progress-check" aria-hidden="true">✓</span>}
+      actions={<>
         <button type="button" className="svg-btn primary tiny" data-testid={testId(mode, "progress-review")} onClick={props.onReview}>→ Review results</button>
         <button type="button" className="batch-progress-close" data-testid={testId(mode, "progress-dismiss")} aria-label="Dismiss" onClick={props.onDismiss}>✕</button>
-      </div>
-    </div>
-  );
-}
-
-function Track({ percent, testid }: { percent: number; testid: string }) {
-  return (
-    <div className="batch-progress-track" data-testid={testid}>
-      <div className="batch-progress-fill" style={{ width: `${percent}%` }} />
-    </div>
+      </>} />
   );
 }
 

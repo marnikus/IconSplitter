@@ -44,6 +44,8 @@ function mountSvgKeyboard(actions: SvgHotActions): void {
 }
 
 beforeEach(() => {
+  // Workbench mounts Sheets too; model discovery must stay on a fake transport.
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
   localStorage.clear();
   resetAppStore();
 });
@@ -51,6 +53,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => ui.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("the shell", () => {
@@ -160,3 +163,18 @@ function svgActions(dialogOpen: boolean): SvgHotActions {
     showCode: vi.fn(), dismissDialog: vi.fn(),
   };
 }
+
+describe("Upload lifetime and shared progress mount", () => {
+  it("keeps Upload mounted after visiting and provides its global progress portal", async () => {
+    mountWorkbench();
+    expect(q('[data-testid="upload-progress-mount"]')).not.toBeNull();
+    await click('[data-testid="tab-upload"]');
+    const shell = q('[data-testid="upload-shell"]') as HTMLElement;
+    expect(shell).not.toBeNull();
+    await click('[data-testid="tab-selection"]');
+    expect(q('[data-testid="upload-shell"]')).toBe(shell);
+    expect(shell.hidden).toBe(true);
+    await click('[data-testid="tab-upload"]');
+    expect(shell.hidden).toBe(false);
+  });
+});

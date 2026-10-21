@@ -90,3 +90,5 @@ contenteditable — so undo still works after using the zoom slider or a checkbo
 | `log-body` / `log-list` / `log-entry` / `log-empty` | the scrolling entries | one `log-entry` per line: level, `feature.action`, ids, detail; `role="log"` |
 | `--app-dock-h` | CSS custom property on `:root` | the dock's height (236 px open, 36 px minimized), published by `src/log/dockheight.ts`; the fixed floats (`svg-toast`, `svg-busy`, `.toast-above-dock`) read it |
 | `scroll-top-btn` | `↑` corner button, `aria-label="Back to top"` | rendered by the shell next to `app-main` — one instance on every tab; `hidden` while the list is at the top, appears past 80 px of scroll; click returns `app-main` to the top (verified 2026-10-15) |
+
+Shared process header/accessibility and Upload portal selectors: [process progress](../sor/process-progress.md#handles).

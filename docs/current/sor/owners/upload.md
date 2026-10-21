@@ -14,3 +14,5 @@ to use the shared outline model; no EPS artwork rasterizer is introduced.
 
 Endpoint policy/validation, pre-expansion application, shared settings UI and
 source-faithful EPS inheritance: [stroke endpoints](../upload-stroke-endpoints.md#owners-and-tests).
+
+Upload progress runner/reducer/header owners: [shared process progress](../process-progress.md#upload-lifecycle).

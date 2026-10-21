@@ -1,7 +1,7 @@
 // Workbench.tsx — top-level shell: mode switch, undo/redo bar, session autosave, activity log
 // Shell is ONE viewport column: nav, scrolling tab area (app-main), log dock last (not overlay).
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import App from "../App";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
@@ -45,6 +45,7 @@ function Shell() {
       <div className="progress-mounts flex flex-col gap-1">
         <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
+        <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
       </div>
       <Nav tab={tab} />
       <main ref={mainRef} className="app-main" data-testid="app-main">
@@ -102,13 +103,17 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
       <div className="svg-shell px-4 py-3" data-testid="svg-shell" hidden={tab !== "generateSvg"}>
         <SvgPanel active={tab === "generateSvg"} />
       </div>
-      {tab === "upload" && (
-        <div className="up-shell px-4 py-3">
-          <UploadPanel />
-        </div>
-      )}
+      <UploadWorkspace active={tab === "upload"} />
     </>
   );
+}
+
+/** Lazy on first visit; after that a hidden panel must not lose an in-flight run. */
+function UploadWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="up-shell px-4 py-3" data-testid="upload-shell" hidden={!active}><UploadPanel active={active} /></div>;
 }
 
 function TabWrapper({ children }: { children: React.ReactNode }) {

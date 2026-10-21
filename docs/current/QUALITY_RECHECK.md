@@ -2978,3 +2978,26 @@ Plan/outcome: `docs/archive/2026-10-21-eps-no-routine-warning/README.md`. Remove
 - Independent GS9.56 raster traps exit 0 for inherited butt/round/square EPS;
   15 endpoint/interior samples match resvg. Rasters are test-only; no runtime
   dependencies added, EPS remains vector only. User fixtures still absent.
+
+## 2026-10-21 — shared batch progress and Upload metadata/export headers
+
+- Plan/results: `docs/archive/2026-10-21-shared-process-progress/README.md`;
+  current contract/reuse API/handles: `sor/process-progress.md`.
+- TDD: three new UI regressions red plus missing shared module suite, then
+  112/112 focused tests green. Tests use real metadata/export stages with gated
+  fake transports/encoders: 0/50/100%, metadata-to-export handoff, cancellation
+  blocking chained export, aborted-item exclusion, independent/stale snapshots,
+  retained/dismissed summaries and a real Workbench cross-tab export/review.
+- Shared header reused by Batch, SVG and Upload, with accessible progressbar
+  values and responsive layout; generic immutable reporter/totals reusable by
+  future batch tasks. Metadata orchestration extracted from hooks; hidden Upload
+  stays mounted after first visit, progress portal stays above navigation,
+  hidden shortcuts are silent. Existing Batch/SVG selectors/actions preserved.
+- Explicit-base quality check passes: common UI 54 lines, pure model 42 lines,
+  Upload adapter 58 lines, metadata runner 220 lines; no new gate violations.
+  Types/lint pass. Fast all five lanes and FULL ALL SIX LANES PASSED; native
+  2.5 s, coverage 172.2 s, build 6.4 s. No timing thresholds changed.
+- 2431/2431 tests, 227 files; library lines 97.81%; new processprogress module
+  100% statements/branches/functions/lines. Existing SVG test teardown stops
+  unfinished runners before restoring transports; shell discovery is stubbed.
+  No dependencies added; generated dist excluded from staging.

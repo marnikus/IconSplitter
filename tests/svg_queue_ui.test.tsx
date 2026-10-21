@@ -162,7 +162,13 @@ async function check(id: string): Promise<void> {
 const callsOf = (t: Transport) => t.calls.map((c) => c.items.map((i) => i.split("/").pop()));
 
 afterEach(async () => {
-  // the popup portals into <body>: unmount, or the next test sees this one's
+  // Stop real runners before their fake transport is restored at teardown.
+  const cancel = host?.querySelector("[data-testid=svg-cancel-run]") as HTMLButtonElement | null;
+  if (cancel) {
+    await act(async () => cancel.click());
+    await waitUntil(() => host.querySelector("[data-testid=svg-cancel-run]") === null, "the test runner to stop", 4000);
+  }
+  // The popup portals into <body>: unmount, or the next test sees this one's.
   if (ui !== undefined) await act(async () => { ui.unmount(); });
   host?.remove();
 });

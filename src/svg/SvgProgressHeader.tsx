@@ -3,6 +3,7 @@
 // Portalled to #svg-progress-mount in Workbench so it stays visible when switching tabs.
 
 import { useEffect, useState } from "react";
+import ProcessProgressBar from "../ui/ProcessProgressBar";
 import { createPortal } from "react-dom";
 import { useSideThumbs } from "../selection/thumbs";
 import type { DirHandleLike } from "../lib/fs";
@@ -63,65 +64,27 @@ function useCurrent(props: Props) {
 }
 
 function RunningBar(props: Props & { onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const { done, left, images, percent, currentRow } = useCurrent(props) as ReturnType<typeof useCurrent> & { done: number };
-  const currentName = (currentRow as SvgRow | null)?.source.name ?? "";
+  const { done, left, images, percent, currentRow } = useCurrent(props);
+  const currentName = currentRow?.source.name ?? "";
   return (
-    <div className="svg-progress-header" data-testid="svg-progress-header">
-      <div className="svg-progress-left">
-        <ProgressThumb rootRef={props.rootRef} row={currentRow as SvgRow | null} />
-        <div className="svg-progress-text">
-          <strong data-testid="svg-progress-title">Generating SVGs · {images} images</strong>
-          <span className="svg-progress-file" data-testid="svg-progress-file" title={currentName}>{currentName}</span>
-        </div>
-      </div>
-      <div className="svg-progress-center">
-        <Track percent={percent} />
-        <div className="svg-progress-stats">
-          <span data-testid="svg-progress-completed">{done} completed / {images}</span>
-          <span data-testid="svg-progress-remaining">{left} remaining</span>
-        </div>
-      </div>
-      <div className="svg-progress-right">
-        <span className="svg-progress-percent" data-testid="svg-progress-percent">{percent}%</span>
-        <button type="button" className="svg-btn tiny" data-testid="svg-progress-cancel" onClick={props.onCancelClick}>✕ Cancel batch</button>
-      </div>
-    </div>
+    <ProcessProgressBar prefix="svg" theme="svg" title={`Generating SVGs · ${images} images`} detail={currentName}
+      done={done} total={images} remaining={left} percent={percent}
+      leading={<ProgressThumb rootRef={props.rootRef} row={currentRow} />}
+      actions={<button type="button" className="svg-btn tiny" data-testid="svg-progress-cancel" onClick={props.onCancelClick}>✕ Cancel batch</button>} />
   );
 }
 
 function CompleteBar(props: Props & { onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const { done, images } = useCurrent(props) as ReturnType<typeof useCurrent> & { done: number };
+  const { done, images } = useCurrent(props);
   const saved = props.progress?.saved ?? done;
   return (
-    <div className="svg-progress-header complete" data-testid="svg-progress-header">
-      <div className="svg-progress-left">
-        <span className="svg-progress-check" aria-hidden="true">✓</span>
-        <div className="svg-progress-text">
-          <strong className="success" data-testid="svg-progress-title">SVG batch complete</strong>
-          <span data-testid="svg-progress-file">{saved} results saved · ready for review</span>
-        </div>
-      </div>
-      <div className="svg-progress-center">
-        <Track percent={100} />
-        <div className="svg-progress-stats">
-          <span data-testid="svg-progress-completed">{done} completed / {images}</span>
-          <span data-testid="svg-progress-remaining">0 remaining</span>
-        </div>
-      </div>
-      <div className="svg-progress-right">
-        <span className="svg-progress-percent">100%</span>
+    <ProcessProgressBar prefix="svg" theme="svg" title="SVG batch complete" detail={`${saved} results saved · ready for review`}
+      done={done} total={images} remaining={0} percent={100} complete
+      leading={<span className="svg-progress-check" aria-hidden="true">✓</span>}
+      actions={<>
         <button type="button" className="svg-btn primary tiny" data-testid="svg-progress-review" onClick={props.onReview}>→ Review results</button>
         <button type="button" className="svg-progress-close" data-testid="svg-progress-dismiss" aria-label="Dismiss" onClick={props.onDismiss}>✕</button>
-      </div>
-    </div>
-  );
-}
-
-function Track({ percent }: { percent: number }) {
-  return (
-    <div className="svg-progress-track" data-testid="svg-progress-track">
-      <div className="svg-progress-fill" style={{ width: `${percent}%` }} />
-    </div>
+      </>} />
   );
 }
 

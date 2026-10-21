@@ -19,8 +19,9 @@ import { JOURNAL_KEY } from "../src/upload/journal";
 import { UPLOAD_JOBS_KEY, forgetRestoreNote } from "../src/upload/jobstore";
 import { getLogState, resetLogStore } from "../src/log/logstore";
 import { saveGeminiKey } from "../src/upload/keystore";
+import Workbench from "../src/ui/Workbench";
 import UploadPanel from "../src/upload/UploadPanel";
-import { resetAppStore } from "../src/state/appstore";
+import { getAppState, setAppState, resetAppStore } from "../src/state/appstore";
 import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import HistoryBar from "../src/ui/HistoryBar";
@@ -352,11 +353,12 @@ function stubClipboard(): { written: string[] } {
   return { written };
 }
 
-async function mount(root: BinDir): Promise<void> {
+async function mount(root: BinDir, workbench = false): Promise<void> {
   stored.set("__upload__", { source: root });
+  if (workbench) setAppState({ tab: "upload" });
   await act(async () => {
     ui = createRoot(host);
-    ui.render(<HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
+    ui.render(workbench ? <Workbench /> : <HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
   });
   await waitFor(() => q("[data-testid=upload-row-count]") !== null, "the list to render");
   await settle();
@@ -2010,5 +2012,152 @@ describe("export — green means a complete committed package", () => {
     const exp = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
     expect([...exp.children.keys()]).toEqual(["fog_AI.svg"]);
     expect((exp.children.get("fog_AI.svg") as BinFile).text).toBe("export junk");
+  });
+});
+
+describe("persistent batch process progress", () => {
+  itSlow("metadata shows real completion fractions, then a dismissible summary", async () => {
+    const transport = geminiTransport(GOOD_ANSWER);
+    const releases: (() => void)[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      await new Promise<void>((resolve) => releases.push(resolve));
+      return transport.fetch(url, init);
+    });
+    await mount(makeRoot());
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_progress_key"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG); await check(ARCH);
+    await click("[data-testid=upload-meta-selected]");
+    expect(q("[data-testid=upload-metadata-progress-header]")).toBeNull();
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => releases.length >= 1, "the first metadata send");
+    const bar = () => q("[data-testid=upload-metadata-progress-track]")!;
+    expect(bar().getAttribute("aria-valuenow")).toBe("0");
+    await act(async () => releases[0]());
+    await waitFor(() => text("[data-testid=upload-metadata-progress-completed]").includes("1 completed / 2"), "first metadata result progress");
+    expect(bar().getAttribute("aria-valuenow")).toBe("50");
+    await waitFor(() => releases.length === 2, "second metadata send");
+    await act(async () => releases[1]());
+    await waitFor(() => text("[data-testid=upload-metadata-progress-title]").includes("complete"), "metadata summary");
+    expect(bar().getAttribute("aria-valuenow")).toBe("100");
+    expect(q("[data-testid=upload-progress]")).toBeNull();
+    await click("[data-testid=upload-metadata-progress-dismiss]");
+    expect(q("[data-testid=upload-metadata-progress-header]")).toBeNull();
+    await click("[data-testid=upload-meta-regenerate-selected]");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => releases.length === 4, "the new regeneration batch");
+    expect(bar().getAttribute("aria-valuenow")).toBe("0");
+    await act(async () => { releases[2](); releases[3](); });
+    await waitFor(() => text("[data-testid=upload-metadata-progress-title]").includes("complete"), "regeneration summary");
+  });
+
+  itSlow("cancelling metadata for Export selected does not launch export or claim full completion", async () => {
+    const transport = geminiTransport(null);
+    vi.stubGlobal("fetch", transport.fetch);
+    const root = makeRegenerationRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_progress_key"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG); await check(ARCH); await check(COURT);
+    await click("[data-testid=upload-export-selected]");
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => transport.calls.length > 0, "metadata in flight");
+    expect(q("[data-testid=upload-metadata-progress-header]")).not.toBeNull();
+    await click("[data-testid=upload-metadata-progress-cancel]");
+    await waitFor(() => text("[data-testid=upload-metadata-progress-title]").includes("cancelled"), "cancelled metadata summary");
+    expect(Number(q("[data-testid=upload-metadata-progress-track]")!.getAttribute("aria-valuenow"))).toBeLessThan(100);
+    expect(q("[data-testid=upload-export-progress-header]")).toBeNull();
+    expect(q("[data-testid=upload-status-export]")).toBeNull();
+    const exported = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
+    expect(exported.children.has("fog.svg")).toBe(false);
+    expect(exported.children.has("arch.svg")).toBe(false);
+  });
+});
+
+
+// Transport gating keeps real runner stages observable without mocking app logic.
+function holdJpegEncodes(): (() => void)[] {
+  const releases: (() => void)[] = [];
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback) {
+    const blob = new Blob([minimalJpeg(this.width, this.height) as BlobPart], { type: "image/jpeg" });
+    releases.push(() => cb(blob));
+  });
+  return releases;
+}
+
+describe("real export batch progress", () => {
+  itSlow("metadata hands off to sequential export, reporting 0%, 50%, 100% from committed packages", async () => {
+    const transport = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", transport.fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_progress_key"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG); await check(ARCH);
+    await click("[data-testid=upload-export-selected]");
+    await waitFor(() => (q("[data-testid=upload-meta-confirm]") as HTMLButtonElement)?.disabled === false, "prepared confirmation");
+    const releases = holdJpegEncodes();
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => releases.length === 1, "first export JPEG");
+    expect(text("[data-testid=upload-metadata-progress-title]")).toContain("complete");
+    const bar = () => q("[data-testid=upload-export-progress-track]")!;
+    expect(bar().getAttribute("aria-valuenow")).toBe("0");
+    expect(text("[data-testid=upload-export-progress-file]")).toContain("_AI.svg");
+    await act(async () => releases[0]());
+    await waitFor(() => releases.length === 2, "second export JPEG");
+    expect(bar().getAttribute("aria-valuenow")).toBe("50");
+    await act(async () => releases[1]());
+    await waitFor(() => text("[data-testid=upload-export-progress-title]").includes("complete"), "export completion");
+    expect(bar().getAttribute("aria-valuenow")).toBe("100");
+    expect(text("[data-testid=upload-export-progress-remaining]")).toBe("0 remaining");
+    expect(fileText(root, `${DIR}/export/fog.svg`)).toContain("<metadata>");
+    expect(fileText(root, `${DIR}/export/arch.svg`)).toContain("<metadata>");
+    expect(transport.calls).toHaveLength(2);
+  });
+
+  itSlow("row export cancellation does not count the aborted item or commit its package", async () => {
+    const root = makeRoot();
+    await mount(root);
+    const releases = holdJpegEncodes();
+    await click(`[data-testid=upload-export-${FOG}]`);
+    await waitFor(() => releases.length === 1, "export JPEG encoding");
+    await click("[data-testid=upload-export-progress-cancel]");
+    await act(async () => releases[0]());
+    await waitFor(() => text("[data-testid=upload-export-progress-title]").includes("cancelled"), "cancelled export summary");
+    expect(q("[data-testid=upload-export-progress-track]")!.getAttribute("aria-valuenow")).toBe("0");
+    const exported = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
+    expect(exported.children.has("fog.svg")).toBe(false);
+    expect(q("[data-testid=upload-status-export]")).toBeNull();
+  });
+});
+
+
+describe("Upload progress outlives its tab", () => {
+  itSlow("keeps the actual export alive above navigation and reviews it without remounting", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
+    await mount(makeRoot(), true);
+    const shell = q('[data-testid="upload-shell"]')!;
+    const releases = holdJpegEncodes();
+    await click(`[data-testid=upload-export-${FOG}]`);
+    await waitFor(() => releases.length === 1, "the export to pause at encode");
+    await click('[data-testid="tab-sheets"]');
+    expect(shell.hidden).toBe(true);
+    const progress = q('[data-testid="upload-export-progress-header"]')!;
+    expect(q('[data-testid="upload-progress-mount"]')!.contains(progress)).toBe(true);
+    expect(progress.closest("[hidden]")).toBeNull();
+    const checked = [...getAppState().upload.checked];
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true })));
+    expect(getAppState().upload.checked).toEqual(checked);
+    await act(async () => releases[0]());
+    await waitFor(() => text('[data-testid="upload-export-progress-title"]').includes("complete"), "hidden-tab export completion");
+    expect(getAppState().tab).toBe("sheets");
+    await click('[data-testid="upload-export-progress-review"]');
+    expect(getAppState().tab).toBe("upload");
+    expect(q('[data-testid="upload-shell"]')).toBe(shell);
+    expect(shell.hidden).toBe(false);
+    expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Processed");
   });
 });

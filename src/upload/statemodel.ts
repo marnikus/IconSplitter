@@ -4,6 +4,7 @@
 // the rules testable without a DOM and keeps the hook itself tiny. Mirrors
 // svg/statemodel; the selection lives in the appstore upload slice (session).
 
+import { applyProcessUpdate, dismissProcess, type ProcessUpdate, type UploadProcessKind, type UploadProgressState } from "./processprogress";
 import type { KeySource } from "../lib/keyvault";
 import type { SentPreview } from "../lib/upload/sentpreview";
 import { useReducer, type Dispatch } from "react";
@@ -24,7 +25,7 @@ import {
 } from "./types";
 
 /** Everything the upload panel shows, in one snapshot. */
-export interface UploadModel {
+export interface UploadModel extends UploadProgressState {
   rootName: string;
   rows: UploadRow[];
   discovery: UploadDiscovery | null;
@@ -64,7 +65,6 @@ export interface UploadModel {
   runningMeta: number;
   /** Export runs in flight. */
   runningExport: number;
-  progress: { done: number; total: number } | null;
 }
 
 /** The fields one run updates on a row (status/stage/record/error/running/stale). */
@@ -96,7 +96,8 @@ export type UploadAction =
   | { type: "previews"; previews: SentPreview[]; preparing: boolean }
   | { type: "meta"; id: string; meta: UploadMetaState }
   | { type: "run"; id: string; run: UploadRunUpdate }
-  | { type: "progress"; progress: { done: number; total: number } | null }
+  | ({ type: "process" } & ProcessUpdate)
+  | { type: "process-dismiss"; kind: UploadProcessKind; runId: string }
   | { type: "running"; kind: "metadata" | "export"; n: number };
 
 /** The previews land on the meta dialog they belong to — never on a new one. */
@@ -153,7 +154,11 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
     const act = a as { id: string; run: UploadRunUpdate };
     return { ...m, rows: restaleRows(m.rows, m.defaults, m.overrides, (r) => r.source.id === act.id ? withStale({ ...r, ...act.run }, act.run.stale ?? r.stale) : r) };
   },
-  progress: (m, a) => ({ ...m, progress: (a as { progress: { done: number; total: number } | null }).progress }),
+  process: (m, a) => ({ ...m, ...applyProcessUpdate(m, a as ProcessUpdate) }),
+  "process-dismiss": (m, a) => {
+    const act = a as { kind: UploadProcessKind; runId: string };
+    return { ...m, ...dismissProcess(m, act.kind, act.runId) };
+  },
   running: (m, a) => {
     const act = a as { kind: "metadata" | "export"; n: number };
     return act.kind === "metadata" ? { ...m, runningMeta: act.n } : { ...m, runningExport: act.n };
@@ -226,7 +231,7 @@ export function initialModel(boot: Boot): UploadModel {
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
-    runningMeta: 0, runningExport: 0, progress: null,
+    runningMeta: 0, runningExport: 0, progress: null, processes: { metadata: null, export: null },
   };
 }
 

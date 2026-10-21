@@ -6,6 +6,8 @@
 // itself (preflight → prepare → optimize → render → embed → eps → validate →
 // atomic commit) lives in runexport + exportstages/validate/commit.
 
+import type { ProcessReporter } from "../lib/processprogress";
+import { startUploadProgress } from "./processprogress";
 import { useCallback, useRef } from "react";
 import { copyFolderText } from "../lib/copypath";
 import { log } from "../log/logstore";
@@ -95,33 +97,53 @@ export async function runExportBatch(
 ): Promise<void> {
   const c = latest.current;
   const root = c.refs.root.current as DirHandleLike | null;
-  if (root === null) return;
+  if (root === null || c.refs.abortExport.current !== null) return;
   const abort = new AbortController();
   c.refs.abortExport.current = abort;
   c.dispatch({ type: "running", kind: "export", n: ids.length });
-  const tally = { done: 0, total: ids.length };
-  let fixed = 0;
-  c.dispatch({ type: "progress", progress: { ...tally } });
-  for (const id of ids) rememberJob(id, "queued");
-  const epsNote = await probeEpsNote(c, ids);
-  if (epsNote !== null) c.say(epsNote, true);
-  for (const id of ids) {
-    if (abort.signal.aborted) break;
-    rememberJob(id, "running");
-    fixed += await exportOne({ latest, root, id, signal: abort.signal, freshMeta });
-    tally.done += 1;
-    c.dispatch({ type: "progress", progress: { ...tally } });
+  const tally = { done: 0, total: ids.length, fixed: 0 };
+  const progress = startUploadProgress(c, "export", ids.length);
+  try {
+    const epsNote = await exportBatchItems({ latest, root, ids, signal: abort.signal, freshMeta, progress, tally });
+    progress.finish(abort.signal.aborted ? "cancelled" : "completed");
+    c.say(exportBatchLine({ ...tally, aborted: abort.signal.aborted, epsNote }));
+  } catch {
+    progress.finish("failed");
+    c.say("Export batch stopped unexpectedly — finished packages are kept", true);
+  } finally {
+    finishBatch(c, { ...tally, aborted: abort.signal.aborted });
   }
-  finishBatch(c, { done: tally.done, total: ids.length, aborted: abort.signal.aborted, fixed, epsNote });
+}
+
+interface ExportBatchWork extends Omit<ExportOneArgs, "id"> {
+  ids: string[];
+  progress: ProcessReporter;
+  tally: { done: number; total: number; fixed: number };
+}
+
+/** One item's completion drives both the batch summary and shared visual count. */
+async function exportBatchItems(work: ExportBatchWork): Promise<string | null> {
+  const c = work.latest.current;
+  for (const id of work.ids) rememberJob(id, "queued");
+  const epsNote = await probeEpsNote(c, work.ids);
+  if (epsNote !== null) c.say(epsNote, true);
+  for (const id of work.ids) {
+    if (work.signal.aborted) break;
+    rememberJob(id, "running");
+    const outcome = await exportOne({ ...work, id });
+    if (outcome.cancelled) break;
+    work.tally.fixed += outcome.fixed;
+    work.tally.done += 1;
+    work.progress.advance();
+  }
+  return epsNote;
 }
 
 /** The batch's end: the run flags off, the cancel logged, the one toast line. */
-function finishBatch(c: UploadCtx, b: { done: number; total: number; aborted: boolean; fixed: number; epsNote: string | null }): void {
+function finishBatch(c: UploadCtx, b: { done: number; total: number; aborted: boolean }): void {
   c.refs.abortExport.current = null;
   c.dispatch({ type: "running", kind: "export", n: 0 });
-  c.dispatch({ type: "progress", progress: null });
   if (b.aborted) log(cancelledSpec(b.total - b.done));
-  c.say(exportBatchLine(b));
 }
 
 /** The helper's URL from the device config + the browser's own fetch (2026-10-09). */
@@ -156,11 +178,11 @@ interface ExportOneArgs {
   freshMeta: ReadonlyMap<string, UploadMetaState>;
 }
 
-/** Runs one export; resolves 1 when its EPS was auto-fixed (the batch toast counts them), else 0. */
-async function exportOne(args: ExportOneArgs): Promise<number> {
+/** One result: count actual completions, not aborted work; retain EPS-fix summary. */
+async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; cancelled: boolean }> {
   const c = args.latest.current;
   const row = rowOf(c, args.id);
-  if (row === null) return 0;
+  if (row === null) return { fixed: 0, cancelled: false };
   c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "", note: "" } });
   const overrides = c.m.overrides[args.id] ?? {};
   const meta = acceptedOf(args.freshMeta.get(args.id) ?? row.meta);
@@ -174,7 +196,7 @@ async function exportOne(args: ExportOneArgs): Promise<number> {
     deps: { converter: browserConverterDeps() },
   });
   applyExportResult(args.latest, args.id, row, result);
-  return result.notes.length > 0 ? 1 : 0;
+  return { fixed: result.notes.length > 0 ? 1 : 0, cancelled: result.status === "cancelled" };
 }
 
 /** The accepted state an export may carry, or null when there is nothing to embed. */

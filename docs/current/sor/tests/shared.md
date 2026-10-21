@@ -35,3 +35,5 @@ Focused test inventory; [all tests](../TESTS.md).
 * `quality_base.test.ts` — `tools/quality.mjs --base/--files`, spawned for
   real: explicit ref/list, loud failure on an unknown ref or a missing file,
   honest empty set for non-src, the shallow-clone fetch hint
+
+Shared progress arithmetic/layout and cross-tab adapter tests: [process progress](../process-progress.md#tests-and-safety).

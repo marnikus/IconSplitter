@@ -73,3 +73,5 @@ Batch:
   persists statuses → UI mirrors (RULE 24). Stop is honoured between items.
 * **Presets:** save/load/delete in localStorage; directory handles persisted
   in IndexedDB per preset name; last-used preset auto-restores on open.
+
+The persistent header now reuses the app-wide [process progress layout](process-progress.md); existing controls and selectors remain unchanged.

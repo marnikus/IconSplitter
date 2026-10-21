@@ -2003,3 +2003,9 @@
 .svg-ai-bar .svg-progress-mini { width: 48px; margin-top: 0; }
 .svg-ai-bar .svg-progress-mini span { animation: v2-pulse 1.2s ease-in-out infinite; }
 .svg-ai-bar .svg-error { flex: 1 1 100%; overflow: hidden; color: var(--v2-red); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* One responsive header layout for all batch processes, including Upload. */
+@media (max-width: 760px) {
+  .process-progress-header { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .process-progress-header > :last-child { justify-content: flex-start; }
+}

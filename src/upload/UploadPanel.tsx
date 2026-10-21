@@ -13,6 +13,7 @@ import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
 import { downloadPlanOf } from "./downloadactions";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
+import UploadProgressHeaders from "./UploadProgressHeaders";
 import UploadBulkBar from "./UploadBulkBar";
 import { selectedShadow } from "./shadowselection";
 import { resettableIds } from "./selectedsettings";
@@ -28,11 +29,11 @@ import type { UploadDiscovery, UploadExclusion } from "./discovery";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { useUploadHotkeys } from "./UploadHotkeys";
 
-export default function UploadPanel() {
+export default function UploadPanel({ active = true }: { active?: boolean }) {
   const g = useUpload();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
-  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, g.dialog === null);
-  useUploadHotkeys({ visible: g.visible, activeId: g.activeId, setActive: g.setActive }, g.dialog === null);
+  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && g.dialog === null);
+  useUploadHotkeys({ visible: g.visible, activeId: g.activeId, setActive: g.setActive }, active && g.dialog === null);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
@@ -46,6 +47,7 @@ export default function UploadPanel() {
         onFilter={g.setFilter} onSort={g.setSort} onClearFilters={g.clearFilters} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
+      <UploadProgressHeaders g={g} />
       <StatusBar g={g} />
       <Dialogs g={g} />
       <Overlay g={g} />

@@ -95,3 +95,5 @@ Only explicit confirmation sends the displayed prompt/input to Gemini; export re
   A truncated answer (`finishReason` `MAX_TOKENS`/`LENGTH`) is `invalid` with the
   provider's own reason and is never accepted, even when the half-written tags
   happen to parse.
+
+Metadata/regeneration progress, cancellation and metadata-to-export handoff: [shared process progress](process-progress.md).

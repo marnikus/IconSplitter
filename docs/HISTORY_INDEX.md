@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-21-shared-process-progress/README.md` | Plan/results for shared batch progress UI and persistent Upload metadata/export progress |
 | `archive/2026-10-21-stroke-endpoints/README.md` | Plan and verification for source-faithful EPS cap/join inheritance and all-stroke endpoint controls |
 | `archive/2026-10-21-eps-no-routine-warning/README.md` | Remove misleading supported-shadow EPS warnings in bulk, rows and both settings scopes; actual export errors and no-raster gate unchanged; full verification passed |
 | `archive/2026-10-21-vector-only-eps/implementation.md` / `verification.md` | Native Level 3 vector gradient implementation and measured results: strict no-raster final-byte gates, 2396 passing coverage tests, independent interpreter checks; full perf lane remains blocked |

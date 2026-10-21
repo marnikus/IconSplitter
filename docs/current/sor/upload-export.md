@@ -111,3 +111,5 @@ EPS delivery also enforces the [vector-only grammar and shading gate](upload-eps
 after metadata, on temporary and final readback, before cached reuse, and before
 Download all. Any raster or unverified program fails the EPS stage/test; a header
 or a matching old export fingerprint alone never certifies it.
+
+Export runner progress, terminal cleanup and cross-tab headers: [shared process progress](process-progress.md).

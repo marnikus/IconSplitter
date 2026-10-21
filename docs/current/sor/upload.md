@@ -82,3 +82,7 @@ opt-in class as Generate SVG → Requesty; design
   unchanged. `src/upload/uploadundo.ts` applies settings live when mounted and
   writes the store directly when unmounted. Neither local files/downloads nor
   a confirmed paid metadata call can be undone.
+
+## Batch progress
+
+Metadata and export use the app-wide [shared progress header](process-progress.md), visible across tab switches with real counts and retained terminal summaries.
