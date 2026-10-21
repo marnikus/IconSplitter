@@ -137,6 +137,142 @@ const INFO = {
   usage: { input: 1, output: 2, total: 3 },
 };
 
+/** Replicates the test webpage's JPEG XMP parser (APP1 segment scan). */
+function readJpegXmpLikeWebpage (bytes: Uint8Array): { title: string; description: string; tags: string[] } | null {
+  // Must match src/lib/upload/jpeg.ts XMP_ID exactly (includes trailing "/" before NUL).
+  const XMP_ID = 'http://ns.adobe.com/xap/1.0/\0';
+  const BEGIN = '<?xpacket begin=';
+  const END = '<?xpacket end=';
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let at = 2;
+  while (at + 4 <= bytes.length) {
+    if (bytes[at] !== 0xff) break;
+    const marker = bytes[at + 1];
+    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { at += 2; continue; }
+    const length = (bytes[at + 2] << 8) | bytes[at + 3];
+    const end = at + 2 + length;
+    if (end > bytes.length) break;
+    if (marker === 0xe1) {
+      const id = new TextEncoder().encode(XMP_ID);
+      const data = bytes.slice(at + 4, end);
+      if (data.length > id.length && id.every((b, i) => data[i] === b)) {
+        const xml = new TextDecoder().decode(data.slice(id.length));
+        return findXmpPacket(xml, BEGIN, END);
+      }
+    }
+    at = end;
+  }
+  return null;
+}
+
+/** Replicates the test webpage's EPS XMP parser (xpacket scan in text). */
+function readEpsXmpLikeWebpage (text: string): { title: string; description: string; tags: string[] } | null {
+  const BEGIN = '<?xpacket begin=';
+  const END = '<?xpacket end=';
+  return findXmpPacket(text, BEGIN, END);
+}
+
+function findXmpPacket (xml: string, begin: string, end: string): { title: string; description: string; tags: string[] } | null {
+  let at = 0;
+  while (at < xml.length) {
+    const start = xml.indexOf(begin, at);
+    if (start < 0) return null;
+    const endStart = xml.indexOf(end, start);
+    if (endStart < 0) return null;
+    const endPos = xml.indexOf('?>', endStart);
+    if (endPos < 0) return null;
+    const packet = xml.slice(start, endPos + 2);
+    const parsed = parseXmpPacket(packet);
+    if (parsed) return parsed;
+    at = endPos + 2;
+  }
+  return null;
+}
+
+function parseXmpPacket (packet: string): { title: string; description: string; tags: string[] } | null {
+  const doc = new DOMParser().parseFromString(packet, 'application/xml');
+  if (doc.querySelector('parsererror')) return null;
+  const title = xmpTextEl(doc, 'title');
+  const description = xmpTextEl(doc, 'description');
+  if (title === null || description === null) return null;
+  const tags = xmpTagsEl(doc);
+  if (!tags.length) return null;
+  return { title, description, tags };
+}
+
+function localNameEl (el: Element): string {
+  const i = el.nodeName.indexOf(':');
+  return i >= 0 ? el.nodeName.slice(i + 1) : el.nodeName;
+}
+
+function xmpTextEl (doc: Document, local: string): string | null {
+  for (const el of Array.from(doc.getElementsByTagName('*'))) {
+    if (localNameEl(el) !== local) continue;
+    const text = (el.textContent || '').trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+function xmpTagsEl (doc: Document): string[] {
+  const subject = Array.from(doc.getElementsByTagName('*')).find((el) => localNameEl(el) === 'subject');
+  if (!subject) return [];
+  return Array.from(subject.getElementsByTagName('*'))
+    .filter((el) => localNameEl(el) === 'li')
+    .map((el) => (el.textContent || '').trim())
+    .filter((t) => t);
+}
+
+describe("webpage XMP parsing — same logic as read-exported-metadata.html and adobe-stock-upload.html", () => {
+  it("reads Title / Description / Tags from exported JPEG bytes (APP1 segment)", async () => {
+    const root = pairRoot(JPEG_SOURCE);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: false };
+    const result = await runExport(args(root, {
+      settings, defaults: settings,
+      metadata: JPEG_META,
+      metadataInfo: { ...INFO, validation: validateMetadata(JPEG_META) },
+      deps: { raster: fakeRaster() },
+    }));
+    expect(result.status).toBe("processed");
+
+    const bytes = await jpegBytes(root);
+    const meta = readJpegXmpLikeWebpage(bytes);
+    expect(meta).not.toBeNull();
+    expect(meta!.title).toBe(JPEG_META.title);
+    expect(meta!.description).toBe(JPEG_META.description);
+    expect(meta!.tags).toEqual(JPEG_META.tags);
+  });
+
+  it("reads Title / Description / Tags from exported EPS text (xpacket stream)", async () => {
+    const root = pairRoot(EPS_SOURCE);
+    const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const result = await runExport(args(root, {
+      settings, defaults: settings,
+      metadata: EPS_META,
+      metadataInfo: { ...INFO, validation: validateMetadata(EPS_META) },
+      deps: { raster: fakeRaster() },
+    }));
+    expect(result.status).toBe("processed");
+
+    const eps = epsText(root);
+    const meta = readEpsXmpLikeWebpage(eps);
+    expect(meta).not.toBeNull();
+    expect(meta!.title).toBe(EPS_META.title);
+    expect(meta!.description).toBe(EPS_META.description);
+    expect(meta!.tags).toEqual(EPS_META.tags);
+  });
+
+  it("returns null for a JPEG without XMP metadata", () => {
+    const bare = minimalJpeg(100, 100);
+    expect(readJpegXmpLikeWebpage(bare)).toBeNull();
+  });
+
+  it("returns null for EPS without XMP metadata", () => {
+    const bareEps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 24 24\n%%EOF\n";
+    expect(readEpsXmpLikeWebpage(bareEps)).toBeNull();
+  });
+});
+
 describe("SVG asset → exported JPEG and EPS carry readable metadata", () => {
   it("writes Title / Description / Tags into the exported JPEG (XMP) and reads them back", async () => {
     const root = pairRoot(JPEG_SOURCE);

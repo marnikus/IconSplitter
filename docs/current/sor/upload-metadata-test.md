@@ -11,7 +11,7 @@ from the file itself — from the EPS at upload, or from the JPEG likewise.
 The library writers (`src/lib/upload/jpeg.ts`, `src/lib/upload/epsmetadata.ts`,
 `src/lib/upload/embed.ts`) and the end-to-end pipeline (`src/upload/runexport.ts`,
 `src/upload/exportstages.ts`, `src/upload/exportcommit.ts`) already implement this.
-What is missing is **verifiable end-to-end evidence**:
+What was missing is **verifiable end-to-end evidence**:
 
 1. No SVG **test assets** exist that get exported end-to-end to JPEG and EPS with
    known Title/Description/Tags.
@@ -20,7 +20,7 @@ What is missing is **verifiable end-to-end evidence**:
 3. No dedicated tests exercise the full "SVG source → export → JPEG+EPS with
    readable metadata → read back from file" flow using those assets.
 
-This change adds exactly that: test assets, a test webpage, and tests.
+This change adds exactly that: test assets, two test webpages, and tests.
 
 ## Requirement (acceptance)
 
@@ -28,11 +28,24 @@ This change adds exactly that: test assets, a test webpage, and tests.
    each a valid minimal icon SVG to be exported to JPEG and EPS respectively.
 2. A test webpage loads an exported JPEG or EPS file (file input), parses its XMP
    metadata, and displays **Title, Description and Tags** read straight from the file.
-3. Vitest tests export each SVG asset to JPEG and EPS through the real pipeline
+3. An Adobe Stock upload simulation page (`adobe-stock-upload.html`) demonstrates
+   exactly what a stock website reads from the uploaded file.
+4. Vitest tests export each SVG asset to JPEG and EPS through the real pipeline
    (with accepted metadata), then read the metadata back from the committed file
    bytes and assert Title/Description/Tags match the test values.
-4. JPEG read-back uses the XMP APP1 segment; EPS read-back uses the XMP pdfmark
+5. Tests also replicate the **exact XMP parsing logic used by the webpages**
+   (raw JPEG APP1 segment scan; raw EPS xpacket scan) and validate it against
+   real exported bytes — so the webpages are proven to work, not just the library.
+6. JPEG read-back uses the XMP APP1 segment; EPS read-back uses the XMP pdfmark
    stream. Both must return exactly the accepted fields.
+
+## Critical implementation detail
+
+The JPEG APP1 XMP identifier (`src/lib/upload/jpeg.ts`, `XMP_ID`) is
+`"http://ns.adobe.com/xap/1.0/\0"` — note the trailing `/` before the NUL byte.
+Any webpage or test that parses JPEG XMP must use this exact identifier, or the
+APP1 segment match will fail and metadata will appear missing. Both test webpages
+and the validation test use this exact constant.
 
 ## Implementation map
 
@@ -44,8 +57,9 @@ This change adds exactly that: test assets, a test webpage, and tests.
 | End-to-end export | `src/upload/runexport.ts` | `runExport` over a fake folder, commits JPEG+EPS+SVG |
 | Fake binary FS | `tests/helpers/binfakefs.ts` | `BinDir`/`BinFile` — byte-exact JPEG round-trip |
 | Test assets | `tests/assets/SVG to JPEG or EPS export tests/` | 2 SVG source files |
-| Test webpage | `tests/assets/SVG to JPEG or EPS export tests/read-exported-metadata.html` | loads JPEG/EPS, displays Title/Description/Tags |
-| Tests | `tests/upload-metadata-export.test.ts` | end-to-end export → JPEG/EPS → read back metadata |
+| Test webpage (metadata reader) | `tests/assets/SVG to JPEG or EPS export tests/read-exported-metadata.html` | loads JPEG/EPS, displays Title/Description/Tags |
+| Adobe Stock simulation page | `tests/assets/SVG to JPEG or EPS export tests/adobe-stock-upload.html` | stock-site-style upload flow with metadata read-back |
+| Tests | `tests/upload-metadata-export.test.ts` | end-to-end export → JPEG/EPS → read back metadata, incl. webpage-logic replication |
 
 ## Test assets (2 SVG source files)
 
@@ -54,37 +68,38 @@ This change adds exactly that: test assets, a test webpage, and tests.
 | `source-for-jpeg.svg` | JPEG | title: `Test icon for JPEG export`; description: `A minimal line icon used to verify JPEG metadata`; tags: `icon, pictogram, vector, stroke, line, editable, web, jpeg, test, metadata` |
 | `source-for-eps.svg` | EPS | title: `Test icon for EPS export`; description: `A minimal line icon used to verify EPS metadata`; tags: `icon, pictogram, vector, stroke, line, editable, web, eps, test, metadata` |
 
-Each SVG is a simple `<svg viewBox="0 0 24 24">` with a single stroked path — inside the EPS subset and JPEG-renderable.
+Each SVG is a simple `<svg viewBox="0 0 24 24">` with stroked geometry — inside the EPS subset and JPEG-renderable.
 
-## Test webpage
+## Test webpages
 
-`read-exported-metadata.html` — a single self-contained HTML page:
+**`read-exported-metadata.html`** — lightweight metadata reader. Choose an exported
+`.jpg`/`.jpeg`/`.eps` file; it parses the XMP (JPEG: APP1 segment after SOI; EPS:
+xpacket in the pdfmark stream) and displays Title, Description and Tags.
 
-* File `<input accept=".jpg,.jpeg,.eps">` to choose an exported file.
-* On choose, read the file bytes and parse XMP:
-  * JPEG: find the `APP1` segment after `SOI` carrying the XMP id (`http://ns.adobe.com/xap/1.0\0`), extract the packet XML, read `dc:title`, `dc:description`, `dc:subject`/`rdf:li`.
-  * EPS: find the `<?xpacket ... ?>` XMP packet inside the pdfmark stream, read the same three Dublin Core fields.
-* Display **Title**, **Description**, **Tags** (comma-joined) read straight from the file — proving the stock-site reader can get them from the uploaded file itself.
-* A "clear" button and a "no metadata found" state.
-
-The page is dependency-free (plain DOM + `TextDecoder`/`TextEncoder`), so it opens directly in a browser and needs no build step.
+**`adobe-stock-upload.html`** — Adobe Stock upload simulation. Same parsing logic,
+plus a "Continue to submit" button enabled only when metadata is readable, an alert
+showing exactly what the stock site would receive, and clear success/warning states.
+Both pages are dependency-free (plain DOM + `TextDecoder`/`TextEncoder`), open
+directly in a browser, need no build step.
 
 ## Test steps (automated)
 
 For each of the 2 SVG assets:
 
 1. Build a fake folder containing the SVG source + its approved sidecar (as `runExport` expects).
-2. Call `runExport` with accepted metadata (Title/Description/Tags from the table above) and `includeEps: true`, using a fake raster that encodes a real minimal JPEG of the target size.
+2. Call `runExport` with accepted metadata and `includeEps: true`, using a fake raster that encodes a real minimal JPEG of the target size.
 3. Assert status `processed` and outputs `{ svg, jpg, eps }` all present.
 4. Read the committed JPEG bytes; `readXmpMetadata(jpeg)` must equal the test metadata; `verifyJpeg(...).ok` must be true.
 5. Read the committed EPS text; `readXmpMetadataFromEps(eps)` must equal the test metadata; `verifyEpsMetadata(eps, meta)` must be true.
-6. (Metadata edit) Re-export with a changed title; assert the JPEG and EPS read back the **edited** title without re-rendering.
+6. Replicate the webpage's exact XMP parsing (raw APP1 segment scan for JPEG; raw xpacket scan for EPS) against the committed bytes — asserts the webpages will read the metadata correctly.
+7. Negative cases: JPEG without XMP → null; EPS without XMP → null.
+8. (Metadata edit) Re-export with a changed title; assert the JPEG and EPS read back the **edited** title without re-rendering.
 
 ## Verification
 
 * `npx tsc --noEmit` — clean.
 * `npm run lint` — 0 errors in touched files.
 * `npm run quality:changed` — gate passed.
-* New vitest suite `tests/upload-metadata-export.test.ts` — green.
-* Full upload suite stays green (no regressions).
-* The HTML test webpage opens in a browser and displays Title/Description/Tags when an exported JPEG/EPS is chosen.
+* New vitest suite `tests/upload-metadata-export.test.ts` — green (7 tests).
+* Full upload suite stays green (835 tests, 63 files, no regressions).
+* The HTML test webpages open in a browser and display Title/Description/Tags when an exported JPEG/EPS is chosen.

@@ -72,7 +72,8 @@
   const outTags = document.getElementById('out-tags');
   const clearBtn = document.getElementById('clear');
 
-  const XMP_ID = 'http://ns.adobe.com/xap/1.0\0';
+  // Must match src/lib/upload/jpeg.ts XMP_ID exactly (includes trailing "/" before NUL).
+  const XMP_ID = 'http://ns.adobe.com/xap/1.0/\0';
   const BEGIN = '<?xpacket begin=';
   const END = '<?xpacket end=';
 

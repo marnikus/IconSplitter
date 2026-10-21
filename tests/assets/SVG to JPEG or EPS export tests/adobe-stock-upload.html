@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Adobe Stock Upload — Metadata Read Test (IconSplitter)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #f5f5f7; color: #1d1d1f; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 32px 20px; }
+  header { margin-bottom: 8px; }
+  h1 { font-size: 27px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.005em; }
+  p.sub { color: #86868b; font-size: 13px; margin: 0 0 24px; }
+  .panel { background: #fff; border: 1px solid #d2d2d7; border-radius: 14px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .panel h2 { font-size: 15px; margin: 0 0 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #6e6e73; }
+  .drop { border: 2px dashed #c7c7cc; border-radius: 12px; padding: 40px 24px; text-align: center; background: #fafafa; cursor: pointer; transition: border-color 0.2s; }
+  .drop.drag-over { border-color: #007aff; background: #eef4ff; }
+  .drop input { display: none; }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop p { margin: 4px 0; color: #424245; font-size: 15px; }
+  .drop p.kind { color: #86868b; font-size: 12px; margin-top: 8px; }
+  .btn-file { color: #007aff; text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; }
+  .btn-file:hover { border-bottom-color: #007aff; }
+  .card { display: none; }
+  .card.show { display: block; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #86868b; margin-bottom: 6px; }
+  .value { font-size: 17px; white-space: pre-wrap; word-break: break-word; color: #1d1d1f; }
+  .tags-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: #f0f0f3; border: 1px solid #d2d2d7; border-radius: 8px; padding: 4px 10px; font-size: 13px; color: #1d1d1f; }
+  .tags-empty { color: #86868b; font-size: 15px; }
+  .btn { background: #007aff; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 10px; }
+  .btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+  .btn:hover:not(:disabled) { background: #0062cc; }
+  .warn { color: #d43d0d; font-size: 13px; margin-top: 10px; display: none; }
+  .ok { color: #34c759; font-size: 13px; margin-top: 10px; display: none; }
+  .note { font-size: 12px; color: #86868b; margin-top: 16px; border-top: 1px solid #e5e5ea; padding-top: 14px; }
+  .format-badge { display: inline-block; background: #e5e5ea; color: #6e6e73; font-size: 11px; font-weight: 600; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
+</style>
+<div class="wrap">
+  <header>
+    <h1>Adobe Stock Upload — Metadata Read Test</h1>
+    <p class="sub">Simulates what Adobe Stock reads from an uploaded image file. Upload an exported <b>.jpg</b>, <b>.jpeg</b> or <b>.eps</b> file to verify Title, Description and Tags are embedded and readable.</p>
+  </header>
+
+  <div class="panel">
+    <h2>1. Upload exported file</h2>
+    <div class="drop" id="drop">
+      <input type="file" id="file" accept=".jpg,.jpeg,.eps,.epsf">
+      <div class="drop-icon">&#128247;</div>
+      <p>Choose file</p>
+      <p>or drag and drop an exported JPEG or EPS here</p>
+      <p class="kind" id="kind"></p>
+      <p class="btn-file" id="choose">Choose file</p>
+    </div>
+    <div class="warn" id="warn">No XMP metadata found in this file. The file was not exported with IconSplitter metadata, or the metadata could not be read.</div>
+    <div class="ok" id="ok">Metadata readable — this is what Adobe Stock will see when you upload this file.</div>
+  </div>
+
+  <div class="panel card" id="card">
+    <h2>2. Metadata read from file</h2>
+    <div class="field">
+      <div class="label">Title <span class="format-badge">dc:title</span></div>
+      <div class="value" id="out-title">—</div>
+    </div>
+    <div class="field">
+      <div class="label">Description <span class="format-badge">dc:description</span></div>
+      <div class="value" id="out-desc">—</div>
+    </div>
+    <div class="field">
+      <div class="label">Keywords / Tags <span class="format-badge">dc:subject</span></div>
+      <div class="tags-row" id="out-tags"></div>
+      <div class="tags-empty" id="out-tags-empty">—</div>
+    </div>
+    <button class="btn" id="submit" disabled>Continue to submit (metadata verified)</button>
+  </div>
+
+  <div class="note">
+    <strong>How this works:</strong> IconSplitter embeds accepted metadata (Title, Description, Tags) as XMP directly into the exported file — XMP APP1 segment for JPEG, XMP pdfmark stream for EPS, and Dublin Core <metadata> block for SVG. When you upload this file to a stock website, the site reads those fields straight from the file — no sidecar needed.<br><br>
+    JPEG: XMP packet in the first APP1 segment after SOI.<br>
+    EPS: XMP packet in the pdfmark metadata stream bracketed by BDC/EMC.<br>
+    SVG: <title>, <desc> and Dublin Core <metadata> RDF block.
+  </div>
+</div>
+<script>
+(function () {
+  const fileInput = document.getElementById('file');
+  const drop = document.getElementById('drop');
+  const kindEl = document.getElementById('kind');
+  const card = document.getElementById('card');
+  const warn = document.getElementById('warn');
+  const ok = document.getElementById('ok');
+  const outTitle = document.getElementById('out-title');
+  const outDesc = document.getElementById('out-desc');
+  const outTags = document.getElementById('out-tags');
+  const outTagsEmpty = document.getElementById('out-tags-empty');
+  const submitBtn = document.getElementById('submit');
+  const chooseBtn = document.getElementById('choose');
+
+  // Must match src/lib/upload/jpeg.ts XMP_ID exactly (includes trailing "/" before NUL).
+  const XMP_ID = 'http://ns.adobe.com/xap/1.0/\0';
+  const BEGIN = '<?xpacket begin=';
+  const END = '<?xpacket end=';
+
+  function reset () {
+    card.classList.remove('show');
+    warn.style.display = 'none';
+    ok.style.display = 'none';
+    outTitle.textContent = '—';
+    outDesc.textContent = '—';
+    outTags.innerHTML = '';
+    outTagsEmpty.style.display = 'block';
+    submitBtn.disabled = true;
+    kindEl.textContent = '';
+  }
+
+  function show (meta) {
+    card.classList.add('show');
+    warn.style.display = 'none';
+    ok.style.display = 'block';
+    outTitle.textContent = meta.title || '—';
+    outDesc.textContent = meta.description || '—';
+    outTags.innerHTML = '';
+    outTagsEmpty.style.display = 'block';
+    if (meta.tags && meta.tags.length) {
+      outTagsEmpty.style.display = 'none';
+      meta.tags.forEach((tag) => {
+        const el = document.createElement('span');
+        el.className = 'tag';
+        el.textContent = tag;
+        outTags.appendChild(el);
+      });
+    }
+    submitBtn.disabled = false;
+  }
+
+  function fail () {
+    card.classList.remove('show');
+    warn.style.display = 'block';
+    ok.style.display = 'none';
+    outTitle.textContent = '—';
+    outDesc.textContent = '—';
+    outTags.innerHTML = '';
+    outTagsEmpty.style.display = 'block';
+    submitBtn.disabled = true;
+  }
+
+  // --- XMP packet parsing (shared by JPEG and EPS) -------------------------
+
+  function findPacket (xml) {
+    let at = 0;
+    while (at < xml.length) {
+      const start = xml.indexOf(BEGIN, at);
+      if (start < 0) return null;
+      const endStart = xml.indexOf(END, start);
+      if (endStart < 0) return null;
+      const end = xml.indexOf('?>', endStart);
+      if (end < 0) return null;
+      const packet = xml.slice(start, end + 2);
+      const parsed = parsePacket(packet);
+      if (parsed) return parsed;
+      at = end + 2;
+    }
+    return null;
+  }
+
+  function parsePacket (packet) {
+    const doc = new DOMParser().parseFromString(packet, 'application/xml');
+    if (doc.querySelector('parsererror')) return null;
+    const title = xmpText(doc, 'title');
+    const description = xmpText(doc, 'description');
+    if (title === null || description === null) return null;
+    const tags = xmpTags(doc);
+    if (!tags.length) return null;
+    return { title, description, tags };
+  }
+
+  function localName (el) {
+    const i = el.nodeName.indexOf(':');
+    return i >= 0 ? el.nodeName.slice(i + 1) : el.nodeName;
+  }
+
+  function xmpText (doc, local) {
+    for (const el of Array.from(doc.getElementsByTagName('*'))) {
+      if (localName(el) !== local) continue;
+      const text = (el.textContent || '').trim();
+      if (text) return text;
+    }
+    return null;
+  }
+
+  function xmpTags (doc) {
+    const subject = Array.from(doc.getElementsByTagName('*')).find((el) => localName(el) === 'subject');
+    if (!subject) return [];
+    return Array.from(subject.getElementsByTagName('*'))
+      .filter((el) => localName(el) === 'li')
+      .map((el) => (el.textContent || '').trim())
+      .filter((t) => t);
+  }
+
+  // --- JPEG: XMP in the first APP1 segment after SOI -----------------------
+
+  function readJpegXmp (bytes) {
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+    let at = 2;
+    while (at + 4 <= bytes.length) {
+      if (bytes[at] !== 0xff) break;
+      const marker = bytes[at + 1];
+      if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { at += 2; continue; }
+      const length = (bytes[at + 2] << 8) | bytes[at + 3];
+      const end = at + 2 + length;
+      if (end > bytes.length) break;
+      if (marker === 0xe1) {
+        const id = new TextEncoder().encode(XMP_ID);
+        const data = bytes.slice(at + 4, end);
+        if (data.length > id.length && id.every((b, i) => data[i] === b)) {
+          const xml = new TextDecoder().decode(data.slice(id.length));
+          return findPacket(xml);
+        }
+      }
+      at = end;
+    }
+    return null;
+  }
+
+  // --- EPS: XMP packet anywhere in the document ----------------------------
+
+  function readEpsXmp (text) {
+    return findPacket(text);
+  }
+
+  // --- file handling -------------------------------------------------------
+
+  async function handleFile (file) {
+    reset();
+    kindEl.textContent = file.name + ' · ' + (file.type || 'application/octet-stream');
+    const ab = await file.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+    let meta;
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.eps') || name.endsWith('.epsf')) {
+      const text = new TextDecoder().decode(bytes);
+      meta = readEpsXmp(text);
+    } else {
+      meta = readJpegXmp(bytes);
+    }
+    if (meta) show(meta);
+    else fail();
+  }
+
+  drop.addEventListener('click', (e) => { if (e.target === drop || e.target.closest('.btn-file')) fileInput.click(); });
+  fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag-over'); });
+  drop.addEventListener('dragleave', () => { drop.classList.remove('drag-over'); });
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  chooseBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+  submitBtn.addEventListener('click', () => {
+    alert('Metadata verified — this is what Adobe Stock would read from the uploaded file.\n\nTitle: ' + outTitle.textContent + '\nDescription: ' + outDesc.textContent + '\nTags: ' + ([...outTags.querySelectorAll('.tag')].map((t) => t.textContent).join(', ') || 'none'));
+  });
+  fileInput.addEventListener('click', reset);
+})();
+</script>
