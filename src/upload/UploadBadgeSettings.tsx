@@ -4,6 +4,7 @@ import {
   clampBadgeOffsetPct, clampBadgeWidthPct, parseBadgeCorner,
   type BadgeCorner, type UploadSettings,
 } from "../lib/upload/settings";
+import UploadBadgeTemplateSetting from "./UploadBadgeTemplateSetting";
 import DraftNumberInput from "../ui/DraftNumberInput";
 import { change, changeMany, Marker, type UploadSettingsDialogProps } from "./settingsfield";
 
@@ -20,6 +21,7 @@ export default function UploadBadgeSettings({ p, effective }: { p: UploadSetting
       {p.id === null && <small className="up-hint" data-testid="upload-badge-defaults-note">
         These defaults change size and placement, but never turn on an unchecked icon.
       </small>}
+      <UploadBadgeTemplateSetting p={p} effective={effective} />
       <BadgePlacementFields p={p} effective={effective} />
     </div>
   );
@@ -51,9 +53,9 @@ function PerIconBadgeToggle({ p, effective }: { p: UploadSettingsDialogProps; ef
       <label className="up-shadow-check">
         <input type="checkbox" data-testid="upload-set-badge" aria-label="Corner badge on this icon"
           checked={effective.badgeEnabled} onChange={(e) => change(p, "badgeEnabled", e.target.checked)} />
-        Add the supplied graphic
+        Add the badge graphic
       </label>
-      <small className="up-hint">A fixed graphic placed over the SVG in the chosen artboard corner.</small>
+      <small className="up-hint">The selected SVG template placed over the icon in the chosen artboard corner.</small>
     </div>
   );
 }

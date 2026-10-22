@@ -9,7 +9,6 @@ import { fnv1a32 } from "../pairing";
 import type { UploadSettings } from "./settings";
 
 const templateHash = fnv1a32(shadowTemplate).toString(16);
-const badgeTemplateHash = fnv1a32(badgeTemplate).toString(16);
 const sizeGuideTemplateHash = fnv1a32(sizeLabelSmall + sizeLabelLarge).toString(16);
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -24,7 +23,7 @@ export function settingsFingerprint(s: UploadSettings): string {
     ...(s.expandStrokes ? ["expand"] : []),
     ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, templateHash]] : []),
-    ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, badgeTemplateHash]] : []),
+    ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, fnv1a32(s.badgeTemplateSvg || badgeTemplate).toString(16)]] : []),
     ...(s.sizeGuideEnabled ? [["sizeguide", s.sizeGuideCorner, s.sizeGuideSmallPct, s.sizeGuideLargePct,
       round3(s.sizeGuideSmallStrokePx), round3(s.sizeGuideLargeStrokePx), s.sizeGuideGapPct,
       s.sizeGuideOffsetXPct, s.sizeGuideOffsetYPct, sizeGuideTemplateHash]] : []),

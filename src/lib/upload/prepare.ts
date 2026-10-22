@@ -169,6 +169,7 @@ function badgeStageOf(root: Element, settings: UploadSettings): BadgeStage {
   const board = viewBoxOf(root);
   if (board === null) return { failure: fail("no-fit", "the final artboard has no room for the corner badge"), expanded: 0 };
   const badge = appendCornerBadge(root, { width: board.width, height: board.height }, {
+    templateSvg: settings.badgeTemplateSvg,
     corner: settings.badgeCorner, widthPct: settings.badgeWidthPct, strokeLinecap: settings.strokeLinecap,
     offsetXPct: settings.badgeOffsetXPct, offsetYPct: settings.badgeOffsetYPct,
   }, settings.expandStrokes);

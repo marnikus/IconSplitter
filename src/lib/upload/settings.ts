@@ -6,16 +6,16 @@
 // display-only (design §2.12) and lives in lib/zoom.
 // Paints are source/transparent/artwork sentinels or a normalized hex.
 
+import { BADGE_DEFAULTS, normalizeBadge, readBadgeOverrides, type BadgeSettings } from "./settingsbadge";
 import { normalizeStrokeLinecap, readStrokeCapOverride, type StrokeLinecap } from "./strokecaps";
 import { normalizeHex } from "../svgbackground";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
 import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
 import type { EpsConverterId } from "./epsconv/types";
-import type { BadgeCorner } from "./cornerbadge";
 import { normalizeSizeGuide, readSizeGuideOverrides, SIZE_GUIDE_DEFAULTS, SIZE_GUIDE_FIELDS, type SizeGuideSettings } from "./settingssizeguide";
 import {
-  ARTBOARD_MP_DEFAULT, BADGE_OFFSET_DEFAULT, BADGE_WIDTH_DEFAULT, MP_DEFAULT, PADDING_DEFAULT,
+  ARTBOARD_MP_DEFAULT, MP_DEFAULT, PADDING_DEFAULT,
   QUALITY_DEFAULT, SHADOW_GAP_DEFAULT, SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT,
   clampArtboardMegapixels, clampBadgeOffsetPct, clampBadgeWidthPct, clampMegapixels,
   clampPaddingPct, clampQuality, clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
@@ -33,15 +33,9 @@ export {
   type SizeGuideCorner, type SizeGuideSettings,
 } from "./settingssizeguide";
 
-export const BADGE_CORNERS: readonly BadgeCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
-export const BADGE_CORNER_DEFAULT: BadgeCorner = "bottom-right";
+export { BADGE_CORNERS, BADGE_CORNER_DEFAULT, parseBadgeCorner } from "./settingsbadge";
 
-export function parseBadgeCorner(value: unknown): BadgeCorner | null {
-  return typeof value === "string" && BADGE_CORNERS.includes(value as BadgeCorner) ? value as BadgeCorner : null;
-}
-
-
-export interface UploadSettings extends SizeGuideSettings {
+export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
   /** Uniform padding on all four sides, % of the fitted artwork's largest side; null = default (the source's own margins). */
   paddingPct: number | null;
   /** `default` (no artboard rect, 2026-10-19), `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
@@ -94,16 +88,7 @@ export interface UploadSettings extends SizeGuideSettings {
   shadowWidthPct: number;
   /** Clear gap below the final painted icon as a percentage of icon height. */
   shadowGapPct: number;
-  /** The fixed vector badge, opt-in per icon and drawn inside the final artboard. */
-  badgeEnabled: boolean;
-  /** Which artboard edges the badge's inward offsets reference. */
-  badgeCorner: BadgeCorner;
-  /** Requested badge width as a percentage of final artboard width. */
-  badgeWidthPct: number;
-  /** Inward distance from the chosen left/right edge, % of artboard width. */
-  badgeOffsetXPct: number;
-  /** Inward distance from the chosen top/bottom edge, % of artboard height. */
-  badgeOffsetYPct: number;
+
 }
 
 export type SettingsOverrides = Partial<UploadSettings>;
@@ -139,11 +124,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   shadowEnabled: false,
   shadowWidthPct: SHADOW_WIDTH_DEFAULT,
   shadowGapPct: SHADOW_GAP_DEFAULT,
-  badgeEnabled: false,
-  badgeCorner: BADGE_CORNER_DEFAULT,
-  badgeWidthPct: BADGE_WIDTH_DEFAULT,
-  badgeOffsetXPct: BADGE_OFFSET_DEFAULT,
-  badgeOffsetYPct: BADGE_OFFSET_DEFAULT,
+  ...BADGE_DEFAULTS,
   ...SIZE_GUIDE_DEFAULTS,
 };
 
@@ -189,11 +170,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     shadowEnabled: false, // Only an icon override can opt in; persisted defaults must never enable unchecked icons.
     shadowWidthPct: clampShadowWidthPct(raw.shadowWidthPct),
     shadowGapPct: clampShadowGapPct(raw.shadowGapPct),
-    badgeEnabled: false, // The badge also opts in only through per-icon overrides.
-    badgeCorner: parseBadgeCorner(raw.badgeCorner) ?? BADGE_CORNER_DEFAULT,
-    badgeWidthPct: clampBadgeWidthPct(raw.badgeWidthPct),
-    badgeOffsetXPct: clampBadgeOffsetPct(raw.badgeOffsetXPct),
-    badgeOffsetYPct: clampBadgeOffsetPct(raw.badgeOffsetYPct),
+    ...normalizeBadge(raw),
     ...normalizeSizeGuide(raw), // opt-in per icon: a stored `sizeGuideEnabled: true` reads back false
   };
 }
@@ -207,8 +184,7 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   Object.assign(out, readStrokeCapOverride(raw));
   readPaints(raw, out);
   readArtboard(raw, out);
-  const corner = parseBadgeCorner(raw.badgeCorner);
-  if (corner !== null) out.badgeCorner = corner;
+  Object.assign(out, readBadgeOverrides(raw));
   Object.assign(out, readSizeGuideOverrides(raw));
   if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
   return out;
@@ -278,7 +254,7 @@ export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "strokeLinecap", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
   "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
-  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
+  "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
   ...SIZE_GUIDE_FIELDS,
 ];
 

@@ -26,7 +26,7 @@ export const DECORATION_FIELD = {
 /** Every field a decoration owns: its enable flag and its geometry. */
 export const DECORATION_FIELDS: (keyof UploadSettings)[] = [
   "shadowEnabled", "shadowWidthPct", "shadowGapPct",
-  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
+  "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
   ...SIZE_GUIDE_FIELDS,
 ];
 

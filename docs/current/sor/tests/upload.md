@@ -96,3 +96,7 @@ Metadata/export progress, cancellation, handoff and hidden-tab tests: [process p
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
 
 Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [validation guide](../upload-adobe-validation.md).
+
+
+User-defined badge validation, editor, persistence/undo/live preview and actual
+supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-templates).

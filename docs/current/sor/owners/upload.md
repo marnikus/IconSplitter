@@ -20,3 +20,7 @@ Upload progress runner/reducer/header owners: [shared process progress](../proce
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
 
 Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [validation guide](../upload-adobe-validation.md).
+
+
+User-defined badge settings, SVG safety/parser, shared geometry and popup owners:
+[custom SVG templates](../upload-badge.md#custom-svg-templates).

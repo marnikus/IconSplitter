@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-22-custom-badge-template/README.md` | Plan for a validated user SVG badge template editor, shared geometry/output and persisted scope |
 | `archive/2026-10-22-bulk-metadata-accept/README.md` | Selected-only global metadata acceptance, shared validation gate and one sequential re-embed batch |
 | `archive/2026-10-22-metadata-carrier-contract/README.md` | Explicit JPEG/EPS XMP/IPTC contract and optional Creator/Copyright end-to-end support |
 | `archive/2026-10-21-adobe-upload-validation/README.md` | Adobe saved-page investigation and opt-in real upload acceptance; local readback is not Adobe ingestion |

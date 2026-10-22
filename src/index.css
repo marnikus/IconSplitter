@@ -2009,3 +2009,11 @@
   .process-progress-header { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .process-progress-header > :last-child { justify-content: flex-start; }
 }
+
+/* User badge template editor: code remains data, preview is an isolated SVG image. */
+.up-badge-template-backdrop { z-index: 60; }
+.up-badge-template-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+.up-badge-template-code { min-height: 280px; font-family: ui-monospace, monospace; resize: vertical; }
+.up-badge-template-preview { display: grid; place-items: center; min-height: 220px; padding: 16px; border: 1px solid var(--v2-line); border-radius: 6px; background: #fff; color: #43506b; }
+.up-badge-template-preview img { display: block; width: 100%; height: 200px; object-fit: contain; }
+@media (max-width: 640px) { .up-badge-template-grid { grid-template-columns: minmax(0, 1fr); } }

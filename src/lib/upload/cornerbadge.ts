@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
-// A fixed vector badge: the user's seven paths, uniformly baked into a corner
+// A vector badge: the bundled seven paths or a validated user template, baked into a corner
 // of the FINAL artboard. It does not participate in fitting the icon.
+import { appendCustomBadge } from "./custombadge";
 import badgeTemplate from "../../svg/templates/editable-stroke-width.svg?raw";
 import { normalizeStrokeLinecap, setStrokeCap, type StrokeLinecap } from "./strokecaps";
 import { expandStrokes } from "./expand";
@@ -17,6 +18,7 @@ const SOURCE_H = 20;
 export type BadgeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export interface BadgePlacement {
   corner: BadgeCorner;
+  templateSvg?: string;
   strokeLinecap?: StrokeLinecap;
   widthPct: number;
   offsetXPct: number;
@@ -28,14 +30,22 @@ export type BadgeResult = { ok: true; bounds: BadgeBounds; paths: Element[]; exp
 
 interface SourcePath { outline: Outline; fill: boolean }
 
-/** Append the seven supplied paths last; on a refusal the export tree is untouched. */
+/** Append the selected template last; every refusal leaves the export tree untouched. */
 export function appendCornerBadge(
   root: Element, artboard: { width: number; height: number }, placement: BadgePlacement, expand = false,
 ): BadgeResult {
-  const source = readBadgeSource();
-  if (source === null) return unsupported("the bundled corner badge is malformed or exceeds its own viewport");
   if (!validRequest(root, artboard, placement)) return unsupported("invalid corner badge artboard or percentages");
   if (rootOpacityBlocksBadge(root)) return unsupported("the source root opacity, display or visibility would hide or fade the corner badge");
+  return placement.templateSvg ? appendCustomBadge(root, artboard, placement, expand)
+    : appendBundledBadge(root, artboard, placement, expand);
+}
+
+/** Preserve the supplied seven-path graphic's existing rounding, paint and expansion contracts. */
+function appendBundledBadge(
+  root: Element, artboard: { width: number; height: number }, placement: BadgePlacement, expand: boolean,
+): BadgeResult {
+  const source = readBadgeSource();
+  if (source === null) return unsupported("the bundled corner badge is malformed or exceeds its own viewport");
   const bounds = badgeBounds(artboard, placement);
   if (bounds === null) return noFit();
   const baked = bakeBadge(root, source, bounds, { expand, linecap: placement.strokeLinecap });
@@ -95,11 +105,11 @@ function readSourcePath(el: Element, index: number): SourcePath | null {
 }
 
 /** Percentages name distances from the selected edges of the emitted viewBox. */
-function badgeBounds(board: { width: number; height: number }, p: BadgePlacement): BadgeBounds | null {
+export function badgeBounds(board: { width: number; height: number }, p: BadgePlacement, aspect = SOURCE_H / SOURCE_W): BadgeBounds | null {
   const mx = board.width * p.offsetXPct / 100;
   const my = board.height * p.offsetYPct / 100;
-  const width = Math.min(board.width * p.widthPct / 100, board.width - mx, (board.height - my) * SOURCE_W / SOURCE_H);
-  const height = width * SOURCE_H / SOURCE_W;
+  const width = Math.min(board.width * p.widthPct / 100, board.width - mx, (board.height - my) / aspect);
+  const height = width * aspect;
   if (!(Number(fmt(width)) > 0) || !(Number(fmt(height)) > 0)) return null;
   return {
     x: p.corner.endsWith("left") ? mx : board.width - mx - width,
@@ -165,7 +175,7 @@ function setStrokeDefaults(path: Element, width: number): void {
 }
 
 /** Probe only badge paint; source bounds have already been settled separately. */
-function badgeFits(root: Element, board: { width: number; height: number }, paths: readonly Element[]): boolean {
+export function badgeFits(root: Element, board: { width: number; height: number }, paths: readonly Element[]): boolean {
   const probe = root.cloneNode(false) as Element;
   probe.setAttribute("viewBox", `0 0 ${fmt(board.width)} ${fmt(board.height)}`);
   for (const path of paths) probe.appendChild(path.cloneNode(true));

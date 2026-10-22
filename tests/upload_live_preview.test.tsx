@@ -198,6 +198,40 @@ describe("per-icon shadow controls and exact live preview", () => {
 });
 
 describe("per-icon corner badge in the live export preview", () => {
+  it("applies a custom SVG through the popup, persists it, and undo/reset keeps the badge opt-in independent", async () => {
+    await mount();
+    const custom = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30"><rect width="60" height="30" fill="#ff0000"/></svg>';
+    const editor = (id: string) => document.querySelector(`[data-testid="upload-badge-template-${id}"]`) as HTMLElement;
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-badge]");
+    await click("[data-testid=upload-badge-template-edit]");
+    await act(async () => {
+      const area = editor("code") as HTMLTextAreaElement;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(area, custom);
+      area.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => editor("apply").click());
+    await waitUntil(() => art().includes('#ff0000'), "the custom template in the actual row preview", 8000);
+    expect(preview().shadowRoot?.querySelectorAll("path")).toHaveLength(1);
+    expect(loadUploadSettings().overrides[FOG].badgeTemplateSvg).toContain('#ff0000');
+    expect(loadUploadSettings().overrides[FOG].badgeEnabled).toBe(true);
+    await click("[data-testid=upload-set-close]");
+    await click("[data-testid=hist-undo]");
+    await waitUntil(() => !art().includes('#ff0000'), "undo restores the bundled template", 8000);
+    expect(loadUploadSettings().overrides[FOG].badgeEnabled).toBe(true);
+    await click("[data-testid=hist-redo]");
+    await waitUntil(() => art().includes('#ff0000'), "redo restores the custom template", 8000);
+    await unmount();
+    // Fresh panel boot without mount()'s deliberately clean-store fixture setup.
+    await act(async () => { ui = createRoot(host); ui.render(<HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>); });
+    await waitUntil(() => q(`[data-testid=upload-prev-${FOG}]`)?.shadowRoot?.innerHTML.includes('#ff0000') ?? false, "custom template after remount", 8000);
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-reset]");
+    expect(loadUploadSettings().overrides[FOG]).toBeUndefined();
+    // Reset doesn't change defaults; this badge was a local pin, not a selection-applied decoration.
+    expect(loadUploadSettings().defaults.badgeTemplateSvg).toBe('');
+  });
+
   it("updates the same vector preview when the badge is enabled, resized and reset", async () => {
     await mount();
     expect(preview().shadowRoot?.querySelectorAll("path")).toHaveLength(1);

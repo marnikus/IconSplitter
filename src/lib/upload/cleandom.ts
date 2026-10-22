@@ -241,3 +241,6 @@ function alphaName(index: number): string {
   } while (n >= 0);
   return name;
 }
+
+// Reuse the exact paint-only CSS grammar for isolated user-template validation.
+export { parseCssSubset as parsePaintStylesheet, matches as matchesPaintSelector };

@@ -28,7 +28,7 @@ See [conventions](shared.md#i-selector-object-structure--for-every-element) and 
   `.up-shadow-check` label, width/gap disabled when off). Width 10–200%, gap 0–100%;
   `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.
   Supported built-in EPS shadows show no routine warning in either scope.
-- `upload-set-badge-section`: the supplied fixed 412×20 editable-stroke vector.
+- `upload-set-badge-section`: the selected vector graphic ([template editor](upload-badge-template.md)).
   `upload-badge-controls` holds `upload-set-badge-selected` (none/mixed/all) and
   ONE `upload-set-badge-*` placement set under **Badge defaults**; no second
   selected-only block. Per-icon scope adds `upload-set-badge` and
@@ -45,7 +45,6 @@ See [conventions](shared.md#i-selector-object-structure--for-every-element) and 
   `upload-sizeguide-{defaults,fit,expand}-note`.
 
 `upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope**: that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; a blank field does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
-The older text below is kept for the other handles.
 
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
 `upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on

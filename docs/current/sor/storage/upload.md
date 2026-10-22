@@ -19,3 +19,10 @@ Validate on read (RULE 13). Part of the [storage map](../STORAGE.md).
 | `<pair-folder>/export/export.json` | the per-icon export record (schema v1: source/settings fingerprints, svgo + eps tool records, metadata block, outputs with hashes, stage, status, validation, timestamps) | one per icon, no global multi-icon file; written LAST as the commit marker; corrupt/missing → rebuilt, never destroys outputs |
 
 Object URLs from user files are revoked on sheet removal (sheets mode).
+
+
+The badge's `badgeTemplateSvg` field is stored in the same defaults/overrides/
+applied payload. Empty means bundled source; nonempty code must pass the shared
+safe-vector validator on every read. Invalid template data drops only that
+field. No source file or extra asset store is written. See
+[custom badge templates](../upload-badge.md#custom-svg-templates).

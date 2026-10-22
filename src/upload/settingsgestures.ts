@@ -7,7 +7,7 @@ import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 const ENDPOINT_FIELDS: (keyof UploadSettings)[] = ["strokeLinecap"];
 const SHADOW_FIELDS: (keyof UploadSettings)[] = ["shadowEnabled", "shadowWidthPct", "shadowGapPct"];
 const BADGE_FIELDS: (keyof UploadSettings)[] = [
-  "badgeEnabled", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
+  "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
 ];
 
 /** Decoration toggles and committed numbers get one undo entry; other drags still coalesce. */

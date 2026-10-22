@@ -3081,3 +3081,28 @@ Plan: docs/archive/2026-10-22-metadata-carrier-contract/README.md before impleme
 ## 2026-10-22 — Accept metadata for all checked icons
 
 Plan: docs/archive/2026-10-22-bulk-metadata-accept/README.md before code. TDD missing-button and unchecked-row reload failures witnessed then fixed;3 new real-panel tests +12 eligibility/guard cases. Shared row/bulk clean/validate/cache gate, invalid/empty/unchanged skips, edited identity, no paid calls, one sequential re-embed batch with fresh-state map. Restoration cannot import a sibling pair's acceptance. 135 focused tests/6 files pass. Fast5/full6 lanes PASS sequentially,2494 tests/234 files,97.99% lines; native30 tests pass. Full timings types13.8s/lint10.9s/quality0.6s/native2.5s/coverage182.4s/build7.0s. Docs/handles updated, diff check clean; dist and withdrawn Windows changes not staged.
+
+
+## 2026-10-22 — user-defined badge SVG template
+
+Delivered a scope-aware SVG code/preview popup with draft Apply/Cancel/default recovery,
+focus isolation, validated persistence, local-pin undo/redo and actual-template
+fingerprints. Supported replacement vector geometry uses shared bake/copy/caps/
+expansion and bounds proofs in actual preview/SVG/JPEG/native EPS preparation.
+Untrusted code is inert-parsed, allowlisted and resource/effect limited; simple CSS
+preserves specificity/source/inline precedence. Existing bundled badge and checked-only
+opt-in behavior retained. Plan/results: `docs/archive/2026-10-22-custom-badge-template/`.
+
+Measured: initial validator/editor and CSS cascade REDs witnessed; GREEN final focused
+6 files/94 tests. The first aggregate run caught the legacy defaults-shape assertion;
+updated for the new empty template field and reran both full gates sequentially.
+`verify:fast -- --base HEAD`: 5 lanes PASS. `verify -- --base HEAD`: 6 lanes PASS,
+2544 tests/237 files; native perf 30 tests/5 files. Full lane times: types 14.1s,
+lint 12.2s, quality 0.7s, native 2.9s, coverage 205.0s, build 7.6s. src/lib coverage
+98.03% lines, 94.98% statements, 98.02% functions, 89.35% branches. All five new lib
+modules have 100% line/function coverage. Explicit-base changed quality: 15 files PASS;
+no new scoped lint warnings, overrides or baseline changes. Single-file build
+1737.56 kB / gzip 513.08 kB. Actual supplied SVG tested with optimization on/off;
+both user originals unchanged. Raster APIs simulated in unit tests: no independent
+pixel/interpreter or live Adobe/Windows ingestion claim. Dist, dependency reinstall
+line-ending noise and temporary outputs excluded.
