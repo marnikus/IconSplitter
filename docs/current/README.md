@@ -28,7 +28,7 @@ only for the area you will change. Pages ≤ 9 KB (enforced by `tests/docs_navig
 | A RULE n | [RULE 1–25 index](AGENT_RULES.md) → [behaviour](rules/BEHAVIOR.md), [quality](rules/QUALITY.md), [RULE 16 gates](rules/QUALITY_GATES.md), [docs/privacy/delivery](rules/DOCS_AND_SAFETY.md) |
 | Shared list-selection gestures | [RULE 25 matrix](rules/BEHAVIOR.md#rule-25) → [I-73](sor/invariants/shared.md#i-73); then the affected tab's behaviour / selectors / tests row above |
 | Commands and gates | [Code Verification](CODE_VERIFICATION.md); why a gate failed: [ratchet & CI](VERIFICATION_RATCHET.md) |
-| Test runner speed, setup, settling | [test harness](TEST_HARNESS.md) |
+| Harness, coverage and caches | [test harness](TEST_HARNESS.md) |
 | What the app is | [six-mode overview](sor/OVERVIEW.md) |
 
 ## 3. Page conventions

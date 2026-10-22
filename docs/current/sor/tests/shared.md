@@ -31,9 +31,24 @@ Focused test inventory; [all tests](../TESTS.md).
   appears neither in the entry, the stored payload, nor the copied text
 * `verify_runner.test.ts` — the lane plan of `tools/verify.mjs`, spawned for
   real: fast mode runs the suite exactly once (the coverage lane), `--full`
-  adds the standalone lane, lane order, quality-lane args, `--base` passthrough
+  adds the standalone lane, lane order, quality-lane args, `--base` passthrough,
+  incremental/content-cache options and complete `--cold` bypass
 * `quality_base.test.ts` — `tools/quality.mjs --base/--files`, spawned for
   real: explicit ref/list, loud failure on an unknown ref or a missing file,
   honest empty set for non-src, the shallow-clone fetch hint
 
 Shared progress arithmetic/layout and cross-tab adapter tests: [process progress](../process-progress.md#tests-and-safety).
+
+* `harness_policy.test.ts` — resource budgets, exact native ownership, isolation,
+  full source coverage policy and pinned provider / retained V8 audit
+* `harness_node.test.ts`, `harness_isolation_{a,b}.test.*` — lightweight Node
+  bootstrap, real React leaked-root cleanup, body/module/global/storage
+  isolation and working deterministic timer settling
+* `harness_coverage.test.ts` — real provider child run: uncovered function and
+  branch fail 100% thresholds; exercising both passes (no mocked coverage)
+* `harness_static_cache.test.ts` — real ESLint content-cache invalidation with
+  restored timestamps, real TypeScript incremental success-to-type-error edit
+* `harness_benchmark.test.ts` — real command wall time/nonzero propagation,
+  60% boundary, median aggregation, failed/invalid/different-machine rejection
+
+Harness architecture and benchmark instructions: [test harness](../../TEST_HARNESS.md).

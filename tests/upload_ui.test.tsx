@@ -360,7 +360,7 @@ async function mount(root: BinDir, workbench = false): Promise<void> {
     ui = createRoot(host);
     ui.render(workbench ? <Workbench /> : <HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
   });
-  await waitFor(() => q("[data-testid=upload-row-count]") !== null, "the list to render");
+  await waitFor(() => q("[data-testid=upload-audit]") !== null, "the asynchronous scan to complete");
   await settle();
 }
 

@@ -3106,3 +3106,27 @@ no new scoped lint warnings, overrides or baseline changes. Single-file build
 both user originals unchanged. Raster APIs simulated in unit tests: no independent
 pixel/interpreter or live Adobe/Windows ingestion claim. Dist, dependency reinstall
 line-ending noise and temporary outputs excluded.
+
+## 2026-10-22 — isolated full-verification speed redesign
+
+Research/plan/design written before implementation; bounded two-worker VM main,
+serial real-realm native project, pinned official Istanbul 5.0.3, DOM-only React
+bootstrap and tool-owned static caches with explicit --cold. Original 2544
+runtime cases/237 files preserved; 17 added regression cases, final 2561/244
+PASS. Same 167 src/lib files and exact per-file line/function/statement counts;
+98.03% lines, unchanged 80% threshold. Four branch hits differ by provider
+(89.35% V8 vs 89.28% Istanbul), disclosed; V8 audit retained. Real uncovered-code
+threshold, cache invalidation, module/global/storage/root/timer isolation and
+benchmark exit/median/machine canaries pass, including single-worker isolation.
+Standalone types/lint (0 errors, 23 legacy warnings), quality changed vs ecc5ffa,
+fast and full gates PASS. Sequential accepted passing original architecture
+replay 254.9463s (native workers only calibrated 4 -> 1, all six gates/original
+tests); final warm repeats 80.3059s/79.4789s, median79.8924s =68.6630% faster.
+Cold bypass117.3432s =53.9734% faster: 60% cold aspiration NOT met. Initial
+242.80s baseline failed native alarms and is not accepted performance evidence.
+Details/evidence: docs/archive/2026-10-22-test-harness-speed/{results.md,measurements.json}.
+No app algorithms, test assertions, coverage scope or verification gates omitted;
+no intentional live provider calls; generated dist/dependency/cache churn excluded.
+Exact warm candidate times (JSON authoritative): 80.306083791s and 79.478741579s;
+the preceding four-decimal candidate figures have a sub-millisecond transcription
+rounding error; median/reduction and PASS/FAIL results are unchanged.

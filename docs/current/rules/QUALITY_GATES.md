@@ -53,7 +53,7 @@ Floor example: four independent binary outcomes cannot cost less than CC 5. Do n
 
 | Metric | Target | Tool |
 |---|---:|---|
-| Line coverage of `src/lib/` | **≥ 80%**, never decrease vs baseline | `vitest --coverage` (v8) |
+| Line coverage of `src/lib/` | **≥ 80%**, never decrease vs baseline | `vitest --coverage` (Istanbul; V8 audit) |
 | Uncovered **new** functions | **0** without override | coverage diff |
 
 **What "tested" means.** For every new production function: at least one test that would **fail if the function were deleted** or a boolean inverted; empty vs broken distinguished (RULE 4); batch loops tested for per-item failure isolation (RULE 5).

@@ -5,6 +5,7 @@
 // executes every test, so the fast path runs the suite exactly once.
 //
 //   node tools/verify.mjs                  # fast lanes (every commit)
+//   node tools/verify.mjs --cold           # bypass static/transform caches (all gates still run)
 //   node tools/verify.mjs --full           # + uninstrumented perf-budget lane (pre-push)
 //   node tools/verify.mjs --base <ref>     # passes --base to the quality lane (shallow clones)
 //   node tools/verify.mjs --plan [--json]  # prints the lane plan and runs nothing (test seam)
@@ -17,6 +18,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const args = process.argv.slice(2);
 const full = args.includes("--full");
+const cold = args.includes("--cold");
 const planOnly = args.includes("--plan");
 const jsonOut = args.includes("--json");
 
@@ -27,16 +29,19 @@ function baseArgs() {
 }
 
 function lanePlan() {
+  const typeCache = cold ? [] : ["--incremental", "--tsBuildInfoFile", "node_modules/.cache/verify/types.tsbuildinfo"];
+  const lintCache = cold ? [] : ["--cache", "--cache-strategy", "content", "--cache-location", "node_modules/.cache/verify/eslint"];
+  const testCache = cold ? ["--fsModuleCache=false"] : [];
   return [
-    { name: "Types", cmd: "npx", args: ["tsc", "--noEmit"] },
-    { name: "Lint", cmd: "npx", args: ["eslint", "src", "tests", "tools", "--max-warnings", "1000"] },
+    { name: "Types", cmd: "npx", args: ["tsc", "--noEmit", ...typeCache] },
+    { name: "Lint", cmd: "npx", args: ["eslint", "src", "tests", "tools", "--max-warnings", "1000", ...lintCache] },
     { name: "Quality gate (changed)", cmd: "node", args: ["tools/quality.mjs", "--changed", "--allow-legacy", ...baseArgs()] },
     // --full adds the wall-clock budgets WITHOUT coverage instrumentation: the
     // native project only (TEST_HARNESS.md) — the coverage lane already runs
     // every test, so a second full-suite lane would be pure duplication.
-    ...(full ? [{ name: "Perf budgets (native, uninstrumented)", cmd: "npx", args: ["vitest", "run", "--project", "native"] }] : []),
+    ...(full ? [{ name: "Perf budgets (native, uninstrumented)", cmd: "npx", args: ["vitest", "run", "--project", "native", ...testCache] }] : []),
     // PERF_BUDGETS tells wall-clock alarms (algo_efficiency) that instrumentation inflates every run.
-    { name: "Tests + coverage", cmd: "npx", args: ["vitest", "run", "--coverage"], env: { PERF_BUDGETS: "coverage" } },
+    { name: "Tests + coverage", cmd: "npx", args: ["vitest", "run", "--coverage", ...testCache], env: { PERF_BUDGETS: "coverage" } },
     { name: "Build", cmd: "npm", args: ["run", "build"] },
   ];
 }

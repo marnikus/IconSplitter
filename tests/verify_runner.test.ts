@@ -82,3 +82,23 @@ describe("--plan mode itself", () => {
     expect(r.stdout).toContain("npx tsc --noEmit");
   });
 });
+
+describe("honest incremental static checks and explicit cold verification", () => {
+  it("uses compiler-owned incremental checking and content-keyed lint cache, never a cached test success", () => {
+    const lanes = plan("--full");
+    expect(lanes[0].args).toContain("--incremental");
+    expect(lanes[0].args).toContain("--tsBuildInfoFile");
+    expect(lanes[1].args).toContain("--cache");
+    expect(lanes[1].args).toContain("content");
+    expect(lanes.find((l) => l.name === "Tests + coverage")?.args).toEqual(["vitest", "run", "--coverage"]);
+    expect(lanes.at(-1)?.name).toBe("Build");
+  });
+
+  it("cold mode bypasses static and transform caches but keeps every gate", () => {
+    const cold = plan("--full", "--cold");
+    expect(cold.map((l) => l.name)).toEqual(plan("--full").map((l) => l.name));
+    expect(cold[0].args).not.toContain("--incremental");
+    expect(cold[1].args).not.toContain("--cache");
+    for (const lane of vitestLanes(cold)) expect(lane.args).toContain("--fsModuleCache=false");
+  });
+});

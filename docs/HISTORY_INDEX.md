@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-22-test-harness-speed/README.md` / `research.md` / `design.md` | >=60% full-verification speed target, measured provider/worker probes and isolation-preserving redesign |
 | `archive/2026-10-22-custom-badge-template/README.md` | Plan for a validated user SVG badge template editor, shared geometry/output and persisted scope |
 | `archive/2026-10-22-bulk-metadata-accept/README.md` | Selected-only global metadata acceptance, shared validation gate and one sequential re-embed batch |
 | `archive/2026-10-22-metadata-carrier-contract/README.md` | Explicit JPEG/EPS XMP/IPTC contract and optional Creator/Copyright end-to-end support |

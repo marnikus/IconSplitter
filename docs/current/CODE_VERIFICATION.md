@@ -127,8 +127,8 @@ Run before releases and after refactors; zero **new** findings on a diff.
 ### 8. Combined check — one cross-platform runner (lanes 1–6 + build)
 
 ```bash
-npm run verify:fast   # = node tools/verify.mjs — every commit (~1 min)
-npm run verify        # = node tools/verify.mjs --full — before push (~65 s, 2026-10-19)
+npm run verify:fast   # = node tools/verify.mjs — every commit (all tests + coverage)
+npm run verify        # = node tools/verify.mjs --full — before push (all gates)
 ```
 
 Fast lanes: tsc + eslint + quality gate (changed, ratchet) + **one** suite run
@@ -140,6 +140,13 @@ them — instead of a second full suite run.
 `node tools/verify.mjs --plan [--json]` prints the lane plan without running
 it — the contract `tests/verify_runner.test.ts` characterizes.
 `--base <ref>` is forwarded to the quality lane (shallow clones).
+The runner reuses TypeScript incremental and ESLint content caches under
+`node_modules/.cache/verify`; tests/coverage/build are never result-cached.
+`npm run verify -- --cold` bypasses these and Vitest filesystem transforms.
+Default coverage uses pinned official Istanbul; V8 audits remain available.
+Measured warm full verification on the 2-CPU Linux reference is ~80 s versus
+~255 s before; cold ~117 s does **not** reach 60%. Details and isolation/cache
+contracts: [test harness](TEST_HARNESS.md).
 
 ### 9. Browser probes (optional)
 
