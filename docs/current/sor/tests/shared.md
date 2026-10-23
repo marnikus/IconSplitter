@@ -49,6 +49,7 @@ Shared progress arithmetic/layout and cross-tab adapter tests: [process progress
 * `harness_static_cache.test.ts` — real ESLint content-cache invalidation with
   restored timestamps, real TypeScript incremental success-to-type-error edit
 * `harness_benchmark.test.ts` — real command wall time/nonzero propagation,
-  60% boundary, median aggregation, failed/invalid/different-machine rejection
+  default 60% and explicit 50% boundaries, median aggregation, invalid target
+  diagnostics and failed/invalid/different-machine rejection
 
 Harness architecture and benchmark instructions: [test harness](../../TEST_HARNESS.md).

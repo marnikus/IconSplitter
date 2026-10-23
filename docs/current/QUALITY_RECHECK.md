@@ -3130,3 +3130,24 @@ no intentional live provider calls; generated dist/dependency/cache churn exclud
 Exact warm candidate times (JSON authoritative): 80.306083791s and 79.478741579s;
 the preceding four-decimal candidate figures have a sub-millisecond transcription
 rounding error; median/reduction and PASS/FAIL results are unchanged.
+
+## 2026-10-23 — second harness investigation; additional 50% NOT achieved
+
+User selected harness-only/application unchanged. New plan, profiling, rejected
+probes and measured evidence: docs/archive/2026-10-23-harness-round2/. Passing
+current warm baselines76.2973s/73.4715s (median74.8844s; half37.4422s). No tested
+execution change justifies a switch: four VM workers58.66s coverage-only with
+~113 CPU-seconds; heap64 no gain; isolated threads115.64s; Vitest4 warm64.30s;
+main-only vmForks warm56.57s; optimizer83.04s failed cleanup/Selection assertions.
+Retained original architecture, app source/compiler, dependencies, assertions,
+isolation, coverage scope and native budgets. No intentional live provider call
+added; pre-existing blocked-network diagnostics still occur in current suites.
+Only shipped code: --required-reduction percentage comparator option, default60,
+new target50 and invalid-input regressions witnessed RED ->GREEN. Comparison of
+real73.4715s baseline to73.9280s final warm correctly reports target50 FAIL; no
+speedup claimed. Full final81.0645s (post-probe cache revalidation),73.9280s warm,
+108.6925s explicit cold: all six gates PASS. Final2563tests/244files (two new
+comparator regressions), every original discovery entry retained; full coverage
+JSON exactly identical on167src/lib files,98.03%lines. Standalone types, lint
+(0errors/23legacy warnings), quality changed vs0fa074c, fast/full gates PASS.
+Generated dependency/build/cache/private-version/profiling output excluded.

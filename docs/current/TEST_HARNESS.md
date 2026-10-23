@@ -96,7 +96,9 @@ React or quiet tracking; DOM files load `tests/setup/dom.ts`, which:
   `harness_static_cache` proves changed input invalidates cached success.
 - `node tools/harness-benchmark.mjs --output run.json --label warm -- npm run verify`
   records wall time/exit/machine. `--compare before.json after1.json after2.json`
-  checks the candidate median against >=60%; failed or incompatible evidence
+  checks the candidate median against >=60% by default; use
+  `--required-reduction 50` for a new 50% target. Targets must be finite and
+  strictly between 0 and 100. Failed or incompatible evidence
   cannot pass. Keep generated reports outside Git and compare equal conditions.
 
 ## 6. Find the slow file
@@ -109,3 +111,13 @@ npx vitest run --reporter=default --reporter=json --outputFile.json=report.json
 The happy-dom `AbortError: The operation was aborted.` stacks printed at
 worker teardown are pending in-DOM fetches aborted when a file's window
 closes; they were printed by the old harness too and do not fail the run.
+
+## 7. Second-round research (2026-10-23)
+
+Additional 50% reduction was **not achieved**: current warm full baseline
+73–76 s requires <=37–38 s. Extra workers, heap tuning, dependency prebundling,
+real threads, previous Vitest and main-only vmForks did not justify a safe switch.
+Application code/compiler remains unchanged, as explicitly requested. Retain the
+current architecture, not an unproven faster configuration. [Research, measured
+failures and future boundary](../archive/2026-10-23-harness-round2/results.md).
+The new comparator target flag is measurement tooling, **not a speedup**.

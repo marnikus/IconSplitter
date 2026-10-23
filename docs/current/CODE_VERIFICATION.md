@@ -107,7 +107,7 @@ fails, and always with `--reporter=verbose` for a single file you are chasing.
 ### 6. Coverage (RULE 16.3)
 
 ```bash
-npm run coverage             # vitest run --coverage (v8 provider)
+npm run coverage             # vitest run --coverage (Istanbul provider; V8 audit supported)
 ```
 
 - Thresholds enforced in `vitest.config.ts`: `src/lib` lines ≥ 80%.

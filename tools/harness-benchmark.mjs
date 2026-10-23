@@ -44,7 +44,13 @@ function readEvidence(path) {
   return report;
 }
 
-function compare(paths) {
+function compare(args) {
+  const targetIndex = args.indexOf("--required-reduction");
+  const required = targetIndex < 0 ? 60 : Number(args[targetIndex + 1]);
+  if (!Number.isFinite(required) || required <= 0 || required >= 100) {
+    throw new Error("Required reduction must be a finite percentage strictly between 0 and 100.");
+  }
+  const paths = args.filter((_, index) => targetIndex < 0 || (index !== targetIndex && index !== targetIndex + 1));
   if (paths.length < 2) throw new Error("Use --compare baseline.json candidate.json [candidate2.json ...]");
   const [baseline, ...candidates] = paths.map(readEvidence);
   if (candidates.some((r) => Object.keys(baseline.environment).some((key) => r.environment[key] !== baseline.environment[key]))) {
@@ -53,9 +59,9 @@ function compare(paths) {
   const sorted = candidates.map((r) => r.seconds).sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   const after = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-  const passed = after <= baseline.seconds * 0.4;
+  const passed = after <= baseline.seconds * (1 - required / 100);
   console.log(JSON.stringify({ beforeSeconds: baseline.seconds, afterSeconds: after,
-    reductionPct: (1 - after / baseline.seconds) * 100, requiredReductionPct: 60, passed }, null, 2));
+    reductionPct: (1 - after / baseline.seconds) * 100, requiredReductionPct: required, passed }, null, 2));
   return passed ? 0 : 1;
 }
 

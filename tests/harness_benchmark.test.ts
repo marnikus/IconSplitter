@@ -53,3 +53,30 @@ it('records enough machine identity to reject different hardware and invalid CPU
   const other = sample(30); other.environment.cpuModel = 'different';
   expect(cli('--compare', save('before.json', sample(100)), save('other.json', other)).status).toBe(1);
 });
+
+it('supports a requested additional 50% reduction without changing the default 60% target', () => {
+  const before = save('before.json', sample(100));
+  const at = save('at50.json', sample(50));
+  expect(cli('--compare', before, at).status).toBe(1); // default remains 60%
+  const exact = cli('--compare', before, at, '--required-reduction', '50');
+  expect(exact.status, exact.stderr).toBe(0);
+  expect(JSON.parse(exact.stdout)).toMatchObject({ passed: true, requiredReductionPct: 50, reductionPct: 50 });
+  expect(cli('--compare', before, save('miss50.json', sample(50.01)), '--required-reduction', '50').status).toBe(1);
+  const median = cli('--compare', '--required-reduction', '50', before, at,
+    save('faster50.json', sample(20)), save('slower50.json', sample(80)));
+  expect(median.status, median.stderr).toBe(0);
+  expect(JSON.parse(median.stdout)).toMatchObject({ afterSeconds: 50, passed: true });
+});
+
+it('rejects missing, nonnumeric and out-of-range reduction targets with a diagnostic', () => {
+  const before = save('before.json', sample(100));
+  const after = save('after.json', sample(1));
+  for (const value of ['', 'no', 'NaN', 'Infinity', '-1', '0', '100', '101']) {
+    const result = cli('--compare', before, after, '--required-reduction', value);
+    expect(result.status, value).toBe(1);
+    expect(result.stderr, value).toMatch(/reduction.*between 0 and 100/i);
+  }
+  const missing = cli('--compare', before, after, '--required-reduction');
+  expect(missing.status).toBe(1);
+  expect(missing.stderr).toMatch(/reduction.*between 0 and 100/i);
+});
