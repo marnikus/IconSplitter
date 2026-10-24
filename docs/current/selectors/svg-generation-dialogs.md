@@ -18,7 +18,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 | `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size, read from the connection's **Images / request** (no count control in the popup) ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
 | `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
 | `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
-| `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
+| `svg-confirm-queue-note` | shown only while a run is in flight: confirming schedules these N image(s); independent sources can start in parallel, busy sources/full slots wait, and existing runs are not interrupted (I-53) |
 | `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent; regeneration with no saved prompts shows problem and disables confirm |
 | `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
 | `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
@@ -44,9 +44,9 @@ First-time generation uses the main currently loaded prompt shown in `svg-prompt
 Regeneration no longer has a global window in the main toolbar. The prompt is chosen
 **per-batch in the confirmation popup** before anything is sent.
 
-`RegenSettingWindow` (`src/svg/RegenSetting.tsx`) remains as fallback for the front-placement
-path (a row's Regenerate while a run is in flight — no dialog, first in queue) and its
-storage (`iconSplitter.svg.regen.v1`) is still honoured there.
+`RegenSettingWindow` is retained only for direct legacy component/storage use.
+Every row correction now opens this confirmation; no dialog-less front-placement
+path sends paid requests. See [parallel runs](../sor/svg-parallel-runs.md).
 
 ## Confirmation popup handles (regeneration mode)
 

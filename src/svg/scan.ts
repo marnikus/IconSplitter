@@ -1,3 +1,4 @@
+import { hasJobs } from "./jobstate";
 // scan.ts — scanning the picked root for the Generate SVG tab (prompt §1).
 // Owns: restoring the remembered root handle, recursive approved-source
 // discovery, loading every pair file, and committing ONE complete snapshot.
@@ -42,6 +43,7 @@ export interface BootArgs {
 
 /** Scans the root, loads every pair file and commits one complete snapshot. */
 export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> {
+  if (hasJobs(refs)) return s.say("Finish or stop active processes before rescanning", true);
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
   const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
@@ -52,7 +54,7 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
   try {
     const found = await discoverApprovedSources(root);
     const loaded = loadRows(found);
-    if (!isCurrent(refs.seq.current, ticket.id)) return; // a newer scan took over
+    if (!isCurrent(refs.seq.current, ticket.id) || hasJobs(refs)) return; // a newer scan took over
     const key = scanKey(root.name, found, loaded.rows);
     if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
     commit({ refs, setters: s, discovery: found, loaded, key });

@@ -1,3 +1,4 @@
+import { notifyCompletion } from "../ui/completionSound";
 // imgbatchrun.ts — one confirmed square per image-edit request, one explicit
 // review per multi-icon answer, and independent saves to the original pairs.
 // Request-level usage is logged once and each saved cell keeps its share;
@@ -278,6 +279,7 @@ function updateJournal(run: CompositeRun, entries: ImageRequestEvidence[]): void
 }
 
 function finish(run: CompositeRun): void {
+  notifyCompletion(run.id, run.control.stop);
   const { c, tally, discarded, results, prepared } = run;
   c.dispatch({ type: "img-review", review: null });
   c.setBusy(null);

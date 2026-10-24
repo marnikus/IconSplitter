@@ -24,8 +24,9 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { guard, perRequestOf, planOf } from "./runplan";
-import { busy, confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
-import { nextGenerate, regenerateNext } from "./runqueuepath";
+import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
+import { hasJobs } from "./jobstate";
+import { stopSvgRuns } from "./runjobs";
 import type { CancelNote } from "./runcontext";
 import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
@@ -63,7 +64,7 @@ export interface SvgActions extends SvgPromptActions {
   setImageVersion: (id: string, version: number | null) => void;
   applyImageReview: () => void; discardImageReview: () => void;
   dismissImageJournal: (id: string) => void; retryImageUnknown: (id: string) => void;
-  regenerateSelected: (ids: string[]) => void; cancelRun: () => void; confirmGenerate: (batch: ConfirmedBatch) => void;
+  regenerateSelected: (ids: string[]) => void; cancelRun: (id?: string) => void; confirmGenerate: (batch: ConfirmedBatch) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
@@ -81,6 +82,7 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const chooseRoot = useCallback(() => {
     void (async () => {
       const c = latest.current;
+      if (hasJobs(c.refs)) return c.say("Finish or stop active processes before changing the folder", true);
       const picked = await pickFolderFor((h) => { c.refs.root.current = h; c.dispatch({ type: "root", name: h.name }); void rememberRoot(h); });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
       const cap = picked.message === null ? "" : " · full path captured";
@@ -201,11 +203,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
     const perReq = perRequestOf(c, regenForGuard);
     const problems = validateBatchPlan(planOf(c, ids, regenForGuard), perReq);
     if (problems.length > 0) return c.say(problems[0], true);
-    if (placement === "front" && busy(c)) {
-      if (operation === "regenerate") void regenerateNext(c, ids);
-      else nextGenerate(c, ids);
-      return;
-    }
+    void placement; // Row corrections also preview their new prompt before consent.
     const dialog: Dialog = { kind: "confirm", ids, operation };
     log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} · ${operation}` });
     c.dispatch({ type: "dialog", dialog });
@@ -222,10 +220,12 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
 function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "dropQueued"> {
   const latest = useRef(ctx); latest.current = ctx;
   const confirmGenerate = useCallback((batch: ConfirmedBatch) => { void confirmRun(latest.current, batch); }, []);
-  const cancelRun = useCallback(() => {
+  const cancelRun = useCallback((id?: string) => {
     const c = latest.current;
     log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "cancel — keep finished" });
+    if (typeof id === "string") { stopSvgRuns(c, id); return; }
     const dropped = dropQueueForCancel(c);
+    stopSvgRuns(c, undefined, dropped);
     c.refs.abort.current?.abort({ dropped } satisfies CancelNote);
     c.dispatch({ type: "current", id: null });
     c.say(dropped === 0 ? "Cancelling — finished results are kept" : `Cancelling — kept, ${dropped} batch${dropped === 1 ? "" : "es"} dropped`);

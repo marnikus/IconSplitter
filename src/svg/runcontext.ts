@@ -29,12 +29,6 @@ export interface CancelNote {
   dropped: number;
 }
 
-/** What queueing did: how many batches wait now, and how many lost the image (front only). */
-export interface Queued {
-  waiting: number;
-  removedFrom: number;
-}
-
 /** One writer for the queue: the ref first (synchronously), then the mirror. */
 export function setQueue(ctx: RunCtx, queue: QueueItem[]): void {
   ctx.refs.queue.current = queue;

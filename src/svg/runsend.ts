@@ -70,7 +70,7 @@ function journalRequest(ctx: BatchCtx): void {
 /** The id is written the moment it arrives — the journal, then the record. */
 function rememberId(ctx: BatchCtx, id: string): void {
   if (ctx.requestId === null) ctx.requestId = id;
-  attachRequestId(ctx.plan.id, id);
+  attachRequestId(ctx.plan.id, id, ctx.state.runId);
 }
 
 /** The user-facing reason: redacted; a stall names the window and the id. */

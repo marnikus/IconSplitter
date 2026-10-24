@@ -1,3 +1,4 @@
+import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // codeactions.ts — the code/versions/location actions of the Generate SVG tab
 // (prompt §16/§18). Owns reading a version's SVG back off disk, copying the
 // complete validated document, opening the code and versions dialogs, choosing
@@ -67,13 +68,19 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
  * say it in place; a failure changes nothing in the row and claims nothing.
  */
 async function preferOf(ctx: CodeCtx, id: string, version: number): Promise<string | null> {
+  const release = reserveSources(ctx, [id]);
+  if (release === null) return refuse(ctx, SOURCE_BUSY);
+  try { return await savePreferredVersion(ctx, id, version); } finally { release(); }
+}
+
+async function savePreferredVersion(ctx: CodeCtx, id: string, version: number): Promise<string | null> {
   const row = ctx.rows.find((r) => r.source.id === id);
   const chosen = usableVersion(row, version);
   if (!row || chosen === null) return refuse(ctx, "That version has no SVG to show");
   if (row.meta === null) return refuse(ctx, "This pair has no record file yet");
   const root = ctx.refs.root.current as DirHandleLike | null;
   if (root === null) return refuse(ctx, "No folder is open — the choice cannot be saved");
-  const next = withPreferred(row.meta, version);
+  const next = withPreferred(ctx.refs.metas.get(id) ?? row.meta, version);
   try {
     await saveMetaAt(root, row.source.metaPath, next);
   } catch {

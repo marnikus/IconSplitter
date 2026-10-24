@@ -67,6 +67,9 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   valid generated SVG never enter that batch. The shared confirmation says
   "Confirm SVG regeneration"; both actions keep the existing validation,
   versioned-save and confirmation gates.
+* [Parallel runs and completion sound](svg-parallel-runs.md) (I-53/I-57):
+  independent confirmed SVG/image jobs coexist; source conflicts wait or refuse
+  before send, and completed rows can be corrected during remaining work.
 * [Task prompts and batch regeneration](svg-generation-prompts.md) (I-74…I-77):
   the selection chooses a remembered task prompt; the connection's request size
   and frozen current SVG codes govern a confirmed regeneration.
@@ -82,7 +85,7 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   order is the order the user picked, decided in ONE place
   (`lib/selectionorder.inIdOrder`) and read from it by the confirmation's plan
   (`runplan.planOf`), the dialog's own pick list, the queue's label and the
-  runner's sources (`runcontrol.startRun`) — so the contact sheet the dialog
+  runner's sources (`runjobs`) — so the contact sheet the dialog
   draws is the sheet the request carries, cell for cell, whatever order the list
   happens to be sorted in. A cached page is identified by the sheet's own
   content (`lib/svgcomposite.compositeSheetKey`: page label + every source with

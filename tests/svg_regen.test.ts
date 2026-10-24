@@ -142,7 +142,7 @@ describe("regenstore — the setting is stored and read back (RULE 13)", () => {
 
 describe("the plan and the guard read the stored choice (the confirmation shows the same plan)", () => {
   const ctxWithKey = () => ({
-    rows: [], m: { config: { ...DEFAULT_CONFIG, imagesPerRequest: 4 } },
+    rows: [], m: { busy: null, config: { ...DEFAULT_CONFIG, imagesPerRequest: 4 } },
     refs: { root: { current: new FakeDir("root") }, key: { current: "key" } },
   });
 
@@ -160,6 +160,12 @@ describe("the plan and the guard read the stored choice (the confirmation shows 
   it("the guard refuses a current-SVG run with no usable saved prompt, and names why", () => {
     saveRegenSetting({ mode: "current-svg", presetName: "" });
     expect(guard(ctxWithKey() as unknown as SvgCtx, ["a"])).toContain("saved prompt");
+  });
+
+  it("refuses scanning/non-image work but permits independent SVG confirmation during image work", () => {
+    const c = ctxWithKey();
+    expect(guard({ ...c, m: { ...c.m, busy: "Scanning sources" } } as unknown as SvgCtx, ["a"])).toContain("Scanning");
+    expect(guard({ ...c, m: { ...c.m, busy: "Regenerating AI sources: 1 left" } } as unknown as SvgCtx, ["a"])).toBeNull();
   });
 
   it("the guard lets a valid choice through", () => {

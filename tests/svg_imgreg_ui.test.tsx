@@ -25,7 +25,7 @@ import { HistoryProvider } from "../src/state/HistoryProvider";
 import SvgPanel from "../src/svg/SvgPanel";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
-import { transport, type Transport } from "./helpers/svgtransport";
+import { streamFrames, transport, type Transport } from "./helpers/svgtransport";
 import { settle as quietSettle, waitUntil } from "./helpers/quiet";
 
 vi.stubGlobal("indexedDB", fakeIndexedDb.indexedDB);
@@ -793,4 +793,86 @@ describe("image regeneration — tokens and cost on the row", () => {
     expect(cell).toContain("$0.0225 Estimated");
     expect(cell).not.toContain("no cost reported");
   }, 15000);
+});
+
+function twoSourceRoot(): FakeDir {
+  const root = makeRoot();
+  const arch = root.children.get("architecture") as FakeDir;
+  arch.children.set("court.png", new FakeFile("court.png"));
+  arch.children.set("court_AI.png", new FakeFile("court_AI.png"));
+  const own = newPairMeta({ id: pairId("architecture", "court", ""), base: "court", suffix: "", dirPath: "architecture",
+    ai: { relPath: "architecture/court_AI.png", name: "court_AI.png", fingerprint: "4:1000" },
+    source: { relPath: "architecture/court.png", name: "court.png", fingerprint: "4:1000" } });
+  const text = serializePairMeta({ ...own, decision: "approved", reviewedAt: "2026-10-24T10:00:00.000Z" });
+  arch.children.set("court_AI.svg.json", new FakeFile("court_AI.svg.json", text.length, 1000, text));
+  return root;
+}
+
+describe("independent image edits during SVG generation", () => {
+  it("starts an independent image edit without stopping SVG generation and keeps both histories", async () => {
+    const response = deferred<Response>();
+    imageAnswer = () => response.promise;
+    svgT = transport({ mode: "silent" });
+    await mount(twoSourceRoot());
+    await click(q(`[data-testid=svg-generate-${FOG}]`)!);
+    await click(q("[data-testid=svg-confirm-generate]")!);
+    await waitFor(() => svgT.calls.length === 1, "SVG run to start");
+    await choose("[data-testid=svg-connection-select]", "Sunburst");
+    const court = pairId("architecture", "court", "");
+    await click(q(`[data-testid=svg-row-image-regen-${court}]`)!);
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => imageCalls.length === 1, "independent image edit to start");
+    expect(txt(`[data-testid=svg-status-${FOG}]`)).toContain("Generating");
+    expect(q(`[data-testid=svg-ai-running-${court}]`)).not.toBeNull();
+    await act(async () => { response.resolve(okImage()); });
+    await waitFor(() => q("[data-testid=svg-img-stop]") === null, "image edit to finish");
+    expect(q("[data-testid=svg-cancel-run]")).not.toBeNull(); // SVG still streams
+    const root = (stored.get("__svg__") as { source: FakeDir }).source;
+    const arch = root.children.get("architecture") as FakeDir;
+    const courtMeta = JSON.parse((arch.children.get("court_AI.svg.json") as FakeFile).text);
+    expect(courtMeta.imageVersions).toHaveLength(1);
+    expect(courtMeta.imagePreferred).toBe(1);
+    await act(async () => { svgT.streams[0].push(streamFrames(svgT.calls[0].items)); svgT.streams[0].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "SVG run to finish independently");
+    expect(metaNow().versions).toHaveLength(1);
+    expect(JSON.parse((arch.children.get("court_AI.svg.json") as FakeFile).text).imageVersions).toHaveLength(1);
+  });
+
+  it("refuses a conflicting image send, then saves both histories after explicit re-confirmation", async () => {
+    svgT = transport({ mode: "silent" });
+    await mount();
+    await click(q(`[data-testid=svg-generate-${FOG}]`)!);
+    await click(q("[data-testid=svg-confirm-generate]")!);
+    await waitFor(() => svgT.calls.length === 1, "SVG to hold its source lease");
+    await choose("[data-testid=svg-connection-select]", "Sunburst");
+    await regenerateRow();
+    expect(imageCalls).toHaveLength(0);
+    expect(txt("[data-testid=svg-toast]")).toContain("in use by another process");
+    expect(q("[data-testid=svg-img-confirm]")).not.toBeNull();
+    await act(async () => { svgT.streams[0].push(streamFrames(svgT.calls[0].items)); svgT.streams[0].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "SVG to save and release its source");
+    expect(imageCalls).toHaveLength(0); // releasing a lock is not consent to retry an edit
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => (metaNow()?.imageVersions?.length ?? 0) === 1, "explicit image retry to save");
+    expect(metaNow().versions).toHaveLength(1);
+    expect(metaNow().imageVersions).toHaveLength(1);
+    expect(imageCalls).toHaveLength(1);
+  });
+
+  it("never silently swaps a confirmed SVG input while its image is being edited", async () => {
+    const response = deferred<Response>();
+    imageAnswer = () => response.promise;
+    await mountWithImages();
+    await regenerateRow();
+    await waitFor(() => imageCalls.length === 1, "image edit to hold its source lease");
+    await choose("[data-testid=svg-connection-select]", "Sol");
+    await click(q(`[data-testid=svg-generate-${FOG}]`)!);
+    await click(q("[data-testid=svg-confirm-generate]")!);
+    expect(svgT.calls).toHaveLength(0);
+    expect(txt("[data-testid=svg-toast]")).toContain("review the SVG inputs again");
+    expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    await act(async () => { response.resolve(okImage()); });
+    await waitFor(() => q("[data-testid=svg-img-stop]") === null, "edited image to land");
+    expect(svgT.calls).toHaveLength(0); // never auto-send a different main image
+  });
 });

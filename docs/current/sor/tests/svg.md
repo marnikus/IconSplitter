@@ -107,3 +107,15 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
   tokens/cost/outcome/elapsed **and** the provider request id, a stalled outcome
   is a warning that says "never retried" (never an error), and the composite's
   data URL travelling on the same event never reaches the entry
+
+* `joblocks.test.ts`, `svg_jobstate.test.ts` — atomic all-or-none acquisition,
+  canonical path/image ownership, late release, fair disjoint bypass, pending
+  preview protection, uncertain retry removal, slot validation, aggregate counts.
+* `svg_queue_ui.test.tsx` — real streamed concurrent runs/journal isolation,
+  same-pair waiting, independent Stop/global drop, completed-row correction during
+  sibling work, retained versions, frozen queued settings, 3-slot cap and root guards.
+* `svg_imgreg_ui.test.tsx` — disjoint image/SVG overlap, refusal before conflicting
+  image send, explicit retry after release preserves both histories, reverse
+  image-input mutation refuses SVG rather than auto-sending changed bytes.
+* `completion_sound.test.ts` — import/arm silence, once-only finished cues,
+  serial playback, cancellation, mute, first-click async activation and blocked audio.

@@ -2,12 +2,18 @@
 
 Selector priority and object shape: [shared conventions](shared.md#i-selector-object-structure--for-every-element). Part of [Generate SVG selectors](svg-generation.md).
 
-Queue (waiting batches, I-53): `svg-queue` is absent when nothing waits; otherwise
-`svg-queue-count` ("N queued — they start as soon as the run in flight ends.
-Adding more never interrupts it."), `svg-queue-line-{n}` (1-based, "#n · <first
-file> + N more · N images · N requests") and `svg-queue-drop-{n}` ("× Drop", drops
-exactly that batch — the run in flight is untouched). `svg-confirm-generate` reads
-"Add to queue" while a run is in flight and `svg-confirm-queue-note` explains why.
+Queue (waiting confirmations, I-53): `svg-queue` is absent when empty;
+`svg-queue-count` explains that independent sources run in parallel and source
+conflicts/full slots wait. `svg-queue-line-{n}` names the 1-based batch and
+request/image counts; `svg-queue-drop-{n}` drops only that waiting confirmation.
+`svg-confirm-generate` reads "Add to queue" during SVG work; the queue note
+explains immediate independent admission without interrupting existing jobs.
+
+Parallel controls: `svg-runs`, `svg-parallel-limit` (select 1/2/3, default 3),
+`svg-run-{runId}` (status/progress), `svg-run-stop-{runId}` (only that active run).
+Sound: `process-sound`, `process-sound-enabled` (persisted checkbox),
+`process-sound-test` (local test/status). The label honestly identifies the
+built-in fallback when the requested MP3 is absent. [Behaviour](../sor/svg-parallel-runs.md).
 
 Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
 BELOW the list; absent when nothing ran and nothing waits.
@@ -34,7 +40,7 @@ Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visibl
 |---|---|---|
 | `svg-progress-mount` | mount div in Workbench | above nav, `position:relative`, z-index 55 |
 | `svg-progress-header` | bar container | `complete` class when done |
-| `svg-progress-title` | strong | "Generating SVGs · N images" or "SVG batch complete" |
+| `svg-progress-title` | strong | all-process count or "SVG batch complete"; interrupted terminal work says "SVG processes ended — check results" |
 | `svg-progress-file` | span | current filename while running, or "N results saved · ready for review" when complete |
 | `svg-progress-thumb` | img/span | current AI thumbnail (via `useSideThumbs`) |
 | `svg-progress-track` / `svg-progress-fill` | divs | progress bar track and its fill |
@@ -49,7 +55,7 @@ Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visibl
 | `svg-cancel-stats` | div | "8 completed · kept" / "16 remaining · stopped" |
 | `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close` | buttons | Keep running / Cancel batch / X close |
 
-Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops queue, aborts, keeps saved), `svg-cancel-keep` closes dialog (Esc also).
+Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops waiting SVG jobs then aborts active SVG jobs only; keeps saved; image process is independent), `svg-cancel-keep` closes dialog (Esc also).
 
 Shared surfaces: `svg-warn-{noteId}` (`pairfile` — the pair files that could not
 be parsed, I-43 / `problems` — the

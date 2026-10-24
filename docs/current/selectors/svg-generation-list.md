@@ -20,7 +20,7 @@ file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 | `svg-stroke-control` → `svg-stroke` / `svg-stroke-value` / `svg-stroke-reset` | preview stroke width | text field (placeholder `default`, 0–50 px, `aria-invalid` on bad text), live label, Reset (disabled at default); preview only, screen px (`vector-effect: non-scaling-stroke`, same visible width for every viewBox) — row thumbnails adopt one shared sheet (2026-10-19) |
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
-| `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration appends behind a run in flight (I-53) |
+| `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration confirms and schedules independent work in parallel; conflicts wait (I-53) |
 | `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
@@ -56,4 +56,4 @@ source matches these filters."), `svg-footer-summary` (`shownLabel`).
 Status badge while a row waits in the queue: `svg-status-{sourceId} .svg-badge`
 reads "Next attempt" with class `queued` (grey); the row's own status is back the
 moment the batch is dropped (I-53). `svg-generate-{sourceId}` while a run is in
-flight queues that source FIRST, with no dialog (idle: the dialog as before).
+flight opens the same explicit prompt/input popup as idle; independent work can start immediately, while conflicts wait.

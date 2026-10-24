@@ -2,6 +2,8 @@
 
 Read [I-71](invariants/svg-image-edits.md#i-71) and [I-72](invariants/svg-image-edits.md#i-72) for non-overwriting pair history and composite identity; see [image-edit handles](../selectors/svg-image-edits.md), [storage keys](STORAGE.md) and [tests](TESTS.md). This workflow is independent of SVG-text contact-sheet generation.
 
+See [parallel-run safety and completion sound](svg-parallel-runs.md): independent SVG work may continue, but shared-pair edits refuse before send and image leases survive review.
+
 ## Confirmed composite workflow
 
 * **AI-source image edits (2026-10-19, I-71/I-72):** the separate

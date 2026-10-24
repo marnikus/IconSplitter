@@ -12,7 +12,7 @@ import { toListRow, toRow, withMeta } from "../src/svg/rowmodel";
 import { decideReview, applyReviewPatch } from "../src/svg/reviewact";
 import { applySvgReviewPatch } from "../src/svg/reviewundo";
 import { svgSource, svgVersion, pairMetaFor, svgPathFor } from "./helpers/svgpair";
-import type { SvgRow } from "../src/svg/types";
+import type { SvgRefs, SvgRow } from "../src/svg/types";
 import { setAppState } from "../src/state/appstore";
 
 const source = svgSource("pair_1", { name: "fog_AI.png" });
@@ -122,6 +122,21 @@ describe("a decision", () => {
     expect(pushed).toHaveLength(1);
     expect(pushed[0].after).toEqual({ recs: [{ id: source.id, review: "declined" }] });
     expect(pushed[0].before).toEqual({ recs: [{ id: source.id, review: "pending" }] });
+  });
+
+  it("preserves a just-saved version when a review closure still holds the older row", async () => {
+    const older = metaWith(["pending"]);
+    const latest = metaWith(["pending", "pending"]);
+    const live = refs() as SvgRefs;
+    live.metas.set(source.id, latest);
+    const rows = [toRow(source, older, false)];
+    await decideReview({ rows, refs: live,
+      setRowsFn: (fn) => rows.splice(0, rows.length, ...fn(rows)),
+      say: () => {}, hist: { push: () => {} },
+    }, [source.id], "approved");
+    expect(live.metas.get(source.id)?.versions).toHaveLength(2);
+    expect(rows[0].meta?.versions).toHaveLength(2);
+    expect(rows[0].review).toBe("approved");
   });
 
   it("is undone by source, not by version", async () => {

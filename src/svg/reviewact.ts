@@ -1,3 +1,4 @@
+import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // reviewact.ts — the SVG review decision and its undo path (prompt §15, RULE 12).
 // Owns: approving/declining ONE item at a time (2026-10-20). The status belongs
 // to the pair, not to a version, so a decision is written once per row and
@@ -38,12 +39,18 @@ export interface ReviewCtx {
 }
 
 /** The pair's record, or a fresh one when the pair has none yet. */
-function metaOf(row: SvgRow): PairMeta {
-  return row.meta ?? metaForSource(row.source, null);
+function metaOf(s: ReviewCtx, row: SvgRow): PairMeta {
+  return s.refs.metas.get(row.source.id) ?? row.meta ?? metaForSource(row.source, null);
 }
 
 /** Undo/redo entry point: set the recorded item status on every named source. */
 export async function applyReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Promise<boolean> {
+  const release = reserveSources(s, patch.recs.map((rec) => rec.id));
+  if (release === null) { s.say(SOURCE_BUSY, true); return false; }
+  try { return await writeReviewPatch(s, patch); } finally { release(); }
+}
+
+async function writeReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Promise<boolean> {
   const root = s.refs.root.current as DirHandleLike | null;
   let changed = false;
   for (const rec of patch.recs) {
@@ -51,7 +58,7 @@ export async function applyReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Pro
     if (!row || row.review === rec.review) continue;
     // The status is the item's, so an undo needs no version: whatever version is
     // shown now, the row goes back to the status the entry recorded.
-    const next = withReview(metaOf(row), rec.review);
+    const next = withReview(metaOf(s, row), rec.review);
     s.refs.metas.set(rec.id, next);
     if (root) await saveMetaAt(root, row.source.metaPath, next);
     s.setRowsFn((rows) => rows.map((r) => (r.source.id === rec.id ? withMeta(r, next) : r)));
@@ -62,6 +69,12 @@ export async function applyReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Pro
 
 /** Approve / decline the whole item for every named source. */
 export async function decideReview(s: ReviewCtx, ids: string[], decision: ReviewStatus): Promise<void> {
+  const release = reserveSources(s, ids);
+  if (release === null) return s.say(SOURCE_BUSY, true);
+  try { await saveReviewDecision(s, ids, decision); } finally { release(); }
+}
+
+async function saveReviewDecision(s: ReviewCtx, ids: string[], decision: ReviewStatus): Promise<void> {
   const rows = ids.map((id) => rowOf(s, id)).filter(hasSvg);
   if (rows.length === 0) return s.say("No generated SVG to review yet", true);
   const recs = rows.map((r) => recOf(r, decision));
@@ -110,7 +123,7 @@ async function writeAll(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): P
   const root = s.refs.root.current as DirHandleLike | null;
   for (const row of rows) {
     if (shownVersion(row) === null) continue; // decided rows always have one; a rescan may race
-    const next = withReview(metaOf(row), decision);
+    const next = withReview(metaOf(s, row), decision);
     s.refs.metas.set(row.source.id, next);
     try {
       if (root) await saveMetaAt(root, row.source.metaPath, next);

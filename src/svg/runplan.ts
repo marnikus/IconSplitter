@@ -50,6 +50,7 @@ function plannedRegen(): RegenPlan {
 /** Why a run cannot start, or null when it can. Never a partial reason. */
 export function guard(c: SvgCtx, ids: string[], regen: RegenPlan | null = null): string | null {
   if (ids.length === 0) return "Select at least one approved source";
+  if (c.m.busy !== null && !c.m.busy.startsWith("Regenerating AI sources")) return `Wait for “${c.m.busy}” to finish`;
   if (c.refs.root.current === null) return "Pick the source folder first";
   if (c.refs.key.current === null) return "Add your Requesty API key first — it stays on this device";
   if (regen !== null) return null;

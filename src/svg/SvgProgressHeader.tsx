@@ -12,6 +12,7 @@ import type { QueueItem } from "./runqueue";
 import type { RunProgress, SvgRow } from "./types";
 
 interface Props {
+  aggregate?: ReturnType<typeof import("./jobprogress").processTotals>;
   progress: RunProgress | null;
   running: boolean;
   queue: readonly QueueItem[];
@@ -55,11 +56,11 @@ function useCurrent(props: Props) {
   const { progress, queue, chain, currentId, rows } = props;
   if (!progress) return { totals: null, currentRow: null, done: 0, left: 0, images: 0, percent: 0 };
   const totals = withChain(runTotals(progress, queue), chain);
-  const done = totals.done;
-  const left = totals.left;
-  const images = progress.images;
+  const done = props.aggregate?.done ?? totals.done;
+  const left = props.aggregate?.left ?? totals.left;
+  const images = props.aggregate?.images ?? progress.images + chain.done + totals.queued;
   const percent = images > 0 ? Math.round((done / images) * 100) : 0;
-  const currentRow = currentId ? rows.find((r) => r.source.id === currentId) ?? null : rows.find((r) => r.running) ?? null;
+  const currentRow = currentRowOf(rows, currentId);
   return { totals, currentRow, done, left, images, percent };
 }
 
@@ -76,9 +77,9 @@ function RunningBar(props: Props & { onCancelClick: () => void; onDismiss: () =>
 
 function CompleteBar(props: Props & { onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
   const { done, images } = useCurrent(props);
-  const saved = props.progress?.saved ?? done;
+  const saved = props.aggregate?.saved ?? props.progress?.saved ?? done;
   return (
-    <ProcessProgressBar prefix="svg" theme="svg" title="SVG batch complete" detail={`${saved} results saved · ready for review`}
+    <ProcessProgressBar prefix="svg" theme="svg" title={props.aggregate?.interrupted ? "SVG processes ended — check results" : "SVG batch complete"} detail={`${saved} results saved · ready for review`}
       done={done} total={images} remaining={0} percent={100} complete
       leading={<span className="svg-progress-check" aria-hidden="true">✓</span>}
       actions={<>
@@ -155,4 +156,8 @@ function ProgressThumb({ rootRef, row }: { rootRef: { current: DirHandleLike | n
   ) : (
     <span className="svg-progress-thumb empty" data-testid="svg-progress-thumb">{row.source.name.slice(0, 2)}</span>
   );
+}
+
+function currentRowOf(rows: readonly SvgRow[], currentId: string | null): SvgRow | null {
+  return currentId ? rows.find((r) => r.source.id === currentId) ?? null : rows.find((r) => r.running) ?? null;
 }

@@ -113,7 +113,7 @@ function finishBatch(ctx: BatchCtx): void {
   // Saved, failed or cancelled: this request has a confirmed outcome, so its
   // journal note is done with. A STALL keeps its note on purpose — nobody has
   // confirmed anything about it, and the next boot must say so.
-  if (!ctx.unsettled) endRequest(plan.id);
+  if (!ctx.unsettled) endRequest(plan.id, state.runId);
   state.outcomes.push(report);
   const done = state.outcomes.reduce((n, o) => n + o.count, 0);
   state.args.onEvent({ kind: "batch-done", report, done, images: state.images });

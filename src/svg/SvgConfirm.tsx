@@ -140,8 +140,8 @@ function QueueNote({ running, count }: { running: boolean; count: number }) {
   if (!running) return null;
   return (
     <p className="svg-note" data-testid="svg-confirm-queue-note">
-      A run is in flight — confirming adds these {count} image(s) to the queue.
-      The run in flight is not interrupted, and nothing waits for the queue to be noticed.
+      A run is in flight — confirming schedules these {count} image(s).
+      Independent sources can start in parallel; busy sources or full slots wait in the queue. Nothing interrupts the existing runs.
     </p>
   );
 }

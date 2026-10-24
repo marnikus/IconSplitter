@@ -1,3 +1,6 @@
+import { reserveSources, SOURCE_BUSY } from "./jobstate";
+import { armCompletionSound, notifyCompletion } from "../ui/completionSound";
+import { newRunId } from "./journal";
 // imgactions.ts — AI source image regeneration (2026-10-16): the guarded
 // request, the confirm that starts ONE run at a time, Stop, the main switch —
 // and the run itself. 2026-10-19 fix (archive/2026-10-19-image-regen-fix):
@@ -37,11 +40,16 @@ export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
   const requestImageRegen = useCallback((ids: string[]) => openDialog(latest.current, ids, control), [control]);
   const confirmImageRegen = useCallback((prepared: PreparedImageRun | null = null) => {
     if (control.active) return; // a second click while the first run starts
+    const c = latest.current;
+    if (c.m.dialog?.kind !== "image-regen") return;
+    const release = reserveSources(c, c.m.dialog.ids, "image");
+    if (release === null) return c.say(SOURCE_BUSY, true);
+    armCompletionSound();
     control.active = true;
     control.stop = false;
     const run = prepared === null ? runImageRegen(latest.current, control) : runCompositeEdits(latest.current, prepared, control);
     void run.catch((error: unknown) => latest.current.say(`AI source regeneration stopped: ${messageOf(error)}`, true))
-      .finally(() => { control.active = false; });
+      .finally(() => { control.active = false; release(); });
   }, [control]);
   const stopImageRegen = useCallback(() => {
     if (!control.active) return;
@@ -102,6 +110,12 @@ function refusalOf(c: SvgCtx, ids: string[], control: CompositeControl): string 
 
 /** The main switch: saved first, then the in-memory copy and the row — a failed save changes nothing. */
 async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<void> {
+  const release = reserveSources(c, [id], "image");
+  if (release === null) return c.say(SOURCE_BUSY, true);
+  try { await saveMainImage(c, id, version); } finally { release(); }
+}
+
+async function saveMainImage(c: SvgCtx, id: string, version: number | null): Promise<void> {
   const root = c.refs.root.current as DirHandleLike | null;
   const row = c.rows.find((r) => r.source.id === id);
   if (root === null || row === undefined) return c.say("No folder is open — the choice cannot be saved", true);
@@ -123,6 +137,7 @@ async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<vo
 
 /** Everything one run needs, fixed at confirm time. */
 interface ImgRun {
+  id: string;
   c: SvgCtx;
   conn: Connection;
   root: DirHandleLike;
@@ -156,7 +171,7 @@ async function runImageRegen(c: SvgCtx, control: CompositeControl): Promise<void
   } catch (error) {
     run.tally.reason ??= messageOf(error);
   } finally {
-    finish(run);
+    finish(run, control.stop);
   }
 }
 
@@ -174,7 +189,7 @@ function runOf(c: SvgCtx): ImgRun | string {
   // prompt the single/batch task last chose, never silently the textarea's text.
   const prompt = taskPromptOf(c, "image.edit", rows.length);
   if (prompt.trim() === "") return "Write a prompt first — nothing was sent";
-  return { c, conn, root, rows, prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
+  return { id: newRunId(), c, conn, root, rows, prompt, tally: { total: rows.length, done: 0, failed: 0, reason: null }, results: [] };
 }
 
 /**
@@ -223,7 +238,8 @@ function count(run: ImgRun, row: SvgRow, failure: string | null): void {
   log({ feature: "svg", action: "image-regen-failed", ids: { source: row.source.id }, detail: failure });
 }
 
-function finish(run: ImgRun): void {
+function finish(run: ImgRun, stopped: boolean): void {
+  notifyCompletion(run.id, stopped);
   const { c, rows } = run;
   c.dispatch({ type: "img-running", ids: rows.map((r) => r.source.id), on: false });
   c.setBusy(null);

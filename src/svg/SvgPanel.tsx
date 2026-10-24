@@ -1,3 +1,4 @@
+import SvgRuns from "./SvgRuns";
 // SvgPanel.tsx — the Generate SVG tab (prompt §1/§2/§17): controls, the honest
 // discovery banners, the bulk bar, the source list, the run record (strip and
 // queue, below the list), the status footer, the three dialogs and the toast. The panel owns no rule of
@@ -10,14 +11,13 @@ import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
-import { setAppState } from "../state/appstore";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import { PanelDialogs, panelRowActions } from "./panelbits";
 import SvgBulkBar from "./SvgBulkBar";
 import RunRecord from "./RunRecord";
 import SvgImgReview from "./SvgImgReview";
 import SvgImgInflight from "./SvgImgInflight";
-import SvgProgressHeader from "./SvgProgressHeader";
+import SvgJobProgress from "./SvgJobProgress";
 import SvgControls, { type SvgCounts } from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
 import { useSvgHotkeys } from "./SvgHotkeys";
@@ -47,9 +47,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
-      <SvgProgressHeader progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} currentId={g.currentId} rows={g.rows} rootRef={rootRef}
-        onCancel={g.cancelRun} onDismiss={() => g.dispatch({ type: "progress", progress: null })}
-        onReview={() => setAppState({ tab: "generateSvg" })} />
+      <SvgJobProgress g={g} rootRef={rootRef} />
       <Controls g={g} root={rootRef.current} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
@@ -112,6 +110,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
       </div>
       <SvgList g={g} actions={actions} />
+      <SvgRuns refs={g.refs} onStop={g.cancelRun} />
       <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
     </>
   );
