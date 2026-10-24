@@ -1,3 +1,4 @@
+import { recoverPinnedFit } from "./placefallback";
 // place.ts — the artwork placed in its artboard, measured as it SHIPS
 // (I-60, 2026-10-09). The artboard used to be fitted to the SOURCE bounds,
 // so a stroke the setting widened, or an expanded outline, lay partly outside
@@ -51,7 +52,7 @@ export interface Placed {
 
 export type PlaceResult = ({ ok: true } & Placed) | { ok: false; code: "unsupported" | "no-fit"; detail: string };
 type Candidate = Omit<Placed, "fit" | "passes">;
-type CandidateResult = ({ ok: true } & Candidate) | Extract<PlaceResult, { ok: false }>;
+export type CandidateResult = ({ ok: true } & Candidate) | Extract<PlaceResult, { ok: false }>;
 
 /** [minX, minY, maxX, maxY] of the placed artwork with the fit's translation removed. */
 type Edges = [number, number, number, number];
@@ -72,6 +73,8 @@ export function placeArtwork(source: Element, want: PlaceWant): PlaceResult {
     bounds = correctedBounds(samples, want);
     fit = fitArtboard(bounds, want.paddingPct, want.target);
   }
+  const recovered = recoverPinnedFit(want, fit, (next) => candidate(source, next, want));
+  if (recovered) return recovered;
   return { ok: false, code: "no-fit", detail: `the artwork did not settle in its artboard after ${MAX_PASSES} passes` };
 }
 
@@ -96,6 +99,11 @@ function placeShadowFrame(source: Element, want: PlaceWant, frame: Bounds): Plac
     bounds = correctedBounds(samples, { ...want, paddingPct: 0 });
     fit = fitArtboard(bounds, 0, want.target);
   }
+  const recovered = recoverPinnedFit({ ...want, paddingPct: 0 }, fit, (next) => {
+    const got = candidate(source, next, want);
+    return got.ok ? { ...got, bounds: unionBounds(got.bounds, mappedFrame(frame, next)) } : got;
+  });
+  if (recovered) return recovered;
   return { ok: false, code: "no-fit", detail: `the shadow did not settle in its artboard after ${MAX_PASSES} passes` };
 }
 

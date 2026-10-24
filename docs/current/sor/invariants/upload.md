@@ -19,9 +19,11 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   before that badge, shrinking uniformly or failing `no-fit`. With default/null padding the
   authored source viewBox (or width/height-only frame) is also an unpainted
   layout frame, extended only when the shadow overflows; an extension that
-  would reveal formerly clipped painted art fails `unsupported`. Fully
+  would reveal formerly clipped geometry fails `unsupported`. Minor stroke-only
+  viewport overshoot is repaired under the [bounded policy](../upload-auto-repair.md). Fully
   transparent or hidden paint has no sizing effect. The placement passes are recorded,
-  and a placement that does not settle fails by name (`no-fit`) instead of
+  with a bounded measured pinned-fit recovery after the four-pass fast path;
+  impossible placement still fails by name (`no-fit`) instead of
   shipping a guess. Pinned by
   `upload_prepare` ("the artboard is the shipped artwork"), `upload_geom`
   (unpainted shapes have no bounds), `upload_optimize`/`upload_clean`/

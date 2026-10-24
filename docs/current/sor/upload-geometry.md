@@ -13,15 +13,14 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   on — and MEASURES that candidate (`shippedBounds`: every stroke expanded into
   its real outline on a probe copy, so joins and caps are exact; the analytic
   hull only when the expander refuses), so the viewBox is the FINAL bounds
-  plus the padding and nothing visible lies outside it (the field report: a
-  1 px source stroke widened to 8 px lay 3.5 px outside the old viewBox on
-  every edge). A pinned artboard with verbatim strokes is not linear in its
+  plus the padding, including widened stroke reach. A pinned artboard with verbatim strokes is not linear in its
   scale, so the fit is corrected from the measurements (each edge is
   `k · geometry + a constant stroke reach`; two samples pin both) and
-  re-measured — at most 4 passes, settled when every edge is within the file's
-  own precision (0.002 px); the count is recorded (`tools.artboard.passes`;
-  1 when the first fit was exact — fills only, or width 0) and a candidate
-  that never settles is an honest `no-fit` failure, never a guess. The
+  re-measured in a four-pass fast path (0.002 px tolerance). If limiting
+  edges switch under wide strokes, a bounded measured pinned-artboard search
+  verifies a safe final fit; actual passes remain recorded. See
+  [automatic repairs](upload-auto-repair.md) for the fallback and minor
+  source-frame stroke overflow repair. Unrepresentable fits still fail honestly. The
   artwork is fitted proportionally into the padded artboard: in `content`
   mode the padding is a uniform % of the artwork's largest side, and on a
   PINNED artboard it is a % of the TARGET's largest side while the artwork is
@@ -37,10 +36,8 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   with the EPS writer). The stroke width is written AFTER that bake,
   **verbatim: the number in the setting is the number in the file**
   (`strokePx: 2` → `stroke-width="2"` on every visible stroke, whatever the
-  artwork's transform or the artboard's scale — the reviewer's
-  `2.6224000000000003` was a width finalised in local units that SVGO
-  re-multiplied when it baked the transforms; with nothing left to bake the
-  optimizer cannot touch a width, and the export test pins the SHIPPED text).
+  artwork's transform or artboard scale). No transform remains for the optimizer
+  to re-scale that width; export tests pin the shipped text.
   A stroke width of 0 keeps the artwork's own strokes: each width follows its
   geometry (× the baked scale, ≤ 3 decimals; a `non-scaling-stroke` keeps its
   number and loses the attribute), dash arrays/offsets scale the same way, and
@@ -104,7 +101,8 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   the shadow; a child can override inherited visibility but not display. If
   painted content outside the
   source viewport would become visible when extending that frame, Shadow
-  preparation refuses it as `unsupported` instead of silently exposing artwork;
+  refuses it; only bounded minor stroke/cap overflow with in-frame geometry
+  is repaired automatically ([policy](upload-auto-repair.md));
   analytic stroke reach also ignores a zero-opacity stroke. Expanded stroke
   outlines retain their source display/visibility and explicitly use the
   effective stroke opacity for their fill, even under inherited zero fill

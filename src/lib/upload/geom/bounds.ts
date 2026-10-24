@@ -61,8 +61,8 @@ const UNSUPPORTED = ["text", "tspan", "textpath", "image", "use", "foreignobject
 /** CSS properties a `<style>` block could use to move or restyle geometry. */
 const RISKY_CSS = ["stroke", "transform", "display", "clip", "mask"];
 
-/** Visible bounds of the document under `root`; null when it has no geometry. */
-export function visibleBounds(root: Element): BoundsResult | null {
+/** Visible paint bounds; includeStroke=false measures visible geometry without stroke reach. */
+export function visibleBounds(root: Element, includeStroke = true): BoundsResult | null {
   const acc: Acc = { bounds: null, unsupported: [] };
   walkPaintTree(root, (el, { ctm, stroke, visibility }) => {
     const bad = unsupportedTag(el);
@@ -71,7 +71,7 @@ export function visibleBounds(root: Element): BoundsResult | null {
       return;
     }
     const b = SHAPES.includes(name(el)) && visiblePaint(stroke, visibility)
-      ? shapeBounds(el, stroke, ctm, visibility.stroke) : null;
+      ? shapeBounds(el, stroke, ctm, visibility.stroke && includeStroke) : null;
     if (b !== null) acc.bounds = acc.bounds === null ? b : union(acc.bounds, b);
   });
   if (acc.bounds === null) return null;

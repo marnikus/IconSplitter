@@ -1,3 +1,4 @@
+import { repairStrokeFrame } from "./viewrepair";
 // prepare.ts — the export SVG copy of the "SVG to upload" tab
 // (RULE 1/3). The approved source is parsed, never modified; the export
 // document is a re-rooted copy built in two phases (2026-10-09, I-60):
@@ -81,15 +82,17 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
     return fail("unsupported", `unsupported content: ${vb.unsupported.join(", ")}`);
   }
   if (vb === null) return fail("no-geometry", "the document has no visible geometry");
-  const clipped = shadowClipFailure(root, frame, settings.shadowEnabled);
-  if (clipped !== null) return clipped;
-  return buildExport(doc, root, settings, frame);
+  const shade = shadowSourceFrame(root, frame, settings.shadowEnabled);
+  if (shade.failure !== null) return shade.failure;
+  return buildExport(doc, root, settings, shade.frame);
 }
 
-/** A larger shadow artboard cannot retain the source viewport's implicit clip. */
-function shadowClipFailure(root: Element, frame: Bounds | null, enabled: boolean): PrepareFailure | null {
-  if (!enabled || frame === null || !overflowsSourceFrame(root, frame)) return null;
-  return fail("unsupported", "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping");
+/** Repair minor cap overflow, but do not reveal genuinely clipped geometry. */
+function shadowSourceFrame(root: Element, frame: Bounds | null, enabled: boolean): { frame: Bounds | null; failure: PrepareFailure | null } {
+  if (!enabled) return { frame, failure: null };
+  const repaired = repairStrokeFrame(root, frame);
+  if (repaired === null || !overflowsSourceFrame(root, repaired)) return { frame: repaired, failure: null };
+  return { frame, failure: fail("unsupported", "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping") };
 }
 
 /** Place → artboard → strokes defined once → re-rooted: the export copy of a cleaned, measurable source. */

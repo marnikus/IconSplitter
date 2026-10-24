@@ -100,3 +100,10 @@ Adobe saved-page regression and opt-in LIVE upload validation (local reader is n
 
 User-defined badge validation, editor, persistence/undo/live preview and actual
 supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-templates).
+
+* `upload_auto_repair.test.ts`, `upload_viewrepair.test.ts`,
+  `upload_fitfallback.test.ts` — both user-supplied bulb SVGs from
+  `tests/assets/bug with SVG export expl temp`, original 4-pass/viewport failures,
+  automatic fitting across stroke/target presets, source-frame shadow repair,
+  source immutability, determinism, geometry/clipping safety, bounded impossible
+  fits, no overflow, verbatim strokes and genuine vector EPS verification.
