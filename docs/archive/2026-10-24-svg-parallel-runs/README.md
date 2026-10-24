@@ -102,9 +102,11 @@ Implemented 2026-10-24 on `arena/cf992ba5-iconsplitter`.
 - All-process progress header + per-run records. Completion cues are emitted
   once per actual completed process (not per request/icon), failures included,
   cancellation/refusal/drop excluded. Mute/Test and async first-click activation
-  are covered. Exact requested MP3 was absent: the shipped local fallback is
-  explicitly labelled; the inline hook embeds the exact file after it is supplied
-  and rebuilt. No real provider requests or external sound downloads were made.
+  are covered. The MP3 was initially absent, then arrived in remote commit
+  `7f9952b` during the first push. It was merged without overwriting either change;
+  the final build embeds that exact recording. A byte-exact asset decode test
+  proves it is not the fallback. No real provider requests or external sound
+  downloads were made.
 
 ### Measured verification
 
@@ -132,3 +134,28 @@ Evidence directory: `/home/user/svg-parallel-runs/` (outside Git).
 - Owning behaviour/invariants, storage, owners, tests, selectors and router
   updated; append-only measured ledger updated without reading it. Generated
   build, dependencies and evidence are not staged.
+
+
+### Supplied-sound integration follow-up
+
+The first push was safely rejected because the user concurrently added the
+requested 41,795-byte MP3 in `7f9952b`. Fetched and merged that commit on the same
+branch, no force-push or discarded work. Repeated focused audio and complete
+fast/full gates with the real inline asset before the merge commit. Final
+measurements are recorded below after those gates; earlier missing-file notes
+above describe planning/initial verification only.
+
+The asset integration test first failed (still selecting fallback), revealing
+that a cached empty optional glob did not track a newly supplied file reliably.
+The final implementation uses an explicit required inline MP3 import, removing
+the temporary fallback. It decodes exactly the supplied bytes, schedules decoded
+recordings without overlap, and reports decoder failure silently/unavailable
+instead of pretending another tone is that recording.
+
+Final supplied-recording gates: `supplied-sound-green.log` 10/10 (audio + docs),
+`quality-supplied-sound.log` PASS, `verify-fast-supplied-sound.log` and
+`verify-full-supplied-sound.log` ALL LANES PASS: 2,611 tests / 249 files, native
+30/5, 98.03% src/lib lines, 89.31% branches, 100% joblocks metrics. Production
+single HTML 1,786.51 kB; byte-exact Base64 comparison confirms it contains the
+entire supplied 41,795-byte MP3. The final implementation has no substitute tone:
+missing asset fails build, decoder/browser failure is silent and cannot fail work.

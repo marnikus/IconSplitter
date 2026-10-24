@@ -50,8 +50,10 @@ dropped queue entry. Confirmation arms browser audio; blocked/unsupported audio
 cannot fail the process. **Completion sound** persists mute, **Test sound** plays
 locally, and simultaneous completions serialize their cues.
 
-The requested `tests/assets/Sound/universfield-new-notification-037-485898.mp3`
-was absent from the checkout. The UI explicitly labels a built-in tone fallback.
-Adding that exact MP3 then rebuilding embeds it into the self-contained HTML via
-Vite's inline asset hook; no runtime network audio fetch is used. The fallback
-is not a claim that the requested recording was supplied or auditioned.
+The supplied `tests/assets/Sound/universfield-new-notification-037-485898.mp3`
+is embedded into the self-contained HTML through Vite's explicit inline asset import;
+there is no runtime network audio fetch. It arrived in remote commit `7f9952b`
+after initial fallback-only verification and was integrated without overwriting
+concurrent work. The UI names the exact recording. A missing recording fails the
+build rather than silently substituting another sound. A decoding failure stays
+silent and Test reports unavailable audio; it cannot fail the completed process.

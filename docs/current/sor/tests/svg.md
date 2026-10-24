@@ -118,4 +118,5 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
   image send, explicit retry after release preserves both histories, reverse
   image-input mutation refuses SVG rather than auto-sending changed bytes.
 * `completion_sound.test.ts` — import/arm silence, once-only finished cues,
-  serial playback, cancellation, mute, first-click async activation and blocked audio.
+  serial playback, cancellation, mute, first-click async activation, blocked audio
+  and byte-exact decoding/serialization of the supplied inline MP3.

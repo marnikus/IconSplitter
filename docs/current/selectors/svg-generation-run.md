@@ -12,8 +12,8 @@ explains immediate independent admission without interrupting existing jobs.
 Parallel controls: `svg-runs`, `svg-parallel-limit` (select 1/2/3, default 3),
 `svg-run-{runId}` (status/progress), `svg-run-stop-{runId}` (only that active run).
 Sound: `process-sound`, `process-sound-enabled` (persisted checkbox),
-`process-sound-test` (local test/status). The label honestly identifies the
-built-in fallback when the requested MP3 is absent. [Behaviour](../sor/svg-parallel-runs.md).
+`process-sound-test` (local test/status). The label names the supplied MP3; failed decoding is silent and Test reports
+unavailable audio rather than claiming a different tone was the recording. [Behaviour](../sor/svg-parallel-runs.md).
 
 Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
 BELOW the list; absent when nothing ran and nothing waits.
