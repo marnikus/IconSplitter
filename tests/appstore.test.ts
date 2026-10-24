@@ -25,8 +25,8 @@ describe("mutations", () => {
   it("merges a partial state and notifies subscribers", () => {
     const spy = vi.fn();
     const off = subscribe(spy);
-    setAppState({ tab: "selection" });
-    expect(getAppState().tab).toBe("selection");
+    setAppState({ tab: "selectionV2" });
+    expect(getAppState().tab).toBe("selectionV2");
     expect(getAppState().view).toEqual(DEFAULT_SESSION.selection); // untouched slices survive
     expect(spy).toHaveBeenCalledTimes(1);
     off();
@@ -35,8 +35,8 @@ describe("mutations", () => {
   });
 
   it("patches only the shared view slice", () => {
-    patchView({ selectedId: "pair_a", collapsed: true });
-    expect(getAppState().view).toMatchObject({ selectedId: "pair_a", collapsed: true, autoNext: true });
+    patchView({ selectedId: "pair_a", zoom: "full" });
+    expect(getAppState().view).toMatchObject({ selectedId: "pair_a", zoom: "full", autoNext: true });
     expect(getAppState().v2.checked).toEqual([]);
   });
 

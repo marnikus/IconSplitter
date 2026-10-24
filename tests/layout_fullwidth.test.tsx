@@ -187,7 +187,7 @@ describe("all tabs fill full window, no centered max-width card", () => {
     expect(src).toMatch(/TabWrapper/);
     expect(src).toMatch(/w-full px-4 py-6/);
     expect(src).not.toMatch(/mx-auto max-w-7xl.*BatchPanel/);
-    expect(src).not.toMatch(/mx-auto max-w-\[90rem\].*SelectionPanel/);
+    expect(src).not.toMatch(/mx-auto max-w-\[90rem\].*SelectionV2Panel/);
 
     act(() => setAppState({ tab: "batch" }));
     await settle();
@@ -200,10 +200,10 @@ describe("all tabs fill full window, no centered max-width card", () => {
     expect(batchWrapper?.className).not.toMatch(/max-w-/);
   });
 
-  it("Selection wrapper also w-full", async () => {
-    act(() => setAppState({ tab: "selection" }));
+  it("Selection V2 wrapper also w-full", async () => {
+    act(() => setAppState({ tab: "selectionV2" }));
     await settle();
-    const wrapper = host.querySelector("main > div.w-full") as HTMLElement | null;
+    const wrapper = host.querySelector("main > .v2-shell") as HTMLElement | null;
     expect(wrapper).not.toBeNull();
     expect(wrapper?.className).toMatch(/\bw-full\b/);
   });

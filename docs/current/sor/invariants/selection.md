@@ -38,7 +38,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   and unrelated files in that folder are not hidden.
 
 <a id="i-40"></a>
-* **I-40 (the scope is visible, RULE 12):** both Selection toolbars state the
+* **I-40 (the scope is visible, RULE 12):** the Selection V2 toolbar states the
   scope the scan used and, when it hides pairs, how many are not listed
   ("Scope: split output only · N pair(s) in the main folder not listed" /
   "Scope: whole folder — no split output found"), and the Generate SVG list

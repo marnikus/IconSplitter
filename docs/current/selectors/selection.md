@@ -1,45 +1,20 @@
-# Selection and Selection V2 — UI selectors
+# Selection V2 — UI selectors
 
 Selector priority: **semantic** (role / label / text) > **structural** (parent / child) > **class fragment** (last resort). See [shared selector rules](shared.md#i-selector-object-structure--for-every-element).
 
-## M. Selection review — `src/selection/*` (verified 2026-10-01)
+<a id="m-selection-review--srcselection-verified-2026-10-01"></a>
+## M. Shared comparison and status surfaces
 
-Header + status:
+The original Selection tab and its `sel-open-folder`, filter/sidebar/list,
+collapse/expand and unsupported/empty-state handles are removed. The legacy
+section anchor above now routes to the still-supported V2 shared panes.
 
-| Test id | Element | Notes |
-|---|---|---|
-| `sel-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root |
-| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* (I-46; *completed — check it* removed by I-59) |
-| `sel-rescan` | `↺ Rescan` | re-walks the root |
-| `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
-| `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
-| `sel-help` | `?` popover | keyboard reference |
-
-Filter bar (`sel-filterbar`): `sel-date-all` / `sel-date-month` / `sel-date-custom`,
-`sel-month` (month input), `sel-from` / `sel-to` (datetime-local, inclusive),
-`sel-status`, `sel-sort` (date/status/name/path), `sel-dir` (newest/oldest),
-`sel-clear`, `sel-shown` ("Showing N pairs").
-
-Review list (`sel-list`): `sel-search` (Ctrl+K focuses), `sel-attention`
-("N NEED ATTENTION"), `sel-expand` / `sel-collapse`, `sel-row-{pairId}`
-(rows carry text status chips — never colour alone), `sel-empty`,
-`sel-clear-empty`.
-
-Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (1:1 fit/full,
-Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,
-`sel-autonext`, `sel-open-src` / `sel-open-ai` (copy-path fallback),
-`sel-missing` (absent side / decode failure), `sel-discovery`
-(created/generated line).
-
-Surfaces: `sel-writewarn` + `sel-retry` (write-failure banner: it names the
-pair files — `<name>.svg.json` — and Retry rewrites exactly the pairs whose write
-failed, I-43), `sel-pairfiles` (the pair files this scan could not read, by
-name — their decisions are kept, I-43), `sel-corrupt` (the **legacy**
-`review-decisions.json` is unreadable; it is never written, I-42), `sel-toast`,
-`sel-busy`, `sel-footer` with `sel-rescan-age`,
-`sel-diff` (+new/renamed/removed/unchanged), `sel-retry-count`,
-`sel-progress`; the empty-root state's button is `sel-open-folder-empty` (the
-old `sel-root-empty` handle was that button and is gone), and `sel-unsupported`.
+Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (fit/1:1, Space),
+`sel-sync`, `sel-decline`, `sel-approve`, `sel-reset`, `sel-autonext`,
+`sel-open-src` / `sel-open-ai` (copy-path fallback), `sel-missing`
+(absent side / decode failure), `sel-discovery` (created/generated line).
+Shared status: `sel-footer`, `sel-rescan-age`, `sel-diff`, `sel-retry-count`,
+`sel-progress`. V2-specific banners/toasts use the `v2-*` ids below.
 
 ## N. Selection review V2 — `src/selectionv2/*` (verified 2026-10-01)
 
@@ -65,7 +40,7 @@ Bulk bar (`v2-bulk`):
 | `v2-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible checks only, preserving hidden ones (I-73) |
 | `v2-selected-count` | `N selected` | checked rows, independent of the filters |
 | `v2-scope` | `across N visible pairs` | the scope "Select visible" and bulk act on |
-| `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — the same two states as `sel-scope`; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
+| `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — split-output-only or whole-folder scope; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
 | `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
 | `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
 | `v2-select-visible` / `v2-deselect` | buttons | add filtered rows / clear ALL checks including hidden |
@@ -89,8 +64,8 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 | `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
 
 Comparison layout: `v2-pair-picker` (labelled `<select>` of the visible pairs)
-plus the V1 `sel-compare` handles (§M). Shared surfaces keep their `sel-*`
-handles in both tabs: `sel-footer`, `sel-diff`, `sel-rescan-age`,
+plus the shared `sel-compare` handles (§M). V2 keeps the shared `sel-*`
+status handles: `sel-footer`, `sel-diff`, `sel-rescan-age`,
 `sel-retry-count`, `sel-progress`; V2 skins its own banners and overlays with
 `v2-writewarn` / `v2-retry`, `v2-pairfiles`, `v2-corrupt`, `v2-toast`, `v2-busy`,
 and the empty-root states `v2-root-empty` (its button is

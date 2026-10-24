@@ -41,7 +41,6 @@ source doc's "Missing Selectors" section.
 |---|---|---|
 | `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with the others |
 | `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
-| `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
 | `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` ([§N](selection.md#n-selection-review-v2--srcselectionv2-verified-2026-10-01)) |
 | `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` ([§P](svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01)) |
 | `tab-upload` | `SVG to upload` | mounts `UploadPanel` ([§R](upload.md#r-svg-to-upload--srcupload-verified-2026-10-07)), after Generate SVG |
@@ -73,7 +72,7 @@ The History window (`ui/HistoryPanel.tsx`), opened by `hist-open`:
 | `hist-item-<entryId>` | li | `data-current` marks the entry under the cursor |
 | `hist-panel-error` | p `role="alert"` | same error as `hist-error`, inside the window |
 
-Selection's reset and row-click details live [with the Selection handles](selection.md#selection-reset-and-row-interactions); the `hist-*` controls above are the one global undo timeline.
+Selection V2's reset and row-click details live [with the Selection handles](selection.md#selection-reset-and-row-interactions); the `hist-*` controls above are the one global undo timeline.
 
 Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo. Ignored only
 while the focus is in a *text* surface — text-ish input, textarea, select or a

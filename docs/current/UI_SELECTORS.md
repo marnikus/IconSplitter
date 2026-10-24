@@ -57,7 +57,7 @@ activity log, history, and selector conventions. Per RULE 21, prefer
 
 ## M. Selection review — `src/selection/*` (verified 2026-10-01)
 
-[Selection](selectors/selection.md#m-selection-review--srcselection-verified-2026-10-01).
+[V2 shared comparison/status](selectors/selection.md#m-selection-review--srcselection-verified-2026-10-01).
 
 ## N. Selection review V2 — `src/selectionv2/*` (verified 2026-10-01)
 

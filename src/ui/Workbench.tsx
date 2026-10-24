@@ -6,7 +6,6 @@ import App from "../App";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
-import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
 import UploadPanel from "../upload/UploadPanel";
@@ -21,7 +20,6 @@ import ScrollTopButton from "./ScrollTopButton";
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
   { id: "batch", label: "Batch folders", testid: "tab-batch" },
-  { id: "selection", label: "Selection", testid: "tab-selection" },
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
@@ -90,13 +88,8 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
           <BatchPanel active={tab === "batch"} />
         </TabWrapper>
       </div>
-      {tab === "selection" && (
-        <TabWrapper>
-          <SelectionPanel />
-        </TabWrapper>
-      )}
       {tab === "selectionV2" && (
-        <div className="v2-shell px-4 py-3">
+        <div className="v2-shell w-full px-4 py-3">
           <SelectionV2Panel />
         </div>
       )}

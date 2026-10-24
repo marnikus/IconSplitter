@@ -16,9 +16,9 @@ import {
 export interface AppState {
   tab: TabId;
   sheets: SheetOptsState;
-  /** Review view state shared by the Selection and Selection V2 tabs. */
+  /** Selection V2 review state, persisted in the compatible selection JSON slice. */
   view: SessionSelection;
-  /** What only the V2 layout adds on top of that. */
+  /** Selection V2 checkbox and scroll state. */
   v2: SessionV2;
   /** Generate SVG tab: its own checkbox selection (stable source ids). */
   svg: SessionSvg;

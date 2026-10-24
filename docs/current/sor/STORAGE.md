@@ -21,7 +21,7 @@ Jump to a domain; validate everything read from storage (RULE 13). Image-edit ke
 | Where | What | Rules |
 |---|---|---|
 | `<root>/review-decisions.json` | **legacy** approve/decline records — read as a fallback only | never written or deleted by this build (I-42); a local pair file wins; corrupt → warn + keep memory (I-12) |
-| IndexedDB `iconSplitter/handles["__selection__"]` | selection root handle (shared by both Selection tabs) | permission re-requested on restore |
+| IndexedDB `iconSplitter/handles["__selection__"]` | Selection V2 review root handle (compatible key retained) | permission re-requested on restore |
 | localStorage `iconSplitter.selectionV2.prefs.v1` | V2 view prefs `{ mode, thumbHeight }` | validated + clamped on read (RULE 13) |
 
 ## Shared paths and log
@@ -30,3 +30,8 @@ Jump to a domain; validate everything read from storage (RULE 13). Image-edit ke
 |---|---|---|
 | IndexedDB `iconSplitter/rootpaths` | the picked folders' real full paths, records `[{ handle, path, how }]` — one per folder HANDLE (I-63) | normalised + validated on write and read (I-29/I-39); identity is `isSameEntry`, never the name; capped at 20; never leaves the browser. The old name-keyed `localStorage iconSplitter.rootpaths.v1` is **never read** (a guess may not survive as data, I-59) |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
+
+Original Selection tab removal: stored `tab: "selection"` is read as
+`selectionV2`; the existing `selection` session view slice remains V2's filter,
+sort, active row and comparison state. Obsolete `collapsed` state is dropped.
+No session schema/key, shared root handle or pair-sidecar deletion is performed.

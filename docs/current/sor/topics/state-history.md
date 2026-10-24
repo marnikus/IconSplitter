@@ -17,7 +17,7 @@ by `useAppState` / `useAppView` (`useSyncExternalStore`):
 |---|---|---|
 | `tab` | the active tab | session |
 | `sheets` | `padding`, `size`, `transparent` | session |
-| `view` | `filter`, `sort`, `selectedId`, `collapsed`, `zoom`, `sync`, `autoNext` (shared by Selection and Selection V2) | session |
+| `view` | `filter`, `sort`, `selectedId`, `zoom`, `sync`, `autoNext` (Selection V2 review state) | session |
 | `v2` | `checked`, `scrollY`, `anchorId` (the Shift anchor) | session |
 | `batch`, `svg`, `upload` | each tab's `checked`, `activeId`, `anchorId` | session |
 | `prefs` | V2 `mode`, `thumbHeight` — held in memory only | `selectionv2/prefsstore` |
@@ -25,7 +25,7 @@ by `useAppState` / `useAppView` (`useSyncExternalStore`):
 One owner per value, so the session file deliberately does **not** duplicate: the
 last batch preset (`saveLastName`), a preset's `ignoreFolders` (`lib/presets`),
 the V2 prefs (`prefsstore`), folder handles (IndexedDB via `batch/store`) or
-decisions (`review-decisions.json`).
+decisions (per-pair sidecars; legacy root file is read-only).
 
 Restore happens in `state/boot.ts` **before** the first render, so no panel ever
 paints defaults and then jumps. Autosave is debounced 250 ms
@@ -132,3 +132,8 @@ datetime-local`), a `<textarea>`, a `<select>` or a contenteditable. A `range` o
 `checkbox` passes the keystroke through, so `Ctrl+Z` still works after dragging
 the zoom slider or clicking a row checkbox — the previous "any input is a text
 field" test killed undo for the two controls the review tab uses most.
+
+The original Selection UI is removed. Old saved `tab: "selection"` opens V2
+and preserves its valid view/checked state; `collapsed` is no longer a view
+field. A historical collapse-only apply is refused without mutating state;
+valid mixed history still applies its supported V2 fields.

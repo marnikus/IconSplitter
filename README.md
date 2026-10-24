@@ -4,25 +4,20 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has six modes (tabs across the top):
+It has five modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
 * **Batch folders** — point the app at a folder tree of `*_AI` sheets and let
   it scan, review, split and write everything in one pass, preserving your
   folder hierarchy (see below). Batch mode requires **Chrome or Edge**.
-* **Selection** — review every original next to its `_AI` result, approve or
-  decline each pair, and keep every decision in the pair's **own** JSON file,
-  beside its images (`<name>.svg.json` — the file also records the SVGs
-  generated from that pair; filters by month/date range, sorting, search,
-  hotkeys A/D). Also Chrome/Edge only.
-* **Selection V2** — the same review data in a denser, table-like layout:
+* **Selection V2** — review original/AI pairs and save decisions in per-pair JSON sidecars:
   a full-width list where every row shows the original and the AI result side
-  by side, a thumbnail zoom slider (48–240 px, remembered between sessions),
-  checkboxes with select-all, and **Approve selected** / **Approve visible
-  list** for bulk decisions. A second layout switches to the large
+  by side, a thumbnail zoom slider (48–800 px, remembered between sessions),
+  checkboxes with select-all, and **Approve selected**, **Decline selected** and **Reset selected** with
+  confirmation, limited to checked, visible, complete pairs. A second layout switches to the large
   side-by-side comparison. Also Chrome/Edge only.
-* **Generate SVG** — for the pairs Selection approved, sends the AI image
+* **Generate SVG** — for the pairs Selection V2 approved, sends the AI image
   (alone, or as one square contact sheet of up to 9) to Requesty's
   OpenAI-compatible chat endpoint with your own API key, and writes one
   validated, versioned `<name>.svg` beside each AI image and records each
@@ -167,7 +162,7 @@ npm run dev
 Switch to the **Batch folders** tab to process a whole directory tree of
 sheets in one go.
 
-1. **Choose source folder** — the app walks the folder recursively, keeps your
+1. **Open folder** — the app walks the folder recursively, keeps your
    relative paths, and collects every `*_AI` image with a numeric tail
    (`*_AI_7`, `*_AI_9_01`, …). Each source
    gets a status file `<base>.json` next to its reference image, tracking
@@ -215,19 +210,20 @@ start. A folder or file that has since disappeared is reported, never hidden.
 
 ## Selection V2 (Chrome / Edge only)
 
-The **Selection V2** tab reviews the same pairs as **Selection**, but as a
-fast bulk-review table. Both tabs share one root folder and the same decisions:
+The **Selection V2** tab is the only review tab, with list and comparison layouts;
 each approval is written to the pair's own `<name>.svg.json` beside its images,
 so a folder keeps its approvals when it is renamed, moved or opened on its own.
+Sessions saved on the removed original Selection tab now open Selection V2,
+without deleting review state, root handles or decisions.
 An older `review-decisions.json` at the root is still **read** as a fallback for
 pairs that have no file of their own, and is never written again.
 
-1. **Choose source folder** (or **↻ Rescan**) — the folder is walked
+1. **Open folder** (or **↻ Rescan**) — the folder is walked
    recursively; every `name.ext` is paired with its `name_AI.ext`. Files
    without a partner stay visible as **AI result missing** / **Original
    missing** instead of disappearing.
 2. **Zoom** — drag the `ZOOM` slider to set the maximum thumbnail height in
-   pixels (48–240, default 84). Row height and both thumbnails resize while
+   pixels (48–800, default 84). Row height and both thumbnails resize while
    you drag, the aspect ratio is preserved, and the value is remembered the
    next time you open the app.
 3. **Select** — tick individual rows, use the header checkbox (it shows a
@@ -235,8 +231,8 @@ pairs that have no file of their own, and is never written again.
    **Deselect all**. Selection is independent of the review status and
    survives filtering and sorting; rows hidden by a filter are counted and
    never changed behind your back.
-4. **Approve in bulk** — **✓ Approve selected (n)** or **✓ Approve visible
-   list (n)**. The count is part of the button, the button asks you to confirm
+4. **Approve in bulk** — **Approve selected (n)**, **Decline selected (n)** or
+   **Reset selected (n)**, limited to checked, visible, complete pairs. The count is part of the button, the button asks you to confirm
    before writing, and the whole batch produces a single message such as
    `12 pairs approved · 2 skipped (incomplete or gone)`.
 5. **Decide one by one** — click a row to make it the *active* row (highlighted
@@ -287,9 +283,9 @@ IconSplitter/
 ├── src/
 │   ├── main.tsx             # React bootstrap
 │   ├── App.tsx              # Single-sheets UI
-│   ├── ui/Workbench.tsx     # Mode shell — sheets / batch / selection / V2 tabs
+│   ├── ui/Workbench.tsx     # Mode shell — sheets / batch / V2 / SVG / upload tabs
 │   ├── batch/               # Batch mode (store, process, presets, UI)
-│   ├── selection/           # Selection review (state, decision IO, V1 UI)
+│   ├── selection/           # Shared V2 review engine, comparison, pair IO
 │   ├── selectionv2/         # Selection V2 (list review, bulk bar, zoom)
 │   ├── lib/                 # Pure logic: detect, render, naming, scan, fs,
 │   │                        # statefile, presets, output plan, batchsplit

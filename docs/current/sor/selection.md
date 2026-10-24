@@ -1,10 +1,10 @@
-# Selection / Selection V2 — current behaviour
+# Selection V2 — current behaviour
 
 See [invariants/selection.md](invariants/selection.md), [path invariants](invariants/paths.md), [selection selectors](../selectors/selection.md), [pair-file deep dive](topics/pair-files.md), [storage](STORAGE.md) and [test owners](TESTS.md).
 
 ## Behaviour
 
-Selection:
+Selection V2 shared review rules:
 
 * Recursive scan pairs `name.ext` with `name_AI.ext` incl. numeric tails
   (`name_AI_9_01.ext`; stable `pair_<hash>` ids, dir-scoped); unpaired files surface as
@@ -44,11 +44,11 @@ Selection:
   transiently missing file never destroys a decision.
 * Rescan is explicit; an age counter updates without performing a background scan.
 
-Selection V2 (adds to, never replaces, the rules above):
+Selection V2 layouts and controls:
 
 * Two layouts over one state: **List review** (full width, no comparison
   panel, one pair per row showing BOTH an Original and an AI result thumbnail,
-  each labelled) and **Comparison** (the V1 `CompareView` panes + a pair
+  each labelled) and **Comparison** (the shared `CompareView` panes + a pair
   picker). Layout, filters, selection and decisions survive switching.
 * Thumbnail zoom: range slider **48–800 px, step 4, default 84** with a live
   "128 px" readout and both bounds shown; row and thumbnail height follow it
@@ -82,7 +82,7 @@ Everything above runs client-side; nothing is uploaded anywhere.
 ## State
 
 Selection V2 model (`useSelectionV2` wraps `useSelection`, so decision,
-filter and persistence state are V1's and stay single-owned):
+filter and persistence stay single-owned in the shared review engine):
 
 ```
 core: SelectionApi      discovery, pairs + decisions, filter, sort,
@@ -92,3 +92,12 @@ prefs: ReviewPrefs      { mode: "list"|"compare", thumbHeight: 48..800 }
 derived                 header check state, bulk scope
                         { affected, blocked, hidden }
 ```
+
+## Original-tab removal (2026-10-24)
+
+Selection V2 is the only review tab. The old Selection panel, header, filter
+bar, single-sided sidebar/list and collapse control are removed. Its obsolete
+saved tab id migrates to `selectionV2`. The session `selection` view slice and
+`__selection__` root key remain compatible because V2 and other workflows use
+them; user decisions, root handles and checked rows are not deleted. Shared
+review modules remain in `src/selection/`; this directory is not an extra tab.

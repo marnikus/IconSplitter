@@ -12,8 +12,8 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `log-head`, `log-count`, `log-autoscroll`, `log-max`, `log-copy`, `log-clear`,
   `log-minimize`, `log-note`, `log-body`, `log-list`, `log-entry`, `log-empty`.
 
-* Workbench: `tab-sheets`, `tab-batch`, `tab-selection`, `tab-selection-v2`,
-  `tab-generate-svg`.
+* Workbench: `tab-sheets`, `tab-batch`, `tab-selection-v2`,
+  `tab-generate-svg`, `tab-upload`.
 * Sheets mode: header (upload + 3 export buttons), Sheets, Export settings
   (padding/size/transparent), Detection (merge slider + reset), Boundary
   overlay, Result grid, busy overlay, toast.
@@ -21,11 +21,6 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   `batch-cancel`), PresetBar (name/save/list/delete + split settings), Dest
   info, review window (`scan-table`, `batch-check-all`, per-row checkbox/actions),
   reference warnings, busy overlay, toast.
-* Selection mode: header (`sel-root`, `sel-rescan`, `sel-watcher`, counters,
-  help), FilterBar (date modes + From/To, status, sort, order, clear), review
-  list (`sel-list`, `sel-search`, `sel-row-*`), comparison (`sel-compare`,
-  Approve/Decline, 1:1/SYNC, per-side Open-in-Explorer), status footer
-  (`sel-footer`), write/corrupt banners, busy + toast.
 * Selection V2 mode: source bar (`v2-root`, `v2-rescan`, `v2-watcher`,
   `v2-mode-list` / `v2-mode-compare`, `v2-count-*`), filter grid (`v2-date-*`,
   `v2-from` / `v2-to`, `v2-status`, `v2-pairing`, `v2-sort`, `v2-dir`,
@@ -35,7 +30,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   list (`v2-list`, `v2-rows`, `v2-row-*`, `v2-check-*`, `v2-thumb-src` /
   `v2-thumb-ai`, `v2-status-*`, `v2-open-{src,ai}-*`, `v2-decline-*` /
   `v2-approve-row-*`, `v2-autonext`, `v2-empty`, `v2-nomatch`), comparison
-  (`v2-pair-picker` + the V1 `sel-compare` handles), shared surfaces
+  (`v2-pair-picker` + the shared `sel-compare` handles), shared surfaces
   (`v2-writewarn` / `v2-retry`, `v2-corrupt`, `v2-toast`, `v2-busy` and the
   shared `sel-footer` / `sel-diff` / `sel-retry-count`), the folder control
   (`v2-open-folder` + the read-only `v2-folder-path` row, I-44/I-46), and the

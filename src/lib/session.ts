@@ -8,7 +8,7 @@
 // writers that can disagree.
 //
 // Also absent: root folder handles (IndexedDB, owned by batch/store) and
-// decisions (review-decisions.json, owned by selection/reviewstore).
+// decisions (pair sidecars, owned by selection/pairstore; legacy fallback read-only).
 
 import { isRecord } from "./isrecord";
 import { DEFAULT_SHEET_OPTS, parseSheetOpts, type SheetOpts } from "./exportopts";
@@ -18,23 +18,22 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selection" | "selectionV2" | "generateSvg" | "upload";
+export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload";
 
-export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2", "generateSvg", "upload"];
+export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selectionV2", "generateSvg", "upload"];
 
-/** Review list state shared by the Selection and Selection V2 tabs. */
+/** Selection V2 review state; the JSON slice name stays compatible with saved sessions. */
 export interface SessionSelection {
   filter: ListFilter;
   sort: SortState;
   /** Stable pair id — never a row index (I-10). */
   selectedId: string | null;
-  collapsed: boolean;
   zoom: ZoomMode;
   sync: boolean;
   autoNext: boolean;
 }
 
-/** What only the V2 layout adds on top of the shared review state. */
+/** Selection V2 checkbox and scroll state. */
 export interface SessionV2 {
   checked: string[];
   scrollY: number;
@@ -79,7 +78,7 @@ export interface SessionState {
 
 export const DEFAULT_SELECTION: SessionSelection = {
   filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
-  collapsed: false, zoom: "fit", sync: true, autoNext: true,
+  zoom: "fit", sync: true, autoNext: true,
 };
 
 export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: null };
@@ -125,7 +124,8 @@ export function pruneIds(ids: readonly string[], knownIds: ReadonlySet<string>):
 function toSession(raw: unknown): SessionState {
   if (!isRecord(raw) || raw.v !== SESSION_VERSION) return DEFAULT_SESSION;
   return {
-    tab: TAB_IDS.includes(raw.tab as TabId) ? (raw.tab as TabId) : DEFAULT_SESSION.tab,
+    tab: raw.tab === "selection" ? "selectionV2"
+      : TAB_IDS.includes(raw.tab as TabId) ? (raw.tab as TabId) : DEFAULT_SESSION.tab,
     sheets: parseSheetOpts(raw.sheets),
     selection: parseSelection(raw.selection),
     selectionV2: parseV2(raw.selectionV2),
@@ -168,7 +168,6 @@ function parseSelection(raw: unknown): SessionSelection {
     filter: parseFilter(raw.filter),
     sort: parseSort(raw.sort),
     selectedId: typeof raw.selectedId === "string" ? raw.selectedId : null,
-    collapsed: raw.collapsed === true,
     zoom: raw.zoom === "full" ? "full" : "fit",
     sync: raw.sync !== false,
     autoNext: raw.autoNext !== false,

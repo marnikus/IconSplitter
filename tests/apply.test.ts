@@ -145,3 +145,13 @@ describe("applyEntry", () => {
     expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"]);
   });
 });
+
+it('does not resurrect removed sidebar state from old view history, but keeps V2 comparison changes', async () => {
+  const legacy = { ...entry('view'), origin: 'selection' };
+  const before = getAppState().view;
+  await expect(applyEntry(legacy, { collapsed: true })).resolves.toBe(false);
+  expect(getAppState().view).toBe(before);
+  await expect(applyEntry(legacy, { collapsed: true, zoom: 'full' })).resolves.toBe(true);
+  expect(getAppState().view.zoom).toBe('full');
+  expect(getAppState().view).not.toHaveProperty('collapsed');
+});

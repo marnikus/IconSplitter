@@ -152,7 +152,6 @@ function viewPatch(v: Record<string, unknown>): Partial<SessionSelection> {
 
 function togglePatch(v: Record<string, unknown>): Partial<SessionSelection> {
   const patch: Partial<SessionSelection> = {};
-  if (typeof v.collapsed === "boolean") patch.collapsed = v.collapsed;
   if (v.zoom === "fit" || v.zoom === "full") patch.zoom = v.zoom;
   if (typeof v.sync === "boolean") patch.sync = v.sync;
   if (typeof v.autoNext === "boolean") patch.autoNext = v.autoNext;

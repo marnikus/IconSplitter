@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-24-remove-selection-v1/README.md` | Remove the original Selection tab/exclusive UI; retain V2 and shared review/IO, migrate saved tab and remove sidebar state |
 | `archive/2026-10-23-harness-round2/README.md` / `results.md` | Further 50% research, rejected probes, unchanged application/execution architecture and explicit configurable comparison target; speed target unmet |
 | `archive/2026-10-22-test-harness-speed/README.md` / `research.md` / `design.md` | >=60% full-verification speed target, measured provider/worker probes and isolation-preserving redesign |
 | `archive/2026-10-22-custom-badge-template/README.md` | Plan for a validated user SVG badge template editor, shared geometry/output and persisted scope |

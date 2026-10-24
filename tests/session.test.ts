@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { ALL_FILTER } from "../src/lib/reviewfilter";
 import {
-  DEFAULT_SESSION, parseSession, pruneIds, serializeSession, SESSION_VERSION,
+  TAB_IDS, DEFAULT_SESSION, parseSession, pruneIds, serializeSession, SESSION_VERSION,
 } from "../src/lib/session";
 
 const NOW = "2026-10-01T10:00:00.000Z";
@@ -53,7 +53,7 @@ describe("parseSession", () => {
     expect(s.selection.selectedId).toBe("pair_a");
     expect(s.selection.filter).toEqual({ ...ALL_FILTER, status: "approved", search: "fog" });
     expect(s.selection.sort).toEqual({ by: "name", dir: "asc" });
-    expect(s.selection.collapsed).toBe(true);
+    expect(s.selection).not.toHaveProperty("collapsed");
     expect(s.selection.zoom).toBe("full");
     expect(s.selection.sync).toBe(false);
     expect(s.selection.autoNext).toBe(false);
@@ -125,5 +125,21 @@ describe("pruneIds — stale ids never survive a rescan", () => {
   it("does not hand back the caller's array", () => {
     const ids = ["pair_a"];
     expect(pruneIds(ids, new Set())).not.toBe(ids);
+  });
+});
+
+describe("original Selection removal compatibility", () => {
+  it("keeps only the five supported tabs", () => {
+    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload"]);
+  });
+  it("moves old Selection sessions to V2 without losing review/check state", () => {
+    const session = parseSession(asText({ tab: "selection" }));
+    expect(session.tab).toBe("selectionV2");
+    expect(session.selection.filter).toEqual(FULL.selection.filter);
+    expect(session.selection.selectedId).toBe("pair_a");
+    expect(session.selection.zoom).toBe("full");
+    expect(session.selectionV2).toEqual(FULL.selectionV2);
+    expect(session.selection).not.toHaveProperty("collapsed");
+    expect(serializeSession(session, NOW)).not.toContain('"collapsed"');
   });
 });

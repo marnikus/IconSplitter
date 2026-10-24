@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SESSION } from "../src/lib/session";
 import { getAppState, patchBatch, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
-import { loadSessionState, saveSessionState } from "../src/state/sessionstore";
+import { loadSessionState, saveSessionState, SESSION_KEY } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
 import { useSvgHotkeys, type SvgHotActions } from "../src/svg/SvgHotkeys";
 import type { SvgRow } from "../src/svg/types";
@@ -57,6 +57,20 @@ afterEach(() => {
 });
 
 describe("the shell", () => {
+  it("migrates a saved original Selection tab into V2 without rendering the removed panel", () => {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...DEFAULT_SESSION, v: 1, tab: "selection",
+      selection: { ...DEFAULT_SESSION.selection, selectedId: "pair_kept" },
+      selectionV2: { checked: ["pair_kept"], scrollY: 12, anchorId: "pair_kept" } }));
+    bootStores();
+    mountWorkbench();
+    expect(getAppState().tab).toBe("selectionV2");
+    expect(getAppState().view.selectedId).toBe("pair_kept");
+    expect(getAppState().v2.checked).toEqual(["pair_kept"]);
+    expect(q('[data-testid="tab-selection"]')).toBeNull();
+    expect(q('[data-testid="sel-unsupported"]')).toBeNull();
+    expect(q('[data-testid="v2-unsupported"]')).not.toBeNull();
+  });
+
   it("shows the undo/redo bar next to the tabs on the default tab", () => {
     mountWorkbench();
     expect(q("[data-testid='history-bar']")).not.toBeNull();
@@ -75,20 +89,20 @@ describe("the shell", () => {
   });
 
   it("opens on the tab the last session ended on", () => {
-    saveSessionState({ ...DEFAULT_SESSION, tab: "selection" }, "2026-10-01T12:00:00.000Z");
+    saveSessionState({ ...DEFAULT_SESSION, tab: "selectionV2" }, "2026-10-01T12:00:00.000Z");
     bootStores();
     mountWorkbench();
-    expect(getAppState().tab).toBe("selection");
+    expect(getAppState().tab).toBe("selectionV2");
     // the Selection panel, not the sheets tab — this DOM has no File System
     // Access API, so the panel renders its "unsupported browser" note
-    expect(q("[data-testid='sel-unsupported']")).not.toBeNull();
+    expect(q("[data-testid='v2-unsupported']")).not.toBeNull();
     expect(q("[data-testid='padding-slider']")).toBeNull();
   });
 
   it("offers the SVG to upload tab right after Generate SVG, and opens its panel", async () => {
     mountWorkbench();
     const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
-    expect(tabs).toEqual(["tab-sheets", "tab-batch", "tab-selection", "tab-selection-v2", "tab-generate-svg", "tab-upload"]);
+    expect(tabs).toEqual(["tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload"]);
     await click("[data-testid='tab-upload']");
     await settle();
     expect(getAppState().tab).toBe("upload");
@@ -171,7 +185,7 @@ describe("Upload lifetime and shared progress mount", () => {
     await click('[data-testid="tab-upload"]');
     const shell = q('[data-testid="upload-shell"]') as HTMLElement;
     expect(shell).not.toBeNull();
-    await click('[data-testid="tab-selection"]');
+    await click('[data-testid="tab-selection-v2"]');
     expect(q('[data-testid="upload-shell"]')).toBe(shell);
     expect(shell.hidden).toBe(true);
     await click('[data-testid="tab-upload"]');

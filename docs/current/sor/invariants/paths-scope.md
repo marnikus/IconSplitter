@@ -5,7 +5,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
 <a id="i-38"></a>
 * **I-38 (the scope is the batch's output, RULE 3/24):** when the picked tree
   contains a folder whose name matches `/^_.*split.+output/i` (or the picked
-  folder is one), Selection V1/V2 and Generate SVG list **only** pairs with a
+  folder is one), Selection V2 and Generate SVG list **only** pairs with a
   side inside such a folder — the main folder keeps the unsplit sheets, which are
   the batch's input, and they are not reviewable and not generatable. The scope
   is a function of the tree's directories — and of what the picked folder itself

@@ -37,7 +37,7 @@ reached by copying an item that sits in it. (Historical note: the batch chain
 used to be found from either side of the picked root — inside the
 relative path, at its head (the output folder or a month folder picked as the
 root), or the root itself being one run folder — see §17. Four surfaces use it:
-the Batch scan table's row action, Selection V1's and V2's "original / AI
+the Batch scan table's row action, Selection V2's "original / AI
 result" buttons and Generate SVG's "open location".
 
 ### 14.3 The path is captured at pick time (2026-10-05, I-35…I-37)

@@ -11,7 +11,7 @@ import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const TABS = ["tab-sheets", "tab-batch", "tab-selection", "tab-selection-v2", "tab-generate-svg", "tab-upload"];
+const TABS = ["tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload"];
 
 let host: HTMLDivElement;
 let ui: Root;

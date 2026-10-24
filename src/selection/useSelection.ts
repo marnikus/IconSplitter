@@ -29,7 +29,7 @@ const ACTION_WORD: Record<Decision, string> = { pending: "Reset", approved: "App
 
 /** View toggles `patch()` may carry; the rest of SelState stays local. */
 const VIEW_TOGGLES: Record<string, string> = {
-  collapsed: "Sidebar", zoom: "Detail zoom", sync: "Sync selection", autoNext: "Auto-advance",
+  zoom: "Detail zoom", sync: "Sync selection", autoNext: "Auto-advance",
 };
 
 import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";

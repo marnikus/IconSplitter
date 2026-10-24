@@ -1,10 +1,10 @@
 # Current system overview
 
-The six current modes are routed from [the current-doc index](../README.md). Provider requests are opt-in exceptions to local processing (RULE 20); no automatic website upload occurs. The old summary claimed that Generate SVG uploaded nothing, but a confirmed Requesty generation explicitly sends selected AI images.
+The five current modes are routed from [the current-doc index](../README.md). Provider requests are opt-in exceptions to local processing (RULE 20); no automatic website upload occurs. The old summary claimed that Generate SVG uploaded nothing, but a confirmed Requesty generation explicitly sends selected AI images.
 
 ## 1. What this is
 
-A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -22,23 +22,20 @@ A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
    quietly, keeps the handle, and shows a one-click "Restore access" bar
    (`batch-grant`) when the browser answers "prompt"; per-item merge decisions
    persist per preset and drive the preview AND the split identically (I-67).
-3. **Selection** (Chrome/Edge only) — recursively scan a root, pair every
-   original with its `_AI` result, review them side by side and store an
-   approve/decline decision per pair in the pair's own `<stem>.svg.json` (I-41).
-4. **Selection V2** (Chrome/Edge only) — the same discovery, decisions and
-   decision file as mode 3, presented as the template-driven
+3. **Selection V2** (Chrome/Edge only) — recursively pair originals with AI
+   results and save each decision in its own pair sidecar, presented as the template-driven
    `design/selection tab V2/v2 selection tab.html` design: a full-width
    **list review** with paired thumbnails, a thumbnail zoom slider, real
    multi-selection and bulk approve, plus a switchable **comparison** layout.
-5. **Generate SVG** (Chrome/Edge only) — recursively scans the same root and
-   keeps ONLY the pairs the Selection workflow approved, sends each approved
+4. **Generate SVG** (Chrome/Edge only) — recursively scans the same root and
+   keeps ONLY the pairs Selection V2 approved, sends each approved
    AI image (alone or as a square contact sheet of up to 9) to Requesty's
    OpenAI-compatible chat endpoint, and saves one validated SVG per source
    beside that source's AI image, versioned (`_v2`, `_v3`…) with a per-file
    `<stem>.svg.json` sidecar. Only a confirmed provider request sends the
    disclosed images; the API key lives only in this browser. [AI-source image
    edits](svg-image-edits.md) have their own confirmation and review flow.
-6. **SVG to upload** (Chrome/Edge only) — prepares the APPROVED SVG icons for
+5. **SVG to upload** (Chrome/Edge only) — prepares the APPROVED SVG icons for
    external stock/print websites. Recursively discovers one row per pair with
    a valid approved SVG (through the pair sidecars; `export/` is never
    scanned, so export output never feeds discovery), applies

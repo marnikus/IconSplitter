@@ -3151,3 +3151,22 @@ comparator regressions), every original discovery entry retained; full coverage
 JSON exactly identical on167src/lib files,98.03%lines. Standalone types, lint
 (0errors/23legacy warnings), quality changed vs0fa074c, fast/full gates PASS.
 Generated dependency/build/cache/private-version/profiling output excluded.
+
+## 2026-10-24 — remove original Selection tab, retain Selection V2
+
+Plan/dependency map written before implementation in
+`docs/archive/2026-10-24-remove-selection-v1/README.md`. Witnessed6RED then
+focused140GREEN/12files. Removed original nav/render branch and exclusive
+SelectionPanel/HeaderRow/FilterBar/PairList (418lines), sidebar-collapse state
+and undo handling, and single-sided thumbnail resolver. Retained V2 engine,
+comparison, selection/hotkeys, roots/sidecars and shared SVG/Upload/Batch/history
+consumers. Old saved tab `selection` migrates to `selectionV2` with valid view,
+checked ids and anchor retained; old collapsed field is discarded. Five tabs.
+Original3UI smoke cases ported to V2, not deleted; log/scroll/layout and session
+regressions updated. Standalone tsc, lint (0errors/23existing warnings), changed
+quality vs c403c22, verify:fast5lanes and verify6lanes PASS. Full2568tests/245files,
+native30tests/5files separately PASS,98.03%src/lib lines. Single-file build
+1723.38kB/509.74kB gzip. No user files, sidecars or shared handle/session keys
+deleted, no intentional live provider request, no coverage/gate relaxation.
+Current owner/selectors/storage/overview/history routes updated; generated
+dist/dependency/cache churn excluded.

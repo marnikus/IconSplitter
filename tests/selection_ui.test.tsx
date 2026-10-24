@@ -1,10 +1,10 @@
-// selection_ui.test.tsx — RULE 8: DOM-level smoke for the Selection panel:
+// selection_ui.test.tsx — RULE 8: DOM-level smoke for the remaining Selection V2 panel:
 // folder pick -> scan -> list rows -> hotkey decision -> text status chips
 // (a11y §11 verified in rendered markup, not just pure helpers).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
-import SelectionPanel from "../src/selection/SelectionPanel";
+import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { resetAppStore } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
@@ -43,7 +43,7 @@ function fakeRoot(): FakeDir {
   return root;
 }
 
-describe("SelectionPanel in a DOM", () => {
+describe("SelectionV2Panel in a DOM", () => {
   beforeAll(() => {
     (window as unknown as PickerWindow).showDirectoryPicker = () => Promise.resolve(fakeRoot());
   });
@@ -53,23 +53,25 @@ describe("SelectionPanel in a DOM", () => {
     document.body.appendChild(el);
     const root: Root = createRoot(el);
     resetAppStore();
-    await act(async () => { root.render(<HistoryProvider><SelectionPanel /></HistoryProvider>); });
-    const pick = el.querySelector("[data-testid='sel-open-folder']") as HTMLButtonElement;
+    await act(async () => { root.render(<HistoryProvider><SelectionV2Panel /></HistoryProvider>); });
+    const pick = el.querySelector("[data-testid='v2-open-folder']") as HTMLButtonElement;
     expect(pick).toBeTruthy();
     expect(pick.textContent).toBe("Open folder");
     expect(pick.className).toContain("folder-open");
     await act(async () => { pick.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     await settle();
-    const row = el.querySelector("[data-testid^='sel-row-']");
+    const row = el.querySelector("[data-testid^='v2-row-']");
     expect(row).toBeTruthy();
     expect(row?.textContent).toContain("Pending"); // text, not colour alone
+    await act(async () => { (el.querySelector('[data-testid="v2-mode-compare"]') as HTMLButtonElement).click(); });
+    await settle();
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true })); });
     await settle();
     expect(el.querySelector("[data-testid='sel-status']")?.textContent).toContain("Approved");
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true })); });
     await settle();
     expect(el.querySelector("[data-testid='sel-status']")?.textContent).toContain("Declined");
-    expect(el.querySelector("[data-testid='sel-count-declined']")?.textContent).toContain("1");
+    expect(el.querySelector("[data-testid='v2-count-declined']")?.textContent).toContain("1");
     await act(async () => { root.unmount(); });
   });
 
@@ -79,13 +81,13 @@ describe("SelectionPanel in a DOM", () => {
     document.body.appendChild(el);
     const root: Root = createRoot(el);
     resetAppStore();
-    await act(async () => { root.render(<HistoryProvider><SelectionPanel /></HistoryProvider>); });
-    const pick = el.querySelector("[data-testid='sel-open-folder']") as HTMLButtonElement;
+    await act(async () => { root.render(<HistoryProvider><SelectionV2Panel /></HistoryProvider>); });
+    const pick = el.querySelector("[data-testid='v2-open-folder']") as HTMLButtonElement;
     await act(async () => { pick.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     await settle();
-    expect(el.querySelector("[data-testid='sel-scope']")?.textContent).toContain("Scope: split output only");
+    expect(el.querySelector("[data-testid='v2-scan-scope']")?.textContent).toContain("Scope: split output only");
     // the unsplit sheet at the root is the batch's input, not a reviewable pair
-    expect(el.querySelectorAll("[data-testid^='sel-row-']")).toHaveLength(1);
+    expect(el.querySelectorAll("[data-testid^='v2-row-']")).toHaveLength(1);
     await act(async () => { root.unmount(); });
   });
 
@@ -95,22 +97,22 @@ describe("SelectionPanel in a DOM", () => {
     document.body.appendChild(el);
     const root: Root = createRoot(el);
     resetAppStore();
-    await act(async () => { root.render(<HistoryProvider><SelectionPanel /></HistoryProvider>); });
+    await act(async () => { root.render(<HistoryProvider><SelectionV2Panel /></HistoryProvider>); });
     // the empty state carries the same control, so the action is the same word
     // wherever the eye lands (I-44)
-    const empty = el.querySelector("[data-testid='sel-open-folder-empty']") as HTMLButtonElement;
+    const empty = el.querySelector("[data-testid='v2-open-folder-empty']") as HTMLButtonElement;
     expect(empty.textContent).toBe("Open folder");
     expect(empty.className).toContain("folder-open");
     expect(empty.closest("section")?.textContent).toContain("Pick the folder that holds your originals");
     await act(async () => {
-      (el.querySelector("[data-testid='sel-open-folder']") as HTMLButtonElement)
+      (el.querySelector("[data-testid='v2-open-folder']") as HTMLButtonElement)
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     // the row shows the folder's own name while no full path was captured (I-46)
-    expect(el.querySelector("[data-testid='sel-folder-path']")?.textContent).toContain("test_processing");
-    expect(el.querySelector("[data-testid='sel-folder-path']")?.textContent).toContain("full path not captured");
-    expect(el.querySelector("[data-testid='sel-folder-path']")?.querySelector("input, button")).toBeNull();
+    expect(el.querySelector("[data-testid='v2-folder-path']")?.textContent).toContain("test_processing");
+    expect(el.querySelector("[data-testid='v2-folder-path']")?.textContent).toContain("full path not captured");
+    expect(el.querySelector("[data-testid='v2-folder-path']")?.querySelector("input, button")).toBeNull();
     // the removed chrome is absent, and the folder's name is never the button
     expect(el.querySelector("[data-testid='sel-root']")).toBeNull();
     expect(el.querySelector("[data-testid='sel-watcher']")).toBeNull();

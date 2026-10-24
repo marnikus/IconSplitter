@@ -25,7 +25,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
 <a id="i-36"></a>
 * **I-36 (the path is visible, RULE 12):** wherever a root is shown, its full
   path is shown with it once known — the full-width row below the controls
-  (`ui/FolderBar`, `sel-folder-path` / `v2-folder-path` / `svg-folder-path` /
+  (`ui/FolderBar`, `v2-folder-path` / `svg-folder-path` /
   `upload-folder-path`) — and the row names the state the value is in (*the
   path*, *full path not captured*). A user never has to open a dialog to find out
   what a copy will hand over, and a capture in one tab reaches the others without
