@@ -43,7 +43,7 @@ opt-in class as Generate SVG → Requesty; design
 ## Navigate by operation
 
 - [Settings and artboard](upload-settings.md) · [output geometry](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md)
-- [Metadata generation, validation and confirmation](upload-metadata.md)
+- [Metadata generation, automatic acceptance, validation and provider confirmation](upload-metadata.md)
 - [Clean SVG, JPEG and atomic export](upload-export.md)
 - [EPS conversion and stroke expansion](upload-eps.md)
 

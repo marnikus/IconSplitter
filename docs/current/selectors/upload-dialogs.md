@@ -113,7 +113,8 @@ label matches Generate vs Regenerate) / `upload-meta-dismiss` /
 `upload-meta-cancel`. The title `#upload-meta-title` reads "Generate metadata
 for N icons" or "Regenerate metadata for N icons"; when opened by "⇪ Export
 selected", it also says "…, then export N". Regeneration's note states that a
-returned answer replaces current text and is never auto-accepted; review it and
-fix validation errors before accepting, while provider failure preserves it. The
-extra note `upload-meta-then-export` states
+returned answer replaces current text while provider failure preserves it.
+Both modes state valid new metadata is auto-accepted; invalid answers
+need correction. No post-generation confirmation.
+The extra note `upload-meta-then-export` states
 the accept-as-it-lands rule before anything is paid for.

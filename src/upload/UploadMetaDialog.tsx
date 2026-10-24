@@ -50,12 +50,13 @@ function MetaDialogHead({ count, mode, thenExport, onDismiss }: {
 /** What this ONE request does — and what regeneration replaces. */
 function SentNote({ mode }: { mode: MetaDialogModel["mode"] }) {
   const replacement = mode === "regenerate"
-    ? " A returned answer replaces the current text and is never auto-accepted; review it and fix validation errors before accepting. A provider failure keeps the existing text."
+    ? " A returned answer replaces the current text. A provider failure keeps the existing text."
     : "";
   return (
     <p className="svg-note">
       Each icon's image is sent to Gemini inside this one request — nothing is uploaded
       automatically, and a timeout or disconnect is never resent on its own.{replacement}
+      {" "}Valid generated metadata is accepted automatically; invalid answers still need correction.
     </p>
   );
 }

@@ -72,7 +72,12 @@ Endpoint inheritance/settings/preview/final-package tests: [stroke endpoints](..
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
   entry; reset), the exact-request confirmation, editable/copiable metadata
-  fields, invalid-answer refusal, cancel (never resent), interrupted after a
+  fields, automatic valid-result acceptance for row/bulk Generate/Regenerate,
+  accepted-cache reload, preserved ownership, exact mixed-batch acceptance counts,
+  sequential existing-package refresh without unsolicited new exports,
+  legacy-draft/manual-edit acceptance, invalid/malformed/truncated refusal,
+  failed/cancelled regeneration preserving accepted text/cache, cancel (never
+  resent), interrupted after a
   restart, selected-only Shadow (hidden checks, mixed toggles, undo, general
   bulk apply preserves it, popup EPS warning), selected-only badge opt-in
   (mixed/hidden checks, undo, one shared defaults block, per-icon

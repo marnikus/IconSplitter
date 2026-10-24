@@ -43,7 +43,7 @@ function useMetaRequestActions(latest: Latest): Pick<MetaSlice,
     const previews = dialog.previews;
     const thenExport = dialog.thenExport;
     c.dispatch({ type: "dialog", dialog: null });
-    void runMetadataBatch(latest, dialog.ids, previews, { acceptValid: thenExport.length > 0, thenExport });
+    void runMetadataBatch(latest, dialog.ids, previews, { thenExport });
   }, [latest]);
   const cancelMetadata = useCallback(() => {
     const c = latest.current;

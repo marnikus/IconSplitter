@@ -14,7 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { AUTH_HEADER } from "../src/lib/upload/gemini";
-import { MANDATORY_TAGS } from "../src/lib/upload/meta";
+import { sha256HexText } from "../src/lib/upload/hash";
+import { rememberMeta } from "../src/upload/metacache";
+import { MANDATORY_TAGS, parseMetadata } from "../src/lib/upload/meta";
 import { withIntrinsicSize } from "../src/lib/upload/raster";
 import { JOURNAL_KEY } from "../src/upload/journal";
 import { UPLOAD_JOBS_KEY, forgetRestoreNote } from "../src/upload/jobstore";
@@ -1118,11 +1120,10 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     // the confirmation shows the prompt that will actually be sent
     expect((q("[data-testid=upload-meta-prompt]") as HTMLTextAreaElement).value).toBe(CUSTOM);
     await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("accepted"), "the metadata to land");
     expect(JSON.parse(t.calls[0].body).contents[0].parts[0].text).toBe(CUSTOM);
 
     // and the committed record names the prompt that produced the metadata
-    await click(`[data-testid=upload-meta-accept-${FOG}]`);
     await click("[data-testid=upload-export-selected]"); // the row is still the checked one
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     expect(fileText(root, `${DIR}/export/export.json`)).toContain(CUSTOM);
@@ -1417,11 +1418,177 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
   });
 });
 
+/** Legacy cached drafts remain explicit-review work; new model results do not. */
+async function rememberDraft(svg: string): Promise<void> {
+  rememberMeta(`sha256:${await sha256HexText(svg)}`, { state: "generated", meta: parseMetadata(GOOD_ANSWER)! });
+}
+
+describe("new metadata is accepted automatically", () => {
+  itSlow("row Generate accepts and persists valid metadata without an Accept click or unsolicited export", async () => {
+    const root = makeRoot(); const t = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", t.fetch);
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_row")); await mount(root); await check(FOG); await activate(FOG);
+    await click(`[data-testid=upload-meta-gen-${FOG}]`);
+    expect(t.calls).toHaveLength(0); // initial paid-input confirmation remains
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 1 && q("[data-testid=upload-progress]") === null, "row generation finished");
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
+    expect((q(`[data-testid=upload-meta-accept-${FOG}]`) as HTMLButtonElement).disabled).toBe(true);
+    expect((q("[data-testid=upload-meta-accept-selected]") as HTMLButtonElement).disabled).toBe(true);
+    expect(text("[data-testid=upload-toast]")).toContain("1 accepted");
+    expect(getLogState().entries.filter((e) => e.feature === "upload" && e.action === "named")).toHaveLength(1);
+    const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
+    expect(Object.values(cached.cache).map((v) => (v as {state: string}).state)).toEqual(["accepted"]);
+    expect(((root.children.get(DIR) as BinDir).children.get("export") as BinDir).children.has("fog.svg")).toBe(false);
+    await act(async () => { ui.unmount(); }); await mount(root); await activate(FOG);
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
+    expect(t.calls).toHaveLength(1); // reload neither sends nor asks to accept again
+  });
+
+  it.each([
+    ["invalid fields", BAD_ANSWER, null],
+    ["malformed lines", "No labeled metadata lines here", null],
+    ["truncated answer", GOOD_ANSWER, "MAX_TOKENS"],
+  ])("does not auto-accept %s or report it as accepted", async (_label, answer, finish) => {
+    const t = geminiTransport(answer);
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      const response = await t.fetch(url, init);
+      const body = await response.json();
+      if (finish !== null) body.candidates[0].finishReason = finish;
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_invalid")); await mount(makeRoot()); await activate(FOG);
+    await click(`[data-testid=upload-meta-gen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => t.calls.length === 1 && q("[data-testid=upload-progress]") === null, "invalid generation finished");
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
+    expect(text(`[data-testid=upload-meta-detail-${FOG}]`)).not.toBe("");
+    expect(text("[data-testid=upload-toast]")).toContain("0 accepted");
+    const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1") ?? '{"cache":{}}');
+    expect(Object.values(cached.cache).some((v) => (v as {state: string}).state === "accepted")).toBe(false);
+    expect(getLogState().entries.filter((e) => e.feature === "upload" && e.action === "named")).toHaveLength(0);
+  });
+
+  itSlow("a mixed batch accepts only its valid answer and reports the exact accepted count", async () => {
+    const good = geminiTransport(GOOD_ANSWER); const bad = geminiTransport(BAD_ANSWER); let calls = 0;
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => (++calls === 1 ? good : bad).fetch(url, init));
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_mixed")); await mount(makeDistinctRoot());
+    await check(FOG); await check(ARCH);
+    await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => calls === 2 && q("[data-testid=upload-progress]") === null, "mixed results finished");
+    expect([FOG, ARCH].filter((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("accepted"))).toHaveLength(1);
+    expect([FOG, ARCH].filter((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("invalid"))).toHaveLength(1);
+    expect(text("[data-testid=upload-toast]")).toContain("1 accepted");
+    const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
+    expect(Object.values(cached.cache).map((v) => (v as {state: string}).state).sort()).toEqual(["accepted", "generated"]);
+    expect(getLogState().entries.filter((e) => e.feature === "upload" && e.action === "named")).toHaveLength(1);
+    expect(good.calls).toHaveLength(1); expect(bad.calls).toHaveLength(1);
+  });
+
+  it.each(["failure", "cancellation"])("regeneration %s preserves prior accepted text/cache without accepting another answer", async (mode) => {
+    const first = geminiTransport(GOOD_ANSWER); vi.stubGlobal("fetch", first.fetch);
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_unsuccessful")); await mount(makeRoot()); await activate(FOG);
+    await click(`[data-testid=upload-meta-gen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => first.calls.length === 1 && q("[data-testid=upload-progress]") === null, "first answer accepted");
+    const before = localStorage.getItem("iconSplitter.upload.meta.v1");
+    const pending = geminiTransport(null);
+    vi.stubGlobal("fetch", mode === "cancellation" ? pending.fetch : vi.fn(async () => { throw new TypeError("network disconnected"); }));
+    await click(`[data-testid=upload-meta-regen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
+    if (mode === "cancellation") {
+      await waitFor(() => pending.calls.length === 1, "regeneration pending");
+      await click("[data-testid=upload-cancel-run]");
+    }
+    await waitFor(() => q("[data-testid=upload-progress]") === null, "unsuccessful regeneration finished");
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Minimal line icon of growth and speed");
+    expect(localStorage.getItem("iconSplitter.upload.meta.v1")).toBe(before);
+    expect(getLogState().entries.filter((e) => e.feature === "upload" && e.action === "named")).toHaveLength(1);
+    expect(q("[data-testid=upload-export-progress-header]")).toBeNull();
+    expect(first.calls).toHaveLength(1);
+  });
+
+  itSlow("partial cancellation keeps finished acceptance but never refreshes existing packages", async () => {
+    const root = makeDistinctRoot(); const good = geminiTransport(GOOD_ANSWER); const pending = geminiTransport(null); let calls = 0;
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => (++calls === 1 ? good : pending).fetch(url, init));
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_partial")); await mount(root);
+    for (const id of [FOG, ARCH]) {
+      await click(`[data-testid=upload-export-${id}]`);
+      await waitFor(() => text(`[data-testid=upload-status-${id}]`).includes("Processed"), "initial package");
+      await check(id);
+    }
+    const before = ["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`));
+    await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => pending.calls.length === 1 && [FOG, ARCH].some((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("accepted")), "one accepted result and one pending request");
+    await click("[data-testid=upload-cancel-run]");
+    await waitFor(() => q("[data-testid=upload-progress]") === null, "partly completed cancellation");
+    expect([FOG, ARCH].filter((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("accepted"))).toHaveLength(1);
+    expect([FOG, ARCH].filter((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("empty"))).toHaveLength(1);
+    expect(["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`))).toEqual(before);
+    const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
+    expect(Object.values(cached.cache).map((v) => (v as {state: string}).state)).toEqual(["accepted"]);
+    expect(good.calls).toHaveLength(1); expect(pending.calls).toHaveLength(1);
+    expect(text("[data-testid=upload-metadata-progress-title]")).toContain("cancelled");
+  });
+
+  itSlow("row Regenerate accepts the replacement automatically and retains user ownership fields", async () => {
+    const root = makeRoot(); const first = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", first.fetch);
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_regenerate")); await mount(root); await activate(FOG);
+    await click(`[data-testid=upload-meta-gen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => first.calls.length === 1 && q("[data-testid=upload-progress]") === null, "initial generation");
+    await type(`[data-testid=upload-meta-creator-${FOG}]`, "User author");
+    await type(`[data-testid=upload-meta-copyright-${FOG}]`, "© User rights");
+    const next = geminiTransport(GOOD_ANSWER.replace("growth and speed", "a renewed business strategy"));
+    vi.stubGlobal("fetch", next.fetch);
+    await click(`[data-testid=upload-meta-regen-${FOG}]`);
+    expect(next.calls).toHaveLength(0);
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => next.calls.length === 1 && q("[data-testid=upload-progress]") === null, "row regeneration");
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
+    expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toContain("renewed business strategy");
+    expect(input(`[data-testid=upload-meta-creator-${FOG}]`).value).toBe("User author");
+    expect(input(`[data-testid=upload-meta-copyright-${FOG}]`).value).toBe("© User rights");
+    const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
+    expect(Object.values(cached.cache)).toEqual([expect.objectContaining({ state: "accepted", meta: expect.objectContaining({ creator: "User author", copyright: "© User rights" }) })]);
+    expect(first.calls).toHaveLength(1); expect(next.calls).toHaveLength(1);
+  });
+
+  itSlow("bulk Generate and Regenerate auto-accept and sequentially refresh existing packages only", async () => {
+    const root = makeRegenerationRoot(); const first = geminiTransport(GOOD_ANSWER);
+    vi.stubGlobal("fetch", first.fetch);
+    await saveGeminiKey(fakeKey("AIza", "auto_accept_existing")); await mount(root);
+    for (const id of [FOG, ARCH]) {
+      await click(`[data-testid=upload-export-${id}]`);
+      await waitFor(() => text(`[data-testid=upload-status-${id}]`).includes("Processed"), "initial package");
+      await check(id);
+    }
+    await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => first.calls.length === 2 && q("[data-testid=upload-progress]") === null, "bulk generation finished");
+    for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
+    for (const name of ["fog", "arch"]) {
+      expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("Minimal line icon of growth and speed");
+
+    }
+    const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
+    expect(record.metadata.state).toBe("accepted");
+    await check(COURT); // selected empty row must remain excluded from Regenerate
+    const next = geminiTransport(GOOD_ANSWER.replace("growth and speed", "a renewed business strategy"));
+    vi.stubGlobal("fetch", next.fetch);
+    await click("[data-testid=upload-meta-regenerate-selected]"); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => next.calls.length === 2 && q("[data-testid=upload-progress]") === null, "bulk regeneration finished");
+    for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
+    for (const name of ["fog", "arch"]) expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("renewed business strategy");
+    expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
+    expect(((root.children.get(DIR) as BinDir).children.get("export") as BinDir).children.has("court.svg")).toBe(false);
+    expect(first.calls).toHaveLength(2); expect(next.calls).toHaveLength(2);
+  });
+});
+
 describe("metadata — the exact request, editable fields, accept", () => {
   itSlow("bulk Accept metadata accepts only checked drafts, caches them and re-embeds BOTH existing packages without new requests", async () => {
     const root = makeRegenerationRoot(); const t = geminiTransport(GOOD_ANSWER);
     const sourceDir = root.children.get(DIR) as BinDir;
     for (const [name, mark] of [["fog", "FOG"], ["arch", "ARCH"], ["court", "COURT"]]) sourceDir.children.set(`${name}_AI.svg`, new BinFile(`${name}_AI.svg`, distinctSvg(mark), 3400));
+    for (const mark of ["FOG", "ARCH", "COURT"]) await rememberDraft(distinctSvg(mark));
     vi.stubGlobal("fetch", t.fetch); await mount(root);
     const button = () => q("[data-testid=upload-meta-accept-selected]") as HTMLButtonElement;
     expect(button()).not.toBeNull(); expect(button().disabled).toBe(true);
@@ -1433,8 +1600,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await type("[data-testid=upload-key-input]", fakeKey("AIza", "bulk_accept_test"));
     await click("[data-testid=upload-key-save]");
     for (const id of [FOG, ARCH, COURT]) await check(id);
-    await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => t.calls.length === 3 && [FOG, ARCH, COURT].every((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("generated")), "three drafts");
+    expect([FOG, ARCH, COURT].every((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("generated"))).toBe(true);
     await check(COURT); // retains its draft, but unchecked => must not be accepted
     expect(button().textContent).toContain("Accept metadata (2)");
     await activate(FOG); await type(`[data-testid=upload-meta-creator-${FOG}]`, "User test author");
@@ -1442,7 +1608,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await waitFor(() => ["fog", "arch"].every((name) => fileText(root, `${DIR}/export/${name}.svg`).includes("<metadata>")), "both committed packages re-embedded");
     for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("generated");
-    expect(t.calls).toHaveLength(3); expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();
+    expect(t.calls).toHaveLength(0); expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();
     expect(button().disabled).toBe(true);
     const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
     expect(Object.values(cached.cache).filter((v) => (v as {state: string}).state === "accepted")).toHaveLength(2);
@@ -1451,7 +1617,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(button().textContent).toContain("Accept metadata (1)");
     await click("[data-testid=upload-meta-accept-selected]");
     await waitFor(() => fileText(root, `${DIR}/export/fog.svg`).includes("Edited author"), "edited accepted identity re-embedded");
-    expect(t.calls).toHaveLength(3);
+    expect(t.calls).toHaveLength(0);
     await waitFor(() => q("[data-testid=upload-progress]") === null, "re-embedding finished");
     await act(async () => { ui!.unmount(); }); await mount(root);
     await waitFor(() => [FOG, ARCH, COURT].every((id) => q(`[data-testid=upload-meta-cell-${id}]`) !== null), "reloaded rows");
@@ -1462,10 +1628,14 @@ describe("metadata — the exact request, editable fields, accept", () => {
 
   itSlow("bulk Accept metadata validates each draft, skips empty rows, and leaves unchecked drafts alone", async () => {
     const t = geminiTransport(GOOD_ANSWER); vi.stubGlobal("fetch", t.fetch);
-    const root = makeRegenerationRoot(); await mount(root); await saveGeminiKey(fakeKey("AIza", "bulk_invalid_test"));
+    const root = makeRegenerationRoot();
+    for (const [name, mark] of [["fog", "FOG"], ["arch", "ARCH"]]) {
+      (root.children.get(DIR) as BinDir).children.set(`${name}_AI.svg`, new BinFile(`${name}_AI.svg`, distinctSvg(mark), 3400));
+      await rememberDraft(distinctSvg(mark));
+    }
+    await saveGeminiKey(fakeKey("AIza", "bulk_invalid_test")); await mount(root);
     await check(FOG); await check(ARCH);
-    await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => [FOG, ARCH].every((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("generated")), "drafts");
+    expect([FOG, ARCH].every((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("generated"))).toBe(true);
     await activate(ARCH); await type(`[data-testid=upload-meta-title-${ARCH}]`, "Too short");
     await check(COURT); // empty metadata, never generated or auto-accepted
     await click("[data-testid=upload-meta-accept-selected]");
@@ -1475,19 +1645,20 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
     expect(text("[data-testid=upload-toast]")).toContain("1 invalid");
     expect(text("[data-testid=upload-toast]")).toContain("1 skipped");
-    expect(t.calls).toHaveLength(2);
+    expect(t.calls).toHaveLength(0);
     expect(((root.children.get(DIR) as BinDir).children.get("export") as BinDir).children.has("fog.svg")).toBe(false); // accepting alone never creates a new package
     await type(`[data-testid=upload-meta-title-${ARCH}]`, "Fixed title with enough clean words");
     await click("[data-testid=upload-meta-accept-selected]");
     expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).toContain("accepted");
-    expect(t.calls).toHaveLength(2);
+    expect(t.calls).toHaveLength(0);
   });
 
   itSlow("bulk Accept metadata is disabled during provider work and works after cancellation without a new request", async () => {
     const ready = geminiTransport(GOOD_ANSWER); vi.stubGlobal("fetch", ready.fetch);
-    await mount(makeRegenerationRoot()); await saveGeminiKey(fakeKey("AIza", "bulk_busy_test"));
-    await check(FOG); await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("generated"), "one existing draft");
+    await rememberDraft(distinctSvg("FOG"));
+    await saveGeminiKey(fakeKey("AIza", "bulk_busy_test")); await mount(makeDistinctRoot());
+    await check(FOG);
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("generated");
     const pending = geminiTransport(null); vi.stubGlobal("fetch", pending.fetch);
     await check(ARCH); await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => pending.calls.length === 1, "second row pending");
@@ -1498,7 +1669,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click("[data-testid=upload-meta-accept-selected]");
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).not.toContain("accepted");
-    expect(ready.calls).toHaveLength(1); expect(pending.calls).toHaveLength(1);
+    expect(ready.calls).toHaveLength(0); expect(pending.calls).toHaveLength(1);
   });
 
   itSlow("confirms the exact request before any send, then fills the editable fields", async () => {
@@ -1521,7 +1692,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text("[data-testid=upload-meta-backdrop]")).toContain("never resent on its own");
     await click("[data-testid=upload-meta-confirm]");
 
-    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("accepted"), "the metadata to land");
     expect(t.calls).toHaveLength(1);
     expect(t.calls[0].key).toBe(fakeKey("AIza", "ui_test_key_1")); // the header, never the URL
     expect(t.calls[0].url).not.toContain("key=");
@@ -1565,20 +1736,20 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(qa("[data-testid^=upload-preview-pair_]").length).toBeGreaterThanOrEqual(1);
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => t.calls.length === 2, "both requests to land");
-    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("generated")
-      && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("generated"), "both drafts to land");
+    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("accepted")
+      && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("accepted"), "both accepted answers to land");
 
-    // one paid call per icon, each row carrying its own draft
+    // one paid call per icon, each row carrying its own accepted result
     expect(t.calls).toHaveLength(2);
-    // the batch does NOT accept on the user's behalf: accepting stays a per-row decision
-    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
+    // Valid new results are accepted without a second confirmation.
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
     expect(text("[data-testid=upload-toast]")).toContain("Metadata ready");
 
     // now that both have metadata, the button says there is nothing left to generate
     expect(text("[data-testid=upload-meta-selected]")).toContain("Generate metadata (0)");
     await click("[data-testid=upload-meta-selected]");
     expect(q("[data-testid=upload-meta-backdrop]")).toBeNull();
-    expect(text("[data-testid=upload-toast]")).toContain("already have metadata");
+    expect(text("[data-testid=upload-toast]")).toContain("already have accepted metadata");
     expect(t.calls).toHaveLength(2); // no second paid call
   });
 
@@ -1599,8 +1770,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text("#upload-meta-title")).toContain("Generate metadata for 2 icons");
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => t.calls.length === 2
-      && text(`[data-testid=upload-meta-cell-${FOG}]`).includes("generated")
-      && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("generated"), "the initial metadata to land");
+      && text(`[data-testid=upload-meta-cell-${FOG}]`).includes("accepted")
+      && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("accepted"), "the initial metadata to land");
 
     await click(`[data-testid=upload-row-${FOG}]`);
     await type(`[data-testid=upload-meta-creator-${FOG}]`, "User test author");
@@ -1621,9 +1792,9 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => t.calls.length >= 4 && q("[data-testid=upload-progress]") === null, "regeneration batch to finish");
     expect(t.calls).toHaveLength(4); // two initial requests plus only the two existing metadata rows
-    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("generated");
-    expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).toContain("generated");
-    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
+    expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).toContain("accepted");
+    expect((q(`[data-testid=upload-meta-accept-${FOG}]`) as HTMLButtonElement).disabled).toBe(true);
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
     expect(input(`[data-testid=upload-meta-creator-${FOG}]`).value).toBe("User test author");
     expect(input(`[data-testid=upload-meta-copyright-${FOG}]`).value).toBe("© User test rights");
@@ -1685,13 +1856,13 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
     await click("[data-testid=upload-key-save]");
 
-    // FOG gets metadata the long way: generate, accept, export it
+    // FOG generates metadata first; automatic acceptance needs no extra click
     await check(FOG);
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => t.calls.length === 1, "fog's answer");
-    await activate(FOG); // the editable fields (and Accept) render under the active row
-    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    await activate(FOG);
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
     expect(t.calls).toHaveLength(1);
 
     // now select both: only ARCH still needs a request, and BOTH export
@@ -1823,7 +1994,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("accepted"), "the metadata to land");
     await click(`[data-testid=upload-copy-title-${FOG}]`);
     await click(`[data-testid=upload-copy-tags-${FOG}]`);
     expect(clip.written[0]).toContain("Minimal line icon of growth");
@@ -1879,6 +2050,8 @@ describe("metadata — the exact request, editable fields, accept", () => {
       throw new Error("no request may leave the tab on restore");
     });
     await mount(makeRoot());
+    // Hash/read assembly follows the audit; wait for both real rows, not a tick count.
+    await waitFor(() => [FOG, ARCH].every((id) => q(`[data-testid=upload-status-${id}]`) !== null), "restored rows assembled");
     // the LAST run of each icon is shown as interrupted — not as quietly pending
     expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Interrupted");
     expect(text(`[data-testid=upload-status-${ARCH}]`)).toContain("Interrupted");
@@ -1909,7 +2082,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("accepted"), "the metadata to land");
     expect(t.calls).toHaveLength(1);
 
     // a reload: the same artwork must not be billed a second time
@@ -1919,7 +2092,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     const root2 = makeRoot();
     await mount(root2);
     await activate(FOG);
-    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("generated");
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("accepted");
     expect(sent).toEqual([]);
 
     // the artwork moves: the remembered answer no longer applies to it
@@ -2021,10 +2194,10 @@ describe("export — green means a complete committed package", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the first paid answer");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("accepted"), "the first paid answer");
     expect(t.calls).toHaveLength(1); // the one click that spends
 
-    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    expect((q(`[data-testid=upload-meta-accept-${FOG}]`) as HTMLButtonElement).disabled).toBe(true);
     expect(t.calls).toHaveLength(1);
 
     // a full export embeds the accepted answer: no further call
@@ -2078,8 +2251,7 @@ describe("export — green means a complete committed package", () => {
     await activate(FOG);
     await click("[data-testid=upload-meta-selected]");
     await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("generated"), "the metadata to land");
-    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("accepted"), "the metadata to land");
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     const svg = fileText(root, `${DIR}/export/fog.svg`);

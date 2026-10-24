@@ -50,9 +50,14 @@ lists start unchecked; there are no A/D review shortcuts.
 
 ## Global metadata acceptance
 
+Fresh valid Generate/Regenerate results are accepted automatically, including
+bulk and row requests. Their row Accept is disabled, and they do not contribute
+to the bulk Accept count. [Automatic acceptance](../sor/upload-metadata-acceptance.md#automatic-acceptance)
+owns persistence, validation and existing-package refresh behaviour.
+
 `upload-meta-accept-selected` is the green **✓ Accept metadata (N)** button in
 `upload-bulk-right`, beside Generate/Regenerate. It operates on checked IDs only,
-not the active row or the visible filter subset. N counts drafts/invalid drafts
+not the active row or the visible filter subset. N counts legacy drafts/invalid drafts
 and accepted-but-edited values; disabled with none or while work is running.
 Click validates each candidate locally; invalid fields stay unaccepted and show
 `upload-meta-validation-{id}`. The toast summarizes accepted/invalid/skipped.

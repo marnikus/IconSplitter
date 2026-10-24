@@ -33,40 +33,25 @@ Only explicit confirmation sends the displayed prompt/input to Gemini; export re
   order kept, blanks dropped (`dedupeTags`), and the ≥10 minimum counts the
   DEDUPED list, so a tag written twice is never a refusal or a warning. The
   fields
-  under each row are editable and copiable, empty until generated; Accept
-  re-validates and persists through the embed commit. The confirmation dialog shows the exact
+  under each row are editable and copiable, empty until generated. Valid new
+  answers are accepted automatically; manual Accept re-validates edited fields
+  and legacy drafts and persists through the embed commit. The confirmation dialog shows the exact
   request (prompt, endpoint, auth rule) before any paid send; a timeout or
   disconnect is NEVER resent automatically (no duplicate paid submission);
   in-flight requests are journalled and reported `interrupted` after a restart.
   The bulk bar keeps **Generate metadata** (selected rows whose metadata is
   null) separate from **Regenerate metadata** (selected rows whose metadata is
   non-null). Regeneration's count and confirmed preview include only existing
-  answers; a returned answer replaces that text but is never auto-accepted —
-  review it and pass validation before Accept. Provider failure leaves the
-  previous text. Empty rows are never part of this
-  regeneration batch; `Export selected` remains unchanged.
+  answers; a returned valid answer replaces that text and is accepted
+  automatically. Provider failure leaves the previous text. Empty rows are
+  never part of this regeneration batch; `Export selected` keeps its
+  whole-selection export promise.
 
-## Accept metadata for the selection
+## Acceptance
 
-The global **✓ Accept metadata (N)** button beside Generate/Regenerate accepts
-existing metadata on checked icons only, including selected icons hidden by a
-filter. N counts drafts, fixable invalid drafts and accepted-but-edited fields;
-empty, pending/interrupted and unchanged accepted rows are excluded. The button
-is disabled at zero and while a metadata/export run or other busy work is active.
-
-It uses the SAME clean → validate → accept/cache/log gate as each row's Accept.
-Valid metadata becomes accepted; invalid metadata stays unaccepted with its exact
-validation errors. Empty/already accepted rows are skipped. The outcome line
-reports accepted, invalid and skipped counts. There is no AI request, no new
-metadata generation, and no additional paid confirmation.
-
-Accepting unexported rows stores their metadata without creating files. Rows
-with existing packages are re-embedded together through ONE sequential export
-batch, carrying the newly accepted states directly rather than waiting for a
-React render. This prevents parallel per-row runs from skipping selected files.
-User-entered Creator/Copyright survive, and edited accepted fields can be
-accepted again. Acceptance persists in cache/export records through reload;
-a sibling pair's shared-folder record cannot make an unchecked row accepted.
+[Automatic acceptance and legacy/manual acceptance](upload-metadata-acceptance.md)
+defines valid new results, persistence, existing-package refresh, cancellation
+and the checked-only Accept action for old drafts/edited fields.
 
 ## Optional user identity
 

@@ -18,7 +18,7 @@ export const META_CACHE_VERSION = 1;
 /** Oldest entries are dropped beyond this — a folder of 400 icons fits once. */
 export const META_CACHE_LIMIT = 512;
 
-/** How far the paid answer got: the model replied, and the user had their say. */
+/** New valid responses are accepted automatically; legacy/invalid drafts are not. */
 export interface CachedMeta {
   state: "generated" | "accepted";
   meta: IconMetadata;
@@ -92,7 +92,7 @@ export function rememberMeta(hash: string, entry: CachedMeta): MetaCache {
   return saveMetaCache({ ...cache, [hash]: entry });
 }
 
-/** A restored answer never skips review: `accepted` was accepted, `generated` is not. */
+/** Preserve acceptance on reload; legacy drafts are not silently promoted. */
 export function restoredMeta(entry: CachedMeta | null): UploadMetaState {
   if (entry === null) return EMPTY_META;
   const meta = cleanMetadata(entry.meta); // entries older than the one-clean-phrase rule

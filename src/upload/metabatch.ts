@@ -18,12 +18,6 @@ import type { ProcessReporter, ProcessStatus } from "../lib/processprogress";
 
 /** What the batch does beyond producing answers (RULE 3: one place that decides). */
 interface MetaBatchOptions {
-  /**
-   * Accept every answer that PASSES the policy the moment it lands (unedited,
-   * machine-produced). "Export selected" sets this: it promised metadata in the
-   * package, and an unaccepted draft is never exportable.
-   */
-  acceptValid?: boolean;
   /** The whole selection to export once the answers are in (empty = none). */
   thenExport?: string[];
 }
@@ -35,7 +29,7 @@ export async function runMetadataBatch(
   previews: readonly SentPreview[] = [],
   opts: MetaBatchOptions = {},
 ): Promise<void> {
-  const ctx = prepareMetadataRun(latest, ids, previews, opts);
+  const ctx = prepareMetadataRun(latest, ids, previews);
   if (ctx === null) return;
   let status: Exclude<ProcessStatus, "running"> = "failed";
   try {
@@ -51,7 +45,7 @@ export async function runMetadataBatch(
 }
 
 /** Capture the batch's inputs and publish zero before the first asynchronous work. */
-function prepareMetadataRun(latest: Latest, ids: string[], previews: readonly SentPreview[], opts: MetaBatchOptions): MetaRunCtx | null {
+function prepareMetadataRun(latest: Latest, ids: string[], previews: readonly SentPreview[]): MetaRunCtx | null {
   const c = latest.current;
   const root = c.refs.root.current as DirHandleLike | null;
   const key = c.refs.key.current;
@@ -62,7 +56,7 @@ function prepareMetadataRun(latest: Latest, ids: string[], previews: readonly Se
   return {
     latest, root, key, queue: [...ids], previews, signal: abort.signal,
     tally: { done: 0, ok: 0, total: ids.length },
-    accept: opts.acceptValid === true, accepted: new Map(),
+    accepted: new Map(),
     progress: startUploadProgress(c, "metadata", ids.length),
   };
 }
@@ -74,20 +68,21 @@ async function finishMetadataRun(ctx: MetaRunCtx, opts: MetaBatchOptions, status
   c.dispatch({ type: "running", kind: "metadata", n: 0 });
   ctx.progress.finish(status);
   if (status !== "completed") return;
-  const accepted = opts.acceptValid === true ? ` — ${ctx.tally.ok} accepted` : "";
+  const accepted = ` — ${ctx.accepted.size} accepted`;
   c.say(`Metadata ready for ${ctx.tally.ok} of ${ctx.tally.total} icon${ctx.tally.total === 1 ? "" : "s"}${accepted}`);
   await exportAfterMetadata(ctx.latest, opts, ctx.accepted);
 }
 
 /**
- * The promised second half of "Export selected": the WHOLE selection, so an
- * icon that already had metadata is exported just like the fresh ones — with
- * the run's own accepted states, which React has not re-rendered yet (RULE 24).
+ * Export selected keeps its whole-selection promise. Ordinary generation only
+ * refreshes packages already on disk; it never creates unsolicited packages.
+ * Both use this run's accepted states before React re-renders (RULE 24).
  */
 function exportAfterMetadata(
   latest: Latest, opts: MetaBatchOptions, accepted: ReadonlyMap<string, UploadMetaState>,
 ): Promise<void> {
-  const then = opts.thenExport ?? [];
+  const then = opts.thenExport?.length ? opts.thenExport
+    : [...accepted.keys()].filter((id) => rowOf(latest.current, id)?.record != null);
   return then.length > 0 ? runExportBatch(latest, then, accepted) : Promise.resolve();
 }
 
@@ -102,8 +97,6 @@ interface MetaRunCtx {
   signal: AbortSignal;
   tally: { done: number; ok: number; total: number };
   progress: ProcessReporter;
-  /** Accept each valid answer as it lands (the "then export" flow). */
-  accept: boolean;
   /** What this run accepted, keyed by row id — the export's own truth. */
   accepted: Map<string, UploadMetaState>;
 }
@@ -143,11 +136,12 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
     ...(prepared === null ? {} : { image: prepared.image }),
     deps: { journal: c.refs.journal.current },
   }), row.meta);
-  applyMetaResult(ctx.latest, id, row.meta, result);
-  const validation = result.validation;
-  if (ctx.accept && result.outcome === "generated" && validation !== null && validation.ok) {
+  if (result.outcome === "generated" && result.validation?.ok) {
     acceptNow(ctx, id, result);
+  } else {
+    applyMetaResult(ctx.latest, id, row.meta, result);
   }
+  c.dispatch({ type: "run", id, run: { running: null } });
   return result.outcome === "generated" || result.outcome === "invalid";
 }
 
@@ -159,10 +153,8 @@ function unreadable(c: UploadCtx, id: string, meta: UploadMetaState): boolean {
 }
 
 /**
- * The acceptance the "then export" flow performs: a valid, unedited,
- * machine-produced answer, stored exactly as the Accept button stores it (same
- * state, same remembered fingerprint) — the user asked for a package that
- * CARRIES the metadata, and a draft is never exportable.
+ * Every valid newly generated answer is accepted automatically, with the same
+ * state/cache fingerprint as manual Accept, without an intermediate draft.
  */
 function acceptNow(ctx: MetaRunCtx, id: string, result: MetadataResult): void {
   const c = ctx.latest.current;
@@ -181,24 +173,21 @@ function acceptNow(ctx: MetaRunCtx, id: string, result: MetadataResult): void {
   log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: result.metadata.tags.length }));
 }
 
-/** The run's outcome → the row's metadata state; a failure keeps the prior text. */
+/** Invalid answers stay unaccepted; a failure keeps the prior text/state. */
 function applyMetaResult(latest: Latest, id: string, base: UploadMetaState, result: MetadataResult): void {
   const c = latest.current;
   const row = rowOf(c, id);
   c.dispatch({ type: "meta", id, meta: metaFromResult(base, result) });
-  c.dispatch({ type: "run", id, run: { running: null } });
   if (row === null) return;
   const ref = refOf(row);
   if (result.metadata === null) {
     if (result.outcome === "failed" || result.outcome === "cancelled") log(nameRefusedSpec({ ...ref, why: result.detail }));
     return;
   }
-  // A produced answer is paid work: remember it (unaccepted) under the
-  // fingerprint so a crash before acceptance cannot buy it twice (CP-15).
+  // Even an invalid answer is paid work: remember its draft so fixing it does
+  // not require another provider call (CP-15).
   rememberMeta(row.sourceHash ?? "", { state: "generated", meta: result.metadata });
-  log(result.outcome === "generated"
-    ? namedSpec({ ...ref, model: c.m.gemini.model, tags: result.metadata.tags.length })
-    : nameRefusedSpec({ ...ref, why: result.detail }));
+  log(nameRefusedSpec({ ...ref, why: result.detail }));
 }
 
 /** The log's identifying half, straight off the row's source. */
@@ -211,7 +200,7 @@ function metaFromResult(base: UploadMetaState, result: MetadataResult): UploadMe
     return { ...base, detail: result.detail, usage: result.usage };
   }
   return {
-    state: result.outcome === "generated" ? "generated" : "invalid",
+    state: "invalid",
     metadata: result.metadata,
     validation: result.validation,
     usage: result.usage,
