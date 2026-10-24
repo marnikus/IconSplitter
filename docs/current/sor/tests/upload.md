@@ -107,3 +107,5 @@ supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-tem
   automatic fitting across stroke/target presets, source-frame shadow repair,
   source immutability, determinism, geometry/clipping safety, bounded impossible
   fits, no overflow, verbatim strokes and genuine vector EPS verification.
+
+* `upload_centred_fit.test.ts` — exact leaf 64×64 / 50px / 8% final-centering regression; grid-aligned offsets, actual padded/centred containment, nearby presets, vector EPS, optimization/cleaning, determinism and impossible-fit safety.

@@ -10,7 +10,11 @@ scale changes. The affine edge estimate may not settle in its normal four passes
 even when a valid pinned fit exists. After that fast path fails, the exporter
 uses a bounded search over uniformly scaled, actually baked/restyled/expanded
 candidates. It retains the pinned artboard and configured stroke/padding, then
-centres and re-measures the final candidate. A small 0.008px size guard absorbs
+centres on the same 0.001px coordinate grid as the baked geometry, then
+re-measures the final candidate. An off-grid translation can re-round tiny
+segments and radically change their wide-stroke extrema; snapping the translation
+(not the stroke or artboard) avoids that false final-containment failure. The
+maximum centring adjustment is 0.0005px per axis. A small 0.008px size guard absorbs
 3-decimal coordinate rounding; final bounds must meet the existing 0.002px
 containment tolerance. Up to 32 search probes and one final probe follow the four
 fast passes (37 total); `tools.artboard.passes` reports that work honestly.
@@ -44,3 +48,11 @@ retained unchanged (`icon-lightbulb-idea_AI_5_02.svg`, `_5_03.svg`). Tests cover
 shadow/source-frame and expanded variants, 512px and MP targets, the reproduced
 64px/50px-stroke fit failure, a broader stroke/target matrix, deterministic
 source-preserving preparation, final containment and genuine vector EPS output.
+
+`upload_centred_fit.test.ts` pins the supplied leaf's exact final-containment
+failure at stroke 50px, padding 8%, artboard 64×64. It also covers both bulbs,
+nearby widths/padding, rectangular targets, expanded/unexpanded vector EPS,
+shadows, final padding/centre precision, unchanged sources, deterministic output
+through optimization/cleaning and refusal of impossible dimensions. EPS uses
+representable geometry (40px for the gear/circle, exact 50px for the failing leaf);
+zero-radius circles remain outside the existing EPS subset.

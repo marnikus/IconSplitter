@@ -1,6 +1,6 @@
 // A bounded measured search when large verbatim strokes change the limiting
 // edge: an affine edge model can switch branches and miss a valid pinned fit.
-import type { ArtboardFit } from "./geom";
+import { fmt, type ArtboardFit } from "./geom";
 import type { Bounds } from "./geom/bounds";
 import type { CandidateResult, PlaceResult, PlaceWant } from "./place";
 
@@ -16,9 +16,11 @@ export function recoverPinnedFit(want: PlaceWant, initial: ArtboardFit, probe: P
   const found = searchScale(fit, probe);
   if (!found.ok) return found;
   const b = found.candidate.bounds;
+  // Use the same coordinate grid as the baked geometry: a fractional-grid shift
+  // can re-round tiny segments and change their wide-stroke tangent extrema.
   const centered = { ...fit, scale: found.scale,
-    offsetX: fit.artW / 2 - b.minX - b.width / 2,
-    offsetY: fit.artH / 2 - b.minY - b.height / 2 };
+    offsetX: Number(fmt(fit.artW / 2 - b.minX - b.width / 2)),
+    offsetY: Number(fmt(fit.artH / 2 - b.minY - b.height / 2)) };
   const final = probe(centered);
   if (!final.ok) return final;
   if (!insidePadding(final.bounds, centered)) return { ok: false, code: "no-fit", detail: "the measured artwork cannot fit the requested artboard with these strokes" };
