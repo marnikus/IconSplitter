@@ -24,7 +24,7 @@ Source bar + layout switch:
 |---|---|---|
 | `v2-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root (I-30) |
 | `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* names the missing state (*completed — check it* removed by I-59) |
-| `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
+| `v2-rescan` | `↻ Rescan` | re-walks sources under the [output-folder exclusions](../sor/selection.md#behaviour), keeps decisions/zoom and only discovered checks/anchor |
 | `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
 | `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
 

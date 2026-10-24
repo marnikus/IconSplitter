@@ -15,11 +15,17 @@ Selection V2 shared review rules:
   unspecified — never reaches the algorithm. `pairEntries` is a function of
   the file *set*: for one pair id the raster result beats the `.svg` artifact,
   the list comes out in `(folder, base, suffix)` order, and a versioned output
-  (`X_AI_v2.svg`) is ignored rather than invented as a source row. The shared
-  scan also excludes only this app's regenerated image artifacts: a canonical
-  `_AI` stem followed by positive `_vN.png`, directly in the case-insensitive
-  `AI source regeneration versions` folder (or at its picked root). Other files
-  in that folder and similarly named files elsewhere remain reviewable.
+  (`X_AI_v2.svg`) is ignored rather than invented as a source row.
+* **Output folders are not sources (2026-10-24).** Selection V2 prunes `export`,
+  `AI source regeneration versions`, and `SVG versions` by whole directory name,
+  case-insensitively at every depth. Every file and descendant is excluded,
+  regardless of extension or version naming, before media/sidecar reads, split
+  scope detection and outside counts. Picking one of these folders itself is an
+  empty scan, not an error, and reads none of its media or decision files.
+  Similarly named source folders (e.g. `exports`, `SVG versions originals`)
+  and ordinary source pairs remain eligible. This is review discovery policy:
+  explicit saved-version reads for main images/SVG previews and sidecar version
+  references remain available; no files or history are deleted or moved.
 * A read that fails (locked / being replaced mid-write) is **not** data: the
   walk retries once, then marks the file `unreadable` with its path — `size 0`
   alone is never evidence, an unreadable file is never reported as changed or
@@ -43,6 +49,8 @@ Selection V2 shared review rules:
   renames via size+mtime identity; orphan records are retained so a
   transiently missing file never destroys a decision.
 * Rescan is explicit; an age counter updates without performing a background scan.
+  A completed scan also removes checks and a range anchor for rows no longer
+  discovered, including when no pairs remain; valid checks/anchor are preserved.
 
 Selection V2 layouts and controls:
 

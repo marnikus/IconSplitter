@@ -12,13 +12,15 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   is (I-47) — so a repeated scan decides the same way; every out-of-scope item is
   counted and reported (both toolbars, the log, `outside-split` exclusions),
   never silently dropped, and the records of out-of-scope pairs stay as orphans.
-  A tree without such a folder behaves exactly as before.
+  A tree without such a folder behaves exactly as before. Selection V2 applies
+  its [output-folder discovery exclusions](../selection.md#behaviour) first:
+  an ignored subtree cannot establish split scope or inflate outside counts.
 
 <a id="i-47"></a>
 * **I-47 (picking the output folder is picking the set, RULE 3/12):** when the
   picked folder **is** the app's own output folder (`_split_output`, tolerant
-  variants) or one run folder inside it (`<YYYY-MM-DD>`, legacy `<YYYY-MM-DD_HH-mm-ss>`), every pair
-  found below it is reviewable — the filter that hides the unsplit sheets
+  variants) or one run folder inside it (`<YYYY-MM-DD>`, legacy `<YYYY-MM-DD_HH-mm-ss>`), every eligible pair
+  discovered below it is reviewable — the filter that hides the unsplit sheets
   applies only while the output folder is strictly *below* the picked root
   (`lib/splitscope.ScopeRule { split, hideOutside }`). The scope line names such
   a root (`Scope: split output only`) and never says "in the main folder", which

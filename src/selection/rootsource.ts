@@ -1,4 +1,4 @@
-// rootsource.ts — where the Selection tabs' root comes from, and the one scan
+// rootsource.ts — where Selection V2's root comes from, and the one scan
 // that may commit a snapshot. Moved out of useSelection so that file stays
 // inside the RULE 18 size budget (it grew with the pick-time path capture).
 // Owns: the remembered handle at boot, the picker every tab goes through
@@ -7,7 +7,7 @@
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
-import { isImageRegenArtifact } from "../lib/imageartifact";
+import { isReviewExcludedFolder, REVIEW_EXCLUDED_FOLDERS } from "../lib/reviewfolders";
 import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
 import { pairIdOfMetaPath } from "../lib/pairmeta";
@@ -21,7 +21,6 @@ import { retryCapture } from "../ui/rootcapture";
 import { restoreKnownRoot } from "../lib/knownroots";
 import { getAppState, patchV2, patchView } from "../state/appstore";
 import type { HistoryApi } from "../state/HistoryProvider";
-import { pruneIds } from "../lib/session";
 import { loadPairDecisions, type PairLoad } from "./pairstore";
 import { SELECTION_HANDLE_KEY } from "./offline";
 import { applyScan, type SelState } from "./state";
@@ -50,7 +49,7 @@ export async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   await rescan(ctx, setS, () => undefined);
 }
 
-/** The picker both Selection tabs use: pick, capture the path, scan (I-35). */
+/** The picker Selection V2 uses: pick, capture the path, scan (I-35). */
 export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   const picked = await pickFolderFor((h: DirHandleLike) => {
     setRoot(ctx, setS, h);
@@ -98,6 +97,12 @@ interface Walked {
 }
 
 async function walkAndLoad(root: DirHandleLike): Promise<Walked> {
+  if (isReviewExcludedFolder(root.name)) {
+    return {
+      pairs: [], scope: { split: false, outside: 0 },
+      load: { metas: new Map(), records: [], corruptFiles: [], legacy: false, legacyCorrupt: false },
+    };
+  }
   const { pairs, scope, entries } = await scanRoot(root);
   return { pairs, scope, load: await loadPairDecisions(root, entries) };
 }
@@ -129,11 +134,10 @@ function commit(
  * folder that never saw a batch behaves exactly as before.
  */
 async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope; entries: FileEntry[] }> {
-  const tree = await readDirTree(root, []);
+  const tree = await readDirTree(root, REVIEW_EXCLUDED_FOLDERS);
   const rule = scopeOf(directoryNames(tree), root.name);
-  const entries = walkTree(tree, []);
-  const reviewEntries = entries.filter((e) => !isImageRegenArtifact(e, root.name));
-  const { pairs, outside } = splitPairs(pairEntries(reviewEntries), rule);
+  const entries = walkTree(tree, REVIEW_EXCLUDED_FOLDERS);
+  const { pairs, outside } = splitPairs(pairEntries(entries), rule);
   return { pairs, scope: { split: rule.split, outside: outside.length }, entries };
 }
 
@@ -171,7 +175,10 @@ function announce(before: ScanScope, scope: ScanScope, say: Say): void {
 }
 
 function pruneChecked(pairs: ViewPair[]): void {
-  const checked = getAppState().v2.checked;
-  const kept = pruneIds(checked, new Set(pairs.map((p) => p.pairId)));
-  if (kept.length !== checked.length) patchV2({ checked: kept });
+  const { checked, anchorId } = getAppState().v2;
+  const known = new Set(pairs.map((p) => p.pairId));
+  // A completed empty scan is authoritative, unlike a not-yet-restored session.
+  const kept = checked.filter((id) => known.has(id));
+  const anchor = anchorId !== null && known.has(anchorId) ? anchorId : null;
+  if (kept.length !== checked.length || anchor !== anchorId) patchV2({ checked: kept, anchorId: anchor });
 }

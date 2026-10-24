@@ -205,8 +205,8 @@ describe("the reviewable set is the split output (I-38/I-47)", () => {
   });
 });
 
-describe("image regeneration artifacts are not review pairs", () => {
-  it("skips only canonical versions in the immediate version folder", async () => {
+describe("image regeneration folder trees are not review pairs", () => {
+  it("skips all files and descendants in the version folder, but not lookalikes elsewhere", async () => {
     const root = makeRoot();
     const arch = root.children.get("architecture") as FakeDir;
     const versions = new FakeDir("aI SoUrCe ReGeNeRaTiOn VeRsIoNs");
@@ -222,13 +222,13 @@ describe("image regeneration artifacts are not review pairs", () => {
     await rescan(h.ctx, h.set, h.say);
     const paths = h.ctx.state.current.pairs.flatMap((p) => [p.source?.relPath, p.ai?.relPath]);
     expect(paths).not.toContain(`architecture/${versions.name}/court_AI_v1.png`);
-    expect(paths).toContain(`architecture/${versions.name}/ordinary_v2.png`);
-    expect(paths).toContain(`architecture/${versions.name}/court_AI_v0.png`);
-    expect(paths).toContain(`architecture/${versions.name}/nested/court_AI_v2.png`);
+    expect(paths).not.toContain(`architecture/${versions.name}/ordinary_v2.png`);
+    expect(paths).not.toContain(`architecture/${versions.name}/court_AI_v0.png`);
+    expect(paths).not.toContain(`architecture/${versions.name}/nested/court_AI_v2.png`);
     expect(paths).toContain("architecture/court_AI_v3.png");
   });
 
-  it("recognizes a picked version folder itself, but not its descendants", async () => {
+  it("excludes a picked version folder itself and every descendant", async () => {
     const root = new FakeDir("AI SOURCE REGENERATION VERSIONS");
     root.children.set("fog_AI_9_01_v12.PNG", new FakeFile("fog_AI_9_01_v12.PNG"));
     root.children.set("fog_AI_v0.png", new FakeFile("fog_AI_v0.png"));
@@ -237,9 +237,7 @@ describe("image regeneration artifacts are not review pairs", () => {
     root.children.set("nested", nested);
     const h = harness(root);
     await rescan(h.ctx, h.set, h.say);
-    expect(h.ctx.state.current.pairs.map((p) => p.source?.relPath ?? p.ai?.relPath)).toEqual([
-      "fog_AI_v0.png", "nested/fog_AI_v1.png",
-    ]);
+    expect(h.ctx.state.current.pairs).toEqual([]);
   });
 });
 

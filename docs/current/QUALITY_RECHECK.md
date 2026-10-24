@@ -3170,3 +3170,11 @@ native30tests/5files separately PASS,98.03%src/lib lines. Single-file build
 deleted, no intentional live provider request, no coverage/gate relaxation.
 Current owner/selectors/storage/overview/history routes updated; generated
 dist/dependency/cache churn excluded.
+
+## 2026-10-24 — Selection V2 output-folder discovery exclusions
+
+- Planned before implementation: `docs/archive/2026-10-24-selection-output-folders/README.md`.
+- Whole-name case-insensitive `export`, `AI source regeneration versions`, `SVG versions` pruning before traversal, media/sidecar reads and split-scope calculation; excluded picked roots are empty without metadata reads. Preserve real/near-miss sources and explicit saved-version reads. Reconcile stale checks/anchor, including completed empty scans.
+- Witnessed 13 RED regressions, then focused 200 GREEN tests/10 files. Real V2 DOM reproduction shrank from 13 phantom/real rows to the one genuine split pair. New pure folder policy: 100% coverage across all metrics.
+- Types, lint (0 errors/23 pre-existing warnings), changed quality vs4616d1e PASS. Initial fast gate: unchanged Upload T2 restore assertion failed; isolated unchanged Upload suite 73/73 PASS, full fast rerun PASS, then full verification all6lanes PASS. No Upload/harness changes or skipped/weakened gates.
+- Full suite:2581tests/246files; separate uninstrumented native:30tests/5files. src/lib coverage:98.03%lines,98.02%functions,94.98%statements,89.28%branches. Production single-file build:1723.61kB/gzip509.79kB. Owning docs/router/selectors/invariants/owners/test inventory updated. Generated dependencies/dist/coverage/caches excluded from delivery.

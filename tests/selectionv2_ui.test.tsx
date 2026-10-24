@@ -87,6 +87,32 @@ describe("Selection V2 panel", () => {
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("not listed");
   });
 
+  it("never lists exported or version-folder media as phantom split rows", async () => {
+    const root = makeBatchRoot();
+    let split = root;
+    for (const name of ["_split_output", "2026-10", "2026-10-01_10-24-31", "icon-sheet_AI", "split_01"]) {
+      split = await split.getDirectoryHandle(name);
+    }
+    for (const name of ["export", "AI source regeneration versions", "SVG versions"]) {
+      const output = new FakeDir(name);
+      const nested = new FakeDir("nested");
+      for (const file of ["icon-handshake-heart7_01_v2.svg", "ghost.jpeg", "ghost.eps"]) {
+        output.children.set(file, new FakeFile(file));
+        nested.children.set(file, new FakeFile(file));
+      }
+      output.children.set("nested", nested);
+      split.children.set(name, output);
+    }
+    const { el } = await mount(root);
+    expect(rows(el)).toHaveLength(1);
+    expect(text(el, "[data-testid='v2-count-total']")).toContain("1");
+    expect(q(el, "[data-testid='v2-count-attention']")).toBeNull(); // zero hides this badge
+    expect(rows(el)[0].textContent).toContain("icon-sheet_AI_01.png");
+    expect(rows(el)[0].textContent).not.toContain("AI result missing");
+    expect(el.textContent).not.toContain("icon-handshake-heart7_01_v2.svg");
+    expect(text(el, "[data-testid='v2-scan-scope']")).toContain("1 pair(s) in the main folder not listed");
+  });
+
   it("keeps the whole folder when no split output exists", async () => {
     const { el } = await mount(makeRoot());
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("no split output found");
