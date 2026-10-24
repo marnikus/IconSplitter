@@ -45,3 +45,5 @@ Single sheets:
   `busy` reports `Rendering d/t…` per item (RULE 5); per-item failure is
   reported, never silently swallowed.
 * **Single icon:** copy to clipboard or download one rendered blob.
+
+`src/sheets/importSheets.ts` owns the real import/decode/detection loop and per-image failure isolation; App supplies the state sinks. Imports and exports use the [shared completion cue](process-progress.md#completion-sound-on-every-tab), independent of the visible tab.

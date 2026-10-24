@@ -1,3 +1,4 @@
+import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // selectionv2_ui.test.tsx — RULE 8: DOM-level tests for the V2 Selection
 // surface (spec V2 §16). Everything here drives the real panel: folder pick →
 // recursive scan → list review rows → zoom → selection → bulk approve →
@@ -355,17 +356,20 @@ describe("Selection V2 panel", () => {
 
   it("approves the checked rows in one operation with one summary toast", async () => {
     const { el } = await mount(makeRoot());
+    recordCompletionAudio();
     await check(q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement, true);
     await check(q(el, `[data-testid='v2-check-${COURT}']`) as HTMLInputElement, true);
     const btn = q(el, "[data-testid='v2-approve-selected']") as HTMLButtonElement;
     expect(btn.textContent).toBe("✓ Approve selected (2)");
     await click(btn);
     expect(btn.textContent).toBe("Confirm approve 2?"); // count shown before it applies
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
     await click(q(el, "[data-testid='v2-approve-selected']")!);
     expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
     expect(text(el, `[data-testid='v2-status-${COURT}']`)).toBe("✓ Approved");
     expect(text(el, "[data-testid='v2-toast']")).toBe("2 pairs approved");
     expect(text(el, "[data-testid='v2-count-approved']")).toContain("2");
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
   });
 
   it("declines the selected rows in one operation, and reports the blocked one", async () => {

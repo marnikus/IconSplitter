@@ -36,6 +36,26 @@ export function notifyCompletion(id: string, cancelled = false): void {
   if (!cancelled && completionSoundEnabled()) void playCompletionSound();
 }
 
+/** Capture one actual run; arm before async work can lose user activation. */
+export function startCompletionSound(id: string = crypto.randomUUID()): (cancelled?: boolean) => void {
+  armCompletionSound();
+  return (cancelled = false) => notifyCompletion(id, cancelled);
+}
+
+/** A terminal task cue, preserving its result/error and ignoring picker cancellation. */
+export async function withCompletionSound<T>(work: () => Promise<T>): Promise<T> {
+  const finish = startCompletionSound();
+  let cancelled = false;
+  try {
+    const result = await work();
+    cancelled = result === false;
+    return result;
+  } catch (error) {
+    cancelled = (error instanceof Error || error instanceof DOMException) && error.name === "AbortError";
+    throw error;
+  } finally { finish(cancelled); }
+}
+
 /** A browser's autoplay refusal must never reject or roll back completed work. */
 export async function playCompletionSound(): Promise<boolean> {
   try {

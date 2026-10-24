@@ -91,3 +91,5 @@ contenteditable — so undo still works after using the zoom slider or a checkbo
 | `scroll-top-btn` | `↑` corner button, `aria-label="Back to top"` | rendered by the shell next to `app-main` — one instance on every tab; `hidden` while the list is at the top, appears past 80 px of scroll; click returns `app-main` to the top (verified 2026-10-15) |
 
 Shared process header/accessibility and Upload portal selectors: [process progress](../sor/process-progress.md#handles).
+
+Completion sound is global across tabs; existing `process-sound`, `process-sound-enabled` and `process-sound-test` remain below Generate SVG. Pointer/keyboard capture on `app-shell` silently unlocks audio for all task starts; [contract](../sor/process-progress.md#completion-sound-on-every-tab).

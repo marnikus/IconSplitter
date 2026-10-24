@@ -1,3 +1,4 @@
+import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // upload_ui.test.tsx — the "SVG to upload" tab drives the real panel, the real
 // scan, the real metadata pipeline and the real export pipeline (RULE 8):
 // approved pairs only, the bulk bar's header checkbox, the filters, the zoom,
@@ -2189,9 +2190,11 @@ describe("real export batch progress", () => {
     await click("[data-testid=upload-export-selected]");
     await waitFor(() => (q("[data-testid=upload-meta-confirm]") as HTMLButtonElement)?.disabled === false, "prepared confirmation");
     const releases = holdJpegEncodes();
+    recordCompletionAudio();
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => releases.length === 1, "first export JPEG");
     expect(text("[data-testid=upload-metadata-progress-title]")).toContain("complete");
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
     const bar = () => q("[data-testid=upload-export-progress-track]")!;
     expect(bar().getAttribute("aria-valuenow")).toBe("0");
     expect(text("[data-testid=upload-export-progress-file]")).toContain("_AI.svg");
@@ -2205,11 +2208,13 @@ describe("real export batch progress", () => {
     expect(fileText(root, `${DIR}/export/fog.svg`)).toContain("<metadata>");
     expect(fileText(root, `${DIR}/export/arch.svg`)).toContain("<metadata>");
     expect(transport.calls).toHaveLength(2);
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(2);
   });
 
   itSlow("row export cancellation does not count the aborted item or commit its package", async () => {
     const root = makeRoot();
     await mount(root);
+    recordCompletionAudio();
     const releases = holdJpegEncodes();
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => releases.length === 1, "export JPEG encoding");
@@ -2220,6 +2225,7 @@ describe("real export batch progress", () => {
     const exported = (root.children.get(DIR) as BinDir).children.get("export") as BinDir;
     expect(exported.children.has("fog.svg")).toBe(false);
     expect(q("[data-testid=upload-status-export]")).toBeNull();
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
   });
 });
 
@@ -2229,6 +2235,7 @@ describe("Upload progress outlives its tab", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
     await mount(makeRoot(), true);
     const shell = q('[data-testid="upload-shell"]')!;
+    recordCompletionAudio();
     const releases = holdJpegEncodes();
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => releases.length === 1, "the export to pause at encode");
@@ -2242,6 +2249,7 @@ describe("Upload progress outlives its tab", () => {
     expect(getAppState().upload.checked).toEqual(checked);
     await act(async () => releases[0]());
     await waitFor(() => text('[data-testid="upload-export-progress-title"]').includes("complete"), "hidden-tab export completion");
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
     expect(getAppState().tab).toBe("sheets");
     await click('[data-testid="upload-export-progress-review"]');
     expect(getAppState().tab).toBe("upload");

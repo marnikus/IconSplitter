@@ -56,7 +56,7 @@ export interface UploadCtx {
   header: "none" | "some" | "all";
   counts: UploadCounts;
   say: (msg: string, err?: boolean) => void;
-  loadAll: () => void;
+  loadAll: (audible?: boolean) => void;
   setRootName: (name: string) => void;
   setDiscovery: (d: UploadDiscovery | null) => void;
   setBusy: (b: string | null) => void;
@@ -158,7 +158,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
         void rememberRoot(h);
       });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
-      c.loadAll();
+      c.loadAll(true);
       c.say(picked.message ?? `Approved SVGs scanned from ${picked.handle.name}`);
     })();
   }, []);
@@ -167,7 +167,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
     // before any await: the click's own gesture is what allows the read (I-52)
     const root = c.refs.root.current as DirHandleLike | null;
     void retryCapture(root).then((captured) => { if (captured !== null) c.say(captured); });
-    c.loadAll();
+    c.loadAll(true);
   }, []);
   return { chooseRoot, rescan };
 }

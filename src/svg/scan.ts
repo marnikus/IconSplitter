@@ -1,3 +1,4 @@
+import { startCompletionSound } from "../ui/completionSound";
 import { hasJobs } from "./jobstate";
 // scan.ts — scanning the picked root for the Generate SVG tab (prompt §1).
 // Owns: restoring the remembered root handle, recursive approved-source
@@ -42,10 +43,11 @@ export interface BootArgs {
 }
 
 /** Scans the root, loads every pair file and commits one complete snapshot. */
-export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> {
+export async function scanSources(refs: SvgRefs, s: ScanSetters, audible = false): Promise<void> {
   if (hasJobs(refs)) return s.say("Finish or stop active processes before rescanning", true);
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
+  const finish = audible ? startCompletionSound() : () => undefined;
   const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
   if (captured !== null) s.say(captured);
   const ticket = beginScan(refs.seq.current);
@@ -54,20 +56,30 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters): Promise<void> 
   try {
     const found = await discoverApprovedSources(root);
     const loaded = loadRows(found);
-    if (!isCurrent(refs.seq.current, ticket.id) || hasJobs(refs)) return; // a newer scan took over
+    if (!scanMayCommit(refs, ticket.id)) return; // a newer scan took over
     const key = scanKey(root.name, found, loaded.rows);
     if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
     commit({ refs, setters: s, discovery: found, loaded, key });
     logScan(found);
     reportScan(found, s.say);
   } catch {
-    if (isCurrent(refs.seq.current, ticket.id)) {
-      log({ level: "error", feature: "svg", action: "scan-failed", detail: "the scan failed — the folder may be unreadable" });
-      s.say("Rescan failed — the folder may be unreadable", true);
-    }
+    reportScanFailure(refs, s, ticket.id);
   } finally {
     if (isCurrent(refs.seq.current, ticket.id)) s.setBusy(null);
+    finish(!scanMayCommit(refs, ticket.id));
   }
+}
+
+/** Report only the current scan's failure, never a stale scan's error toast. */
+function reportScanFailure(refs: SvgRefs, setters: ScanSetters, ticket: number): void {
+  if (!isCurrent(refs.seq.current, ticket)) return;
+  log({ level: "error", feature: "svg", action: "scan-failed", detail: "the scan failed — the folder may be unreadable" });
+  setters.say("Rescan failed — the folder may be unreadable", true);
+}
+
+/** A superseded scan or one overtaken by provider work may neither commit nor cue. */
+function scanMayCommit(refs: SvgRefs, ticket: number): boolean {
+  return isCurrent(refs.seq.current, ticket) && !hasJobs(refs);
 }
 
 interface LoadedRows {

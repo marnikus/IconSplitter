@@ -1,3 +1,4 @@
+import { completionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // workbench_ui.test.tsx — the shell above the panels: the restored tab is the
 // one that opens, a tab switch goes through the store (so it survives a
 // restart), and the global undo/redo bar is present on every tab.
@@ -69,6 +70,18 @@ describe("the shell", () => {
     expect(q('[data-testid="tab-selection"]')).toBeNull();
     expect(q('[data-testid="sel-unsupported"]')).toBeNull();
     expect(q('[data-testid="v2-unsupported"]')).not.toBeNull();
+  });
+
+  it("unlocks shared audio on pointer and keyboard gestures on any tab, never on mount", async () => {
+    recordCompletionAudio(); mountWorkbench();
+    expect(completionAudio.resumes).toBe(0);
+    const shell = q('[data-testid="app-shell"]')!;
+    await act(async () => { shell.dispatchEvent(new Event("pointerdown", { bubbles: true })); });
+    expect(completionAudio.resumes).toBeGreaterThan(0);
+    const before = completionAudio.resumes;
+    await act(async () => { shell.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", bubbles: true })); });
+    expect(completionAudio.resumes).toBeGreaterThan(before);
+    expect(completionAudio.starts).toEqual([]);
   });
 
   it("shows the undo/redo bar next to the tabs on the default tab", () => {

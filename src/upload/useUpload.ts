@@ -89,20 +89,20 @@ function useSay(dispatch: Dispatch<UploadAction>): (msg: string, err?: boolean) 
  */
 function useLoadAll(
   refs: UploadRefs, dispatch: Dispatch<UploadAction>, say: (m: string, e?: boolean) => void, model: UploadModel,
-): () => void {
+): (audible?: boolean) => void {
   const modelRef = useRef(model);
   modelRef.current = model;
   const setters = useMemo<UploadScanSetters>(() => ({
     setRootName: (name) => dispatch({ type: "root", name }),
-    setRows: (sources) => { void assembleAndCommit(refs, dispatch, modelRef, sources); },
+    setRows: (sources) => assembleAndCommit(refs, dispatch, modelRef, sources),
     setDiscovery: (d) => dispatch({ type: "discovery", discovery: d }),
     setBusy: (b) => dispatch({ type: "busy", busy: b }),
     say,
   }), [dispatch, refs, say]);
-  return useCallback(() => {
+  return useCallback((audible = false) => {
     const root = refs.root.current as DirHandleLike | null;
     if (root === null) return;
-    void scanUpload(refs, root, setters);
+    void scanUpload(refs, root, setters, audible);
   }, [refs, setters]);
 }
 

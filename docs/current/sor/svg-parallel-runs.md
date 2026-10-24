@@ -45,16 +45,8 @@ other browser windows; they are not OS filesystem locks.
 
 ## Local completion audio
 
-One enabled cue per actually completed SVG or image process, including reported
-failures; not per icon, request, render or refusal. No cue for cancellation or a
-dropped queue entry. Confirmation arms browser audio; blocked/unsupported audio
-cannot fail the process. **Completion sound** persists mute, **Test sound** plays
-locally, and simultaneous completions serialize their cues.
-
-The supplied `tests/assets/Sound/universfield-new-notification-037-485898.mp3`
-is embedded into the self-contained HTML through Vite's explicit inline asset import;
-there is no runtime network audio fetch. It arrived in remote commit `7f9952b`
-after initial fallback-only verification and was integrated without overwriting
-concurrent work. The UI names the exact recording. A missing recording fails the
-build rather than silently substituting another sound. A decoding failure stays
-silent and Test reports unavailable audio; it cannot fail the completed process.
+SVG and image jobs retain one enabled terminal cue per run, not per icon or
+request. Shared activation, mute, recording embedding and the **all-tab** lifecycle
+contract now live under [process completion sound](process-progress.md#completion-sound-on-every-tab).
+The existing controls remain below the Generate SVG list. Cancelled/dropped work
+stays silent; parallel completions remain serialized.

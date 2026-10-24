@@ -88,11 +88,11 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
       const cap = picked.message === null ? "" : " · full path captured";
       log({ feature: "svg", action: "root-picked", detail: picked.handle.name + cap });
       c.refreshKey(); // a fresh pick never went through the remembered-handle boot: load the stored device key too
-      await scanSources(c.refs, c);
+      await scanSources(c.refs, c, true);
       c.say(picked.message ?? `Approved sources scanned from ${picked.handle.name}`);
     })();
   }, []);
-  const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current); }, []);
+  const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current, true); }, []);
   return { chooseRoot, rescan };
 }
 function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort"> {

@@ -81,6 +81,21 @@ describe("completion sound", () => {
     expect(await sound.playCompletionSound()).toBe(false);
     expect(starts).toEqual([]);
   });
+  it("task wrappers preserve results/errors, signal failures, and suppress refusal/cancellation", async () => {
+    const { starts } = fakeAudio();
+    const sound = await import("../src/ui/completionSound");
+    expect(await sound.withCompletionSound(async () => 42)).toBe(42);
+    expect(starts).toHaveLength(1);
+    expect(await sound.withCompletionSound(async () => false)).toBe(false);
+    await expect(sound.withCompletionSound(async () => { throw new DOMException("cancelled", "AbortError"); })).rejects.toMatchObject({ name: "AbortError" });
+    expect(starts).toHaveLength(1);
+    const failure = new Error("failed output");
+    await expect(sound.withCompletionSound(async () => { throw failure; })).rejects.toBe(failure);
+    expect(starts).toHaveLength(2);
+    const finish = sound.startCompletionSound(); finish(); finish();
+    await Promise.resolve(); await Promise.resolve(); expect(starts).toHaveLength(3);
+  });
+
   it("handles unsupported or blocked audio without rejecting work", async () => {
     vi.stubGlobal("AudioContext", undefined);
     const sound = await import("../src/ui/completionSound");

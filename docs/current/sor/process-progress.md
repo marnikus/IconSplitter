@@ -79,3 +79,49 @@ items excluded, actual tab-switch completion/review and silent hidden hotkeys.
 unfinished runners before restoring fake transports, preventing late retries
 from escaping the test transport. No live provider sends are needed to verify
 this feature.
+
+## Completion sound on every tab
+
+`src/ui/completionSound.ts` is the one local audio service for **all** tabs, not
+only Generate SVG. One enabled cue follows each real process reaching its terminal
+boundary (including completed attempts with item errors). It does not depend on
+which tab is visible, a progress header mounting or React re-rendering.
+
+- Single sheets: one cue after an entire import/detection run; ZIP, sequential
+  downloads, folder save, single-icon Save/Copy cue after output work settles.
+- Batch folders: explicit scans, preview/regeneration queues, approved splitting
+  and manual review writes cue once per operation, never once per item. Preview
+  auto-review and restored-cache synchronization stay silent.
+- Selection V2: explicit scans, confirmed bulk decisions/reset and Retry writes
+  cue after persistence. Ordinary row selection/filter/zoom and undo are not jobs.
+- Generate SVG: existing independent SVG/image jobs retain their per-run cues;
+  explicit scans and review writes use the same service.
+- SVG to upload: metadata and package export signal their own terminal boundaries,
+  including a metadata→export chain (one cue for each completed phase). Download
+  all cues after the verified copies, not after the destination picker. Scans wait
+  for row assembly before notifying.
+
+Stop/cancel, dismissed confirmations, invalid/empty selections, cancelled folder
+pickers, superseded ticket-guarded scans, cached preview no-ops and mount/restore
+scans never cue. A scan explicitly requested by the user still finishes even if
+its discovered snapshot is unchanged. Ordinary slider/thumbnail updates are not
+new processes. A hidden/unmounted visual surface cannot suppress a runner's cue.
+
+The shell arms Web Audio during pointer/keyboard capture, **before** async work
+or a picker loses user activation. Runner starts also arm audio. Arming/importing
+is silent. `startCompletionSound` captures an idempotent per-run finisher;
+`withCompletionSound` preserves task results/errors and suppresses AbortError or
+explicit `false` refusal. Upload adapts its immutable reporter rather than playing
+from the reducer/header. Global mute remains persisted through the existing
+`process-sound-enabled` control under Generate SVG; Test sound is local. Queued
+cues do not overlap. Unsupported/blocked audio cannot fail processing.
+
+The exact supplied `tests/assets/Sound/universfield-new-notification-037-485898.mp3`
+is embedded in the self-contained HTML, never fetched or replaced with a tone.
+Missing assets fail the build; decode failures stay silent and Test reports them.
+
+Sound regressions: `completion_sound.test.ts`, `process_completion_sound.test.tsx`,
+`sheets_completion_sound.test.tsx`, plus actual Upload phase-chain/hidden-tab/
+cancellation/download, Batch warm-cache auto-review, Selection bulk persistence
+and shell gesture tests in their existing UI suites. Real processing algorithms
+run against browser I/O shims; no live providers.

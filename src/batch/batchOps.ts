@@ -1,5 +1,6 @@
 // batchOps.ts — scan + process ops (RULE 18), yields to keep UI responsive
 
+import { armCompletionSound, startCompletionSound } from "../ui/completionSound";
 import { readDirTree, ensureDirPath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { walkTree, collectAiImages, linkReferences, type AiImageEntry } from "../lib/scan";
 import { syncAndCollect, applyOutcomes, applyReviewOutcomes, type ReviewOutcome } from "./statewrite";
@@ -48,9 +49,10 @@ export function finishScan(a: FinishArgs): void {
 
 
 
-export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void): Promise<void> {
+export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void, audible = false): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
+  const finish = audible ? startCompletionSound() : () => undefined;
   setS((p) => ({ ...p, busy: "Scanning…", rootName: root.name }));
   try {
     const images = await scanImages(root, ctx.state.current.preset);
@@ -60,7 +62,7 @@ export async function scan(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean)
   } catch (e) {
     setS((p) => ({ ...p, busy: null }));
     say((e as Error).message || "Scan failed", true);
-  }
+  } finally { finish(); }
 }
 
 /** A remembered custom dest re-grants inside the click's activation; refused → auto dest this run. */
@@ -71,6 +73,7 @@ async function regrantDest(ctx: Ctx): Promise<void> {
 export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
+  armCompletionSound();
   ctx.stop.current = false;
   await regrantDest(ctx);
   const allRows = ctx.state.current.rows;
@@ -86,9 +89,7 @@ export async function batchProcess(ctx: Ctx, setS: Setter): Promise<void> {
   init.currentRelPath = selected[0]?.relPath ?? null;
   init.currentName = selected[0]?.name ?? "";
   setS((p) => ({ ...p, running: true, progress: init }));
-  await yieldToFrame();
-  const report = await runBatch({ ctx, root, selected, setS, init });
-  await finalize(root, report.results, selected, setS);
+  await executeBatch({ ctx, root, selected, setS, init });
 }
 
 function makeRunId(): string {
@@ -96,6 +97,19 @@ function makeRunId(): string {
 }
 
 type RunArgs = { ctx: Ctx; root: DirHandleLike; selected: Row[]; setS: Setter; init: BatchProgress };
+
+/** Notify only after persisted outcomes settle; Stop never masquerades as completion. */
+async function executeBatch(args: RunArgs): Promise<void> {
+  const finish = startCompletionSound(args.init.runId);
+  try {
+    await yieldToFrame();
+    const report = await runBatch(args);
+    await finalize(args.root, report.results, args.selected, args.setS);
+  } finally {
+    args.setS((p) => ({ ...p, running: false }));
+    finish(args.ctx.stop.current);
+  }
+}
 
 async function runBatch(args: RunArgs) {
   const { ctx, root, selected, setS } = args;
@@ -227,7 +241,7 @@ async function finalize(root: DirHandleLike, results: ItemResult[], selected: Ro
   try { patchBatch({ checked: [] }); } catch { /* best-effort clear */ }
 }
 
-type DecideArgs = { ctx: Ctx; relPaths: string[]; review: BatchReviewStatus; setS: Setter };
+type DecideArgs = { ctx: Ctx; relPaths: string[]; review: BatchReviewStatus; setS: Setter; audible?: boolean };
 
 export async function decideReview(a: DecideArgs): Promise<void> {
   const root = a.ctx.root.current;
@@ -242,5 +256,8 @@ export async function decideReview(a: DecideArgs): Promise<void> {
     const base = (row as any).ai?.base ?? row.name.replace(/_AI\..*$/, "").replace(/\..*$/, "");
     grouped.push({ dirPath: row.dirPath, base, relPath: row.relPath, review: a.review });
   }
-  if (grouped.length > 0) await applyReviewOutcomes(root, grouped, now);
+  if (grouped.length > 0) {
+    const finish = a.audible ? startCompletionSound() : () => undefined;
+    try { await applyReviewOutcomes(root, grouped, now); } finally { finish(); }
+  }
 }

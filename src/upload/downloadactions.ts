@@ -1,3 +1,4 @@
+import { armCompletionSound, startCompletionSound } from "../ui/completionSound";
 // downloadactions.ts — "Download all" (2026-10-08, design
 // docs/archive/2026-10-08-upload-download-all/design.md): the selection's
 // committed packages copied into ONE folder the user picks. The plan comes from
@@ -48,8 +49,10 @@ function downloadGuard(c: UploadCtx, ids: string[]): string | null {
 async function downloadTo(latest: Latest, ids: string[]): Promise<void> {
   const c = latest.current;
   const plan = downloadPlanOf(c, ids);
+  armCompletionSound();
   const dest = await pickDirectory();
   if (dest === null) return c.say("No folder chosen — nothing was saved");
+  const finish = plan.items.length > 0 ? startCompletionSound() : () => undefined;
   c.setBusy("Downloading…");
   try {
     const result = await copyPlanned(c.refs.root.current as DirHandleLike, dest, plan);
@@ -58,6 +61,7 @@ async function downloadTo(latest: Latest, ids: string[]): Promise<void> {
     latest.current.say(line, result.failed > 0);
   } finally {
     latest.current.setBusy(null);
+    finish();
   }
 }
 

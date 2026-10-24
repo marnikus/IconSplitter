@@ -64,7 +64,7 @@ function makeChooseRoot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     setS((p) => ({ ...p, needsGrant: false })); // a fresh pick carries its own grant
     await saveHandles(ctx.state.current.preset.name, { source: picked.handle, dest: ctx.dest.current ?? undefined });
-    await scanOp(ctx, setS, say);
+    await scanOp(ctx, setS, say, true);
     if (picked.message !== null) say(picked.message);
   };
 }
@@ -82,7 +82,7 @@ function makeChooseDest(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
 function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   const chooseRoot = useCallback(makeChooseRoot(ctx, setS, say), [ctx, setS, say]);
   const chooseDest = useCallback(makeChooseDest(ctx, setS, say), [ctx, setS, say]);
-  const refresh = useCallback(() => { void scanOp(ctx, setS, say); }, [ctx, setS, say]);
+  const refresh = useCallback(() => { void scanOp(ctx, setS, say, true); }, [ctx, setS, say]);
   const run = useCallback(() => { void batchProcess(ctx, setS); }, [ctx, setS]);
   // The one gesture a restart may ask for: re-grant the remembered root, then scan.
   const grantAccess = useCallback(async () => {
@@ -90,10 +90,10 @@ function useCoreActions(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) =>
     if (!h) return;
     if (!(await ensurePermission(h))) return say(`Access to "${h.name}" was refused — rows stay hidden until the browser grants it`, true);
     setS((p) => ({ ...p, needsGrant: false }));
-    await scanOp(ctx, setS, say);
+    await scanOp(ctx, setS, say, true);
   }, [ctx, setS, say]);
   const cancel = useCallback(() => { ctx.stop.current = true; }, [ctx]);
-  const decide = useCallback((relPaths: string[], review: BatchReviewStatus) => { void decideReview({ ctx, relPaths, review, setS }); }, [ctx, setS]);
+  const decide = useCallback((relPaths: string[], review: BatchReviewStatus, audible = true) => { void decideReview({ ctx, relPaths, review, setS, audible }); }, [ctx, setS]);
   return useMemo(() => ({ chooseRoot, chooseDest, refresh, run, grantAccess, cancel, decide }), [chooseRoot, chooseDest, refresh, run, grantAccess, cancel, decide]);
 }
 

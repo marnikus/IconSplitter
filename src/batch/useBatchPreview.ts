@@ -1,5 +1,6 @@
 // useBatchPreview.ts — high-perf preview for Batch (1000 images) + immediate per-row preview on Apply/Reset + progress bar + restore per root + regenerate
 // ideal-size: 262 lines reason=preview owns cache, load, queue, abort and the single-row preview; the records live in previewPersist.ts
+import { startCompletionSound } from "../ui/completionSound";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { analyzeAsync, detectAsync, type Analysis, type Box } from "../lib/detect";
@@ -184,10 +185,13 @@ function usePreviewQueue(args: { previewOne: (row: Row, signal: AbortSignal, ove
     abortRef.current?.abort();
     const ac = new AbortController(); abortRef.current = ac;
     const init = initPreviewProgress(eligible);
+    const finish = startCompletionSound(init.runId);
     setProgress(init); setRunning(true); setIsPreviewing(true);
     markLoading(eligible, setPreviews);
     const onProgress = makePreviewProgressUpdater(setProgress);
-    await runWorkers({ queue: [...eligible], ac, previewOne, force, setPreviews, onProgress, onReviewed });
+    try {
+      await runWorkers({ queue: [...eligible], ac, previewOne, force, setPreviews, onProgress, onReviewed });
+    } finally { finish(ac.signal.aborted); }
     if (!ac.signal.aborted) { setIsPreviewing(false); setRunning(false); }
   }, [previewOne, abortRef, setPreviews, setIsPreviewing, setProgress, setRunning, onReviewed, previews, split, rowMerges]);
 }

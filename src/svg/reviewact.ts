@@ -1,3 +1,4 @@
+import { withCompletionSound } from "../ui/completionSound";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // reviewact.ts — the SVG review decision and its undo path (prompt §15, RULE 12).
 // Owns: approving/declining ONE item at a time (2026-10-20). The status belongs
@@ -78,9 +79,11 @@ async function saveReviewDecision(s: ReviewCtx, ids: string[], decision: ReviewS
   const rows = ids.map((id) => rowOf(s, id)).filter(hasSvg);
   if (rows.length === 0) return s.say("No generated SVG to review yet", true);
   const recs = rows.map((r) => recOf(r, decision));
-  await writeAll(s, rows, decision);
-  patchRows(s, rows, decision);
-  pushEntry(s, rows, decision, recs);
+  await withCompletionSound(async () => {
+    await writeAll(s, rows, decision);
+    patchRows(s, rows, decision);
+    pushEntry(s, rows, decision, recs);
+  });
 }
 
 /** Re-reads the written pair files into the list without touching other rows. */

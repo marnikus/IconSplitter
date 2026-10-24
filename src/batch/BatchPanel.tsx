@@ -23,13 +23,13 @@ function useReviewed(v: View) {
   // stay stable too — the restore effect must not re-run on every render.
   const decide = v.core.decide;
   const onReviewed = useCallback((relPath: string, count: number) => {
-    decide([relPath], count === 4 ? "approved" : "warning");
+    decide([relPath], count === 4 ? "approved" : "warning", false);
   }, [decide]);
   const onReviewedBatch = useCallback((entries: { relPath: string; count: number }[]) => {
     const approve = entries.filter((e) => e.count === 4).map((e) => e.relPath);
     const warn = entries.filter((e) => e.count !== 4).map((e) => e.relPath);
-    if (approve.length) decide(approve, "approved");
-    if (warn.length) decide(warn, "warning");
+    if (approve.length) decide(approve, "approved", false);
+    if (warn.length) decide(warn, "warning", false);
   }, [decide]);
   return { onReviewed, onReviewedBatch };
 }

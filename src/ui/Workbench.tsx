@@ -15,6 +15,7 @@ import { useAppState } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
 import { useSessionAutosave } from "../state/useSessionAutosave";
 import HistoryBar from "./HistoryBar";
+import { armCompletionSound } from "./completionSound";
 import ScrollTopButton from "./ScrollTopButton";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
@@ -39,7 +40,7 @@ function Shell() {
   useSessionAutosave();
   usePrefsAutosave();
   return (
-    <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell">
+    <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell" onPointerDownCapture={armCompletionSound} onKeyDownCapture={armCompletionSound}>
       <div className="progress-mounts flex flex-col gap-1">
         <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>

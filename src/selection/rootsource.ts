@@ -5,6 +5,7 @@
 // (I-35: the picked folder's real path is captured from the clipboard), and the
 // ticket-guarded rescan (a stale scan never commits).
 
+import { startCompletionSound } from "../ui/completionSound";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
 import { isReviewExcludedFolder, REVIEW_EXCLUDED_FOLDERS } from "../lib/reviewfolders";
@@ -56,7 +57,7 @@ export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void
     void saveHandles(SELECTION_HANDLE_KEY, { source: h });
   });
   if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
-  await rescan(ctx, setS, say);
+  await rescan(ctx, setS, say, true);
   if (picked.message !== null) say(picked.message);
 }
 
@@ -66,9 +67,10 @@ export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
 }
 
 /** Walks the root and commits one snapshot — only if it is still the newest. */
-export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
+export async function rescan(ctx: Ctx, setS: Setter, say: Say, audible = false): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
+  const finish = audible ? startCompletionSound() : () => undefined;
   const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
   if (captured !== null) say(captured);
   const ticket = beginScan(ctx.seq.current);
@@ -86,6 +88,7 @@ export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
     if (isCurrent(ctx.seq.current, ticket.id)) say("Rescan failed — the folder may be unreadable", true);
   } finally {
     if (isCurrent(ctx.seq.current, ticket.id)) setS((p) => ({ ...p, busy: null }));
+    finish(!isCurrent(ctx.seq.current, ticket.id));
   }
 }
 

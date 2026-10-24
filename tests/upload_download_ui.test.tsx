@@ -1,3 +1,4 @@
+import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // upload_download_ui.test.tsx — "Download all" on the SVG to upload tab
 // (2026-10-08): the real panel over a fake folder that already holds two
 // committed packages. The button counts the selection's committed files, the
@@ -122,9 +123,11 @@ describe("Download all — the selection's packages, one folder", () => {
     expect(btn().disabled).toBe(false);
     expect(btn().textContent).toContain("Download all (3 files)"); // fog's three; court has no package yet
 
+    recordCompletionAudio();
     await click("[data-testid=upload-download-selected]");
     await waitFor(() => text("[data-testid=upload-toast]").includes("Saved"), "the copy to finish");
     expect(picker).toHaveBeenCalledWith({ mode: "readwrite" });
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
     expect([...dest.children.keys()].sort()).toEqual(["fog.eps", "fog.jpg", "fog.svg"]);
     expect(bytesOf(dest, "fog.jpg")).toEqual(JPG); // byte for byte
     expect(new TextDecoder().decode(bytesOf(dest, "fog.svg")!)).toBe(SVG);
@@ -157,11 +160,13 @@ describe("Download all — the selection's packages, one folder", () => {
   it("a cancelled picker writes nothing and says so; nothing selected is refused before any dialog", async () => {
     const root = makeRoot();
     picker.mockRejectedValue(new DOMException("aborted", "AbortError"));
+    recordCompletionAudio();
     await mount(root);
     await check(FOG);
     await click("[data-testid=upload-download-selected]");
     await waitFor(() => text("[data-testid=upload-toast]") !== "", "the toast");
     expect(text("[data-testid=upload-toast]")).toContain("No folder chosen");
     expect(picker).toHaveBeenCalledTimes(1);
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
   });
 });

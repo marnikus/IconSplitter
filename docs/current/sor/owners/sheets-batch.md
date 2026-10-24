@@ -5,7 +5,7 @@ Choose the row for your change, then open that source file. Part of the [owner m
 | Layer | Files | Owns |
 |---|---|---|
 | Mode shell | `src/ui/Workbench.tsx`, `src/main.tsx` | Sheets/Batch tab switch |
-| Sheets UI | `src/App.tsx`, `src/utils/cn.ts` | sheet state, controls, export paths |
+| Sheets UI | `src/App.tsx`, `src/sheets/importSheets.ts`, `src/utils/cn.ts` | sheet state, controls, real import/detection loop, export paths and shared per-process completion cues |
 | Detection | `src/lib/detect.ts` | `analyze` (mask), `detect` (boxes, auto radius, reading order) |
 | Rendering | `src/lib/render.ts` | `squareInfo`, `cropRect`, `renderIcon`, `canvasToBlob` |
 | Naming (batch) | `src/lib/naming.ts` | `_AI` parse, split names, variations, batch path |
