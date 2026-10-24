@@ -16,7 +16,8 @@ import {
   MAIN_ENTRY, type PromptTaskId, type ResolvedTaskPrompt, type TaskPromptEntry, type TaskPromptMap,
 } from "../lib/prompttasks";
 import TaskPromptPicker from "../ui/TaskPromptPicker";
-import { loadImageEditPref, saveImageEditPref } from "./imgprefs";
+import ImageAutoApplyControl from "./ImageAutoApplyControl";
+import { loadImageAutoApply, saveImageAutoApply, loadImageEditPref, saveImageEditPref } from "./imgprefs";
 import type { PreparedImageRun } from "./imgprepare";
 import type { SvgRow } from "./types";
 import { useImgPreview, type ImagePreview } from "./useImgPreview";
@@ -67,12 +68,15 @@ interface TaskState {
 }
 
 interface ConfirmState extends TaskState {
+  autoApply: boolean; chooseAutoApply: (enabled: boolean) => void;
   countText: string; count: number; limit: number; warning: boolean; multi: boolean;
   problem: string | null; preview: ImagePreview; ready: boolean;
   page: number; setPage: (page: number) => void; chooseCount: (text: string) => void;
 }
 
 function useImageConfirmState(p: SvgImgConfirmProps): ConfirmState {
+  const [autoApply, setAutoApply] = useState(loadImageAutoApply);
+  const chooseAutoApply = (enabled: boolean) => { setAutoApply(enabled); saveImageAutoApply(enabled); };
   const [stored] = useState(loadImageEditPref);
   const [countText, setCountText] = useState(String(stored.count));
   const [page, setPage] = useState(0);
@@ -85,7 +89,7 @@ function useImageConfirmState(p: SvgImgConfirmProps): ConfirmState {
   const preview = useImgPreview({ rootRef: p.rootRef ?? EMPTY_ROOT, rows: p.rows ?? EMPTY_ROWS, ids: p.ids,
     conn: p.conn, prompt: prompt.text, count, active: shouldPreview(multi, problem, prompt.text) });
   const chooseCount = (text: string) => rememberCount(text, setCountText, setPage);
-  return { countText, count, limit, warning: stored.warning, multi, problem, preview,
+  return { autoApply, chooseAutoApply, countText, count, limit, warning: stored.warning, multi, problem, preview,
     ready: canConfirm(prompt.text, problem, multi, preview), page, setPage, chooseCount, ...prompt };
 }
 
@@ -140,8 +144,9 @@ function ConfirmBody({ p, state: s }: { p: SvgImgConfirmProps; state: ConfirmSta
   return <div className="svg-modal-body svg-img-body">
     <ConfirmHead ids={p.ids.length} conn={p.conn} waitMs={p.waitMs} multi={s.multi} />
     <CountControl text={s.countText} limit={s.limit} warning={s.warning} problem={s.problem} onChange={s.chooseCount} />
+    <ImageAutoApplyControl checked={s.autoApply} onChange={s.chooseAutoApply} />
     <p className="svg-note" data-testid="svg-img-caps">Image edit — {s.multi
-      ? `each request sends one previewed square containing up to ${s.count} current main AI images to ${p.conn.name}. Review returned cells before saving their individual new versions. Nothing is overwritten.`
+      ? `each request sends one previewed square containing up to ${s.count} current main AI images to ${p.conn.name}. Apply returned cells using the review policy above, saving individual new versions. Nothing is overwritten.`
       : "each request sends this prompt together with that source’s current main AI image as the reference. One request per source; each result is saved as a new version and becomes the main AI source, which the SVG generation then uses. Nothing is overwritten."}</p>
     <PreviewPanel preview={s.preview} page={s.page} setPage={s.setPage} multi={s.multi} />
     <TaskPromptPicker testId="svg-img-prompt" work={WORK} count={p.ids.length}
@@ -150,7 +155,7 @@ function ConfirmBody({ p, state: s }: { p: SvgImgConfirmProps; state: ConfirmSta
     <div className="svg-modal-actions">
       <button type="button" className="svg-btn primary" data-testid="svg-img-generate" disabled={!s.ready}
         title={!s.ready ? s.problem ?? "Write a prompt and wait for its exact reference preview" : undefined}
-        onClick={() => p.onConfirm(s.multi ? s.preview.run : null)}>Generate now</button>
+        onClick={() => p.onConfirm(s.multi && s.preview.run ? { ...s.preview.run, autoApply: s.autoApply } : null)}>Generate now</button>
     </div>
   </div>;
 }

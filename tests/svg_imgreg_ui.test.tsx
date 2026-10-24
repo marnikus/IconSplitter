@@ -503,6 +503,7 @@ describe("composite AI-source regeneration", () => {
     expect(txt("[data-testid=svg-img-manifest]")).toMatch(/fog_AI\.png.*mist_AI\.png/s);
     await click(q("[data-testid=svg-img-generate]")!);
     await waitFor(() => q("[data-testid=svg-img-review]") !== null, "returned cells to review");
+    expect(txt("[data-testid=svg-image-progress-title]")).toContain("waiting for Apply / Discard");
     expect(metaNow().imageVersions).toHaveLength(0);
     expect(imageCalls).toHaveLength(1);
     expect(imageCalls[0].ref).toBe("SHEET");
@@ -534,7 +535,7 @@ describe("composite AI-source regeneration", () => {
     await waitFor(() => q("[data-testid=svg-img-review]") !== null, "nine returned cells");
     expect(q("[data-testid=svg-img-review]")!.querySelectorAll(".svg-img-result-cells img")).toHaveLength(9);
     await click(q("[data-testid=svg-img-apply]")!);
-    await waitFor(() => metaNow().imagePreferred === 1, "first of nine saved");
+    await waitFor(() => metaNow().imagePreferred === 1 && q("[data-testid=svg-img-review]") === null, "all nine cells saved and review closed");
     const files = arch.children.get("AI source regeneration versions") as FakeDir;
     const images = ["fog", ...names].map((name) => {
       const metaFile = arch.children.get(`${name}_AI.svg.json`) as FakeFile;
@@ -827,6 +828,7 @@ describe("independent image edits during SVG generation", () => {
     await act(async () => { response.resolve(okImage()); });
     await waitFor(() => q("[data-testid=svg-img-stop]") === null, "image edit to finish");
     expect(q("[data-testid=svg-cancel-run]")).not.toBeNull(); // SVG still streams
+    expect(txt("[data-testid=svg-image-progress-completed]")).toBe("1 completed / 1");
     const root = (stored.get("__svg__") as { source: FakeDir }).source;
     const arch = root.children.get("architecture") as FakeDir;
     const courtMeta = JSON.parse((arch.children.get("court_AI.svg.json") as FakeFile).text);
@@ -875,4 +877,107 @@ describe("independent image edits during SVG generation", () => {
     await waitFor(() => q("[data-testid=svg-img-stop]") === null, "edited image to land");
     expect(svgT.calls).toHaveLength(0); // never auto-send a different main image
   });
+});
+
+describe("automatic image Apply and batch process progress", () => {
+  it("opts in explicitly, freezes the policy and applies two requests without interrupting for review", async () => {
+    editCanvas();
+    const first = deferred<Response>(); const second = deferred<Response>();
+    let calls = 0;
+    imageAnswer = () => (++calls === 1 ? first.promise : second.promise);
+    const root = manyPairs(["mist", "rain", "snow"]);
+    localStorage.setItem(IMAGE_EDIT_PREF_KEY, JSON.stringify({ v: 1, count: 2 }));
+    await mountWithImages(root);
+    await click(q("[data-testid=svg-check-all]")!);
+    await click(q("[data-testid=svg-bulk-image-regen]")!);
+    await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "preview ready");
+    const auto = q("[data-testid=svg-img-auto-apply]") as HTMLInputElement;
+    expect(auto).not.toBeNull();
+    expect(auto.checked).toBe(false);
+    await click(auto);
+    expect(localStorage.getItem("iconSplitter.svg.imageAutoApply.v1")).toBe("on");
+    expect(txt("[data-testid=svg-img-auto-apply-note]")).toContain("moved or swapped");
+    await click(q("[data-testid=svg-img-generate]")!);
+    await waitFor(() => imageCalls.length === 1, "first image request sent");
+    expect(txt("[data-testid=svg-image-progress-completed]")).toBe("0 completed / 4");
+    // Changing a future run's preference is not permission to interrupt this run.
+    localStorage.setItem("iconSplitter.svg.imageAutoApply.v1", "off");
+    const answer = () => new Response(JSON.stringify({ data: [{ b64_json: btoa(String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10)) }] }), { status: 200 });
+    await act(async () => { first.resolve(answer()); });
+    await waitFor(() => imageCalls.length === 2, "second request without Apply dialog");
+    expect(q("[data-testid=svg-img-review]")).toBeNull();
+    expect(txt("[data-testid=svg-image-progress-completed]")).toBe("2 completed / 4");
+    expect(txt("[data-testid=svg-image-progress-remaining]")).toBe("2 remaining");
+    await act(async () => { second.resolve(answer()); });
+    await waitFor(() => q("[data-testid=svg-busy]") === null, "all images saved");
+    expect(txt("[data-testid=svg-image-progress-completed]")).toBe("4 completed / 4");
+    expect(txt("[data-testid=svg-image-progress-title]")).toContain("complete");
+    const arch = root.children.get("architecture") as FakeDir;
+    for (const name of ["fog", "mist", "rain", "snow"]) {
+      const meta = JSON.parse((arch.children.get(`${name}_AI.svg.json`) as FakeFile).text);
+      expect(meta.imageVersions).toHaveLength(1); expect(meta.imagePreferred).toBe(1);
+    }
+  });
+
+  it("shows single-source image generation as its own stoppable process bar", async () => {
+    const response = deferred<Response>(); imageAnswer = () => response.promise;
+    await mountWithImages();
+    await regenerateRow();
+    await waitFor(() => imageCalls.length === 1, "single image request sent");
+    expect(q("[data-testid=svg-image-progress-header]")).not.toBeNull();
+    expect(txt("[data-testid=svg-image-progress-completed]")).toBe("0 completed / 1");
+    await act(async () => { response.resolve(okImage()); });
+    await waitFor(() => q("[data-testid=svg-img-stop]") === null, "single image finished");
+    expect(txt("[data-testid=svg-image-progress-completed]")).toBe("1 completed / 1");
+    await click(q("[data-testid=svg-image-progress-dismiss]")!);
+    expect(q("[data-testid=svg-image-progress-header]")).toBeNull();
+  });
+});
+
+
+it("auto Apply still refuses stale cells and counts failures without overwriting another pair", async () => {
+  editCanvas(); const answer = imageAnswer;
+  const response = deferred<Response>(); imageAnswer = () => response.promise;
+  const root = manyPairs(["mist"]);
+  const arch = root.children.get("architecture") as FakeDir;
+  localStorage.setItem("iconSplitter.svg.imageAutoApply.v1", "on");
+  await mountWithImages(root);
+  await click(q("[data-testid=svg-check-all]")!);
+  await click(q("[data-testid=svg-bulk-image-regen]")!);
+  await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "auto Apply preview");
+  expect((q("[data-testid=svg-img-auto-apply]") as HTMLInputElement).checked).toBe(true);
+  await click(q("[data-testid=svg-img-generate]")!);
+  await waitFor(() => imageCalls.length === 1, "paid request sent");
+  arch.children.set("mist_AI.png", new FakeFile("mist_AI.png", 9, 4, "changed externally"));
+  await act(async () => { response.resolve(await answer()); });
+  await waitFor(() => q("[data-testid=svg-busy]") === null, "stale-cell refusal and remaining save");
+  expect(q("[data-testid=svg-img-review]")).toBeNull();
+  expect(metaNow().imagePreferred).toBe(1);
+  const changed = JSON.parse((arch.children.get("mist_AI.svg.json") as FakeFile).text);
+  expect(changed.imagePreferred).toBeNull(); expect(changed.imageVersions).toEqual([]);
+  expect(txt("[data-testid=svg-image-progress-completed]")).toBe("2 completed / 2");
+  expect(txt("[data-testid=svg-image-progress-file]")).toContain("1 saved · 1 failed");
+  expect(txt("[data-testid=svg-image-progress-title]")).toContain("check results");
+});
+
+it("Stop in automatic mode saves only the sent group, skips later requests and keeps honest partial progress", async () => {
+  editCanvas(); const answer = imageAnswer;
+  const response = deferred<Response>(); imageAnswer = () => response.promise;
+  localStorage.setItem(IMAGE_EDIT_PREF_KEY, JSON.stringify({ v: 1, count: 2 }));
+  localStorage.setItem("iconSplitter.svg.imageAutoApply.v1", "on");
+  await mountWithImages(manyPairs(["mist", "rain", "snow"]));
+  await click(q("[data-testid=svg-check-all]")!);
+  await click(q("[data-testid=svg-bulk-image-regen]")!);
+  await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "two group preview");
+  await click(q("[data-testid=svg-img-generate]")!);
+  await waitFor(() => imageCalls.length === 1, "first group sent");
+  await click(q("[data-testid=svg-image-progress-stop]")!);
+  expect(txt("[data-testid=svg-image-progress-title]")).toContain("Stopping");
+  await act(async () => { response.resolve(await answer()); });
+  await waitFor(() => q("[data-testid=svg-busy]") === null, "sent group saved and stopped");
+  expect(imageCalls).toHaveLength(1);
+  expect(q("[data-testid=svg-img-review]")).toBeNull();
+  expect(txt("[data-testid=svg-image-progress-completed]")).toBe("2 completed / 4");
+  expect(txt("[data-testid=svg-image-progress-percent]")).toBe("50%");
+  expect(txt("[data-testid=svg-image-progress-title]")).toContain("stopped");
 });

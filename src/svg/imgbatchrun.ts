@@ -1,3 +1,5 @@
+import { markSent, markReview, clearJournal } from "./imgbatchjournal";
+import { startImageProcess, updateImageProcess, finishImageProcess } from "./imgprogress";
 import { notifyCompletion } from "../ui/completionSound";
 // imgbatchrun.ts — one confirmed square per image-edit request, one explicit
 // review per multi-icon answer, and independent saves to the original pairs.
@@ -14,14 +16,14 @@ import { allocateUsage } from "../lib/svgusage";
 import type { SvgCtx } from "./actions";
 import { recordImageResult } from "./imgcommit";
 import { taskPromptOf } from "./taskprompt";
-import { loadImageJournal, removeImageRequest, saveImageJournal, upsertImageRequest, type ImageRequestEvidence } from "./imgjournal";
+import { loadImageJournal, type ImageRequestEvidence } from "./imgjournal";
 import { imageGroupSpec, imageSpendSuffix } from "./imglog";
 import { sourceChangeReason } from "./imgstale";
 import { runImageBatch, type ImageRegenItem, type ImageRegenResult } from "./imgrunner";
 import type { PreparedImageGroup, PreparedImageRun } from "./imgprepare";
 import type { ImageReview } from "./types";
 
-interface CompositeRun {
+export interface CompositeRun {
   c: SvgCtx;
   prepared: PreparedImageRun;
   control: CompositeControl;
@@ -120,6 +122,7 @@ function runId(): string {
 
 function begin(run: CompositeRun): void {
   const { c, prepared } = run;
+  startImageProcess(c.refs, { id: run.id, total: prepared.ids.length, requests: prepared.groups.length });
   c.setBusy(busyText(run));
   c.say(`Sending ${prepared.groups.length} confirmed image-edit request(s) via ${prepared.conn.name} for ${prepared.ids.length} icons`);
   log({ feature: "svg", action: "image-regen-start", detail: `${prepared.groups.length} requests · ${prepared.ids.length} sources · ${prepared.conn.model}` });
@@ -138,18 +141,6 @@ function busyText(run: CompositeRun): string {
   return `Regenerating AI sources · ${run.tally.done + run.tally.failed + run.discarded}/${run.tally.total}`;
 }
 
-function markSent(run: CompositeRun, item: ImageRegenItem): void {
-  const index = run.prepared.groups.findIndex((_, i) => item.id === `${run.id}-${i}`);
-  if (index < 0) return;
-  const group = run.prepared.groups[index];
-  run.sent.add(index);
-  const entry: ImageRequestEvidence = { id: item.id, ids: group.plan.cells.map((c) => c.id), status: "sent",
-    at: Date.now(), model: run.prepared.conn.model, provider: run.prepared.conn.name, requestId: null };
-  updateJournal(run, upsertImageRequest(run.journal, entry));
-  run.c.dispatch({ type: "img-running", ids: entry.ids, on: true });
-  run.c.say(`Request ${index + 1}/${run.prepared.groups.length} sent · ${entry.ids.length} icons`);
-}
-
 async function landGroup(run: CompositeRun, result: ImageRegenResult, index: number): Promise<void> {
   const group = run.prepared.groups[index];
   run.results.push(result);
@@ -162,13 +153,14 @@ async function landGroup(run: CompositeRun, result: ImageRegenResult, index: num
   try {
     const image = await normalizedReturnedBlob(result.blob);
     const crops = await cropEditedSheet(group.plan, image);
-    if (crops.length === 1) await applyCrops(run, group, crops, result);
+    if (crops.length === 1 || run.prepared.autoApply === true) await applyCrops(run, group, crops, result);
     else await awaitReview(run, { group, crops, result: { ...result, blob: image }, index });
   } catch (error) {
     await groupFailure(run, group, { ...result, status: "failed", error: `returned grid could not be split (${messageOf(error)})` }, index);
     return;
   }
   if (run.control.pending === null) clearJournal(run, `${run.id}-${index}`);
+  updateImageProcess(run.c.refs, run.id, { phase: "running" });
   run.c.setBusy(busyText(run));
 }
 
@@ -192,6 +184,7 @@ async function awaitReview(run: CompositeRun, candidate: ReviewCandidate): Promi
   const urls = [URL.createObjectURL(result.blob as Blob), ...crops.map((crop) => URL.createObjectURL(crop.blob))];
   const view: ImageReview = { group: index + 1, total: run.prepared.groups.length, mosaic: urls[0], busy: false,
     cells: group.plan.cells.map((cell, i) => ({ id: cell.id, name: cell.name, url: urls[i + 1] })) };
+  updateImageProcess(run.c.refs, run.id, { phase: "review" });
   markReview(run, `${run.id}-${index}`, result.requestId ?? null);
   await new Promise<void>((resolve) => {
     run.control.pending = { run, group, crops, result, urls, view, resolve, deciding: false, index };
@@ -216,12 +209,14 @@ export async function decideCompositeReview(control: CompositeControl, apply: bo
     pending.run.c.dispatch({ type: "img-review", review: null });
     clearJournal(pending.run, `${pending.run.id}-${pending.index}`);
     pending.run.c.setBusy(busyText(pending.run));
+    updateImageProcess(pending.run.c.refs, pending.run.id, { phase: "running" });
     control.pending = null;
     pending.resolve();
   }
 }
 
 async function applyCrops(run: CompositeRun, group: PreparedImageGroup, crops: EditedCrop[], result: ImageRegenResult): Promise<void> {
+  updateImageProcess(run.c.refs, run.id, { phase: "saving" });
   for (const source of group.sources) {
     const crop = crops.find((item) => item.id === source.row.source.id);
     if (crop === undefined) { countFailure(run, source.row.source.id, "Returned icon cell is missing"); continue; }
@@ -242,7 +237,7 @@ async function saveOutcome(run: CompositeRun, group: PreparedImageGroup, row: Pr
     else countFailure(run, row.source.id, entry.error ?? "Image version could not be saved");
   } catch (error) {
     countFailure(run, row.source.id, `${row.source.name}: ${messageOf(error)}`);
-  }
+  } finally { syncBatchProgress(run); }
 }
 
 /** Each cell's share of the one request it rode in — an estimate unless it was alone (allocateUsage). */
@@ -252,6 +247,7 @@ function shareOf(group: PreparedImageGroup, result: ImageRegenResult): Usage {
 
 function countFailure(run: CompositeRun, id: string, reason: string): void {
   run.tally.failed++;
+  syncBatchProgress(run);
   run.tally.reason ??= reason;
   log({ feature: "svg", action: "image-regen-failed", ids: { source: id }, detail: reason });
   run.c.say(`AI source ${id}: ${reason}`, true);
@@ -259,26 +255,13 @@ function countFailure(run: CompositeRun, id: string, reason: string): void {
 
 function discard(run: CompositeRun, group: PreparedImageGroup): void {
   run.discarded += group.plan.cells.length;
+  syncBatchProgress(run);
   run.c.say(`${group.plan.cells.length} edited icons discarded — their existing versions are unchanged`);
   log({ feature: "svg", action: "image-regen-discarded", detail: `${group.plan.cells.length} proposed icons; no versions saved` });
 }
 
-function markReview(run: CompositeRun, id: string, requestId: string | null): void {
-  const current = run.journal.find((entry) => entry.id === id);
-  if (current) updateJournal(run, upsertImageRequest(run.journal, { ...current, status: "review", requestId }));
-}
-
-function clearJournal(run: CompositeRun, id: string): void {
-  updateJournal(run, removeImageRequest(run.journal, id));
-}
-
-function updateJournal(run: CompositeRun, entries: ImageRequestEvidence[]): void {
-  run.journal = entries;
-  saveImageJournal(entries);
-  run.c.dispatch({ type: "img-journal", entries });
-}
-
 function finish(run: CompositeRun): void {
+  finishImageProcess(run.c.refs, run.id, run.control.stop);
   notifyCompletion(run.id, run.control.stop);
   const { c, tally, discarded, results, prepared } = run;
   c.dispatch({ type: "img-review", review: null });
@@ -293,4 +276,9 @@ function finish(run: CompositeRun): void {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** A failed/discarded cell is processed, never counted as a saved version. */
+function syncBatchProgress(run: CompositeRun): void {
+  updateImageProcess(run.c.refs, run.id, { saved: run.tally.done, failed: run.tally.failed, discarded: run.discarded });
 }

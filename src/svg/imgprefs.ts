@@ -31,3 +31,8 @@ export function saveImageEditPref(count: number): void {
     writeKey(IMAGE_EDIT_PREF_KEY, JSON.stringify({ v: 1, count }));
   }
 }
+
+/** Explicit opt-in only: missing, corrupt or unknown values keep manual review. */
+export const IMAGE_AUTO_APPLY_KEY = "iconSplitter.svg.imageAutoApply.v1";
+export const loadImageAutoApply = (): boolean => readKey(IMAGE_AUTO_APPLY_KEY) === "on";
+export const saveImageAutoApply = (enabled: boolean): void => writeKey(IMAGE_AUTO_APPLY_KEY, enabled ? "on" : "off");

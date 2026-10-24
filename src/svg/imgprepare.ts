@@ -28,6 +28,8 @@ export interface PreparedImageGroup {
   prompt: string;
 }
 export interface PreparedImageRun {
+  /** Frozen at confirmation, never re-read from preferences while running. */
+  autoApply?: boolean;
   groups: PreparedImageGroup[];
   /** A bad group is named but never sent; other previewed groups may proceed. */
   skipped: { ids: string[]; reason: string }[];

@@ -4,6 +4,9 @@ Read [I-71](invariants/svg-image-edits.md#i-71) and [I-72](invariants/svg-image-
 
 See [parallel-run safety and completion sound](svg-parallel-runs.md): independent SVG work may continue, but shared-pair edits refuse before send and image leases survive review.
 
+See [automatic Apply and batch progress](svg-image-auto-apply.md) for the persisted
+opt-in checkbox, frozen run policy, independent image process bar and Stop.
+
 ## Confirmed composite workflow
 
 * **AI-source image edits (2026-10-19, I-71/I-72):** the separate
@@ -26,13 +29,14 @@ See [parallel-run safety and completion sound](svg-parallel-runs.md): independen
   composite to `/images/edits` and requires exactly one returned image.
   Percent-based saved cell rectangles are scaled to the returned square's
   actual dimensions (not the sent dimensions); supported decoded formats
-  become genuine per-icon PNG crops. Multi-icon responses wait for an explicit
-  **Apply/Discard** side-by-side review because a model can rearrange artwork
+  become genuine per-icon PNG crops. By default multi-icon responses wait for
+  **Apply/Discard** review because a model can rearrange artwork
   while preserving its aspect ratio. Apply rechecks each original pair and
   source bytes, appends independent non-overwriting image versions, and moves
   each saved pair's main pointer; Discard changes no pair history. A failed
-  or changed cell never re-points another pair. Stop prevents unsent groups;
-  sent responses may still need review. Request-level tokens, cost and ID are
+  or changed cell never re-points another pair. With explicit automatic Apply
+  enabled at confirmation, the same guarded save runs without a result popup.
+  Stop prevents unsent groups; sent responses follow the frozen Apply policy. Request-level tokens, cost and ID are
   logged **once per composite** (never invented or multiplied by icon count),
   and a validated metadata-only journal leaves unknown or lost-on-reload
   requests for deliberate reconfirmation, never auto-retry.

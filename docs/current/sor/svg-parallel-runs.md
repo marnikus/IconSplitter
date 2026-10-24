@@ -33,7 +33,8 @@ foreground strip remains a detail view; the persistent header aggregates all
 processes and waiting work. Stopping one job does not abort another. Global SVG
 Cancel drops waiting SVG work first, then aborts active SVG controllers, keeping
 saved files and leaving the independent image process alone. Image Stop retains
-its existing sent-result/review behaviour.
+its sent-result behaviour under the frozen [manual/automatic Apply policy](svg-image-auto-apply.md);
+the independent image bar remains visible above tabs.
 
 An unknown/stopped request never automatically triggers a previously queued
 same-source retry. Affected waiting batches are dropped with an explanation;

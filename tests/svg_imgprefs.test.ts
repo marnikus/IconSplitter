@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { IMAGE_EDIT_PREF_KEY, loadImageEditPref, parseImageEditPref, saveImageEditPref } from "../src/svg/imgprefs";
+import { IMAGE_AUTO_APPLY_KEY, loadImageAutoApply, saveImageAutoApply, IMAGE_EDIT_PREF_KEY, loadImageEditPref, parseImageEditPref, saveImageEditPref } from "../src/svg/imgprefs";
 
 beforeEach(() => localStorage.clear());
 
@@ -17,5 +17,20 @@ describe("icons per image-edit request preference", () => {
     }
     localStorage.setItem(IMAGE_EDIT_PREF_KEY, "{broken");
     expect(loadImageEditPref()).toEqual({ count: 4, warning: true });
+  });
+});
+
+
+describe("explicit automatic image Apply opt-in", () => {
+  it("defaults off, persists a deliberate choice, and can be turned off", () => {
+    expect(loadImageAutoApply()).toBe(false);
+    saveImageAutoApply(true); expect(loadImageAutoApply()).toBe(true);
+    saveImageAutoApply(false); expect(loadImageAutoApply()).toBe(false);
+  });
+  it("fails closed for corrupt or legacy values", () => {
+    for (const raw of ["true", "1", "{}", "null", "broken", "ON"]) {
+      localStorage.setItem(IMAGE_AUTO_APPLY_KEY, raw);
+      expect(loadImageAutoApply()).toBe(false);
+    }
   });
 });

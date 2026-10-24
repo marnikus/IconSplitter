@@ -43,11 +43,10 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
 * `svgimgbatch.test.ts`, `svgimgpixels.test.ts`, `svg_imgprepare.test.ts`,
   `svg_imgprefs.test.ts`, `svg_imgstale.test.ts`, `svg_imgjournal.test.ts`,
   `svg_imgconfirm_batch.test.tsx`, `svg_imgreview.test.tsx`,
-  `svg_imgrunner.test.ts`, `svg_imgreg_ui.test.tsx` — image-edit grouping,
-  normalized resized crops, exact reference preview, validated preference,
-  stale-pair refusal, unknown-request metadata, one multipart composite per
-  request, explicit Apply/Discard, per-pair versions and Stop, the spend each
-  image version keeps and the row's "Image gen." usage (2026-10-19)
+  `svg_imgrunner.test.ts`, `svg_imgreg_ui.test.tsx`, `svg_image_progress.test.tsx`
+  — exact composite/reference/crops, manual review and frozen opt-in auto Apply,
+  stale-cell guards, independent version/usage/journal commits, Stop after send,
+  partial progress, persisted default-off preference and cross-tab process bar.
 * `svg_bg.test.ts`, `svg_cost.test.ts` — the preview-background rules (presets,
   hex validation, stored-payload fallback, the black-vs-background contrast
   rule) and the cost rules (verified rate card + version, provider-reported vs

@@ -7,6 +7,7 @@ Validate on read (RULE 13). Part of the [storage map](../STORAGE.md).
 | IndexedDB `iconSplitter/handles["__svg__"]` | Generate SVG root handle | falls back to the Selection handle |
 | localStorage `iconSplitter.svg.prefs.v1` | SVG tab view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read (RULE 13); a missing/non-boolean `providerOpen` keeps the model card open |
 | localStorage `iconSplitter.svg.imageEditBatch.v1` | independent image-edit icons/request `{ v: 1, count }` (default 4, 1–16; active square size further limits useful cells) | validated integer/version on read; corrupt → default + visible warning in image confirmation; never provider output `n` |
+| localStorage `iconSplitter.svg.imageAutoApply.v1` | explicit opt-in to Apply image crops without a result popup | only `on` enables; missing/corrupt/unknown → off; frozen per confirmed run; no automatic request/retry |
 | localStorage `iconSplitter.svg.imageInflight.v1` | metadata only for sent image-edit groups: group id, pair IDs, sent/review state, time, provider/model and optional request ID | validated/bounded; corrupt → empty + warning; never bytes/prompt/key; cleared on confirmed save/discard or known failure, unknown transport outcome remains until dismissal/deliberate retry |
 | localStorage `iconSplitter.svg.parallel.v1` | SVG process slots 1/2/3, default 3 | validated integer on read/write; session jobs/credentials never stored |
 | localStorage `iconSplitter.process.sound.v1` | completion audio preference | `off` mutes; otherwise enabled; local-only |

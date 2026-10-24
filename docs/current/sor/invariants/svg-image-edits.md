@@ -43,8 +43,9 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
     sent, unresolved rows in a composite run (one writer), and the busy pill
     reads `Regenerating AI sources · done/total`. Single-source results are
     recorded as they land; composite results are reviewed first (I-72).
-    Stop sends nothing new while sent requests finish, and a returned composite
-    may still need Apply/Discard. Every failure is counted with its reason
+    The independent Batch-style image bar follows the user across tabs and
+    counts processed/saved/failed/discarded separately. Stop sends nothing new
+    while sent requests finish under the confirmed Apply policy. Every failure is counted with its reason
     (router message, timeout, changed source or refused write), and the outcome
     names the first one. An image request waits `imageWaitMs` = max(stall
     window, 300 s) — an image arrives in one piece.
@@ -56,8 +57,11 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   with normalized cell rectangles and blank unused positions. A changed-size
   same-aspect-ratio response is split by those positions, never by current
   row sorting or visual guesses; a non-square, extra, absent or undecodable
-  response cannot write an image. Multi-icon cells remain pending until an
-  explicit result review, and each accepted cell passes I-71's unique-file,
+  response cannot write an image. Multi-icon cells default to manual result
+  review; an explicit, persisted automatic-Apply opt-in is frozen at confirmation
+  and accepts positional crops without a popup, not automatic identity detection.
+  Both policies pass the same stale-source/root/pair checks. Each accepted cell
+  passes I-71's unique-file,
   verified per-pair history and main-image rule. An unrelated/changed pair
   is skipped; cost and request ID stay at request granularity. Unknown sent
   requests and lost pending reviews survive as metadata-only notices and are

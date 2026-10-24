@@ -1,3 +1,4 @@
+import { startImageProcess, updateImageProcess, stopImageProcess, finishImageProcess } from "./imgprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { armCompletionSound, notifyCompletion } from "../ui/completionSound";
 import { newRunId } from "./journal";
@@ -54,7 +55,8 @@ export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
   const stopImageRegen = useCallback(() => {
     if (!control.active) return;
     control.stop = true;
-    latest.current.say("Stopping — requests already sent will finish; multi-icon results still need review. Nothing new is sent");
+    stopImageProcess(latest.current.refs);
+    latest.current.say("Stopping — requests already sent will finish; sent results follow the confirmed Apply policy. Nothing new is sent");
   }, [control]);
   const setImageVersion = useCallback((id: string, version: number | null) => {
     void mainOf(latest.current, id, version).catch((error: unknown) => latest.current.say(`The main image could not be changed: ${messageOf(error)}`, true));
@@ -166,6 +168,7 @@ async function runImageRegen(c: SvgCtx, control: CompositeControl): Promise<void
       items: run.rows.map((r) => referenceItem(run.root, r)),
       concurrency: c.m.config.concurrency, timeoutMs: imageWaitMs(c.m.config.timeoutMs),
       shouldStop: () => control.stop,
+      onSend: (item) => updateImageProcess(c.refs, run.id, { request: run.rows.findIndex((row) => row.source.id === item.id) + 1 }),
       onResult: (result, i) => land(run, run.rows[i], result),
     });
   } catch (error) {
@@ -206,6 +209,7 @@ function referenceItem(root: DirHandleLike, row: SvgRow): ImageRegenItem {
 const busyText = (run: ImgRun) => `Regenerating AI sources · ${run.tally.done + run.tally.failed}/${run.tally.total}`;
 
 function begin(run: ImgRun): void {
+  startImageProcess(run.c.refs, { id: run.id, total: run.rows.length, requests: run.rows.length });
   const { c, rows, conn } = run;
   c.dispatch({ type: "img-running", ids: rows.map((r) => r.source.id), on: true });
   c.setBusy(busyText(run));
@@ -224,6 +228,7 @@ async function land(run: ImgRun, row: SvgRow, result: ImageRegenResult): Promise
     count(run, row, `${row.source.name}: ${messageOf(error)}`);
   } finally {
     run.c.dispatch({ type: "img-running", ids: [row.source.id], on: false });
+    updateImageProcess(run.c.refs, run.id, { saved: run.tally.done, failed: run.tally.failed });
     run.c.setBusy(busyText(run));
   }
 }
@@ -239,6 +244,7 @@ function count(run: ImgRun, row: SvgRow, failure: string | null): void {
 }
 
 function finish(run: ImgRun, stopped: boolean): void {
+  finishImageProcess(run.c.refs, run.id, stopped);
   notifyCompletion(run.id, stopped);
   const { c, rows } = run;
   c.dispatch({ type: "img-running", ids: rows.map((r) => r.source.id), on: false });
