@@ -90,11 +90,7 @@ function ApplyLocalSettings({ p }: { p: UploadSettingsDialogProps }) {
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
-      <UploadPaddingSetting p={p} effective={effective} />
-      {p.id !== null && <IconStrokeSetting p={p} id={p.id} />}
-      <StrokeColorSetting p={p} effective={effective} />
-      <UploadStrokeCapsSetting p={p} effective={effective} />
-      <ArtboardSetting p={p} effective={effective} />
+      <VisualSettings p={p} effective={effective} />
       <UploadShadowSettings p={p} effective={effective} />
       <UploadBadgeSettings p={p} effective={effective} />
       <UploadSizeGuideSettings p={p} effective={effective} />
@@ -107,6 +103,21 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
         hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />
+    </div>
+  );
+}
+
+/** Keep geometry alongside a stacked paint column rather than below a tall padding row. */
+function VisualSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
+  return (
+    <div className="up-visual-settings" data-testid="upload-set-visual">
+      <UploadPaddingSetting p={p} effective={effective} />
+      <ArtboardSetting p={p} effective={effective} />
+      <div className="up-visual-paints">
+        {p.id !== null && <IconStrokeSetting p={p} id={p.id} />}
+        <StrokeColorSetting p={p} effective={effective} />
+        <UploadStrokeCapsSetting p={p} effective={effective} />
+      </div>
     </div>
   );
 }
@@ -139,7 +150,7 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
   return (
     <div className="svg-field up-set-field">
       <span className="svg-label">Stroke width px<Marker p={p} field="strokePx" testid="stroke" /></span>
-      <div className="up-bg-row">
+      <div className="up-bg-row up-stroke-width-row">
         <button type="button" className={`svg-btn tiny up-default-btn${pinned === undefined ? " on" : ""}`} data-testid="upload-set-stroke-inherit"
           aria-pressed={pinned === undefined} onClick={inherit}>Bar ({bar})</button>
         <DraftNumberInput testid="upload-set-stroke" label="This icon's stroke width in px" min={STROKE_MIN} max={STROKE_MAX} step={0.1}

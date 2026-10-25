@@ -9,9 +9,11 @@ export default function UploadPaddingSetting({ p, effective }: SettingsFieldProp
   const edit = (side: PaddingSide, raw: string) => change(p, "paddingPct", compactPadding({ ...sides, [side]: clampPaddingPct(Number(raw)) }));
   return (
     <div className="svg-field up-set-field" data-testid="upload-set-padding-group">
-      <span className="svg-label">Padding %<Marker p={p} field="paddingPct" testid="padding" /></span>
-      <button type="button" className={`svg-btn tiny up-default-btn${value === null ? " on" : ""}`} data-testid="upload-set-padding-default"
-        aria-pressed={value === null} onClick={() => change(p, "paddingPct", value === null ? PADDING_DEFAULT : null)}>Default</button>
+      <div className="up-padding-head">
+        <span className="svg-label">Padding %<Marker p={p} field="paddingPct" testid="padding" /></span>
+        <button type="button" className={`svg-btn tiny up-default-btn${value === null ? " on" : ""}`} data-testid="upload-set-padding-default"
+          aria-pressed={value === null} onClick={() => change(p, "paddingPct", value === null ? PADDING_DEFAULT : null)}>Default</button>
+      </div>
       <div className="up-padding-sides">
         {PADDING_SIDES.map((side) => {
           const label = side[0].toUpperCase() + side.slice(1);

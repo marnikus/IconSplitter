@@ -4,12 +4,9 @@ For [Upload](upload.md); [I-60/I-62](invariants/upload.md).
 
 **Details:** [geometry](upload-geometry.md) · [padding](upload-padding.md) · [badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [caps](upload-stroke-endpoints.md) · [formats](upload-formats.md) · [presets](upload-settings-presets.md).
 
-## Collapsible popup groups
+## Popup layout
 
-Badge, Size guide and Shadow use independent native details/summary in both
-popups, initially collapsed. Click/Enter/Space opens/folds each; several may stay
-open. Folding is display-only: controls/drafts/values/checks/pins remain mounted.
-Rerenders retain open state; normal blur commits are unchanged.
+[Visual settings stay visible in a compact grid; decoration groups fold independently.](upload-settings-layout.md)
 
 ## Current settings and output geometry
 

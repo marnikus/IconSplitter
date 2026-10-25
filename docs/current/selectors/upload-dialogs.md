@@ -5,8 +5,8 @@ See [conventions](shared.md#i-selector-object-structure--for-every-element) and 
 [Caps](../sor/upload-stroke-endpoints.md#selectors) · [Presets](../sor/upload-settings-presets.md#selectors).
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
-Collapsed groups: `<details>` + `upload-set-{badge,sizeguide,shadow}-summary`.
-Folding is display-only. [Apply as local button/contract](../sor/upload-local-settings.md#selectors).
+Layout/handles: [compact visual area and existing decoration disclosures](../sor/upload-settings-layout.md#selectors).
+[Apply as local](../sor/upload-local-settings.md#selectors).
 - `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow/badge/size guide are off) + `upload-set-as-is-note` (turns them off in the icon scope);
 - `upload-set-padding-{left,right,top,bottom}`: independent 0–50% inputs; `upload-set-padding-default` toggles source margins ↔ four 8s. [Padding contract/handles](../sor/upload-padding.md).
 - `upload-set-bg-default` (before `-transparent`);

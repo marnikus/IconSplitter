@@ -1893,6 +1893,26 @@
   margin: 12px 0;
 }
 
+/* Compact geometry/paint area: wrap groups, never hide controls or shrink their type. */
+.up-visual-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.up-visual-settings > * { min-width: 0; }
+.up-visual-paints { display: grid; gap: 12px; align-content: start; }
+.up-stroke-width-row .svg-input { flex: 1; width: auto; }
+.up-visual-settings .up-hint { display: block; margin-top: 4px; }
+.up-padding-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.up-padding-head .svg-label { margin-bottom: 0; }
+.up-visual-settings .up-padding-sides { gap: 6px; margin-top: 4px; }
+.up-artboard-custom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; margin-top: 6px; }
+.up-bg-row.up-artboard-scale { display: grid; grid-template-columns: minmax(0, auto) minmax(64px, 1fr) auto; gap: 4px 6px; margin-top: 6px; }
+.up-bg-row.up-artboard-scale > label { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0; }
+.up-bg-row.up-artboard-scale > small { grid-column: 1 / -1; margin-top: 0; }
+
 .up-set-field .svg-input[type="number"] { height: 28px; font-size: 10px; }
 .up-shadow-dialog { grid-column: 1 / -1; border: 1px solid var(--v2-line); border-radius: 6px; padding: 10px; }
 /* Native summary keeps mouse, Enter/Space and disclosure semantics together. */

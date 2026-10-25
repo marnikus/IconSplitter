@@ -47,12 +47,18 @@ export function ArtboardSetting({ p, effective }: BlockProps) {
 /** The custom width × height, and the ratio they spell out — each checked when its field is left, never per keystroke. */
 function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>) => void }) {
   return (
-    <div className="up-bg-row">
-      <DraftNumberInput testid="upload-set-artboard-w" label="Artboard width in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
-        value={a.width} onCommit={(n) => { if (n !== null) patch({ width: n }); }} />
+    <div className="up-artboard-custom">
+      <label className="svg-field">
+        <span className="svg-label">Width px</span>
+        <DraftNumberInput testid="upload-set-artboard-w" label="Artboard width in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
+          value={a.width} onCommit={(n) => { if (n !== null) patch({ width: n }); }} />
+      </label>
+      <label className="svg-field">
+        <span className="svg-label">Height px</span>
+        <DraftNumberInput testid="upload-set-artboard-h" label="Artboard height in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
+          value={a.height} onCommit={(n) => { if (n !== null) patch({ height: n }); }} />
+      </label>
       <output className="svg-bg-value" data-testid="upload-set-artboard-ratio">{ratioOf(a)}</output>
-      <DraftNumberInput testid="upload-set-artboard-h" label="Artboard height in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
-        value={a.height} onCommit={(n) => { if (n !== null) patch({ height: n }); }} />
       <output className="svg-bg-value" data-testid="upload-set-artboard-mp">{mpOf(a)}</output>
     </div>
   );
@@ -67,7 +73,7 @@ function MegapixelRow({ p, effective }: BlockProps) {
   const pinned = effective.artboard.mode !== "content"; // a pinned size or the source's own decides
   const on = effective.scaleToMegapixels && !pinned;
   return (
-    <div className="up-bg-row">
+    <div className="up-bg-row up-artboard-scale">
       <label className="up-hint up-set-field">
         <input data-testid="upload-set-mp-scale" type="checkbox" aria-label="Scale the artboard to megapixels"
           checked={effective.scaleToMegapixels} disabled={pinned}
