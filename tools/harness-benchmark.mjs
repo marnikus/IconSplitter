@@ -44,13 +44,26 @@ function readEvidence(path) {
   return report;
 }
 
-function compare(args) {
-  const targetIndex = args.indexOf("--required-reduction");
-  const required = targetIndex < 0 ? 60 : Number(args[targetIndex + 1]);
-  if (!Number.isFinite(required) || required <= 0 || required >= 100) {
+function comparisonTarget(args) {
+  const flags = args.filter((arg) => ["--required-reduction", "--required-speedup"].includes(arg));
+  if (flags.length > 1) throw new Error("Specify only one comparison target.");
+  const targetIndex = flags.length ? args.indexOf(flags[0]) : -1;
+  const value = targetIndex < 0 ? 60 : Number(args[targetIndex + 1]);
+  const speedup = flags[0] === "--required-speedup";
+  if (speedup && (!Number.isFinite(value) || value <= 1)) {
+    throw new Error("Required speedup must be finite and greater than 1.");
+  }
+  if (!speedup && (!Number.isFinite(value) || value <= 0 || value >= 100)) {
     throw new Error("Required reduction must be a finite percentage strictly between 0 and 100.");
   }
   const paths = args.filter((_, index) => targetIndex < 0 || (index !== targetIndex && index !== targetIndex + 1));
+  const fraction = speedup ? 1 / value : 1 - value / 100;
+  return { paths, fraction, required: speedup ? (1 - fraction) * 100 : value,
+    requiredSpeedup: speedup ? value : 1 / fraction };
+}
+
+function compare(args) {
+  const { paths, required, requiredSpeedup, fraction } = comparisonTarget(args);
   if (paths.length < 2) throw new Error("Use --compare baseline.json candidate.json [candidate2.json ...]");
   const [baseline, ...candidates] = paths.map(readEvidence);
   if (candidates.some((r) => Object.keys(baseline.environment).some((key) => r.environment[key] !== baseline.environment[key]))) {
@@ -59,9 +72,11 @@ function compare(args) {
   const sorted = candidates.map((r) => r.seconds).sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   const after = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-  const passed = after <= baseline.seconds * (1 - required / 100);
+  const passed = after <= baseline.seconds * fraction;
   console.log(JSON.stringify({ beforeSeconds: baseline.seconds, afterSeconds: after,
-    reductionPct: (1 - after / baseline.seconds) * 100, requiredReductionPct: required, passed }, null, 2));
+    reductionPct: (1 - after / baseline.seconds) * 100, requiredReductionPct: required,
+    speedup: baseline.seconds / after, throughputGainPct: (baseline.seconds / after - 1) * 100,
+    requiredSpeedup, passed }, null, 2));
   return passed ? 0 : 1;
 }
 

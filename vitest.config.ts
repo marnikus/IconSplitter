@@ -6,7 +6,7 @@ import { coveragePolicy, harnessProjects, mainWorkerBudget } from "./tools/test-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // See docs/current/TEST_HARNESS.md: isolated VM contexts share only external packages;
-// native realm/perf files follow serially. No tests, source scope or gates are omitted.
+// geometry then native/perf groups follow without competing pools. No tests, source scope or gates are omitted.
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "src") } },
   test: {

@@ -144,9 +144,12 @@ The runner reuses TypeScript incremental and ESLint content caches under
 `node_modules/.cache/verify`; tests/coverage/build are never result-cached.
 `npm run verify -- --cold` bypasses these and Vitest filesystem transforms.
 Default coverage uses pinned official Istanbul; V8 audits remain available.
-Measured warm full verification on the 2-CPU Linux reference is ~80 s versus
-~255 s before; cold ~117 s does **not** reach 60%. Details and isolation/cache
-contracts: [test harness](TEST_HARNESS.md).
+Current 2-CPU reference:118.14s full warm baseline; candidate warm median91.24s,
+cold142.69s to122.60s. **Requested +430% throughput (5.3x) is not achieved**.
+Original-harness repeats exposed failures/timing variation; do not treat these
+as a guaranteed multiplier. Three isolated test groups now selectively place
+CPU-heavy geometry in native threads, without changing lane order or algorithms.
+Measurement caveats and isolation/cache contracts: [test harness](TEST_HARNESS.md).
 
 ### 9. Browser probes (optional)
 

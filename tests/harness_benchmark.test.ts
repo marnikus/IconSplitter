@@ -80,3 +80,40 @@ it('rejects missing, nonnumeric and out-of-range reduction targets with a diagno
   expect(missing.status).toBe(1);
   expect(missing.stderr).toMatch(/reduction.*between 0 and 100/i);
 });
+
+it('distinguishes +430% throughput (5.3x) from time reduction and checks the exact boundary', () => {
+  const before = save('before.json', sample(530));
+  const at = save('at.json', sample(100));
+  const result = cli('--compare', before, at, '--required-speedup', '5.3');
+  expect(result.status, result.stderr).toBe(0);
+  const report = JSON.parse(result.stdout);
+  expect(report).toMatchObject({ passed: true, speedup: 5.3, requiredSpeedup: 5.3 });
+  expect(report.throughputGainPct).toBeCloseTo(430, 8);
+  expect(report.reductionPct).toBeCloseTo(81.1320754717, 8);
+  expect(cli('--compare', before, save('miss.json', sample(100.01)), '--required-speedup', '5.3').status).toBe(1);
+});
+
+it('rejects missing or invalid throughput targets and ambiguous target combinations', () => {
+  const before = save('before.json', sample(530)), after = save('after.json', sample(100));
+  for (const value of ['', 'NaN', 'Infinity', 'no', '-1', '0', '1']) {
+    const result = cli('--compare', before, after, '--required-speedup', value);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/speedup.*finite.*greater than 1/i);
+  }
+  expect(cli('--compare', before, after, '--required-speedup').stderr).toMatch(/speedup.*finite.*greater than 1/i);
+  for (const flags of [ ['--required-speedup', '5.3', '--required-reduction', '50'],
+    ['--required-speedup', '5.3', '--required-speedup', '6'] ]) {
+    const result = cli('--compare', before, after, ...flags);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/only one.*target/i);
+  }
+});
+
+it('uses the candidate median and still rejects failed evidence for throughput targets', () => {
+  const before = save('before.json', sample(530));
+  const median = cli('--compare', '--required-speedup', '5.3', before,
+    save('fast.json', sample(80)), save('slow.json', sample(120)));
+  expect(median.status, median.stderr).toBe(0);
+  expect(JSON.parse(median.stdout)).toMatchObject({ afterSeconds: 100, passed: true });
+  expect(cli('--compare', before, save('failed.json', sample(1, 1)), '--required-speedup', '5.3').status).toBe(1);
+});

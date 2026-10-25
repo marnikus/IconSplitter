@@ -104,6 +104,10 @@ export async function waitUntil(pred: () => boolean, what: string, budgetMs = 40
   const deadline = now() + budgetMs;
   const stopAt = realNow() + Math.max(budgetMs, 2000);
   while (!pred() && now() < deadline && realNow() < stopAt) {
+    // Readiness may already be queued in a Promise/React commit. Observe that
+    // work before selecting a future timer (otherwise a toast can expire first).
+    await act(async () => { await new Promise<void>((r) => realSetImmediate(r)); });
+    if (pred()) return;
     if (!(await step(deadline))) await act(async () => { await new Promise((r) => realSetTimeout(r, 1)); });
   }
   if (!pred()) throw new Error(`never reached: ${what}`);
