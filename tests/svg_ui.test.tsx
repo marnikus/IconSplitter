@@ -8,11 +8,32 @@ import { describe, expect, it, vi } from "vitest";
 import { boundRootPathInfo } from "../src/lib/knownroots";
 import { FakeFile } from "./helpers/fakefs";
 import {
-  installSvgPanelHooks, COURT, FOG, fakeKey, host, input, makeRoot, mount, mountPick, q,
+  installSvgPanelHooks, SIDECAR, SAVED_SVG, COURT, FOG, fakeKey, host, input, makeRoot, mount, mountPick, q,
   renderPanel, selectEffort, settle, stubClipboard, text, type, unmountPanel, useDeviceStorage,
 } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
+
+describe("review auto-next", () => {
+  it("follows displayed rows after approval, preserving checks and stopping at the bottom", async () => {
+    const dir = await makeRoot();
+    const arch = await dir.getDirectoryHandle("architecture");
+    arch.children.set("court_AI.svg", new FakeFile("court_AI.svg", SAVED_SVG.length, 2200, SAVED_SVG));
+    arch.children.set("court_AI.svg.json", new FakeFile("court_AI.svg.json", 10, 2200, SIDECAR.replace(/fog/g, "court")));
+    await mount(dir);
+    const displayed = [...host.querySelectorAll(".svg-row[data-testid^='svg-row-']")].map((r) => r.getAttribute("data-testid")!.slice("svg-row-".length));
+    expect(displayed).toHaveLength(2);
+    const [current, next] = displayed;
+    await act(async () => (q(`[data-testid='svg-row-${current}']`) as HTMLElement).click());
+    await act(async () => (q(`[data-testid='svg-approve-${current}']`) as HTMLElement).click());
+    await settle();
+    expect(q(`[data-testid='svg-row-${next}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(host.querySelectorAll(".svg-row input:checked")).toHaveLength(0);
+    await act(async () => (q(`[data-testid='svg-decline-${next}']`) as HTMLElement).click());
+    await settle();
+    expect(q(`[data-testid='svg-row-${next}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+});
 
 describe("the folder control and the path row", () => {
   it("keeps a green Open folder button while a root is loaded, so the tab can be pointed by hand", async () => {

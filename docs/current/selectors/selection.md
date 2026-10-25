@@ -60,7 +60,7 @@ List review (`v2-list`, rows in `v2-rows` with `role="list"`):
 | `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
 | `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
 | `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
-| `v2-autonext` | checkbox | advance to the next pending after a decision |
+| `v2-autonext` | checkbox | advance to the closest pending row below in displayed order; no wrap ([rule](../sor/review-navigation.md)) |
 | `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
 
 Comparison layout: `v2-pair-picker` (labelled `<select>` of the visible pairs)

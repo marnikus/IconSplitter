@@ -17,7 +17,7 @@ import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
-import { resetAppStore } from "../src/state/appstore";
+import { getAppState, patchView, resetAppStore } from "../src/state/appstore";
 import { PREFS_KEY } from "../src/selectionv2/prefsstore";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
@@ -225,6 +225,50 @@ describe("Selection V2 panel", () => {
     await key("a");
     expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
     expect(q(el, "[aria-current='true']")?.getAttribute("data-testid")).not.toBe(`v2-row-${FOG}`);
+  });
+
+  it.each(["approved", "declined"] as const)("advances after %s in displayed date order, not scan order", async (decision) => {
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await key(decision === "approved" ? "a" : "d");
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+  });
+
+  it("uses pre-decision status-filtered order and never wraps to pending above", async () => {
+    const { el } = await mount(makeRoot());
+    await act(async () => patchView({
+      sort: { by: "status", dir: "asc" },
+      filter: { date: { mode: "all" }, status: "pending", search: "architecture", pairing: "all" },
+    }));
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await key("a"); // removes the reference from the pending-only list
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(rows(el)).toHaveLength(1);
+    await act(async () => patchView({ filter: { date: { mode: "all" }, status: "all", search: "architecture", pairing: "all" } }));
+    await click(q(el, `[data-testid='v2-decline-${COURT}']`)!);
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("does not wrap from the last displayed row to pending rows above", async () => {
+    const { el } = await mount(makeRoot());
+    await act(async () => patchView({ sort: { by: "name", dir: "desc" } }));
+    await click(q(el, `[data-testid='v2-row-${COURT}']`)!); // last in Z to A
+    await key("a");
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("comparison skips reviewed rows below and preserves checked rows", async () => {
+    const { el } = await mount(makeRoot());
+    await check(q(el, "[data-testid='v2-autonext']") as HTMLInputElement, false);
+    await click(q(el, `[data-testid='v2-decline-${COURT}']`)!);
+    await check(q(el, "[data-testid='v2-autonext']") as HTMLInputElement, true);
+    await check(q(el, `[data-testid='v2-check-${HARBOR}']`) as HTMLInputElement, true);
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await click(q(el, "[data-testid='v2-mode-compare']")!);
+    await key("a");
+    expect(getAppState().view.selectedId).toBe(HARBOR);
+    expect(getAppState().v2.checked).toEqual([HARBOR]);
   });
 
   it("open-side child buttons never activate or check their parent row", async () => {

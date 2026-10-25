@@ -13,7 +13,7 @@ import { decideReview, applyReviewPatch } from "../src/svg/reviewact";
 import { applySvgReviewPatch } from "../src/svg/reviewundo";
 import { svgSource, svgVersion, pairMetaFor, svgPathFor } from "./helpers/svgpair";
 import type { SvgRefs, SvgRow } from "../src/svg/types";
-import { setAppState } from "../src/state/appstore";
+import { getAppState, patchSvg, setAppState } from "../src/state/appstore";
 
 const source = svgSource("pair_1", { name: "fog_AI.png" });
 
@@ -166,5 +166,59 @@ describe("a decision", () => {
 
   it("says so when nothing in the file system can be patched", async () => {
     expect(await applySvgReviewPatch({ recs: [{ id: "missing", review: "approved" }] })).toBe(false);
+  });
+});
+
+/** Deliberately different source-array and visible orders. */
+function navigationContext() {
+  const rows = ["above", "target", "reviewed", "no-svg", "next", "last"].map((id) => {
+    const src = svgSource(id);
+    const meta = pairMetaFor(src, id === "no-svg" ? [] : [svgVersion(svgPathFor(src, 1))]);
+    return toRow(src, id === "reviewed" ? withReview(meta, "declined") : meta, false);
+  });
+  const visible = [...rows];
+  return {
+    rows: [...rows].reverse(), visible, refs: refs() as SvgRefs,
+    setRowsFn(fn: (all: SvgRow[]) => SvgRow[]) { this.rows = fn(this.rows); },
+    say: () => {}, hist: { push: () => {} },
+  };
+}
+
+describe("SVG downward pending navigation", () => {
+  it("skips reviewed and not-generated rows in visible order, not source order", async () => {
+    const ctx = navigationContext();
+    patchSvg({ activeId: "target", anchorId: "above", checked: ["above"] });
+    await decideReview(ctx, ["target"], "approved");
+    expect(getAppState().svg).toMatchObject({ activeId: "next", anchorId: "above", checked: ["above"] });
+  });
+
+  it("does not wrap, navigate on bulk, or navigate on needs-review", async () => {
+    for (const [ids, decision] of [
+      [["last"], "approved"], [["target", "reviewed"], "declined"], [["target"], "needs-review"], [["no-svg"], "approved"],
+    ] as const) {
+      const ctx = navigationContext();
+      patchSvg({ activeId: "target" });
+      await decideReview(ctx, [...ids], decision);
+      expect(getAppState().svg.activeId).toBe("target");
+    }
+  });
+
+  it("does not steal focus if the user moves while the decision is saving", async () => {
+    const ctx = navigationContext();
+    patchSvg({ activeId: "target" });
+    const saving = decideReview(ctx, ["target"], "approved");
+    patchSvg({ activeId: "above" });
+    await saving;
+    expect(getAppState().svg.activeId).toBe("above");
+    expect(ctx.rows.find((r) => r.source.id === "target")?.review).toBe("approved");
+  });
+
+  it("skips a candidate whose live metadata was reviewed while saving", async () => {
+    const ctx = navigationContext();
+    patchSvg({ activeId: "target" });
+    const saving = decideReview(ctx, ["target"], "approved");
+    ctx.refs.metas.set("next", withReview(ctx.visible.find((r) => r.source.id === "next")!.meta!, "declined"));
+    await saving;
+    expect(getAppState().svg.activeId).toBe("last");
   });
 });

@@ -103,3 +103,14 @@ export function nextVisibleId(order: readonly string[], active: string | null, s
   if (at < 0) return step === 1 ? order[0] : order[order.length - 1];
   return order[Math.min(Math.max(at + step, 0), order.length - 1)];
 }
+
+/** First eligible pending row strictly below fromId in pre-decision visible order.
+ * Never wraps, guesses an anchor, sorts, or considers hidden rows. */
+export function nextPendingBelow<T>(rows: readonly T[], fromId: string, idOf: (row: T) => string, isPending: (row: T) => boolean): string | null {
+  const at = rows.findIndex((row) => idOf(row) === fromId);
+  if (at < 0) return null;
+  for (let i = at + 1; i < rows.length; i++) {
+    if (isPending(rows[i])) return idOf(rows[i]);
+  }
+  return null;
+}

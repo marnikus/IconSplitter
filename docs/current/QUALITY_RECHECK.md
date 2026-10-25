@@ -3369,3 +3369,10 @@ Earlier full attempts: metadata-toast summary timeout, then native synthetic
 command still exited1 from global floor). Final unchanged-code full run passed
 all lanes together. No weakened alarms, test skips, src/lib/algorithm/harness/
 isolation/dependency/storage-schema changes or generated artifacts committed.
+
+
+## 2026-10-25 — nearest pending row below in displayed order
+
+- Fixed Selection V2 list/comparison auto-next to use the pre-decision filtered/sorted order instead of raw scan order, without wrapping. Added the same shared `nextPendingBelow` rule to one-row Batch and Generate SVG review; SVG retains generated-item eligibility, reads live candidate review metadata and does not steal an active row changed while saving. Checks/anchors, manual navigation, bulk scopes, confirmations, persistence/history and sound remain intact. Current owner: `sor/review-navigation.md`; plan: `../archive/2026-10-25-next-pending-below/README.md`.
+- TDD witnessed: initial 8 regressions failed (72 passed); stale SVG candidate test separately failed (58 passed). Final focused 171 tests/7 files passed. Types, lint (0 errors/22 existing warnings), changed-quality vs 6c5b909 and verify:fast passed.
+- Full `npm run verify -- --base 6c5b909`: ALL LANES PASSED, first full run. Native 30 tests/5 files; coverage 2917 tests/277 files; statements/branches/functions/lines 95.40/89.90/98.22/98.30%; production build passed. Coverage lane 90.2s, native 3.9s. Logs: `/home/user/next-pending-below/verify-full.log` and focused/red logs in the same external folder. No weakened assertions, gates, native alarms, isolation or harness changes.

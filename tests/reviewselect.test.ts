@@ -3,7 +3,7 @@
 // by stable pair id, and never leaks into review status (spec V2 §5/§9).
 import { describe, expect, it } from "vitest";
 import {
-  applyRowGesture, checkState, checkedInView, nextVisibleId, pruneRowSelection, sameRowSelection, selectIntent, selectOne, selectRange, setChecked, toggleChecked,
+  applyRowGesture, checkState, checkedInView, nextPendingBelow, nextVisibleId, pruneRowSelection, sameRowSelection, selectIntent, selectOne, selectRange, setChecked, toggleChecked,
 } from "../src/lib/reviewselect";
 
 describe("toggleChecked", () => {
@@ -188,5 +188,25 @@ describe("pruneRowSelection — removed sources are never targets", () => {
   it("treats a completed empty scan as no selectable sources", () => {
     expect(pruneRowSelection({ checked: ["old"], active: "old", anchor: "old" }, new Set()))
       .toEqual({ checked: [], active: null, anchor: null });
+  });
+});
+
+describe("nextPendingBelow", () => {
+  const rows = [
+    { id: "z", pending: true }, { id: "a", pending: false },
+    { id: "c", pending: false }, { id: "b", pending: true },
+  ];
+  const next = (visible: typeof rows, from: string) => nextPendingBelow(visible, from, (r) => r.id, (r) => r.pending);
+  it("uses supplied order, skipping reviewed rows and never mutating it", () => {
+    const before = rows.map((r) => ({ ...r }));
+    expect(next(rows, "z")).toBe("b");
+    expect(rows).toEqual(before);
+    expect(next([rows[3], rows[0]], "b")).toBe("z");
+  });
+  it("never wraps or guesses when the anchor is hidden or absent", () => {
+    expect(next(rows, "b")).toBeNull();
+    expect(next(rows, "hidden")).toBeNull();
+    expect(next([], "z")).toBeNull();
+    expect(next([rows[0], rows[1], rows[2]], "z")).toBeNull();
   });
 });

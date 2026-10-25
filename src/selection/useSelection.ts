@@ -74,7 +74,8 @@ function useCtx(s: SelState, hist: HistoryApi): Ctx {
 function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   const before = ctx.state.current;
   const merged = withDecision(before, id, d, new Date().toISOString());
-  const rolled = merged.autoNext ? nextPendingId(merged.pairs, id) : null;
+  const visible = sortPairs(applyFilters(before.pairs, before.filter), before.sort);
+  const rolled = merged.autoNext ? nextPendingId(visible, id) : null;
   const next = rolled ? { ...merged, selectedId: rolled } : merged;
   setS(next);
   if (rolled) patchView({ selectedId: rolled });

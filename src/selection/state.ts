@@ -3,6 +3,7 @@
 // useSelection hook only wires IO + React onto these reducers so the rules
 // stay unit-tested (RULE 8).
 
+import { nextPendingBelow } from "../lib/reviewselect";
 import { attentionInfo, type ReviewPair, type SideRef } from "../lib/pairing";
 import { planBulk } from "../lib/reviewbulk";
 import {
@@ -210,14 +211,9 @@ function toRecorded(p: ViewPair, rec: ReviewRecord | undefined): ViewPair {
   return { ...p, decision: rec.decision, reviewedAt: rec.reviewed_at };
 }
 
-/** Next pending pair after fromId, wrapping; null when all reviewed. */
-export function nextPendingId(pairs: ViewPair[], fromId: string): string | null {
-  const at = pairs.findIndex((p) => p.pairId === fromId);
-  for (let step = 1; step <= pairs.length; step++) {
-    const p = pairs[(at + step + pairs.length) % pairs.length];
-    if (p.decision === "pending") return p.pairId;
-  }
-  return null;
+/** Closest pending pair below fromId in the caller's pre-decision visible order. */
+export function nextPendingId(pairs: readonly ViewPair[], fromId: string): string | null {
+  return nextPendingBelow(pairs, fromId, (p) => p.pairId, (p) => p.decision === "pending");
 }
 
 export interface Counters {

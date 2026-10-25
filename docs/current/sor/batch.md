@@ -14,6 +14,8 @@ Batch folders:
   subfolder. Missing reference → warning + user may skip or continue.
 * Review window: thumbnail, filename, relPath, status badge
   (unprocessed/processed/skipped/changed/missing/deleted), checkbox, Select visible/Deselect all.
+  One-row Approve/Decline (buttons or A/D) activates the
+  [closest pending row below in displayed order](review-navigation.md), without wrapping.
   Its active row and checked rows are independent: Batch owns the shared
   [RULE 25 gesture matrix](../rules/BEHAVIOR.md#rule-25) (I-73). Plain row click
   only activates/anchors; checkbox and modifiers change checks, with Shift

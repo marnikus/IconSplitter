@@ -10,7 +10,8 @@ import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { useEffect, useRef } from "react";
 import { withReview, type PairMeta } from "../lib/pairmeta";
 import type { ReviewStatus } from "../lib/svgmodel";
-import { getAppState } from "../state/appstore";
+import { nextPendingBelow } from "../lib/reviewselect";
+import { getAppState, patchSvg } from "../state/appstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { shownVersion, withMeta } from "./rowmodel";
 import { bindSvgReviewApplier, type SvgReviewPatch, type SvgReviewRec } from "./reviewundo";
@@ -30,6 +31,8 @@ export function useReviewApplier(s: ReviewCtx): void {
 /** What the review actions need from the hook. */
 export interface ReviewCtx {
   rows: SvgRow[];
+  /** UI supplies its pinned, filtered order; headless writes need not navigate. */
+  visible?: readonly SvgRow[];
   refs: SvgRefs;
   setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void;
   say: (msg: string, err?: boolean) => void;
@@ -79,10 +82,12 @@ async function saveReviewDecision(s: ReviewCtx, ids: string[], decision: ReviewS
   const rows = ids.map((id) => rowOf(s, id)).filter(hasSvg);
   if (rows.length === 0) return s.say("No generated SVG to review yet", true);
   const recs = rows.map((r) => recOf(r, decision));
+  const activeBefore = getAppState().svg.activeId;
   await withCompletionSound(async () => {
     await writeAll(s, rows, decision);
     patchRows(s, rows, decision);
     pushEntry(s, rows, decision, recs);
+    if (getAppState().svg.activeId === activeBefore) advanceSvgReview(s, ids, decision);
   });
 }
 
@@ -138,3 +143,10 @@ async function writeAll(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): P
 
 /** Kept for the hook's import graph: the sources a review record names. */
 export type { SvgSource };
+
+/** Use the displayed order captured before writing; never navigate for bulk/reset. */
+function advanceSvgReview(s: ReviewCtx, ids: string[], decision: ReviewStatus): void {
+  if (ids.length !== 1 || !s.visible || (decision !== "approved" && decision !== "declined")) return;
+  const next = nextPendingBelow(s.visible, ids[0], (r) => r.source.id, (r) => (s.refs.metas.get(r.source.id)?.review ?? r.review) === "pending" && shownVersion(r) !== null);
+  if (next) patchSvg({ activeId: next });
+}

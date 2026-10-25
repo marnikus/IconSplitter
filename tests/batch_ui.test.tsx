@@ -72,6 +72,22 @@ beforeEach(async () => {
 });
 
 describe("Batch folders V2 controls", () => {
+  it.each(["approve", "decline"])("%s advances to the nearest pending row below and stops at the end", async (action) => {
+    await mount(makeBatchRoot());
+    await click(q("[data-testid=batch-open-folder]")!);
+    await settle(500);
+    const displayed = [...qAll(".batch-row[data-testid]")].map((r) => r.getAttribute("data-testid")!.slice("batch-row-".length));
+    expect(displayed).toHaveLength(3);
+    const [, current, next] = displayed;
+    await click(q(`[data-testid='batch-row-${current}']`)!);
+    const checked = [...qAll(".batch-row input:checked")];
+    await click(q(`[data-testid='batch-${action}-${current}']`)!);
+    expect(q(`[data-testid='batch-row-${next}']`)?.getAttribute("aria-current")).toBe("true");
+    expect([...qAll(".batch-row input:checked")]).toEqual(checked);
+    await click(q(`[data-testid='batch-${action}-${next}']`)!);
+    expect(q(`[data-testid='batch-row-${next}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+
   it("shows filter grid and bulk bar with zoom 48-800 after picking root", async () => {
     const dir = makeBatchRoot();
     await mount(dir);

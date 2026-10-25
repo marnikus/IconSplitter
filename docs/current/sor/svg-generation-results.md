@@ -68,6 +68,9 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   attribute on the root, written only when the document declares no colour of
   its own — exactly as the standalone file would. Copy/Code always hand over
   the saved bytes.
+* One-row Approve/Decline (buttons or A/D) activates the
+  [closest pending generated row below in displayed pinned order](review-navigation.md),
+  without wrapping or changing checked rows; multi-row actions keep their scope.
 * Review: **one status per item**, not per SVG version (2026-10-20,
   `docs/archive/2026-10-20-item-review-status/`). A new valid SVG starts
   **pending**; Approve/Decline act on the selection and write the pair's single

@@ -40,7 +40,8 @@ Selection V2 shared review rules:
   filter, sorting by date/status/name/path in both directions, counters.
 * Comparison: side-by-side panes with preserved aspect ratio, dims / format /
   size / path per side, 1:1 zoom with synced scrolling, hotkeys A/D/arrows/
-  Space/Ctrl+K, auto-advance to the next pending after each decision.
+  Space/Ctrl+K, auto-advance to the [closest pending row below in displayed
+  order](review-navigation.md) after each decision (no wrap).
 * Decisions persist in each pair’s own `<stem>.svg.json` (I-41); the old root
   `review-decisions.json` is read only as a legacy fallback (I-42). Corrupt files
   warn without destroying in-memory decisions; a failed per-pair write stays

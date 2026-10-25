@@ -70,4 +70,6 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   defined scope; hidden checks survive filters. Batch initially checks eligible
   rows; the other three start unchecked. A changed gesture is one global undo
   entry, including Upload.
+  Post-decision auto-next uses the [closest pending row below in displayed
+  order](../review-navigation.md), never raw scan order or wrapping.
   Tab-specific eligibility and paid confirmation still constrain bulk actions.

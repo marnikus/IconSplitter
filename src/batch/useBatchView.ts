@@ -1,14 +1,15 @@
 // useBatchView.ts — view layer for Batch folders + review
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBatch } from "./useBatch";
 import { applyBatchFilters, type BatchFilter } from "../lib/batchfilter";
 import { sortBatchRows, type BatchSort } from "../lib/batchsort";
 import { loadBatchPrefs, saveBatchPrefs, type BatchPrefs } from "../lib/batchprefs";
 import { clampZoom } from "../lib/zoom";
 import { useBatchSelection, type BatchSelection } from "./useBatchSelection";
-import type { CheckState, SelectIntent } from "../lib/reviewselect";
+import { nextPendingBelow, type CheckState, type SelectIntent } from "../lib/reviewselect";
 import type { Row, RowMergeMap } from "./useBatch";
+import { patchBatch } from "../state/appstore";
 import type { BatchReviewStatus } from "../lib/statefile";
 
 type BatchApi = ReturnType<typeof useBatch>;
@@ -59,13 +60,17 @@ export function useBatchView(): BatchView {
   const reviewCounts = useReviewCounts(core.s.rows);
   const decidableCount = useDecidableCount(core, sel);
   const approvedSelectedCount = useApprovedSelectedCount(core, sel);
+  const visibleRef = useRef(visible); visibleRef.current = visible;
   // Stable callbacks: closures rebuilt per render made `v.decide` new on every
   // render, which re-ran every downstream effect (the scroll CPU spike).
-  const decide = useCallback((ids: string[], review: BatchReviewStatus) => core.decide(ids, review), [core.decide]);
+  const decide = useCallback((ids: string[], review: BatchReviewStatus) => {
+    advanceBatchReview(visibleRef.current, ids, review);
+    core.decide(ids, review);
+  }, [core.decide]);
   const decideActive = useCallback((review: BatchReviewStatus) => {
     const active = sel.activeId;
-    if (active) core.decide([active], review);
-  }, [sel.activeId, core.decide]);
+    if (active) decide([active], review);
+  }, [sel.activeId, decide]);
   return useMemo(() => makeView({ core, ps, visible, sel, reviewCounts, decidableCount, approvedSelectedCount, decide, decideActive }),
     [core, ps, visible, sel, reviewCounts, decidableCount, approvedSelectedCount, decide, decideActive]);
 }
@@ -128,4 +133,12 @@ function useApprovedSelectedCount(core: BatchApi, sel: BatchSelection): number {
     const set = new Set(sel.checked.map((id) => id.toLowerCase()));
     return core.s.rows.filter((r) => set.has(r.relPath.toLowerCase()) && r.review === "approved").length;
   }, [core.s.rows, sel.checked]);
+}
+
+/** Review navigation does not change checks or the Shift anchor. */
+function advanceBatchReview(visible: Row[], ids: string[], review: BatchReviewStatus): void {
+  if (ids.length !== 1 || (review !== "approved" && review !== "declined")) return;
+  const next = nextPendingBelow(visible, ids[0].toLowerCase(), (r) => r.relPath.toLowerCase(), (r) => r.review === "pending");
+  const row = visible.find((r) => r.relPath.toLowerCase() === next);
+  if (row) patchBatch({ activeId: row.relPath });
 }
