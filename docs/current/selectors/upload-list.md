@@ -88,3 +88,5 @@ Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of
 settings **and selection** gestures uses global `hist-undo` / `hist-redo`
 ([§O](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01));
 metadata requests and exported files are not reversed.
+
+Download progress uses `upload-download-progress-{header,title,file,track,completed,remaining,percent,cancel,review,dismiss}` with file counts, shared theme and retained terminal state. Both header Cancel and `upload-cancel-run` stop the next copy, retaining verified files. [Progress contract](../sor/process-progress.md#upload-lifecycle).

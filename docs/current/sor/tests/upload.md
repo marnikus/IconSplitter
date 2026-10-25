@@ -96,7 +96,13 @@ bounds and raster rejection. `upload_runexport` verifies saved EPS/XMP bytes,
 cached raster rejection, Download all and corruption after tmp verification.
 See `sor/upload-eps-gradients.md` for support limits and missing input fixtures.
 
-Metadata/export progress, cancellation, handoff and hidden-tab tests: [process progress](../process-progress.md#tests-and-safety).
+`upload_download_ui.test.tsx` drives real planned copies/readback with gated
+browser I/O: per-file progress, hidden portal/cancel, audio once, retained
+summaries, duplicate picker protection, no-op/cancelled picker silence and mixed
+kept/missing/failed outcomes. `upload_process_progress.test.tsx` also pins the
+independent download slot, stale events and matching toolbar counts.
+
+Metadata/export/download progress, cancellation, handoff and hidden-tab tests: [process progress](../process-progress.md#tests-and-safety).
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
 

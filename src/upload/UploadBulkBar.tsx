@@ -26,6 +26,7 @@ export interface UploadBulkBarProps {
   progress: { done: number; total: number } | null;
   runningMeta: number;
   runningExport: number;
+  downloading?: boolean;
   /** How many checked icons still have no metadata (the Generate paid-call count). */
   metaNeeded: number;
   /** How many checked icons have metadata text available to replace. */
@@ -81,7 +82,7 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
 
 /** The action half: preview settings, progress, cancel and five bulk actions. */
 function BulkRight({ p }: { p: UploadBulkBarProps }) {
-  const running = p.runningMeta + p.runningExport;
+  const running = p.runningMeta + p.runningExport + Number(p.downloading === true);
   return (
     <div className="svg-bulk-right" data-testid="upload-bulk-right">
       <PreviewBg bg={p.bg} onBg={p.onBg} />
@@ -177,7 +178,7 @@ function Progress({ p, running }: { p: UploadBulkBarProps; running: number }) {
       </div>
     );
   }
-  const kind = p.runningMeta > 0 ? "metadata" : "export";
+  const kind = p.downloading ? "download" : p.runningMeta > 0 ? "metadata" : "export";
   return (
     <div className="svg-estimate" data-testid="upload-estimate">
       <strong>{kind} {p.progress.done}/{p.progress.total}</strong>

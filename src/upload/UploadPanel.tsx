@@ -92,7 +92,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
       <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
         thumb={g.thumb} bg={g.bg} stroke={g.defaults.strokePx > 0 ? g.defaults.strokePx : null}
         onStroke={(px) => g.setDefaults({ strokePx: px ?? 0 })} progress={g.progress}
-        runningMeta={g.runningMeta} runningExport={g.runningExport}
+        runningMeta={g.runningMeta} runningExport={g.runningExport} downloading={g.processes.download?.status === "running"}
         metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
         metaAcceptCount={idsAwaitingAcceptance(g.rows, g.checked).length}
         metaAcceptBusy={g.busy !== null || g.runningMeta + g.runningExport > 0}
@@ -106,7 +106,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
         onAcceptMetadata={() => g.acceptMetadataSelected(g.checked)}
         onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
-        onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
+        onCancel={() => g.processes.download?.status === "running" ? g.cancelDownload() : g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport()} />
     </div>
   );
 }

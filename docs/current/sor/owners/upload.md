@@ -15,6 +15,8 @@ to use the shared outline model; no EPS artwork rasterizer is introduced.
 Endpoint policy/validation, pre-expansion application, shared settings UI and
 source-faithful EPS inheritance: [stroke endpoints](../upload-stroke-endpoints.md#owners-and-tests).
 
+Download copy/cancel/verified progress: `downloadactions.ts`; independent slots and
+headers: `processprogress.ts`, `statemodel.ts`, `UploadProgressHeaders.tsx`.
 Upload progress runner/reducer/header owners: [shared process progress](../process-progress.md#upload-lifecycle).
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).

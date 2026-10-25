@@ -364,6 +364,8 @@ async function mount(root: BinDir, workbench = false): Promise<void> {
     ui.render(workbench ? <Workbench /> : <HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
   });
   await waitFor(() => q("[data-testid=upload-audit]") !== null, "the asynchronous scan to complete");
+  // Discovery publishes its audit before source hashing/row assembly finishes.
+  await waitFor(() => q("[data-testid=upload-busy]") === null, "source hashes and rows assembled");
   await settle();
 }
 
@@ -1743,6 +1745,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(t.calls).toHaveLength(2);
     // Valid new results are accepted without a second confirmation.
     expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).toContain("accepted");
+    await waitFor(() => text("[data-testid=upload-toast]").includes("Metadata ready"), "metadata terminal summary");
     expect(text("[data-testid=upload-toast]")).toContain("Metadata ready");
 
     // now that both have metadata, the button says there is nothing left to generate

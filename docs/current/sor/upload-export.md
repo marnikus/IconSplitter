@@ -107,6 +107,13 @@ every renderer, and fingerprinting only while enabled.
   text, no data): `Saved 9 files (3 icons) to stock-drop · 2 kept (already
   there) · 1 icon not exported yet`.
 
+Download all also uses the [shared progress header](process-progress.md#upload-lifecycle):
+current filename, settled files/total, remaining and percentage, with Cancel and
+retained complete/cancelled/error summaries visible across tab switches. Cancel
+keeps verified copies and stops before the next file; it never interrupts a
+write/readback halfway. Duplicate clicks are guarded even during folder picking.
+Cancelled pickers/empty plans create no false run or completion sound.
+
 EPS delivery also enforces the [vector-only grammar and shading gate](upload-eps-gradients.md)
 after metadata, on temporary and final readback, before cached reuse, and before
 Download all. Any raster or unverified program fails the EPS stage/test; a header

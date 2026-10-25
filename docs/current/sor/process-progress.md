@@ -33,10 +33,10 @@ current percentage and a textual processed fraction.
 
 ## Upload lifecycle
 
-Metadata generation/regeneration and package export each own a progress slot.
+Metadata generation/regeneration, package export and Download all each own a progress slot.
 They start at zero, advance only when the real runner settles a non-aborted
 item, and retain a complete/cancelled/error summary until dismissed or replaced
-by a new run of that kind. Each header shows current SVG filename(s), processed
+by a new run of that kind. Each header shows current filename(s), processed
 count, remaining count, percentage and Cancel while running; terminal headers
 have Review results and Dismiss. Review opens SVG to upload without restarting
 or remounting it. Cancel uses the existing abort path and keeps completed work.
@@ -46,10 +46,19 @@ Run identity/terminal guards reject stale publications and stale dismissals;
 finishing metadata cannot clear an active export, or vice versa. The existing
 toolbar text counter is derived from running slots, never a second counter.
 `metabatch.ts` owns bounded metadata workers and terminal cleanup; export uses
-`exportactions.ts`. Workers publish progress independently of React rerenders.
+`exportactions.ts`; download uses `downloadactions.ts`. Workers publish progress independently of React rerenders.
 A failed/cancelled metadata phase never launches a chained Export selected.
 A successful phase leaves its summary while the export header starts at zero.
 Existing exact-request provider confirmation and acceptance rules are unchanged.
+
+Download starts at zero after destination selection, using the captured plan's
+**file** count (not icon count). Its detail names the current file; verified
+saved, kept, missing and failed attempts each advance once. Missing/failed files
+produce an error summary without stopping later copies. Cancel finishes the
+active write/readback before stopping the next file; it retains actual counts
+and verified copies. Empty plans and cancelled pickers create no bar or sound.
+Duplicate clicks cannot launch overlapping pickers/copies. The toolbar uses the
+download slot/counts while active, without resetting metadata/export summaries.
 
 Upload mounts lazily on its first visit, then remains hidden rather than
 unmounting on other tabs, like the other running panels. Its progress portal
@@ -60,7 +69,7 @@ or resend provider work; journals still report interrupted items.
 ## Handles
 
 - Shell: `upload-progress-mount`, `upload-shell` (`hidden` when inactive).
-- Prefixes: `upload-metadata-progress-*`, `upload-export-progress-*`.
+- Prefixes: `upload-metadata-progress-*`, `upload-export-progress-*`, `upload-download-progress-*`.
 - Suffixes: `header`, `title`, `file`, `track`, `completed`, `remaining`,
   `percent`, `cancel` (running), `review` and `dismiss` (terminal).
 - Existing `batch[-preview]-progress-*`, `svg-progress-*` and Upload toolbar
@@ -68,6 +77,8 @@ or resend provider work; journals still report interrupted items.
 
 ## Tests and safety
 
+`upload_download_ui.test.tsx`: gated real per-file readback progress, hidden-panel
+portal/cancel, mixed outcomes, duplicate run protection and completion audio.
 `process_progress.test.tsx`: arithmetic, immutable snapshots, bounds, terminal
 reporting, generic accessible layout. `upload_process_progress.test.tsx`:
 independent channels, stale events, portal outside a hidden panel and actions.

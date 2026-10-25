@@ -115,6 +115,7 @@ export interface UploadActions extends PromptActions {
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
   /** Bulk: the selection's committed SVG/JPG/EPS copied into one folder the user picks (2026-10-08). */
   downloadSelected: (ids: string[]) => void;
+  cancelDownload: () => void;
   exportRows: (ids: string[]) => void;
   exportRow: (id: string) => void;
   cancelExport: () => void;

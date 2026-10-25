@@ -231,7 +231,7 @@ export function initialModel(boot: Boot): UploadModel {
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
-    runningMeta: 0, runningExport: 0, progress: null, processes: { metadata: null, export: null },
+    runningMeta: 0, runningExport: 0, progress: null, processes: { metadata: null, export: null, download: null },
   };
 }
 

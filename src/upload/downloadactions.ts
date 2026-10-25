@@ -1,4 +1,4 @@
-import { armCompletionSound, startCompletionSound } from "../ui/completionSound";
+import { armCompletionSound } from "../ui/completionSound";
 // downloadactions.ts — "Download all" (2026-10-08, design
 // docs/archive/2026-10-08-upload-download-all/design.md): the selection's
 // committed packages copied into ONE folder the user picks. The plan comes from
@@ -15,21 +15,28 @@ import { downloadLine, planDownload, type DownloadItem, type DownloadPlan, type 
 import { verifyEpsDocument } from "../lib/upload/eps";
 import { log } from "../log/logstore";
 import { downloadedSpec } from "./uploadlog";
+import { startUploadProgress } from "./processprogress";
+import type { ProcessReporter, ProcessStatus } from "../lib/processprogress";
 import type { Latest } from "./types";
 import type { UploadActions, UploadCtx } from "./actions";
 
-type DownloadSlice = Pick<UploadActions, "downloadSelected">;
+type DownloadSlice = Pick<UploadActions, "downloadSelected" | "cancelDownload">;
 
 export function useDownloadActions(ctx: UploadCtx): DownloadSlice {
   const latest = useRef(ctx);
   latest.current = ctx;
+  const active = useRef<AbortController | null>(null);
   const downloadSelected = useCallback((ids: string[]) => {
     const c = latest.current;
     const why = downloadGuard(c, ids);
     if (why !== null) return c.say(why, true);
-    void downloadTo(latest, ids);
+    if (active.current !== null) return c.say("A download is already in flight", true);
+    const abort = new AbortController();
+    active.current = abort;
+    void downloadTo(latest, ids, abort.signal).finally(() => { active.current = null; });
   }, [latest]);
-  return { downloadSelected };
+  const cancelDownload = useCallback(() => active.current?.abort(), []);
+  return { downloadSelected, cancelDownload };
 }
 
 /** The files the selection would download right now — what the button counts. */
@@ -45,34 +52,64 @@ function downloadGuard(c: UploadCtx, ids: string[]): string | null {
   return null;
 }
 
-/** Pick the folder, copy the plan, say what happened. */
-async function downloadTo(latest: Latest, ids: string[]): Promise<void> {
+/** Pick the destination with a reserved run and a captured source/selection. */
+async function downloadTo(latest: Latest, ids: string[], signal: AbortSignal): Promise<void> {
   const c = latest.current;
+  const root = c.refs.root.current as DirHandleLike;
   const plan = downloadPlanOf(c, ids);
   armCompletionSound();
-  const dest = await pickDirectory();
-  if (dest === null) return c.say("No folder chosen — nothing was saved");
-  const finish = plan.items.length > 0 ? startCompletionSound() : () => undefined;
-  c.setBusy("Downloading…");
+  c.setBusy("Choosing download folder…");
   try {
-    const result = await copyPlanned(c.refs.root.current as DirHandleLike, dest, plan);
-    const line = downloadLine(result, dest.name);
-    log(downloadedSpec({ line, failed: result.failed }));
-    latest.current.say(line, result.failed > 0);
+    const dest = await pickDirectory();
+    if (dest === null) return c.say("No folder chosen — nothing was saved");
+    await runDownload({ latest, root, dest, plan, signal });
+  } catch {
+    latest.current.say("Download stopped unexpectedly — verified copies are kept", true);
   } finally {
     latest.current.setBusy(null);
-    finish();
   }
 }
 
-/** Sequential, per-file isolated: each outcome is counted, none stops the rest. */
-async function copyPlanned(root: DirHandleLike, dest: DirHandleLike, plan: DownloadPlan): Promise<DownloadResult> {
-  const result: DownloadResult = { saved: 0, icons: 0, kept: 0, missing: 0, failed: 0, notExported: plan.notExported };
+interface DownloadRun {
+  latest: Latest;
+  root: DirHandleLike;
+  dest: DirHandleLike;
+  plan: DownloadPlan;
+  signal: AbortSignal;
+}
+const EMPTY_RESULT: DownloadResult = { saved: 0, icons: 0, kept: 0, missing: 0, failed: 0, notExported: 0 };
+
+/** One retained progress summary and one sound, never on a cancelled picker/no-op. */
+async function runDownload(run: DownloadRun): Promise<void> {
+  if (run.plan.items.length === 0) return publishDownload(run, { ...EMPTY_RESULT, notExported: run.plan.notExported });
+  const progress = startUploadProgress(run.latest.current, "download", run.plan.items.length);
+  let status: Exclude<ProcessStatus, "running"> = "failed";
+  try {
+    const result = await copyPlanned(run, progress);
+    status = run.signal.aborted ? "cancelled" : result.failed + result.missing > 0 ? "failed" : "completed";
+    publishDownload(run, result);
+  } finally {
+    progress.finish(status);
+  }
+}
+
+function publishDownload(run: DownloadRun, result: DownloadResult): void {
+  const line = `${run.signal.aborted ? "Download cancelled — " : ""}${downloadLine(result, run.dest.name)}`;
+  log(downloadedSpec({ line, failed: result.failed }));
+  run.latest.current.say(line, result.failed + result.missing > 0);
+}
+
+/** Sequential isolated copies: cancel blocks the next file, never an active verification. */
+async function copyPlanned(run: DownloadRun, progress: ProcessReporter): Promise<DownloadResult> {
+  const result = { ...EMPTY_RESULT, notExported: run.plan.notExported };
   const savedIcons = new Set<string>();
-  for (const item of plan.items) {
-    const outcome = await copyOne(root, dest, item);
+  for (const item of run.plan.items) {
+    if (run.signal.aborted) break;
+    run.latest.current.setBusy(`Downloading ${item.to}…`);
+    const outcome = await copyOne(run.root, run.dest, item);
     result[outcome] += 1;
     if (outcome === "saved") savedIcons.add(item.id);
+    progress.advance();
   }
   result.icons = savedIcons.size;
   return result;

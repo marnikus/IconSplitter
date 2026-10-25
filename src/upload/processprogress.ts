@@ -3,7 +3,7 @@ import { createProcessReporter, type ProcessProgress } from "../lib/processprogr
 import { startCompletionSound } from "../ui/completionSound";
 import type { UploadCtx } from "./actions";
 
-export type UploadProcessKind = "metadata" | "export";
+export type UploadProcessKind = "metadata" | "export" | "download";
 export interface UploadProgressState {
   processes: Record<UploadProcessKind, ProcessProgress | null>;
   /** Compatibility summary for the existing toolbar, derived from running slots. */
@@ -16,7 +16,7 @@ export interface ProcessUpdate {
 }
 
 function progressState(processes: UploadProgressState["processes"]): UploadProgressState {
-  const active = Object.values(processes).find((p) => p?.status === "running") ?? null;
+  const active = [processes.download, processes.metadata, processes.export].find((p) => p?.status === "running") ?? null;
   return { processes, progress: active };
 }
 
