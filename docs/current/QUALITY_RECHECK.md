@@ -3247,3 +3247,40 @@ Plan written before production changes: `docs/archive/2026-10-24-upload-centred-
 - Genuine TDD RED→GREEN: policy1/4 RED, quiet1/4 RED, speedup comparator3/9 RED; focused32/9 GREEN. New native-realm isolation canaries PASS2/2 with one worker; private isolate:false negative control correctly FAILS leaked global state. Benchmark --required-speedup5.3 reports throughput/time units and rejects ambiguity, failed/different-machine evidence; legacy60%/50% targets retained.
 - Successful original full warm118.1429s/cold142.6921s; candidate fully warm91.02/91.47s, median91.2421s, cold122.6012s. Apparent warm1.2948x (+29.48% throughput,22.77% time reduction), cold1.1639x. Required5.3x (+430%) NOT MET; both real comparator commands return1/passed:false. Original warm repeats88.95/91.28s FAILED with UI readiness/toast assertions and are retained/excluded, so single successful baseline and host timing variation do NOT establish a guaranteed29.48% gain. First-transform candidate105.13s separately disclosed. Global threads/V8 coverage148.71s rejected; no speculative lane overlap shipped.
 - Final fast/full ALL LANES PASSED2849tests/267files, full additionally native30/5. tsc PASS; lint0errors/23existing warnings; changed-quality vs824e6c8 PASS (no src edits); docs4/4 and whitespace PASS. Full src/lib coverage unchanged95.32%stmt/89.72%branch/98.20%fn/98.29%line, lines80 threshold retained, real algorithms remain tested. Build1808.95kB/gzip560.34kB. Raw logs/reports/profiles /home/user/harness-430; no generated/dependency/build artifacts staged. Ledger appended without reading.
+
+### 2026-10-25 — Additional40% full-system investigation (safe partial; target NOT met)
+
+Reference281edd6, Linux/Node22.22.3/2CPU/4131278848B. Plan before implementation:
+`docs/archive/2026-10-25-harness-40/README.md`; results/evidence in its results.md.
+Reference warm91.85/96.16s (median94.00398), retained92.14/90.31s (91.22763):
+nominal2.9534% less time; cold129.92→117.85s (9.2913%). Required56.40239s warm
+NOT attained. Both per-reference warm comparisons and cold40%-required comparator
+correctly FAIL; no best subset/prototype substituted. Additional final full
+release86.37687s also passes; inclusive three-run warm median90.31s (~3.92% less),
+with both inclusive40%-required comparisons also failing. Timing is noisy.
+
+Retain disclosed REAL application offset optimization: same Bernstein arithmetic,
+conservative interval certificates with rounding slack, original40-step fallback,
+TOL/checkpoints/depth/subdivision/output unchanged;36 original hashes,648threshold
+and7special oracle comparisons PASS; genuine call-through RED5658→GREEN<100.
+Keep serial verification DEFAULT; explicit --overlap opts into native quarantine
+then bounded static/build + full-suite pipelines, --serial/resource fallback wins.
+Seven REAL child fixtures prove ordering/isolation/overlap/failures/unknown groups/
+spawn errors and process-tree cancellation; deliberate serialization/direct-child-
+only mutations FAIL. Plan metadata genuine RED→GREEN; focused22/4 PASS.
+
+Reject direct-global VM/four-worker/default-overlap experiments: no proved gain.
+Reject ALL automatic timer/immediate cancellation; invalid shared-immediate
+prototype deadlocked IndexedDB/native work (291.75s failed), timeout-only ownership
+and benefit unproved. Quiet helper/DOM setup/quiet tests restored byte-for-byte.
+No tests/coverage/budgets/pools/provider/dependencies weakened. New kernel100%all
+metrics; src/lib95.33/89.74/98.20/98.29 vs95.32/89.72/98.20/98.29, scope+1module.
+
+Standalone tsc/lint/changed-quality and final fast/full ALL LANES PASSED2862/270,
+plus native30/5; lint0errors/23existing warnings. First release-fast failed router
+5002B cap (shortened) and one unexplained metadata-toast readiness assertion;
+focused87/2 then fast/full PASS, no assertion/deadline changes; failure retained.
+Reference/candidate logs also retain pre-existing blocked TLS attempts, not hidden
+by a global fetch mock. Current owners/test index/router refreshed <=9KB (router
+<5KB); UI handles unchanged; raw evidence losslessly compressed with SHA256.
+No dependency/cache/build/coverage/profile artifacts staged. Ledger appended unread.

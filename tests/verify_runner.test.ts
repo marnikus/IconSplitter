@@ -29,7 +29,7 @@ describe("fast lane plan (npm run verify:fast)", () => {
     expect(lanes[0].args).toContain("--coverage");
   });
 
-  it("keeps the lane order types → lint → quality gate → coverage → build", () => {
+  it("keeps canonical inventory types → lint → quality gate → coverage → build (execution groups control scheduling)", () => {
     expect(plan().map((l) => l.name)).toEqual([
       "Types",
       "Lint",
@@ -101,4 +101,21 @@ describe("honest incremental static checks and explicit cold verification", () =
     expect(cold[1].args).not.toContain("--cache");
     for (const lane of vitestLanes(cold)) expect(lane.args).toContain("--fsModuleCache=false");
   });
+});
+
+describe('explicit execution groups for bounded full verification overlap', () => {
+  it('exposes native quarantine, one static queue and one complete coverage queue', () => {
+    const lanes = plan('--full') as (Lane & { executionGroup: string })[];
+    expect(lanes.find(l => l.name.startsWith('Perf budgets'))?.executionGroup).toBe('native');
+    expect(lanes.find(l => l.name === 'Tests + coverage')?.executionGroup).toBe('suite');
+    expect(lanes.filter(l => l.executionGroup === 'static').map(l => l.name)).toEqual(['Types', 'Lint', 'Quality gate (changed)', 'Build']);
+  });
+});
+
+
+it('keeps serial as the explicit/default machine-readable execution mode', () => {
+  for (const flags of [[], ['--serial'], ['--overlap', '--serial']]) {
+    const lanes = plan(...flags) as (Lane & {executionMode: string})[];
+    expect(lanes.every(l => l.executionMode === 'serial')).toBe(true);
+  }
 });

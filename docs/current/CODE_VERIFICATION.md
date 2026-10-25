@@ -144,11 +144,15 @@ The runner reuses TypeScript incremental and ESLint content caches under
 `node_modules/.cache/verify`; tests/coverage/build are never result-cached.
 `npm run verify -- --cold` bypasses these and Vitest filesystem transforms.
 Default coverage uses pinned official Istanbul; V8 audits remain available.
-Current 2-CPU reference:118.14s full warm baseline; candidate warm median91.24s,
-cold142.69s to122.60s. **Requested +430% throughput (5.3x) is not achieved**.
-Original-harness repeats exposed failures/timing variation; do not treat these
-as a guaranteed multiplier. Three isolated test groups now selectively place
-CPU-heavy geometry in native threads, without changing lane order or algorithms.
+Default execution remains serial. `--overlap` opts into resource-bounded static/
+build and complete-coverage pipelines after native alarms finish alone;
+`--serial` overrides it. Fallback: fewer than2CPUs or3GiB constrained memory.
+Plan JSON exposes execution groups and the selected serial/overlap mode. SIGINT/
+SIGTERM stop owned child trees; any failed/spawn-error lane fails verification.
+Fresh281edd6 reference: warm median94.00s →91.23s; cold129.92s →117.85s.
+**Additional40% full-system time reduction is NOT achieved** (target56.40s warm).
+No skipped tests, weaker budgets or scope reduction. Equivalent real geometry
+computation is optimized; worker pools/provider/lifecycle remain unchanged.
 Measurement caveats and isolation/cache contracts: [test harness](TEST_HARNESS.md).
 
 ### 9. Browser probes (optional)

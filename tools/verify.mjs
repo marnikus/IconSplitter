@@ -6,12 +6,14 @@
 //
 //   node tools/verify.mjs                  # fast lanes (every commit)
 //   node tools/verify.mjs --cold           # bypass static/transform caches (all gates still run)
+//   node tools/verify.mjs --overlap        # opt-in native quarantine + bounded static/suite overlap
+//   node tools/verify.mjs --serial         # canonical sequential fallback / comparison control
 //   node tools/verify.mjs --full           # + uninstrumented perf-budget lane (pre-push)
 //   node tools/verify.mjs --base <ref>     # passes --base to the quality lane (shallow clones)
 //   node tools/verify.mjs --plan [--json]  # prints the lane plan and runs nothing (test seam)
 //
 // The lane plan is a contract: tests/verify_runner.test.ts characterizes it.
-import { spawnSync } from "node:child_process";
+import { canOverlapVerification, runVerification } from "./verify-execution.mjs";
 import { fileURLToPath } from "node:url";
 
 // fileURLToPath: URL.pathname is "/D:/My%20Dir/" on Windows, an invalid cwd.
@@ -21,6 +23,7 @@ const full = args.includes("--full");
 const cold = args.includes("--cold");
 const planOnly = args.includes("--plan");
 const jsonOut = args.includes("--json");
+const overlap = args.includes("--overlap") && !args.includes("--serial") && canOverlapVerification();
 
 /** `--base <ref>` passthrough for the quality lane; empty when not given. */
 function baseArgs() {
@@ -43,21 +46,16 @@ function lanePlan() {
     // PERF_BUDGETS tells wall-clock alarms (algo_efficiency) that instrumentation inflates every run.
     { name: "Tests + coverage", cmd: "npx", args: ["vitest", "run", "--coverage", ...testCache], env: { PERF_BUDGETS: "coverage" } },
     { name: "Build", cmd: "npm", args: ["run", "build"] },
-  ];
+  ].map(lane => ({ ...lane, executionGroup: lane.name.startsWith("Perf budgets") ? "native"
+    : lane.name === "Tests + coverage" ? "suite" : "static", executionMode: overlap ? "overlap" : "serial" }));
 }
 
 function printPlan(lanes) {
   if (jsonOut) console.log(JSON.stringify(lanes, null, 2));
-  else lanes.forEach((l, i) => console.log(`${i + 1}/${lanes.length} ${l.name}: ${l.cmd} ${l.args.join(" ")}`));
-}
-
-function runLane(lane, i, total) {
-  console.log(`\n=== ${i + 1}/${total} ${lane.name} (${lane.cmd} ${lane.args.join(" ")}) ===`);
-  const started = Date.now();
-  const r = spawnSync(lane.cmd, lane.args, { stdio: "inherit", cwd: ROOT, shell: process.platform === "win32", env: { ...process.env, ...lane.env } });
-  const secs = ((Date.now() - started) / 1000).toFixed(1);
-  console.log(`=== ${lane.name}: ${r.status === 0 ? "PASS" : "FAIL"} (${secs}s) ===`);
-  return r.status === 0;
+  else {
+    console.log("Execution groups: with --overlap, native runs alone then static queue and complete suite overlap. Default/--serial uses canonical order.");
+    lanes.forEach((l, i) => console.log(`${i + 1}/${lanes.length} ${l.name}: ${l.cmd} ${l.args.join(" ")} [${l.executionGroup}]`));
+  }
 }
 
 const lanes = lanePlan();
@@ -65,9 +63,17 @@ if (planOnly || jsonOut) {
   printPlan(lanes);
   process.exit(0);
 }
-// map() runs the lanes sequentially, in order; each returns PASS/FAIL.
-const failed = lanes.map((lane, i) => runLane(lane, i, lanes.length)).filter((ok) => !ok).length;
+const controller = new globalThis.AbortController();
+const onInterrupt = () => controller.abort("SIGINT");
+const onTerminate = () => controller.abort("SIGTERM");
+process.once("SIGINT", onInterrupt);
+process.once("SIGTERM", onTerminate);
+console.log(overlap ? "Execution: native alone; static/build queue overlaps complete coverage suite."
+  : "Execution: serial (default, --serial override, or resource fallback).");
+const failed = await runVerification(lanes, ROOT, overlap, controller.signal);
+process.removeListener("SIGINT", onInterrupt);
+process.removeListener("SIGTERM", onTerminate);
 console.log(failed === 0
   ? "\nALL LANES PASSED"
   : `\n${failed} LANE(S) FAILED — fix in RULE 19 order (nesting → CC → cognitive → size) before pushing.`);
-process.exit(failed === 0 ? 0 : 1);
+process.exitCode = controller.signal.aborted ? (controller.signal.reason === "SIGTERM" ? 143 : 130) : failed === 0 ? 0 : 1;

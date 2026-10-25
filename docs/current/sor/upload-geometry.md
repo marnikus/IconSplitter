@@ -1,6 +1,6 @@
 # Upload geometry — bounds, bake and placement
 
-Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-62](invariants/upload.md).
+[Settings](upload-settings.md); [I-60…I-62](invariants/upload.md).
 
 * Geometry: the visible bounds include strokes (width/caps/joins), transforms
   and non-scaling-stroke; a shape whose fill is `none` and that does not
@@ -118,3 +118,5 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   appended after the stroke hoist and before the badge, never change the icon
   fit or artboard size, and shrink uniformly or fail as `no-fit` when the
   requested percentages cannot fit the chosen insets.
+
+* Offset search: equivalent bounded checks, unchanged tolerance; [proof](../../archive/2026-10-25-harness-40/results.md).

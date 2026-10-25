@@ -120,7 +120,8 @@ supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-tem
   source immutability, determinism, geometry/clipping safety, bounded impossible
   fits, no overflow, verbatim strokes and genuine vector EPS verification.
 
-* `upload_centred_fit.test.ts` — exact leaf 64×64 / 50px / 8% final-centering regression; grid-aligned offsets, actual padded/centred containment, nearby presets, vector EPS, optimization/cleaning, determinism and impossible-fit safety.
+* `upload_centred_fit.test.ts` — leaf64×64/50px/8% centering; grid/padded containment, presets, EPS, cleaning, determinism, impossible fits.
+* `upload_offset_equivalence.test.ts`, `upload_offset_distance.test.ts` — hash/threshold equivalence.
 
 `upload_settings_disclosure.test.tsx` drives both popup scopes: native collapsed
 summaries, independent expansion/folding, mounted controls/drafts, open-state
