@@ -1,7 +1,7 @@
 // selectedsettings.ts — one validated per-icon settings batch, one global undo entry.
-// Two batches live here: a decoration gesture from the Export settings popup
+// Settings batches live here: a decoration gesture from the Export settings popup
 // (`commitDecoration`, values into the `applied` map, and the selected-only
-// dimensions in `commitBatch`) and the ONE "Reset to inherited", which deletes
+// dimensions in `commitBatch`), explicit local snapshots and Reset to inherited, which deletes
 // the selection's whole override maps. A decoration is not an override, so the
 // reset can clear every parameter and the decoration still applies
 // (2026-10-21, archive/2026-10-21-decorations-are-not-overrides).
@@ -12,6 +12,7 @@ import {
 import {
   overrideKeys, overridesEqual, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
+import { localSettingsSnapshot } from "../lib/upload/settingslocal";
 import type { UploadCtx } from "./actions";
 
 type OverridesSide = Record<string, SettingsOverrides | null>;
@@ -105,6 +106,24 @@ export function resetBatch(c: UploadCtx, ids: string[], label: string): number {
     patch.ids.push(id);
   }
   return patch.ids.length === 0 ? 0 : pushEntry(c, label, patch);
+}
+
+/** Freeze current globals on checked, loaded rows; preserve their effective decorations. */
+export function commitLocalBatch(c: UploadCtx, ids: readonly string[]): number {
+  const selected = new Set(c.checked);
+  const loaded = new Set(c.rows.map(row => row.source.id));
+  const patch = emptyPatch();
+  for (const id of new Set(ids)) {
+    if (!selected.has(id) || !loaded.has(id)) continue;
+    const before = c.m.overrides[id] ?? null;
+    const current = rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied);
+    const after = localSettingsSnapshot(c.m.defaults, current);
+    if (overridesEqual(before ?? {}, after)) continue;
+    patch.before.overrides[id] = before;
+    patch.after.overrides[id] = after;
+    patch.ids.push(id);
+  }
+  return patch.ids.length === 0 ? 0 : pushEntry(c, "Apply as local", patch);
 }
 
 /** An empty map entry is stored as null so a patch can clear it. */

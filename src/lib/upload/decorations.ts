@@ -2,8 +2,8 @@
 // archive/2026-10-21-decorations-are-not-overrides).
 //
 // A decoration (Shadow, corner badge, S/L size guide) is a selection-level
-// choice made in the Export settings popup. A row override is a local edit made
-// in that icon's own Settings dialog. They are different things, so they live in
+// choice made in the Export settings popup. Local row overrides come from its
+// own dialog or an explicit Apply as local snapshot. These live in
 // different maps: `applied: { pairId: DecorationValues }` carries the VALUES a
 // global control wrote, and the icon's overrides carry only what the user
 // pinned locally. The effective settings merge defaults ← applied ← overrides,

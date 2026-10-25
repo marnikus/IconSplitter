@@ -41,6 +41,7 @@ function SettingsDialog({ g }: { g: UploadApi }) {
       onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
       selectedSizeGuide={selectedSizeGuide(g.checked, g.defaults, g.overrides, g.applied)}
       onSelectedSizeGuideToggle={() => g.toggleSizeGuideSelected(g.checked)}
+      onApplyLocal={() => g.applySettingsSelected(g.checked)}
       onDefaults={g.setDefaults}
       onOverride={g.setOverride}
       onResetOverride={g.resetOverride}

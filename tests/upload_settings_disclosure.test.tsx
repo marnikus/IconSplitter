@@ -21,13 +21,13 @@ beforeEach(() => {
     id: null, scope: null, defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, applied: {}, selectedCount: 2,
     selectedShadow: { state: "mixed", width: null, gap: null }, selectedBadge: { state: "mixed" }, selectedSizeGuide: { state: "mixed" },
     onSelectedShadowToggle: vi.fn(), onSelectedShadowDimensions: vi.fn(), onSelectedBadgeToggle: vi.fn(), onSelectedSizeGuideToggle: vi.fn(),
-    onDefaults: vi.fn(), onOverride: vi.fn(), onResetOverride: vi.fn(), onClose: vi.fn(),
+    onApplyLocal: vi.fn(), onDefaults: vi.fn(), onOverride: vi.fn(), onResetOverride: vi.fn(), onClose: vi.fn(),
   };
 });
 afterEach(async () => { await act(async () => ui.unmount()); host.remove(); });
 function expectNoChanges() {
   for (const callback of [props.onDefaults, props.onOverride, props.onSelectedShadowToggle, props.onSelectedShadowDimensions,
-    props.onSelectedBadgeToggle, props.onSelectedSizeGuideToggle, props.onResetOverride, props.onClose]) {
+    props.onSelectedBadgeToggle, props.onSelectedSizeGuideToggle, props.onResetOverride, props.onApplyLocal, props.onClose]) {
     expect(callback).not.toHaveBeenCalled();
   }
 }

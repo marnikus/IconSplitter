@@ -1,6 +1,6 @@
-// overrideactions.ts — the ONE place a row's settings may be pinned (2026-10-21):
-// that icon's own Settings dialog. A field written here is a real local pin; the
-// row's "Reset to inherited" deletes the WHOLE override map, so every parameter
+// overrideactions.ts — individual row edits pin settings here; an explicit
+// batch snapshot is owned by selectedsettings.commitLocalBatch. A field written
+// here is a real local pin; the row's "Reset to inherited" deletes the WHOLE override map, so every parameter
 // reads inherited again. The decorations a global control applied live in their
 // own map and keep applying (archive/2026-10-21-decorations-are-not-overrides).
 import { useCallback, useRef } from "react";

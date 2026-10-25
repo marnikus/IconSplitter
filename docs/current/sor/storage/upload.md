@@ -31,3 +31,6 @@ field. No source file or extra asset store is written. See
 Padding keeps its existing field/key/version: scalar or null payloads remain
 compatible; asymmetric `{left,right,top,bottom}` values validate on read and
 participate in overrides/history. [Four-side padding](../upload-padding.md).
+
+Explicit [local batch snapshots](../upload-local-settings.md) reuse the v2
+overrides map, including content-fit artboard pins; no schema/key change.

@@ -28,7 +28,7 @@ async function mount(patch: Partial<UploadSettingsDialogProps> = {}) {
     onSelectedShadowToggle: vi.fn(), onSelectedShadowDimensions: vi.fn(),
     selectedBadge: { state: 'none' }, onSelectedBadgeToggle: vi.fn(),
     selectedSizeGuide: { state: 'none' }, onSelectedSizeGuideToggle: vi.fn(),
-    onDefaults: vi.fn(), onOverride: vi.fn(), onResetOverride: vi.fn(), onClose: vi.fn(), ...patch };
+    onApplyLocal: vi.fn(), onDefaults: vi.fn(), onOverride: vi.fn(), onResetOverride: vi.fn(), onClose: vi.fn(), ...patch };
   await act(async () => ui.render(<UploadSettingsDialog {...props} />));
 }
 beforeEach(() => { host = document.createElement('div'); document.body.appendChild(host); ui = createRoot(host); });

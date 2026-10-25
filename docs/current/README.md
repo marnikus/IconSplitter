@@ -11,7 +11,7 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 | Selection V2 | [sor/selection](sor/selection.md#behaviour) 7 → [selectors/selection](selectors/selection.md) 8 | [pair files](sor/topics/pair-files.md) 3 | [selection](sor/invariants/selection.md) 4 |
 | Generate SVG | [sor/svg-generation](sor/svg-generation.md) 8 → [selectors/svg-generation](selectors/svg-generation.md) 7 | [results](sor/svg-generation-results.md) 7, [task prompts](sor/svg-generation-prompts.md) 2, [parallel runs](sor/svg-parallel-runs.md) 3; handles: [list](selectors/svg-generation-list.md) 7, [run](selectors/svg-generation-run.md) 5, [dialogs](selectors/svg-generation-dialogs.md) 7 | [svg](sor/invariants/svg.md) 8, [run](sor/invariants/svg-run.md) 5 |
 | AI-source image edits | [sor/svg-image-edits](sor/svg-image-edits.md) 2 → [selectors/svg-image-edits](selectors/svg-image-edits.md) 7 | [storage](sor/storage/svg.md) 4, [auto Apply / progress](sor/svg-image-auto-apply.md) 3 | [I-71/I-72](sor/invariants/svg-image-edits.md) 4 |
-| SVG to upload | [sor/upload](sor/upload.md) → [selectors/upload](selectors/upload.md) | [settings](sor/upload-settings.md), [padding](sor/upload-padding.md), [geometry](sor/upload-geometry.md), [repairs](sor/upload-auto-repair.md), [stroke endpoints](sor/upload-stroke-endpoints.md), [badge](sor/upload-badge.md), [row labels](sor/upload-row-badges.md), [size guide](sor/upload-sizeguide.md), [metadata](sor/upload-metadata.md), [acceptance](sor/upload-metadata-acceptance.md), [export](sor/upload-export.md), [file metadata](sor/upload-file-metadata.md), [Adobe validation](sor/upload-adobe-validation.md), [progress](sor/process-progress.md), [EPS](sor/upload-eps.md), [vector gradients](sor/upload-eps-gradients.md); handles: [list](selectors/upload-list.md), [dialogs](selectors/upload-dialogs.md), [template](selectors/upload-badge-template.md) | [upload](sor/invariants/upload.md) |
+| SVG to upload | [sor/upload](sor/upload.md) → [selectors/upload](selectors/upload.md) | [settings](sor/upload-settings.md), [local batches](sor/upload-local-settings.md), [padding](sor/upload-padding.md), [geometry](sor/upload-geometry.md), [repairs](sor/upload-auto-repair.md), [stroke endpoints](sor/upload-stroke-endpoints.md), [badge](sor/upload-badge.md), [row labels](sor/upload-row-badges.md), [size guide](sor/upload-sizeguide.md), [metadata](sor/upload-metadata.md), [acceptance](sor/upload-metadata-acceptance.md), [export](sor/upload-export.md), [file metadata](sor/upload-file-metadata.md), [Adobe validation](sor/upload-adobe-validation.md), [progress](sor/process-progress.md), [EPS](sor/upload-eps.md), [vector gradients](sor/upload-eps-gradients.md); handles: [list](selectors/upload-list.md), [dialogs](selectors/upload-dialogs.md), [template](selectors/upload-badge-template.md) | [upload](sor/invariants/upload.md) |
 | Shell / log / undo | [sor/shared](sor/shared.md) 1 → [selectors/shared](selectors/shared.md) 6 | [progress/sound](sor/process-progress.md) 8, [undo](sor/topics/state-history.md) 7, [log](sor/topics/log.md) 4, [keys](sor/topics/secret-store.md) 4 | [shared](sor/invariants/shared.md) 4 |
 | Root paths / folders | [path invariants](sor/invariants/paths.md) 4 | [capture](sor/invariants/paths-capture.md) 5, [scope](sor/invariants/paths-scope.md) 4; history: [topics](sor/topics/README.md) | — |
 | Docs only | this page + [RULE 17](rules/DOCS_AND_SAFETY.md#rule-17) | — | — |
@@ -32,12 +32,11 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 
 ## 3. Conventions
 
-- `name.md` is an entry page; `name-<part>.md` beside it is its detail page,
-  and both link to each other. Folders (`owners/`, `storage/`, `tests/`,
-  `invariants/`) hold one page per area behind a small index.
+- `name.md` links to its `name-<part>.md` detail and back. `owners/`, `storage/`,
+  `tests/` and `invariants/` use one page per area behind a small index.
 - One owner per fact: link to it instead of restating it.
-- New content goes to the owning page; when a page would pass 9 KB, split it
-  into a `-<part>` sibling and add it to the table above (RULE 17/18).
+- Content stays in its owning page; split above9KB into a `-<part>` sibling
+  and route it above (RULE 17/18).
 - [SYSTEM_OF_RECORD](SYSTEM_OF_RECORD.md) (§1–§20) and
   [UI_SELECTORS](UI_SELECTORS.md) (A–S) only keep old anchors working. Don't
   start from them.

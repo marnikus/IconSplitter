@@ -1,7 +1,7 @@
 // settingsstore.ts — local persistence for the "SVG to upload" settings domain
 // (design §4.1, RULE 6/13). Owns the three maps the tab reads: the global
 // defaults every icon inherits, the per-icon overrides (what that icon's own
-// dialog pinned) and the decorations a global control applied to an icon. One
+// dialog or an explicit batch snapshot pinned) and the decorations a global control applied to an icon. One
 // storage key, one writer pair, validated on read by the lib parsers — a
 // corrupt or hand-edited payload costs one ignored load and the documented
 // defaults, never a broken tab. Undo's persist-only path (uploadundo) writes

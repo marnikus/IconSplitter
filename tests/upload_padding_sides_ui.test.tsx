@@ -24,7 +24,7 @@ beforeEach(() => {
     id: null, scope: null, defaults: { ...DEFAULT_UPLOAD_SETTINGS, paddingPct: 12 }, overrides: {}, applied: {}, selectedCount: 2,
     selectedShadow: { state: "mixed", width: null, gap: null }, selectedBadge: { state: "mixed" }, selectedSizeGuide: { state: "mixed" },
     onSelectedShadowToggle: vi.fn(), onSelectedShadowDimensions: vi.fn(), onSelectedBadgeToggle: vi.fn(), onSelectedSizeGuideToggle: vi.fn(),
-    onDefaults: vi.fn((patch) => { props.defaults = { ...props.defaults, ...patch }; render(); }),
+    onApplyLocal: vi.fn(), onDefaults: vi.fn((patch) => { props.defaults = { ...props.defaults, ...patch }; render(); }),
     onOverride: vi.fn((_id, patch) => { props.overrides = patch; render(); }),
     onResetOverride: vi.fn(() => { props.overrides = {}; render(); }), onClose: vi.fn(),
   };

@@ -6,10 +6,10 @@ For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
 
 ## Collapsible popup groups
 
-Badge, Size guide and Shadow use native details/summary in both popup scopes,
-initially collapsed. Click or Enter/Space opens/folds each independently; several
-may stay open. Folding is display-only: mounted controls, drafts, values, checks
-and pins remain. Rerenders retain open state; normal blur commits are unchanged.
+Badge, Size guide and Shadow use independent native details/summary in both
+popups, initially collapsed. Click/Enter/Space opens/folds each; several may stay
+open. Folding is display-only: controls/drafts/values/checks/pins remain mounted.
+Rerenders retain open state; normal blur commits are unchanged.
 
 ## Current settings and output geometry
 
@@ -30,9 +30,9 @@ and pins remain. Rerenders retain open state; normal blur commits are unchanged.
   - The global dialog has no width row. One icon MAY pin its own width (follow-up,
     same day): its dialog's `upload-set-stroke` (empty = the bar's, inherited;
     `upload-set-stroke-inherit` drops the pin), read by `parseOverrides` (with
-    the `strokePt` alias). Nothing global pins a row (2026-10-21): the bulk bar
-    only CLEARS a selection's pins, so the bar stroke and the decorations keep
-    their own rules.
+    the `strokePt` alias). Ordinary global edits never pin rows. Explicit
+    [Apply as local](upload-local-settings.md) freezes the checked batch,
+    including the current bar width; bulk Reset clears its local pins.
 * **Live export preview** (2026-10-19, `upload/exportpreview`): each row previews
   `prepareExportSvg(source, effective)` — decorations included — debounced
   120 ms, cached per source and fingerprint in a `zoomBoxFit` box.
@@ -70,8 +70,8 @@ and pins remain. Rerenders retain open state; normal blur commits are unchanged.
   quality, SVGO optimize on, optional EPS, artboard) plus per-icon overrides;
   the effective settings are defaults under, the applied decorations, then the
   icon's own overrides on top, and every field is marked inherited or
-  overridden. Only a local edit pins a field (2026-10-21, row settings
-  isolation); a global edit never writes a row. A decoration — a Checked-icons
+  overridden. Row edits or explicit Apply as local pin fields; ordinary global
+  edits never write a row. A decoration — a Checked-icons
   flag or a selected-only dimension — is *applied*, not pinned (2026-10-21,
   [plan](../../archive/2026-10-21-decorations-are-not-overrides/README.md)):
   `applied: { pairId: DecorationValues }` holds the values the selection set,
@@ -79,7 +79,7 @@ and pins remain. Rerenders retain open state; normal blur commits are unchanged.
   (payload `v: 2`; a `v: 1` payload's marks and decoration overrides migrate
   once on read).
   **"↺ Reset to inherited (N)"** deletes the checked icons' whole override
-  map — every parameter its own dialog pinned — as ONE undoable
+  map — row edits AND batch snapshots — as ONE undoable
   `uploadSettings` entry (N counts the icons that pin something); applied
   decorations keep applying and the stored defaults and Checked-icons boxes
   are never touched. The row dialog's own "Reset to inherited" does the same
@@ -114,8 +114,7 @@ and pins remain. Rerenders retain open state; normal blur commits are unchanged.
   W×H, which is what lets the user set the output aspect ratio. Read back
   through `clampArtboard`: 16–8192 px per edge, a 64 MP total area ceiling that
   shrinks BOTH edges together so the ratio survives, and a preset that snaps to
-  the nearest offered size; a corrupt value becomes `content`. Only a
-  non-`content` artboard is written into the stored overrides.
+  the nearest offered size; a corrupt value becomes `content`. Explicit content/source modes also persist as local pins.
 * The JPEG resolution is NEVER capped by the artboard. `jpegMatchArtboard`
   (default true) says whether the JPEG follows a PINNED artboard's exact px;
   unticking it — which typing a megapixel value does in the same gesture —

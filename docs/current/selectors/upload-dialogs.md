@@ -6,7 +6,7 @@ See [conventions](shared.md#i-selector-object-structure--for-every-element) and 
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
 Collapsed groups: `<details>` + `upload-set-{badge,sizeguide,shadow}-summary`.
-Folding is display-only.
+Folding is display-only. [Apply as local button/contract](../sor/upload-local-settings.md#selectors).
 - `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow/badge/size guide are off) + `upload-set-as-is-note` (turns them off in the icon scope);
 - `upload-set-padding-{left,right,top,bottom}`: independent 0–50% inputs; `upload-set-padding-default` toggles source margins ↔ four 8s. [Padding contract/handles](../sor/upload-padding.md).
 - `upload-set-bg-default` (before `-transparent`);
@@ -22,9 +22,8 @@ Folding is display-only.
   Shadow; they commit on blur/Enter to only shadowed checks (one undo entry,
   never enabling off icons). `upload-set-shadow-width` / `-gap` under **Shadow
   defaults** change inherited numbers only, never opting unchecked icons in.
-  A field the popup applied reads `inherited` and is no pin (2026-10-21); only
-  a change in this icon's own dialog pins one, and a reset deletes only those
-  pins — the applied values keep applying.
+  Decoration gestures read `inherited`; row edits or explicit local snapshots
+  pin values. Reset drops pins, not the separately applied values.
   In the per-icon popup `upload-set-shadow` is the on/off checkbox (the one
   `.up-shadow-check` label, width/gap disabled when off). Width 10–200%, gap 0–100%;
   `upload-set-marker-{shadow,shadow-width,shadow-gap}` marks overrides.

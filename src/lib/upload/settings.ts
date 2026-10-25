@@ -234,10 +234,10 @@ function readPaints(raw: Record<string, unknown>, out: SettingsOverrides): void 
   }
 }
 
-/** The artboard is stored only when it really pins something (content ≠ an override). */
+/** Explicit source/content modes are pins too; only an absent artboard inherits. */
 function readArtboard(raw: Record<string, unknown>, out: SettingsOverrides): void {
   const value = raw.artboard;
-  if (isRecord(value) && value.mode !== "content") out.artboard = clampArtboard(value);
+  if (isRecord(value)) out.artboard = clampArtboard(value);
 }
 
 /** The settings one icon exports with: defaults under, overrides on top. */

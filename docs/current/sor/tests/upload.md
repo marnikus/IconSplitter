@@ -2,7 +2,8 @@
 
 Focused test inventory; [all tests](../TESTS.md).
 
-Endpoint inheritance/settings/preview/final-package tests: [stroke endpoints](../upload-stroke-endpoints.md#owners-and-tests).
+[Endpoint tests](../upload-stroke-endpoints.md#owners-and-tests);
+[local batch snapshot tests](../upload-local-settings.md#tests).
 
 * `keyvault.test.ts` — the key rules on their own: a save that storage refused
   is reported `session` (and the key still loads), `save("")` is `empty` and
@@ -123,9 +124,9 @@ supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-tem
 * `upload_centred_fit.test.ts` — leaf64×64/50px/8% centering; grid/padded containment, presets, EPS, cleaning, determinism, impossible fits.
 * `upload_offset_equivalence.test.ts`, `upload_offset_distance.test.ts` — hash/threshold equivalence.
 
-`upload_settings_disclosure.test.tsx` drives both popup scopes: native collapsed
-summaries, independent expansion/folding, mounted controls/drafts, open-state
-retention across rerenders, original toggle/blur handlers and Close/reopen.
+`upload_settings_disclosure.test.tsx`: both popup scopes, native collapsed
+summaries, independent folding, mounted drafts, retained open state, toggle/blur
+handlers and Close/reopen.
 
 * `upload_padding_sides.test.ts`, `upload_padding_sides_ui.test.tsx`,
   `upload_padding_sides_export.test.ts` and live-preview coverage: independent

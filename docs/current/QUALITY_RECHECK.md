@@ -3284,3 +3284,28 @@ Reference/candidate logs also retain pre-existing blocked TLS attempts, not hidd
 by a global fetch mock. Current owners/test index/router refreshed <=9KB (router
 <5KB); UI handles unchanged; raw evidence losslessly compressed with SHA256.
 No dependency/cache/build/coverage/profile artifacts staged. Ledger appended unread.
+
+### 2026-10-25 — Upload Apply as local selected-batch settings
+
+Plan before code: docs/archive/2026-10-25-upload-apply-local/README.md. Global
+Export settings now has Apply as local (N), disabled without checks, absent from
+per-row scope. Copies current global general fields into all checked loaded
+rows (including hidden checks), replaces old general pins and freezes each row's
+current effective decoration choices; separate applied map/defaults/checks stay.
+Full canonical fields include equal/default/off/null values. Nested artboard and
+padding are copied; explicit content-fit artboards survive reload/history. No new
+store/schema or paid/export/source operation. Ordinary global editing remains
+live for inherited fields; existing reset clears local pins. One uploadSettings
+undo/redo entry per changed batch; duplicate/stale/unchecked/no-op ids do not add
+history. Persistent undo works while panel is unmounted; draft blur precedes Apply.
+
+Genuine feature RED5→GREEN10/2 (Rollup startup failure not counted as RED; npm run
+setup repaired foreign-platform deps). Broader focused79/8 and docs4/4 PASS.
+Standalone types/lint/changed-quality vs2187e78 PASS, lint0errors/23existingwarnings.
+Fast AND full ALL LANES PASSED2872tests/272files plus uninstrumented native30/5;
+all gates/build PASS. src/lib95.33/89.74/98.20/98.29; new settingslocal100%allmetrics.
+Real prepared SVG512/1024/2048 and unchanged as-is bytes tested. Initial new-test
+history-total assumption and unused import fixed, no old assertions/budgets weakened.
+Current settings detail, selectors, source/test/storage indexes and router updated
+<=9KB (router<5KB). Ledger appended without reading. Generated dependencies/build/
+coverage/logs remain outside the scoped commit; no live provider calls made.

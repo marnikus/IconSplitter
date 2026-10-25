@@ -29,6 +29,7 @@ export interface UploadSettingsDialogProps {
   onSelectedBadgeToggle: () => void;
   selectedSizeGuide: SelectedSizeGuide;
   onSelectedSizeGuideToggle: () => void;
+  onApplyLocal: () => void;
   onDefaults: (patch: Partial<UploadSettings>) => void;
   onOverride: (id: string, patch: SettingsOverrides) => void;
   onResetOverride: (id: string) => void;
@@ -42,7 +43,7 @@ export interface SettingsFieldProps {
 }
 
 /**
- * The marker a field carries in the icon scope: pinned by THIS icon's dialog,
+ * The marker a field carries in the icon scope: pinned locally (row edit or explicit batch snapshot),
  * or inherited. Decorations a global control applied are not overrides, so
  * they read `inherited` here (2026-10-21).
  */

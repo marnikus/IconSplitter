@@ -1,7 +1,7 @@
 // UploadSettingsDialog.tsx — the export settings dialog (design §4.1): global
 // defaults (from the toolbar) or one icon's overrides (from its row), with the
 // inherited/overridden marker per field, and Reset-to-defaults for the icon
-// scope. Every change is live (RULE 24): the global scope edits the defaults,
+// scope. Field changes are live (RULE 24): the global scope edits the defaults,
 // the icon scope pins the field into that icon's override — both validated by
 // lib/upload/settings. The shared row plumbing lives in settingsfield.tsx, the
 // two paint rows (background, stroke colour) in UploadPaintSettings.tsx, the
@@ -55,9 +55,10 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
     <div className="svg-modal-body">
       <p className="svg-note" data-testid="upload-dialog-scope">
         {p.id === null
-          ? "General settings are inherited; the Checked icons Shadow and Badge checkboxes below apply only to the current selection."
-          : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults. A decoration added to the selection is applied to this icon, not pinned by it."}
+          ? "General settings are inherited unless locally overridden. Apply as local freezes current settings on checked icons; decoration checkboxes affect only checked icons."
+          : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults. Selected decorations stay separately applied unless frozen as local settings."}
       </p>
+      {p.id === null && <ApplyLocalSettings p={p} />}
       <AsIsRow p={p} effective={effective} />
       <PaintClashNote effective={effective} />
       <SettingsGrid p={p} effective={effective} />
@@ -68,6 +69,17 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
           <span className="up-hint">drops this icon's own settings — it follows the global defaults again; Shadow, corner badge and size guide stay</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Explicit batch snapshots; ordinary global editing remains live until this action. */
+function ApplyLocalSettings({ p }: { p: UploadSettingsDialogProps }) {
+  return (
+    <div className="up-set-footer">
+      <button type="button" className="svg-btn" data-testid="upload-set-apply-local"
+        disabled={p.selectedCount === 0} onClick={p.onApplyLocal}>Apply as local ({p.selectedCount})</button>
+      <span className="up-hint" data-testid="upload-set-apply-local-note">Freeze current settings for checked icons, including hidden checks; keep their decoration choices. Later global edits leave these local overrides unchanged. Reset to inherited releases them.</span>
     </div>
   );
 }
