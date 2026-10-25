@@ -71,3 +71,19 @@ export function changeMany(p: UploadSettingsDialogProps, patch: Partial<UploadSe
   }
   p.onOverride(p.id, { ...p.overrides, ...patch });
 }
+
+/** Shared boolean row, with the same live/pinned write path as every setting. */
+export function ToggleSetting({ p, effective, field, label, testid, hint }: {
+  p: UploadSettingsDialogProps; effective: UploadSettings; field: keyof UploadSettings;
+  label: string; testid: string; hint: string;
+}) {
+  const value = effective[field] as boolean;
+  return (
+    <label className="svg-field up-set-field">
+      <span className="svg-label">{label}<Marker p={p} field={field} testid={testid} /></span>
+      <input data-testid={`upload-set-${testid}`} type="checkbox" aria-label={label} checked={value}
+        onChange={(e) => change(p, field, e.target.checked)} />
+      <small className="up-hint">{hint}</small>
+    </label>
+  );
+}

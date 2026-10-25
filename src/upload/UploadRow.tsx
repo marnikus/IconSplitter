@@ -151,7 +151,7 @@ function strokeLine(s: UploadSettings): string {
 
 /** "eps on · inkscape", then "· strokes → fills" when the strokes are expanded (2026-10-09). */
 function epsLine(s: UploadSettings): string {
-  const eps = `eps ${s.includeEps ? "on" : "off"} · ${s.epsConverter}`;
+  const eps = `svg ${s.includeSvg !== false ? "on" : "off"} · jpeg ${s.includeJpeg !== false ? "on" : "off"} · eps ${s.includeEps ? "on" : "off"} · ${s.epsConverter}`;
   return s.expandStrokes ? `${eps} · strokes → fills` : eps;
 }
 

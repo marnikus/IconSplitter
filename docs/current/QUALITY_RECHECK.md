@@ -3309,3 +3309,24 @@ history-total assumption and unused import fixed, no old assertions/budgets weak
 Current settings detail, selectors, source/test/storage indexes and router updated
 <=9KB (router<5KB). Ledger appended without reading. Generated dependencies/build/
 coverage/logs remain outside the scoped commit; no live provider calls made.
+
+
+## 2026-10-25 — Independent SVG/JPEG output selection
+
+Plan: `docs/archive/2026-10-25-upload-output-formats/README.md`; contract:
+`sor/upload-formats.md`. Added default-on SVG/JPEG settings, inherited/local batch
+pins and truthful all-off preflight. Requested-only planner/probes/artifacts and
+atomic record detachment keep disabled bytes out of new downloads without
+removing old files. EPS-only failure cannot commit an empty green package;
+paid export metadata excludes no-output rows, mixed batches isolate failures.
+Failed rows no longer count as exported in the batch toast.
+
+Measured RED12 format failures before implementation, plus separate EPS-only
+warning/failed-summary RED. Final focused128/10 PASS; types PASS; lint0errors/
+23existingwarnings; changed-quality vs c9a99d7 PASS; verify:fast PASS; verify full
+PASS:2894tests/275files + native30/5 + production build. Coverage95.37/89.81/
+98.21/98.29 (statements/branches/functions/lines), formats.ts100% throughout.
+Actual supplied handshake SVG EPS-only, all7 combinations, metadata carriers,
+no raster while JPEG off, no-op/disable/re-enable, persistence/undo/redo and real
+mixed-batch isolation tested. No live providers, source artwork writes, altered
+thresholds/test isolation/scope, skips or generated artifacts committed.

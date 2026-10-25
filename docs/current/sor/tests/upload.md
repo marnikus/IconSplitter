@@ -3,7 +3,7 @@
 Focused test inventory; [all tests](../TESTS.md).
 
 [Endpoint tests](../upload-stroke-endpoints.md#owners-and-tests);
-[local batch snapshot tests](../upload-local-settings.md#tests).
+[local batches](../upload-local-settings.md#tests); [formats](../upload-formats.md#owners-and-tests).
 
 * `keyvault.test.ts` — the key rules on their own: a save that storage refused
   is reported `session` (and the key still loads), `save("")` is `empty` and

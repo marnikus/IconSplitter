@@ -101,12 +101,12 @@ export async function runExportBatch(
   const abort = new AbortController();
   c.refs.abortExport.current = abort;
   c.dispatch({ type: "running", kind: "export", n: ids.length });
-  const tally = { done: 0, total: ids.length, fixed: 0 };
+  const tally = { done: 0, total: ids.length, fixed: 0, failed: 0 };
   const progress = startUploadProgress(c, "export", ids.length);
   try {
     const epsNote = await exportBatchItems({ latest, root, ids, signal: abort.signal, freshMeta, progress, tally });
     progress.finish(abort.signal.aborted ? "cancelled" : "completed");
-    c.say(exportBatchLine({ ...tally, aborted: abort.signal.aborted, epsNote }));
+    c.say(exportBatchLine({ ...tally, aborted: abort.signal.aborted, epsNote }), tally.failed > 0);
   } catch {
     progress.finish("failed");
     c.say("Export batch stopped unexpectedly — finished packages are kept", true);
@@ -118,7 +118,7 @@ export async function runExportBatch(
 interface ExportBatchWork extends Omit<ExportOneArgs, "id"> {
   ids: string[];
   progress: ProcessReporter;
-  tally: { done: number; total: number; fixed: number };
+  tally: { done: number; total: number; fixed: number; failed: number };
 }
 
 /** One item's completion drives both the batch summary and shared visual count. */
@@ -133,6 +133,7 @@ async function exportBatchItems(work: ExportBatchWork): Promise<string | null> {
     const outcome = await exportOne({ ...work, id });
     if (outcome.cancelled) break;
     work.tally.fixed += outcome.fixed;
+    work.tally.failed += outcome.failed;
     work.tally.done += 1;
     work.progress.advance();
   }
@@ -154,18 +155,18 @@ function browserConverterDeps(): ConverterDeps {
 /**
  * One probe BEFORE the batch (design 2026-10-09, RULE 9): when rows want the
  * Inkscape EPS and the helper is not usable, say so up front — those rows
- * will be `partial`, their SVG + JPEG commit regardless. Null = nothing to say.
+ * keep requested SVG/JPEG as partial, or fail when EPS-only. Null = nothing to say.
  */
 async function probeEpsNote(c: UploadCtx, ids: string[]): Promise<string | null> {
-  const wanting = ids.filter((id) => {
-    const s = rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied);
-    return s.includeEps && s.epsConverter === "inkscape";
-  });
+  const wanting = ids.map((id) => rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied))
+    .filter((s) => s.includeEps && s.epsConverter === "inkscape");
   if (wanting.length === 0) return null;
   const state = await CONVERTERS.inkscape.probe(browserConverterDeps());
   if (state.ok) return null;
   const n = wanting.length;
-  return `EPS: ${state.reason} — ${n} row${n === 1 ? "" : "s"} will be partial · ${state.fix}`;
+  const outcome = wanting.some((s) => s.includeSvg === false && s.includeJpeg === false)
+    ? "cannot write EPS; EPS-only rows fail" : "will be partial";
+  return `EPS: ${state.reason} — ${n} row${n === 1 ? "" : "s"} ${outcome} · ${state.fix}`;
 }
 
 /** Everything one export run needs — one domain object (RULE 16). */
@@ -179,10 +180,10 @@ interface ExportOneArgs {
 }
 
 /** One result: count actual completions, not aborted work; retain EPS-fix summary. */
-async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; cancelled: boolean }> {
+async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; failed: number; cancelled: boolean }> {
   const c = args.latest.current;
   const row = rowOf(c, args.id);
-  if (row === null) return { fixed: 0, cancelled: false };
+  if (row === null) return { fixed: 0, failed: 1, cancelled: false };
   c.dispatch({ type: "run", id: args.id, run: { running: "export", stage: "preflight", error: "", note: "" } });
   const overrides = c.m.overrides[args.id] ?? {};
   const meta = acceptedOf(args.freshMeta.get(args.id) ?? row.meta);
@@ -196,7 +197,7 @@ async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; cancelle
     deps: { converter: browserConverterDeps() },
   });
   applyExportResult(args.latest, args.id, row, result);
-  return { fixed: result.notes.length > 0 ? 1 : 0, cancelled: result.status === "cancelled" };
+  return { fixed: result.notes.length > 0 ? 1 : 0, failed: result.status === "failed" ? 1 : 0, cancelled: result.status === "cancelled" };
 }
 
 /** The accepted state an export may carry, or null when there is nothing to embed. */

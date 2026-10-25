@@ -1,3 +1,4 @@
+import { outputFormats } from "../lib/upload/formats";
 // exportcommit.ts — the atomic commit stage of the export pipeline (design
 // §3.2). Every output is written tmp → read back → verified → overwrite →
 // cleanup (RULE 23); `export.json` is written LAST and is the commit marker,
@@ -50,19 +51,20 @@ export interface CommitExportOutput {
 
 /** Commits every rebuilt output, then export.json. Throws on any verify failure. */
 export async function commitExport(input: CommitExportInput): Promise<CommitExportOutput> {
+  const enabled = outputFormats(input.record.settings.effective);
   const dir = await ensureDirPath(input.root, input.exportDir);
   const outputs: CommitExportOutput["outputs"] = { svg: null, jpg: null, eps: null };
   // The new files are written and verified FIRST; only then may anything go
   // (RULE 23: the sweep can never cost the user their only copy).
-  if (input.svgOut !== null) {
+  if (enabled.svg && input.svgOut !== null) {
     await commitFile(dir, `${input.stem}.svg`, encode(input.svgOut), (back) => svgParses(decode(back)));
     outputs.svg = `${input.stem}.svg`;
   }
-  if (input.jpeg !== null) {
+  if (enabled.jpg && input.jpeg !== null) {
     await commitFile(dir, `${input.stem}.jpg`, input.jpeg, (back) => jpegVerifies(back, input));
     outputs.jpg = `${input.stem}.jpg`;
   }
-  if (input.epsText !== null) {
+  if (enabled.eps && input.epsText !== null) {
     await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => epsVerifies(back, input));
     outputs.eps = `${input.stem}.eps`;
   }
@@ -84,13 +86,7 @@ async function writeRecord(
   input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"], replaced: readonly string[],
 ): Promise<ExportRecord> {
   const kept = pruneRemoved(input.record.outputs, replaced, outputs);
-  // Failed or disabled EPS is not part of this package; leave earlier bytes on disk.
-  const keepEps = !input.partial && input.record.tools.eps.enabled;
-  input.record.outputs = {
-    svg: outputs.svg === null ? kept.svg : await outputRecord(input, outputs.svg),
-    jpg: outputs.jpg === null ? kept.jpg : await outputRecord(input, outputs.jpg),
-    eps: outputs.eps === null ? (keepEps ? kept.eps : null) : await outputRecord(input, outputs.eps),
-  };
+  input.record.outputs = await committedOutputs(input, outputs, kept);
   input.record.stage = "committed";
   input.record.status = input.partial ? "partial" : "processed";
   input.record.validation = input.validation;
@@ -106,6 +102,18 @@ async function writeRecord(
     }
   });
   return input.record;
+}
+
+/** Disabled/failed outputs leave earlier bytes on disk, but never enter the new package. */
+async function committedOutputs(input: CommitExportInput, written: CommitExportOutput["outputs"], kept: ExportRecord["outputs"]): Promise<ExportRecord["outputs"]> {
+  const enabled = outputFormats(input.record.settings.effective);
+  enabled.eps = enabled.eps && !input.partial;
+  const outputs = { ...kept };
+  for (const ext of ["svg", "jpg", "eps"] as const) {
+    const name = written[ext];
+    outputs[ext] = !enabled[ext] ? null : name === null ? kept[ext] : await outputRecord(input, name);
+  }
+  return outputs;
 }
 
 /**

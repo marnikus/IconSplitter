@@ -25,9 +25,16 @@ export function settingsFingerprint(s: UploadSettings): string {
     ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, templateHash]] : []),
     ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, fnv1a32(s.badgeTemplateSvg || badgeTemplate).toString(16)]] : []),
+    ...formatToken(s),
     ...(s.sizeGuideEnabled ? [["sizeguide", s.sizeGuideCorner, s.sizeGuideSmallPct, s.sizeGuideLargePct,
       round3(s.sizeGuideSmallStrokePx), round3(s.sizeGuideLargeStrokePx), s.sizeGuideGapPct,
       s.sizeGuideOffsetXPct, s.sizeGuideOffsetYPct, sizeGuideTemplateHash]] : []),
   ]);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
+}
+
+/** Explicit disabled outputs change the package; legacy/default flags must not churn hashes. */
+function formatToken(s: UploadSettings): unknown[] {
+  return s.includeSvg === false || s.includeJpeg === false
+    ? [["formats", s.includeSvg !== false, s.includeJpeg !== false]] : [];
 }

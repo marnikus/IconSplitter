@@ -127,6 +127,8 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
     art.epsFixes = eps.fixes;
     art.epsWriter = eps.writer;
   } else art.epsFailure = describeFailure(eps); // honest: the EPS stage failed → partial
+  // EPS-only has no other deliverable: fail before commit, preserving the previous package.
+  if (ctx.settings.includeSvg === false && ctx.settings.includeJpeg === false && art.epsFailure !== null) throw new StageError("eps", art.epsFailure);
 }
 
 /** A fresh render, or the committed JPEG re-embedded (metadata edit only). */

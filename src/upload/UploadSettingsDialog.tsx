@@ -21,9 +21,9 @@ import {
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
 import { paintClash } from "../lib/upload/paintclash";
 import DraftNumberInput from "../ui/DraftNumberInput";
-import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
+import { Marker, change, changeMany, ToggleSetting, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
-import { ConverterSetting } from "./UploadEpsSettings";
+import UploadFormatSettings from "./UploadFormatSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
 import UploadShadowSettings from "./UploadShadowSettings";
 import UploadBadgeSettings from "./UploadBadgeSettings";
@@ -96,14 +96,12 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <UploadShadowSettings p={p} effective={effective} />
       <UploadBadgeSettings p={p} effective={effective} />
       <UploadSizeGuideSettings p={p} effective={effective} />
+      <UploadFormatSettings p={p} effective={effective} />
       <MegapixelSetting p={p} effective={effective} />
       <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
         min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
       <ToggleSetting p={p} effective={effective} field="optimizeSvg" label="Optimize SVG (SVGO)" testid="optimize"
         hint={isAsIs(effective) ? "skipped while every visual setting is default — the SVG ships as is" : "the export copy only — viewBox, geometry, strokes and metadata are preserved"} />
-      <ToggleSetting p={p} effective={effective} field="includeEps" label="Also write EPS" testid="eps"
-        hint="a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly" />
-      <ConverterSetting p={p} effective={effective} />
       <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
         hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
       <BackgroundSetting p={p} effective={effective} />
@@ -170,22 +168,6 @@ function NumberSetting({ p, effective, field, label, testid, min, max, step, cla
       <input className="svg-input" data-testid={`upload-set-${testid}`} type="number" aria-label={label}
         min={min} max={max} step={step} value={value}
         onChange={(e) => change(p, field, clamp(Number(e.target.value)))} />
-      <small className="up-hint">{hint}</small>
-    </label>
-  );
-}
-
-/** One boolean setting: one checkbox, one decision (RULE 10). */
-function ToggleSetting({ p, effective, field, label, testid, hint }: {
-  p: UploadSettingsDialogProps; effective: UploadSettings; field: keyof UploadSettings;
-  label: string; testid: string; hint: string;
-}) {
-  const value = effective[field] as boolean;
-  return (
-    <label className="svg-field up-set-field">
-      <span className="svg-label">{label}<Marker p={p} field={field} testid={testid} /></span>
-      <input data-testid={`upload-set-${testid}`} type="checkbox" aria-label={label} checked={value}
-        onChange={(e) => change(p, field, e.target.checked)} />
       <small className="up-hint">{hint}</small>
     </label>
   );

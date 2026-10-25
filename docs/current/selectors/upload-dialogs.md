@@ -50,7 +50,7 @@ Folding is display-only. [Apply as local button/contract](../sor/upload-local-se
 `upload-set-{stroke,mp,quality}` (`input[type=number]`, clamped on
 change; `upload-set-stroke` is "Stroke width (px)" since 2026-10-08 — the
 number typed is the number written in the file, and the row cell reads
-`2 px`), `upload-set-{optimize,eps}` (checkboxes), the background
+`2 px`), `upload-set-{optimize,svg,jpeg,eps}` (checkboxes), the background
 (`upload-set-bg-transparent` — the default, a checkerboard swatch —
 `upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
 `upload-set-bg-value`, which reads `transparent` or the hex), the stroke
@@ -65,7 +65,7 @@ every swatch carrying `aria-pressed`, the per-field marker
 `upload-set-close`. The row's settings cell `upload-settings-{id}` names the
 background (`transparent` or the hex) and appends `· stroke #hex` when a
 stroke colour is pinned.
-The EPS converter row (2026-10-09) is `upload-set-eps-converter` (`<select>`
+The EPS converter row is `upload-set-eps-converter` (`<select>`
 whose options ARE the registry: `builtin` "Built-in (vector gradients, Level 3)",
 `inkscape` "Inkscape CLI (local helper)"; marker
 `upload-set-marker-eps-converter`; choosing one never toggles
@@ -78,15 +78,15 @@ or the reason + fix (class `warn`): `… not reachable — … run_inkscape_brid
 Inkscape 1.x (inkscape.org) or set INKSCAPE_PATH`. The probe runs when the
 row appears and on Check. Before a batch that wants Inkscape EPS, one probe
 runs: when the helper is not usable the toast (`upload-toast`) says
-`EPS: <reason> — N rows will be partial · <fix>` up front and again on the
+`EPS: <reason> — N rows will be partial · <fix>` (EPS-only rows fail) on the
 batch's final line. `upload-set-expand` (checkbox) is "Expand strokes
 to fills". The row's settings cell reads `eps off · builtin` /
 `eps on · inkscape` and appends `· strokes → fills` when expansion is on.
-The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
+The artboard row is `upload-set-artboard` (`<select>`: Content /
 the square presets / Custom), its hint `upload-set-artboard-note`, and — only
 for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
 clamped when the field is left — blur/Enter; a draft while typing, 2026-10-19) with the reduced-gcd ratio `upload-set-artboard-ratio` and
-the megapixel readout `upload-set-artboard-mp`. `upload-set-mp` is NEVER disabled (2026-10-08): with a pinned
+the megapixel readout `upload-set-artboard-mp`. `upload-set-mp` is NEVER disabled: with a pinned
 artboard the checkbox `upload-set-mp-match` ("same size as the artboard",
 default checked) offers the choice, typing a megapixel value unticks it in the
 same gesture, and `upload-set-mp-note` says what the JPEG will really be

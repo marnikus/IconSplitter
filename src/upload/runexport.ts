@@ -1,3 +1,4 @@
+import { hasOutputFormats, NO_OUTPUT_FORMATS } from "../lib/upload/formats";
 // runexport.ts — the export pipeline for the "SVG to upload" tab (design §3.2).
 // One icon: preflight → prepare → render → optimize → embed → eps → validate
 // → commit, driven by the stage planner (selective re-export, §4.4). Every
@@ -75,6 +76,7 @@ export interface ExportRunArgs {
 
 /** One icon's export run. */
 export async function runExport(args: ExportRunArgs): Promise<ExportRunResult> {
+  if (!hasOutputFormats(args.settings)) return failedResult({ rowId: args.row.id, stages: [], record: args.record, klass: "preflight", detail: NO_OUTPUT_FORMATS });
   const plan = await planFor(args);
   if (plan.error !== null) {
     return { rowId: args.row.id, status: "failed", stages: [], outputs: outputsOf(args.record), record: args.record, error: plan.error, notes: [] };
@@ -107,15 +109,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     return { plan: { stages: [], rebuild: { svg: false, jpg: false, eps: false } }, sourceText: "", sourceHash: "", exportDir, stem, error: { klass: "preflight", detail: "the source SVG could not be read" } };
   }
   const sourceHash = `sha256:${await sha256HexText(sourceText)}`;
-  const outputs = {
-    svg: await fileExistsAt(args.root, `${exportDir}/${stem}.svg`),
-    jpg: await fileExistsAt(args.root, `${exportDir}/${stem}.jpg`),
-    eps: await reusableVectorEps(args.root, `${exportDir}/${stem}.eps`),
-  };
-  const metadataOutputs = await metadataOutputsAt({
-    root: args.root, exportDir, stem, metadata: args.metadata,
-    recordMetadata: args.record?.metadata ?? null, includeEps: args.settings.includeEps,
-  });
+  const { outputs, metadataOutputs } = await probeOutputs(args, exportDir, stem);
   const plan = planStages(args.record, {
     sourceHash,
     settingsFp: settingsFingerprint(args.settings),
@@ -123,11 +117,27 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     hasMetadata: args.metadata !== null,
     optimize: args.settings.optimizeSvg,
     includeEps: args.settings.includeEps,
+    includeSvg: args.settings.includeSvg, includeJpeg: args.settings.includeJpeg,
     epsConverter: args.settings.epsConverter,
     outputs,
     metadataOutputs,
   });
   return { plan, sourceText, sourceHash, exportDir, stem, error: null };
+}
+
+/** Disk probes only inspect requested files; absent disabled outputs never trigger repairs. */
+async function probeOutputs(args: ExportRunArgs, exportDir: string, stem: string) {
+  const outputs = {
+    svg: args.settings.includeSvg !== false && await fileExistsAt(args.root, `${exportDir}/${stem}.svg`),
+    jpg: args.settings.includeJpeg !== false && await fileExistsAt(args.root, `${exportDir}/${stem}.jpg`),
+    eps: args.settings.includeEps && await reusableVectorEps(args.root, `${exportDir}/${stem}.eps`),
+  };
+  const metadataOutputs = await metadataOutputsAt({
+    root: args.root, exportDir, stem, metadata: args.metadata,
+    recordMetadata: args.record?.metadata ?? null, includeEps: args.settings.includeEps,
+    includeSvg: args.settings.includeSvg, includeJpeg: args.settings.includeJpeg,
+  });
+  return { outputs, metadataOutputs };
 }
 
 // --- the stages -----------------------------------------------------------------

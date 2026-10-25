@@ -57,6 +57,9 @@ export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
   jpegQuality: number;
   /** Optimize the export SVG copy with SVGO (default on). */
   optimizeSvg: boolean;
+  /** Deliver SVG/JPEG files (both default on, including legacy saved settings). */
+  includeSvg: boolean;
+  includeJpeg: boolean;
   /** Also write a genuine EPS (default off). */
   includeEps: boolean;
   /** Which converter writes that EPS (2026-10-09): the built-in subset writer, or Inkscape through the local helper. */
@@ -115,6 +118,8 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   jpegMegapixels: MP_DEFAULT,
   jpegQuality: QUALITY_DEFAULT,
   optimizeSvg: true,
+  includeSvg: true,
+  includeJpeg: true,
   includeEps: false,
   epsConverter: DEFAULT_CONVERTER,
   expandStrokes: false,
@@ -161,6 +166,8 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
     jpegQuality: clampQuality(raw.jpegQuality),
     optimizeSvg: raw.optimizeSvg !== false,
+    includeSvg: raw.includeSvg !== false,
+    includeJpeg: raw.includeJpeg !== false,
     includeEps: raw.includeEps === true,
     epsConverter: parseConverterId(raw.epsConverter),
     expandStrokes: raw.expandStrokes === true,
@@ -221,7 +228,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels", "shadowEnabled", "badgeEnabled"]) {
+  for (const key of ["optimizeSvg", "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels", "shadowEnabled", "badgeEnabled"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }
@@ -253,7 +260,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 /** Every overrideable field, in canonical order — the ONE list undo equality and `settingsEqual` derive from. */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "strokeLinecap", "jpegMegapixels", "jpegQuality",
-  "optimizeSvg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
+  "optimizeSvg", "includeSvg", "includeJpeg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
   "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
   "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
   ...SIZE_GUIDE_FIELDS,
