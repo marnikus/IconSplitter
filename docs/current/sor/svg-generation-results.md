@@ -1,6 +1,7 @@
 # Generate SVG — results, preview, cost and review
 
 Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
+Version controls [accept the chosen version for actual use/export](version-acceptance.md).
 
 * Zoom: ONE value (`svg-thumb`, 48..800 px, step 4, default 84) sizes BOTH
   preview slots by their own aspect ratios (`src/lib/zoom.ts` and
@@ -75,9 +76,9 @@ Saved-result behaviour; request flow lives on [Generate SVG](svg-generation.md).
   `docs/archive/2026-10-20-item-review-status/`). A new valid SVG starts
   **pending**; Approve/Decline act on the selection and write the pair's single
   `review` (one history entry per gesture, undoable by source). Every version of
-  that row carries the same status, so switching the version you look at — the
-  newest, or one chosen from the history — never changes the badge, the review
-  filter, the tally or the approved count. Regenerating reopens the review for
+  that row carries the same status. Merely viewing artwork changes nothing;
+  explicitly choosing a version now approves the item and pins that version
+  for actual use/export ([acceptance contract](version-acceptance.md)). Regenerating reopens the review for
   the whole row (`needs-review`) without deleting a version; a failed attempt
   changes neither the status nor the history. Files written before this change
   have no item-level key: the newest decided version's status is read once and

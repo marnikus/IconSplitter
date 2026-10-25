@@ -54,8 +54,8 @@ export interface PairMeta extends PairIdentity {
   reviewedAt: string | null;
   /**
    * The ITEM's review status (2026-10-20): one status for the whole row, shared
-   * by every version. Switching the version you look at never changes it; a
-   * decision writes it here. The versions' own `review` key stays in the stored
+   * by every version. Display alone never changes it; explicit version acceptance
+   * or a review decision writes it here. The versions' own `review` key stays in the stored
    * shape for older readers and is kept in step with this one.
    */
   review: ReviewStatus;

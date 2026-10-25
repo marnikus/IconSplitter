@@ -2,7 +2,7 @@ import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // codeactions.ts — the code/versions/location actions of the Generate SVG tab
 // (prompt §16/§18). Owns reading a version's SVG back off disk, copying the
 // complete validated document, opening the code and versions dialogs, choosing
-// which version the row SHOWS (I-54: one additive field in the pair's own file —
+// the version for actual use/export (I-54: choice + item approval in the pair file —
 // nothing is deleted), and the honest "open file location" fallback (a browser
 // cannot launch Explorer, so the action copies the absolute path and says
 // exactly that).
@@ -10,6 +10,7 @@ import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { copyFolderText } from "../lib/copypath";
+import { withReview, type PairMeta } from "../lib/pairmeta";
 import { withPreferred } from "../lib/pairpreferred";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
@@ -61,7 +62,7 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
 }
 
 /**
- * Chooses which version the row shows, and writes that choice into the pair's
+ * Accepts the chosen SVG for actual use/export, writing choice and approval into the pair's
  * own file (I-54) — tmp, verify, overwrite, exactly like every other pair-file
  * write. Nothing on disk is removed: the history is what makes the choice
  * reversible. Returns null when it worked, else the reason, so the popup can
@@ -75,12 +76,16 @@ async function preferOf(ctx: CodeCtx, id: string, version: number): Promise<stri
 
 async function savePreferredVersion(ctx: CodeCtx, id: string, version: number): Promise<string | null> {
   const row = ctx.rows.find((r) => r.source.id === id);
-  const chosen = usableVersion(row, version);
-  if (!row || chosen === null) return refuse(ctx, "That version has no SVG to show");
-  if (row.meta === null) return refuse(ctx, "This pair has no record file yet");
+  if (!row) return refuse(ctx, "That version has no SVG to show");
+  if (row.corrupt) return refuse(ctx, "This pair has no readable record file");
+  const prev = ctx.refs.metas.get(id) ?? row.meta;
+  if (prev === null) return refuse(ctx, "This pair has no readable record file");
+  const chosen = usableVersion(prev, version);
+  if (chosen === null) return refuse(ctx, "That version has no SVG to show");
   const root = ctx.refs.root.current as DirHandleLike | null;
   if (root === null) return refuse(ctx, "No folder is open — the choice cannot be saved");
-  const next = withPreferred(ctx.refs.metas.get(id) ?? row.meta, version);
+  if (!await readSvgText(root, chosen.svgPath)) return refuse(ctx, "The selected SVG is missing or unreadable — nothing changed");
+  const next = withReview(withPreferred(prev, version), "approved");
   try {
     await saveMetaAt(root, row.source.metaPath, next);
   } catch {
@@ -88,14 +93,14 @@ async function savePreferredVersion(ctx: CodeCtx, id: string, version: number): 
   }
   ctx.refs.metas.set(id, next);
   ctx.setRowsFn((rows) => rows.map((r) => (r.source.id === id ? withMeta(r, next) : r)));
-  log({ feature: "svg", action: "prefer-version", ids: { source: id }, detail: `showing v${version}` });
-  ctx.say(`Showing v${version} — all ${next.versions.length} versions are still there`);
+  log({ feature: "svg", action: "prefer-version", ids: { source: id }, detail: `accepted v${version}` });
+  ctx.say(`Showing v${version} — approved for export; all ${next.versions.length} versions are still there`);
   return null;
 }
 
 /** The version the user may choose: it exists, it was generated, it is valid. */
-function usableVersion(row: SvgRow | undefined, version: number): SvgVersion | null {
-  return (row?.meta?.versions ?? []).find((v) => v.version === version && v.status === "generated" && v.validation.ok) ?? null;
+function usableVersion(meta: PairMeta | null, version: number): SvgVersion | null {
+  return (meta?.versions ?? []).find((v) => v.version === version && v.status === "generated" && v.validation.ok) ?? null;
 }
 
 function refuse(ctx: CodeCtx, message: string): string {

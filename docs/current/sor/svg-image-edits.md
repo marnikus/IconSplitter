@@ -7,6 +7,9 @@ See [parallel-run safety and completion sound](svg-parallel-runs.md): independen
 See [automatic Apply and batch progress](svg-image-auto-apply.md) for the persisted
 opt-in checkbox, frozen run policy, independent image process bar and Stop.
 
+Image chips [accept the selected version as the actual source](version-acceptance.md),
+without approving an existing SVG.
+
 ## Confirmed composite workflow
 
 * **AI-source image edits (2026-10-19, I-71/I-72):** the separate

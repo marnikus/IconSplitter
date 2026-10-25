@@ -194,7 +194,7 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
   const chip = (key: string, text: string, version: number | null) => (
     <button key={key} type="button" className={`svg-btn tiny${main === version ? " primary" : ""}`}
       data-testid={`svg-ai-chip-${id}-${key}`} data-active={main === version ? "true" : "false"}
-      title={main === version ? "This version is the AI source" : "Use this version as the AI source"}
+      title={main === version ? "Accept this version as the AI source" : "Accept and use this version as the AI source"}
       onClick={(e) => { e.stopPropagation(); onMain(id, version); }}>{text}</button>
   );
   return <>{chip("orig", "original", null)}{versions.map((v) => chip(String(v.version), `v${v.version}`, v.version))}</>;
@@ -215,11 +215,12 @@ function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string
     <div className="svg-ai-bar" data-testid={`svg-ver-bar-${id}`}>
       {usable.map(({ version }) => {
         const on = version === shown;
+        const accepted = row.review === "approved" && row.meta?.preferred === version;
         return (
           <button key={version} type="button" className={`svg-btn tiny${on ? " primary" : ""}`}
             data-testid={`svg-ver-chip-${id}-${version}`} data-active={on ? "true" : "false"} aria-pressed={on}
-            title={on ? "This SVG version is shown" : "Show this SVG version"}
-            onClick={(e) => { e.stopPropagation(); if (!on) onPrefer(id, version); }}>v{version}</button>
+            title={accepted ? "This SVG version is approved for use and export" : "Use and approve this SVG version"}
+            onClick={(e) => { e.stopPropagation(); if (!accepted) onPrefer(id, version); }}>v{version}</button>
         );
       })}
     </div>

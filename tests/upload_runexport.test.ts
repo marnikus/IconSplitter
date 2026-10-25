@@ -32,7 +32,7 @@ import { minimalJpeg } from "./helpers/minijpeg";
 import { pairFile } from "./helpers/pairfile";
 import { hiResBox, runPostScript } from "./helpers/psrun";
 import { svgVersion } from "./helpers/svgpair";
-import type { UploadRowSource } from "../src/upload/discovery";
+import { discoverUploadSources, type UploadRowSource } from "../src/upload/discovery";
 
 const OUT = "_split_output/2026-10/2026-10-01_10-24-31";
 const DIR = `${OUT}/fog_AI/split_01`;
@@ -169,6 +169,28 @@ function fileText(root: FakeDir, relPath: string): string {
 }
 
 describe("runExport — the full package commits per icon", () => {
+  it("exports the accepted older artwork, not the newer file beside it", async () => {
+    const older = SOURCE_SVG.replace("#000000", "#123abc");
+    const newer = SOURCE_SVG.replace("#000000", "#c12f8e");
+    const root = pairRoot(older);
+    const folder = dirAt(root, DIR);
+    folder.children.set(`${STEM}_v2.svg`, new BinFile(`${STEM}_v2.svg`, newer, 3500));
+    const meta = pairFile(DIR, AI, { preferred: 1, versions: [
+      svgVersion(`${DIR}/${STEM}.svg`, { version: 1, review: "approved" }),
+      svgVersion(`${DIR}/${STEM}_v2.svg`, { version: 2, review: "approved" }),
+    ] });
+    folder.children.set(`${STEM}.svg.json`, new BinFile(`${STEM}.svg.json`, serializePairMeta(meta), 3600));
+    const found = await discoverUploadSources(root);
+    const settings = { ...DEFAULT_UPLOAD_SETTINGS, ...AS_IS_SETTINGS, includeSvg: true, includeJpeg: false, includeEps: false };
+    const result = await runExport(args(root, { row: found.rows[0], settings, defaults: settings }));
+    expect(result.status).toBe("processed");
+    expect(result.record?.source).toMatchObject({ version: 1, svgPath: `${DIR}/${STEM}.svg` });
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).toContain("#123abc");
+    expect(fileText(root, `${DIR}/export/${ART}.svg`)).not.toContain("#c12f8e");
+    expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(older);
+    expect(fileText(root, `${DIR}/${STEM}_v2.svg`)).toBe(newer);
+  });
+
   it("writes <base>.svg, <base>.jpg and export.json, and cleans up tmp files", async () => {
     const root = pairRoot();
     const result = await runExport(args(root));

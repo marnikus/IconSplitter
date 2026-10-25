@@ -8,8 +8,9 @@ import { describe, expect, it } from "vitest";
 import { parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
+import { discoverUploadSources } from "../src/upload/discovery";
 import { svgVersion } from "./helpers/svgpair";
-import { FOG, click, installSvgPanelHooks, mount, q, settle, text } from "./helpers/svgpanel";
+import { FOG, click, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
 
@@ -86,6 +87,48 @@ describe("SVG version chips under the SVG preview", () => {
     // the old path sees the same choice
     await click(q(`[data-testid=svg-history-${FOG}]`)!);
     expect(q("[data-testid=svg-history-v1]")?.className).toContain("shown");
+  });
+
+  it("accepts an older version for actual export, persists it across reload, and can accept the shown version", async () => {
+    const root = makeRoot();
+    await mountRoot(root);
+    expect(sidecar(root).review).toBe("pending"); // merely displaying a version approves nothing
+    await click(chip(1)!);
+    await settle();
+    expect(sidecar(root).review).toBe("approved");
+    expect(sidecar(root).versions.every((v) => v.review === "approved")).toBe(true);
+    const exported = await discoverUploadSources(root);
+    expect(exported.rows[0]).toMatchObject({ version: 1, svgPath: "architecture/fog_AI.svg" });
+    await unmountPanel();
+    await mountRoot(root);
+    expect(previewVersion()).toBe("1");
+    expect(sidecar(root).review).toBe("approved");
+    await click(q(`[data-testid=svg-needs-review-${FOG}]`)!);
+    await settle();
+    expect(sidecar(root).review).toBe("needs-review");
+    await click(chip(1)!); // the already-shown version must also be approvable
+    await settle();
+    expect(sidecar(root).review).toBe("approved");
+    expect((await discoverUploadSources(root)).rows[0].version).toBe(1);
+  });
+
+  it("clicking the default shown chip explicitly accepts and pins it", async () => {
+    const root = makeRoot();
+    await mountRoot(root);
+    await click(chip(4)!);
+    await settle();
+    expect(sidecar(root)).toMatchObject({ preferred: 4, review: "approved" });
+  });
+
+  it("refuses a selected SVG whose file disappeared without claiming approval", async () => {
+    const root = makeRoot();
+    await mountRoot(root);
+    (root.children.get("architecture") as FakeDir).children.delete("fog_AI.svg");
+    await click(chip(1)!);
+    await settle();
+    expect(sidecar(root)).toMatchObject({ preferred: null, review: "pending" });
+    expect(previewVersion()).toBe("4");
+    expect(text("[data-testid=svg-toast]")).toContain("missing or unreadable");
   });
 
   it("a chip click does not toggle the row's checkbox or steal the click for the row", async () => {

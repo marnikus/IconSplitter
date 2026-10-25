@@ -150,7 +150,7 @@ describe("the versions popup", () => {
     expect(text("[data-testid=svg-history-v3]")).toContain("invalid SVG");
     // the newest version is the one in use when nobody has chosen
     expect(q("[data-testid=svg-history-v2]")?.className).toContain("shown");
-    expect((q("[data-testid=svg-history-use-2]") as HTMLButtonElement).disabled).toBe(true); // already shown
+    expect((q("[data-testid=svg-history-use-2]") as HTMLButtonElement).disabled).toBe(false); // shown is not yet accepted
     expect((q("[data-testid=svg-history-use-1]") as HTMLButtonElement).disabled).toBe(false);
     // cost and review are still there
     expect(text("[data-testid=svg-history-cost-1]")).toContain("no cost reported");
@@ -167,6 +167,7 @@ describe("the versions popup", () => {
     expect(q(`[data-testid=svg-prev-${FOG}]`)?.shadowRoot?.innerHTML).toContain("#c22f2f");
     // the choice is in the pair's own file, beside the images
     expect(sidecar(root).preferred).toBe(1);
+    expect(sidecar(root).review).toBe("approved");
     // the mark moved, the OTHER version now offers the same choice
     expect(q("[data-testid=svg-history-v1]")?.className).toContain("shown");
     expect(q("[data-testid=svg-history-use-2]")).not.toBeNull();
@@ -209,6 +210,7 @@ describe("the versions popup", () => {
     expect(text("[data-testid=svg-toast]")).toContain("could not be saved");
     expect(text("[data-testid=svg-history-note]")).toContain("could not be saved");
     expect(sidecar(root).preferred).toBeNull(); // the file still says "nobody chose"
+    expect(sidecar(root).review).toBe("pending"); // failed saving cannot approve
   });
 
   it("offers the code of every generated version and nothing for a failed one", async () => {

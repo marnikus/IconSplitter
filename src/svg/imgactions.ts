@@ -16,10 +16,9 @@ import { newRunId } from "./journal";
 
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import type { PairMeta } from "../lib/pairmeta";
 import type { Connection } from "../lib/svgconnections";
 import { imageWaitMs, mainImageOf, regenOutcome, type RegenTally } from "../lib/svgimgreg";
-import { saveMetaAt } from "../selection/pairstore";
+import { chooseMainImage } from "./imagechoice";
 import { log } from "../log/logstore";
 import type { SvgCtx, Slice } from "./actions";
 import { imageItemSpec, imageRunSpec, imageSpendSuffix } from "./imglog";
@@ -59,7 +58,7 @@ export function useImgRegenActions(ctx: SvgCtx): ImgSlice {
     latest.current.say("Stopping — requests already sent will finish; sent results follow the confirmed Apply policy. Nothing new is sent");
   }, [control]);
   const setImageVersion = useCallback((id: string, version: number | null) => {
-    void mainOf(latest.current, id, version).catch((error: unknown) => latest.current.say(`The main image could not be changed: ${messageOf(error)}`, true));
+    void chooseMainImage(latest.current, id, version).catch((error: unknown) => latest.current.say(`The main image could not be changed: ${messageOf(error)}`, true));
   }, []);
   return { requestImageRegen, confirmImageRegen, stopImageRegen, setImageVersion,
     ...useImageOutcomeActions(latest, control) };
@@ -108,31 +107,6 @@ function refusalOf(c: SvgCtx, ids: string[], control: CompositeControl): string 
   if (activeImageConn(c.m) === null) return "Switch to an image connection to regenerate AI sources";
   if (c.refs.key.current === null) return "Add the API key first — it lives only on this device";
   return null;
-}
-
-/** The main switch: saved first, then the in-memory copy and the row — a failed save changes nothing. */
-async function mainOf(c: SvgCtx, id: string, version: number | null): Promise<void> {
-  const release = reserveSources(c, [id], "image");
-  if (release === null) return c.say(SOURCE_BUSY, true);
-  try { await saveMainImage(c, id, version); } finally { release(); }
-}
-
-async function saveMainImage(c: SvgCtx, id: string, version: number | null): Promise<void> {
-  const root = c.refs.root.current as DirHandleLike | null;
-  const row = c.rows.find((r) => r.source.id === id);
-  if (root === null || row === undefined) return c.say("No folder is open — the choice cannot be saved", true);
-  const prev = c.refs.metas.get(id) ?? row.meta;
-  if (prev === null) return c.say("This pair has no record file yet — regenerate its image first", true);
-  const meta: PairMeta = { ...prev, imagePreferred: version };
-  try {
-    await saveMetaAt(root, row.source.metaPath, meta);
-  } catch (error) {
-    return c.say(`The choice for ${row.source.name} could not be saved — nothing changed (${messageOf(error)})`, true);
-  }
-  c.refs.metas.set(id, meta);
-  c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? { ...r, meta } : r)));
-  log({ feature: "svg", action: "image-main", ids: { source: id }, detail: version === null ? "original" : `v${version}` });
-  c.say(version === null ? "AI source: the original is main again" : `AI source: v${version} is main — the SVG generation uses it`);
 }
 
 // ── the run ───────────────────────────────────────────────────────────────

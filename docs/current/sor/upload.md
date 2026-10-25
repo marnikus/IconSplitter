@@ -11,8 +11,9 @@ opt-in class as Generate SVG → Requesty; design
 
 * Discovery walks the root ignoring `export`, reads every `.svg.json` sidecar
   and lists ONE row per **item-approved** pair with ≥1 valid generated SVG on
-  disk (I-78); the export source is the NEWEST valid version, regardless of a
-  preview-only preferred-version choice. A declined or needs-review item cannot
+  disk (I-78); the export source is the [explicitly accepted version](version-acceptance.md),
+  with newest-valid fallback only when no usable preference exists. An accepted
+  version with a missing/unreadable file is reported, never silently replaced. A declined or needs-review item cannot
   export an older previously approved version; legacy files without item-level
   review derive it from the newest decided version. Pairs without approval or
   valid artwork, without a sidecar, outside split scope and duplicates are

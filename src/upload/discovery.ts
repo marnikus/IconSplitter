@@ -3,7 +3,7 @@
 // outputs never feed discovery — no export loops), the pair sidecars, split
 // scope, one row per approved item with ≥1 valid generated SVG version,
 // exclusions with reasons, and audit counts. The item's review lives in its
-// `.svg.json` (I-78); the export source is the NEWEST valid version.
+// `.svg.json` (I-78); the export source is the accepted preferred version, else newest valid.
 // Pure orchestration over lib/scan + lib/pairmeta + lib/svgfile.
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
@@ -11,7 +11,7 @@ import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { directoryNames, inSplitScope, scopeOf } from "../lib/splitscope";
 import { parseAiName } from "../lib/naming";
 import { pairId } from "../lib/pairing";
-import { svgStem } from "../lib/svgfile";
+import { preferredVersion, svgStem } from "../lib/svgfile";
 import type { PairMeta } from "../lib/pairmeta";
 import { loadMetaAt } from "../selection/pairstore";
 import type { SvgVersion } from "../lib/svgmodel";
@@ -25,7 +25,7 @@ export interface UploadRowSource {
   base: string;
   suffix: string;
   dirPath: string;
-  /** The export source: the newest valid version of the approved item. */
+  /** The export source: the selected version of the approved item, else newest valid. */
   version: number;
   svgPath: string;
   svgName: string;
@@ -199,11 +199,15 @@ function collectPair(meta: PairMeta, path: string, ctx: PairCtx): void {
     excludeUnusable(meta, ctx.excluded);
     return;
   }
-  const newest = valid.reduce((a, b) => (b.version > a.version ? b : a));
-  const file = fileFor(group, newest.version) as SvgFile;
+  const selected = preferredVersion(approvedValid(meta), meta.preferred) ?? valid.reduce((a, b) => (b.version > a.version ? b : a));
+  const file = fileFor(group, selected.version);
+  if (file === null) {
+    ctx.excluded.push({ id: meta.id, relPath: meta.ai.relPath, kind: "no-valid-svg", reason: `Selected SVG v${selected.version} is missing or unreadable — no other version was substituted` });
+    return;
+  }
   ctx.rows.push({
     id: meta.id, base: meta.base, suffix: meta.suffix, dirPath: meta.dirPath,
-    version: newest.version, svgPath: file.relPath, svgName: file.name,
+    version: selected.version, svgPath: file.relPath, svgName: file.name,
     fingerprint: `${file.size}:${file.mtime}`,
     aiPath: meta.ai.relPath, metaPath: path, approvedValid: valid.length,
   });

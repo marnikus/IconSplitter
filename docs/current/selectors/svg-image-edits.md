@@ -23,7 +23,7 @@ The connection selector/name/kind/add/remove controls are [shared with SVG gener
 | `svg-ai-bar-{sourceId}` | AI-source strip | INSIDE the pair cell, under the two previews (2026-10-19): the in-flight bar, the version chips and the last failure — present only when one of them has something to show. `contain: inline-size` keeps it from widening the preview column |
 | `svg-ai-running-{sourceId}` | progressbar | shown while this row's AI image is being regenerated (2026-10-19); gone the moment its result lands |
 | `svg-ai-error-{sourceId}` | note | "Last image attempt failed: {reason}" — shown while the pair file's LAST image entry failed (2026-10-19): the router's own message, a timeout or a refused write; `title` = the full reason |
-| `svg-ai-chip-{sourceId}-orig` / `svg-ai-chip-{sourceId}-{n}` | version chips | the AI source's version bar (2026-10-16): the original image plus every recorded regeneration with status "done"; the main one carries class `primary` and `data-active="true"`; clicking a chip makes that version main (persisted to the pair file) — the AI thumbnail switches to it everywhere |
+| `svg-ai-chip-{sourceId}-orig` / `svg-ai-chip-{sourceId}-{n}` | version chips | the AI source's version bar (2026-10-16): the original image plus every recorded regeneration with status "done"; the main one carries class `primary` and `data-active="true"`; clicking [accepts it as the actual main source](../sor/version-acceptance.md) in the pair file, not an SVG approval |
 
 ## Image-edit confirmation, preview, and review
 

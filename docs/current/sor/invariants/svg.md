@@ -136,8 +136,9 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   exactly ONE review status, stored once as the pair file's `review`. Approve /
   Decline / Needs review write that one field (and mirror it into every version
   record), so the row badge, its list row, the review filter, the tally and the
-  approved count read the item — switching the shown version, choosing another
-  in the history or renaming a file can never change them. A generated attempt
+  approved count read the item. Merely viewing or renaming changes nothing;
+  explicit [version acceptance](../version-acceptance.md) saves the selected
+  pointer and item approval together (2026-10-25). A generated attempt
   sets it (`pending`, or `needs-review` after a regeneration) and fails closed
   for a failed attempt, which keeps the previous status. Undo records
   `{ id, review }` — a version in an older entry is accepted and ignored — and a

@@ -18,9 +18,8 @@
   corrupt → defaults, clamps), the Gemini key's secret hygiene (own IndexedDB
   slot, never localStorage, session fallback) and the in-flight journal
   (restart → interrupted, corrupt → empty)
-* `upload_discovery.test.ts` — item-level approval gates export after a
-  regeneration or legacy mixed review; an approved item exports its newest
-  valid on-disk version regardless of old version reviews or preview choice
+* `upload_discovery.test.ts` — item-approval gates; [accepted source identity](../version-acceptance.md),
+  legacy newest-valid fallback, missing/unreadable accepted files and exclusions.
 * Named row labels: [domain/store/UI/style tests](../upload-row-badges.md).
 * `upload_rowmodel.test.ts` — row assembly from a real export.json + source
   hash, exact staleness (source/settings/metadata fingerprints), the metadata

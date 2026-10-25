@@ -314,6 +314,20 @@ describe("image regeneration — the confirmed batch", () => {
     expect(bar.contains(q(`[data-testid=svg-ai-chip-${FOG}-1]`))).toBe(true);
   });
 
+  it("explicitly accepts the chosen AI source without approving an existing SVG", async () => {
+    await mountWithImages();
+    await regenerateRow();
+    expect(metaNow().decision).toBeNull(); // legacy source approval was not in the pair yet
+    expect(metaNow().review).toBe("pending");
+    await click(q(`[data-testid=svg-ai-chip-${FOG}-1]`)!);
+    await settle();
+    expect(metaNow()).toMatchObject({ imagePreferred: 1, decision: "approved", review: "pending" });
+    expect(metaNow().reviewedAt).toEqual(expect.any(String));
+    await click(q(`[data-testid=svg-ai-chip-${FOG}-orig]`)!);
+    await settle();
+    expect(metaNow()).toMatchObject({ imagePreferred: null, decision: "approved", review: "pending" });
+  });
+
   it("a second run appends v2; clicking v1's chip makes it main again", async () => {
     await mountWithImages();
     await click(q("[data-testid=svg-check-all]")!);

@@ -25,7 +25,8 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   the folder or other lookalikes; the history and main-image readers still use
   the stored file path directly. Parsed and written through `lib/svgimgreg` + `saveMetaAt`
   (tmp → verify → overwrite); the chips that re-point it are off the undo
-  timeline, like I-54's. Binding since the 2026-10-19 fix
+  timeline, like I-54's. Explicit [image choice](../version-acceptance.md) now
+  also accepts the source decision, never an existing SVG review (2026-10-25). Binding since the 2026-10-19 fix
   (`archive/2026-10-19-image-regen-fix`):
   * **The main image IS the source.** `svgimgreg.mainImageOf(meta, relPath)` is
     the one rule: the row's AI thumbnail shows it AND the SVG generation's
