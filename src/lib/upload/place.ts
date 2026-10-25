@@ -14,7 +14,8 @@ import { recoverPinnedFit } from "./placefallback";
 
 import { bakeGeometry } from "./bake";
 import { expandStrokes } from "./expand";
-import { fitArtboard, type ArtboardFit, type FitTarget } from "./geom";
+import type { PaddingSides } from "./padding";
+import { fitArtboard, paddingBox, type ArtboardFit, type FitTarget } from "./geom";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { identity, type Matrix } from "./geom/matrix";
 import { restyleStrokes, type StrokeStyle } from "./restyle";
@@ -25,7 +26,7 @@ export const MAX_PASSES = 4;
 const FILE_PRECISION = 0.002;
 
 export interface PlaceWant {
-  paddingPct: number;
+  paddingPct: number | PaddingSides;
   target: FitTarget | null;
   style: StrokeStyle;
   expand: boolean;
@@ -64,6 +65,8 @@ export function placeArtwork(source: Element, want: PlaceWant): PlaceResult {
   let bounds = shippedBounds(source);
   if (bounds === null) return { ok: false, code: "unsupported", detail: "the document has no visible geometry" };
   let fit = fitArtboard(bounds, want.paddingPct, want.target);
+  const box = paddingBox(fit);
+  if (box.width <= 0 || box.height <= 0) return { ok: false, code: "no-fit", detail: "the requested padding leaves no room for the artwork" };
   const samples: Sample[] = [];
   for (let pass = 1; pass <= MAX_PASSES; pass++) {
     const got = candidate(source, fit, want);

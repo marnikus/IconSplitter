@@ -11,6 +11,8 @@ import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { clearKnownRoots } from "../src/lib/knownroots";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
+import { prepareExportSvg } from "../src/lib/upload/prepare";
+import { COALESCE_MS } from "../src/lib/history";
 import { ZOOM_DEFAULT } from "../src/lib/zoom";
 import { resetAppStore } from "../src/state/appstore";
 import HistoryBar from "../src/ui/HistoryBar";
@@ -167,7 +169,7 @@ describe("default for every visual setting", () => {
     await click("[data-testid=upload-settings-open]");
     await click("[data-testid=upload-set-padding-default]");
     expect(loadUploadSettings().defaults.paddingPct).toBeNull();
-    expect((q("[data-testid=upload-set-padding]") as HTMLInputElement).value).toBe("");
+    expect((q("[data-testid=upload-set-padding-left]") as HTMLInputElement).value).toBe("");
     await click("[data-testid=upload-set-padding-default]");
     expect(loadUploadSettings().defaults.paddingPct).toBe(8);
   });
@@ -385,5 +387,58 @@ describe("export stroke endpoint controls", () => {
     await click("[data-testid=upload-set-as-is]");
     expect(loadUploadSettings().overrides[FOG].strokeLinecap).toBe("source");
     expect(art()).not.toContain("stroke-linecap");
+  });
+});
+
+
+describe("four-side padding persistence, undo and live export preview", () => {
+  it("updates every side in the real preview, persists and reloads the defaults", async () => {
+    await mount({ paddingPct: 12 });
+    await click("[data-testid=upload-settings-open]");
+    let previous = art();
+    for (const [side, value] of [["left", "3"], ["right", "17"], ["top", "7"], ["bottom", "11"]]) {
+      await type(`[data-testid=upload-set-padding-${side}]`, value);
+      await waitUntil(() => art() !== previous, `updated ${side} padding preview`, 8000);
+      const prepared = prepareExportSvg(SAVED_SVG, loadUploadSettings().defaults);
+      expect(prepared.ok).toBe(true); if (!prepared.ok) return;
+      expect(preview().shadowRoot!.querySelector("svg")!.getAttribute("viewBox")).toBe(prepared.fit.viewBox);
+      previous = art();
+    }
+    expect(loadUploadSettings().defaults.paddingPct).toEqual({ left: 3, right: 17, top: 7, bottom: 11 });
+    expect(loadUploadSettings().overrides).toEqual({});
+    expect(q(`[data-testid=upload-settings-${FOG}]`)?.textContent).toContain("pad L 3% / R 17% / T 7% / B 11%");
+    expect((q("[data-testid=hist-undo]") as HTMLButtonElement).disabled).toBe(true);
+    await unmount();
+    await act(async () => { ui = createRoot(host); ui.render(<HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>); });
+    await waitUntil(() => q(`[data-testid=upload-prev-${FOG}]`)?.shadowRoot != null, "preview after padding reload", 8000);
+    await settle(250);
+    await click("[data-testid=upload-settings-open]");
+    for (const [side, value] of Object.entries({ left: 3, right: 17, top: 7, bottom: 11 })) {
+      expect((q(`[data-testid=upload-set-padding-${side}]`) as HTMLInputElement).value).toBe(String(value));
+    }
+  });
+  it("undoes/redoes a single-side edit without losing the earlier side pin; Reset inherits", async () => {
+    await mount(); await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await type("[data-testid=upload-set-padding-left]", "3");
+    const first = { left: 3, right: 8, top: 8, bottom: 8 };
+    expect(loadUploadSettings().overrides[FOG]).toEqual({ paddingPct: first });
+    // History uses wall-clock Date, not quietSettle's timer-only fast-forward.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, COALESCE_MS + 1)); });
+    await type("[data-testid=upload-set-padding-top]", "9");
+    const second = { ...first, top: 9 };
+    const secondPreview = art();
+    expect(loadUploadSettings().overrides[FOG]).toEqual({ paddingPct: second });
+    await click("[data-testid=upload-set-close]"); await click("[data-testid=hist-undo]");
+    expect(loadUploadSettings().overrides[FOG]).toEqual({ paddingPct: first });
+    expect(art()).not.toBe(secondPreview);
+    await click("[data-testid=hist-redo]");
+    expect(loadUploadSettings().overrides[FOG]).toEqual({ paddingPct: second });
+    expect(art()).toBe(secondPreview);
+    await click(`[data-testid=upload-settings-btn-${FOG}]`); await click("[data-testid=upload-set-reset]");
+    expect(loadUploadSettings().overrides[FOG]).toBeUndefined();
+    expect(loadUploadSettings().defaults.paddingPct).toBe(8);
+    for (const side of ["left", "right", "top", "bottom"]) {
+      expect((q(`[data-testid=upload-set-padding-${side}]`) as HTMLInputElement).value).toBe("8");
+    }
   });
 });

@@ -124,3 +124,8 @@ supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-tem
 `upload_settings_disclosure.test.tsx` drives both popup scopes: native collapsed
 summaries, independent expansion/folding, mounted controls/drafts, open-state
 retention across rerenders, original toggle/blur handlers and Close/reopen.
+
+* `upload_padding_sides.test.ts`, `upload_padding_sides_ui.test.tsx`,
+  `upload_padding_sides_export.test.ts` and live-preview coverage: independent
+  margins, compatible storage/hash/undo, exact fits, supplied SVG/JPEG/vector EPS
+  pipeline. [Contract](../upload-padding.md).

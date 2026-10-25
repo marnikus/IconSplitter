@@ -31,3 +31,5 @@ Automatic pinned-fit (including grid-aligned final centring) and minor stroke-fr
 
 `UploadSettingsGroup.tsx` shares native collapsed-by-default Badge/Size guide/Shadow
 disclosures; their existing section owners retain all control logic and state.
+
+Four-side settings/fit/fallback, UI and tests: [padding owners](../upload-padding.md#selectors-owners-and-tests).

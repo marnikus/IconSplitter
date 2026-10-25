@@ -2,7 +2,7 @@
 
 For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
 
-**Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [stroke endpoints](upload-stroke-endpoints.md).
+**Details:** [geometry](upload-geometry.md) · [four-side padding](upload-padding.md) · [badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [endpoints](upload-stroke-endpoints.md).
 
 ## Collapsible popup groups
 

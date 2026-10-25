@@ -1891,6 +1891,8 @@
 .up-set-group-summary::marker { color: var(--v2-muted); }
 .up-set-group-summary:focus-visible { outline: 2px solid var(--v2-purple-2); outline-offset: 4px; border-radius: 2px; }
 .up-set-group-content { padding-top: 12px; }
+.up-padding-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.up-padding-sides .svg-field { min-width: 0; }
 .up-shadow-controls { display: grid; gap: 8px; border-bottom: 1px solid var(--v2-line); padding-bottom: 10px; margin-bottom: 10px; }
 .up-shadow-check { display: flex; align-items: center; gap: 7px; }
 .up-shadow-dialog .up-shadow-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }

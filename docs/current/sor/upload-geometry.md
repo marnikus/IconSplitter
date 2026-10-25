@@ -22,9 +22,9 @@ Output geometry for [upload settings](upload-settings.md); invariants [I-60…I-
   [automatic repairs](upload-auto-repair.md) for the fallback and minor
   source-frame stroke overflow repair. Unrepresentable fits still fail honestly. The
   artwork is fitted proportionally into the padded artboard: in `content`
-  mode the padding is a uniform % of the artwork's largest side, and on a
+  mode each [side's padding](upload-padding.md) is a % of the artwork's largest side; on a
   PINNED artboard it is a % of the TARGET's largest side while the artwork is
-  scaled by one uniform factor and centred (letterboxed — never stretched,
+  scaled by one uniform factor and centred within the inset rectangle (letterboxed — never stretched,
   never cropped), the pinned px are exact (`viewBox="0 0 W H"`). **Every transform is baked into the
   geometry** (2026-10-08, `lib/upload/bake`): the artwork's own `transform`s
   and the artboard's translate+scale become the shapes' coordinates (3

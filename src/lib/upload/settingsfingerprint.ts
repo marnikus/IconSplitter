@@ -6,6 +6,7 @@ import badgeTemplate from "../../svg/templates/editable-stroke-width.svg?raw";
 import sizeLabelSmall from "../../svg/templates/size-s.svg?raw";
 import sizeLabelLarge from "../../svg/templates/size-l.svg?raw";
 import { fnv1a32 } from "../pairing";
+import { paddingToken } from "./padding";
 import type { UploadSettings } from "./settings";
 
 const templateHash = fnv1a32(shadowTemplate).toString(16);
@@ -14,7 +15,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
-    s.paddingPct === null ? "default" : round3(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
+    paddingToken(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
     round3(s.jpegMegapixels), round3(s.jpegQuality), s.optimizeSvg, s.includeEps,
     s.jpegMatchArtboard,
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],

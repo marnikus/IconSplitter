@@ -7,7 +7,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   viewBox is computed from the bounds of the FINAL document — the configured
   stroke width, expansion, joins and caps included, measured by the strokes'
   real outlines — plus the padding; nothing visible lies outside it; a pinned
-  artboard centres the shipped bounds to the file's precision; the artboard
+  artboard centres the shipped bounds within the [four-side padded rectangle](../upload-padding.md) to the file's precision; the artboard
   rect is always the first child (the background colour, or `fill="none"` when
   transparent); an enabled template shadow is centred below the *final painted*
   icon, sized/spaced by its width/height percentages and included in the fit,

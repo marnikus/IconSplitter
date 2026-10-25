@@ -652,8 +652,8 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=upload-set-close]");
     // one LOCAL general pin is what the button resets
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
-    await type("[data-testid=upload-set-padding]", "17");
-    await act(async () => { input("[data-testid=upload-set-padding]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-set-padding-left]", "17");
+    await act(async () => { input("[data-testid=upload-set-padding-left]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await click("[data-testid=upload-set-close]");
     expect(text("[data-testid=upload-reset-settings]")).toContain("Reset to inherited (1)");
     await click("[data-testid=upload-reset-settings]");
@@ -673,7 +673,7 @@ describe("selection + the bulk bar", () => {
     // one undo brings the padding pin back and leaves the decorations alone
     await click("[data-testid=hist-undo]");
     const undone = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(undone.overrides[FOG]).toEqual({ paddingPct: 17 });
+    expect(undone.overrides[FOG]).toEqual({ paddingPct: { left: 17, right: 8, top: 8, bottom: 8 } });
     expect(undone.applied[FOG]).toEqual(decorations);
   });
 
@@ -841,8 +841,8 @@ describe("selection + the bulk bar", () => {
     await selectOption("[data-testid=upload-set-badge-corner]", "top-left");
     await type("[data-testid=upload-set-badge-offset-x]", "6");
     await act(async () => { input("[data-testid=upload-set-badge-offset-x]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
-    await type("[data-testid=upload-set-padding]", "17");
-    await act(async () => { input("[data-testid=upload-set-padding]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await type("[data-testid=upload-set-padding-left]", "17");
+    await act(async () => { input("[data-testid=upload-set-padding-left]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await click("[data-testid=upload-set-close]");
     // … plus a shadow applied by the global popup (an applied decoration, not a pin)
     await check(FOG);
@@ -864,7 +864,7 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=hist-undo]");
     saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toMatchObject({ badgeEnabled: true, badgeWidthPct: 55,
-      badgeCorner: "top-left", badgeOffsetXPct: 6, paddingPct: 17 });
+      badgeCorner: "top-left", badgeOffsetXPct: 6, paddingPct: { left: 17, right: 8, top: 8, bottom: 8 } });
     // the row's own reset follows the same rule
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
     await click("[data-testid=upload-set-reset]");
@@ -874,7 +874,7 @@ describe("selection + the bulk bar", () => {
     await click("[data-testid=upload-set-close]");
     await click("[data-testid=hist-undo]");
     expect(JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").overrides[FOG])
-      .toMatchObject({ badgeEnabled: true, paddingPct: 17 });
+      .toMatchObject({ badgeEnabled: true, paddingPct: { left: 17, right: 8, top: 8, bottom: 8 } });
   });
 
   it("reads a decoration applied to the selection as inherited until this row changes it", async () => {
@@ -1176,10 +1176,10 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await click("[data-testid=upload-settings-open]");
     expect(q("[data-testid=upload-dialog]") ?? q("[data-testid=upload-dialog-backdrop]")).not.toBeNull();
     expect(text("[data-testid=upload-dialog-scope]")).toContain("General settings are inherited");
-    await type("[data-testid=upload-set-padding]", "20");
-    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad 20%"); // inherited, live
+    await type("[data-testid=upload-set-padding-left]", "20");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad L 20% / R 8% / T 8% / B 8%"); // inherited, live
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.defaults.paddingPct).toBe(20);
+    expect(saved.defaults.paddingPct).toEqual({ left: 20, right: 8, top: 8, bottom: 8 });
     // no undo entry: defaults are the same class as presets (design §6)
     expect((q("[data-testid=hist-undo]") as HTMLButtonElement).disabled).toBe(true);
     await click("[data-testid=upload-set-close]");
@@ -1191,12 +1191,12 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     expect(text("[data-testid=upload-dialog-scope]")).toContain("pinned for this icon");
     expect(text("[data-testid=upload-set-marker-padding]")).toBe("inherited");
     // padding, not the stroke width: that is ONE value, the bar's (2026-10-19)
-    await type("[data-testid=upload-set-padding]", "12");
+    await type("[data-testid=upload-set-padding-left]", "12");
     expect(text("[data-testid=upload-set-marker-padding]")).toBe("overridden");
-    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad 12%");
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad L 12% / R 8% / T 8% / B 8%");
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("1 field overridden");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.overrides[FOG]).toEqual({ paddingPct: 12 });
+    expect(saved.overrides[FOG]).toEqual({ paddingPct: { left: 12, right: 8, top: 8, bottom: 8 } });
     // one gesture entry, and one undo reverses the pin
     await act(async () => { (q("[data-testid=hist-undo]") as HTMLButtonElement).click(); });
     await settle();
@@ -1208,10 +1208,10 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await mount(makeRoot());
     // two LOCAL edits, each in that row's own Settings dialog
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
-    await type("[data-testid=upload-set-padding]", "12");
+    await type("[data-testid=upload-set-padding-left]", "12");
     await click("[data-testid=upload-set-close]");
     await click(`[data-testid=upload-settings-btn-${ARCH}]`);
-    await type("[data-testid=upload-set-padding]", "14");
+    await type("[data-testid=upload-set-padding-left]", "14");
     await click("[data-testid=upload-set-close]");
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("1 field overridden");
     const uploadEntries = () => (JSON.parse(localStorage.getItem("iconSplitter.history.v1") ?? "{}").entries ?? [])
@@ -1222,7 +1222,7 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await click("[data-testid=upload-reset-settings]");
     let saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toBeUndefined();
-    expect(saved.overrides[ARCH]).toEqual({ paddingPct: 14 });
+    expect(saved.overrides[ARCH]).toEqual({ paddingPct: { left: 14, right: 8, top: 8, bottom: 8 } });
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
     // exactly one history entry for the whole batch
     expect(uploadEntries()).toHaveLength(before + 1);
@@ -1230,7 +1230,7 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     // one undo restores the pin, one redo clears it again
     await click("[data-testid=hist-undo]");
     saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.overrides[FOG]).toEqual({ paddingPct: 12 });
+    expect(saved.overrides[FOG]).toEqual({ paddingPct: { left: 12, right: 8, top: 8, bottom: 8 } });
     await click("[data-testid=hist-redo]");
     saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
     expect(saved.overrides[FOG]).toBeUndefined();
@@ -1253,7 +1253,7 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await click("[data-testid=upload-set-close]");
     // a LOCAL pin in FOG's own dialog is what the reset clears
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
-    await type("[data-testid=upload-set-padding]", "17");
+    await type("[data-testid=upload-set-padding-left]", "17");
     await click("[data-testid=upload-set-close]");
     // FOG stays selected for the reset; ARCH is unchecked
     await check(ARCH);
@@ -1279,10 +1279,10 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await click("[data-testid=upload-set-close]");
     // a local pin in FOG's own dialog gives the reset something to clear
     await click(`[data-testid=upload-settings-btn-${FOG}]`);
-    await type("[data-testid=upload-set-padding]", "17");
+    await type("[data-testid=upload-set-padding-left]", "17");
     await click("[data-testid=upload-set-close]");
     const before = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(before.overrides[FOG]).toEqual({ paddingPct: 17 }); // the popup wrote no override
+    expect(before.overrides[FOG]).toEqual({ paddingPct: { left: 17, right: 8, top: 8, bottom: 8 } }); // the popup wrote no override
     expect(before.applied[FOG]).toEqual({ shadowEnabled: true, shadowWidthPct: 120 });
     await click("[data-testid=upload-reset-settings]");
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
@@ -1296,7 +1296,7 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await click("[data-testid=upload-select-visible]");
     await click("[data-testid=upload-settings-open]");
     // every visual default the global dialog owns, changed with the whole list checked
-    await type("[data-testid=upload-set-padding]", "20");
+    await type("[data-testid=upload-set-padding-left]", "20");
     await selectOption("[data-testid=upload-set-artboard]", "512");
     await type("[data-testid=upload-set-badge-width]", "48");
     await act(async () => { input("[data-testid=upload-set-badge-width]").dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
@@ -1307,9 +1307,9 @@ describe("settings — defaults, overrides, one undoable bulk reset", () => {
     await click("[data-testid=upload-set-close]");
     // the defaults moved; no row received a single override
     const saved = JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}");
-    expect(saved.defaults).toMatchObject({ paddingPct: 20, badgeWidthPct: 48, shadowWidthPct: 130, sizeGuideGapPct: 9 });
+    expect(saved.defaults).toMatchObject({ paddingPct: { left: 20, right: 8, top: 8, bottom: 8 }, badgeWidthPct: 48, shadowWidthPct: 130, sizeGuideGapPct: 9 });
     expect(saved.overrides).toEqual({});
-    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad 20%"); // inherited, live
+    expect(text(`[data-testid=upload-settings-${FOG}]`)).toContain("pad L 20% / R 8% / T 8% / B 8%"); // inherited, live
     expect(text(`[data-testid=upload-settings-pinned-${FOG}]`)).toContain("inherits defaults");
     // and no bulk control pins the global values into the selection any more
     expect(q("[data-testid=upload-apply-settings]")).toBeNull();
@@ -2239,7 +2239,7 @@ describe("export — green means a complete committed package", () => {
     await click(`[data-testid=upload-export-${FOG}]`);
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the first commit");
     await click("[data-testid=upload-settings-open]");
-    await type("[data-testid=upload-set-padding]", "30");
+    await type("[data-testid=upload-set-padding-left]", "30");
     await click("[data-testid=upload-set-close]");
     expect(text(`[data-testid=upload-status-${FOG}]`)).toContain("Stale");
     await click(`[data-testid=upload-export-${FOG}]`);

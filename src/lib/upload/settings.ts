@@ -6,6 +6,7 @@
 // display-only (design §2.12) and lives in lib/zoom.
 // Paints are source/transparent/artwork sentinels or a normalized hex.
 
+import { normalizePadding, paddingEqual, readPaddingOverride, type Padding } from "./padding";
 import { BADGE_DEFAULTS, normalizeBadge, readBadgeOverrides, type BadgeSettings } from "./settingsbadge";
 import { normalizeStrokeLinecap, readStrokeCapOverride, type StrokeLinecap } from "./strokecaps";
 import { normalizeHex } from "../svgbackground";
@@ -18,7 +19,7 @@ import {
   ARTBOARD_MP_DEFAULT, MP_DEFAULT, PADDING_DEFAULT,
   QUALITY_DEFAULT, SHADOW_GAP_DEFAULT, SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT,
   clampArtboardMegapixels, clampBadgeOffsetPct, clampBadgeWidthPct, clampMegapixels,
-  clampPaddingPct, clampQuality, clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
+  clampQuality, clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
 } from "./settingsnumbers";
 
 export * from "./settingsnumbers";
@@ -36,8 +37,8 @@ export {
 export { BADGE_CORNERS, BADGE_CORNER_DEFAULT, parseBadgeCorner } from "./settingsbadge";
 
 export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
-  /** Uniform padding on all four sides, % of the fitted artwork's largest side; null = default (the source's own margins). */
-  paddingPct: number | null;
+  /** Independent percentages (legacy number = uniform); null keeps source margins. */
+  paddingPct: Padding;
   /** `default` (no artboard rect, 2026-10-19), `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
   background: string;
   /**
@@ -152,7 +153,7 @@ export function flattenColor(background: string): string {
 export function normalizeSettings(raw: unknown): UploadSettings {
   if (!isRecord(raw)) return { ...DEFAULT_UPLOAD_SETTINGS };
   return {
-    paddingPct: raw.paddingPct === null ? null : clampPaddingPct(raw.paddingPct),
+    paddingPct: normalizePadding(raw.paddingPct),
     background: readBackground(raw.background) ?? BACKGROUND_DEFAULT,
     strokePx: clampStrokePx(raw.strokePx ?? raw.strokePt), // strokePt: the pre-2026-10-08 name, same number
     strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_DEFAULT,
@@ -192,7 +193,6 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
 
 /** The numeric fields and their clamps; `strokePx` (an icon's own width) is read with its alias below. */
 const NUMERIC_FIELDS: [string, (value: number) => number][] = [
-  ["paddingPct", clampPaddingPct],
   ["jpegMegapixels", clampMegapixels],
   ["jpegQuality", clampQuality],
   ["artboardMegapixels", clampArtboardMegapixels],
@@ -214,7 +214,8 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
     const value = raw[key];
     if (typeof value === "number" && Number.isFinite(value)) Object.assign(out, { [key]: clamp(value) });
   }
-  if (raw.paddingPct === null) out.paddingPct = null; // a pinned "default"
+  const padding = readPaddingOverride(raw.paddingPct);
+  if (padding !== undefined) out.paddingPct = padding;
   const stroke = raw.strokePx ?? raw.strokePt; // strokePt: the pre-2026-10-08 name
   if (typeof stroke === "number") out.strokePx = clampStrokePx(stroke);
 }
@@ -264,10 +265,10 @@ export function settingsEqual(a: UploadSettings, b: UploadSettings): boolean {
 
 /** Two partial override payloads that pin the same fields with the same values. */
 export function overridesEqual(a: SettingsOverrides, b: SettingsOverrides): boolean {
-  return SETTINGS_FIELDS.every((field) => fieldValuesEqual(a[field], b[field]));
+  return SETTINGS_FIELDS.every((field) => field === "paddingPct" ? paddingEqual(a.paddingPct, b.paddingPct) : fieldValuesEqual(a[field], b[field]));
 }
 
-/** Field values are primitives except the artboard, which compares as a whole. */
+/** Non-padding fields are primitives except the artboard, compared as a whole. */
 function fieldValuesEqual(a: unknown, b: unknown): boolean {
   if (!isRecord(a) || !isRecord(b)) return a === b;
   return artboardsEqual(clampArtboard(a), clampArtboard(b));

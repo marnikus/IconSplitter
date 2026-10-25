@@ -12,9 +12,10 @@
 // export is then the approved SVG, as is), and the global stroke WIDTH is the
 // bar's STROKE field; only the icon scope has a width row — that icon's own value.
 
+import UploadPaddingSetting from "./UploadPaddingSetting";
 import {
-  artboardSize, clampMegapixels, clampPaddingPct, clampQuality, clampStrokePx, STROKE_MAX, STROKE_MIN,
-  MP_MAX, MP_MIN, PADDING_DEFAULT, PADDING_MAX, PADDING_MIN, QUALITY_MAX, QUALITY_MIN,
+  artboardSize, clampMegapixels, clampQuality, clampStrokePx, STROKE_MAX, STROKE_MIN,
+  MP_MAX, MP_MIN, QUALITY_MAX, QUALITY_MIN,
   type UploadSettings,
 } from "../lib/upload/settings";
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
@@ -75,7 +76,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
-      <PaddingSetting p={p} effective={effective} />
+      <UploadPaddingSetting p={p} effective={effective} />
       {p.id !== null && <IconStrokeSetting p={p} id={p.id} />}
       <StrokeColorSetting p={p} effective={effective} />
       <UploadStrokeCapsSetting p={p} effective={effective} />
@@ -142,24 +143,6 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
 function PaintClashNote({ effective }: { effective: UploadSettings }) {
   const clash = paintClash(effective);
   return clash === null ? null : <p className="svg-warning" role="alert" data-testid="upload-set-paint-clash">⚠ {clash}</p>;
-}
-
-/** Padding: a % of the artwork's largest side, or default — the SVG's own margins. */
-function PaddingSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const value = effective.paddingPct;
-  return (
-    <div className="svg-field up-set-field">
-      <label className="svg-label" htmlFor="upload-set-padding">Padding %<Marker p={p} field="paddingPct" testid="padding" /></label>
-      <div className="up-bg-row">
-        <button type="button" className={`svg-btn tiny up-default-btn${value === null ? " on" : ""}`} data-testid="upload-set-padding-default"
-          aria-pressed={value === null} onClick={() => change(p, "paddingPct", value === null ? PADDING_DEFAULT : null)}>Default</button>
-        <input id="upload-set-padding" className="svg-input" data-testid="upload-set-padding" type="number" aria-label="Padding %"
-          min={PADDING_MIN} max={PADDING_MAX} step={1} value={value ?? ""} placeholder="default"
-          onChange={(e) => change(p, "paddingPct", e.target.value === "" ? null : clampPaddingPct(Number(e.target.value)))} />
-      </div>
-      <small className="up-hint">{value === null ? "default — the SVG's own margins" : "uniform, % of the fitted artwork's largest side"}</small>
-    </div>
-  );
 }
 
 /** One numeric setting: live, clamped at the moment of change (RULE 13). */

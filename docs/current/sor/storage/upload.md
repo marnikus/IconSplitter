@@ -26,3 +26,7 @@ applied payload. Empty means bundled source; nonempty code must pass the shared
 safe-vector validator on every read. Invalid template data drops only that
 field. No source file or extra asset store is written. See
 [custom badge templates](../upload-badge.md#custom-svg-templates).
+
+Padding keeps its existing field/key/version: scalar or null payloads remain
+compatible; asymmetric `{left,right,top,bottom}` values validate on read and
+participate in overrides/history. [Four-side padding](../upload-padding.md).

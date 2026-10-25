@@ -6,6 +6,7 @@
 // metadata readiness and package status are three independent flags — the
 // badges never merge them.
 
+import { paddingLabel } from "../lib/upload/padding";
 import { useEffect, useRef } from "react";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
@@ -179,7 +180,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const pinned = overrideKeys(a.overrides[id] ?? {}).length;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
-      <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${effective.paddingPct === null ? "default" : `${effective.paddingPct}%`} · ${effective.background} · ${strokeLine(effective)}`}</small>
+      <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${paddingLabel(effective.paddingPct)} · ${effective.background} · ${strokeLine(effective)}`}</small>
       <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}{shadowLine(effective)}{decorationLine(effective)}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}

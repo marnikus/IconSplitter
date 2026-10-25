@@ -8,7 +8,7 @@ See [conventions](shared.md#i-selector-object-structure--for-every-element) and 
 Collapsed groups: `<details>` + `upload-set-{badge,sizeguide,shadow}-summary`.
 Folding is display-only.
 - `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow/badge/size guide are off) + `upload-set-as-is-note` (turns them off in the icon scope);
-- `upload-set-padding-default` (toggles null ↔ 8 **only on the button**, never the blank field around it; `upload-set-padding` reads empty with placeholder `default`, its label targets this input);
+- `upload-set-padding-{left,right,top,bottom}`: independent 0–50% inputs; `upload-set-padding-default` toggles source margins ↔ four 8s. [Padding contract/handles](../sor/upload-padding.md).
 - `upload-set-bg-default` (before `-transparent`);
 - `upload-set-stroke-color-artwork` now reads **Default**; both "none" choices are buttons;
 - the artboard select's first option is `source` ("Default (the SVG's own)").
@@ -48,7 +48,7 @@ Folding is display-only.
 `upload-set-stroke` (the stroke WIDTH) exists **only in the icon scope**: that icon's own width (placeholder `bar: …`, committed on leave), with `upload-set-stroke-inherit` ("Bar (…)", `aria-pressed` while inherited; a blank field does not reset a pin) and `upload-set-marker-stroke`. The global width is the bar's `upload-stroke`.
 
 `upload-dialog-scope` (the global-defaults vs per-icon wording),
-`upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
+`upload-set-{stroke,mp,quality}` (`input[type=number]`, clamped on
 change; `upload-set-stroke` is "Stroke width (px)" since 2026-10-08 — the
 number typed is the number written in the file, and the row cell reads
 `2 px`), `upload-set-{optimize,eps}` (checkboxes), the background
