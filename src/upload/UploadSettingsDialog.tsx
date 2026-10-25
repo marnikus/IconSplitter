@@ -12,6 +12,7 @@
 // export is then the approved SVG, as is), and the global stroke WIDTH is the
 // bar's STROKE field; only the icon scope has a width row — that icon's own value.
 
+import UploadSettingsPresets from "./UploadSettingsPresets";
 import UploadPaddingSetting from "./UploadPaddingSetting";
 import {
   artboardSize, clampMegapixels, clampQuality, clampStrokePx, STROKE_MAX, STROKE_MIN,
@@ -58,6 +59,7 @@ function DialogBody({ p, effective }: { p: UploadSettingsDialogProps; effective:
           ? "General settings are inherited unless locally overridden. Apply as local freezes current settings on checked icons; decoration checkboxes affect only checked icons."
           : "Fields marked overridden are pinned for this icon; the rest inherit the global defaults. Selected decorations stay separately applied unless frozen as local settings."}
       </p>
+      {p.id === null && <UploadSettingsPresets defaults={p.defaults} onLoad={p.onDefaults} />}
       {p.id === null && <ApplyLocalSettings p={p} />}
       <AsIsRow p={p} effective={effective} />
       <PaintClashNote effective={effective} />

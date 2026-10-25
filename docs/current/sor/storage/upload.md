@@ -38,3 +38,7 @@ overrides map, including content-fit artboard pins; no schema/key change.
 Format flags `includeSvg`/`includeJpeg` reuse the settings payload/version;
 absent/junk defaults normalize to true, only boolean overrides survive.
 See [format persistence/delivery](../upload-formats.md).
+
+Named Export settings presets use `iconSplitter.upload.exportPresets.v1`, a
+versioned `{v:1,presets:[{name,settings}]}` catalog, separate from active settings.
+Validation, bounds and verified-write behavior: [presets](../upload-settings-presets.md).

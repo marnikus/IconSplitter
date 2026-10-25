@@ -1,8 +1,8 @@
-# Upload settings and geometry
+# Upload settings
 
-For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
+For [Upload](upload.md); [I-60/I-62](invariants/upload.md).
 
-**Details:** [geometry](upload-geometry.md) · [padding](upload-padding.md) · [badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [caps](upload-stroke-endpoints.md) · [formats](upload-formats.md).
+**Details:** [geometry](upload-geometry.md) · [padding](upload-padding.md) · [badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [caps](upload-stroke-endpoints.md) · [formats](upload-formats.md) · [presets](upload-settings-presets.md).
 
 ## Collapsible popup groups
 
@@ -23,7 +23,7 @@ Rerenders retain open state; normal blur commits are unchanged.
   - **All six default with Expand, Shadow, corner badge and size guide off = as is**: the export SVG is the approved file
     byte for byte — no clean, no bake, no SVGO, and the clean-SVG-1.1 check is
     skipped (it must still parse); JPEG and EPS build from it.
-  - Factory defaults and their fingerprint (`36232c04`) are unchanged; padding
+  - Default fingerprint (`36232c04`) are unchanged; padding
     null fingerprints as `"default"`.
 * **One stroke width** (2026-10-19): the bar's STROKE (`upload-stroke`) IS the
   defaults' `strokePx`, range 0–50.

@@ -39,3 +39,7 @@ Named row labels/catalog/filter/store/global undo and extracted dialog shell: [r
 [Local batch snapshot source/test owners](../upload-local-settings.md#owners).
 
 Format selection, probes, planner and record delivery: [formats](../upload-formats.md#owners-and-tests).
+
+Named export-default snapshots: `lib/upload/settingspresets.ts`,
+`upload/settingspresetstore.ts`, `settingspresetsmodel.ts`, `UploadSettingsPresets.tsx`.
+[Preset contract and tests](../upload-settings-presets.md).

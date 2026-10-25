@@ -1,9 +1,9 @@
-# SVG to upload tests
+# Upload tests
 
-Focused test inventory; [all tests](../TESTS.md).
+[All tests](../TESTS.md).
 
-[Endpoint tests](../upload-stroke-endpoints.md#owners-and-tests);
-[local batches](../upload-local-settings.md#tests); [formats](../upload-formats.md#owners-and-tests).
+[Caps](../upload-stroke-endpoints.md#owners-and-tests);
+[local](../upload-local-settings.md#tests); [formats](../upload-formats.md#owners-and-tests); [presets](../upload-settings-presets.md#owners-and-tests).
 
 * `keyvault.test.ts` — the key rules on their own: a save that storage refused
   is reported `session` (and the key still loads), `save("")` is `empty` and

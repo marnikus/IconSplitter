@@ -3330,3 +3330,23 @@ Actual supplied handshake SVG EPS-only, all7 combinations, metadata carriers,
 no raster while JPEG off, no-op/disable/re-enable, persistence/undo/redo and real
 mixed-batch isolation tested. No live providers, source artwork writes, altered
 thresholds/test isolation/scope, skips or generated artifacts committed.
+
+
+## 2026-10-25 — Named global Export settings presets
+
+Plan `docs/archive/2026-10-25-upload-settings-presets/README.md`; current contract
+`sor/upload-settings-presets.md`. Added named create/load/rename/confirmed-remove
+catalog under an independent versioned key. Canonical settings normalization,
+case-insensitive collision rejection, 1–60 character names,50-entry bound,
+normalized nested snapshot copies and verified-storage failure reporting.
+Only explicit Load changes inherited globals; local pins/checks/applied decoration
+choices stay. Save/rename/remove do not alter current export settings or files.
+
+RED UI absence witnessed before implementation; final focused21/5 PASS,
+including fresh boot, normalized custom template/padding/artboard, existing pins,
+Apply-as-local/Undo and real SVG/EPS export with JPEG off/source unchanged.
+Types PASS; lint0errors/23existingwarnings; changed-quality vs a5acedf PASS;
+verify:fast PASS; full verify PASS:2901tests/277files + native30/5 + production
+build. Coverage95.39/89.87/98.22/98.30 (statements/branches/functions/lines).
+No src/lib mocks, provider calls, dependencies, skipped tests, weakened gates,
+source artwork writes or generated artifacts committed.
