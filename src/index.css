@@ -975,6 +975,8 @@
   align-items: end;
 }
 
+.up .svg-filters { grid-template-columns: 150px 140px 165px 150px 150px auto 1fr auto; }
+
 .svg-result-copy { color: var(--v2-muted); font-size: 10px; white-space: nowrap; }
 
 /* bulk bar, buttons, zoom ───────────────────────────────────────────────── */
@@ -1704,6 +1706,7 @@
   .batch-row { grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(100px, 0.7fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr) !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
+  .up .svg-filters { grid-template-columns: 132px 126px 148px 136px 136px auto 1fr auto; }
   .svg-provider { flex-basis: 380px; }
 }
 
@@ -2024,3 +2027,24 @@
 .up-badge-template-preview { display: grid; place-items: center; min-height: 220px; padding: 16px; border: 1px solid var(--v2-line); border-radius: 6px; background: #fff; color: #43506b; }
 .up-badge-template-preview img { display: block; width: 100%; height: 200px; object-fit: contain; }
 @media (max-width: 640px) { .up-badge-template-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Upload row badges (I-79): catalog chips, not the corner decoration. */
+.up-rowbadges { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; }
+.up-rowbadge-chip, .up-rowbadge-option {
+  display: inline-flex; align-items: center; min-height: 18px; padding: 2px 7px;
+  border: 1px solid; border-radius: 999px; color: var(--v2-text); font-size: 8px; font-weight: 750;
+}
+.up-rowbadge-menu, .up-rowbadge-apply { position: relative; }
+.up-rowbadge-pop {
+  position: absolute; z-index: 8; top: 100%; left: 0; margin: 4px 0 0;
+  min-width: 160px; padding: 6px; list-style: none;
+  border: 1px solid var(--v2-line-strong); border-radius: 6px; background: #0d1425;
+}
+.up-rowbadge-pop li { margin: 0; }
+.up-rowbadge-option { width: 100%; justify-content: flex-start; margin: 2px 0; cursor: pointer; }
+.up-rowbadge-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.up-rowbadge-add, .up-rowbadge-edit { display: flex; gap: 8px; align-items: center; }
+.up-rowbadge-add .svg-input, .up-rowbadge-edit .svg-input { flex: 1; }
+.up-rowbadge-add input[type="color"], .up-rowbadge-edit input[type="color"] {
+  width: 36px; height: 32px; padding: 0; border: 1px solid var(--v2-line); background: transparent;
+}

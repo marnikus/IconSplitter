@@ -20,6 +20,7 @@ Endpoint inheritance/settings/preview/final-package tests: [stroke endpoints](..
 * `upload_discovery.test.ts` — item-level approval gates export after a
   regeneration or legacy mixed review; an approved item exports its newest
   valid on-disk version regardless of old version reviews or preview choice
+* Named row labels: [domain/store/UI/style tests](../upload-row-badges.md).
 * `upload_rowmodel.test.ts` — row assembly from a real export.json + source
   hash, exact staleness (source/settings/metadata fingerprints), the metadata
   state a record carries, filters/sort/header/counts (incl. a failed run with

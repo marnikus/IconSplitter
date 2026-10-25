@@ -66,3 +66,12 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   `jpegMegapixels`. Pinned by `upload_settings`, `upload_geom` (the megapixel
   fit), `upload_prepare` ("scale the artboard to N megapixels"),
   `upload_runexport` and `upload_eps_settings_ui`.
+
+<a id="i-79"></a>
+* **I-79 (row badges are labels, not artwork, RULE 10/12/13 — 2026-10-25):**
+  named coloured badges on SVG-to-upload rows are independent of the corner
+  badge. The catalog and per-pair assignments persist in
+  `iconSplitter.upload.rowBadges.v1` and validate on read; a row may hold one
+  or more ids; multi-apply toggles one catalog badge on the checked ids; the
+  list filter is All / none / any / one id. They are never exported or sent.
+  Pinned by `upload_rowbadge`, `upload_rowbadge_store`, `upload_rowbadge_ui`.

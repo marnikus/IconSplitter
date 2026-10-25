@@ -19,7 +19,9 @@ import {
   type GeminiConfig,
 } from "../lib/upload/gemini";
 import type { ModelCheck, UploadListFilter, UploadSort } from "./types";
+import type { RowBadge } from "../lib/upload/rowbadge";
 import UploadPromptPanel, { type UploadPromptPanelProps } from "./UploadPromptPanel";
+import UploadRowBadgeFilter from "./UploadRowBadgeFilter";
 import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
@@ -54,6 +56,8 @@ export interface UploadControlsProps {
   onFilter: (patch: Partial<UploadListFilter>) => void;
   onSort: (sort: UploadSort) => void;
   onClearFilters: () => void;
+  badgeCatalog: readonly RowBadge[];
+  onOpenRowBadges: () => void;
 }
 
 export default function UploadControls(p: UploadControlsProps) {
@@ -227,6 +231,7 @@ function FilterLine({ p }: { p: UploadControlsProps }) {
       <Select label="Sort by" testid="upload-sort" value={p.sort}
         options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"]]}
         onChange={(v) => p.onSort(v as UploadSort)} />
+      <UploadRowBadgeFilter filter={p.filter} catalog={p.badgeCatalog} onFilter={p.onFilter} onOpen={p.onOpenRowBadges} />
       <label className="svg-field">
         <span className="svg-label">Search</span>
         <input className="svg-input" data-testid="upload-search" type="search" aria-label="Search icons"

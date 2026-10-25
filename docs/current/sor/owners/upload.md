@@ -33,3 +33,5 @@ Automatic pinned-fit (including grid-aligned final centring) and minor stroke-fr
 disclosures; their existing section owners retain all control logic and state.
 
 Four-side settings/fit/fallback, UI and tests: [padding owners](../upload-padding.md#selectors-owners-and-tests).
+
+Named row labels/catalog/filter/store/global undo and extracted dialog shell: [row badges](../upload-row-badges.md). UI shell: `src/upload/UploadDialogs.tsx`; does not own export-setting control logic.

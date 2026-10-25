@@ -34,6 +34,7 @@ import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
 import { useShadowActions } from "./shadowactions";
 import { useBadgeActions } from "./badgeactions";
+import { useRowBadgeActions } from "./rowbadgeactions";
 import { useSizeGuideActions } from "./sizeguideactions";
 import { useSettingsResetActions } from "./settingsreset";
 import { useOverrideActions, useOverrideResetActions } from "./overrideactions";
@@ -98,6 +99,13 @@ export interface UploadActions extends PromptActions {
   selectRow: (id: string, intent: SelectIntent) => void;
   setActive: (id: string) => void;
   openSettings: (id: string | null) => void;
+  openRowBadges: () => void;
+  addRowBadge: (name: string, color?: string) => void;
+  removeRowBadge: (id: string) => void;
+  renameRowBadge: (id: string, name: string) => void;
+  recolorRowBadge: (id: string, color: string) => void;
+  toggleRowBadge: (pairId: string, badgeId: string) => void;
+  applyRowBadgeSelected: (ids: string[], badgeId: string) => void;
   dismissDialog: () => void;
   requestMetadata: (ids: string[]) => void;
   /** Bulk: every selected icon that still needs metadata gets one paid call. */
@@ -135,6 +143,7 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
     ...useSettingsResetActions(ctx),
     ...useShadowActions(ctx),
     ...useBadgeActions(ctx),
+    ...useRowBadgeActions(ctx),
     ...useSizeGuideActions(ctx),
     ...useGeminiActions(ctx),
     ...useModelCheckActions(ctx),

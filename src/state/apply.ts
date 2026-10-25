@@ -16,28 +16,36 @@ import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
+import { applyRowBadgeState } from "../upload/rowbadgeundo";
 import { getAppState, patchBatch, patchSvg, patchUpload, patchV2, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
   const selection = applySelectionEntry(entry, value);
   if (selection !== null) return selection;
+  return applyDomainEntry(entry, value);
+}
+
+function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> {
   switch (entry.type) {
     case "decisions": return applyDecisions(entry.ids, value);
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
     case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
-    case "uploadSettings": {
-      const patch = toUploadSettingsPatch(value);
-      return patch === null ? false : applyUploadSettingsPatch(patch);
-    }
+    case "uploadSettings": return applyUploadSettings(value);
+    case "uploadRowBadges": return applyRowBadgeState(value);
     default: return false; // an entry from a future schema: refuse, do not guess
   }
+}
+
+function applyUploadSettings(value: unknown): boolean {
+  const patch = toUploadSettingsPatch(value);
+  return patch === null ? false : applyUploadSettingsPatch(patch);
 }
 
 /** Route checked state to its tab before considering domain-specific edits. */

@@ -9,7 +9,7 @@ import type {
   UploadListFilter, UploadListRow, UploadRow, UploadSort,
 } from "./types";
 
-export function toListRow(row: UploadRow): UploadListRow {
+export function toListRow(row: UploadRow, assigned: Record<string, string[]> = {}): UploadListRow {
   return {
     id: row.source.id,
     name: row.source.svgName,
@@ -17,12 +17,13 @@ export function toListRow(row: UploadRow): UploadListRow {
     status: row.record === null ? "not-exported" : row.stale ? "stale" : (row.record.status as UploadListRow["status"]),
     metadata: row.meta.state,
     approvedValid: row.source.approvedValid,
+    badges: assigned[row.source.id] ?? [],
   };
 }
 
 export function applyUploadFilters(rows: readonly UploadListRow[], f: UploadListFilter): UploadListRow[] {
   const needle = f.search.trim().toLowerCase();
-  return rows.filter((r) => inStatus(r, f.status) && inMeta(r, f.metadata) && inSearch(r, needle));
+  return rows.filter((r) => inStatus(r, f.status) && inMeta(r, f.metadata) && inSearch(r, needle) && inBadge(r, f.badge));
 }
 
 function inStatus(row: UploadListRow, want: UploadListFilter["status"]): boolean {
@@ -36,6 +37,13 @@ function inMeta(row: UploadListRow, want: UploadListFilter["metadata"]): boolean
 function inSearch(row: UploadListRow, needle: string): boolean {
   if (needle === "") return true;
   return `${row.name} ${row.relPath} v${row.approvedValid}`.toLowerCase().includes(needle);
+}
+
+function inBadge(row: UploadListRow, want: UploadListFilter["badge"]): boolean {
+  if (!want || want === "all") return true;
+  if (want === "none") return row.badges.length === 0;
+  if (want === "any") return row.badges.length > 0;
+  return row.badges.includes(want);
 }
 
 /** Sorts a copy — the caller's array is never reordered. */
@@ -63,9 +71,11 @@ function rank(value: string): number {
 }
 
 /** Filter + sort a copy of the rows; the caller's array is never reordered. */
-export function visibleRows(rows: readonly UploadRow[], filter: UploadListFilter, sort: UploadSort): UploadRow[] {
+export function visibleRows(
+  rows: readonly UploadRow[], filter: UploadListFilter, sort: UploadSort, assigned: Record<string, string[]> = {},
+): UploadRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  return sortUploadRows(applyUploadFilters([...byId.values()].map(toListRow), filter), sort)
+  return sortUploadRows(applyUploadFilters([...byId.values()].map((r) => toListRow(r, assigned)), filter), sort)
     .flatMap((l) => {
       const row = byId.get(l.id);
       return row ? [row] : [];
@@ -76,8 +86,3 @@ export function visibleRows(rows: readonly UploadRow[], filter: UploadListFilter
 export function headerState(visible: readonly UploadRow[], checked: readonly string[]): "none" | "some" | "all" {
   return checkState(visible.map((r) => r.source.id), checked);
 }
-
-/** The counters the source bar shows, straight off the rows (no extra state). */
-
-
-/** The counters the source bar shows, straight off the rows (no extra state). */

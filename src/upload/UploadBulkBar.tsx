@@ -14,6 +14,8 @@
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
 import PreviewStroke from "../svg/PreviewStroke";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
+import UploadRowBadgeApply from "./UploadRowBadgeApply";
 
 export interface UploadBulkBarProps {
   header: "none" | "some" | "all";
@@ -51,6 +53,9 @@ export interface UploadBulkBarProps {
   onExport: () => void;
   onDownload: () => void;
   onCancel: () => void;
+  rowBadges: RowBadgeState;
+  checkedIds: string[];
+  onApplyRowBadge: (ids: string[], badgeId: string) => void;
 }
 
 const STROKE_TITLE = "Export stroke width in px, written on every visible stroke of every icon (the live previews show it). default = each SVG keeps its own widths.";
@@ -93,6 +98,7 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
       <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>
         ⚙ Export settings…
       </button>
+      <UploadRowBadgeApply state={p.rowBadges} ids={p.checkedIds} onApply={p.onApplyRowBadge} />
       <span className="svg-divider" aria-hidden="true" />
       <Progress p={p} running={running} />
       {running > 0 && (

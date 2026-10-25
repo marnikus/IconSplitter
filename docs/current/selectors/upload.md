@@ -2,7 +2,7 @@
 
 Selector priority: **semantic** (role / label / text) > **structural** (parent / child) > **class fragment** (last resort). See [shared selector rules](shared.md#i-selector-object-structure--for-every-element).
 
-**Detail pages:** [filters, bulk bar, rows, status](upload-list.md) · [settings and metadata dialogs](upload-dialogs.md).
+**Detail pages:** [filters, bulk bar, rows, status](upload-list.md) · [settings and metadata dialogs](upload-dialogs.md) · [row badges](upload-row-badges.md).
 
 ## R. SVG to upload — `src/upload/*` (verified 2026-10-07)
 

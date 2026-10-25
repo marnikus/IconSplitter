@@ -17,11 +17,13 @@ vi.mock("../src/selection/offline", async (importOriginal) => {
 
 const applyDecisionsSpy = vi.mocked(applyDecisionPatch);
 import { getAppState, patchSvg, patchUpload, patchV2, patchView, resetAppStore, setAppState } from "../src/state/appstore";
+import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
 import { DEFAULT_SESSION } from "../src/lib/session";
 import { HISTORY_VERSION, type HistoryEntry } from "../src/lib/history";
 
 beforeEach(() => {
   resetAppStore();
+  resetRowBadges();
   applyDecisionsSpy.mockClear();
 });
 
@@ -140,9 +142,16 @@ describe("applyEntry", () => {
     await expect(applyEntry(entry("sheets"), null)).resolves.toBe(false);
   });
 
+  it("restores upload row badges from a history payload", async () => {
+    const after = { v: 1 as const, catalog: [{ id: "rb1", name: "Priority", color: "#ff5b7e" }], assigned: { pair_a: ["rb1"] } };
+    await expect(applyEntry(entry("uploadRowBadges"), after)).resolves.toBe(true);
+    expect(getRowBadgeState().catalog[0].name).toBe("Priority");
+    await expect(applyEntry(entry("uploadRowBadges"), { v: 9 })).resolves.toBe(false);
+  });
+
   it("refuses a kind it does not know instead of guessing", async () => {
     await expect(applyEntry(entry("deleteFiles"), { all: true })).resolves.toBe(false);
-    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"]);
+    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges"]);
   });
 });
 

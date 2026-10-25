@@ -7,7 +7,7 @@
 // actions, the boot/persist effects, the derived lists and the flat API the
 // panel reads.
 
-import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type Dispatch } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { SCAN_IDLE } from "../lib/scanseq";
@@ -23,6 +23,8 @@ import { bootRoot, scanUpload, type UploadScanSetters } from "./scan";
 import { loadUploadPrefs, saveUploadPrefs } from "./prefsstore";
 import { assembleRows, countsOf, pruneChecked, type UploadCounts } from "./rowmodel";
 import { headerState, visibleRows } from "./rowlist";
+import { getRowBadgeState, subscribeRowBadges } from "./rowbadgestore";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
 import { loadUploadSettings, saveUploadSettings } from "./settingsstore";
 import { useUploadActions, type UploadActions, type UploadCtx } from "./actions";
 import { loadPresets, loadPrompt, savePrompt } from "./promptstore";
@@ -41,6 +43,7 @@ export type UploadApi = UploadModel & UploadActions & {
   counts: UploadCounts;
   refs: UploadRefs;
   dispatch: Dispatch<UploadAction>;
+  rowBadges: RowBadgeState;
 };
 
 export function useUpload(): UploadApi {
@@ -69,7 +72,7 @@ export function useUpload(): UploadApi {
     ...model, ...actions, supported: fsSupported(),
     checked: app.upload.checked, activeId: app.upload.activeId,
     header: derived.header, visible: derived.visible, counts: derived.counts,
-    refs, dispatch,
+    refs, dispatch, rowBadges: derived.rowBadges,
   };
 }
 
@@ -179,12 +182,16 @@ function useUndoBinding(dispatch: Dispatch<UploadAction>): void {
 
 /** The filtered/sorted view, its header state and the counts, derived only. */
 function useDerived(model: UploadModel, checked: string[]): {
-  visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts;
+  visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts; rowBadges: RowBadgeState;
 } {
-  const visible = useMemo(() => visibleRows(model.rows, model.filter, model.sort), [model.rows, model.filter, model.sort]);
+  const rowBadges = useSyncExternalStore(subscribeRowBadges, getRowBadgeState, getRowBadgeState);
+  const visible = useMemo(
+    () => visibleRows(model.rows, model.filter, model.sort, rowBadges.assigned),
+    [model.rows, model.filter, model.sort, rowBadges.assigned],
+  );
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const counts = useMemo(() => countsOf(model.rows), [model.rows]);
-  return { visible, header, counts };
+  return { visible, header, counts, rowBadges };
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */
