@@ -2,7 +2,7 @@
 
 See [conventions](shared.md#i-selector-object-structure--for-every-element) and [Upload selectors](upload.md).
 
-[Caps](../sor/upload-stroke-endpoints.md#selectors).
+[Caps](../sor/upload-stroke-endpoints.md#selectors) · [Presets](../sor/upload-settings-presets.md#selectors).
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
 Collapsed groups: `<details>` + `upload-set-{badge,sizeguide,shadow}-summary`.

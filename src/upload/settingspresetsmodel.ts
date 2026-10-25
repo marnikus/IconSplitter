@@ -20,9 +20,10 @@ export function useSettingsPresets(defaults: UploadSettings, onLoad: (settings: 
   const [state, setState] = useState(initialState);
   const patch = (change: Partial<PresetManagerState>) => setState((current) => ({ ...current, ...change }));
   const commit = (change: PresetChange, message: string) => {
-    if (change.error !== null) return patch({ message: change.error });
-    if (!saveExportPresets(change.presets)) return patch({ message: "Unable to verify preset storage. Check browser storage and try again." });
+    if (change.error !== null) { patch({ message: change.error }); return false; }
+    if (!saveExportPresets(change.presets)) { patch({ message: "Unable to verify preset storage. Check browser storage and try again." }); return false; }
     patch({ presets: change.presets, selected: change.selected, name: change.selected, removing: false, message });
+    return true;
   };
   return {
     state,

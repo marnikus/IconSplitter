@@ -113,14 +113,14 @@ it('saves/loads global snapshots explicitly and renames/removes without changing
   saveUploadSettings({defaults:{...DEFAULT_UPLOAD_SETTINGS,includeJpeg:false},overrides:{[FOG]:{includeJpeg:true}}});
   await mount();await click('upload-settings-open');
   expect(q('upload-settings-preset-select')).not.toBeNull();
-  await type('upload-settings-preset-name','Vectors');await click('upload-settings-preset-save');
+  await click('upload-settings-preset-save-open');await type('upload-settings-preset-name','Vectors');await click('upload-settings-preset-save');
   expect(q('upload-settings-preset-status')!.textContent).toContain('saved');
   await click('upload-set-jpeg');await click('upload-set-svg');
   await select('Vectors');expect(loadUploadSettings().defaults.includeSvg).toBe(false);
   await click('upload-settings-preset-load');
   expect(loadUploadSettings().defaults).toMatchObject({includeSvg:true,includeJpeg:false});
   expect(loadUploadSettings().overrides[FOG]).toEqual({includeJpeg:true});
-  await type('upload-settings-preset-name','Shop vectors');await click('upload-settings-preset-rename');
+  await click('upload-settings-preset-rename');await type('upload-settings-preset-name','Shop vectors');await click('upload-settings-preset-rename-confirm');
   expect(q('upload-settings-preset-select')!.textContent).toContain('Shop vectors');
   expect(q('upload-settings-preset-select')!.textContent).not.toContain('Vectors');
   await click('upload-set-close');await click('upload-settings-open');
@@ -134,10 +134,10 @@ it('saves/loads global snapshots explicitly and renames/removes without changing
 });
 
 it('rejects duplicate/blank names and reports failed storage without claiming success',async()=>{
-  await mount();await click('upload-settings-open');await click('upload-settings-preset-save');
+  await mount();await click('upload-settings-open');await click('upload-settings-preset-save-open');await click('upload-settings-preset-save');
   expect(q('upload-settings-preset-status')!.textContent).toMatch(/name/i);
   await type('upload-settings-preset-name','One');await click('upload-settings-preset-save');
-  await type('upload-settings-preset-name','one');await click('upload-settings-preset-save');
+  await click('upload-settings-preset-save-open');await type('upload-settings-preset-name','one');await click('upload-settings-preset-save');
   expect(q('upload-settings-preset-status')!.textContent).toMatch(/already exists/i);
   const storage=localStorage;
   vi.stubGlobal('localStorage',{getItem:(key:string)=>storage.getItem(key),setItem:()=>{throw new Error('quota');}});
@@ -153,7 +153,7 @@ it('reloads rich presets after a fresh panel boot without changing checks, local
   const applied={[FOG]:{shadowEnabled:true,shadowWidthPct:70,shadowGapPct:9}};
   const overrides={[FOG]:{includeJpeg:true}};
   saveUploadSettings({defaults,applied,overrides});
-  await mount();await click('upload-settings-open');await type('upload-settings-preset-name','Rich');
+  await mount();await click('upload-settings-open');await click('upload-settings-preset-save-open');await type('upload-settings-preset-name','Rich');
   expect(loadUploadSettings().defaults).toEqual(defaults);
   await click('upload-settings-preset-save');expect(loadExportPresets()[0].settings).toEqual(defaults);
   await click('upload-set-jpeg');await type('upload-set-padding-left','17');
@@ -181,4 +181,37 @@ it('reloads rich presets after a fresh panel boot without changing checks, local
   await click('hist-undo');expect(loadUploadSettings().overrides).toEqual(overrides);
   expect(loadUploadSettings().defaults).toEqual(defaults);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('starts compact, expands names only on demand and supports cancel/keyboard without changing settings',async()=>{
+  await mount();await click('upload-settings-open');
+  expect(q('upload-settings-preset-name')).toBeNull();
+  expect(q('upload-settings-presets')!.tagName).toBe('DIV');
+  expect(q('upload-settings-presets')!.textContent).not.toContain('Save global defaults for reuse');
+  const before=loadUploadSettings();
+  await click('upload-settings-preset-save-open');
+  expect(document.activeElement).toBe(q('upload-settings-preset-name'));
+  await type('upload-settings-preset-name','Discarded');await click('upload-settings-preset-edit-cancel');
+  expect(q('upload-settings-preset-name')).toBeNull();expect(loadExportPresets()).toEqual([]);
+  await click('upload-settings-preset-save-open');await type('upload-settings-preset-name','Compact');
+  await act(async()=>{q('upload-settings-preset-form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
+  expect(q('upload-settings-preset-name')).toBeNull();expect(loadExportPresets()[0].name).toBe('Compact');
+  await click('upload-settings-preset-rename');
+  expect((q('upload-settings-preset-name') as HTMLInputElement).value).toBe('Compact');
+  await act(async()=>{q('upload-settings-preset-name')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));});
+  expect(q('upload-settings-preset-name')).toBeNull();expect(q('upload-dialog-backdrop')).not.toBeNull();
+  expect(loadUploadSettings()).toEqual(before);
+});
+
+it('keeps one idle toolbar and dismisses the name editor when selecting or removing a preset',async()=>{
+  await mount();await click('upload-settings-open');await click('upload-settings-preset-save-open');
+  await type('upload-settings-preset-name','Main');await click('upload-settings-preset-save');
+  const toolbar=q('upload-settings-preset-select')!.parentElement!;
+  for(const action of ['load','save-open','rename','remove']) expect(toolbar.contains(q(`upload-settings-preset-${action}`))).toBe(true);
+  expect(q('upload-settings-preset-select')!.classList.contains('max-w-xs')).toBe(true);
+  await click('upload-settings-preset-rename');await select('Main');
+  expect(q('upload-settings-preset-name')).toBeNull();
+  await click('upload-settings-preset-save-open');await click('upload-settings-preset-remove');
+  expect(q('upload-settings-preset-name')).toBeNull();expect(q('upload-settings-preset-remove-confirm')).not.toBeNull();
+  await click('upload-settings-preset-remove-cancel');expect(loadExportPresets()[0].name).toBe('Main');
 });

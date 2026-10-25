@@ -3350,3 +3350,22 @@ verify:fast PASS; full verify PASS:2901tests/277files + native30/5 + production
 build. Coverage95.39/89.87/98.22/98.30 (statements/branches/functions/lines).
 No src/lib mocks, provider calls, dependencies, skipped tests, weakened gates,
 source artwork writes or generated artifacts committed.
+
+
+## 2026-10-25 — Compact export preset toolbar
+
+Plan `docs/archive/2026-10-25-compact-export-presets/README.md`; current owner
+`sor/upload-settings-presets.md`. Replaced bordered/two-row card with a single
+wrapping toolbar and capped selector. Save as/Rename open an auto-focused inline
+form; submit closes only after verified success; Escape/Cancel/select/removal
+dismiss it without changing stored settings. Duplicate/storage errors retain
+editable names. Explicit Load and confirmed removal remain intact.
+
+Genuine RED compact-idle assertion; focused23/5 PASS; types/lint/changed-quality
+vs dcee771 PASS (0errors/23existingwarnings); verify:fast PASS. Final full verify
+PASS:2903/277 + native30/5 + build; coverage95.39/89.87/98.22/98.30.
+Earlier full attempts: metadata-toast summary timeout, then native synthetic
+201.30ms vs200ms; standalone upload UI83 assertions passed (focused coverage
+command still exited1 from global floor). Final unchanged-code full run passed
+all lanes together. No weakened alarms, test skips, src/lib/algorithm/harness/
+isolation/dependency/storage-schema changes or generated artifacts committed.
