@@ -33,7 +33,7 @@ Filter grid (`v2-filters`): `v2-date-all` / `v2-date-month` / `v2-date-range`,
 `v2-to` (Range only), `v2-status`, `v2-pairing` (all / complete / missing
 pair), `v2-sort`, `v2-dir`, `v2-shown` ("Showing N pairs"), `v2-clear`.
 
-Bulk bar (`v2-bulk`):
+Bulk bar (`v2-bulk`, sticky at top 0 while the list scrolls):
 
 | Test id | Element | Notes |
 |---|---|---|

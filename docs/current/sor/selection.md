@@ -74,6 +74,10 @@ Selection V2 layouts and controls:
   Select visible adds those rows and Deselect all clears hidden checks too.
   Live counts distinguish selected, visible, checked-but-hidden and
   checked-but-incomplete (RULE 25, I-73).
+* In List review, the complete bulk bar (selected count, visible selection,
+  zoom and review actions) sticks to the top while the list scrolls, matching
+  the other tabs. Its opaque surface stays above rows and below overlays;
+  controls still wrap on narrower screens.
 * Bulk review — **Approve selected / Decline selected / Reset selected** only:
   the affected count is `checked ∩ visible ∩ complete` (I-15), shown before
   the button arms; Escape or Cancel disarms. One operation = one transition and

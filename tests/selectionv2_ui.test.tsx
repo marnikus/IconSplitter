@@ -194,6 +194,34 @@ describe("Selection V2 panel", () => {
     expect(ai.alt).toBe("AI result thumbnail");
   });
 
+  it("pins the bulk bar at the scroll-container top, above rows and below overlays", () => {
+    const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+    const rule = css.match(/\.v2-bulk\s*\{([^}]*)\}/)?.[1].replace(/\s/g, "") ?? "";
+    expect(rule).toContain("position:sticky;");
+    expect(rule).toContain("top:0;");
+    const z = Number(rule.match(/z-index:(\d+)/)?.[1]);
+    expect(z).toBeGreaterThan(2);
+    expect(z).toBeLessThan(30);
+    expect(rule).toContain("background:var(--v2-surface);");
+    for (const selector of ["v2-workspace", "v2", "v2-shell"]) {
+      const ancestor = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      expect(ancestor).not.toMatch(/overflow(?:-[xy])?:\s*(?:auto|scroll|hidden|clip)/);
+    }
+  });
+
+  it("keeps the whole pinned toolbar alongside the full list, outside nested scrollers", async () => {
+    const { el } = await mount(makeRoot());
+    const bar = q(el, "[data-testid='v2-bulk']")!;
+    const list = q(el, "[data-testid='v2-list']")!;
+    expect(bar.parentElement?.className).toBe("v2-workspace");
+    expect(bar.parentElement).toBe(list.parentElement);
+    expect(bar.nextElementSibling).toBe(list);
+    expect(bar.closest(".v2-panel, .pair-table, .v2-controls")).toBeNull();
+    for (const id of ["v2-check-all", "v2-selected-count", "v2-select-visible", "v2-deselect", "v2-thumb", "v2-approve-selected", "v2-decline-selected", "v2-reset-selected"]) {
+      expect(bar.querySelector(`[data-testid='${id}']`)).not.toBeNull();
+    }
+  });
+
   it("switches between list review and comparison, and the list has no compare panel", async () => {
     const { el } = await mount(makeRoot());
     expect(q(el, "[data-testid='v2-list']")).toBeTruthy();
