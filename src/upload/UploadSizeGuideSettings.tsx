@@ -1,3 +1,4 @@
+import UploadSettingsGroup from "./UploadSettingsGroup";
 // UploadSizeGuideSettings.tsx — the S/L size guide: the finished icon repeated
 // at two smaller sizes in one artboard corner, each labelled with the supplied
 // S and L letter outlines. ONE control set: the selected-only checkbox in the
@@ -27,13 +28,13 @@ interface NumberWant {
 
 export default function UploadSizeGuideSettings({ p, effective }: SettingsFieldProps) {
   return (
-    <div className="up-shadow-dialog" data-testid="upload-set-sizeguide-section">
+    <UploadSettingsGroup name="sizeguide" label="Size guide">
       {p.id === null ? <SelectedSizeGuideToggle p={p} /> : <PerIconSizeGuideToggle p={p} effective={effective} />}
       {p.id === null && <small className="up-hint" data-testid="upload-sizeguide-defaults-note">
         These defaults change the two logos' sizes and placement, but never turn on an unchecked icon.
       </small>}
       <SizeGuideFields p={p} effective={effective} />
-    </div>
+    </UploadSettingsGroup>
   );
 }
 

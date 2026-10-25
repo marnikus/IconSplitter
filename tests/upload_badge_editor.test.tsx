@@ -9,7 +9,12 @@ import { DEFAULT_BADGE_TEMPLATE, validateBadgeTemplate } from "../src/lib/upload
 const CUSTOM = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30"><rect width="60" height="30" fill="red"/></svg>';
 let host: HTMLDivElement, ui: Root, props: UploadSettingsDialogProps;
 const el = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLElement;
-const click = async (id: string) => { await act(async () => el(id).click()); };
+const click = async (id: string) => {
+  const element = el(id);
+  const folded = element.closest("details:not([open])");
+  if (folded) await act(async () => { (folded.querySelector("summary") as HTMLElement).click(); });
+  await act(async () => element.click());
+};
 const code = () => el('upload-badge-template-code') as HTMLTextAreaElement;
 async function type(value: string) {
   await act(async () => {

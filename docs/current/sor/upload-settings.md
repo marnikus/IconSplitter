@@ -4,10 +4,16 @@ For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
 
 **Detail pages:** [geometry: bounds, bake, placement](upload-geometry.md) · [corner badge](upload-badge.md) · [size guide](upload-sizeguide.md) · [stroke endpoints](upload-stroke-endpoints.md).
 
+## Collapsible popup groups
+
+Badge, Size guide and Shadow use native details/summary in both popup scopes,
+initially collapsed. Click or Enter/Space opens/folds each independently; several
+may stay open. Folding is display-only: mounted controls, drafts, values, checks
+and pins remain. Rerenders retain open state; normal blur commits are unchanged.
+
 ## Current settings and output geometry
 
-* **"Default" for every visual setting** (2026-10-19,
-  [plan](../../archive/2026-10-19-upload-default-settings/README.md); `lib/upload/asis`):
+* **Default visual settings** (`lib/upload/asis`):
   - `paddingPct: null` keeps the SVG's own margins (one fit pass).
   - Background `default` adds no artboard rect.
   - Stroke colour `artwork` is labelled Default.
@@ -81,8 +87,7 @@ For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
   presets. The
   checkbox selection is session-persisted and
   its gestures are undoable through the separate `uploadChecked` history type.
-* **Scale to N MP** (2026-10-09, I-62, design
-  `docs/archive/2026-10-09-eps-executable-artboard-megapixels/design.md` D5):
+* **Scale to N MP** (I-62):
   two more settings fields, `scaleToMegapixels` (default off) and
   `artboardMegapixels` (default 5, clamped 1–64 like the JPEG; junk → 5). On,
   and only in `content` mode, the artboard is the content fit (icon + padding)
@@ -103,7 +108,7 @@ For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
   padding) is scaled to N MP · strokes keep their px`; with a pinned artboard
   the checkbox is disabled and the note reads `the pinned size decides the
   megapixels`).
-* The artboard (2026-10-08) is one more settings field, with three modes:
+* The artboard has three modes:
   `content` (the artboard hugs the artwork, as before), a square px preset
   (256/512/1024/2048/4096 — "512×512 and other popular") or an exact CUSTOM
   W×H, which is what lets the user set the output aspect ratio. Read back
@@ -111,8 +116,7 @@ For [SVG to upload](upload.md); [I-60/I-62](invariants/upload.md).
   shrinks BOTH edges together so the ratio survives, and a preset that snaps to
   the nearest offered size; a corrupt value becomes `content`. Only a
   non-`content` artboard is written into the stored overrides.
-* The JPEG resolution is NEVER blocked by the artboard (2026-10-08, the user's
-  correction: "a small artboard must not cap the resolution"). `jpegMatchArtboard`
+* The JPEG resolution is NEVER capped by the artboard. `jpegMatchArtboard`
   (default true) says whether the JPEG follows a PINNED artboard's exact px;
   unticking it — which typing a megapixel value does in the same gesture —
   renders `jpegMegapixels` instead while keeping the artboard's aspect ratio, so

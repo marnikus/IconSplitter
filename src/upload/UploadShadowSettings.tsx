@@ -1,3 +1,4 @@
+import UploadSettingsGroup from "./UploadSettingsGroup";
 // UploadShadowSettings.tsx — the icon-relative gradient controls in export settings.
 import {
   clampShadowGapPct, clampShadowWidthPct, SHADOW_GAP_MAX, SHADOW_GAP_MIN,
@@ -8,7 +9,7 @@ import { change, Marker, type UploadSettingsDialogProps } from "./settingsfield"
 
 export default function UploadShadowSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
-    <div className="up-shadow-dialog" data-testid="upload-set-shadow-section">
+    <UploadSettingsGroup name="shadow" label="Shadow">
       {p.id === null ? <SelectedShadowControls p={p} /> : <div className="svg-field up-set-field">
         <span className="svg-label">Shadow<Marker p={p} field="shadowEnabled" testid="shadow" /></span>
         <label className="up-shadow-check">
@@ -20,7 +21,7 @@ export default function UploadShadowSettings({ p, effective }: { p: UploadSettin
       </div>}
       <ShadowDimensions p={p} effective={effective} />
       {p.id === null && <small className="up-hint">Shadow defaults for icon settings; changing these numbers does not enable unchecked icons.</small>}
-    </div>
+    </UploadSettingsGroup>
   );
 }
 

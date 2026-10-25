@@ -1886,6 +1886,11 @@
 
 .up-set-field .svg-input[type="number"] { height: 28px; font-size: 10px; }
 .up-shadow-dialog { grid-column: 1 / -1; border: 1px solid var(--v2-line); border-radius: 6px; padding: 10px; }
+/* Native summary keeps mouse, Enter/Space and disclosure semantics together. */
+.up-set-group-summary { cursor: pointer; font-weight: 600; color: var(--v2-text); }
+.up-set-group-summary::marker { color: var(--v2-muted); }
+.up-set-group-summary:focus-visible { outline: 2px solid var(--v2-purple-2); outline-offset: 4px; border-radius: 2px; }
+.up-set-group-content { padding-top: 12px; }
 .up-shadow-controls { display: grid; gap: 8px; border-bottom: 1px solid var(--v2-line); padding-bottom: 10px; margin-bottom: 10px; }
 .up-shadow-check { display: flex; align-items: center; gap: 7px; }
 .up-shadow-dialog .up-shadow-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }

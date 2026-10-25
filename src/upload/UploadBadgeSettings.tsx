@@ -1,3 +1,4 @@
+import UploadSettingsGroup from "./UploadSettingsGroup";
 // UploadBadgeSettings.tsx — the supplied graphic's corner controls: one placement set.
 import {
   BADGE_CORNERS, BADGE_OFFSET_MAX, BADGE_OFFSET_MIN, BADGE_WIDTH_MAX, BADGE_WIDTH_MIN,
@@ -16,14 +17,14 @@ interface NumberField {
 
 export default function UploadBadgeSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
-    <div className="up-shadow-dialog" data-testid="upload-set-badge-section">
+    <UploadSettingsGroup name="badge" label="Badge">
       {p.id === null ? <SelectedBadgeToggle p={p} /> : <PerIconBadgeToggle p={p} effective={effective} />}
       {p.id === null && <small className="up-hint" data-testid="upload-badge-defaults-note">
         These defaults change size and placement, but never turn on an unchecked icon.
       </small>}
       <UploadBadgeTemplateSetting p={p} effective={effective} />
       <BadgePlacementFields p={p} effective={effective} />
-    </div>
+    </UploadSettingsGroup>
   );
 }
 

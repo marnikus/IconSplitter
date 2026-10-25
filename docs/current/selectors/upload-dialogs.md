@@ -5,7 +5,8 @@ See [conventions](shared.md#i-selector-object-structure--for-every-element) and 
 [Stroke endpoints](../sor/upload-stroke-endpoints.md#selectors).
 
 ## Settings dialog (`upload-dialog-backdrop`, `role="dialog"`)
-**2026-10-19 — "default" for every visual setting** ([plan](../../archive/2026-10-19-upload-default-settings/README.md)):
+Collapsed groups: `<details>` + `upload-set-{badge,sizeguide,shadow}-summary`.
+Folding is display-only.
 - `upload-set-as-is` ("All default (export as is)", `aria-pressed` while every visual field is default and Shadow/badge/size guide are off) + `upload-set-as-is-note` (turns them off in the icon scope);
 - `upload-set-padding-default` (toggles null ↔ 8 **only on the button**, never the blank field around it; `upload-set-padding` reads empty with placeholder `default`, its label targets this input);
 - `upload-set-bg-default` (before `-transparent`);

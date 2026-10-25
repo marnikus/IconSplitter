@@ -89,7 +89,10 @@ const settle = () => quietSettle(0);
  */
 async function waitForEl(sel: string): Promise<HTMLElement> {
   await waitFor(() => q(sel) !== null, sel);
-  return q(sel) as HTMLElement;
+  const element = q(sel) as HTMLElement;
+  const folded = element.closest("details:not([open])");
+  if (folded) await act(async () => { (folded.querySelector("summary") as HTMLElement).click(); });
+  return element;
 }
 
 async function click(sel: string): Promise<void> {
