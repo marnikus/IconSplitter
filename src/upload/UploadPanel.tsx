@@ -16,14 +16,10 @@ import { idsAwaitingAcceptance } from "./metaaccept";
 import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
 import UploadProgressHeaders from "./UploadProgressHeaders";
 import UploadBulkBar from "./UploadBulkBar";
-import { selectedShadow } from "./shadowselection";
 import { resettableIds } from "./selectedsettings";
-import { selectedBadge } from "./badgeselection";
-import { selectedSizeGuide } from "./sizeguideselection";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
-import UploadMetaDialog from "./UploadMetaDialog";
-import UploadSettingsDialog from "./UploadSettingsDialog";
+import UploadDialogs from "./UploadDialogs";
 import type { UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadRowActions } from "./UploadRow";
 import type { UploadDiscovery, UploadExclusion } from "./discovery";
@@ -45,12 +41,13 @@ export default function UploadPanel({ active = true }: { active?: boolean }) {
         onChooseRoot={g.chooseRoot} onRescan={g.rescan}
         onGemini={g.setGemini} onCheckModel={g.checkModel} onProviderOpen={g.setProviderOpen}
       onSaveKey={g.saveKey} onForgetKey={g.forgetKey}
-        onFilter={g.setFilter} onSort={g.setSort} onClearFilters={g.clearFilters} />
+        onFilter={g.setFilter} onSort={g.setSort} onClearFilters={g.clearFilters}
+        badgeCatalog={g.rowBadges.catalog} onOpenRowBadges={g.openRowBadges} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
       <UploadProgressHeaders g={g} />
       <StatusBar g={g} />
-      <Dialogs g={g} />
+      <UploadDialogs g={g} />
       <Overlay g={g} />
     </div>
   );
@@ -75,7 +72,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
     toggleCheck: g.toggleCheck, selectRow: g.selectRow, openSettings: g.openSettings,
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
     editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
-    openLocation: g.openLocation,
+    openLocation: g.openLocation, rowBadges: g.rowBadges, toggleRowBadge: g.toggleRowBadge,
   };
   return (
     <>
@@ -106,7 +103,8 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
         onAcceptMetadata={() => g.acceptMetadataSelected(g.checked)}
         onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
-        onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())} />
+        onCancel={() => (g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport())}
+        rowBadges={g.rowBadges} checkedIds={g.checked} onApplyRowBadge={g.applyRowBadgeSelected} />
     </div>
   );
 }
@@ -203,49 +201,6 @@ function StatusBar({ g }: { g: UploadApi }) {
       </div>
     </footer>
   );
-}
-
-/** The settings dialog (global or one icon) and the metadata confirmation. */
-function Dialogs({ g }: { g: UploadApi }) {
-  const dialog = g.dialog;
-  return (
-    <>
-      <SettingsDialog g={g} />
-      {dialog !== null && dialog.kind === "meta" && <UploadMetaDialog g={g} dialog={dialog} />}
-    </>
-  );
-}
-
-function SettingsDialog({ g }: { g: UploadApi }) {
-  const dialog = g.dialog;
-  if (dialog === null || dialog.kind !== "settings") return null;
-  const id = dialog.id;
-  const row = id === null ? null : g.rows.find((r) => r.source.id === id) ?? null;
-  return (
-    <UploadSettingsDialog
-      scope={id === null ? null : row?.source.svgName ?? id}
-      id={id}
-      defaults={g.defaults}
-      overrides={ownMap(g.overrides, id)}
-      applied={ownMap(g.applied, id)}
-      selectedShadow={selectedShadow(g.checked, g.defaults, g.overrides, g.applied)}
-      selectedCount={g.checked.length}
-      onSelectedShadowToggle={() => g.toggleShadowSelected(g.checked)}
-      onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
-      selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides, g.applied)}
-      onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
-      selectedSizeGuide={selectedSizeGuide(g.checked, g.defaults, g.overrides, g.applied)}
-      onSelectedSizeGuideToggle={() => g.toggleSizeGuideSelected(g.checked)}
-      onDefaults={g.setDefaults}
-      onOverride={g.setOverride}
-      onResetOverride={g.resetOverride}
-      onClose={g.dismissDialog} />
-  );
-}
-
-/** A dialog's own maps: the row's entry in the icon scope, the empty map globally. */
-function ownMap<T>(map: Record<string, T>, id: string | null): Partial<T> {
-  return (id === null ? undefined : map[id]) ?? {};
 }
 
 /** The status bar's one word about the key — never "no key" when unreadable. */

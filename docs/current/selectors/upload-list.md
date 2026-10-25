@@ -5,8 +5,9 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 Filters: `upload-filter-status` (all / processed / partial / failed / cancelled /
 stale / not exported), `upload-filter-metadata` (all / empty / generating /
 generated / invalid / accepted / interrupted), `upload-sort` (name / package
-status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
-`upload-clear-filters`.
+status / metadata state), `upload-filter-badge` (all / none / any / a catalog
+id — [row badges](upload-row-badges.md)), `upload-search`, `upload-shown` ("Showing N of M"),
+`upload-clear-filters`, `upload-rowbadges-open`.
 
 ## Bulk bar (`upload-bulk`)
 

@@ -6,10 +6,13 @@ import type { ExportRecord, ExportStage, ExportStatus } from "../lib/upload/expo
 import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
 import type { SentPreview } from "../lib/upload/sentpreview";
 import type { GeminiUsage } from "../lib/upload/gemini";
+import type { BadgeFilter } from "../lib/upload/rowbadge";
 import type { ScanSeq } from "../lib/scanseq";
 import type { MetadataJournal } from "./journal";
 import type { UploadRowSource } from "./discovery";
 import type { UploadCtx } from "./actions";
+
+export type { BadgeFilter };
 
 /** One toast line (mirrors svg/statemodel's Toast). */
 export interface Toast {
@@ -85,9 +88,11 @@ export interface UploadListFilter {
   status: UploadStatusFilter;
   metadata: UploadMetaFilter;
   search: string;
+  /** Catalog id, or all / none / any (I-79). */
+  badge: BadgeFilter;
 }
 
-export const ALL_UPLOAD_FILTER: UploadListFilter = { status: "all", metadata: "all", search: "" };
+export const ALL_UPLOAD_FILTER: UploadListFilter = { status: "all", metadata: "all", search: "", badge: "all" };
 
 /** The row fields a filter or sort may look at. */
 export interface UploadListRow {
@@ -97,6 +102,7 @@ export interface UploadListRow {
   status: UploadStatusFilter;
   metadata: UploadMetaFilter;
   approvedValid: number;
+  badges: string[];
 }
 
 // --- dialogs ------------------------------------------------------------------
@@ -105,6 +111,7 @@ export type MetaDialogMode = "generate" | "regenerate";
 
 export type UploadDialog =
   | { kind: "settings"; id: string | null } // null = the global defaults
+  | { kind: "rowBadges" }
   /**
    * The exact request preview, before any paid send, with the images it carries.
    * `thenExport` names the selection "Export selected" must export once the

@@ -22,6 +22,8 @@ import { statusOf, type UploadCounts } from "./rowmodel";
 import UploadPreview from "./UploadPreview";
 import UploadMetaFields from "./UploadMetaFields";
 import type { UploadJobStatus, UploadRow } from "./types";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
+import UploadRowBadges from "./UploadRowBadges";
 
 export interface UploadRowActions {
   activeId: string | null;
@@ -43,6 +45,8 @@ export interface UploadRowActions {
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
   exportRow: (id: string) => void;
+  rowBadges: RowBadgeState;
+  toggleRowBadge: (pairId: string, badgeId: string) => void;
 }
 
 export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRowActions }) {
@@ -64,7 +68,7 @@ export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRow
         thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
         label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
         settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
-      <FileCell row={row} />
+      <FileCell row={row} a={a} />
       <StatusCell row={row} status={status} />
       <MetaCell row={row} />
       <SettingsCell row={row} a={a} />
@@ -97,7 +101,7 @@ function useActiveScroll(active: boolean) {
 }
 
 /** The file a row is about and the folder its package commits into. */
-function FileCell({ row }: { row: UploadRow }) {
+function FileCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
   const id = row.source.id;
   return (
     <div className="svg-file-main">
@@ -107,6 +111,7 @@ function FileCell({ row }: { row: UploadRow }) {
         export → {exportDirOf(row.source.dirPath)} · approved v{row.source.version}
         {row.source.approvedValid > 1 ? ` · ${row.source.approvedValid} approved versions` : ""}
       </div>
+      <UploadRowBadges pairId={id} state={a.rowBadges} onToggle={a.toggleRowBadge} />
     </div>
   );
 }
