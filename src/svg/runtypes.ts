@@ -58,6 +58,8 @@ export interface RunArgs {
   metas: Map<string, PairMeta | null>;
   onEvent: (event: RunEvent) => void;
   signal: AbortSignal;
+  /** Request-local cancellation never aborts the owning run. Cleared in finally. */
+  onRequestController?: (controller: AbortController | null) => void;
 }
 
 export interface RunSummary {

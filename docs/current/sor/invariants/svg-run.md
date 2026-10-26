@@ -18,7 +18,9 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   main image from later image edits/main switches; SVG confirmation refuses
   active image mutations and asks for input review rather than silently swapping.
   Root changes/rescans and conflicting sidecar writes are guarded. Per-run Stop
-  stops that SVG run only; global SVG Cancel drops pending SVGs then aborts active
+  stops that SVG run only. **Skip current request** aborts only the foreground
+  request and continues that run with the next plan; shared-request icons skip
+  together. Saved files and independent waiting/parallel work survive. Global SVG Cancel drops pending SVGs then aborts active
   SVGs, not image work. Unknown/stopped outcomes drop affected waiting retries
   with an explanation, never auto-resend; independent waiting work is preserved.
   Queue/controllers/credentials are session-only; restart sends nothing.

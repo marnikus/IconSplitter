@@ -103,19 +103,21 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
   tiers
 * `svg_runlog.test.ts` — every `RunEvent` kind maps to one `svg.*` entry with
   its stable ids (run, request, item, retry, cancel), a finished request reports
-  tokens/cost/outcome/elapsed **and** the provider request id, a stalled outcome
-  is a warning that says "never retried" (never an error), and the composite's
-  data URL travelling on the same event never reaches the entry
+  tokens/cost/outcome/elapsed/request id; stalls warn "never retried"; composite
+  data URLs never reach log entries
 
 * `joblocks.test.ts`, `svg_jobstate.test.ts` — atomic all-or-none acquisition,
   canonical path/image ownership, late release, fair disjoint bypass, pending
-  preview protection, uncertain retry removal, slot validation, aggregate counts.
+  preview protection, uncertain retries, slot/count validation, foreground-only skip.
 * `svg_queue_ui.test.tsx` — real streamed concurrent runs/journal isolation,
   same-pair waiting, independent Stop/global drop, completed-row correction during
-  sibling work, retained versions, frozen queued settings, 3-slot cap and root guards.
+  sibling work, retained versions, frozen settings, slot/root guards; request skip
+  continues its batch and preserves independent queued work/terminal audio.
 * `svg_imgreg_ui.test.tsx` — disjoint image/SVG overlap, refusal before conflicting
   image send, explicit retry after release preserves both histories, reverse
   image-input mutation refuses SVG rather than auto-sending changed bytes.
 * `completion_sound.test.ts` — import/arm silence, once-only finished cues,
   serial playback, cancellation, mute, first-click async activation, blocked audio
   and byte-exact decoding/serialization of the supplied inline MP3.
+
+Request skip/backoff/late-answer tests: `svg_runner.test.ts`; [scope/owners](../svg-parallel-runs.md#skip-current-request-versus-cancel-the-batch).

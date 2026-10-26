@@ -5,8 +5,8 @@
 // partial failure or an unknown outcome can be traced to a single request. The
 // composites live in memory only and are never written into the SVG output
 // folder. The strip stays after a run ends (that record is the answer to "what
-// did this cost, what failed"), and Cancel only exists while something is in
-// flight — cancelling keeps everything already saved.
+// did this cost, what failed"), and Skip current request exists while work is
+// active — it keeps saved results and continues the owning run.
 
 import { fmtElapsed } from "../lib/svgclock";
 import { costLabel, fmtTokens } from "../lib/svgusage";
@@ -35,7 +35,8 @@ export default function SvgBatchStrip({ progress, running, onCancel }: SvgBatchS
         <span className="svg-masked">hash {progress.hash.slice(0, 12)}</span>
       </div>
       <Outcomes outcomes={progress.outcomes} />
-      {running && <button type="button" className="svg-btn" data-testid="svg-batch-cancel" onClick={onCancel}>Cancel</button>}
+      {running && <button type="button" className="svg-btn" data-testid="svg-batch-cancel" onClick={onCancel}
+        title="Skip this provider request only (all icons sharing it); continue with the next request">Skip current request</button>}
     </section>
   );
 }

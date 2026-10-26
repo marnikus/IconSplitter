@@ -43,6 +43,37 @@ scope repeated batch IDs by run ID. Restart restores uncertainty metadata, never
 queued paid work. Leases coordinate this panel/session, not external apps or
 other browser windows; they are not OS filesystem locks.
 
+## Skip current request versus cancel the batch
+
+The foreground request strip's **Skip current request** (`svg-batch-cancel`)
+only aborts that run's current provider request. It does not abort the owning
+run controller, remove independent queued confirmations, stop parallel runs or
+stop image edits. The next planned request starts automatically; completed SVG
+versions remain saved. When several icons share one HTTP request, all its
+members are skipped together—an individual composite member cannot be cancelled
+at the provider. The button's tooltip says this explicitly.
+
+A fresh short-lived controller owns each request, including composite/prompt
+preparation and retry backoff. Whole-run cancellation forwards into it; request
+cancellation never flows back to the run. Finally clears ownership and removes
+the parent listener, including exceptional exits. An abort is never retried;
+late answers arriving after skip are not saved, but known reported usage is kept.
+The skipped request has a failed/aborted outcome with an explicit skipped reason,
+not a whole-run `cancelled` status. The normal terminal batch cue still occurs
+once when the continuing batch ends. Same-source uncertain-retry protection
+remains in force; independent waiting work survives.
+
+**Stop this run** still stops the named SVG run. The bulk **Cancel run** and
+persistent **Cancel batch** still stop all active SVG runs and drop waiting SVG
+work; neither stops the separate image process. These are deliberately separate
+from the request-strip action.
+
+Owners: `runner.ts`/`runtypes.ts` (request lifetime), `runbatch.ts`/`runsend.ts`
+(request signal, retry, late-answer guard), `jobstate.ts`/`runjobs.ts` (owned
+controller and foreground skip), `actions.ts`/`SvgPanel.tsx`/`SvgBatchStrip.tsx`
+(separate UI action). Regressions: `svg_runner.test.ts`, `svg_queue_ui.test.tsx`,
+`svg_jobstate.test.ts`, `svg_strip.test.tsx`. [Plan/evidence](../../archive/2026-10-26-svg-request-skip/README.md).
+
 ## Local completion audio
 
 SVG and image jobs retain one enabled terminal cue per run, not per icon or

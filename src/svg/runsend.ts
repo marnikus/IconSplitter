@@ -37,10 +37,10 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
 async function attemptSend(ctx: BatchCtx, request: ReturnType<typeof buildChatRequest>): Promise<SendOk | SendBad> {
   const { state } = ctx;
   for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
-    if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
+    if (ctx.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
     const out = await sendChatStreaming({
       url: chatUrl(state.args.config.baseUrl), body: request, apiKey: state.args.apiKey,
-      signal: state.args.signal, stallMs: state.stallMs, onId: (id) => rememberId(ctx, id),
+      signal: ctx.signal, stallMs: state.stallMs, onId: (id) => rememberId(ctx, id),
     });
     if (out.ok) {
       // A non-streamed answer carries no stream `id:`; keep the header id it does have.
@@ -52,7 +52,7 @@ async function attemptSend(ctx: BatchCtx, request: ReturnType<typeof buildChatRe
     }
     const waitMs = out.failure.retryAfterMs ?? backoff(attempt);
     noteRetry(ctx, attempt + 1, out.failure, waitMs);
-    await delay(waitMs, state.args.signal);
+    await delay(waitMs, ctx.signal);
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
 }
@@ -75,6 +75,9 @@ function rememberId(ctx: BatchCtx, id: string): void {
 
 /** The user-facing reason: redacted; a stall names the window and the id. */
 function failureText(state: RunState, failure: Failure, ctx: BatchCtx): string {
+  if (failure.kind === "aborted" && !state.args.signal.aborted) {
+    return "Current request skipped — remaining requests continue; the provider may still finish or bill it. Not resent.";
+  }
   if (failure.kind !== "stalled") return redact(failure.message, state.args.apiKey);
   const id = ctx.requestId === null ? "" : ` Provider request id: ${ctx.requestId}.`;
   return stallHint(state.args.caps, state.args.params, state.stallMs) + id;
@@ -94,10 +97,11 @@ function backoff(attempt: number): number {
 }
 
 async function delay(ms: number, signal: AbortSignal): Promise<void> {
-  if (ms <= 0) return;
+  if (ms <= 0 || signal.aborted) return;
   await new Promise<void>((resolve) => {
     const done = () => {
       window.clearTimeout(timer);
+      signal.removeEventListener("abort", done);
       resolve();
     };
     const timer = window.setTimeout(done, ms);

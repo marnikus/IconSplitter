@@ -6,7 +6,7 @@
 // retries a request whose outcome is unknown, and never guesses a mapping — an
 // unmatched or duplicate result is reported.
 
-import { planBatches, validateBatchPlan, type BatchSource } from "../lib/svgbatch";
+import { planBatches, validateBatchPlan, type BatchPlan, type BatchSource } from "../lib/svgbatch";
 import { requestSizeFor } from "../lib/svgregen";
 import { effectiveStallMs } from "../lib/effortlimits";
 import { costInfoFor } from "../lib/svgpricing";
@@ -36,9 +36,25 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
       args.onEvent({ kind: "cancelled" });
       break;
     }
-    await runBatch(state, plan, i + 1);
+    await runRequest(state, plan, i + 1);
   }
   return summaryOf(state, args.signal.aborted);
+}
+
+/** The parent can stop a request, but skipping a request cannot stop its parent. */
+async function runRequest(state: RunState, plan: BatchPlan, index: number): Promise<void> {
+  const { args } = state;
+  const controller = new AbortController();
+  const stop = () => controller.abort(args.signal.reason);
+  args.signal.addEventListener("abort", stop, { once: true });
+  if (args.signal.aborted) stop();
+  try {
+    args.onRequestController?.(controller);
+    await runBatch(state, plan, index, controller.signal);
+  } finally {
+    args.signal.removeEventListener("abort", stop);
+    args.onRequestController?.(null);
+  }
 }
 
 function newRunState(args: RunArgs, total: number, perRequest: number): RunState {

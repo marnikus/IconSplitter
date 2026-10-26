@@ -29,8 +29,11 @@ request in flight, next to Cancel — the visual proof that a long generation is
 alive; "(ended)" once the run stops), `svg-batch-reports` with one
 `svg-batch-report-{index}` per finished request (its own counts, elapsed,
 tokens and cost; class `failed` when that request failed and `unknown` when its
-outcome was never confirmed), `svg-batch-cancel` (only while something is in
-flight).
+outcome was never confirmed), `svg-batch-cancel` (**Skip current request**, only while running): aborts
+only this foreground request, then continues the same run. Its tooltip explains
+that all icons sharing the provider request are skipped together. It does not
+invoke the full-batch Cancel or drop independent waiting work.
+[Scope/lifecycle](../sor/svg-parallel-runs.md#skip-current-request-versus-cancel-the-batch).
 
 ## S1. Persistent progress header — `src/svg/SvgProgressHeader.tsx` (2026-10-11)
 

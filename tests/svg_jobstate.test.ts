@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SCAN_IDLE } from "../src/lib/scanseq";
 import { jobStore, reserveSources, sourcesBusy, parallelLimit, setParallelLimit, imagesBusy } from "../src/svg/jobstate";
+import { skipCurrentSvgRequest } from "../src/svg/runjobs";
 import { jobEvent, processTotals } from "../src/svg/jobprogress";
 import { queueItem } from "../src/svg/runqueue";
 import { toRow } from "../src/svg/rowmodel";
@@ -17,7 +18,7 @@ function context(): RunCtx {
   } as unknown as RunCtx;
 }
 function job(): SvgJob {
-  return { id: "running", label: "fog", ids: ["pair_1"], keys: ["architecture/fog_ai.svg.json"], controller: new AbortController(),
+  return { id: "running", label: "fog", ids: ["pair_1"], keys: ["architecture/fog_ai.svg.json"], controller: new AbortController(), requestController: null,
     status: "running", progress: null, current: null, outcomes: [], summary: "" };
 }
 
@@ -68,4 +69,21 @@ describe("session process safety", () => {
     ], [waiting]);
     expect(totals).toEqual({ done: 0, left: 9, images: 9, saved: 0, interrupted: true });
   });
+});
+
+
+it("skips only the foreground request, leaving sibling job/run controllers intact", () => {
+  const c = context(); const first = job(); const second = { ...job(), id: "second" };
+  first.requestController = new AbortController(); second.requestController = new AbortController();
+  const store = jobStore(c.refs); store.jobs = [first, second]; store.foreground = second.id;
+  expect(skipCurrentSvgRequest(c)).toBe(true);
+  expect(second.requestController.signal.aborted).toBe(true);
+  expect(first.requestController.signal.aborted).toBe(false);
+  expect(first.controller.signal.aborted).toBe(false);
+  expect(second.controller.signal.aborted).toBe(false);
+  expect(skipCurrentSvgRequest(c)).toBe(false);
+  second.requestController = null; expect(skipCurrentSvgRequest(c)).toBe(false);
+  second.requestController = new AbortController(); second.status = "finished";
+  expect(skipCurrentSvgRequest(c)).toBe(false);
+  expect(second.requestController.signal.aborted).toBe(false);
 });

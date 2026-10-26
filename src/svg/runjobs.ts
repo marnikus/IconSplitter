@@ -35,7 +35,7 @@ function launchRun(snapshot: RunSnapshot, item: QueueItem): void {
   const store = jobStore(c.refs);
   if (!store.jobs.some((job) => job.status === "running")) store.jobs = [];
   const job: SvgJob = { id: newRunId(), label: item.label, ids: item.ids, keys: sourceKeys(c, item.ids),
-    controller: new AbortController(), status: "running", progress: null, current: null, outcomes: [], summary: "" };
+    controller: new AbortController(), requestController: null, status: "running", progress: null, current: null, outcomes: [], summary: "" };
   if (!acquireResources(store.locks, job.id, job.keys)) return;
   store.jobs.push(job);
   syncForeground(c);
@@ -50,6 +50,7 @@ async function executeRun(snapshot: RunSnapshot, item: QueueItem, job: SvgJob): 
       config: { ...c.m.config, imagesPerRequest: item.regen?.kind === "current-svg" ? item.regen.size : c.m.config.imagesPerRequest }, caps: c.m.caps, params: c.m.params,
       prompt: c.m.prompt, regen: item.regen ?? MAIN_PLAN, promptChoice: item.prompt, regenCodes: item.codes,
       sources: inIdOrder(c.rows, item.ids, (r) => r.source.id).map((r) => r.source), metas: c.refs.metas,
+      onRequestController: (controller) => { job.requestController = controller; },
       signal: job.controller.signal, onEvent: withRunLog((event) => jobEvent(c, job, event)) });
     job.outcomes = summary.outcomes;
     job.status = summary.cancelled ? "cancelled" : summary.saved === 0 && summary.problems.length > 0 ? "failed" : "finished";
@@ -74,6 +75,17 @@ function finishJob(c: RunCtx, job: SvgJob): void {
   syncForeground(c);
   releaseJobRows(c.refs, job, job.keys);
   if (job.status !== "cancelled") notifyCompletion(job.id);
+}
+
+/** Skip only the foreground request; queues, sibling requests and other jobs survive. */
+export function skipCurrentSvgRequest(c: RunCtx): boolean {
+  const store = jobStore(c.refs);
+  const job = store.jobs.find((candidate) => candidate.id === store.foreground && candidate.status === "running");
+  const controller = job?.requestController;
+  if (!controller || controller.signal.aborted) return false;
+  controller.abort("Current request skipped — remaining requests continue");
+  c.say("Skipping current request — the batch will continue with the next request; finished results are kept");
+  return true;
 }
 
 export function stopSvgRuns(c: RunCtx, id?: string, dropped = 0): void {

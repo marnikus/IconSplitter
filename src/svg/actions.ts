@@ -26,7 +26,7 @@ import { decideReview, useReviewApplier } from "./reviewact";
 import { guard, perRequestOf, planOf } from "./runplan";
 import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
 import { hasJobs } from "./jobstate";
-import { stopSvgRuns } from "./runjobs";
+import { skipCurrentSvgRequest, stopSvgRuns } from "./runjobs";
 import type { CancelNote } from "./runcontext";
 import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
@@ -64,7 +64,7 @@ export interface SvgActions extends SvgPromptActions {
   setImageVersion: (id: string, version: number | null) => void;
   applyImageReview: () => void; discardImageReview: () => void;
   dismissImageJournal: (id: string) => void; retryImageUnknown: (id: string) => void;
-  regenerateSelected: (ids: string[]) => void; cancelRun: (id?: string) => void; confirmGenerate: (batch: ConfirmedBatch) => void;
+  regenerateSelected: (ids: string[]) => void; cancelRun: (id?: string) => void; skipCurrentRequest: () => void; confirmGenerate: (batch: ConfirmedBatch) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
@@ -217,7 +217,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
   const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
   return { requestGenerate, regenerateSelected, dismissDialog };
 }
-function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "dropQueued"> {
+function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "skipCurrentRequest" | "dropQueued"> {
   const latest = useRef(ctx); latest.current = ctx;
   const confirmGenerate = useCallback((batch: ConfirmedBatch) => { void confirmRun(latest.current, batch); }, []);
   const cancelRun = useCallback((id?: string) => {
@@ -230,11 +230,12 @@ function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "
     c.dispatch({ type: "current", id: null });
     c.say(dropped === 0 ? "Cancelling — finished results are kept" : `Cancelling — kept, ${dropped} batch${dropped === 1 ? "" : "es"} dropped`);
   }, []);
+  const skipCurrentRequest = useCallback(() => { skipCurrentSvgRequest(latest.current); }, []);
   const dropQueued = useCallback((itemId: string) => {
     const c = latest.current;
     c.say(`Queued batch dropped — ${dropWaiting(c, itemId)} still waiting`);
   }, []);
-  return { confirmGenerate, cancelRun, dropQueued };
+  return { confirmGenerate, cancelRun, skipCurrentRequest, dropQueued };
 }
 function svgSelection(): RowSelection {
   const { checked, activeId, anchorId } = getAppState().svg;

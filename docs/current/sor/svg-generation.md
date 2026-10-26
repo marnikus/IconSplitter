@@ -67,9 +67,9 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   valid generated SVG never enter that batch. The shared confirmation says
   "Confirm SVG regeneration"; both actions keep the existing validation,
   versioned-save and confirmation gates.
-* [Parallel runs and completion sound](svg-parallel-runs.md) (I-53/I-57):
-  independent confirmed SVG/image jobs coexist; source conflicts wait or refuse
-  before send, and completed rows can be corrected during remaining work.
+* [Run controls and completion sound](svg-parallel-runs.md) (I-53/I-57):
+  independent jobs coexist; source conflicts wait/refuse. The request-strip
+  **Skip current request** continues the batch; full Cancel remains separate.
 * [Task prompts and batch regeneration](svg-generation-prompts.md) (I-74…I-77):
   the selection chooses a remembered task prompt; the connection's request size
   and frozen current SVG codes govern a confirmed regeneration.

@@ -3432,3 +3432,29 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
 - Plan, measured verification and pixel methodology/results:
   docs/archive/2026-10-26-anisotropic-stroke-repair/. Current geometry, repair,
   selector, owner/test and router pages updated; no UI controls added.
+
+
+## 2026-10-26 — skip current SVG request, continue its batch
+
+- Diagnosed request-strip Cancel sharing the global cancelRun handler. Added
+  one-way run-to-request cancellation scopes and separate foreground skip action.
+  Skip retains saved versions, continues later plans, preserves independent
+  queued/parallel/image work and the normal once-per-batch completion sound.
+  Full Cancel/per-run Stop retain existing behaviour. Shared-request icons skip
+  together; cancelled requests are never automatically resent.
+- TDD: corrected one-icon/request panel fixture fails against original global
+  wiring, then passes with separate action. Additional red/green regressions pin
+  skipped wording, known usage on discarded late answers and whole-run late
+  cancellation wording. Fresh controller, pre-send/retry abort, grouped inputs,
+  global stop, exceptional cleanup and foreground isolation covered.
+- Focused: 89 tests/8 files PASS. Final verify:fast and verify at base 20da47f:
+  ALL LANES PASSED, each 2992 tests/283 files; full native 30/5 PASS (4.1s).
+  Lib coverage unchanged at 95.43/89.99/98.23/98.31%. Types, uncached lint
+  (0 errors/20 existing warnings), changed quality, docs/routes/budgets,
+  whitespace and build PASS. No live providers, new dependencies or weakened
+  assertions/harness/performance thresholds. One early verification was stopped
+  deliberately to finish the late-answer regression and is not counted as PASS.
+- Plan/results: docs/archive/2026-10-26-svg-request-skip/README.md.
+  Updated current run contract, invariant I-53, request-strip selector, source/
+  test owners and router. The button is labelled Skip current request, not a
+  misleading generic Cancel.

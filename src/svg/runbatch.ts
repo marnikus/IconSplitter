@@ -26,11 +26,11 @@ import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";
 import type { RunState } from "./runtypes";
 
-export async function runBatch(state: RunState, plan: BatchPlan, index: number): Promise<void> {
+export async function runBatch(state: RunState, plan: BatchPlan, index: number, signal: AbortSignal = state.args.signal): Promise<void> {
   const items = plan.items.map((i) => state.args.sources.find((s) => s.id === i.sourceId)).filter(isSource);
   if (items.length === 0) return;
   const ctx = newBatchCtx({
-    state, plan, index, items, startedAt: Date.now(),
+    state, plan, index, items, signal, startedAt: Date.now(),
     hash: "", usage: null, share: null, error: null, requestId: null, unsettled: false,
     recorded: state.args.prompt, records: new Map(),
   });
@@ -40,6 +40,12 @@ export async function runBatch(state: RunState, plan: BatchPlan, index: number):
   ctx.hash = composite.hash;
   const sent = await sendBatch(ctx, composite);
   if (!sent.ok) failBatch(ctx, sent.error, sent.failure, sent.retryAfterMs);
+  else if (signal.aborted) {
+    ctx.usage = sent.usage;
+    state.usages.push(sent.usage); // A discarded late answer may already have been charged.
+    failBatch(ctx, state.args.signal.aborted ? "Run cancelled — late result not saved"
+      : "Current request skipped — remaining requests continue", "aborted", null);
+  }
   else await saveMatches(ctx, sent.text, sent.usage);
   finishBatch(ctx);
 }
@@ -56,6 +62,7 @@ function announceStart(ctx: BatchCtx, built: BuiltComposite): void {
 /** Everything the per-request writers need, so no writer takes seven params. */
 export interface BatchCtx {
   state: RunState;
+  signal: AbortSignal;
   plan: BatchPlan;
   /** 1-based request index within the run. */
   index: number;

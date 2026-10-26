@@ -806,3 +806,34 @@ it("cleans source ownership after an unexpected filesystem exception and permits
   await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "retry finish");
   expect(q(`[data-testid=svg-status-${FOG}]`)?.textContent).toContain("Generated");
 });
+
+it("skips the current SVG request and continues the same batch without dropping independent queued work", async () => {
+  const notify = vi.spyOn(completionAudio, "notifyCompletion");
+  const t = transport({ mode: "silent" });
+  vi.stubGlobal("fetch", t.fetch);
+  const root = makeRegenerationRoot();
+  await mount(root);
+  await inputValue("svg-per-request", "1");
+  await check(FOG); await check(COURT);
+  await click("[data-testid=svg-generate-selected]");
+  await click("[data-testid=svg-confirm-generate]");
+  await waitFor(() => t.calls.length === 1, "the first request in the two-icon batch");
+  const runId = host.querySelector("[data-testid^=svg-run-stop-]")!.getAttribute("data-run-id")!;
+  await check(FOG); await check(COURT);
+  await pick(MIST); await click("[data-testid=svg-confirm-generate]");
+  expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+  await click("[data-testid=svg-batch-cancel]");
+  await waitFor(() => t.calls.length === 2, "the next SVG request after skipping the current one");
+  expect(callsOf(t)).toEqual([["fog_AI.png"], ["court_AI.png"]]);
+  expect(q(`[data-testid=svg-run-stop-${runId}]`)).not.toBeNull();
+  expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+  t.streams[1].push(streamFrames(["architecture/court_AI.png"])); t.streams[1].close();
+  await waitFor(() => t.calls.length === 3, "the preserved independent queued batch");
+  t.streams[2].push(streamFrames(["architecture/mist_AI.png"])); t.streams[2].close();
+  await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "both batches to finish");
+  const dir = root.children.get("architecture") as FakeDir;
+  expect((dir.children.get("court_AI.svg") as FakeFile).text).toContain("<title>court_AI</title>");
+  expect((dir.children.get("mist_AI.svg") as FakeFile).text).toContain("<title>mist_AI</title>");
+  expect((dir.children.get("fog_AI.svg") as FakeFile).text).not.toContain("<title>fog_AI</title>");
+  expect(notify.mock.calls.filter(([id]) => id === runId)).toHaveLength(1);
+});

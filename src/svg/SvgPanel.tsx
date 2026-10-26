@@ -111,7 +111,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
       </div>
       <SvgList g={g} actions={actions} />
       <SvgRuns refs={g.refs} onStop={g.cancelRun} />
-      <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
+      <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.skipCurrentRequest} onDrop={g.dropQueued} />
     </>
   );
 }

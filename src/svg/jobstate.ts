@@ -12,7 +12,7 @@ export const MAX_SVG_RUNS = 3;
 export interface LockCtx { refs: SvgRefs; rows: readonly SvgRow[]; say: (msg: string, err?: boolean) => void }
 export interface RunSnapshot { c: RunCtx; root: DirHandleLike; key: string }
 export interface SvgJob {
-  id: string; label: string; ids: string[]; keys: string[]; controller: AbortController;
+  id: string; label: string; ids: string[]; keys: string[]; controller: AbortController; requestController: AbortController | null;
   status: "running" | "finished" | "failed" | "cancelled";
   progress: RunProgress | null; current: string | null; outcomes: BatchOutcome[]; summary: string;
 }

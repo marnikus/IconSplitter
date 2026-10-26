@@ -19,7 +19,7 @@ import { toRow } from "../src/svg/rowmodel";
 import type { RegenPlan } from "../src/lib/svgregen";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import { streamFrames, transport } from "./helpers/svgtransport";
+import { answerFor, streamFrames, transport } from "./helpers/svgtransport";
 import { pairMetaFor, svgPathFor, svgSource, svgVersion } from "./helpers/svgpair";
 
 // The contact sheet is the only browser-canvas step; its own pixel test lives
@@ -539,4 +539,139 @@ describe("runGeneration — an image regeneration landing mid-save", () => {
     expect(saved.imagePreferred).toBe(1);
     expect(args.metas.get(sources[0].id)?.imageVersions).toHaveLength(1);
   });
+});
+
+
+describe("request-local SVG cancellation", () => {
+  it("keeps saved results, skips one streaming request, then saves the next with a fresh controller", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(3);
+    const t = transport({ mode: (call) => call === 2 ? "silent" : "sse" });
+    vi.stubGlobal("fetch", t.fetch);
+    const { args, events } = runArgs(root, sources, { imagesPerRequest: 1, retries: 3 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    const controllers: (AbortController | null)[] = [];
+    let done = false;
+    const pending = runGeneration({ ...args, onRequestController: (c) => controllers.push(c) }).then((s) => { done = true; return s; });
+    await settle(() => t.calls.length === 2);
+    controllers.at(-1)!.abort();
+    await settle(() => done);
+    const summary = await pending;
+    expect(summary).toMatchObject({ saved: 2, failed: 1, cancelled: false });
+    expect(summary.problems.join(" ")).toContain("skipped");
+    expect(t.calls.map((c) => c.items)).toEqual(sources.map((s) => [s.relPath]));
+    expect(await svgText(root, sources[0])).not.toBeNull();
+    expect(await svgText(root, sources[1])).toBeNull();
+    expect(await svgText(root, sources[2])).not.toBeNull();
+    expect(controllers).toHaveLength(6);
+    expect(controllers.filter((c) => c !== null)).toHaveLength(3);
+    expect(new Set(controllers.filter((c) => c !== null)).size).toBe(3);
+    expect(controllers.at(-1)).toBeNull();
+    expect(args.signal.aborted).toBe(false);
+    expect(events.filter((e) => e.kind === "cancelled")).toEqual([]);
+    expect(loadInflight()).toEqual([]);
+  });
+
+  it("can skip before sending without transmitting that request or cancelling the rest", async () => {
+    const { root, sources } = fixture(2);
+    const t = transport(); vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    let first = true;
+    const summary = await runGeneration({ ...args, onRequestController: (c) => { if (c && first) { first = false; c.abort(); } } });
+    expect(summary).toMatchObject({ saved: 1, failed: 1, cancelled: false });
+    expect(t.calls.map((c) => c.items)).toEqual([[sources[1].relPath]]);
+    expect(await svgText(root, sources[0])).toBeNull();
+    expect(loadInflight()).toEqual([]);
+  });
+
+  it("interrupts retry backoff immediately and never resends the skipped request", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(2);
+    const t = transport({ failAt: 1 }); vi.stubGlobal("fetch", t.fetch);
+    const { args, events } = runArgs(root, sources, { imagesPerRequest: 1, retries: 3 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    let request: AbortController | null = null;
+    let done = false;
+    const started = Date.now();
+    const pending = runGeneration({ ...args, onRequestController: (c) => { request = c; }, onEvent: (e) => {
+      events.push(e); if (e.kind === "request-retry") request!.abort();
+    } }).then((s) => { done = true; return s; });
+    await settle(() => done);
+    const summary = await pending;
+    expect(Date.now()).toBe(started);
+    expect(summary).toMatchObject({ saved: 1, failed: 1, cancelled: false });
+    expect(t.calls.map((c) => c.items)).toEqual(sources.map((s) => [s.relPath]));
+    expect(events.filter((e) => e.kind === "request-retry")).toHaveLength(1);
+  });
+
+  it("skips every member of a shared provider request but continues with subsequent groups", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(5);
+    const t = transport({ mode: (call) => call === 1 ? "silent" : "sse" }); vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 2 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    let request: AbortController | null = null, done = false;
+    const pending = runGeneration({ ...args, onRequestController: (c) => { request = c; } }).then((s) => { done = true; return s; });
+    await settle(() => t.calls.length === 1); request!.abort();
+    await settle(() => done); const summary = await pending;
+    expect(summary).toMatchObject({ saved: 3, failed: 2, cancelled: false });
+    expect(t.calls.map((c) => c.items.length)).toEqual([2, 2, 1]);
+    for (const s of sources.slice(0, 2)) expect(await svgText(root, s)).toBeNull();
+    for (const s of sources.slice(2)) expect(await svgText(root, s)).not.toBeNull();
+  });
+
+  it("retains whole-run cancellation: no later planned request is sent", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(3);
+    const t = transport({ mode: "silent" }); vi.stubGlobal("fetch", t.fetch);
+    const parent = new AbortController();
+    const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" }, parent.signal);
+    const controllers: (AbortController | null)[] = [];
+    let done = false;
+    const pending = runGeneration({ ...args, onRequestController: (c) => controllers.push(c) }).then((s) => { done = true; return s; });
+    await settle(() => t.calls.length === 1); parent.abort(); await settle(() => done);
+    expect(await pending).toMatchObject({ saved: 0, cancelled: true });
+    expect(t.calls).toHaveLength(1);
+    expect(controllers[0]!.signal.aborted).toBe(true);
+    expect(controllers.at(-1)).toBeNull();
+  });
+
+  it("clears request ownership and removes the parent listener even when event handling throws", async () => {
+    const { root, sources } = fixture(1);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    const remove = vi.spyOn(args.signal, "removeEventListener");
+    const controllers: (AbortController | null)[] = [];
+    await expect(runGeneration({ ...args, onRequestController: (c) => controllers.push(c), onEvent: (e) => {
+      if (e.kind === "batch-start") throw new Error("test event failure");
+    } })).rejects.toThrow("test event failure");
+    expect(controllers).toHaveLength(2);
+    expect(controllers.at(-1)).toBeNull();
+    expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
+  });
+});
+
+
+it.each(["request", "run"])("handles late answers after %s cancellation without saving cancelled artwork", async (scope) => {
+  vi.useFakeTimers();
+  const { root, sources } = fixture(2);
+  const response = answerFor([sources[0].relPath]);
+  const body = await response.text();
+  let deliver: ((text: string) => void) | null = null;
+  const late = answerFor([sources[0].relPath]);
+  late.text = () => new Promise<string>((resolve) => { deliver = resolve; });
+  let calls = 0;
+  vi.stubGlobal("fetch", async () => ++calls === 1 ? late : answerFor([sources[1].relPath]));
+  const parent = new AbortController();
+  const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" }, parent.signal);
+  let request: AbortController | null = null, done = false;
+  const pending = runGeneration({ ...args, onRequestController: (c) => { request = c; } }).then((s) => { done = true; return s; });
+  await settle(() => deliver !== null);
+  if (scope === "run") parent.abort(); else request!.abort();
+  (deliver as unknown as (text: string) => void)(body);
+  await settle(() => done);
+  const summary = await pending;
+  expect(summary).toMatchObject({ saved: scope === "run" ? 0 : 1, failed: 1, cancelled: scope === "run" });
+  expect(summary.problems.join(" ")).toContain(scope === "run" ? "Run cancelled" : "skipped");
+  expect(calls).toBe(scope === "run" ? 1 : 2);
+  expect(await svgText(root, sources[0])).toBeNull();
+  expect((await svgText(root, sources[1])) !== null).toBe(scope !== "run");
+  expect(summary.usage.total).toBe(scope === "run" ? 300 : 600);
+  expect(summary.outcomes[0].usage.total).toBe(300);
 });
