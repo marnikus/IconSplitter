@@ -12,12 +12,13 @@ import { parseFilter } from "../lib/reviewfilter";
 import { parsePrefsValue } from "../lib/reviewprefs";
 import { parseSort } from "../lib/reviewsort";
 import type { HistoryEntry } from "../lib/history";
+import { applySelectionOp, readSelectionPayload } from "../lib/selectiondelta";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
-import { getAppState, patchBatch, patchSvg, patchUpload, patchV2, patchView, setAppState } from "./appstore";
+import { getAppState, patchBatch, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
@@ -53,8 +54,8 @@ function applySelectionEntry(entry: HistoryEntry, value: unknown): boolean | nul
   switch (entry.type) {
     case "checked": return entry.origin === "generateSvg" ? applyLegacySvgChecked(value) : applyChecked(value);
     case "batchChecked": return applyBatchChecked(value);
-    case "svgChecked": return applyTabChecked(value, patchSvg, "generateSvg");
-    case "uploadChecked": return applyTabChecked(value, patchUpload, "upload");
+    case "svgChecked": return applyTabChecked(value, () => getAppState().svg.checked, patchSvg, "generateSvg");
+    case "uploadChecked": return applyTabChecked(value, () => getAppState().upload.checked, patchUpload, "upload");
     default: return null;
   }
 }
@@ -89,15 +90,14 @@ interface SelectionPatch {
 }
 
 function applyChecked(value: unknown): boolean {
-  const sel = toSelection(value);
+  const sel = selectionValue(value, getAppState().v2.checked);
   if (!sel) return false;
-  patchV2({ checked: sel.ids, anchorId: sel.anchor });
-  patchView({ selectedId: sel.active }); // a row click carries its active row
+  patchV2Selection({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
 }
 
 function applyBatchChecked(value: unknown): boolean {
-  const sel = toSelection(value);
+  const sel = selectionValue(value, getAppState().batch.checked);
   if (!sel) return false;
   patchBatch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
@@ -115,17 +115,32 @@ function applyLegacySvgChecked(value: unknown): boolean {
 
 function applyTabChecked(
   value: unknown,
+  current: () => string[],
   patch: (next: { checked: string[]; anchorId: string | null; activeId: string | null }) => void,
   tab: CheckableList,
 ): boolean {
   if (!isRecord(value)) return false;
   if (!(value.anchor === null || typeof value.anchor === "string")) return false;
   if (!(value.active === null || typeof value.active === "string")) return false;
-  const sel = toSelection(value);
+  const sel = selectionValue(value, current());
   if (!sel) return false;
   if (!selectionTargetsKnown(tab, { checked: sel.ids, anchor: sel.anchor, active: sel.active })) return false;
   patch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
+}
+
+/**
+ * One entry side -> the selection it produces. A version-2 payload is a diff
+ * applied to the live selection (lib/selectiondelta); a version-1 payload is the
+ * recorded whole array. Both are validated; anything else leaves the cursor.
+ */
+function selectionValue(value: unknown, current: string[]): SelectionPatch | null {
+  const delta = readSelectionPayload(value);
+  if (delta !== null) {
+    const ids = applySelectionOp(current, delta.sel);
+    return ids === null ? null : { ids, anchor: delta.anchor, active: delta.active };
+  }
+  return toSelection(value);
 }
 
 /** Entries recorded before the shift anchor existed stored a bare id array. */

@@ -1,7 +1,7 @@
 // ScanTable.tsx — Batch folders list + review (approved/declined/warning) + preview
 // 9-col flex grid, yellow warning line for not-4
 
-import { useCheckedRows, useCheckedRow, type RegisterCheckedRow } from "../ui/checkedrows";
+import { useCheckedRows, useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { sameRowData, useRowPresentation } from "../ui/rowpresentation";
 import { memo, useCallback, useMemo } from "react";
 import type { Row, RowMergeMap } from "./useBatch";
@@ -19,6 +19,9 @@ export interface ScanTableProps {
   /** I-68: answers whether this row's stored preview was made under other settings. */
   rowStale?: (relPath: string) => boolean;
   rows: Row[];
+  /** The live selection. `rows` may be a memoized view whose `selected` mirror
+   *  is a moment behind (D8), so the projection is fed from the store, not rows. */
+  checked?: string[];
   thumb: number;
   activeId: string | null;
   toggle: (relPath: string) => void;
@@ -38,10 +41,17 @@ export interface ScanTableProps {
 
 export { useThumbCache };
 
+/** Three attention counters, ONE pass over the rows per snapshot. */
 function Header({ rows }: { rows: Row[] }) {
-  const missing = rows.filter((r) => r.status === "missing" || r.status === "deleted").length;
-  const refMissing = rows.filter((r) => r.refRelPath === null).length;
-  const warning = rows.filter((r) => r.review === "warning").length;
+  const { missing, refMissing, warning } = useMemo(() => {
+    let m = 0, ref = 0, warn = 0;
+    for (const r of rows) {
+      if (r.status === "missing" || r.status === "deleted") m += 1;
+      if (r.refRelPath === null) ref += 1;
+      if (r.review === "warning") warn += 1;
+    }
+    return { missing: m, refMissing: ref, warning: warn };
+  }, [rows]);
   return (
     <header className="svg-head">
       <div className="svg-title"><h1>BATCH FOLDERS / IMAGES</h1><span data-testid="batch-row-count">{rows.length}</span><span>one file per pair</span></div>
@@ -179,10 +189,10 @@ function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: 
   );
 }
 
-function rowClass(r: Row, active: boolean): string {
+function rowClass(r: Row): string {
   const review = r.review ?? "pending";
   const isWarning = review === "warning";
-  return `svg-row batch-row ${r.status} ${review}${active ? " active" : ""}${isWarning ? " warning-row" : ""}`;
+  return `svg-row batch-row ${r.status} ${review}${isWarning ? " warning-row" : ""}`;
 }
 
 function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
@@ -190,23 +200,23 @@ function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
 }
 
 type Presentation = Omit<ScanTableProps, "rows" | "activeId" | "previews" | "rowStale">;
-interface RowProps { r: Row; a: Presentation; active: boolean; register: RegisterCheckedRow; entry: PreviewEntry | undefined; stale: boolean }
+interface RowProps { r: Row; a: Presentation; register: RegisterCheckedRow; entry: PreviewEntry | undefined; stale: boolean }
 
-function RowViewInner({ r, a, active, register, entry, stale }: RowProps) {
+function RowViewInner({ r, a, register, entry, stale }: RowProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
-  const ref = useCheckedRow(r.relPath, active, register);
+  const ref = useRowBinding(r.relPath, register);
   const onRowClick = useRowClick(r, disabled, a.selectRow, a.selectActive);
   const onKeyDown = useRowKey(r, disabled, a.selectActive);
   return (
-    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={rowClass(r, active)} onClick={onRowClick} onKeyDown={onKeyDown} style={rowStyle(r.review)}>
+    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} data-testid={`batch-row-${r.relPath}`} className={rowClass(r)} onClick={onRowClick} onKeyDown={onKeyDown} style={rowStyle(r.review)}>
       <CheckCell r={r} toggle={a.toggle} />
       <RowContent r={r} a={a} entry={entry} stale={stale} />
     </div>
   );
 }
 
-const RowView = memo(RowViewInner, (a, b) => a.active === b.active && sameContent(a, b));
-type ContentProps = Omit<RowProps, "active" | "register">;
+const RowView = memo(RowViewInner, sameContent);
+type ContentProps = Omit<RowProps, "register">;
 const RowContent = memo(function RowContent({ r, a, entry, stale }: ContentProps) {
   return <>
     <BatchThumbInfoCell r={r} thumbFor={a.thumbFor} thumb={a.thumb} />
@@ -227,24 +237,26 @@ function sameContent(a: ContentProps, b: ContentProps): boolean {
 export default function ScanTable(props: ScanTableProps) {
   const { rows, activeId, previews, rowStale, ...presentation } = props;
   const a = useRowPresentation(presentation, ["thumbFor"]);
-  const checked = useMemo(() => rows.filter((r) => r.selected).map((r) => r.relPath), [rows]);
-  const register = useCheckedRows(checked);
+  const mirrored = useMemo(() => rows.filter((r) => r.selected).map((r) => r.relPath), [rows]);
+  const checked = props.checked ?? mirrored;
+  const register = useCheckedRows(checked, activeId);
+  // The active row is projected into the registry, so an arrow move no longer
+  // recreates every row element (the Batch list is the largest by default).
+  const list = useMemo(() => rows.map((r) => (
+    <RowView key={r.relPath} r={r} a={a} register={register} entry={previews?.get(r.relPath)} stale={rowStale?.(r.relPath) ?? false} />
+  )), [rows, a, register, previews, rowStale]);
   return (
     <div className="svg-panel" data-testid="scan-table">
       <Header rows={props.rows} />
       <div className="pair-table">
         <Columns />
         <div className="svg-rows" role="list" aria-label="Batch images" data-testid="batch-rows">
-          {rows.length === 0 ? <p className="svg-empty">No _AI images found in this folder.</p> : rows.map((r) => <RowView key={r.relPath} r={r} a={a} register={register} active={isActive(r.relPath, activeId)} entry={previews?.get(r.relPath)} stale={rowStale?.(r.relPath) ?? false} />)}
+          {rows.length === 0 ? <p className="svg-empty">No _AI images found in this folder.</p> : list}
         </div>
       </div>
       <Footer count={props.rows.length} />
     </div>
   );
-}
-
-function isActive(relPath: string, activeId: string | null): boolean {
-  return activeId !== null && relPath.toLowerCase() === activeId.toLowerCase();
 }
 
 function useRowClick(r: Row, disabled: boolean, selectRow: ScanTableProps["selectRow"], selectActive: ScanTableProps["selectActive"]) {

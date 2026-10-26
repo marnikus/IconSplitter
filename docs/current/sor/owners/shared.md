@@ -19,3 +19,8 @@ Choose the row for your change, then open that source file. Part of the [owner m
 * `ui/checkedrows.ts`, `ui/rowpresentation.ts` — [large-list selection presentation](../selection-performance.md): canonical snapshot projection, callback bridges and data invalidation.
 
 * `lib/statesort.ts`, `state/useSortChecks.ts` and tab sort/view modules — [reversible selection/approval sorting](../list-state-sorting.md).
+
+* `lib/selectiondelta.ts`, `state/{HistoryProvider,historystore,useAppState}.ts(x)`,
+  `svg/panelcounts.ts` and tab view hooks — [selection response redesign](../selection-performance.md):
+  compact ordered history, deferred persistence, stable actions/slice subscriptions,
+  summaries, active-row projection and Batch mirror-only caching.

@@ -9,6 +9,7 @@ import { clampZoom } from "../lib/zoom";
 import { useBatchSelection, type BatchSelection } from "./useBatchSelection";
 import { nextPendingBelow, type CheckState, type SelectIntent } from "../lib/reviewselect";
 import type { Row, RowMergeMap } from "./useBatch";
+import { sameRowData } from "../ui/rowpresentation";
 import { useSortChecks } from "../state/useSortChecks";
 import { patchBatch } from "../state/appstore";
 import type { BatchReviewStatus } from "../lib/statefile";
@@ -21,6 +22,8 @@ export interface BatchView {
   sort: BatchSort;
   thumb: number;
   visible: Row[];
+  /** The live checked ids (the store's truth, not the row mirror). */
+  checked: string[];
   header: CheckState;
   checkedCount: number;
   visibleCount: number;
@@ -82,6 +85,7 @@ function makeView(a: ViewArgs): BatchView {
   const { core, ps, visible, sel, decide, decideActive } = a;
   return {
     core, filter: ps.prefs.filter, sort: ps.prefs.sort, thumb: ps.prefs.thumb, visible,
+    checked: sel.checked,
     header: sel.header, checkedCount: sel.checkedCount, visibleCount: sel.visibleCount,
     totalCount: sel.totalCount, selectedCount: sel.checkedCount, hiddenCount: sel.hiddenCount,
     affectedCount: sel.affectedCount, activeId: sel.activeId, anchorId: sel.anchorId,
@@ -105,9 +109,23 @@ function usePrefsState() {
   return useMemo(() => ({ prefs, setFilter, setSort, setThumb }), [prefs, setFilter, setSort, setThumb]);
 }
 
-function useVisibleRows(rows: Row[], filter: BatchFilter, sort: BatchSort) {
+/** Ignore only the legacy check mirror; every other row field stays reactive.
+ * A reference/output change must not disappear behind unchanged sort fields. */
+function useRowData(rows: Row[]): Row[] {
+  const data = useRef(rows);
+  return useMemo(() => {
+    if (rows.length !== data.current.length || rows.some((r, i) => !sameRowData(r, data.current[i], "selected"))) {
+      data.current = rows;
+    }
+    return data.current;
+  }, [rows]);
+}
+
+/** Ordinary sorts reuse their view on mirror-only changes; selection sorts stay live. */
+export function useVisibleRows(rows: Row[], filter: BatchFilter, sort: BatchSort): Row[] {
   const checked = useSortChecks("batch", sort.by === "selected");
-  return useMemo(() => sortBatchRows(applyBatchFilters(rows, filter), sort, checked), [rows, filter, sort, checked]);
+  const data = useRowData(rows);
+  return useMemo(() => sortBatchRows(applyBatchFilters(data, filter), sort, checked), [data, filter, sort, checked]);
 }
 
 function useReviewCounts(rows: Row[]): BatchView["reviewCounts"] {

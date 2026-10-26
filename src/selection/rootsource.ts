@@ -21,7 +21,7 @@ import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
 import { restoreKnownRoot } from "../lib/knownroots";
 import { getAppState, patchV2, patchView } from "../state/appstore";
-import type { HistoryApi } from "../state/HistoryProvider";
+import type { HistoryActions } from "../state/HistoryProvider";
 import { loadPairDecisions, type PairLoad } from "./pairstore";
 import { SELECTION_HANDLE_KEY } from "./offline";
 import { applyScan, type SelState } from "./state";
@@ -33,7 +33,7 @@ export type Setter = React.Dispatch<React.SetStateAction<SelState>>;
 export interface Ctx {
   root: { current: DirHandleLike | null };
   state: { current: SelState };
-  hist: HistoryApi;
+  hist: HistoryActions;
   /** Which rescan may commit (see lib/scanseq) — two rescans can overlap one. */
   seq: { current: ScanSeq };
 }

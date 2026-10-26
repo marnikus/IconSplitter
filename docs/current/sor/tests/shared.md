@@ -59,3 +59,8 @@ All-tab audio: `completion_sound.test.ts`, `process_completion_sound.test.tsx`, 
 * [Large-list selection work, projection, invalidation and Chromium measurements](../selection-performance.md#verification-and-timing): `selection_response.test.tsx`, `checkedrows.test.tsx`, `rowpresentation.test.tsx`.
 
 * `list_state_sort.test.ts` and four real-panel regressions — [binary state grouping, reversal, persistence, live sorting and navigation](../list-state-sorting.md#source-and-test-owners).
+
+* `selectiondelta`, `history_persist`, `selection_perf_budgets` — [performance
+  redesign verification](../selection-performance.md#verification-and-timing):
+  ordered delta round trips/legacy reads, deferred history flush, byte/render/id-read
+  budgets, slice isolation, live state sorting and complete Batch data invalidation.

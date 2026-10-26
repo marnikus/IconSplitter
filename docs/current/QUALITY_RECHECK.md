@@ -3485,3 +3485,32 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
 - Canonical contract/selectors/routes/owners/tests updated. Plan and exact results:
   docs/archive/2026-10-26-list-state-sorting/README.md. Logs outside Git under
   /home/user/list-state-sorting/.
+
+
+## 2026-10-26 — import selection performance redesign from 0216b05e
+
+- Imported cde75d1 (plus a9a9deb's named plan) from arena/0216b05e-iconsplitter
+  onto current delivery 74b05d49, not a wholesale branch replacement. Compact
+  ordered undo deltas, deferred history persistence, stable action/view contexts,
+  slice subscriptions, atomic V2 gestures, projected active/checked rows, memoized
+  row arrays, linear summaries and updated real-history benchmark tooling.
+- Preserved current SVG skip/full Cancel separation, selected/approval sorting,
+  accepted versions, generic stroke repair and export behavior. Batch integration
+  uses canonical checks for selection sorts; ignores ONLY the selected processing
+  mirror for ordinary memo reuse, retaining all-field reference/output updates.
+- Witnessed three new failing tests for live selected sorting, reordered ids in
+  undo and duplicate insertion ids, then green. A fourth red pinned stale reference
+  data under source-only cache; fixed with existing all-field row-data comparison.
+  Focused 70/6 PASS; existing regressions 244/11 PASS; final hardened focus 53/5
+  PASS. Original byte/render/id-read/no-sort/native budgets unchanged.
+- Final verify:fast + verify at 74b05d49: ALL LANES PASSED, each 3035 tests/287
+  files plus full native 30/5 (3.3s). Types, uncached lint (0 errors/20 existing
+  warnings), changed quality (36 production files), docs/routes/read budgets,
+  whitespace and builds PASS. Coverage improves to 95.52/90.21/98.31/98.37%;
+  selectiondelta lines/functions 100%. Native optional package restored via locked
+  npm run setup; no manifest/lockfile changes. No live generation or new deps.
+- Source serialization timings are historical, NOT a newly measured end-to-end
+  browser improvement. Current docs make the distinction explicit. Source plan,
+  import scope, TDD and precise gate evidence:
+  docs/archive/2026-10-26-import-selection-performance/README.md.
+  Logs outside Git: /home/user/perf-import/.

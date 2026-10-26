@@ -12,8 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type Dis
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { SCAN_IDLE } from "../lib/scanseq";
-import { useAppState } from "../state/useAppState";
-import { useHistory } from "../state/HistoryProvider";
+import { useAppSlice } from "../state/useAppState";
+import { useHistoryActions } from "../state/HistoryProvider";
 import { loadGeminiConfig, saveGeminiConfig } from "./configstore";
 import { readGeminiKey } from "./keystore";
 import { log } from "../log/logstore";
@@ -50,31 +50,50 @@ export type UploadApi = UploadModel & UploadActions & {
 export function useUpload(): UploadApi {
   const boot = useRef(loadBoot()).current;
   const [model, dispatch] = useUploadModel(boot);
-  const hist = useHistory();
-  const app = useAppState();
+  const hist = useHistoryActions();
+  const upload = useAppSlice("upload");
   const refs = useRef(newRefs()).current;
   const say = useSay(dispatch);
   const loadAll = useLoadAll(refs, dispatch, say, model);
-  const derived = useDerived(model, app.upload.checked);
+  const derived = useDerived(model, upload.checked);
   const setRootName = useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]);
   const setDiscovery = useCallback((d: UploadDiscovery | null) => dispatch({ type: "discovery", discovery: d }), [dispatch]);
   const setBusy = useCallback((b: string | null) => dispatch({ type: "busy", busy: b }), [dispatch]);
-  const ctx: UploadCtx = {
-    m: model, dispatch, refs, hist,
-    rows: model.rows, visible: derived.visible, checked: app.upload.checked,
-    activeId: app.upload.activeId, header: derived.header, counts: derived.counts,
+  // D7: one context identity per input change. Every action slice reads it
+  // through a ref, so a fresh object per render only churned the memo below.
+  const ctx: UploadCtx = useUploadCtx({
+    model, dispatch, refs, hist, derived, checked: upload.checked, activeId: upload.activeId,
     say, loadAll, setRootName, setDiscovery, setBusy,
-  };
+  });
   const actions = useUploadActions(ctx);
   useBoot(refs, dispatch, loadAll);
   usePersist(model);
   useUndoBinding(dispatch);
-  return {
-    ...model, ...actions, supported: fsSupported(),
-    checked: app.upload.checked, activeId: app.upload.activeId,
+  const supported = fsSupported();
+  return useMemo(() => ({
+    ...model, ...actions, supported,
+    checked: upload.checked, activeId: upload.activeId,
     header: derived.header, visible: derived.visible, counts: derived.counts,
     refs, dispatch, rowBadges: derived.rowBadges,
-  };
+  }), [model, actions, supported, upload.checked, upload.activeId, derived, refs, dispatch]);
+}
+
+interface CtxParts {
+  model: UploadModel; dispatch: Dispatch<UploadAction>; refs: UploadRefs; hist: UploadCtx["hist"];
+  derived: ReturnType<typeof useDerived>; checked: string[]; activeId: string | null;
+  say: UploadCtx["say"]; loadAll: UploadCtx["loadAll"]; setRootName: UploadCtx["setRootName"];
+  setDiscovery: UploadCtx["setDiscovery"]; setBusy: UploadCtx["setBusy"];
+}
+
+/** The bag every action slice reads; rebuilt only when one of its inputs is. */
+function useUploadCtx(p: CtxParts): UploadCtx {
+  return useMemo(() => ({
+    m: p.model, dispatch: p.dispatch, refs: p.refs, hist: p.hist,
+    rows: p.model.rows, visible: p.derived.visible, checked: p.checked,
+    activeId: p.activeId, header: p.derived.header, counts: p.derived.counts,
+    say: p.say, loadAll: p.loadAll, setRootName: p.setRootName,
+    setDiscovery: p.setDiscovery, setBusy: p.setBusy,
+  }), [p]);
 }
 
 /** A toast lives for a few seconds and then clears itself (RULE 9). */
@@ -193,7 +212,7 @@ function useDerived(model: UploadModel, checked: string[]): {
   );
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const counts = useMemo(() => countsOf(model.rows), [model.rows]);
-  return { visible, header, counts, rowBadges };
+  return useMemo(() => ({ visible, header, counts, rowBadges }), [visible, header, counts, rowBadges]);
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */

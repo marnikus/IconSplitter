@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { getAppState, patchBatch } from "../state/appstore";
-import { useAppState } from "../state/useAppState";
+import { useAppSlice } from "../state/useAppState";
 import { useOptionalHistory } from "../state/HistoryProvider";
-import { applyRowGesture, checkState, checkedInView, nextVisibleId, sameRowSelection, setChecked, toggleChecked, type CheckState, type SelectIntent } from "../lib/reviewselect";
+import { applyRowGesture, checkState, checkedInView, nextVisibleId, sameRowSelection, setChecked, toggleChecked, type CheckState, type RowSelection, type SelectIntent } from "../lib/reviewselect";
+import { selectionPayloads } from "../lib/selectiondelta";
 import { selectableIds, toLowerSet, selectionLabel } from "../lib/batchselect";
 
 type BatchRow = { relPath: string; status: string; selected?: boolean };
@@ -58,24 +59,26 @@ function useBatchCounts(core: BatchCore, visible: BatchRow[], checked: string[])
     return checked.filter((id) => !vis.has(id.toLowerCase())).length;
   }, [checked, visible]);
   const affectedCount = useMemo(() => checkedInView(selectableIds(visible), checked).length, [checked, visible]);
-  return { checkedCount, visibleCount, totalCount, hiddenCount, affectedCount };
+  return useMemo(() => ({ checkedCount, visibleCount, totalCount, hiddenCount, affectedCount }),
+    [checkedCount, visibleCount, totalCount, hiddenCount, affectedCount]);
 }
 
-type PushFn = (label: string, before: { ids: string[]; anchor: string | null; active: string | null }, after: { ids: string[]; anchor: string | null; active: string | null }, changed: string[]) => void;
+/** `gesture` is the coalescing key: an Up/Down burst on one list is ONE entry. */
+type PushFn = (label: string, before: RowSelection, after: RowSelection, gesture?: string) => void;
 
 function usePushBatchChecked(gesture: boolean): PushFn {
   const hist = useOptionalHistory();
   return useCallback(
-    (label, before, after, changed) => {
+    (label, before, after, key) => {
       if (!hist) return;
       const record = gesture ? hist.pushGesture : hist.push;
+      const payload = selectionPayloads(before, after);
       record({
         type: "batchChecked",
         label,
         origin: getAppState().tab,
-        ids: changed,
-        before: { ids: before.ids, anchor: before.anchor, active: before.active },
-        after: { ids: after.ids, anchor: after.anchor, active: after.active },
+        ...(key === undefined ? {} : { gesture: key }),
+        ids: payload.ids, before: payload.before, after: payload.after,
       });
     },
     [hist, gesture],
@@ -89,10 +92,9 @@ function useApplySelect(visible: BatchRow[], push: PushFn) {
       const before = { checked: batch.checked, anchor: batch.anchorId, active: batch.activeId };
       const after = applyRowGesture(before, { id, intent, visibleIds: selectableIds(visible) });
       if (sameRowSelection(before, after)) return;
-      const changed = intent === "range" ? after.checked : [id];
       push(intent === "replace" ? "Select row" : selectionLabel(after.checked),
-        { ids: before.checked, anchor: before.anchor, active: before.active },
-        { ids: after.checked, anchor: after.anchor, active: after.active }, changed);
+        { checked: before.checked, active: before.active, anchor: before.anchor },
+        { checked: after.checked, active: after.active, anchor: after.anchor });
       patchBatch({ checked: after.checked, anchorId: after.anchor, activeId: after.active });
     },
     [visible, push],
@@ -104,7 +106,8 @@ function useToggleCheck(push: PushFn) {
     (id: string) => {
       const b = getAppState().batch;
       const next = toggleChecked(b.checked, id);
-      push(selectionLabel(next), { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, [id]);
+      push(selectionLabel(next), { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+        { checked: next, active: b.activeId, anchor: b.anchorId });
       patchBatch({ checked: next });
     },
     [push],
@@ -118,7 +121,8 @@ function useCheckVisible(visible: BatchRow[], push: PushFn) {
     if (ids.length === 0) return;
     const next = setChecked(b.checked, ids, true);
     if (next.length === b.checked.length) return;
-    push("Select visible", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, ids);
+    push("Select visible", { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+      { checked: next, active: b.activeId, anchor: b.anchorId });
     patchBatch({ checked: next });
   }, [visible, push]);
 }
@@ -127,7 +131,8 @@ function useUncheckAll(push: PushFn) {
   return useCallback(() => {
     const b = getAppState().batch;
     if (b.checked.length === 0) return;
-    push("Deselect all", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: [], anchor: b.anchorId, active: b.activeId }, b.checked);
+    push("Deselect all", { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+      { checked: [], active: b.activeId, anchor: b.anchorId });
     patchBatch({ checked: [] });
   }, [push]);
 }
@@ -140,7 +145,8 @@ function useToggleAllVisible(visible: BatchRow[], push: PushFn) {
       const next = setChecked(b.checked, ids, on);
       if (next.length === b.checked.length) return;
       const label = on ? "Select visible" : "Deselect visible";
-      push(label, { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, ids);
+      push(label, { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+        { checked: next, active: b.activeId, anchor: b.anchorId });
       patchBatch({ checked: next });
     },
     [visible, push],
@@ -155,7 +161,8 @@ function useMoveActive(visible: BatchRow[], push: PushFn) {
       const current = vIds.find((id) => id.toLowerCase() === b.activeId?.toLowerCase()) ?? null;
       const nxt = nextVisibleId(vIds, current, step);
       if (!nxt || nxt === b.activeId) return;
-      push("Move active row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: b.checked, anchor: b.anchorId, active: nxt }, [nxt]);
+      push("Move active row", { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+        { checked: b.checked, active: nxt, anchor: b.anchorId }, "active");
       patchBatch({ activeId: nxt });
     },
     [visible, push],
@@ -169,7 +176,8 @@ function useCheckActive(push: PushFn) {
     if (!id) return;
     if (b.checked.some((x) => x.toLowerCase() === id.toLowerCase())) return;
     const next = setChecked(b.checked, [id], true);
-    push("Select active row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, [id]);
+    push("Select active row", { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+      { checked: next, active: b.activeId, anchor: b.anchorId });
     patchBatch({ checked: next });
   }, [push]);
 }
@@ -181,7 +189,8 @@ function useUncheckActive(push: PushFn) {
     if (!id) return;
     if (!b.checked.some((x) => x.toLowerCase() === id.toLowerCase())) return;
     const next = setChecked(b.checked, [id], false);
-    push("Deselect active row", { ids: b.checked, anchor: b.anchorId, active: b.activeId }, { ids: next, anchor: b.anchorId, active: b.activeId }, [id]);
+    push("Deselect active row", { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+      { checked: next, active: b.activeId, anchor: b.anchorId });
     patchBatch({ checked: next });
   }, [push]);
 }
@@ -189,28 +198,30 @@ function useUncheckActive(push: PushFn) {
 function useSelectionActions(visible: BatchRow[], push: PushFn, pushGesture: PushFn) {
   const selectRow = useApplySelect(visible, push);
   const selectActive = useCallback((id: string) => selectRow(id, "replace"), [selectRow]);
-  return {
-    selectRow, selectActive,
-    toggleCheck: useToggleCheck(push),
-    checkVisible: useCheckVisible(visible, push),
-    uncheckAll: useUncheckAll(push),
-    toggleAllVisible: useToggleAllVisible(visible, push),
-    moveActive: useMoveActive(visible, pushGesture),
-    checkActive: useCheckActive(push),
-    uncheckActive: useUncheckActive(push),
-  };
+  const toggleCheck = useToggleCheck(push);
+  const checkVisible = useCheckVisible(visible, push);
+  const uncheckAll = useUncheckAll(push);
+  const toggleAllVisible = useToggleAllVisible(visible, push);
+  const moveActive = useMoveActive(visible, pushGesture);
+  const checkActive = useCheckActive(push);
+  const uncheckActive = useUncheckActive(push);
+  return useMemo(() => ({
+    selectRow, selectActive, toggleCheck, checkVisible, uncheckAll,
+    toggleAllVisible, moveActive, checkActive, uncheckActive,
+  }), [selectRow, selectActive, toggleCheck, checkVisible, uncheckAll, toggleAllVisible, moveActive, checkActive, uncheckActive]);
 }
 
 export function useBatchSelection(core: BatchCore, visible: BatchRow[]): BatchSelection {
-  const app = useAppState();
-  const { checked, activeId, anchorId } = app.batch;
+  const { checked, activeId, anchorId } = useAppSlice("batch");
   useSyncCoreRows(core, checked);
   const header = useBatchHeader(visible, checked);
   const counts = useBatchCounts(core, visible, checked);
   const push = usePushBatchChecked(false);
   const pushGesture = usePushBatchChecked(true);
   const actions = useSelectionActions(visible, push, pushGesture);
-  return {
+  // One stable view object: a fresh one per render invalidated every downstream
+  // memo (makeView, ScanTable's row array) and re-sorted the list on a patch.
+  return useMemo<BatchSelection>(() => ({
     checked,
     activeId,
     anchorId,
@@ -222,5 +233,5 @@ export function useBatchSelection(core: BatchCore, visible: BatchRow[]): BatchSe
     hiddenCount: counts.hiddenCount,
     affectedCount: counts.affectedCount,
     ...actions,
-  };
+  }), [checked, activeId, anchorId, visible, header, counts, actions]);
 }

@@ -3,7 +3,7 @@
 // toggles its checkbox, G/A/D/W/V act on the active row only, and Escape closes
 // an open dialog without sending anything. Text fields keep their keystrokes.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { isTextField } from "../selection/hotkeys";
 import { nextVisibleId } from "../lib/reviewselect";
 import { isNativeListKeyTarget } from "../ui/rowgesture";
@@ -23,10 +23,15 @@ export interface SvgHotActions {
   dismissDialog: () => void;
 }
 
-export function useSvgHotkeys(a: SvgHotActions, enabled = true): void {
+export function useSvgHotkeys(actions: SvgHotActions, enabled = true): void {
+  // The panel builds this bag per render; reading it through a ref keeps ONE
+  // window listener for the tab's lifetime (the callbacks it holds are stable).
+  const held = useRef(actions);
+  held.current = actions;
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
+      const a = held.current;
       if (e.key === "Escape" && a.dialogOpen) return a.dismissDialog();
       // A dialog is modal: Escape closes it and nothing else reaches the list
       // behind it. Otherwise a keystroke could re-plan the confirmation (the
@@ -39,7 +44,7 @@ export function useSvgHotkeys(a: SvgHotActions, enabled = true): void {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [a, enabled]);
+  }, [enabled]);
 }
 
 /** Shortcuts belong to the list, never to a chord or to text being composed. */

@@ -6,7 +6,7 @@
 // this file is the wiring that makes them one screen.
 
 import type { KeySource } from "../lib/keyvault";
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
@@ -82,19 +82,33 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
   );
 }
 
+/** Everything the bulk bar counts, in ONE pass over the rows per snapshot.
+ *  Before this, five separate O(rows × checked) scans ran on every render —
+ *  including renders caused by another tab's selection. */
+function useBulkSummary(g: UploadApi) {
+  return useMemo(() => ({
+    needed: idsNeedingMetadata(g.rows, g.checked).length,
+    withMeta: idsWithMetadata(g.rows, g.checked).length,
+    awaiting: idsAwaitingAcceptance(g.rows, g.checked).length,
+    download: downloadPlanOf(g, g.checked).items.length,
+    overridden: resettableIds(g.checked, g.overrides).length,
+  }), [g]);
+}
+
 /** The bulk bar, pinned while the rows scroll — the Generate SVG tab's sticky .svg-bulkbar-pin, reused. */
 function PinnedBulkBar({ g }: { g: UploadApi }) {
+  const bulk = useBulkSummary(g);
   return (
     <div className="svg-bulkbar-pin" data-testid="upload-bulkbar-pin">
       <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
         thumb={g.thumb} bg={g.bg} stroke={g.defaults.strokePx > 0 ? g.defaults.strokePx : null}
         onStroke={(px) => g.setDefaults({ strokePx: px ?? 0 })} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport} downloading={g.processes.download?.status === "running"}
-        metaNeeded={idsNeedingMetadata(g.rows, g.checked).length} metaRegenerateCount={idsWithMetadata(g.rows, g.checked).length}
-        metaAcceptCount={idsAwaitingAcceptance(g.rows, g.checked).length}
+        metaNeeded={bulk.needed} metaRegenerateCount={bulk.withMeta}
+        metaAcceptCount={bulk.awaiting}
         metaAcceptBusy={g.busy !== null || g.runningMeta + g.runningExport > 0}
-        downloadFiles={downloadPlanOf(g, g.checked).items.length}
-        overriddenCount={resettableIds(g.checked, g.overrides).length}
+        downloadFiles={bulk.download}
+        overriddenCount={bulk.overridden}
         onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}

@@ -25,7 +25,7 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 | Which test covers X | [test index](sor/TESTS.md) → `sor/tests/<area>.md` |
 | An I-n ID | [ID lookup](sor/invariants/README.md) |
 | A RULE n | [RULE 1–25 index](AGENT_RULES.md) → [behaviour](rules/BEHAVIOR.md), [quality](rules/QUALITY.md), [RULE 16 gates](rules/QUALITY_GATES.md), [docs/privacy/delivery](rules/DOCS_AND_SAFETY.md) |
-| Selection gestures / speed | [RULE 25 matrix](rules/BEHAVIOR.md#rule-25) → [I-73](sor/invariants/shared.md#i-73); then the affected tab's behaviour / selectors / tests row above |
+| Selection speed / gestures | [Performance](sor/selection-performance.md) → [RULE 25](rules/BEHAVIOR.md#rule-25) / [I-73](sor/invariants/shared.md#i-73) |
 | Commands and gates | [Code Verification](CODE_VERIFICATION.md); why a gate failed: [ratchet & CI](VERIFICATION_RATCHET.md) |
 | Harness / speed evidence | [test harness](TEST_HARNESS.md) |
 | What the app is | [five-mode overview](sor/OVERVIEW.md) |

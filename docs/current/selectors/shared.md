@@ -102,3 +102,8 @@ state), not the HTML `checked` attribute. `.selected` is the row highlight;
 `aria-current` and tab order still describe the separate active row.
 [One canonical selection / layout projection](../sor/selection-performance.md)
 updates all mounted inputs/classes before paint; filtering retains hidden checks.
+
+Active projection also owns `.active`, `aria-current`, roving `tabIndex` and
+scrolling; assert the same existing row node after arrow/checkbox gestures.
+History handles/shortcuts stay unchanged; recording now uses stable actions and
+compact ordered deltas with deferred persistence (read/pagehide/unmount flush).

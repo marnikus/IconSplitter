@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useCheckedRows } from "../ui/checkedrows";
 import { useRowPresentation } from "../ui/rowpresentation";
 // SvgList.tsx — the source list of the Generate SVG tab (prompt §2): head with
@@ -18,14 +19,18 @@ export interface SvgListProps {
 export default function SvgList({ g, actions }: SvgListProps) {
   const { checked, activeId, ...presentation } = actions;
   const a = useRowPresentation(presentation);
-  const register = useCheckedRows(checked);
+  const register = useCheckedRows(checked, activeId, true);
+  // Checked and active are projected, so this array is stable through a gesture.
+  const rows = useMemo(() => g.visible.map((row) => (
+    <SvgRow key={row.source.id} row={row} a={a} register={register} />
+  )), [g.visible, a, register]);
   return (
     <div className="svg-panel" data-testid="svg-list">
       <ListHead g={g} />
       <div className="pair-table">
         <Columns />
         <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
-          {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={a} register={register} active={row.source.id === activeId} />)}
+          {rows}
           {g.visible.length === 0 && <p className="svg-empty" data-testid="svg-empty">No approved source matches these filters.</p>}
         </div>
       </div>

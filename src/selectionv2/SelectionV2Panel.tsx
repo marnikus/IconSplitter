@@ -3,7 +3,7 @@
 // layout), status bar, overlays and the shared A/D/arrow hotkeys. It owns no
 // rule of its own — decisions, filters and persistence come from useSelection.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { attentionInfo } from "../lib/pairing";
@@ -142,6 +142,9 @@ function UnsupportedNote({ onPick }: { onPick: () => void }) {
 
 function useHotkeys(v: SelectionV2Api, enabled: boolean): void {
   const listMode = v.prefs.mode === "list";
+  // The api object is new on every render; reading it through a ref keeps ONE
+  // window listener for the life of the tab.
+  const latest = useRef(v); latest.current = v;
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
@@ -151,11 +154,11 @@ function useHotkeys(v: SelectionV2Api, enabled: boolean): void {
       // layout uses it as the fit/1:1 zoom toggle.
       if (!act || (act === "zoom" && listMode) || nativeListAction(act, e.target)) return;
       e.preventDefault();
-      runHotAction(act, hotTarget(v.core));
+      runHotAction(act, hotTarget(latest.current.core));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [v, listMode, enabled]);
+  }, [listMode, enabled]);
 }
 
 function nativeListAction(action: NonNullable<ReturnType<typeof keyToAction>>, target: EventTarget | null): boolean {

@@ -15,7 +15,8 @@ import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
 import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
-import type { HistoryApi } from "../state/HistoryProvider";
+import type { HistoryActions } from "../state/HistoryProvider";
+import { selectionPayloads } from "../lib/selectiondelta";
 import { useKeyActions } from "./keyactions";
 import { useSvgPromptActions, type SvgPromptActions } from "./promptactions";
 import { refreshCatalog } from "./catalog";
@@ -36,7 +37,7 @@ import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
 import { MAIN_PLAN, clampRegenPerRequest, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
 export interface SvgCtx {
-  m: SvgModel; dispatch: Dispatch<SvgAction>; refs: SvgRefs; hist: HistoryApi;
+  m: SvgModel; dispatch: Dispatch<SvgAction>; refs: SvgRefs; hist: HistoryActions;
   rows: SvgRow[]; visible: SvgRow[]; checked: string[]; activeId: string | null;
   header: "none" | "some" | "all"; affected: string[]; totals: UsageTotals; requests: number;
   provider: string; say: (msg: string, err?: boolean) => void; loadAll: () => void; refreshKey: () => void;
@@ -139,21 +140,21 @@ function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | 
 function useSvgChecks(latest: { current: SvgCtx }) {
   const toggleCheck = useCallback((id: string) => {
     const before = svgSelection();
-    editChecked(latest.current, { ...before, checked: toggleChecked(before.checked, id) }, "Toggle row", [id]);
+    editChecked(latest.current, { ...before, checked: toggleChecked(before.checked, id) }, "Toggle row");
   }, [latest]);
   const selectVisible = useCallback(() => {
     const before = svgSelection();
     const ids = latest.current.visible.map((r) => r.source.id);
-    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, true) }, "Select visible", ids);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, true) }, "Select visible");
   }, [latest]);
   const uncheckVisible = useCallback(() => {
     const before = svgSelection();
     const ids = latest.current.visible.map((r) => r.source.id);
-    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, false) }, "Deselect visible", ids);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, false) }, "Deselect visible");
   }, [latest]);
   const deselectAll = useCallback(() => {
     const before = svgSelection();
-    editChecked(latest.current, { ...before, checked: [] }, "Deselect all", before.checked);
+    editChecked(latest.current, { ...before, checked: [] }, "Deselect all");
   }, [latest]);
   return { toggleCheck, selectVisible, uncheckVisible, deselectAll,
     checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest) };
@@ -164,11 +165,11 @@ function useSvgRowActions(latest: { current: SvgCtx }) {
     const before = svgSelection();
     const visibleIds = latest.current.visible.map((r) => r.source.id);
     const after = applyRowGesture(before, { id, intent, visibleIds });
-    editChecked(latest.current, after, intent === "replace" ? "Select row" : "Select range", [id]);
+    editChecked(latest.current, after, intent === "replace" ? "Select row" : "Select range");
   }, [latest]);
   const setActive = useCallback((id: string) => {
     const before = svgSelection();
-    editChecked(latest.current, { ...before, active: id }, "Move active row", [id]);
+    editChecked(latest.current, { ...before, active: id }, "Move active row", "active");
   }, [latest]);
   return { selectRow, setActive };
 }
@@ -177,14 +178,14 @@ function useCheckActive(latest: { current: SvgCtx }) {
   return useCallback(() => {
     const before = svgSelection();
     if (!before.active) return;
-    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], true) }, "Select active row", [before.active]);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], true) }, "Select active row");
   }, [latest]);
 }
 function useUncheckActive(latest: { current: SvgCtx }) {
   return useCallback(() => {
     const before = svgSelection();
     if (!before.active) return;
-    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], false) }, "Deselect active row", [before.active]);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], false) }, "Deselect active row");
   }, [latest]);
 }
 function useDecide(latest: { current: SvgCtx }) {
@@ -242,14 +243,18 @@ function svgSelection(): RowSelection {
   return { checked, active: activeId, anchor: anchorId };
 }
 
-function editChecked(c: SvgCtx, after: RowSelection, label: string, touched: string[]): void {
+/** One gesture = one entry holding the DIFF (lib/selectiondelta), never two
+ *  copies of a 1,000-row selection. `gesture` makes an arrow burst one entry. */
+function editChecked(c: SvgCtx, after: RowSelection, label: string, gesture?: string): void {
   const before = svgSelection();
   if (sameRowSelection(before, after)) return;
   patchSvg({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
-  c.hist.push({
-    type: "svgChecked", label, origin: getAppState().tab, ids: touched,
-    before: { ids: before.checked, anchor: before.anchor, active: before.active },
-    after: { ids: after.checked, anchor: after.anchor, active: after.active },
+  const payload = selectionPayloads(before, after);
+  const record = gesture === undefined ? c.hist.push : c.hist.pushGesture;
+  record({
+    type: "svgChecked", label, origin: getAppState().tab,
+    ...(gesture === undefined ? {} : { gesture }),
+    ids: payload.ids, before: payload.before, after: payload.after,
   });
 }
 function dummyRegen(c: SvgCtx): RegenPlan {

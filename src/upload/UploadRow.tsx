@@ -8,7 +8,7 @@
 
 import { paddingLabel } from "../lib/upload/padding";
 import { memo } from "react";
-import { useCheckedRow, type RegisterCheckedRow } from "../ui/checkedrows";
+import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -53,14 +53,19 @@ export interface UploadRowActions {
 
 export type UploadRowPresentation = Omit<UploadRowActions, "checked" | "activeId">;
 
-function UploadRowView({ row, a, active, register }: { row: UploadRow; a: UploadRowPresentation; active: boolean; register: RegisterCheckedRow }) {
-  const ref = useCheckedRow(row.source.id, active, register);
+/**
+ * `active` is the ONLY active-dependent part (the expanded metadata fields), and
+ * the list clones just that one row's element — so an arrow move re-renders one
+ * row instead of all of them. Its class/aria-current/tabIndex still come from
+ * the projection registry, never from this prop.
+ */
+function UploadRowView({ row, a, active = false, register }: { row: UploadRow; a: UploadRowPresentation; active?: boolean; register: RegisterCheckedRow }) {
+  const ref = useRowBinding(row.source.id, register);
   const id = row.source.id;
   const status = statusOf(row);
   return (
-    <div ref={ref} role="listitem" data-testid={`upload-row-${id}`} tabIndex={active ? 0 : -1}
-      aria-current={active ? "true" : undefined}
-      className={`up-row ${status}${active ? " active" : ""}`}
+    <div ref={ref} role="listitem" data-testid={`upload-row-${id}`} tabIndex={-1}
+      className={`up-row ${status}`}
       onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); a.selectRow(id, "replace"); } }}>
       <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`}

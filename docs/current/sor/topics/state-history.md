@@ -36,7 +36,7 @@ above the tabs so an undo applied while a panel is unmounted is persisted too.
 
 `lib/history.ts` is pure and holds the contracts (adapted from the reference
 implementation, see the design doc): `{ entries, index }` with `index = -1`
-meaning "before the first action", `MAX_HISTORY = 100`, `HISTORY_VERSION = 1`,
+meaning "before the first action", `MAX_HISTORY = 100`, `HISTORY_VERSION = 2` (still reads version 1),
 push truncates the redo branch, collapses a consecutive duplicate and drops the
 oldest entry on overflow, `parseTimeline` validates and clamps on every read.
 Each entry is `{ id, type, label, at, origin, ids[], before, after, v }` —
@@ -51,6 +51,11 @@ read-only list of the timeline.
 `pushGesture` coalesces one gesture (slider drag, search typing, arrow-key
 navigation) into a single entry: the tip's `after` is replaced and the original
 `before` kept.
+
+Current [selection performance](../selection-performance.md) extends this dated
+record: selection payloads are ordered deltas (legacy absolute values still read),
+`useHistoryActions` is stable and separate from `useHistoryView`, and persistence
+is deferred per burst with read/pagehide/unmount flush. Session keys are unchanged.
 
 ### 12.3 The apply path and the failure rule
 
