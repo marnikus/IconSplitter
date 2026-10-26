@@ -5,7 +5,7 @@
 // selection and prefs live in the store above the tabs, so both survive a tab
 // switch and a restart and both are undoable.
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { type ReviewPrefs, type ViewMode } from "../lib/reviewprefs";
 import { clampZoom } from "../lib/zoom";
 import { bulkScope } from "../lib/reviewbulk";
@@ -13,10 +13,11 @@ import {
   applyRowGesture, checkState, sameRowSelection, setChecked, toggleChecked,
   type CheckState, type SelectIntent,
 } from "../lib/reviewselect";
+import { selectionPayloads } from "../lib/selectiondelta";
 import { useSelection, type SelectionApi } from "../selection/useSelection";
-import { getAppState, patchV2, patchView, setAppState } from "../state/appstore";
-import { useAppState } from "../state/useAppState";
-import { useHistory, type HistoryApi } from "../state/HistoryProvider";
+import { getAppState, patchV2, patchV2Selection, setAppState } from "../state/appstore";
+import { useAppSlice } from "../state/useAppState";
+import { useHistoryActions, type HistoryActions } from "../state/HistoryProvider";
 
 export interface SelectionV2Api {
   core: SelectionApi;
@@ -40,7 +41,7 @@ export interface SelectionV2Api {
   uncheckActive: () => void;
 }
 
-function makeCheckActive(hist: HistoryApi) {
+function makeCheckActive(hist: HistoryActions) {
   return () => {
     const a = getAppState().view.selectedId;
     if (!a) return;
@@ -49,7 +50,7 @@ function makeCheckActive(hist: HistoryApi) {
   };
 }
 
-function makeUncheckActive(hist: HistoryApi) {
+function makeUncheckActive(hist: HistoryActions) {
   return () => {
     const a = getAppState().view.selectedId;
     if (!a) return;
@@ -60,32 +61,37 @@ function makeUncheckActive(hist: HistoryApi) {
 
 export function useSelectionV2(): SelectionV2Api {
   const core = useSelection();
-  const hist = useHistory();
-  const app = useAppState();
-  const { checked, scrollY } = app.v2;
+  const hist = useHistoryActions();
+  const { checked, scrollY } = useAppSlice("v2");
+  const prefs = useAppSlice("prefs");
   const visibleIds = useMemo(() => core.visible.map((p) => p.pairId), [core.visible]);
-  const scope = bulkScope(core.visible, checked);
-  return {
-    core, prefs: app.prefs, checked, scrollY,
-    affected: scope.affected,
-    blockedCount: scope.blocked,
-    hiddenCount: scope.hidden,
-    header: checkState(visibleIds, checked),
-    setMode: (mode) => editPrefs(hist, { mode }, `View mode: ${mode}`, false),
-    setThumb: (px) => editPrefs(hist, { thumbHeight: clampZoom(px) }, `Thumbnail ${clampZoom(px)} px`, true),
-    setScroll: (y) => patchV2({ scrollY: y }),
-    selectRow: (id, intent) => applySelect({ hist, visibleIds, id, intent }),
-    toggleCheck: (id) => editSelection(hist, toggleChecked(getAppState().v2.checked, id), getAppState().v2.anchorId),
-    checkVisible: () => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, true), getAppState().v2.anchorId),
-    uncheckVisible: () => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, false), getAppState().v2.anchorId),
-    uncheckAll: () => editSelection(hist, [], getAppState().v2.anchorId),
-    checkActive: makeCheckActive(hist),
-    uncheckActive: makeUncheckActive(hist),
-  };
+  const scope = useMemo(() => bulkScope(core.visible, checked), [core.visible, checked]);
+  const header = useMemo(() => checkState(visibleIds, checked), [visibleIds, checked]);
+  // D7: the API object and every action in it keep one identity until an input
+  // really changes. Hotkey effects and the panel memoize on this API, so a new
+  // closure per render rebound their listeners on every keystroke.
+  const onMode = useCallback((mode: ViewMode) => editPrefs(hist, { mode }, `View mode: ${mode}`, false), [hist]);
+  const onThumb = useCallback((px: number) => editPrefs(hist, { thumbHeight: clampZoom(px) }, `Thumbnail ${clampZoom(px)} px`, true), [hist]);
+  const onScroll = useCallback((y: number) => patchV2({ scrollY: y }), []);
+  const onSelectRow = useCallback((id: string, intent: SelectIntent) => applySelect({ hist, visibleIds, id, intent }), [hist, visibleIds]);
+  const onToggleCheck = useCallback((id: string) => editSelection(hist, toggleChecked(getAppState().v2.checked, id), getAppState().v2.anchorId), [hist]);
+  const onCheckVisible = useCallback(() => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, true), getAppState().v2.anchorId), [hist, visibleIds]);
+  const onUncheckVisible = useCallback(() => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, false), getAppState().v2.anchorId), [hist, visibleIds]);
+  const onUncheckAll = useCallback(() => editSelection(hist, [], getAppState().v2.anchorId), [hist]);
+  const onCheckActive = useMemo(() => makeCheckActive(hist), [hist]);
+  const onUncheckActive = useMemo(() => makeUncheckActive(hist), [hist]);
+  return useMemo(() => ({
+    core, prefs, checked, scrollY,
+    affected: scope.affected, blockedCount: scope.blocked, hiddenCount: scope.hidden, header,
+    setMode: onMode, setThumb: onThumb, setScroll: onScroll, selectRow: onSelectRow,
+    toggleCheck: onToggleCheck, checkVisible: onCheckVisible, uncheckVisible: onUncheckVisible,
+    uncheckAll: onUncheckAll, checkActive: onCheckActive, uncheckActive: onUncheckActive,
+  }), [core, prefs, checked, scrollY, scope, header, onMode, onThumb, onScroll, onSelectRow,
+    onToggleCheck, onCheckVisible, onUncheckVisible, onUncheckAll, onCheckActive, onUncheckActive]);
 }
 
 interface SelectArgs {
-  hist: HistoryApi;
+  hist: HistoryActions;
   visibleIds: string[];
   id: string;
   intent: SelectIntent;
@@ -103,21 +109,25 @@ function applySelect(a: SelectArgs): void {
   editSelection(a.hist, after.checked, after.anchor, after.active);
 }
 
-/** One selection gesture = one entry holding the whole selection, so one undo
- *  restores every row it touched, not just the last one. `active` is set by a
- *  row click; the checkbox and header controls leave the active row alone. */
-function editSelection(hist: HistoryApi, ids: string[], anchor: string | null, active?: string | null): void {
+/** One selection gesture = one entry, so one undo restores every row it touched,
+ *  not just the last one. `active` is set by a row click; the checkbox and header
+ *  controls leave the active row alone. The entry records the DIFF (ordered
+ *  indices, lib/selectiondelta) and ONE store notification, so a 1,000-row list
+ *  no longer copies its whole selection into history or wakes the other tabs. */
+function editSelection(hist: HistoryActions, ids: string[], anchor: string | null, active?: string | null): void {
   const before = getAppState().v2;
   const beforeActive = getAppState().view.selectedId;
   const nextActive = active === undefined ? beforeActive : active;
   if (sameRowSelection({ checked: before.checked, anchor: before.anchorId, active: beforeActive },
     { checked: ids, anchor, active: nextActive })) return;
-  patchV2({ checked: ids, anchorId: anchor });
-  if (active !== undefined) patchView({ selectedId: active });
+  patchV2Selection({ checked: ids, anchorId: anchor, activeId: nextActive });
+  const payload = selectionPayloads(
+    { checked: before.checked, anchor: before.anchorId, active: beforeActive },
+    { checked: ids, anchor, active: nextActive },
+  );
   hist.push({
-    type: "checked", label: selectionLabel(ids), origin: getAppState().tab, ids,
-    before: { ids: before.checked, anchor: before.anchorId, active: beforeActive },
-    after: { ids, anchor, active: nextActive },
+    type: "checked", label: selectionLabel(ids), origin: getAppState().tab,
+    ...payload,
   });
 }
 
@@ -127,7 +137,7 @@ function selectionLabel(ids: string[]): string {
 }
 
 /** Prefs stay in the store; prefsstore remains their only writer (see boot). */
-function editPrefs(hist: HistoryApi, patch: Partial<ReviewPrefs>, label: string, gesture: boolean): void {
+function editPrefs(hist: HistoryActions, patch: Partial<ReviewPrefs>, label: string, gesture: boolean): void {
   const before = getAppState().prefs;
   const after = { ...before, ...patch };
   setAppState({ prefs: after });

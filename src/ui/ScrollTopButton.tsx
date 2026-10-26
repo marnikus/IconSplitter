@@ -23,9 +23,13 @@ function usePastTop(target: React.RefObject<HTMLElement | null>): [boolean, () =
   const toTop = useCallback(() => {
     const el = target.current;
     if (!el) return;
-    if (typeof el.scrollTo === "function") el.scrollTo({ top: 0, behavior: "smooth" });
+    // No explicit `behavior`: the contract is the RESULT (app-main is back at the
+    // top), so the scroll box decides how to animate it — `scrollTo({top: 0})`
+    // honours CSS `scroll-behavior`, and a DOM without smooth-scroll support
+    // still lands exactly at 0 instead of silently ignoring the call.
+    if (typeof el.scrollTo === "function") el.scrollTo({ top: 0 });
     else el.scrollTop = 0;
-    setPast(false); // the scroll listener refines this as smooth scrolling fires `scroll`
+    setPast(false); // the scroll listener refines this if the box animates
   }, [target]);
 
   return [past, toTop];

@@ -13,7 +13,7 @@ import type { ReviewRecord } from "../lib/reviewfile";
 import type { DirHandleLike } from "../lib/fs";
 import { fsSupported } from "../batch/picker";
 import { useAppView } from "../state/useAppState";
-import { useHistory, type HistoryApi } from "../state/HistoryProvider";
+import { useHistoryActions, type HistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchView } from "../state/appstore";
 import { SCAN_IDLE } from "../lib/scanseq";
 import { bindDecisionApplier, type DecisionPatch } from "./offline";
@@ -38,7 +38,7 @@ import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";
 export function useSelection() {
   const view = useAppView();
   const [core, setCore] = useState(initialSelState);
-  const hist = useHistory();
+  const hist = useHistoryActions();
   const ctx = useCtx(useMerged(core, view), hist);
   useEffect(() => { void boot(ctx, setCore); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useToastClear(ctx.state.current.toast, setCore);
@@ -46,29 +46,44 @@ export function useSelection() {
   const s = ctx.state.current;
   const visible = useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort), [s.pairs, s.filter, s.sort]);
   const say = useCallback((msg: string, err = false) => setCore((p) => ({ ...p, toast: { msg, err } })), []);
-  return {
-    s, visible, say, supported: fsSupported(), rootRef: ctx.root,
-    chooseRoot: useCallback(() => chooseRoot(ctx, setCore, say), [ctx, say]),
-    rescan: useCallback(() => rescan(ctx, setCore, say, true), [ctx, say]),
-    decide: useCallback((id: string, d: Decision) => decide(ctx, setCore, id, d), [ctx]),
-    decideBulk: useCallback((ids: string[], d: Decision) => decideBulk(ctx, setCore, ids, d), [ctx]),
-    resetBulk: useCallback((ids: string[]) => resetBulk(ctx, setCore, ids), [ctx]),
-    retryWrite: useCallback(() => retryWrite(ctx, setCore), [ctx]),
-    select: useCallback((id: string) => selectRow(ctx, id), [ctx]),
-    setFilter: useCallback((f: ListFilter, gesture = false) => editView(ctx, { patch: { filter: f }, label: filterLabel(f), id: "filter", gesture }), [ctx]),
-    setSort: useCallback((so: SortState) => editView(ctx, { patch: { sort: so }, label: sortLabel(so), id: "sort", gesture: false }), [ctx]),
-    patch: useCallback((part: Partial<SelState>) => patchState(ctx, setCore, part), [ctx]),
-  };
+  const actions = useSelectionActions(ctx, setCore, say);
+  const supported = fsSupported();
+  return useMemo(() => ({
+    s, visible, say, supported, rootRef: ctx.root, ...actions,
+  }), [s, visible, say, supported, ctx.root, actions]);
+}
+
+/** Stable action identities: consumers memoize on this bag (D7). */
+function useSelectionActions(ctx: Ctx, setCore: Setter, say: (m: string, e?: boolean) => void) {
+  const onChooseRoot = useCallback(() => chooseRoot(ctx, setCore, say), [ctx, say, setCore]);
+  const onRescan = useCallback(() => rescan(ctx, setCore, say, true), [ctx, say, setCore]);
+  const onDecide = useCallback((id: string, d: Decision) => decide(ctx, setCore, id, d), [ctx, setCore]);
+  const onDecideBulk = useCallback((ids: string[], d: Decision) => decideBulk(ctx, setCore, ids, d), [ctx, setCore]);
+  const onResetBulk = useCallback((ids: string[]) => resetBulk(ctx, setCore, ids), [ctx, setCore]);
+  const onRetryWrite = useCallback(() => retryWrite(ctx, setCore), [ctx, setCore]);
+  const onSelect = useCallback((id: string) => selectRow(ctx, id), [ctx]);
+  const onSetFilter = useCallback((f: ListFilter, gesture = false) => editView(ctx, { patch: { filter: f }, label: filterLabel(f), id: "filter", gesture }), [ctx]);
+  const onSetSort = useCallback((so: SortState) => editView(ctx, { patch: { sort: so }, label: sortLabel(so), id: "sort", gesture: false }), [ctx]);
+  const onPatch = useCallback((part: Partial<SelState>) => patchState(ctx, setCore, part), [ctx, setCore]);
+  return useMemo(() => ({
+    chooseRoot: onChooseRoot, rescan: onRescan, decide: onDecide, decideBulk: onDecideBulk,
+    resetBulk: onResetBulk, retryWrite: onRetryWrite, select: onSelect,
+    setFilter: onSetFilter, setSort: onSetSort, patch: onPatch,
+  }), [onChooseRoot, onRescan, onDecide, onDecideBulk, onResetBulk, onRetryWrite, onSelect, onSetFilter, onSetSort, onPatch]);
 }
 
 function useMerged(core: SelState, view: ReturnType<typeof useAppView>): SelState {
   return useMemo(() => ({ ...core, ...view }), [core, view]);
 }
 
-function useCtx(s: SelState, hist: HistoryApi): Ctx {
+/** One identity for the whole panel: every action depends on `ctx`, so a fresh
+ *  object per render rebound every callback and every effect that consumed it. */
+function useCtx(s: SelState, hist: HistoryActions): Ctx {
   const stateRef = useRef(s);
   stateRef.current = s; // render-mirror for async callbacks (RULE 24)
-  return { root: useRef(null), state: stateRef, hist, seq: useRef(SCAN_IDLE) };
+  const root = useRef(null);
+  const seq = useRef(SCAN_IDLE);
+  return useMemo(() => ({ root, state: stateRef, hist, seq }), [hist]);
 }
 
 function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {

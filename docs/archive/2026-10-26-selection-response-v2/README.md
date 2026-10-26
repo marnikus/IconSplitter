@@ -757,3 +757,41 @@ A user with 1,000+ rows can:
 
 The same is demonstrated with measurements on the recorded harness, and the
 current docs/rules are honest about the remaining 5,000-row DOM floor.
+
+---
+
+## 13. Implementation status (2026-10-26, second pass)
+
+Implemented in `src/` in the order below; the sections above stay as the design
+record.
+
+| Step | Status | Where |
+|---|---|---|
+| D1 slice selectors | done | `state/useAppState.ts` `useAppSlice`, consumed by Workbench, V2, Batch, SVG, Upload, Sheets |
+| D2 history actions/view split | done | `state/HistoryProvider.tsx` `useHistoryActions` / `useHistoryView` (combined `useHistory` kept for tests) |
+| D3 compact ordered deltas | done | `lib/selectiondelta.ts` (runs of removed/added ids with positions, inverse apply, id-based fallback, capped `ids` label), used by all four tabs; `state/apply.ts` still reads absolute v1 payloads |
+| D4 deferred persistence | done | `state/historystore.ts` `scheduleSaveHistory` / `flushHistory` / read-through `loadHistory`; flushed on `pagehide`, provider unmount and any read; a refusing storage keeps working in memory |
+| D5 checked + active projection | done | `ui/checkedrows.ts` owns checked, active class, `aria-current`, roving `tabIndex` and scroll; all four lists memoize the row element array |
+| D6 one summary per tab | done | `svg/panelcounts.ts` (one pass, replaces the O(affected × rows) scan), Batch header trio, `useBulkSummary`, memoized `bulkScope`/`checkState` |
+| D7 stable identities | done | `useSelection` (actions hook), `useSelectionV2`, `useBatch`, `useBatchView`, `useBatchSelection`, `svg/ctx` (derived + bridge + context), `upload/useUpload` + `useUploadActions`, `SvgHotkeys` reads through a ref |
+| D8 conditional Batch mirror | partly | the `row.selected` mirror is KEPT (it feeds split/preview paths and is the equivalence gate), but the visible list is keyed by the fields the filter/sort read, so a checkbox no longer re-filters or re-sorts the folder |
+| D9 logs/autosave off the path | done | `log/LogRow` memo, autosave unchanged (debounced, slice-scoped) |
+
+Measured on this machine (Node 22, vitest, 100-gesture timeline of single-row
+toggles; serialization is the part that sat inside the click):
+
+| Rows | Old payload | Old serialize | New payload | New serialize | New per-gesture diff |
+|---|---|---|---|---|---|
+| 100 | 10.7 KB | 3.21 ms | 0.3 KB | 0.31 ms | 0.02 ms |
+| 1,000 | 95.1 KB | 31.58 ms | 0.5 KB | 0.35 ms | 0.14 ms |
+| 5,000 | 470.1 KB | 165.87 ms | 0.5 KB | 0.39 ms | 0.94 ms |
+
+A 100-gesture timeline at 5,000 rows drops from 46.5 MB to 42.3 KB; a select-all
+payload at 5,000 rows is built in 0.61 ms.
+
+Not measured: the input-to-committed-DOM figures in §2/§6 need a headless
+Chromium. This sandbox has none, so the browser before/after comparison is still
+open; `tools/perf/selection-response.tsx` now records real history entries per
+gesture (and exports `historyBytes`) so that re-run measures the new path.
+Budget tests in `tests/selection_perf_budgets.test.tsx`, `tests/selectiondelta.test.ts`
+and `tests/history_persist.test.tsx` guard the same properties deterministically.

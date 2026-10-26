@@ -5,7 +5,7 @@
 // merely checked row.
 
 import { memo, useState } from "react";
-import { useCheckedRow, type RegisterCheckedRow } from "../ui/checkedrows";
+import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { attentionInfo } from "../lib/pairing";
 import type { Decision, ViewPair } from "../lib/reviewfilter";
 import { statusInfo } from "../lib/reviewmeta";
@@ -14,11 +14,10 @@ import { isRowGestureClick } from "../ui/rowgesture";
 import ThumbPair, { type Dims } from "./ThumbPair";
 import type { ReviewPresentation } from "./ReviewList";
 
-function ReviewRow({ row, p, active, register }: { row: ViewPair; p: ReviewPresentation; active: boolean; register: RegisterCheckedRow }) {
-  const ref = useCheckedRow(row.pairId, active, register);
+function ReviewRow({ row, p, register }: { row: ViewPair; p: ReviewPresentation; register: RegisterCheckedRow }) {
+  const ref = useRowBinding(row.pairId, register);
   return (
-    <div ref={ref} role="listitem" data-testid={`v2-row-${row.pairId}`} tabIndex={active ? 0 : -1}
-      aria-current={active ? "true" : undefined} className={rowClass(row.decision, active)}
+    <div ref={ref} role="listitem" data-testid={`v2-row-${row.pairId}`} tabIndex={-1} className={rowClass(row.decision)}
       onClick={(e) => { if (isRowGestureClick(e)) p.onRowClick(row.pairId, e); }}
       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); p.onRowClick(row.pairId, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false }); } }}>
       <input type="checkbox" className="v2-check" data-testid={`v2-check-${row.pairId}`}
@@ -49,8 +48,8 @@ const RowContent = memo(function RowContent({ row, p }: { row: ViewPair; p: Revi
   </>;
 });
 
-function rowClass(decision: Decision, active: boolean): string {
-  return `v2-row ${decision}${active ? " active" : ""}`;
+function rowClass(decision: Decision): string {
+  return `v2-row ${decision}`;
 }
 
 

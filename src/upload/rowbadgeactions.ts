@@ -5,7 +5,7 @@ import {
   toggleBadgeOn, type RowBadgeState,
 } from "../lib/upload/rowbadge";
 import { getAppState } from "../state/appstore";
-import type { HistoryApi } from "../state/HistoryProvider";
+import type { HistoryActions } from "../state/HistoryProvider";
 import { getRowBadgeState, setRowBadgeState } from "./rowbadgestore";
 import type { UploadActions, UploadCtx } from "./actions";
 
@@ -93,7 +93,7 @@ function commit(a: CommitArgs): void {
   a.ctx.say(a.label);
 }
 
-function pushHistory(hist: HistoryApi, a: CommitArgs, after: RowBadgeState): void {
+function pushHistory(hist: HistoryActions, a: CommitArgs, after: RowBadgeState): void {
   const entry = { type: "uploadRowBadges", label: a.label, origin: getAppState().tab, ids: a.ids ?? [], before: a.before, after };
   if (a.gesture) hist.pushGesture(entry);
   else hist.push(entry);

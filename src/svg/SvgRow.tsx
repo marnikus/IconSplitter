@@ -10,7 +10,7 @@
 // checked one.
 
 import { memo } from "react";
-import { useCheckedRow, type RegisterCheckedRow } from "../ui/checkedrows";
+import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
@@ -50,13 +50,12 @@ export interface SvgRowActions {
 
 export type SvgRowPresentation = Omit<SvgRowActions, "checked" | "activeId">;
 
-function SvgRowView({ row, a, active, register }: { row: SvgRow; a: SvgRowPresentation; active: boolean; register: RegisterCheckedRow }) {
-  const ref = useCheckedRow(row.source.id, active, register);
+function SvgRowView({ row, a, register }: { row: SvgRow; a: SvgRowPresentation; register: RegisterCheckedRow }) {
+  const ref = useRowBinding(row.source.id, register);
   const id = row.source.id;
   return (
-    <div ref={ref} role="listitem" data-testid={`svg-row-${id}`} tabIndex={active ? 0 : -1}
-      aria-current={active ? "true" : undefined}
-      className={`svg-row ${row.review}${active ? " active" : ""}${row.corrupt ? " corrupt" : ""}`}
+    <div ref={ref} role="listitem" data-testid={`svg-row-${id}`} tabIndex={-1}
+      className={`svg-row ${row.review}${row.corrupt ? " corrupt" : ""}`}
       onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
       onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") { e.preventDefault(); a.selectRow(id, "replace"); } }}>
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`}

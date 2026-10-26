@@ -4,59 +4,74 @@ Part of [shared state](shared.md); gestures remain [RULE 25](../rules/BEHAVIOR.m
 
 ## One state, inexpensive projection
 
-Canonical checked ids stay in existing React/app-store arrays, with unchanged
-history/session formats. Lists never keep an independent selection state.
-`ui/checkedrows.ts` registers mounted row/input bindings. A layout effect projects
-each committed snapshot to native checkbox **properties** and the existing
-`.selected` row class before paint. Only changed properties/classes are written.
-All rows/controls remain mounted; no virtualization, deferred/chunked selection,
-hidden rows or provider/file work on selection. Filtering unmounts bindings,
-not hidden checked ids; remounting projects the current snapshot.
+Canonical checked ids stay in the app store's arrays; lists never keep an
+independent selection state. `ui/checkedrows.ts` registers mounted row/input
+bindings and owns the whole selection **projection**: `input.checked`, the
+`.selected` class, the `.active` row class, `aria-current`, the roving
+`tabIndex` and the active row's `scrollIntoView`. A layout effect projects each
+committed snapshot before paint and writes only values that changed. Rows
+therefore receive neither the checked array nor an `active` prop, and each list
+memoizes its row element array (`ReviewList`, `SvgList`, `UploadList`,
+`ScanTable`): a checkbox or an arrow key moves two DOM nodes, not 1,000.
 
-Row shells no longer receive checked arrays. A 1000-item select-all updates one
-indexed registry instead of rerendering 1000 checkbox/presentation trees.
-A row-data/active change reapplies selection after React updates its base class.
-Active scrolling, keyboard/checkbox events, eligibility, anchors, bulk scopes and
-undo/redo still use their existing handlers. Row background changes are instant:
-bulk selection must not launch 1000 simultaneous colour animations. Zoom sizing
-behaviour remains unchanged.
+All rows/controls remain mounted; no virtualization, deferred/chunked
+selection, hidden rows or provider/file work on selection. Filtering unmounts
+bindings, not hidden checked ids; remounting projects the current snapshot.
+Batch stays non-roving: its rows keep their own `tabIndex` rule.
 
-## Presentation boundaries and invalidation
+## One notification per gesture
 
-`ui/rowpresentation.ts` bridges event callbacks to the latest committed handler
-without changing their identities. Ordinary data remains reactive; function-valued
-render dependencies such as thumbnail loaders explicitly retain their identities.
-Memoized row contents preserve image/preview trees and local UI state during
-selection. Source, metadata, versions, status, zoom, background, export settings,
-root generation, badges and preview entries still invalidate their consumers.
-Batch compares every row data field except its legacy `selected` processing
-mirror; reconciliation reads that flag directly, never searches the whole list
-for every row. Its preview-freshness lookup uses an indexed path map. Shared
-visible deselection and SVG affected-scope derivation use Set membership.
+Panels read only their slice (`useAppSlice`); an upload patch wakes upload
+consumers only. A gesture that changes checked ids, anchor and the active row is
+ONE store notification: `patchV2Selection` writes the V2 slice and the shared
+active row together. History is split into stable **actions** (`push`,
+`pushGesture`, `undo`, `redo`) and a **view** (entries, cursor, labels, error),
+so recording an entry never re-renders the recorder. `useSelection`,
+`useSelectionV2`, `useBatch`, `useBatchView`, `useBatchSelection`, the SVG
+context and the upload API keep their identities between real changes, and every
+hotkey listener reads its targets through a ref (one window listener per tab).
+
+## Compact, ordered history entries
+
+`lib/selectiondelta.ts` records what a gesture changed, not the selection:
+runs of removed ids at their source positions and added ids at their destination
+positions, plus anchor/active. Selection order is the request order (RULE 10),
+so an undo inserts ids back at their recorded positions; when the live selection
+has moved on, apply degrades to id-based removal/insertion so ids are still
+correct and never duplicated. Absolute entry payloads (older timelines) are
+still read by `state/apply.ts`, and an unparsable payload is refused without
+moving the cursor. Entry `ids` is a capped label (24 ids), never a copy of the
+list. Persistence writes the timeline after the gesture (one deferred write per
+burst), flushes on `pagehide`, unmount and any read, and keeps working in memory
+when storage refuses.
+
+## Derived summaries
+
+Counts and scopes are one pass per rows snapshot: `svg/panelcounts.ts`
+(`countsOf`, `decidableCount`), the Batch header trio, `useBulkSummary` for
+Upload. The Batch visible list is keyed by the fields the filter/sort read, so
+the legacy `row.selected` mirror no longer re-filters and re-sorts the folder on
+a checkbox.
 
 ## Verification and timing
 
-- `tests/checkedrows.test.tsx`: 1000-row projection without shell renders,
-  data/class updates, restoration, filtering/remount and binding cleanup.
-- `tests/rowpresentation.test.tsx`: fresh callbacks/return values, reactive loaders,
-  full data comparison, source/status/preview invalidation.
-- `tests/selection_response.test.tsx`: real four-list preview/format algorithms,
-  zero selection-only presentation work, native checks/classes, linear Batch
-  reconciliation and no per-row background animations. Spies delegate to real code.
-- Existing all-tab selection/history/preview suites protect semantics.
+- `tests/selection_perf_budgets.test.tsx`: slice isolation, history actions/view
+  isolation, entry byte budgets at 1,000 rows, linear `countsOf`/`decidableCount`,
+  same-DOM-node row identity across click/toggle, and no re-sort on a Batch
+  selection-only change.
+- `tests/selectiondelta.test.ts`: order-exact forward/inverse apply, malformed
+  payload refusal, id fallback, size that does not grow with the selection.
+- `tests/history_persist.test.tsx`: one deferred write per burst, pagehide and
+  unmount flush, read-through load, storage refusal, no write when idle.
+- `tests/checkedrows.test.tsx`, `tests/rowpresentation.test.tsx`,
+  `tests/selection_response.test.tsx`: projection, invalidation and the real
+  four-list algorithms; the existing selection/history/undo suites protect
+  RULE 25 semantics and cross-tab undo.
 
 Reproducible Chromium fixture/runner: `tools/perf/selection-response.html`,
-`tools/selection-response-bench.mjs`; production build config
-`tools/perf/vite.selection.config.ts`. [Plan, methodology and measured results](../../archive/2026-10-26-selection-response/README.md).
-Timing results are fixture/browser measurements, not universal hardware guarantees.
-
-## End-to-end interaction cost (open)
-
-List projection is inexpensive; the **round trip** around it is not. Every panel
-subscribes to the whole app store, every selection gesture copies the whole
-checked array into a history entry, and the provider serializes and writes the
-whole timeline synchronously. Those costs are outside the list component and
-therefore outside the measurements above. Measured 1,000/5,000-row figures and
-the redesign (slice selectors, deltas, deferred history persistence, per-panel
-summaries) are in [the plan](../../archive/2026-10-26-selection-response-v2/README.md);
-history and session formats stay as stated above until that work lands.
+`tools/selection-response-bench.mjs` (gestures now record real history and report
+`byKind` medians plus the serialized `historyBytes`); production build config
+`tools/perf/vite.selection.config.ts`. Plan, methodology and the per-tab
+before/after measurements: [plan](../../archive/2026-10-26-selection-response-v2/README.md)
+and [first pass](../../archive/2026-10-26-selection-response/README.md). Timing
+results are fixture/browser measurements, not universal hardware guarantees.

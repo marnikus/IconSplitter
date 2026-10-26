@@ -3409,3 +3409,38 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
 - Final fast/full ALL LANES PASSED vs0755387: 2959 tests/282 files; coverage statements/branches/functions/lines95.40/89.90/98.22/98.30%; fast coverage93.8s, full96.1s; native30/5 in3.9s; both builds PASS. Types PASS; lint0errors/20warnings (two old any casts removed); changed quality PASS (13 TS/TSX files); doc routing/budgets and whitespace PASS. No provider generations, dependencies, schemas or export-algorithm changes. Logs /home/user/selection-response/.
 
 - 2026-10-26 — Selection response v2 research + plan (docs only; no production code changed). Measured against the real modules: whole-store fan-out (Shell plus all four mounted panels rerender on one unrelated patch; a history push rerenders every `useHistory()` panel), history entries copying whole checked arrays (~230 KB per 1,000-row entry; whole timeline 15.4 MB per gesture; 17.8 ms arrow / 18.6 ms toggle median), synchronous timeline persistence, and an O(N²) SVG `decidableCount` (6.46 ms @1,000; 130.9 ms @5,000); the list component alone is 5.55–8.68 ms @1,000. Plan: `docs/archive/2026-10-26-selection-response-v2/README.md` (slice selectors, split history contexts, ordered delta history with one projection per slice, deferred persistence, row-element memoization, per-panel summaries, Steps 0–8, ≥80% acceptance at 1,000/5,000). Updated `docs/current/sor/selection-performance.md` (open end-to-end gap) and `docs/HISTORY_INDEX.md`. Temporary probes were deleted before commit. Gates: `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 20 existing warnings); `npm run quality:changed` PASS; `npm run verify:fast` PASS (tests+coverage 112.1 s, build 8.0 s); `npm run verify` PASS (tests+coverage 96.1 s, build 7.7 s). No before/after browser numbers claimed: this environment has no Chromium/Playwright, so Step 0 builds that harness. Runner: Node 22.22.3, npm 10.9.8.
+
+## 2026-10-26 — selection response, implementation pass
+
+Second pass on the selection freeze (the plan landed earlier today as
+`archive/2026-10-26-selection-response-v2`): implemented the ordered delta
+history (`lib/selectiondelta.ts`), the store slice selectors
+(`useAppSlice`, `patchV2Selection`), the history actions/view split, the
+checked+active row projection, per-snapshot summaries (`svg/panelcounts.ts`,
+Batch header, `useBulkSummary`), stable API identities across all four tabs,
+deferred timeline writes with pagehide/unmount/read flush, and a content-keyed
+Batch visible list so the `row.selected` mirror no longer re-sorts the folder.
+
+- History serialization per gesture, 100-entry timeline: 3.21/31.58/165.87 ms at
+  100/1,000/5,000 rows → 0.31/0.35/0.39 ms; payload 10.7 KB/95.1 KB/470.1 KB →
+  0.3/0.5/0.5 KB; timeline bytes at 5,000 rows 46.5 MB → 42.3 KB.
+- New cost per gesture is one diff of the selection: 0.02/0.14/0.94 ms at
+  100/1,000/5,000 rows; select-all payload at 5,000 rows 0.61 ms.
+- One store notification per gesture (checked + anchor + active), no history
+  broadcast to recording panels, `countsOf`/`decidableCount` linear (getter
+  counters in `tests/selection_perf_budgets.test.tsx`), row DOM nodes survive a
+  click and a toggle.
+- Not measured: input-to-committed-DOM in a browser (no Chromium available in
+  this environment). The bench fixture records real history now, so the re-run
+  measures the new path.
+
+Verified: `npx tsc --noEmit`; `npm run lint` (0 errors, 20 pre-existing
+warnings); `npm run quality:changed` (GATE PASSED); `npm run verify:fast` (all
+lanes); `npm run verify` (2,990 tests in 285 files); focused suites
+`selectiondelta`, `selection_perf_budgets`, `history_persist`, `history`,
+`statestores`, `history_ui`, `history_fail`, `selection_v2_undo`,
+`history_integration`, `checkedrows`, `selectionv2_ui`, `svg_ui`,
+`svg_row_gestures`, `upload_ui`, `batch_ui`, `batch_selection_v2`,
+`selection_response`, `docs_navigation`.
+
+Attribution: Arena.ai Agent Mode session on `arena/0216b05e-iconsplitter`.

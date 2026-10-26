@@ -11,7 +11,7 @@ import SvgPanel from "../svg/SvgPanel";
 import UploadPanel from "../upload/UploadPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
-import { useAppState } from "../state/useAppState";
+import { useAppSlice } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
 import { useSessionAutosave } from "../state/useSessionAutosave";
 import HistoryBar from "./HistoryBar";
@@ -35,7 +35,7 @@ export default function Workbench() {
 }
 
 function Shell() {
-  const tab = useAppState().tab;
+  const tab = useAppSlice("tab");
   const mainRef = useRef<HTMLElement | null>(null);
   useSessionAutosave();
   usePrefsAutosave();

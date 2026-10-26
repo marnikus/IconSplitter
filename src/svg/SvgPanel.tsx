@@ -6,7 +6,7 @@ import SvgRuns from "./SvgRuns";
 // and the review decision all live in tested modules; this file is the wiring
 // that makes them one screen.
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -18,13 +18,15 @@ import RunRecord from "./RunRecord";
 import SvgImgReview from "./SvgImgReview";
 import SvgImgInflight from "./SvgImgInflight";
 import SvgJobProgress from "./SvgJobProgress";
-import SvgControls, { type SvgCounts } from "./SvgControls";
+import SvgControls from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
-import { idsWithGeneratedSvg, shownVersion } from "./rowmodel";
+import { idsWithGeneratedSvg } from "./rowmodel";
+import { countsOf, decidableCount } from "./panelcounts";
 import SvgList from "./SvgList";
 import type { Discovery, SourceProblem } from "./sources";
+
 import { exclusionSummary } from "./sourcelist";
 
 /**
@@ -76,8 +78,9 @@ function useActivation(active: boolean, g: SvgGenApi): void {
 
 /** The control block, wired straight from the api — one place to read it. */
 function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
+  const counts = useMemo(() => countsOf(g.rows), [g.rows]);
   return (
-    <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
+    <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={counts}
       prompt={svgPromptWindowOf(g)} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
       connections={g.connections} activeConn={g.activeConn}
       onSwitchConnection={g.switchConnection} onAddConnection={g.addConnection} onRemoveConnection={g.removeConnection}
@@ -94,13 +97,15 @@ function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
 
 /** Everything that only exists once a root is picked. */
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
+  const decidable = useMemo(() => decidableCount(g.rows, g.affected), [g.rows, g.affected]);
+  const regenerable = useMemo(() => idsWithGeneratedSvg(g.rows, g.checked).length, [g.rows, g.checked]);
   if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
   const actions = panelRowActions(g, rootRef);
   return (
     <>
       <div className="svg-bulkbar-pin" data-testid="svg-bulkbar-pin">
-        <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={idsWithGeneratedSvg(g.rows, g.checked).length}
-          requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidableCount(g)}
+        <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={regenerable}
+          requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidable}
           thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setPreviewStroke} model={modelLabel(g.config.model)} totals={g.totals}
           progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
           onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
@@ -133,22 +138,6 @@ function Overlay({ g }: { g: SvgGenApi }) {
 /** The ONE zoom value: both previews, the row height and the column read it. */
 function thumbStyle(px: number): CSSProperties {
   return { "--svg-thumb": `${px}px` } as CSSProperties;
-}
-
-/** The four counters above the list, straight off the rows (no extra state). */
-function countsOf(g: SvgGenApi): SvgCounts {
-  const rows = g.rows;
-  return {
-    eligible: rows.length,
-    generated: rows.filter((r) => r.status === "generated").length,
-    approved: rows.filter((r) => r.review === "approved").length,
-    failed: rows.filter((r) => r.status === "failed").length,
-  };
-}
-
-/** Selected rows that actually have a valid SVG to approve or decline. */
-function decidableCount(g: SvgGenApi): number {
-  return g.affected.filter((id) => { const r = g.rows.find((x) => x.source.id === id); return r !== undefined && shownVersion(r) !== null; }).length;
 }
 
 /** What the scan could not use — said out loud, and never by removing a row. */

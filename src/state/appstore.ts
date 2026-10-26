@@ -60,6 +60,28 @@ export function patchV2(patch: Partial<SessionV2>): void {
   setAppState({ v2: { ...state.v2, ...patch } });
 }
 
+/** A V2 selection gesture: checked + anchor live in `v2`, the active row in `view`. */
+export interface V2SelectionPatch {
+  checked?: string[];
+  anchorId?: string | null;
+  activeId?: string | null;
+}
+
+/**
+ * ONE store notification for a whole gesture. V2 keeps its active row in the
+ * shared `view` slice, so the old path wrote `v2` and then `view` (two
+ * notifications, and a needless `v2` rewrite for an active-only move).
+ */
+export function patchV2Selection(p: V2SelectionPatch): void {
+  const v2: SessionV2 = { ...state.v2 };
+  if (p.checked !== undefined) v2.checked = p.checked;
+  if (p.anchorId !== undefined) v2.anchorId = p.anchorId;
+  const nextActive = p.activeId === undefined ? state.view.selectedId : p.activeId;
+  const view = nextActive === state.view.selectedId ? state.view : { ...state.view, selectedId: nextActive };
+  state = { ...state, v2, view };
+  notify();
+}
+
 export function patchSvg(patch: Partial<SessionSvg>): void {
   setAppState({ svg: { ...state.svg, ...patch } });
 }

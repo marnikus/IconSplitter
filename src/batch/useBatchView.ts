@@ -20,6 +20,8 @@ export interface BatchView {
   sort: BatchSort;
   thumb: number;
   visible: Row[];
+  /** The live checked ids (the store's truth, not the row mirror). */
+  checked: string[];
   header: CheckState;
   checkedCount: number;
   visibleCount: number;
@@ -81,6 +83,7 @@ function makeView(a: ViewArgs): BatchView {
   const { core, ps, visible, sel, decide, decideActive } = a;
   return {
     core, filter: ps.prefs.filter, sort: ps.prefs.sort, thumb: ps.prefs.thumb, visible,
+    checked: sel.checked,
     header: sel.header, checkedCount: sel.checkedCount, visibleCount: sel.visibleCount,
     totalCount: sel.totalCount, selectedCount: sel.checkedCount, hiddenCount: sel.hiddenCount,
     affectedCount: sel.affectedCount, activeId: sel.activeId, anchorId: sel.anchorId,
@@ -104,8 +107,27 @@ function usePrefsState() {
   return useMemo(() => ({ prefs, setFilter, setSort, setThumb }), [prefs, setFilter, setSort, setThumb]);
 }
 
-function useVisibleRows(rows: Row[], filter: BatchFilter, sort: BatchSort) {
-  return useMemo(() => sortBatchRows(applyBatchFilters(rows, filter), sort), [rows, filter, sort]);
+/**
+ * The six fields the filter and the sort actually read (`lib/batchfilter`,
+ * `lib/batchsort`) — and deliberately NOT `selected` (D8).
+ *
+ * The Batch list still mirrors the selection into `row.selected`, so a checkbox
+ * replaces the row objects and the `rows` array. Keying the visible list on this
+ * content signature means that mirror no longer re-filters and re-sorts the whole
+ * folder on every click (4.97 ms at 5,000 rows, measured), while a real data
+ * change (scan, status, review, date) still invalidates it.
+ */
+function visibleKey(rows: Row[]): string {
+  let key = "";
+  for (const r of rows) key += `${r.dirPath}/${r.relPath}|${r.name}|${r.mtime}|${r.status}|${r.review ?? ""}\n`;
+  return key;
+}
+
+/** The filtered/sorted view; selection-only row changes keep the previous array. */
+export function useVisibleRows(rows: Row[], filter: BatchFilter, sort: BatchSort): Row[] {
+  const key = useMemo(() => visibleKey(rows), [rows]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` captures every field the pipeline reads
+  return useMemo(() => sortBatchRows(applyBatchFilters(rows, filter), sort), [key, filter, sort]);
 }
 
 function useReviewCounts(rows: Row[]): BatchView["reviewCounts"] {

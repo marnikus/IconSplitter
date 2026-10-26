@@ -8,7 +8,7 @@
 // bulk apply and per-icon overrides. Global defaults stay persisted but not
 // undoable (the same class as presets).
 
-import { useCallback, useRef, type Dispatch } from "react";
+import { useCallback, useMemo, useRef, type Dispatch } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import type { SelectIntent } from "../lib/reviewselect";
 import type { PreviewBackground } from "../lib/svgbackground";
@@ -19,7 +19,7 @@ import type { IconMetadata } from "../lib/upload/meta";
 import {
   normalizeSettings, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
-import type { HistoryApi } from "../state/HistoryProvider";
+import type { HistoryActions } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
 import { clearGeminiKey, saveGeminiKey } from "./keystore";
@@ -49,7 +49,7 @@ export interface UploadCtx {
   m: UploadModel;
   dispatch: Dispatch<UploadAction>;
   refs: UploadRefs;
-  hist: HistoryApi;
+  hist: HistoryActions;
   rows: UploadRow[];
   visible: UploadRow[];
   checked: string[];
@@ -136,26 +136,33 @@ export interface UploadActions extends PromptActions {
 export type Slice<K extends keyof UploadActions> = Pick<UploadActions, K>;
 
 export function useUploadActions(ctx: UploadCtx): UploadActions {
-  return {
-    ...useSourceActions(ctx),
-    ...useViewActions(ctx),
-    ...useDefaultsActions(ctx),
-    ...useOverrideActions(ctx),
-    ...useOverrideResetActions(ctx),
-    ...useSelectedSettingsActions(ctx),
-    ...useShadowActions(ctx),
-    ...useBadgeActions(ctx),
-    ...useRowBadgeActions(ctx),
-    ...useSizeGuideActions(ctx),
-    ...useGeminiActions(ctx),
-    ...useModelCheckActions(ctx),
-    ...useKeyActions(ctx),
-    ...useUiActions(ctx),
-    ...useMetaActions(ctx),
-    ...useExportActions(ctx),
-    ...useDownloadActions(ctx),
-    ...usePromptActions(ctx),
-  };
+  // Every slice reads `ctx` through a ref and returns stable callbacks, so the
+  // flattened bag only changes when the context does (D7). Hooks are called at
+  // the top level; the spread itself is memoized.
+  const source = useSourceActions(ctx);
+  const view = useViewActions(ctx);
+  const defaults = useDefaultsActions(ctx);
+  const overrides = useOverrideActions(ctx);
+  const resets = useOverrideResetActions(ctx);
+  const selected = useSelectedSettingsActions(ctx);
+  const shadow = useShadowActions(ctx);
+  const badge = useBadgeActions(ctx);
+  const rowBadge = useRowBadgeActions(ctx);
+  const sizeGuide = useSizeGuideActions(ctx);
+  const gemini = useGeminiActions(ctx);
+  const modelCheck = useModelCheckActions(ctx);
+  const key = useKeyActions(ctx);
+  const ui = useUiActions(ctx);
+  const meta = useMetaActions(ctx);
+  const exp = useExportActions(ctx);
+  const download = useDownloadActions(ctx);
+  const prompt = usePromptActions(ctx);
+  return useMemo(() => ({
+    ...source, ...view, ...defaults, ...overrides, ...resets, ...selected,
+    ...shadow, ...badge, ...rowBadge, ...sizeGuide, ...gemini, ...modelCheck,
+    ...key, ...ui, ...meta, ...exp, ...download, ...prompt,
+  }), [source, view, defaults, overrides, resets, selected, shadow, badge, rowBadge,
+    sizeGuide, gemini, modelCheck, key, ui, meta, exp, download, prompt]);
 }
 
 function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {

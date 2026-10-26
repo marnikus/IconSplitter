@@ -20,18 +20,41 @@ for (const count of [100, 1000]) for (const tab of ["batch", "selectionV2", "gen
     await page.waitForFunction((n) => document.querySelectorAll('[role="listitem"]').length === n, count);
     // Let real SVG reads, image decoding, export-preview debounce and initial paints settle outside timing.
     await page.waitForTimeout(2500);
-    for (let cycle = 0; cycle < 8; cycle++) for (const on of [true, false]) {
+    // Bulk, then the three reported gestures. Each click changes state, so the
+    // fixture records exactly one sample; the first two of each kind are warmup.
+    const drive = async (selector) => {
       const length = await page.evaluate(() => window.selectionBench.samples.length);
-      await page.locator(on ? "#select-all" : "#clear-all").evaluate((el) => el.click());
+      await page.locator(selector).evaluate((el) => el.click());
       await page.waitForFunction((length) => window.selectionBench.samples.length > length, length);
+    };
+    for (let cycle = 0; cycle < 8; cycle++) for (const on of [true, false]) {
+      await drive(on ? "#select-all" : "#clear-all");
       const actual = await page.locator('input[type="checkbox"]:checked').count();
       if (actual !== (on ? count : 0)) throw new Error(`${tab}/${count}: wrong selection ${actual}`);
     }
-    const samples = await page.evaluate(() => window.selectionBench.samples.slice(2)); // identical one-cycle warmup
+    for (let cycle = 0; cycle < 8; cycle++) {
+      await drive(cycle % 2 === 0 ? "#click-first" : "#click-last");
+      await drive("#toggle-first");
+      await drive("#arrow-down");
+      await drive("#arrow-up");
+    }
+    const all = await page.evaluate(() => window.selectionBench.samples.slice(4));
     const median = (xs) => { const sorted = [...xs].sort((a,b) => a-b); return (sorted[Math.floor((xs.length-1)/2)] + sorted[Math.floor(xs.length/2)]) / 2; };
-    const result = { tab, count, samples, commitMedianMs: median(samples.map((s) => s.commitMs)), frameMedianMs: median(samples.map((s) => s.frameMs)) };
+    const byKind = {};
+    for (const kind of ["select-all", "deselect-all", "click", "toggle", "arrow"]) {
+      const xs = all.filter((s) => s.kind === kind);
+      if (xs.length === 0) continue;
+      byKind[kind] = {
+        commitMedianMs: median(xs.map((s) => s.commitMs)),
+        frameMedianMs: median(xs.map((s) => s.frameMs)),
+        historyBytes: xs.at(-1).historyBytes,
+        n: xs.length,
+      };
+    }
+    const samples = all;
+    const result = { tab, count, samples, byKind, commitMedianMs: median(samples.map((s) => s.commitMs)), frameMedianMs: median(samples.map((s) => s.frameMs)) };
     results.push(result);
-    console.log(JSON.stringify({ ...result, samples: samples.length }));
+    console.log(JSON.stringify({ tab, count, byKind, samples: samples.length }));
     writeFileSync(process.argv[3], JSON.stringify({ browser: browser.version(), viewport: "1440x1000", cpuThrottle: 1, results }, null, 2));
   } finally { await browser.close(); }
 }

@@ -145,7 +145,7 @@ function PresetAndDest({ v }: { v: View }) {
   );
 }
 function FullWidthList({ v, thumbFor, previews, rowStale, onRowMergeApply, onRowMergeReset }: { v: View; thumbFor: (r: string) => Promise<string>; previews: Map<string, PreviewEntry>; rowStale: (relPath: string) => boolean; onRowMergeApply: (relPath: string, value: number | null) => void; onRowMergeReset: (relPath: string) => void }) {
-  return <div className="batch-list w-full"><ScanTable rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} locate={(rel) => locateSplits(v, rel)} thumbFor={thumbFor} previews={previews} rowStale={rowStale} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
+  return <div className="batch-list w-full"><ScanTable checked={v.checked} rows={v.visible} thumb={v.thumb} activeId={v.activeId} toggle={v.toggleCheck} selectRow={v.selectRow} selectActive={v.selectActive} copyPath={(rel) => copyPath(v, rel)} locate={(rel) => locateSplits(v, rel)} thumbFor={thumbFor} previews={previews} rowStale={rowStale} rowMerges={v.rowMerges} globalFrac={v.core.s.preset.split.mergeFrac} setRowMerge={onRowMergeApply} clearRowMerge={onRowMergeReset} decide={v.decide} /></div>;
 }
 function Overlays({ v }: { v: View }) {
   const showBusy = !!v.core.s.busy;
