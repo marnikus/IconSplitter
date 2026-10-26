@@ -5,14 +5,12 @@
 [Caps](../upload-stroke-endpoints.md#owners-and-tests);
 [local](../upload-local-settings.md#tests); [formats](../upload-formats.md#owners-and-tests); [presets](../upload-settings-presets.md#owners-and-tests).
 
-* `keyvault.test.ts` — the key rules on their own: a save that storage refused
-  is reported `session` (and the key still loads), `save("")` is `empty` and
-  erases nothing, an unreadable store answers `unreadable` — never `none` — and
-  a corrupt envelope is absent, not a crash
-* `upload_keypersist.test.tsx` — the reported bug, end to end: a key saved once
-  survives an edit, a tab switch and a fresh boot; a session-only key says so
-  instead of asking again; an empty Save cannot destroy a stored key (Save is
-  disabled; `Forget` is what clears); five operations open ONE connection
+* `keyvault.test.ts` — refused storage reports `session` (key still loads),
+  empty save erases nothing, unreadable stays distinct from absent, corrupt
+  envelopes are absent rather than crashing.
+* `upload_keypersist.test.tsx` — saved key survives edit/tab/restart; session
+  state is reported, empty Save cannot destroy a key, Forget clears it; five
+  operations use one connection.
 * `upload_settings_store.test.ts`, `upload_keystore.test.ts`,
   `upload_journal.test.ts` — the stores (defaults + overrides round-trip,
   corrupt → defaults, clamps), the Gemini key's secret hygiene (own IndexedDB
@@ -72,10 +70,9 @@
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
-  entry; reset), the exact-request confirmation, editable/copiable metadata
-  fields, automatic valid-result acceptance for row/bulk Generate/Regenerate,
+  entry; reset), request confirmation, editable/copiable metadata, automatic valid-result acceptance for row/bulk Generate/Regenerate,
   accepted-cache reload, preserved ownership, exact mixed-batch acceptance counts,
-  sequential existing-package refresh without unsolicited new exports,
+  sequential package refresh without unsolicited exports,
   legacy-draft/manual-edit acceptance, invalid/malformed/truncated refusal,
   failed/cancelled regeneration preserving accepted text/cache, cancel (never
   resent), interrupted after a
@@ -101,7 +98,7 @@ See `sor/upload-eps-gradients.md` for support limits and missing input fixtures.
 browser I/O: per-file progress, hidden portal/cancel, audio once, retained
 summaries, duplicate picker protection, no-op/cancelled picker silence and mixed
 kept/missing/failed outcomes. `upload_process_progress.test.tsx` also pins the
-independent download slot, stale events and matching toolbar counts.
+download slot, stale events and toolbar counts.
 
 Metadata/export/download progress, cancellation, handoff and hidden-tab tests: [process progress](../process-progress.md#tests-and-safety).
 
@@ -120,9 +117,8 @@ supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-tem
 * `upload_centred_fit.test.ts` — leaf64×64/50px/8% centering; grid/padded containment, presets, EPS, cleaning, determinism, impossible fits.
 * `upload_offset_equivalence.test.ts`, `upload_offset_distance.test.ts` — hash/threshold equivalence.
 
-`upload_settings_disclosure.test.tsx`: both popup scopes, native collapsed
-summaries, independent folding, mounted drafts, retained open state, toggle/blur
-handlers and Close/reopen.
+`upload_settings_disclosure.test.tsx`: both scopes, native folding, mounted
+drafts, retained open state, toggle/blur and Close/reopen.
 
 * `upload_padding_sides.test.ts`, `upload_padding_sides_ui.test.tsx`,
   `upload_padding_sides_export.test.ts` and live-preview coverage: independent
@@ -132,3 +128,6 @@ handlers and Close/reopen.
 * `upload_stroke_repair.test.ts` plus actual preview/package tests:
   [snowflake, affine pen geometry/compositing, source/final widths, dashes,
   safety and vector exports](../upload-auto-repair.md#non-uniform-stroke-transforms).
+
+* `upload_tightbounds.test.ts`, `upload_flag_viewport.test.ts` — tight viewport
+  math/safety and both flags; preview/package tests above. [Policy](../upload-auto-repair.md#tight-source-viewport-classification).

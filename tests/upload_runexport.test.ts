@@ -1107,3 +1107,38 @@ describe("supplied snowflake package auto-repair", () => {
     expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(source);
   });
 });
+
+describe("supplied flags shadow package", () => {
+  it.each(["icon-waving-flag_AI_3_01.svg", "icon-waving-flag_AI_5_04.svg"])("commits %s as SVG/JPEG/EPS and preserves source", async (file) => {
+    const source = readFileSync(`tests/assets/bug with SVG export expl temp/${file}`, "utf8");
+    const root = pairRoot(source);
+    const settings = { ...DEFAULT_UPLOAD_SETTINGS, shadowEnabled: true, includeEps: true };
+    const rendered: string[] = [];
+    const raster: RasterDeps = {
+      render: async (text, target) => { rendered.push(text); return target as unknown as HTMLCanvasElement; },
+      encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
+    expect(result.error).toBeNull();
+    expect(result.status).toBe("processed");
+    expect(result.outputs.svg).not.toBeNull();
+    expect(result.outputs.jpg).not.toBeNull();
+    expect(result.outputs.eps).not.toBeNull();
+    const savedSvg = fileText(root, `${DIR}/export/${ART}.svg`);
+    const savedEps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyExportSvg(savedSvg)).toEqual([]);
+    expect(verifyEps(savedEps).ok).toBe(true);
+    expect(savedEps).not.toContain("colorimage");
+    expect(savedSvg).toContain("radialGradient");
+    expect(savedEps).toContain("/ShadingType 3");
+    expect(rendered).toHaveLength(1);
+    const expected = prepareExportSvg(source, settings);
+    expect(expected.ok).toBe(true);
+    if (expected.ok) {
+      const size = readRecord(root).jpeg;
+      expect(rendered[0]).toBe(withIntrinsicSize(expected.svg, size.width, size.height));
+    }
+    expect(rendered[0]).not.toContain("transform=");
+    expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(source);
+  });
+});

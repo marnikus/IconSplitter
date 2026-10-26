@@ -136,8 +136,7 @@ export function shippedBounds(root: Element): Bounds | null {
 }
 
 /** Enlarging the source viewport for a shadow would reveal this previously clipped paint. */
-export function overflowsSourceFrame(root: Element, frame: Bounds): boolean {
-  const painted = shippedBounds(root);
+export function overflowsSourceFrame(root: Element, frame: Bounds, painted: Bounds | null = shippedBounds(root)): boolean {
   if (painted === null) return false;
   return painted.minX < frame.minX - FILE_PRECISION || painted.minY < frame.minY - FILE_PRECISION
     || painted.minX + painted.width > frame.minX + frame.width + FILE_PRECISION

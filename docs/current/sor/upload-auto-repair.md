@@ -82,23 +82,42 @@ This is not permission to expose truly clipped geometry: out-of-frame shapes,
 large stroke overflow, explicit unsupported clips/masks and other unsupported
 content retain their existing failures. Fully default/as-is exports remain byte
 identical. Corrections occur automatically in the shared preparation used by
-preview and SVG/JPEG/EPS export, with no repair dialog or provider request.
+preview and SVG/JPEG/EPS export, without a dialog or provider call.
 
-## Planned tight viewport-bounds fix — not implemented
+## Tight source-viewport classification
 
-Both supplied waving flags are now available from fixture commit `8324120` and
-reproduce the shadow warning. Negative Bézier control Y values (−18/−15) inflate
-the conservative bounds, although measured represented paint starts at positive
-Y **7.560711/8.191972**, inside the 224/240 source frames. This is a bounds false
-positive, not demonstrated actual clipping. [Per-file evidence and ordered fix
-plan](../../archive/2026-10-26-shadow-viewport-repair-plan/README.md) specifies tight
-curve/paint classification, shared guard semantics and full export regression
-steps. No path rewrite, viewBox enlargement or clipping engine is needed for
-these examples. Genuine clipping refusals and 2% minor-stroke policy stay intact.
+Shadow preparation now refines ambiguous conservative control-hull overflow with
+actual extrema of the represented cubic curves. Both supplied waving flags have
+negative control Y values (−18/−15), but represented paint
+starts at Y **7.560711/8.191972**, inside their original 224/240 frames. They now
+prepare with source/factory settings, pinned/rectangular/MP artboards, chosen
+widths and optional expansion. Source bytes and frames stay unchanged; no enlargement is needed.
 
-Research only: no fix is implemented or successful repaired export claimed.
-Original fixture bytes remain unchanged; real preview/export acceptance must
-follow before declaring the planned automatic correction complete.
+`viewportbounds.ts` makes one detached identity bake/stroke-expansion probe and
+shares its result between `viewrepair.ts` and the final `prepare.ts` overflow
+veto. A contained conservative hull is already sufficient proof, retaining the
+existing fast path and contained gradient-stroke compatibility. For ambiguous
+overflow, `geom/tightbounds.ts` uses the existing paint-tree visibility and
+unsupported policy. `geom/curvebounds.ts` measures endpoints and interior cubic
+derivative roots after affine mapping. Quadratic, arc, primitive and stroke outlines share this model.
+Non-finite bounds are failures, not empty geometry. An unavailable outline may
+not authorize frame enlargement; unresolved ambiguous overflow still refuses.
+
+This affects source-viewport classification only. Conservative placement,
+padding and EPS bounds remain unchanged. Actual geometry exits, large stroke
+overshoot, unsupported content and explicit clipping keep their guards. Minor
+stroke-only enlargement remains bounded by **2%** of the smaller frame dimension;
+containment tolerance stays **0.002**. No filename cases, control rewrites, raster fallback or provider calls.
+
+Tests: `upload_tightbounds.test.ts` (math, visibility and safety),
+`upload_flag_viewport.test.ts` (both originals, settings matrix, hashes, original
+frame, determinism, SVGO/clean/vector EPS), `upload_live_preview.test.tsx` (opt-in
+row shadow, no warning, unchanged source) and `upload_runexport.test.ts` (saved
+SVG/JPEG/vector radial EPS, exact raster input and unchanged source).
+HappyDOM/JPEG transport tests verify the pipeline, not pixel fidelity or
+stock-provider acceptance.
+[Implementation plan and measured gates](../../archive/2026-10-26-flag-viewport-implementation/README.md);
+[pre-fix diagnosis](../../archive/2026-10-26-shadow-viewport-repair-plan/README.md).
 
 ## Real regression assets
 

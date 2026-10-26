@@ -94,18 +94,17 @@
   when the shadow fits and extended when it overflows. Source/content, pinned
   and MP artboards contain the whole composite without cropping; the artboard
   background remains first, the shadow is drawn before the icon. A source with
-  width/height but no viewBox retains that authored frame before root-dimension
-  cleanup. Fully transparent paint, `display="none"` subtrees and
+  width/height but no viewBox retains that frame before dimension cleanup. Transparent paint, `display="none"` subtrees and
   `visibility="hidden"` elements do not inflate the icon bounds or position
   the shadow; a child can override inherited visibility but not display. If
-  painted content outside the
-  source viewport would become visible when extending that frame, Shadow
+  paint outside the source viewport would be revealed, Shadow
   refuses it; only bounded minor stroke/cap overflow with in-frame geometry
-  is repaired automatically ([policy](upload-auto-repair.md));
+  is repaired automatically; ambiguous hull overflow uses
+  [tight paint bounds](upload-auto-repair.md#tight-source-viewport-classification);
   analytic stroke reach also ignores a zero-opacity stroke. Expanded stroke
   outlines retain their source display/visibility and explicitly use the
   effective stroke opacity for their fill, even under inherited zero fill
-  opacity. Shadow-off as-is bytes remain unchanged.
+  opacity. Shadow-off as-is bytes are unchanged.
 * **Corner badge:** the [artboard-relative vector](upload-badge.md) is appended
   after the icon/Shadow fit, so it never changes icon geometry or artboard size.
   Exact edge percentages and a uniform aspect-preserving scale keep its paint

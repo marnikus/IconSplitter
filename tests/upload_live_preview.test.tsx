@@ -459,3 +459,19 @@ describe("supplied snowflake live preview auto-repair", () => {
     expect(((saved.children.get(DIR) as BinDir).children.get("fog_AI.svg") as BinFile).text).toBe(source);
   });
 });
+
+
+describe("supplied flags live shadow preview", () => {
+  it.each(["icon-waving-flag_AI_3_01.svg", "icon-waving-flag_AI_5_04.svg"])("renders %s without mutating approved source", async (file) => {
+    const source = readFileSync(`tests/assets/bug with SVG export expl temp/${file}`, "utf8");
+    await mount({}, source);
+    await click(`[data-testid=upload-settings-btn-${FOG}]`);
+    await click("[data-testid=upload-set-shadow]");
+    await waitUntil(() => art().includes("radialGradient"), "flag shadow export preview", 8000);
+    expect(art()).not.toContain("transform=");
+    expect(q(`[data-testid=upload-prev-${FOG}-note]`)).toBeNull();
+    expect(preview().shadowRoot!.querySelector("ellipse[fill^='url']")).not.toBeNull();
+    const saved = (stored.get("__upload__") as { source: BinDir }).source;
+    expect(((saved.children.get(DIR) as BinDir).children.get("fog_AI.svg") as BinFile).text).toBe(source);
+  });
+});

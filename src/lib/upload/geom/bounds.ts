@@ -93,7 +93,7 @@ export function strokeHits(root: Element): StrokeHit[] {
 }
 
 /** The element's name when its bounds cannot be computed honestly. */
-function unsupportedTag(el: Element): string | null {
+export function unsupportedTag(el: Element): string | null {
   const tag = name(el);
   if (UNSUPPORTED.includes(tag)) return tag;
   const css = tag === "style" ? (el.textContent ?? "").toLowerCase() : "";
@@ -209,7 +209,7 @@ function openSegs(pts: number[][]): Seg[] {
 
 // --- bounds plumbing --------------------------------------------------------
 
-function union(a: Bounds, b: Bounds): Bounds {
+export function union(a: Bounds, b: Bounds): Bounds {
   const minX = Math.min(a.minX, b.minX);
   const minY = Math.min(a.minY, b.minY);
   return {

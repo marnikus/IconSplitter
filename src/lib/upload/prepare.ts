@@ -1,3 +1,4 @@
+import { measureViewportBounds } from "./viewportbounds";
 import { repairStrokeFrame } from "./viewrepair";
 // prepare.ts — the export SVG copy of the "SVG to upload" tab
 // (RULE 1/3). The approved source is parsed, never modified; the export
@@ -89,9 +90,10 @@ export function prepareExportSvg(sourceSvg: string, settings: UploadSettings): P
 
 /** Repair minor cap overflow, but do not reveal genuinely clipped geometry. */
 function shadowSourceFrame(root: Element, frame: Bounds | null, enabled: boolean): { frame: Bounds | null; failure: PrepareFailure | null } {
-  if (!enabled) return { frame, failure: null };
-  const repaired = repairStrokeFrame(root, frame);
-  if (repaired === null || !overflowsSourceFrame(root, repaired)) return { frame: repaired, failure: null };
+  if (!enabled || frame === null) return { frame, failure: null };
+  const measured = measureViewportBounds(root, frame);
+  const repaired = repairStrokeFrame(root, frame, measured);
+  if (measured.unsupported.length === 0 && repaired !== null && !overflowsSourceFrame(root, repaired, measured.painted)) return { frame: repaired, failure: null };
   return { frame, failure: fail("unsupported", "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping") };
 }
 
