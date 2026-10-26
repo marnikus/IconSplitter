@@ -4,6 +4,7 @@
 // STROKE field IS the export strokePx (it replaced the preview-only override of
 // archive/2026-10-19-upload-preview-stroke); every row previews the exact export
 // text; the box fits the artboard's ratio inside the zoom square.
+import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,20 +50,20 @@ const preview = () => q(`[data-testid=upload-prev-${FOG}]`)!;
 const art = () => preview().shadowRoot!.innerHTML;
 const frame = () => q(`[data-testid=upload-prev-${FOG}-frame]`)!;
 
-function makeRoot(): BinDir {
+function makeRoot(source: string = SAVED_SVG): BinDir {
   const root = new BinDir("split_root");
   const dir = new BinDir(DIR);
   const meta = pairFile(DIR, "fog_AI.png", { id: FOG, versions: [svgVersion(`${DIR}/fog_AI.svg`, { version: 1, review: "approved" })] });
   dir.children.set("fog_AI.png", new BinFile("fog_AI.png", "ai", 3100));
-  dir.children.set("fog_AI.svg", new BinFile("fog_AI.svg", SAVED_SVG, 3400));
+  dir.children.set("fog_AI.svg", new BinFile("fog_AI.svg", source, 3400));
   dir.children.set("fog_AI.svg.json", new BinFile("fog_AI.svg.json", serializePairMeta(meta), 3300));
   root.children.set(DIR, dir);
   return root;
 }
 
-async function mount(defaults: Partial<UploadSettings> = {}): Promise<void> {
+async function mount(defaults: Partial<UploadSettings> = {}, source: string = SAVED_SVG): Promise<void> {
   saveUploadSettings({ defaults: { ...DEFAULT_UPLOAD_SETTINGS, ...defaults }, overrides: {} });
-  stored.set("__upload__", { source: makeRoot() });
+  stored.set("__upload__", { source: makeRoot(source) });
   await act(async () => {
     ui = createRoot(host);
     ui.render(<HistoryProvider><UploadPanel /><HistoryBar /></HistoryProvider>);
@@ -440,5 +441,21 @@ describe("four-side padding persistence, undo and live export preview", () => {
     for (const side of ["left", "right", "top", "bottom"]) {
       expect((q(`[data-testid=upload-set-padding-${side}]`) as HTMLInputElement).value).toBe("8");
     }
+  });
+});
+
+
+describe("supplied snowflake live preview auto-repair", () => {
+  it.each([0, 2])("shows the repaired export without the unavailable warning at stroke %d", async (strokePx) => {
+    const source = readFileSync("tests/assets/bug with SVG export expl temp/icon-snowflake_AI_9_03.svg", "utf8");
+    await mount({ strokePx, strokeColor: "#245678", paddingPct: 8 }, source);
+    await waitUntil(() => art().includes("#245678") && !art().includes("transform="), "the actual repaired snowflake preview", 8000);
+    expect(q(`[data-testid=upload-prev-${FOG}-note]`)).toBeNull();
+    const svg = preview().shadowRoot!.querySelector("svg")!;
+    expect(svg.querySelectorAll("circle,path")).toHaveLength(8);
+    if (strokePx === 2) expect(svg.getAttribute("stroke-width")).toBe("2");
+    else expect(svg.querySelector('path[fill="#245678"]')).not.toBeNull();
+    const saved = (stored.get("__upload__") as { source: BinDir }).source;
+    expect(((saved.children.get(DIR) as BinDir).children.get("fog_AI.svg") as BinFile).text).toBe(source);
   });
 });

@@ -1,7 +1,50 @@
-# Upload — automatic artboard and minor viewport repairs
+# Upload — automatic stroke, artboard and viewport repairs
 
 Detail of [geometry](upload-geometry.md), [I-60](invariants/upload.md) and
 [export](upload-export.md). [Owners](owners/upload.md), [tests](tests/upload.md).
+
+## Non-uniform stroke transforms
+
+Valid SVG can scale a stroke differently along each axis. The supplied snowflake
+uses `translate(64 64) scale(1.7320508075688772 1)` for its central hexagon. A
+single baked stroke width cannot represent that original pen, so this previously
+failed with `a stroked <path> under a non-uniform transform`.
+
+`bakeGeometry` now detects the accumulated artboard × source matrix (nested
+transforms, reflections and skew included). With **source width (0)**, only the
+affected shapes are cloned with their inherited fill/stroke/dash/colour context.
+The existing stroke-outline model expands the pen in **local coordinates**, then
+the normal bake transforms both fill and stroke outline. Unaffected strokes stay
+editable. Shape opacity is applied once around the fill/stroke composite; stroke
+opacity remains independent of fill opacity. Chosen colour/endpoints apply before
+outlining. The result is vector geometry, not an averaged width or raster image.
+
+With an **explicit final width**, the transformed centreline receives that width
+verbatim in final pixels after baking, just like every other stroked shape.
+A non-scaling stroke already has a final-pixel pen and keeps its width and dash
+lengths without outlining. Changing settings always rebuilds from the original
+source, so a previous outline never prevents a later width change.
+
+All replacement copies are planned before mutation. Unsupported outline paints
+(`url(#…)` unless replaced by a chosen solid colour), invalid dash patterns, and
+non-uniform dashed strokes combined with an explicit final-width override remain
+named failures rather than guessed spacing. Existing coordinate-definition
+refusals (clips/masks/filters/patterns/user-space gradients) stay intact.
+Preview, placement probes and SVG/JPEG/EPS share the repair automatically, with
+no extra control, dialog or provider call. The source SVG is never rewritten;
+fully default/as-is SVGs remain byte identical. Automatic outlines are included
+in `PreparedSvg.strokesExpanded`, and their recolouring in `strokesRecolored`.
+
+Owners: `lib/upload/strokerepair.ts`, `bake.ts`, `geom/stroke.ts`, `place.ts`;
+shared presentation lookup: `geom/stroke.ts` (also used by `expand.ts`);
+source/setting entry point: `prepare.ts`. Tests: `upload_stroke_repair.test.ts`
+(analytic bounds, inheritance/compositing, local-space dashes, combined CTMs,
+non-scaling pens, atomic refusal, real-file preparation, containment, SVGO/clean
+and vector EPS), `upload_bake.test.ts`, `upload_prepare.test.ts`,
+`upload_live_preview.test.tsx` (actual row, no unavailable note),
+`upload_runexport.test.ts` (SVG/JPEG/EPS package commits, actual raster input,
+unchanged approved source). Plan/evidence:
+[2026-10-26 repair](../../archive/2026-10-26-anisotropic-stroke-repair/README.md).
 
 ## Wide-stroke pinned fitting
 
@@ -42,6 +85,9 @@ identical. Corrections occur automatically in the shared preparation used by
 preview and SVG/JPEG/EPS export, with no repair dialog or provider request.
 
 ## Real regression assets
+
+The supplied snowflake (`icon-snowflake_AI_9_03.svg`) is retained unchanged in
+that same directory and exercises the non-uniform-stroke repair above.
 
 Both supplied bulb files in `tests/assets/bug with SVG export expl temp/` are
 retained unchanged (`icon-lightbulb-idea_AI_5_02.svg`, `_5_03.svg`). Tests cover

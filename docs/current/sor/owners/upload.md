@@ -27,7 +27,7 @@ Adobe saved-page regression and opt-in LIVE upload validation (local reader is n
 User-defined badge settings, SVG safety/parser, shared geometry and popup owners:
 [custom SVG templates](../upload-badge.md#custom-svg-templates).
 
-Automatic pinned-fit (including grid-aligned final centring) and minor stroke-frame repair ownership/tests: [repair contract](../upload-auto-repair.md).
+Automatic non-uniform stroke (`strokerepair.ts`/`bake.ts`), pinned-fit (including grid-aligned final centring) and minor stroke-frame repair ownership/tests: [repair contract](../upload-auto-repair.md).
 
 `UploadSettingsGroup.tsx` shares native collapsed-by-default Badge/Size guide/Shadow
 disclosures; their existing section owners retain all control logic and state.

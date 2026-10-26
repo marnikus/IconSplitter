@@ -114,11 +114,8 @@ User-defined badge validation, editor, persistence/undo/live preview and actual
 supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-templates).
 
 * `upload_auto_repair.test.ts`, `upload_viewrepair.test.ts`,
-  `upload_fitfallback.test.ts` — both user-supplied bulb SVGs from
-  `tests/assets/bug with SVG export expl temp`, original 4-pass/viewport failures,
-  automatic fitting across stroke/target presets, source-frame shadow repair,
-  source immutability, determinism, geometry/clipping safety, bounded impossible
-  fits, no overflow, verbatim strokes and genuine vector EPS verification.
+  `upload_fitfallback.test.ts` — real bulbs, bounded pinned-fit and minor-frame
+  recovery, safety, source immutability and vector EPS. [Cases/policy](../upload-auto-repair.md).
 
 * `upload_centred_fit.test.ts` — leaf64×64/50px/8% centering; grid/padded containment, presets, EPS, cleaning, determinism, impossible fits.
 * `upload_offset_equivalence.test.ts`, `upload_offset_distance.test.ts` — hash/threshold equivalence.
@@ -131,3 +128,7 @@ handlers and Close/reopen.
   `upload_padding_sides_export.test.ts` and live-preview coverage: independent
   margins, compatible storage/hash/undo, exact fits, supplied SVG/JPEG/vector EPS
   pipeline. [Contract](../upload-padding.md).
+
+* `upload_stroke_repair.test.ts` plus actual preview/package tests:
+  [snowflake, affine pen geometry/compositing, source/final widths, dashes,
+  safety and vector exports](../upload-auto-repair.md#non-uniform-stroke-transforms).

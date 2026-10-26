@@ -49,7 +49,7 @@ export interface PreparedSvg {
   strokesNormalized: number;
   /** Elements whose stroke paint was set (0 when strokeColor = artwork). */
   strokesRecolored: number;
-  /** Visible strokes turned into filled shapes, the size guide and badge handles included (0 unless `expandStrokes` is on). */
+  /** Visible strokes turned into filled shapes, automatic non-uniform-stroke repairs, size guide and badge handles included. */
   strokesExpanded: number;
   /** The background the export paints: `transparent` or the normalized hex. */
   background: string;

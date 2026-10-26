@@ -156,7 +156,7 @@ export function insideArtboard(root: Element): boolean {
 /** One pass: clone → bake the fit → the configured stroke → expansion → measure. */
 function candidate(source: Element, fit: ArtboardFit, want: PlaceWant): CandidateResult {
   const root = source.cloneNode(true) as Element;
-  const baked = bakeGeometry(root, matrixOf(fit));
+  const baked = bakeGeometry(root, matrixOf(fit), want.style);
   if (baked.unsupported.length > 0) return { ok: false, code: "unsupported", detail: `unsupported content: ${baked.unsupported.join(", ")}` };
   const touched = restyleStrokes(root, want.style);
   const expanded = want.expand ? expandStrokes(root) : { shapes: 0, refused: null };
@@ -165,7 +165,8 @@ function candidate(source: Element, fit: ArtboardFit, want: PlaceWant): Candidat
   if (icon === null) return { ok: false, code: "unsupported", detail: "the placed document has no visible geometry" };
   const shaded = shadowedBounds(root, icon, want.shadow);
   if (shaded === null) return { ok: false, code: "unsupported", detail: "the shadow template or icon bounds are invalid" };
-  return { ok: true, root, ...shaded, shapesBaked: baked.baked, widths: touched.widths, colors: touched.colors, expanded: expanded.shapes };
+  return { ok: true, root, ...shaded, shapesBaked: baked.baked, widths: touched.widths,
+    colors: touched.colors + (baked.repaired?.colors ?? 0), expanded: expanded.shapes + (baked.repaired?.expanded ?? 0) };
 }
 
 /** Add the ellipse only after the icon's shipped stroke/expansion is measured; fit their union. */

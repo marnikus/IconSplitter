@@ -3407,3 +3407,28 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
 - Chromium153.0.8010.0, 1440x1000, no CPU throttle, fresh browser/case, 14 samples after one warmup cycle, standard medians: production 1000-row committed-DOM ms Batch99.95→5.50 (94.50%), V2 75.30→3.30 (95.62%), SVG402.90→3.75 (99.07%), Upload90.15→3.75 (95.84%). All 100-row primary reductions >90%; all 1000-row two-rAF frame proxies >80% in prod/dev. Frame percentage gains at100 rows are lower in some cases, reported without overclaim. Actual list components/preview algorithms, not full-panel/history/scan timing; no universal hardware guarantee. Browser packages/binaries/builds external to Git; small raw evidence record ~106KB.
 - First fast gate PASS. First full native/build PASS but new Upload structural test setup exceeded5s under coverage (100 real export geometries). Corrected ONLY its setup to real source/as-is previews, retaining100 rows/all assertions; original default-settings browser benchmark and separate real geometry/preview tests unchanged. No timeout, count, skip, algorithm/mock, harness, isolation, coverage threshold or native timing-budget changes.
 - Final fast/full ALL LANES PASSED vs0755387: 2959 tests/282 files; coverage statements/branches/functions/lines95.40/89.90/98.22/98.30%; fast coverage93.8s, full96.1s; native30/5 in3.9s; both builds PASS. Types PASS; lint0errors/20warnings (two old any casts removed); changed quality PASS (13 TS/TSX files); doc routing/budgets and whitespace PASS. No provider generations, dependencies, schemas or export-algorithm changes. Logs /home/user/selection-response/.
+
+
+## 2026-10-26 — automatic non-uniform SVG stroke repair
+
+- Diagnosed the actual supplied snowflake: central hexagon under translate(64 64)
+  scale(1.7320508075688772 1), previously refused by bakeGeometry. TDD: 13 initial
+  regressions failed, including the exact source/final-width error.
+- Automatic local-space pen outlines preserve anisotropic source strokes; chosen
+  final widths remain verbatim after centreline bake. Paint/caps, inherited dash
+  context and single shape-opacity composition retained. Non-scaling pens retain
+  final widths/dashes. Shared presentation lookup extracted, no duplicated walk.
+  Source/as-is bytes unchanged; unsupported repair inputs fail atomically.
+- Final focused 168 tests/7 files PASS. Final fast/full ALL LANES PASSED at base
+  c30ec49: each 2982 tests/283 files; full native 30/5 PASS (4.1s). Coverage
+  95.43/89.99/98.23/98.31%; new strokerepair.ts 100% across metrics. Types, lint
+  (0 errors/20 existing warnings), changed quality, build, doc routes/budgets and
+  whitespace PASS. Initial earlier native detector alarm missed 200ms at
+  203.878ms; subsequent full gates passed with unchanged algorithms/budgets.
+- Independent Chromium alpha probe: actual snowflake 147/1048576 differing pixels,
+  normalized alpha error 0.06548%; translucent dashed affine fixture 0.16879%.
+  Supplementary rendering evidence only, no raster artwork/dependency/provider
+  fallback. Actual live preview and SVG/JPEG/EPS package regressions pass.
+- Plan, measured verification and pixel methodology/results:
+  docs/archive/2026-10-26-anisotropic-stroke-repair/. Current geometry, repair,
+  selector, owner/test and router pages updated; no UI controls added.

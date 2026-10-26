@@ -29,26 +29,25 @@
   geometry** (2026-10-08, `lib/upload/bake`): the artwork's own `transform`s
   and the artboard's translate+scale become the shapes' coordinates (3
   decimals, in artboard px), so the shipped file carries NO `transform` and no
-  wrapper group — a rect/ellipse/line/polyline/polygon keeps its element under
+  placement wrapper (repair groups retain compositing) — a
+  rect/ellipse/line/polyline/polygon keeps its element under
   an axis-aligned matrix, a circle under a uniform one, anything rotated or
   skewed (a rounded rect included, 2026-10-08) becomes a `<path>` from the one
   outline model (`geom/outline.ts` + `geom/ops.ts` + `geom/shapes.ts`, shared
   with the EPS writer). The stroke width is written AFTER that bake,
   **verbatim: the number in the setting is the number in the file**
   (`strokePx: 2` → `stroke-width="2"` on every visible stroke, whatever the
-  artwork's transform or artboard scale). No transform remains for the optimizer
-  to re-scale that width; export tests pin the shipped text.
+  artwork's transform or artboard scale). No transform can re-scale that width.
   A stroke width of 0 keeps the artwork's own strokes: each width follows its
   geometry (× the baked scale, ≤ 3 decimals; a `non-scaling-stroke` keeps its
   number and loses the attribute), dash arrays/offsets scale the same way, and
   containers lose their `stroke-width` because every shape now carries its
-  own. What a bake would distort is refused by name before the tree is touched
-  (`unsupported: a stroked <path> under a non-uniform transform`, `a
-  userSpaceOnUse <linearGradient>`, `a <clipPath>` / `<mask>` / `<filter>` /
-  `<pattern>`) — a deliberate narrowing recorded in the 2026-10-08
-  stroke-width design (the `a rounded <rect> under a rotation or skew` refusal
-  of that design was retired the same day: the outline model now draws rounded
-  corners, so the rect bakes to a `<path>`); a stroke COLOUR
+  own. **Non-uniform strokes are repaired automatically** (`strokerepair.ts`):
+  source width (0) expands the local pen before affine baking; a configured width
+  is written in final px after baking the centreline. Chosen colour/caps apply
+  before outlining. [Policy, opacity/dash preservation and safe refusals](upload-auto-repair.md#non-uniform-stroke-transforms).
+  User-space gradients, clips/masks/filters/patterns and unrepresentable repair
+  paints/dashes remain named, atomic refusals; no raster fallback. A stroke COLOUR
   other than "artwork" is written onto every element that strokes visibly
   (fills, `stroke="none"` and gradient/pattern strokes are never touched, and
   a `currentColor` stroke becomes the chosen hex). **Each stroke property is

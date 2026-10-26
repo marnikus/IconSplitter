@@ -64,3 +64,9 @@ They retain their values when descriptive metadata is regenerated.
 Global **✓ Accept metadata (N)**: `upload-meta-accept-selected` accepts existing
 metadata for checked icons only (invalid drafts stay unaccepted, no paid calls).
 [Acceptance handles](upload-list.md#global-metadata-acceptance).
+
+
+Automatic non-uniform-stroke repair adds no UI control or confirmation. The real
+row preview (`upload-prev-{id}`) shows the prepared vectors and does not render
+`upload-prev-{id}-note` as unavailable for a successfully repaired stroke.
+[Detection, source-width/final-width policy and regression owners](../sor/upload-auto-repair.md#non-uniform-stroke-transforms).

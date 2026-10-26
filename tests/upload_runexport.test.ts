@@ -4,6 +4,7 @@
 // does no work, selective re-export does no redundant render, an EPS subset
 // failure is an honest `partial` (SVG/JPEG stay committed), and a prepare
 // failure commits nothing.
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { copyOne } from "../src/upload/downloadactions";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "../src/upload/runexport";
@@ -14,7 +15,7 @@ import { commitExport } from "../src/upload/exportcommit";
 import { DEFAULT_UPLOAD_SETTINGS, settingsFingerprint, type UploadSettings } from "../src/lib/upload/settings";
 import { readJpegDimensions, verifyJpeg } from "../src/lib/upload/jpeg";
 import { planDownload } from "../src/lib/upload/download";
-import type { RasterDeps } from "../src/lib/upload/raster";
+import { withIntrinsicSize, type RasterDeps } from "../src/lib/upload/raster";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
 import { verifyExportSvg } from "../src/lib/upload/clean";
 import { AS_IS_SETTINGS } from "../src/lib/upload/asis";
@@ -1069,6 +1070,40 @@ describe("committed package stroke endpoints", () => {
     expect(emitted).toEqual(expected);
     expect(verifyEps(savedEps).ok).toBe(true);
     expect(readRecord(root).settings.effective.strokeLinecap).toBe(strokeLinecap);
+    expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(source);
+  });
+});
+
+
+describe("supplied snowflake package auto-repair", () => {
+  it.each([0, 2])("commits SVG/JPEG/EPS with stroke %d and leaves the approved source untouched", async (strokePx) => {
+    const source = readFileSync("tests/assets/bug with SVG export expl temp/icon-snowflake_AI_9_03.svg", "utf8");
+    const root = pairRoot(source);
+    const settings = { ...DEFAULT_UPLOAD_SETTINGS, strokePx, includeEps: true };
+    const rendered: string[] = [];
+    const raster: RasterDeps = {
+      render: async (text, target) => { rendered.push(text); return target as unknown as HTMLCanvasElement; },
+      encode: async (canvas) => minimalJpeg(canvas.width, canvas.height),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, deps: { raster } }));
+    expect(result.error).toBeNull();
+    expect(result.status).toBe("processed");
+    expect(result.outputs.svg).not.toBeNull();
+    expect(result.outputs.jpg).not.toBeNull();
+    expect(result.outputs.eps).not.toBeNull();
+    const savedSvg = fileText(root, `${DIR}/export/${ART}.svg`);
+    const savedEps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyExportSvg(savedSvg)).toEqual([]);
+    expect(verifyEps(savedEps).ok).toBe(true);
+    expect(savedEps).not.toContain("colorimage");
+    expect(rendered).toHaveLength(1);
+    const expected = prepareExportSvg(source, settings);
+    expect(expected.ok).toBe(true);
+    if (expected.ok) {
+      const size = readRecord(root).jpeg;
+      expect(rendered[0]).toBe(withIntrinsicSize(expected.svg, size.width, size.height));
+    }
+    expect(rendered[0]).not.toContain("transform=");
     expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(source);
   });
 });
