@@ -2,6 +2,9 @@
 
 Date: 2026-10-26. Baseline: 01e0814 (imported shared selection redesign).
 
+Follow-up: [production implementation and evidence](../2026-10-26-upload-response-implementation/README.md).
+The findings below describe the historical baseline, not the current shipped state.
+
 ## Request
 
 Selection V2 and Generate SVG now respond well; SVG to upload still feels slow.

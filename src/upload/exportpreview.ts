@@ -46,6 +46,9 @@ function keyOf(source: string, settings: UploadSettings): string {
 
 /** One prepare run; a failure previews the source and says why. */
 function buildPreview(key: string, source: string, settings: UploadSettings): ExportPreview {
+  // Another row's already-scheduled timer may have prepared this key meanwhile.
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
   const prepared = prepareExportSvg(source, settings);
   const value = prepared.ok ? { svg: prepared.svg, note: paintClash(settings) } : { svg: source, note: `export preview unavailable — ${prepared.detail}` };
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);

@@ -97,8 +97,9 @@ Metadata and export use the app-wide [shared progress header](process-progress.m
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](upload-file-metadata.md).
 
-## Remaining response work
+## Upload response performance
 
-Full-tab measurements and the **proposed, not implemented** Upload-specific
-[response redesign](upload-response.md) distinguish warm orchestration, quadratic
-local settings updates and unmeasured cold preview work.
+The implemented [response redesign](upload-response.md) removes warm boot reloads,
+render-time destination planning and quadratic local-map updates, targets stale
+projection, shares popup derivation and reuses already-built preview results.
+Exact export algorithms and all controls remain; browser latency is not claimed.

@@ -11,13 +11,16 @@ export interface SelectedShadow {
 export function selectedShadow(
   ids: string[], defaults: UploadSettings, overrides: Record<string, SettingsOverrides>, applied: AppliedMap,
 ): SelectedShadow {
-  if (ids.length === 0) return { state: "none", width: defaults.shadowWidthPct, gap: defaults.shadowGapPct };
-  const settings = ids.map((id) => rowSettings(defaults, id, overrides, applied));
+  return shadowSelectionOf(ids.map((id) => rowSettings(defaults, id, overrides, applied)), defaults);
+}
+
+/** Same summary for callers that already resolved all selected settings. */
+export function shadowSelectionOf(settings: readonly UploadSettings[], defaults: UploadSettings): SelectedShadow {
   const active = settings.filter((s) => s.shadowEnabled);
   const enabled = active.length;
   const width = active.length === 0 ? defaults.shadowWidthPct
     : active.every((s) => s.shadowWidthPct === active[0].shadowWidthPct) ? active[0].shadowWidthPct : null;
   const gap = active.length === 0 ? defaults.shadowGapPct
     : active.every((s) => s.shadowGapPct === active[0].shadowGapPct) ? active[0].shadowGapPct : null;
-  return { state: enabled === 0 ? "none" : enabled === ids.length ? "all" : "mixed", width, gap };
+  return { state: enabled === 0 ? "none" : enabled === settings.length ? "all" : "mixed", width, gap };
 }

@@ -3538,3 +3538,35 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
 - Earlier fast attempts failed the existing transient Metadata ready toast wait;
   unchanged focused/full/final-fast checks passed. Timing-sensitive check remains
   noted, not claimed fixed. No assertions, timeouts, gates or isolation weakened.
+
+## 2026-10-26 — Finish Upload-specific response redesign (base aba2474)
+
+- Implemented mount-only boot/refs, actual-input context memo, one-pass selected
+  metadata/artifact summaries with narrow dependencies, and count-only shared
+  artifact eligibility; exact collision-safe download execution stays unchanged.
+- Replaced quadratic pin map updates with one immutable batch map replacement,
+  shared by applied decorations. Targeted stale projection retains unaffected
+  rows and honors defaults→applied→pins, fixing applied-decoration omission.
+  Global default changes skip equal nested values and non-inheriting rows.
+- Open settings resolves each checked icon once for all decoration summaries;
+  closed guard and all controls remain. Preview callbacks recheck result cache:
+  real duplicate-subscriber regression improves 20 prepares to one, same output.
+  Exact geometry/debounce/cache bound/failure fallback remain unchanged.
+- Witnessed red: full-panel boot (4 failures), destination planning (4), popup
+  3N instead of N (4), targeted/applied stale projection (7 failures/1 pass),
+  preview duplicate work (1 failure/1 pass). Strengthened original research
+  fixture; added model/summary/preview tests. Focused integration 95/95 passed;
+  model/preview/docs smoke 15/15 passed. No existing gates/assertions weakened.
+- Original 1000-key zero-row patch/reset diagnostic 231.719/1233.745 ms; isolated
+  post-change 5.950/1.002 ms. Warm boot/planner calls now zero, single-row stale
+  work 1000→1, popup resolutions 3000→1000. Node/Happy DOM diagnostics, not browser
+  latency or an overall ≥80% claim. Three final isolated warm runs and mixed-run
+  outliers retained in docs/archive/2026-10-26-upload-response-implementation/.
+- Types, lint (0 errors/20 existing warnings), changed quality (14 source files),
+  docs and whitespace passed. verify:fast and verify both ALL LANES PASSED on
+  first implementation attempts: each 3066 tests/292 files; native 30/5 passed.
+  Coverage statements/branches/functions/lines 95.54/90.23/98.32/98.37%, none
+  decreased; settingspatch.ts and download.ts each 100% in all four metrics.
+- Current Upload/performance/owner contracts updated. No selector removal,
+  dependency/lock changes, provider generation, geometry replacement, altered
+  harness isolation, test timeout relaxation or generated artifacts committed.

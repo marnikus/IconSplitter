@@ -95,18 +95,8 @@ export function withoutDecoration(values: DecorationValues, key: DecorationKey):
   return next;
 }
 
-/** Apply a patch of per-icon decoration values; null (or empty) clears that row. */
-export function mergeApplied(
-  map: AppliedMap, patch: Record<string, DecorationValues | null> | undefined,
-): AppliedMap {
-  if (patch === undefined) return map;
-  const next = { ...map };
-  for (const [id, values] of Object.entries(patch)) {
-    if (values === null || Object.keys(values).length === 0) delete next[id];
-    else next[id] = values;
-  }
-  return next;
-}
+/** Decoration maps use the same atomic replacement semantics as local pins. */
+export { patchSettingsMap as mergeApplied } from "./settingspatch";
 
 /** The fields a global control must leave for an icon to take an applied value. */
 export function clearedFor(key: DecorationKey, overrides: SettingsOverrides): SettingsOverrides {

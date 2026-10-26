@@ -19,6 +19,7 @@ import * as storage from "../src/state/safestorage";
 import * as settingsStore from "../src/upload/settingsstore";
 import * as decorations from "../src/lib/upload/decorations";
 import * as download from "../src/upload/downloadactions";
+import * as bulk from "../src/upload/bulksummary";
 import * as rowmodel from "../src/upload/rowmodel";
 import * as prepare from "../src/lib/upload/prepare";
 import { BinDir, BinFile } from "./helpers/binfakefs";
@@ -76,6 +77,18 @@ const q = (id: string) => host.querySelector<HTMLElement>(`[data-testid="${id}"]
 const click = async (id: string) => act(async () => q(id).click());
 
 describe("Upload full-panel response research", () => {
+  it("loads freshly persisted settings on remount rather than retaining a global boot cache", async () => {
+    fixture(0, false);
+    await act(async () => root.render(<HistoryProvider><UploadPanel /></HistoryProvider>));
+    expect((q("upload-stroke") as HTMLInputElement).value).toBe("");
+    await act(async () => root.unmount());
+    settingsStore.saveUploadSettings({ defaults: { ...DEFAULT_UPLOAD_SETTINGS, strokePx: 7 }, overrides: {}, applied: {} });
+    root = createRoot(host);
+    await act(async () => root.render(<HistoryProvider><UploadPanel /></HistoryProvider>));
+    expect((q("upload-stroke") as HTMLInputElement).value).toBe("7");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it.each([{ count: 100, pinned: false }, { count: 1000, pinned: false }, { count: 1000, pinned: true }, { count: 1000, pinned: "snapshot" as const }])(
     "profiles real warm gestures for $count rows, stored pins=$pinned", async ({ count, pinned }) => {
       const ids = fixture(count, pinned);
@@ -93,18 +106,27 @@ describe("Upload full-panel response research", () => {
       });
       const effective = vi.spyOn(decorations, "rowSettings");
       const plans = vi.spyOn(download, "downloadPlanOf");
+      const summaries = vi.spyOn(bulk, "uploadBulkSummary");
       const needed = vi.spyOn(rowmodel, "idsNeedingMetadata");
       const previews = vi.spyOn(prepare, "prepareExportSvg");
       const reads = vi.spyOn(storage, "readKey");
       const samples: unknown[] = [];
       const measure = async (gesture: string, action: () => Promise<unknown>) => {
-        for (const spy of [loads, effective, plans, needed, previews, reads]) spy.mockClear();
+        for (const spy of [loads, effective, plans, summaries, needed, previews, reads]) spy.mockClear();
         bootLoadMs = 0;
         const start = performance.now(); await action(); const ms = performance.now() - start;
         samples.push({ gesture, actMs: +ms.toFixed(3), bootSettingsLoads: loads.mock.calls.length, bootLoadMs: +bootLoadMs.toFixed(3),
-          effectiveSettingsCalls: effective.mock.calls.length, downloadPlans: plans.mock.calls.length,
+          effectiveSettingsCalls: effective.mock.calls.length, downloadPlans: plans.mock.calls.length, summaryScans: summaries.mock.calls.length,
           metadataScans: needed.mock.calls.length, previewPrepares: previews.mock.calls.length,
           storageReads: reads.mock.calls.length });
+        expect(loads.mock.calls.length, `${gesture}: mount-owned settings must not reload`).toBe(0);
+        expect(plans.mock.calls.length, `${gesture}: UI counts must not allocate download plans`).toBe(0);
+        expect(summaries.mock.calls.length, `${gesture}: recount only changed rows/checks`).toBe(
+          gesture === "check-one" || gesture === "select-visible" ? 1 : 0,
+        );
+        expect(effective.mock.calls.length, `${gesture}: resolve selected settings only once`).toBe(
+          gesture === "open-export-settings" ? count : 0,
+        );
       };
       await measure("activate-first", () => click(`upload-row-${ids[0]}`));
       expect(getAppState().upload.activeId).toBe(ids[0]);

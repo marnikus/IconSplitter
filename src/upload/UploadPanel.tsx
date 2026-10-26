@@ -11,9 +11,7 @@ import { PROVIDER_NAME } from "../lib/upload/gemini";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import { useUpload, type UploadApi } from "./useUpload";
-import { downloadPlanOf } from "./downloadactions";
-import { idsAwaitingAcceptance } from "./metaaccept";
-import { idsNeedingMetadata, idsWithMetadata } from "./rowmodel";
+import { uploadBulkSummary } from "./bulksummary";
 import UploadProgressHeaders from "./UploadProgressHeaders";
 import UploadBulkBar from "./UploadBulkBar";
 import { resettableIds } from "./selectedsettings";
@@ -82,17 +80,11 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
   );
 }
 
-/** Everything the bulk bar counts, in ONE pass over the rows per snapshot.
- *  Before this, five separate O(rows × checked) scans ran on every render —
- *  including renders caused by another tab's selection. */
-function useBulkSummary(g: UploadApi) {
-  return useMemo(() => ({
-    needed: idsNeedingMetadata(g.rows, g.checked).length,
-    withMeta: idsWithMetadata(g.rows, g.checked).length,
-    awaiting: idsAwaitingAcceptance(g.rows, g.checked).length,
-    download: downloadPlanOf(g, g.checked).items.length,
-    overridden: resettableIds(g.checked, g.overrides).length,
-  }), [g]);
+/** Recount only when rows or checks change; local pins have their own scope. */
+function useBulkSummary({ rows, checked, overrides }: UploadApi) {
+  const summary = useMemo(() => uploadBulkSummary(rows, checked), [rows, checked]);
+  const overridden = useMemo(() => resettableIds(checked, overrides).length, [checked, overrides]);
+  return { ...summary, overridden };
 }
 
 /** The bulk bar, pinned while the rows scroll — the Generate SVG tab's sticky .svg-bulkbar-pin, reused. */

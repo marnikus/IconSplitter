@@ -1,4 +1,5 @@
 // badgeselection.ts — checked icons' independent badge state in Export settings.
+import { enabledSelection } from "./decorationselection";
 import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 
@@ -8,6 +9,6 @@ export interface SelectedBadge { state: "none" | "mixed" | "all" }
 export function selectedBadge(
   ids: string[], defaults: UploadSettings, overrides: Record<string, SettingsOverrides>, applied: AppliedMap,
 ): SelectedBadge {
-  const on = ids.filter((id) => rowSettings(defaults, id, overrides, applied).badgeEnabled).length;
-  return { state: on === 0 ? "none" : on === ids.length ? "all" : "mixed" };
+  const settings = ids.map((id) => rowSettings(defaults, id, overrides, applied));
+  return { state: enabledSelection(settings, "badgeEnabled") };
 }

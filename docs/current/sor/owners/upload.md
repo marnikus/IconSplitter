@@ -44,6 +44,6 @@ Named export-default snapshots: `lib/upload/settingspresets.ts`,
 `upload/settingspresetstore.ts`, `settingspresetsmodel.ts`, `UploadSettingsPresets.tsx`.
 [Preset contract and tests](../upload-settings-presets.md).
 
-Full-panel and override-map response diagnostics: `tests/upload_response_research.test.tsx`,
-`tests/upload_response_reducer_research.test.ts`;
-[proposed redesign and phase owners](../upload-response.md). No production change yet.
+Full-panel/override-map diagnostics, targeted stale projection, artifact counts,
+shared selected-decoration derivation and preview deduplication:
+[implemented response contract and source/test owners](../upload-response.md).

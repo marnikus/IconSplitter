@@ -1,7 +1,6 @@
 // UploadDialogs.tsx — settings, metadata confirm, and row-badge catalog popups.
-import { selectedShadow } from "./shadowselection";
-import { selectedBadge } from "./badgeselection";
-import { selectedSizeGuide } from "./sizeguideselection";
+import { useMemo } from "react";
+import { selectedDecorations } from "./decorationselection";
 import UploadMetaDialog from "./UploadMetaDialog";
 import UploadSettingsDialog from "./UploadSettingsDialog";
 import UploadRowBadgeSettings from "./UploadRowBadgeSettings";
@@ -24,28 +23,28 @@ export default function UploadDialogs({ g }: { g: UploadApi }) {
 function SettingsDialog({ g }: { g: UploadApi }) {
   const dialog = g.dialog;
   if (dialog === null || dialog.kind !== "settings") return null;
-  const id = dialog.id;
+  return <OpenSettingsDialog g={g} id={dialog.id} />;
+}
+
+function OpenSettingsDialog({ g, id }: { g: UploadApi; id: string | null }) {
+  const selected = useMemo(() => selectedDecorations(g.checked, g.defaults, g.overrides, g.applied),
+    [g.checked, g.defaults, g.overrides, g.applied]);
   const row = id === null ? null : g.rows.find((r) => r.source.id === id) ?? null;
   return (
     <UploadSettingsDialog
       scope={id === null ? null : row?.source.svgName ?? id}
-      id={id}
-      defaults={g.defaults}
-      overrides={ownMap(g.overrides, id)}
-      applied={ownMap(g.applied, id)}
-      selectedShadow={selectedShadow(g.checked, g.defaults, g.overrides, g.applied)}
+      id={id} defaults={g.defaults} overrides={ownMap(g.overrides, id)} applied={ownMap(g.applied, id)}
+      selectedShadow={selected.shadow}
       selectedCount={g.checked.length}
       onSelectedShadowToggle={() => g.toggleShadowSelected(g.checked)}
       onSelectedShadowDimensions={(patch) => g.setShadowSelected(g.checked, patch)}
-      selectedBadge={selectedBadge(g.checked, g.defaults, g.overrides, g.applied)}
+      selectedBadge={selected.badge}
       onSelectedBadgeToggle={() => g.toggleBadgeSelected(g.checked)}
-      selectedSizeGuide={selectedSizeGuide(g.checked, g.defaults, g.overrides, g.applied)}
+      selectedSizeGuide={selected.sizeGuide}
       onSelectedSizeGuideToggle={() => g.toggleSizeGuideSelected(g.checked)}
       onApplyLocal={() => g.applySettingsSelected(g.checked)}
-      onDefaults={g.setDefaults}
-      onOverride={g.setOverride}
-      onResetOverride={g.resetOverride}
-      onClose={g.dismissDialog} />
+      onDefaults={g.setDefaults} onOverride={g.setOverride}
+      onResetOverride={g.resetOverride} onClose={g.dismissDialog} />
   );
 }
 

@@ -8,7 +8,7 @@
 // panel reads.
 
 import { isSelectionSort } from "../lib/statesort";
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type Dispatch } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { SCAN_IDLE } from "../lib/scanseq";
@@ -48,11 +48,11 @@ export type UploadApi = UploadModel & UploadActions & {
 };
 
 export function useUpload(): UploadApi {
-  const boot = useRef(loadBoot()).current;
+  const [boot] = useState(loadBoot);
   const [model, dispatch] = useUploadModel(boot);
   const hist = useHistoryActions();
   const upload = useAppSlice("upload");
-  const refs = useRef(newRefs()).current;
+  const [refs] = useState(newRefs);
   const say = useSay(dispatch);
   const loadAll = useLoadAll(refs, dispatch, say, model);
   const derived = useDerived(model, upload.checked);
@@ -87,13 +87,12 @@ interface CtxParts {
 
 /** The bag every action slice reads; rebuilt only when one of its inputs is. */
 function useUploadCtx(p: CtxParts): UploadCtx {
+  const { model, dispatch, refs, hist, derived, checked, activeId, say, loadAll, setRootName, setDiscovery, setBusy } = p;
   return useMemo(() => ({
-    m: p.model, dispatch: p.dispatch, refs: p.refs, hist: p.hist,
-    rows: p.model.rows, visible: p.derived.visible, checked: p.checked,
-    activeId: p.activeId, header: p.derived.header, counts: p.derived.counts,
-    say: p.say, loadAll: p.loadAll, setRootName: p.setRootName,
-    setDiscovery: p.setDiscovery, setBusy: p.setBusy,
-  }), [p]);
+    m: model, dispatch, refs, hist, rows: model.rows, visible: derived.visible, checked,
+    activeId, header: derived.header, counts: derived.counts,
+    say, loadAll, setRootName, setDiscovery, setBusy,
+  }), [model, dispatch, refs, hist, derived, checked, activeId, say, loadAll, setRootName, setDiscovery, setBusy]);
 }
 
 /** A toast lives for a few seconds and then clears itself (RULE 9). */

@@ -93,6 +93,6 @@ The source plan’s serialization figures are historical Node measurements, **no
 a new browser latency claim. The updated browser harness records real history;
 its end-to-end comparison remains unmeasured in this integration.
 
-Upload still has work outside the shared list boundary: see the
-[Upload-specific response research/redesign](upload-response.md). Its diagnostic
-tests exercise the full panel; they are not a new browser speedup claim.
+Upload now also isolates work outside the shared list boundary: see the
+[implemented Upload-specific response redesign](upload-response.md). Its work
+budgets exercise the full panel; diagnostic times are not browser speedup claims.

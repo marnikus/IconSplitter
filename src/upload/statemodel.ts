@@ -14,7 +14,8 @@ import type { PreviewBackground } from "../lib/svgbackground";
 import { mergeApplied, type AppliedMap, type DecorationValues } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { UploadDiscovery } from "./discovery";
-import { staleOf } from "./rowmodel";
+import { patchSettingsMap } from "../lib/upload/settingspatch";
+import { restaleChanged, restaleDefaults, updateUploadRow, withStale } from "./staleprojection";
 import type { PromptPreset } from "../lib/upload/promptpresets";
 import type { OverridesMap, UploadSettingsState } from "./settingsstore";
 import type { UploadPrefs } from "./prefsstore";
@@ -114,20 +115,21 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: UploadDiscovery | null }).discovery }),
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
   toast: (m, a) => ({ ...m, toast: (a as { toast: Toast | null }).toast }),
-  defaults: (m, a) => restaleAll({ ...m, defaults: (a as { defaults: UploadSettings }).defaults }, (a as { defaults: UploadSettings }).defaults),
+  defaults: (m, a) => restaleDefaults(m, (a as { defaults: UploadSettings }).defaults),
   override: (m, a) => {
     const act = a as { id: string; patch: SettingsOverrides | null; applied?: DecorationValues | null };
     const applied = act.applied === undefined ? m.applied : mergeApplied(m.applied, { [act.id]: act.applied });
-    return restaleAll({ ...m, overrides: setOverride(m.overrides, act.id, act.patch), applied }, m.defaults);
+    return restaleChanged({ ...m, overrides: patchSettingsMap(m.overrides, { [act.id]: act.patch }), applied }, new Set([act.id]));
   },
   "overrides-patch": (m, a) => {
     const act = a as {
       overrides: Record<string, SettingsOverrides | null>;
       applied?: Record<string, DecorationValues | null>;
     };
-    let map = m.overrides;
-    for (const [id, patch] of Object.entries(act.overrides)) map = setOverride(map, id, patch);
-    return restaleAll({ ...m, overrides: map, applied: mergeApplied(m.applied, act.applied) }, m.defaults);
+    const overrides = patchSettingsMap(m.overrides, act.overrides);
+    const applied = mergeApplied(m.applied, act.applied);
+    const changed = new Set([...Object.keys(act.overrides), ...Object.keys(act.applied ?? {})]);
+    return restaleChanged({ ...m, overrides, applied }, changed);
   },
   gemini: (m, a) => ({ ...m, gemini: (a as { gemini: GeminiConfig }).gemini }),
   "model-check": (m, a) => ({ ...m, modelCheck: (a as { check: ModelCheck }).check }),
@@ -148,11 +150,11 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   previews: (m, a) => previewsOf(m, a as { previews: SentPreview[]; preparing: boolean }),
   meta: (m, a) => {
     const act = a as { id: string; meta: UploadMetaState };
-    return { ...m, rows: restaleRows(m.rows, m.defaults, m.overrides, (r) => r.source.id === act.id ? { ...r, meta: act.meta } : r) };
+    return updateUploadRow(m, act.id, (row) => ({ ...row, meta: act.meta }));
   },
   run: (m, a) => {
     const act = a as { id: string; run: UploadRunUpdate };
-    return { ...m, rows: restaleRows(m.rows, m.defaults, m.overrides, (r) => r.source.id === act.id ? withStale({ ...r, ...act.run }, act.run.stale ?? r.stale) : r) };
+    return updateUploadRow(m, act.id, (row) => withStale({ ...row, ...act.run }, act.run.stale ?? row.stale));
   },
   process: (m, a) => ({ ...m, ...applyProcessUpdate(m, a as ProcessUpdate) }),
   "process-dismiss": (m, a) => {
@@ -179,39 +181,6 @@ export function reduceState(model: UploadModel, action: UploadAction): UploadMod
 function keyModel(model: UploadModel, key: string | null, from?: KeySource): UploadModel {
   const source = from ?? (key === null ? "none" : "device");
   return { ...model, keySet: key !== null, keyMask: key ? maskKey(key) : "not set", keySource: source };
-}
-
-/** One override set (or delete, on null/empty) — the caller's map is untouched. */
-function setOverride(map: OverridesMap, id: string, patch: SettingsOverrides | null): OverridesMap {
-  const next = { ...map };
-  if (patch === null || Object.keys(patch).length === 0) delete next[id];
-  else next[id] = patch;
-  return next;
-}
-
-/**
- * Re-projects stale after anything a fingerprint keys on moved (defaults,
- * overrides, metadata). A row mid-run keeps its run status; only its flag moves.
- */
-function restaleAll(m: UploadModel, defaults: UploadSettings): UploadModel {
-  return { ...m, rows: restaleRows(m.rows, defaults, m.overrides, (r) => r) };
-}
-
-function restaleRows(
-  rows: readonly UploadRow[], defaults: UploadSettings, overrides: OverridesMap,
-  update: (row: UploadRow) => UploadRow,
-): UploadRow[] {
-  return rows.map((row) => {
-    const next = update(row);
-    const effective = { ...defaults, ...(overrides[next.source.id] ?? {}) };
-    return withStale(next, staleOf({ record: next.record, source: next.source, effective, meta: next.meta, sourceHash: next.sourceHash }));
-  });
-}
-
-function withStale(row: UploadRow, stale: boolean): UploadRow {
-  if (row.stale === stale) return row;
-  if (row.running !== null) return { ...row, stale };
-  return { ...row, stale, status: stale ? "stale" : (row.record?.status ?? "discovered") };
 }
 
 export interface Boot {
