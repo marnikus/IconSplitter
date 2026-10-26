@@ -3570,3 +3570,27 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
 - Current Upload/performance/owner contracts updated. No selector removal,
   dependency/lock changes, provider generation, geometry replacement, altered
   harness isolation, test timeout relaxation or generated artifacts committed.
+
+## 2026-10-26 — Shadow/source-viewport clipping research and plan only
+
+- Investigated the exact preview warning at prepare.ts::shadowSourceFrame,
+  viewrepair.ts and place.ts. Existing minor repair requires in-frame geometry,
+  <=2% paint overshoot and unchanged precision rules; remaining overflow refuses
+  to avoid revealing formerly clipped art when the shadow frame grows.
+- Confirmed conservative Bezier control-hull bounds as a possible false-positive
+  mechanism, not an established diagnosis of the reported flags. Planned tight
+  paint classification first, then vector-painted-region viewport intersection
+  only where actual clipping requires it. Preserve source bytes and pen-space,
+  compositing, gradient, clean SVG and vector EPS contracts; no blanket expansion.
+- Both named waving-flag SVGs are absent from this checkout and attachment
+  directory; screenshots only. Exact overflow/per-file repair success remains
+  unverified. The first planned implementation step obtains immutable originals.
+- Documented ordered TDD/diagnostic/geometry/integration/format/performance/release
+  steps in docs/archive/2026-10-26-shadow-viewport-repair-plan/README.md, linked
+  from the current automatic-repair contract. Explicitly not implemented.
+- Existing focused viewport/shadow/stroke tests 33/33; docs 4/4; whitespace passed.
+  verify:fast and verify against b32d1a3 both ALL LANES PASSED: 3066 tests/292 files
+  each, native/performance 30/5. Types/lint/quality/build passed; coverage unchanged
+  at statements/branches/functions/lines 95.54/90.23/98.32/98.37%.
+- Documentation only. No production/test/dependency/fixture changes, source SVG
+  rewrites, changed guard/tolerance, library installation or implementation claim.

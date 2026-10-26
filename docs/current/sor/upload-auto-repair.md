@@ -84,6 +84,20 @@ content retain their existing failures. Fully default/as-is exports remain byte
 identical. Corrections occur automatically in the shared preparation used by
 preview and SVG/JPEG/EPS export, with no repair dialog or provider request.
 
+## Planned root-viewport clipping repair — not implemented
+
+The reported waving-flag shadow warnings need a distinction between conservative
+Bézier hull overflow and actual viewport clipping. [Research and ordered repair
+plan](../../archive/2026-10-26-shadow-viewport-repair-plan/README.md) covers tight
+paint bounds first, then flattening supported actual viewport clipping into
+vector paint before placing the shadow. No blanket viewBox enlargement, source
+rewrite, warning suppression or raster fallback is proposed. Existing guard and
+2% minor-stroke policy remain unchanged until a tested repair is implemented.
+
+The two named flag SVGs are **not present in this checkout**; only screenshots
+were attached. Their exact overflow and repair success remain unverified. Obtain
+the original files before implementation; no flag-specific fix is claimed.
+
 ## Real regression assets
 
 The supplied snowflake (`icon-snowflake_AI_9_03.svg`) is retained unchanged in
