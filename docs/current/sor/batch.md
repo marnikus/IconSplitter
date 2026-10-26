@@ -2,6 +2,8 @@
 
 See [invariants/batch.md](invariants/batch.md), [path/scope invariants](invariants/paths.md), [batch selectors](../selectors/batch.md), [storage](STORAGE.md) and [test owners](TESTS.md).
 
+[Reversible selection/approval sorting](list-state-sorting.md) defines the new list groups and controls.
+
 ## Behaviour
 
 Batch folders:

@@ -3,6 +3,7 @@
 // subset and the header-checkbox state. Pure functions over the rows; the
 // assembly and the counts stay in rowmodel.
 
+import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "../lib/statesort";
 import { compareNames } from "../lib/scan";
 import { checkState } from "../lib/reviewselect";
 import type {
@@ -47,13 +48,18 @@ function inBadge(row: UploadListRow, want: UploadListFilter["badge"]): boolean {
 }
 
 /** Sorts a copy — the caller's array is never reordered. */
-export function sortUploadRows(rows: readonly UploadListRow[], sort: UploadSort): UploadListRow[] {
+export function sortUploadRows(rows: readonly UploadListRow[], sort: UploadSort, checked: readonly string[] = []): UploadListRow[] {
+  if (isStateSort(sort)) {
+    const selected = new Set(checked);
+    return sortByFlag(sortUploadRows(rows, "name"), (r) => isSelectionSort(sort)
+      ? selected.has(r.id) : r.metadata === "accepted", sort === "selected" || sort === "approved");
+  }
   const out = [...rows];
   out.sort((a, b) => COMPARATORS[sort](a, b));
   return out;
 }
 
-const COMPARATORS: Record<UploadSort, (a: UploadListRow, b: UploadListRow) => number> = {
+const COMPARATORS: Record<Exclude<UploadSort, StateSort>, (a: UploadListRow, b: UploadListRow) => number> = {
   name: (a, b) => compareNames(a.relPath, b.relPath) || compareNames(a.id, b.id),
   status: (a, b) => rank(a.status) - rank(b.status) || compareNames(a.relPath, b.relPath),
   metadata: (a, b) => rank(a.metadata) - rank(b.metadata) || compareNames(a.relPath, b.relPath),
@@ -70,12 +76,17 @@ function rank(value: string): number {
   return STATUS_RANK[value as UploadListRow["status"]] ?? META_RANK[value as UploadListRow["metadata"]] ?? 0;
 }
 
+export interface UploadListView {
+  assigned?: Record<string, string[]>;
+  checked?: readonly string[];
+}
+
 /** Filter + sort a copy of the rows; the caller's array is never reordered. */
 export function visibleRows(
-  rows: readonly UploadRow[], filter: UploadListFilter, sort: UploadSort, assigned: Record<string, string[]> = {},
+  rows: readonly UploadRow[], filter: UploadListFilter, sort: UploadSort, view: UploadListView = {},
 ): UploadRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  return sortUploadRows(applyUploadFilters([...byId.values()].map((r) => toListRow(r, assigned)), filter), sort)
+  return sortUploadRows(applyUploadFilters([...byId.values()].map((r) => toListRow(r, view.assigned)), filter), sort, view.checked)
     .flatMap((l) => {
       const row = byId.get(l.id);
       return row ? [row] : [];

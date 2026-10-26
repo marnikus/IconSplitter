@@ -95,3 +95,5 @@ authoritative state, the clicks only produce it):
 gesture is one global `checked` undo entry carrying ids, anchor and active;
 new lists start unchecked. Bulk remains armed and limited to checked ∩ visible ∩
 complete, never active by inference ([RULE 25](../rules/BEHAVIOR.md#rule-25)).
+
+`v2-sort` adds `selected` / `approval`; `v2-dir` asc/desc uses state-group labels. [State sorting](../sor/list-state-sorting.md).

@@ -73,6 +73,27 @@ function makeBatchRoot(): FakeDir {
 }
 
 describe("Selection V2 panel", () => {
+  it("sorts checked/approval groups live and auto-next uses the pre-decision checked order", async () => {
+    const { el } = await mount(makeRoot());
+    const ordered = () => rows(el).map((r) => r.getAttribute("data-testid")!.slice("v2-row-".length));
+    await choose(el, "[data-testid=v2-sort]", "selected");
+    await choose(el, "[data-testid=v2-dir]", "desc");
+    await check(q(el, `[data-testid=v2-check-${FOG}]`) as HTMLInputElement, true);
+    expect(ordered()).toEqual([FOG, COURT, DUNES, HARBOR]);
+    await choose(el, "[data-testid=v2-dir]", "asc");
+    expect(ordered()).toEqual([COURT, DUNES, HARBOR, FOG]);
+    await choose(el, "[data-testid=v2-dir]", "desc");
+    await click(q(el, `[data-testid=v2-row-${FOG}]`)!);
+    await key("a");
+    expect(q(el, `[data-testid=v2-row-${COURT}]`)?.getAttribute("aria-current")).toBe("true");
+    expect(getAppState().v2.checked).toEqual([FOG]);
+    await choose(el, "[data-testid=v2-sort]", "approval");
+    await choose(el, "[data-testid=v2-dir]", "asc");
+    expect(ordered()).toEqual([COURT, DUNES, HARBOR, FOG]);
+    await choose(el, "[data-testid=v2-dir]", "desc");
+    expect(ordered()).toEqual([FOG, COURT, DUNES, HARBOR]);
+  });
+
   beforeEach(async () => {
     localStorage.clear();
     resetAppStore(); // no checked rows / filters leaking between tests

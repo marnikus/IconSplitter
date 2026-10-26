@@ -7,6 +7,7 @@
 // actions, the boot/persist effects, the derived lists and the flat API the
 // panel reads.
 
+import { isSelectionSort } from "../lib/statesort";
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type Dispatch } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
@@ -185,9 +186,10 @@ function useDerived(model: UploadModel, checked: string[]): {
   visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts; rowBadges: RowBadgeState;
 } {
   const rowBadges = useSyncExternalStore(subscribeRowBadges, getRowBadgeState, getRowBadgeState);
+  const sortChecks = isSelectionSort(model.sort) ? checked : undefined;
   const visible = useMemo(
-    () => visibleRows(model.rows, model.filter, model.sort, rowBadges.assigned),
-    [model.rows, model.filter, model.sort, rowBadges.assigned],
+    () => visibleRows(model.rows, model.filter, model.sort, { assigned: rowBadges.assigned, checked: sortChecks }),
+    [model.rows, model.filter, model.sort, rowBadges.assigned, sortChecks],
   );
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const counts = useMemo(() => countsOf(model.rows), [model.rows]);

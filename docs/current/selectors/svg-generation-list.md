@@ -4,7 +4,7 @@ Selector priority and object shape: [shared conventions](shared.md#i-selector-ob
 
 Filters: `svg-filter-generation` (all / not generated / generating / generated
 / failed), `svg-filter-review` (all / pending / approved / declined / needs-review),
-`svg-sort` (date / name / generation / review / cost), `svg-search` (matches the
+`svg-sort` (date / name / generation / review / cost / selected / unselected / unapproved / approved), `svg-search` (matches the
 file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 
 ## Bulk bar (`svg-bulk`)
@@ -57,3 +57,5 @@ Status badge while a row waits in the queue: `svg-status-{sourceId} .svg-badge`
 reads "Next attempt" with class `queued` (grey); the row's own status is back the
 moment the batch is dropped (I-53). `svg-generate-{sourceId}` while a run is in
 flight opens the same explicit prompt/input popup as idle; independent work can start immediately, while conflicts wait.
+
+[State sorting](../sor/list-state-sorting.md) is live; other sorts stay pinned.

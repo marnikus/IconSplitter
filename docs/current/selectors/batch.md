@@ -74,3 +74,5 @@ Preview results (row level): `batch-preview-count-{relPath}` (e.g. `4 icons`),
 
 Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
 the data `relPath`, so tests should build handles from the scanned entry.
+
+`batch-sort` adds `selected` (Selection) / `approval` (binary Approval); `batch-dir` asc/desc displays Not selected/Selected first or Not approved/Approved first. [State sorting](../sor/list-state-sorting.md).

@@ -5,6 +5,7 @@
 // lives only on this device), then the filter/sort/search row. No rule lives
 // here — every value comes from the hook and every change goes back to it.
 
+import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import type { KeySource } from "../lib/keyvault";
 import { ConnectionRow, ImageSettingsGrid } from "./SvgConnections";
 import type { Connection, ConnectionKind } from "../lib/svgconnections";
@@ -261,7 +262,7 @@ function FilterLine({ filter, sort, shown, total, onFilter, onSort, onClear }: {
         options={[["all", "All reviews"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"], ["needs-review", "Regenerated — new review"]]}
         onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
       <Select label="Sort by" testid="svg-sort" value={sort}
-        options={[["date", "Newest generated"], ["name", "Filename"], ["generation", "Generation status"], ["review", "Review status"], ["cost", "Cost"]]}
+        options={[["date", "Newest generated"], ["name", "Filename"], ["generation", "Generation status"], ["review", "Review status"], ["cost", "Cost"], ...STATE_SORT_OPTIONS]}
         onChange={(v) => onSort(v as SvgSort)} />
       <label className="svg-field">
         <span className="svg-label">Search</span>

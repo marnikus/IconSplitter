@@ -441,6 +441,27 @@ describe("the tab", () => {
     expect(text("[data-testid=upload-thumb-value]")).toBe("200 px");
   });
 
+  it("sorts selection live both ways and groups accepted metadata, not SVG approval", async () => {
+    await saveGeminiKey(fakeKey("AIza", "state_sort"));
+    await mount(makeRoot());
+    const ordered = () => [...qa("[data-testid^='upload-row-'][role='listitem']")].map((r) => r.getAttribute("data-testid")!.slice("upload-row-".length));
+    await check(FOG);
+    await pick("[data-testid=upload-sort]", "selected"); expect(ordered()).toEqual([FOG, ARCH]);
+    await pick("[data-testid=upload-sort]", "unselected"); expect(ordered()).toEqual([ARCH, FOG]);
+    await check(ARCH); expect(ordered()).toEqual([ARCH, FOG]);
+    await check(FOG); expect(ordered()).toEqual([FOG, ARCH]);
+    await pick("[data-testid=upload-sort]", "unapproved");
+    // Both SVG sources are approved; only this new valid metadata becomes accepted.
+    const transport = geminiTransport(GOOD_ANSWER); vi.stubGlobal("fetch", transport.fetch);
+    await activate(FOG);
+    await click(`[data-testid=upload-meta-gen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => text(`[data-testid=upload-meta-cell-${FOG}]`).includes("accepted"), "accepted metadata resort");
+    expect(ordered()).toEqual([ARCH, FOG]);
+    await pick("[data-testid=upload-sort]", "approved"); expect(ordered()).toEqual([FOG, ARCH]);
+    expect((q(`[data-testid=upload-check-${ARCH}]`) as HTMLInputElement).checked).toBe(true);
+    expect(transport.calls).toHaveLength(1);
+  });
+
   it("filters and searches the list, and clears both", async () => {
     await mount(makeRoot());
     await pick("[data-testid=upload-filter-status]", "not-exported");

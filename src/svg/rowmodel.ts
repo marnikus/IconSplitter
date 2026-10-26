@@ -3,6 +3,7 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
+import { isStateSort } from "../lib/statesort";
 import { chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
@@ -106,15 +107,14 @@ function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "
   };
 }
 
-/**
- * Filter + sort a copy of the rows; the caller's array is never reordered. With
- * an `order` (the pin, lib/svglist `pinOrder`) the sorted result is arranged by
- * it, so a landing SVG cannot move a row while the user looks at the list.
- */
-export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, order: readonly string[] = []): SvgRow[] {
+export interface SvgListView { order?: readonly string[]; checked?: readonly string[] }
+
+/** Filter/sort copies; ordinary sorts respect the pin, state groups follow live flags. */
+export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, view: SvgListView = {}): SvgRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort).map((l) => l.id);
-  return pinOrder(order, sorted).flatMap((id) => {
+  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort, view.checked).map((l) => l.id);
+  const ordered = isStateSort(sort) ? sorted : pinOrder(view.order ?? [], sorted);
+  return ordered.flatMap((id) => {
     const row = byId.get(id);
     return row ? [row] : [];
   });

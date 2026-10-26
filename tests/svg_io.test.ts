@@ -482,8 +482,8 @@ describe("row model", () => {
     const list = [older, { ...toRow(COURT_SRC, null, false), status: "generated" as const }];
     const pinned = sortedIds(list, "name"); // [court, fog]
     expect(pinned).toEqual([COURT, FOG]);
-    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "date", pinned).map((r) => r.source.id)).toEqual([COURT, FOG]);
-    expect(visibleRows(list, { generation: "all", review: "all", search: "fog" }, "date", pinned).map((r) => r.source.id)).toEqual([FOG]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "date", { order: pinned }).map((r) => r.source.id)).toEqual([COURT, FOG]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "fog" }, "date", { order: pinned }).map((r) => r.source.id)).toEqual([FOG]);
     // the reducer: a scan (`rows`), a sort change and `repin` refresh the pin; a run event (`rows-fn`) never does
     const start = reduceState(initialModel(CFG, "prompt", VIEW_PREFS), { type: "sort", sort: "name" });
     const scanned = reduceState(start, { type: "rows", rows: list });

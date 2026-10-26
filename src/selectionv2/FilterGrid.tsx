@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { ALL_FILTER, monthKey, type DateFilter, type ListFilter } from "../lib/reviewfilter";
+import { stateOrderOptions } from "../lib/statesort";
 import { DEFAULT_SORT, type SortState } from "../lib/reviewsort";
 import SegButton from "./SegButton";
 
@@ -42,10 +43,10 @@ export default function FilterGrid(p: FilterGridProps) {
         options={[["all", "All pairs"], ["complete", "Complete pairs"], ["incomplete", "Missing pair"]]} />
       <SelectField label="Sort by" testid="v2-sort" value={p.sort.by}
         onChange={(v) => p.setSort({ ...p.sort, by: v as SortState["by"] })}
-        options={[["date", "Created date"], ["status", "Review status"], ["name", "Filename"], ["path", "Folder / path"]]} />
+        options={[["date", "Created date"], ["status", "Review status"], ["name", "Filename"], ["path", "Folder / path"], ["selected", "Selection"], ["approval", "Approval"]]} />
       <SelectField label="Order" testid="v2-dir" value={p.sort.dir}
         onChange={(v) => p.setSort({ ...p.sort, dir: v as SortState["dir"] })}
-        options={[["desc", "Newest first"], ["asc", "Oldest first"]]} />
+        options={stateOrderOptions(p.sort.by)} />
       <p className="v2-result-copy" data-testid="v2-shown">Showing {p.shown} {plural(p.shown, "pair")}</p>
       <button type="button" className="v2-btn ghost" data-testid="v2-clear" onClick={clear}>× Clear filters</button>
     </div>

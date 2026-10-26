@@ -3,9 +3,11 @@
 // orders the template offers. Rows are reduced to the fields the rules need, so
 // the logic stays testable without a DOM (RULE 3/8) and the UI keeps no rule.
 
+import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "./statesort";
+
 export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
 export type ReviewFilter = "all" | "pending" | "approved" | "declined" | "needs-review";
-export type SvgSort = "date" | "name" | "generation" | "review" | "cost";
+export type SvgSort = StateSort | "date" | "name" | "generation" | "review" | "cost";
 
 export interface SvgListFilter {
   generation: GenFilter;
@@ -65,14 +67,19 @@ export function pinOrder(previous: readonly string[], sorted: readonly string[])
 }
 
 /** Sorts a copy — the caller's array is never reordered in place. */
-export function sortSvgRows(rows: readonly SvgListRow[], sort: SvgSort): SvgListRow[] {
+export function sortSvgRows(rows: readonly SvgListRow[], sort: SvgSort, checked: readonly string[] = []): SvgListRow[] {
+  if (isStateSort(sort)) {
+    const selected = new Set(checked);
+    return sortByFlag(sortSvgRows(rows, "name"), (r) => isSelectionSort(sort)
+      ? selected.has(r.id) : r.review === "approved", sort === "selected" || sort === "approved");
+  }
   const out = [...rows];
   out.sort((a, b) => compare(a, b, sort));
   return out;
 }
 
 /** One comparator per sort order, so adding an order never deepens a branch. */
-const COMPARATORS: Record<SvgSort, (a: SvgListRow, b: SvgListRow) => number> = {
+const COMPARATORS: Record<Exclude<SvgSort, StateSort>, (a: SvgListRow, b: SvgListRow) => number> = {
   name: (a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0),
   cost: (a, b) => (b.cost ?? -1) - (a.cost ?? -1),
   date: (a, b) => (b.generatedAt ?? 0) - (a.generatedAt ?? 0),
@@ -80,7 +87,7 @@ const COMPARATORS: Record<SvgSort, (a: SvgListRow, b: SvgListRow) => number> = {
   generation: (a, b) => rank(a.generation) - rank(b.generation),
 };
 
-function compare(a: SvgListRow, b: SvgListRow, sort: SvgSort): number {
+function compare(a: SvgListRow, b: SvgListRow, sort: Exclude<SvgSort, StateSort>): number {
   return COMPARATORS[sort](a, b);
 }
 

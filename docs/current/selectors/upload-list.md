@@ -5,13 +5,13 @@
 Filters: `upload-filter-status` (all / processed / partial / failed / cancelled /
 stale / not exported), `upload-filter-metadata` (all / empty / generating /
 generated / invalid / accepted / interrupted), `upload-sort` (name / package
-status / metadata state), `upload-filter-badge` (all / none / any / a catalog
+status / metadata state / selected / unselected / unapproved / approved), `upload-filter-badge` (all / none / any / a catalog
 id — [row badges](upload-row-badges.md)), `upload-search`, `upload-shown` ("Showing N of M"),
 `upload-clear-filters`, `upload-rowbadges-open`.
 
 ## Bulk bar (`upload-bulk`)
 
-Pinned: the bar sits in `upload-bulkbar-pin`, the Generate SVG tab's sticky `.svg-bulkbar-pin` reused (a direct child of `upload-panel`), so it stays on screen while the rows scroll (2026-10-19).
+Pinned: `upload-bulkbar-pin` is a sticky `.svg-bulkbar-pin`, directly inside `upload-panel`; it stays visible as rows scroll.
 
 | `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible approved rows only, keeps hidden checks |
 | `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
@@ -85,9 +85,10 @@ Status bar (`upload-statusbar`): `upload-status-counts`
 ("Gemini · {model}"), the key state, `upload-status-meta` /
 `upload-status-export` ("… in flight").
 
-Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of
-settings **and selection** gestures uses global `hist-undo` / `hist-redo`
+Shared: `upload-toast` (`role="status"`), `upload-busy`. Settings/selection undo uses `hist-undo` / `hist-redo`
 ([§O](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01));
 metadata requests and exported files are not reversed.
 
 Download progress uses `upload-download-progress-{header,title,file,track,completed,remaining,percent,cancel,review,dismiss}` with file counts, shared theme and retained terminal state. Both header Cancel and `upload-cancel-run` stop the next copy, retaining verified files. [Progress contract](../sor/process-progress.md#upload-lifecycle).
+
+[State sorts](../sor/list-state-sorting.md): approval = accepted metadata.

@@ -15,6 +15,28 @@ import {
 installSvgPanelHooks();
 
 describe("review auto-next", () => {
+  it("offers both state-sort directions, bypasses the old pin only for state groups and keeps checks", async () => {
+    await mount(await makeRoot());
+    const ordered = () => [...host.querySelectorAll(".svg-row[data-testid^='svg-row-']")].map((r) => r.getAttribute("data-testid")!.slice("svg-row-".length));
+    const choose = async (value: string) => {
+      const el = q("[data-testid=svg-sort]") as HTMLSelectElement;
+      await act(async () => { el.value = value; el.dispatchEvent(new Event("change", { bubbles: true })); });
+    };
+    await act(async () => input(`[data-testid=svg-check-${FOG}]`).click());
+    await choose("selected"); expect(ordered()).toEqual([FOG, COURT]);
+    await choose("unselected"); expect(ordered()).toEqual([COURT, FOG]);
+    await act(async () => input(`[data-testid=svg-check-${COURT}]`).click());
+    expect(ordered()).toEqual([COURT, FOG]); // same-state filename ties
+    await act(async () => input(`[data-testid=svg-check-${FOG}]`).click());
+    expect(ordered()).toEqual([FOG, COURT]); // live membership, not cached pin
+    await choose("unapproved");
+    await act(async () => (q(`[data-testid=svg-approve-${FOG}]`) as HTMLElement).click());
+    await settle(); expect(ordered()).toEqual([COURT, FOG]);
+    await choose("approved"); expect(ordered()).toEqual([FOG, COURT]);
+    expect(input(`[data-testid=svg-check-${COURT}]`).checked).toBe(true);
+    expect(input(`[data-testid=svg-check-${FOG}]`).checked).toBe(false);
+  });
+
   it("follows displayed rows after approval, preserving checks and stopping at the bottom", async () => {
     const dir = await makeRoot();
     const arch = await dir.getDirectoryHandle("architecture");

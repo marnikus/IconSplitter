@@ -6,12 +6,13 @@
 
 import { startCompletionSound, withCompletionSound } from "../ui/completionSound";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { applyFilters, filterLabel, type Decision, type ListFilter } from "../lib/reviewfilter";
+import { applyFilters, filterLabel, type Decision, type ListFilter, type ViewPair } from "../lib/reviewfilter";
 import { sortLabel, sortPairs, type SortState } from "../lib/reviewsort";
 import { bulkMessage } from "../lib/reviewbulk";
 import type { ReviewRecord } from "../lib/reviewfile";
 import type { DirHandleLike } from "../lib/fs";
 import { fsSupported } from "../batch/picker";
+import { useSortChecks } from "../state/useSortChecks";
 import { useAppView } from "../state/useAppState";
 import { useHistory, type HistoryApi } from "../state/HistoryProvider";
 import { getAppState, patchView } from "../state/appstore";
@@ -44,7 +45,7 @@ export function useSelection() {
   useToastClear(ctx.state.current.toast, setCore);
   useDecisionApplier(ctx, setCore);
   const s = ctx.state.current;
-  const visible = useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort), [s.pairs, s.filter, s.sort]);
+  const visible = useVisiblePairs(s);
   const say = useCallback((msg: string, err = false) => setCore((p) => ({ ...p, toast: { msg, err } })), []);
   return {
     s, visible, say, supported: fsSupported(), rootRef: ctx.root,
@@ -61,6 +62,11 @@ export function useSelection() {
   };
 }
 
+function useVisiblePairs(s: SelState): ViewPair[] {
+  const checked = useSortChecks("v2", s.sort.by === "selected");
+  return useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort, checked), [s.pairs, s.filter, s.sort, checked]);
+}
+
 function useMerged(core: SelState, view: ReturnType<typeof useAppView>): SelState {
   return useMemo(() => ({ ...core, ...view }), [core, view]);
 }
@@ -74,7 +80,7 @@ function useCtx(s: SelState, hist: HistoryApi): Ctx {
 function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   const before = ctx.state.current;
   const merged = withDecision(before, id, d, new Date().toISOString());
-  const visible = sortPairs(applyFilters(before.pairs, before.filter), before.sort);
+  const visible = sortPairs(applyFilters(before.pairs, before.filter), before.sort, getAppState().v2.checked);
   const rolled = merged.autoNext ? nextPendingId(visible, id) : null;
   const next = rolled ? { ...merged, selectedId: rolled } : merged;
   setS(next);

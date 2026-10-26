@@ -9,6 +9,7 @@ import { clampZoom } from "../lib/zoom";
 import { useBatchSelection, type BatchSelection } from "./useBatchSelection";
 import { nextPendingBelow, type CheckState, type SelectIntent } from "../lib/reviewselect";
 import type { Row, RowMergeMap } from "./useBatch";
+import { useSortChecks } from "../state/useSortChecks";
 import { patchBatch } from "../state/appstore";
 import type { BatchReviewStatus } from "../lib/statefile";
 
@@ -105,7 +106,8 @@ function usePrefsState() {
 }
 
 function useVisibleRows(rows: Row[], filter: BatchFilter, sort: BatchSort) {
-  return useMemo(() => sortBatchRows(applyBatchFilters(rows, filter), sort), [rows, filter, sort]);
+  const checked = useSortChecks("batch", sort.by === "selected");
+  return useMemo(() => sortBatchRows(applyBatchFilters(rows, filter), sort, checked), [rows, filter, sort, checked]);
 }
 
 function useReviewCounts(rows: Row[]): BatchView["reviewCounts"] {

@@ -113,6 +113,29 @@ beforeEach(async () => {
 });
 
 describe("Batch V2 selection: active row separate from checked", () => {
+  it("sorts checked and binary approval groups both ways, updates checks live, and undoes selection", async () => {
+    const ordered = () => [...qAll("[data-testid^='batch-row-'][role='listitem']")].map((r) => r.dataset.testid!.slice("batch-row-".length));
+    const choose = async (id: string, value: string) => {
+      const el = q(`[data-testid=${id}]`) as HTMLSelectElement;
+      await act(async () => { el.value = value; el.dispatchEvent(new Event("change", { bubbles: true })); });
+    };
+    const a = "icon-a_AI_1.png", b = "icon-b_AI_2.png", c = "icon-c_AI_3.png";
+    await click(q("[data-testid=batch-deselect]"));
+    await checkClick(c);
+    await rowClick(a); // active is NOT checked
+    await choose("batch-sort", "selected"); await choose("batch-dir", "desc");
+    expect(ordered()).toEqual([c, a, b]);
+    expect((q("[data-testid=batch-dir]") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Selected first");
+    await choose("batch-dir", "asc"); expect(ordered()).toEqual([a, b, c]);
+    await checkClick(a); expect(ordered()).toEqual([b, a, c]);
+    await act(async () => { await api.undo(); }); expect(ordered()).toEqual([a, b, c]);
+    await choose("batch-sort", "approval"); await choose("batch-dir", "asc");
+    await rowClick(a); await keyDown("a");
+    expect(ordered()).toEqual([b, c, a]);
+    await choose("batch-dir", "desc"); expect(ordered()).toEqual([a, b, c]);
+    expect(q("[data-testid=batch-selected-count]")?.textContent).toMatch(/1 selected/);
+  });
+
   it("does not record Select visible again when the scan already checked every eligible row", async () => {
     const before = api.entries.length;
     await click(q("[data-testid=batch-select-visible]"));

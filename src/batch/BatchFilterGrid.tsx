@@ -1,5 +1,6 @@
 // BatchFilterGrid.tsx — V2-style filter bar for Batch folders + review filter (approved/declined/warning/pending)
 
+import { stateOrderOptions } from "../lib/statesort";
 import { useState } from "react";
 import { ALL_BATCH_FILTER, type BatchFilter } from "../lib/batchfilter";
 import { DEFAULT_BATCH_SORT, type BatchSort } from "../lib/batchsort";
@@ -39,11 +40,9 @@ const SORT_OPTS: [string, string][] = [
   ["name", "Filename"],
   ["path", "Folder / path"],
   ["status", "Review status"],
-  ["review", "Approval"],
-];
-const DIR_OPTS: [string, string][] = [
-  ["desc", "Newest first"],
-  ["asc", "Oldest first"],
+  ["review", "Review status (all states)"],
+  ["selected", "Selection"],
+  ["approval", "Approval"],
 ];
 
 function useRangeState() {
@@ -63,7 +62,7 @@ function Filters({ p, range, setRange }: { p: BatchFilterGridProps; range: Range
       <SelectField label="Status" testid="batch-status" value={p.filter.status} onChange={(v) => p.setFilter({ ...p.filter, status: v as any })} options={STATUS_OPTS} />
       <SelectField label="Review" testid="batch-review-filter" value={p.filter.review ?? "all"} onChange={(v) => p.setFilter({ ...p.filter, review: v as any })} options={REVIEW_OPTS} />
       <SelectField label="Sort by" testid="batch-sort" value={p.sort.by} onChange={(v) => p.setSort({ ...p.sort, by: v as any })} options={SORT_OPTS} />
-      <SelectField label="Order" testid="batch-dir" value={p.sort.dir} onChange={(v) => p.setSort({ ...p.sort, dir: v as any })} options={DIR_OPTS} />
+      <SelectField label="Order" testid="batch-dir" value={p.sort.dir} onChange={(v) => p.setSort({ ...p.sort, dir: v as any })} options={stateOrderOptions(p.sort.by)} />
     </>
   );
 }

@@ -3,6 +3,7 @@
 // toasts, the scan bridge, the boot/autosave effects and the derived lists.
 // Building it here keeps useSvgGen itself a five-line composition.
 
+import { isSelectionSort } from "../lib/statesort";
 import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
 import { checkedInView } from "../lib/reviewselect";
 import { providerLabel } from "../lib/svgconfig";
@@ -168,9 +169,10 @@ function useSvgPersist(model: SvgModel): void {
 
 /** The filtered/sorted view, its totals and the request count, derived only. */
 function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected" | "requests"> {
+  const sortChecks = isSelectionSort(model.sort) ? checked : undefined;
   const visible = useMemo(
-    () => withQueued(visibleRows(model.rows, model.filter, model.sort, model.order), model.queue),
-    [model.rows, model.filter, model.sort, model.order, model.queue],
+    () => withQueued(visibleRows(model.rows, model.filter, model.sort, { order: model.order, checked: sortChecks }), model.queue),
+    [model.rows, model.filter, model.sort, model.order, model.queue, sortChecks],
   );
   const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);

@@ -2,6 +2,8 @@
 
 See [invariants/selection.md](invariants/selection.md), [path invariants](invariants/paths.md), [selection selectors](../selectors/selection.md), [pair-file deep dive](topics/pair-files.md), [storage](STORAGE.md) and [test owners](TESTS.md).
 
+[Reversible selection/approval sorting](list-state-sorting.md) defines the new list groups and controls.
+
 ## Behaviour
 
 Selection V2 shared review rules:

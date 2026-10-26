@@ -3458,3 +3458,30 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
   Updated current run contract, invariant I-53, request-strip selector, source/
   test owners and router. The button is labelled Skip current request, not a
   misleading generic Cancel.
+
+
+## 2026-10-26 — reversible selection and approval sorting
+
+- User confirmed all FOUR review tabs (not Single sheets) and accepted metadata
+  as Upload approval. Added binary selected/not-selected and approved/not-approved
+  sorting with reversal: existing Sort+Order in Batch/Selection V2, four explicit
+  Sort options in SVG/Upload. Canonical checks (not active or processing mirrors),
+  all non-approved states grouped together, stable path ties, immutable inputs.
+- State sorting follows live checks/decisions/undo. Normal sorts preserve memoized
+  selection performance; SVG's old pin remains for old sorts only. Selection
+  auto-next uses the same pre-decision checked order as displayed. Existing
+  checks, active/anchors, hidden scope, versions, files and provider gates remain.
+- TDD: five old-sort/parser failures witnessed, then green. Added four real-panel
+  regressions for reversal/live changes, retained checks, Batch undo, Selection
+  next-pending and Upload accepted metadata using one confirmed fake send.
+  Pure/rowmodel/selection-response focused 100 tests/6 files PASS; all four existing
+  zero-selection-only-presentation checks PASS. Docs navigation 4 PASS; original
+  read budgets preserved by condensing repeated prose, not changing assertions.
+- Final verify:fast and verify at base 637d3a8: ALL LANES PASSED, each 3001 tests/
+  284 files; full native 30/5 PASS (3.9s). Coverage 95.45/90.11/98.29/98.32%, all
+  improve. Types, uncached lint (0 errors/20 existing warnings), changed quality
+  for 16 production files, whitespace and builds PASS. No dependencies, live
+  providers, threshold/harness changes or weakened assertions.
+- Canonical contract/selectors/routes/owners/tests updated. Plan and exact results:
+  docs/archive/2026-10-26-list-state-sorting/README.md. Logs outside Git under
+  /home/user/list-state-sorting/.

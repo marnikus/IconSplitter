@@ -17,3 +17,5 @@ Choose the row for your change, then open that source file. Part of the [owner m
 | All-tab completion audio | `src/ui/completionSound.ts`, `CompletionSoundControl.tsx`, `Workbench.tsx`; runner adapters in Batch/Selection/Sheets/SVG/Upload | [Activation, once-per-run terminal cues, mute, embedded recording and exclusions](../process-progress.md#completion-sound-on-every-tab) |
 
 * `ui/checkedrows.ts`, `ui/rowpresentation.ts` — [large-list selection presentation](../selection-performance.md): canonical snapshot projection, callback bridges and data invalidation.
+
+* `lib/statesort.ts`, `state/useSortChecks.ts` and tab sort/view modules — [reversible selection/approval sorting](../list-state-sorting.md).

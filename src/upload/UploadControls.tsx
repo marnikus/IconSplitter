@@ -8,6 +8,7 @@
 // No rule lives here — every value comes from the hook and every change goes
 // straight back to it.
 
+import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import type { KeySource } from "../lib/keyvault";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 import type { DirHandleLike } from "../lib/fs";
@@ -229,7 +230,7 @@ function FilterLine({ p }: { p: UploadControlsProps }) {
         options={[["all", "All metadata"], ["empty", "Empty"], ["pending", "Generating"], ["generated", "Generated"], ["invalid", "Invalid"], ["accepted", "Accepted"], ["interrupted", "Interrupted"]]}
         onChange={(v) => p.onFilter({ metadata: v as UploadListFilter["metadata"] })} />
       <Select label="Sort by" testid="upload-sort" value={p.sort}
-        options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"]]}
+        options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"], ...STATE_SORT_OPTIONS]}
         onChange={(v) => p.onSort(v as UploadSort)} />
       <UploadRowBadgeFilter filter={p.filter} catalog={p.badgeCatalog} onFilter={p.onFilter} onOpen={p.onOpenRowBadges} />
       <label className="svg-field">

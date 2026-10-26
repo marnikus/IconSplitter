@@ -1,3 +1,4 @@
+import type { StateSort } from "../lib/statesort";
 // types.ts — the "SVG to upload" tab's shared shapes (design §3.2/§4.2).
 // Kept in one file so the model, the row model, the actions and the UI all
 // speak the same language without importing each other.
@@ -82,7 +83,7 @@ export interface UploadRow {
 
 export type UploadStatusFilter = "all" | "processed" | "partial" | "failed" | "cancelled" | "stale" | "not-exported";
 export type UploadMetaFilter = "all" | "empty" | "pending" | "generated" | "invalid" | "accepted" | "interrupted";
-export type UploadSort = "name" | "status" | "metadata";
+export type UploadSort = StateSort | "name" | "status" | "metadata";
 
 export interface UploadListFilter {
   status: UploadStatusFilter;

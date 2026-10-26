@@ -4,6 +4,8 @@ Confirmed Requesty calls are the narrow RULE 20 exception. Image-source editing 
 
 **Detail pages:** [results, preview, cost, review](svg-generation-results.md) · [task prompts and batch regeneration](svg-generation-prompts.md).
 
+[Sort groups](list-state-sorting.md).
+
 ## Behaviour and request flow
 
 Generate SVG (adds to, never replaces, the rules above; its confirmed

@@ -57,3 +57,5 @@ Harness architecture and benchmark instructions: [test harness](../../TEST_HARNE
 All-tab audio: `completion_sound.test.ts`, `process_completion_sound.test.tsx`, `sheets_completion_sound.test.tsx` and real UI runner assertions listed in the [sound contract](../process-progress.md#completion-sound-on-every-tab).
 
 * [Large-list selection work, projection, invalidation and Chromium measurements](../selection-performance.md#verification-and-timing): `selection_response.test.tsx`, `checkedrows.test.tsx`, `rowpresentation.test.tsx`.
+
+* `list_state_sort.test.ts` and four real-panel regressions — [binary state grouping, reversal, persistence, live sorting and navigation](../list-state-sorting.md#source-and-test-owners).
