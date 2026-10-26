@@ -3594,3 +3594,28 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
   at statements/branches/functions/lines 95.54/90.23/98.32/98.37%.
 - Documentation only. No production/test/dependency/fixture changes, source SVG
   rewrites, changed guard/tolerance, library installation or implementation claim.
+
+## 2026-10-26 — Flag originals arrived; viewport diagnosis confirmed (docs only)
+
+- Availability follow-up to the initial research entry: remote 8324120 supplied
+  both requested flag SVGs while the first draft was being published. Merged
+  the user's fixture commit unchanged, including its additional root copy.
+  The earlier missing-file prerequisite is resolved; no re-upload is needed.
+- Original production prepare reproduces the exact shadow error on both files
+  with source-default+Shadow and factory-default+Shadow settings. Shadow-off
+  source-default AS-IS stays byte identical. No repair prototype was implemented.
+- Read-only analytic derivative-extrema diagnostics on actual normalized geometry
+  and existing bake/expand probe curves confirm a bounds false positive. Current
+  shipped minY -2.121/-0.580 versus tight represented paint +7.560711/+8.191972,
+  inside 224/240 viewports. Control Y -18/-15 is not a curve extremum.
+- Updated plan narrows the required fix to general tight curve/paint bounds and
+  consistent source-frame checks. No source path/viewBox rewrite, tolerance
+  increase, real-clipping bypass or Boolean library is needed for these flags.
+  True clipping support is separate and still refused. Preserve original hashes.
+- Retained hashes and raw measurements in the research document/JSON; no source,
+  test, dependency or fixture-byte changes by the agent. Temporary stdin research
+  diagnostics did not add scripts or production code to the repository.
+- Post-merge focused/docs 37/37; verify:fast and verify against 8324120 both
+  ALL LANES PASSED: 3066 tests/292 files each, native/performance 30/5. Types,
+  lint/quality/build/whitespace passed; coverage 95.54/90.23/98.32/98.37% unchanged.
+  These gates validate the current baseline, not an implemented automatic fix.

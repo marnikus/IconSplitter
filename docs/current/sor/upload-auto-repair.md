@@ -84,19 +84,21 @@ content retain their existing failures. Fully default/as-is exports remain byte
 identical. Corrections occur automatically in the shared preparation used by
 preview and SVG/JPEG/EPS export, with no repair dialog or provider request.
 
-## Planned root-viewport clipping repair — not implemented
+## Planned tight viewport-bounds fix — not implemented
 
-The reported waving-flag shadow warnings need a distinction between conservative
-Bézier hull overflow and actual viewport clipping. [Research and ordered repair
-plan](../../archive/2026-10-26-shadow-viewport-repair-plan/README.md) covers tight
-paint bounds first, then flattening supported actual viewport clipping into
-vector paint before placing the shadow. No blanket viewBox enlargement, source
-rewrite, warning suppression or raster fallback is proposed. Existing guard and
-2% minor-stroke policy remain unchanged until a tested repair is implemented.
+Both supplied waving flags are now available from fixture commit `8324120` and
+reproduce the shadow warning. Negative Bézier control Y values (−18/−15) inflate
+the conservative bounds, although measured represented paint starts at positive
+Y **7.560711/8.191972**, inside the 224/240 source frames. This is a bounds false
+positive, not demonstrated actual clipping. [Per-file evidence and ordered fix
+plan](../../archive/2026-10-26-shadow-viewport-repair-plan/README.md) specifies tight
+curve/paint classification, shared guard semantics and full export regression
+steps. No path rewrite, viewBox enlargement or clipping engine is needed for
+these examples. Genuine clipping refusals and 2% minor-stroke policy stay intact.
 
-The two named flag SVGs are **not present in this checkout**; only screenshots
-were attached. Their exact overflow and repair success remain unverified. Obtain
-the original files before implementation; no flag-specific fix is claimed.
+Research only: no fix is implemented or successful repaired export claimed.
+Original fixture bytes remain unchanged; real preview/export acceptance must
+follow before declaring the planned automatic correction complete.
 
 ## Real regression assets
 

@@ -1,300 +1,311 @@
-# Shadow + source viewport overflow — research and automatic-repair plan
+# Waving flags — false viewport-overflow warning: research and automatic-fix plan
 
-Date: 2026-10-26. Code baseline: `b32d1a3`.
-Status: **research/design only; implementation is NOT authorized in this change**.
-No production code, tests, dependency files or source SVGs are changed.
+Date: 2026-10-26. Production baseline: `b32d1a3`; supplied fixtures: `8324120`.
+Status: **research/design only — NO repair code implemented**.
 
-## 1. Request and available evidence
+## 1. Request, supplied files and availability timeline
 
-Reported preview error on two waving-flag icons:
+Reported error:
 
 > export preview unavailable — source paint extends outside its viewBox/viewport;
 > a shadow cannot preserve the original clipping
 
-Requested source paths, relative to the repository:
+Inputs:
 
 - `tests/assets/bug with SVG export expl temp/icon-waving-flag_AI_3_01.svg`
 - `tests/assets/bug with SVG export expl temp/icon-waving-flag_AI_5_04.svg`
+- Two screenshots showing original-source fallback and the unavailable note.
 
-**Neither file is present in this checkout.** A filesystem search under `/home/user`
-and the uploaded attachment directory found no matching flag SVGs. The directory
-currently contains the two earlier lightbulb fixtures and the snowflake fixture.
-The supplied attachments are screenshots (`image-1.png`, `image-2.png`), not SVG
-source bytes. They show the warning and the fallback artwork but cannot establish
-path coordinates, transforms, declared overflow, viewport size or exact settings.
+The flags were absent during the initial checkout investigation. While publishing
+that first draft, push detected remote commit **`8324120` — “svg new issue”**, which
+contained both requested files and an additional copy of the first flag at
+`tests/assets/icon-waving-flag_AI_3_01.svg`. The supplied commit was merged without
+replacing its files. **Both originals are now available and were examined.**
+The initial missing-file prerequisite is resolved; no re-upload is required.
 
-Therefore:
+Original SHA-256 hashes (the repair must preserve these):
 
-- The code path producing the warning is confirmed.
-- Bounds limitations and the current repair policy are confirmed by inspection.
-- **The exact cause/overflow amount for either named flag is not yet confirmed.**
-- No flag-specific successful repair, pixel comparison or export result is claimed.
-- Obtaining the two original SVGs is the first implementation prerequisite, not
-  something to replace with traced screenshots or invented path data.
+| File | SHA-256 |
+|---|---|
+| `icon-waving-flag_AI_3_01.svg` | `078e104b46057df33912ab4fbf65c8698fb8d2bc77fe075b20407326c8bb8785` |
+| `icon-waving-flag_AI_5_04.svg` | `fdf3f958c67da4875f53e9305230a072fbfa45329a9ee4b6bf7941ef5ffec4e9` |
 
-## 2. Confirmed cause of this warning
+This delivery changes documentation only. User-supplied fixture files were
+incorporated unchanged from their own commit. No production/test code, source
+coordinates, settings, guards, tolerances or dependencies are modified.
 
-### Call chain
+## 2. Confirmed per-file reproduction and root cause
+
+**Both warnings are bounds false positives in the current geometry pipeline.**
+The negative Y values are Bézier controls, not positions the curves necessarily
+reach. Neither example needs a larger source viewBox, path rewriting or an actual
+clipping operation to address this warning.
+
+### Inputs
+
+- Flag 3: viewBox `0 0 224 224`, fill none, black stroke width 1, round caps/joins.
+  Its first waving cubic includes control Y **−18**.
+- Flag 5: viewBox `0 0 240 240`, fill none, black stroke width 1, implicit default
+  cap/join semantics. Its first waving cubic includes control Y **−15**.
+- Both are simple paths plus a circle/ellipse, without source transforms or
+  authored clip paths in these supplied files.
+
+### Original production behavior, executed without replacing algorithms
+
+A temporary stdin-only diagnostic loaded original TypeScript modules through Vite
+SSR with Happy DOM. It called `visibleBounds`, `shippedBounds`, `repairStrokeFrame`
+and `prepareExportSvg` on the actual supplied source bytes. No diagnostic script,
+new test or prototype repair was added to the repository.
+
+Both files fail with the exact reported `unsupported` message using:
+
+1. Source/default visual settings (`AS_IS_SETTINGS`) plus Shadow enabled.
+2. Factory `DEFAULT_UPLOAD_SETTINGS` plus Shadow enabled.
+
+Source/default settings with Shadow disabled remain successful and byte-identical
+AS-IS. These are controlled reproductions, not a claim that every setting from the
+screenshots was captured.
+
+### Measured bounds
+
+A separate read-only calculation evaluated endpoint/derivative extrema of M/L/C/Z
+outlines, first for source geometry, then for a detached copy baked and outlined
+by the **existing** `bakeGeometry` / `expandStrokes` routines. Both probes had no
+bake veto and expanded two stroked shapes. This is tight measurement of the
+pipeline's represented vector curves, not a browser raster test or a deployed fix.
+
+| Measure (source coordinates) | Flag 3 | Flag 5 |
+|---|---:|---:|
+| Source frame | 224 × 224 | 240 × 240 |
+| Current geometry control-hull minY | −18 | −15 |
+| Current analytic paint minY | −18.5 | −16.003772 |
+| Current `shippedBounds` paint minY | −2.121 | −0.580 |
+| Tight source-curve minY | **8.060529** | **8.688296** |
+| Tight represented painted minY | **7.560711** | **8.191972** |
+| Tight represented painted minX | 32.5 | 30.5 |
+| Tight represented painted maxX | 189.500322 | 187.5 |
+| Tight represented painted maxY | 215.499894 | 218.027135 |
+| Existing repaired frame | unchanged | unchanged |
+| Existing overflow result | true | true |
+
+Every tight painted edge is inside its source frame. These are not tiny tolerance
+violations: the true represented top edges have over seven/eight source units of
+space. There is **no justification to expand the frame or reveal hidden artwork
+for these files**. Original DOMs were unchanged during both probes; source bytes
+and hashes remain unchanged.
+
+Raw evidence: [measurements.json](measurements.json). Diagnostic logs outside Git:
+`/home/user/viewport-research/flags-probe.json` and `flags-tight-probe.json`.
+
+### Why current code rejects them
 
 1. `upload/exportpreview.ts::buildPreview` calls the same
-   `lib/upload/prepare.ts::prepareExportSvg` used by actual export.
-2. Preparation captures the source viewBox, or width/height frame, before cleaning
-   removes root pixel dimensions. Fully AS-IS processing has its own early path.
-3. With effective `shadowEnabled = true`, `shadowSourceFrame` calls
-   `viewrepair.ts::repairStrokeFrame`.
-4. Existing repair permits only small stroke/cap overshoot: visible geometry
-   without stroke reach must be inside the frame within **0.002 source units**,
-   and painted overflow must fit within **2% of the smaller frame dimension**.
-5. `place.ts::overflowsSourceFrame` measures paint again, comparing all four
-   edges against the repaired/original frame, with **0.002** tolerance.
-6. Remaining overflow returns `unsupported` with the reported message.
-7. Preview falls back to original source text and displays the error note. That
-   displayed flag is **not proof of a successful export preview**. Export uses
-   the same guard; this is not merely a toast or a performance/cache problem.
+   `lib/upload/prepare.ts::prepareExportSvg` as real export.
+2. Preparation captures the source viewBox (or width/height frame) before cleaning.
+3. With effective Shadow enabled, `shadowSourceFrame` calls `repairStrokeFrame`.
+4. `geom/path.ts` uses Bézier **control-point hulls**. `geom/bounds.ts::shapeBounds`
+   transforms those hulls and adds stroke reach. A hull is a conservative envelope,
+   not the tight bounds of the curve.
+5. Existing minor repair requires geometry inside the frame within **0.002 source
+   units**, and paint overshoot within **2% of the smaller frame dimension**.
+   The negative control hull fails that geometry precondition for both flags.
+6. `shippedBounds` attempts actual baking/pen outlining but measures those remaining
+   curve outlines through the same hull-based bounds traversal (or falls back to
+   conservative analytic geometry when outlining cannot supply a probe). For these
+   flags it still returns negative top bounds despite the represented paint being
+   inside. “Outline first” alone does not guarantee tight curve bounds.
+7. `overflowsSourceFrame` sees the false negative minY and returns `unsupported`.
+8. Preview shows original source plus the warning. That image is **not** proof that
+   the prepared export succeeded. This is not a toast/cache/performance failure.
 
-The safeguard has a real purpose. Adding a shadow can extend the source's layout
-frame; simply expanding that frame may expose off-frame paths or parts of strokes
-that the original viewport hid. Valid SVG can intentionally contain such geometry.
-The warning does **not**, by itself, prove that the source file is malformed.
+The safety invariant is valid; its bounds evidence is too conservative for this
+classification. Do not remove that invariant or treat Bézier controls as painted
+vertices. Valid SVG can also contain genuinely clipped geometry; that is a
+separate case, not the cause demonstrated by these two files.
 
-### A second confirmed issue to distinguish before repairing geometry
+## 3. Recommended automatic fix — focused scope
 
-`geom/path.ts` explicitly computes Bézier **control-point hulls**, not tight curve
-extrema. `geom/bounds.ts::shapeBounds` transforms that hull and adds conservative
-stroke reach. `shippedBounds` attempts bake + actual stroke outlining, but then
-measures the result using the same bounds traversal; it also falls back to the
-analytic/conservative path if baking/expansion cannot provide the probe.
-Outlining does not make a remaining filled curve's control hull a tight bound.
-
-A control point can be outside a frame while the actual curve stays inside.
-Analytic illustration, **not data from either missing flag**: a cubic with
-P0=(10,50), P1=(10,-10), P2=(90,-10), P3=(90,50) has
-`y(t) = 50 - 180t + 180t²`, whose minimum is **5** at t=0.5. The control hull
-minimum is **-10**. An otherwise in-frame filled contour containing that cubic
-can therefore be conservatively classified outside a 0…100 frame even though
-its actual curve is inside. This illustration has not been added as runnable
-code in this documentation-only change.
-
-Wavy artwork makes this a relevant hypothesis, **not a diagnosis of the flags**.
-First distinguish false-positive hull overflow, a small actual pen overshoot,
-viewport-mapping differences and genuinely clipped paint. Do not jump directly
-to changing source coordinates or adding a clipping engine.
-
-## 3. Automatic repair policy
-
-The objective is to export the artwork that was visible under the approved
-source-rendering contract, with a correctly positioned vector shadow, without
-revealing hidden geometry. Repair the **export copy**, never overwrite the
-approved source, its version history or its original hash. No confirmation popup,
-provider request, special filenames, coordinates or icon-type exceptions.
+**Introduce trustworthy tight curve/paint measurement for source-viewport
+classification; keep artwork and original files unchanged.**
 
 | Classification | Automatic action |
 |---|---|
-| Conservative bound exceeds frame, trustworthy tight paint stays inside | Correct the viewport classification; do not change artwork or frame |
-| Proven small stroke-only overflow covered by existing policy | Keep the existing bounded in-memory stroke-frame repair; do not increase 2% |
-| Genuine root-viewport clipping, representable by supported vector geometry | Flatten the clipping into the icon's painted vectors; then add/fit the shadow |
-| Explicit visible overflow supported by the source-rendering contract | Preserve that visible paint; do not invent a clip merely because a viewBox exists |
-| Unknown mapping, unsupported compositing/paint, failed intersection or invalid numeric geometry | Preserve the named refusal; no silent guess, hidden crop, raster fallback or fake success |
+| Hull overflows but tight painted bounds are inside | Continue normal preparation, original frame and artwork unchanged |
+| Tight geometry inside, actual minor stroke/cap overflow within existing policy | Keep bounded in-memory minor stroke-frame repair using tight measurements |
+| Proven true geometry outside / deliberately large clipped pen | Retain current named refusal; do not reveal previously hidden paint |
+| Unsupported/uncertain measurement | Keep an honest unsupported result; do not substitute “empty” or success |
 
-A viewBox is a coordinate mapping, **not universally the viewport clip itself**.
-Capture root width/height, viewBox, `preserveAspectRatio` and applicable root
-`overflow` before cleaning. Match the canonical source/reference renderer rather
-than assuming arbitrary embedding CSS. `meet`/letterboxing, `slice`, `none`,
-non-origin frames and size-only SVGs require explicit mapping tests. Unsupported
-nested viewports, authored clip paths/masks and root transforms do not become
-supported accidentally through this repair. Where the source rendering contract
-cannot determine clipping unambiguously, report that limitation rather than
-claiming visual preservation.
+The fix applies to **any future icon with the same curve-bound issue**, not flag
+filenames, specific negative numbers or particular shapes. No manual repair popup,
+provider request, control removal or permanent stroke expansion in the source.
+The user’s chosen cap/join/width/colour and source/approved-version identity stay.
 
-## 4. Ordered implementation steps (future work)
+A viewBox is a coordinate mapping, not universally the viewport clip itself.
+The focused fix must preserve the application's existing source-frame contract;
+root overflow, width/height, `preserveAspectRatio`, non-origin frames and embedding
+semantics must not be casually reinterpreted. Broader source clipping semantics
+are separate from correcting these demonstrably wrong bounds.
 
-### Step 1 — obtain originals and pin the reproduction
+## 4. Ordered implementation steps — future work, no code now
 
-- Add both exact original SVGs as immutable fixtures at the requested paths;
-  record hashes and retain their bytes unchanged.
-- Capture effective settings, especially Shadow, padding/artboard mode, stroke
-  width/colour/caps and Expand strokes. Reproduce using actual `prepareExportSvg`
-  and the full Upload preview, not only a standalone SVG viewer.
-- Record per-edge original frame, conservative geometry/paint bounds, tight bounds
-  where available, overflow distances and which existing repair precondition fails.
-  Record measurement provenance: outlined geometry versus conservative fallback.
-- Confirm whether each flag is a bounds false positive, minor pen overflow,
-  actual clipping or a viewport mapping case. If originals have additional
-  unsupported features, document those separately; screenshots cannot rule them out.
+### Step 1 — lock actual-file failures and source preservation (prerequisite resolved)
 
-### Step 2 — tighten the decision before changing the picture
+- Use both supplied originals and the hashes above, without editing their bytes.
+- Add failing tests around actual `prepareExportSvg` and the Upload preview:
+  both must currently reproduce this exact unsupported message with Shadow on.
+- Pin both tested settings families above, then the precise reported UI settings
+  if available. Do not claim the latter were inferred from screenshots.
+- Pin source curve extrema and inside/outside classification independently of the
+  production hull algorithm. Tests that merely compare two callers of the same
+  wrong bound function would not prove the fix.
+- Keep shadow-off AS-IS bytes identical; record both source hashes before/after.
 
-- Add failing regressions for an in-frame Bézier with out-of-frame controls,
-  a curve that really exits the frame, extrema near a boundary and degenerate
-  derivatives. Include C/S/Q/T, arcs, closing segments and nested affine transforms.
-- Introduce a focused viewport-measurement helper, initially without globally
-  changing conservative placement/EPS bounds. Evaluate endpoints and derivative
-  roots in [0,1] **after mapping into the comparison coordinate system**.
-- For cubic/quadratic coordinates use analytic extrema; for arcs/ellipses use
-  transformed extrema or the validated represented-curve model with an explicit
-  approximation error budget. Stroke bounds must use the real supported pen
-  outline (caps, joins, miters, dashes, anisotropy and non-scaling pens included),
-  then tight bounds of those represented curves—not their control polygon alone.
-- Keep conservative bounds as a quick containment filter, not conclusive evidence
-  of actual overflow. Distinguish unsupported/uncertain measurement from empty
-  geometry. Do not fix numerical uncertainty by increasing the current tolerance.
-- If this resolves both originals, they need no source geometry rewrite. Retain
-  the actual-clipping safety cases and continue to implement only proven needs.
+### Step 2 — implement reusable tight represented-curve bounds
 
-### Step 3 — support genuine rectangular viewport clipping safely
+- Proposed owner: a focused helper in `lib/upload/geom/`, consuming the existing
+  outline/segment model. Do not grow `prepare.ts` into a geometry implementation.
+- For each supported segment include endpoints plus interior extrema. For cubic
+  and quadratic coordinates, solve derivative roots and keep valid roots in [0,1].
+  Support implicit/smooth/relative commands by reusing the existing normalization
+  for C/S/Q/T and M/L/H/V/A/Z rather than creating another lenient path parser.
+- Transform curves into the comparison coordinate system **before** taking extrema;
+  transforming a precomputed local bounding box is not tight under rotation/shear.
+  Cover degenerate/linear derivatives, repeated roots, close commands, isolated
+  moves and numeric precision. Nonfinite/malformed geometry must fail by name.
+- Arcs/ellipses need transformed extrema or the validated represented-cubic model
+  with explicit error accounting. Do not label cubic arc approximation or offset
+  approximation mathematically exact source-SVG paint without validation.
+- Retain conservative hull bounds as cheap containment filters where useful. A
+  hull wholly inside is safe; a hull crossing a border is **not proof** of overflow.
+  Compute tight bounds only for ambiguous/relevant candidates where practical.
+- Add synthetic in-frame curves with out-of-frame controls **and** true exiting
+  curves. Include transforms, compound subpaths and all four viewport edges.
 
-For a supported source that really is clipped, preserve that clipping in vector
-geometry before extending layout for its shadow:
+### Step 3 — measure painted regions, not just centrelines
 
-1. Resolve the original clip rectangle in the same coordinate space as the icon.
-2. Classify paint as wholly inside, wholly outside, or crossing. Inside geometry
-   stays unchanged/editable; fully outside paint contributes nothing to the icon
-   or its shadow; crossing paint needs actual curve/region intersection.
-3. Intersect **painted regions**, not just centreline endpoints. A trimmed stroke
-   centreline would create new caps and different joins. Outline only affected
-   strokes in the correct pen space and intersect the filled outline with the
-   viewport rectangle. Preserve fill then stroke, fill rules, compound holes,
-   path order and compositing. Do not union independent translucent paint layers.
-4. Apply the original viewport restriction to the **icon only**. The new shadow,
-   artboard background, size guide and badge are not clipped to that old frame.
-5. Derive icon/shadow bounds from the resulting visible paint and run existing
-   uniform placement, source margins, pinned/MP fitting and final containment.
+- Build a detached measurement probe using current bake/outline semantics, then
+  measure its represented fill curves tightly. Respect cap, join, miter, dash,
+  visibility, inherited opacity, non-uniform and non-scaling stroke behavior.
+- Do not substitute centreline-only bounds for paint: a round cap can really cross
+  an edge while the centreline stays inside. Do not use a fixed half-width growth
+  for every transformed/mitered pen when the actual outline is available.
+- Keep source-width and explicit-final-pixel width semantics distinct. A preflight
+  source-frame classification cannot permanently outline the icon and disable
+  later stroke controls. Placement still rebuilds from the original for each
+  settings change; existing anisotropic repair stays in its correct pen space.
+- Expose measurement provenance: tight supported outline, conservative fallback,
+  empty or unsupported. If expansion refuses, do not silently promote its
+  conservative fallback to trustworthy tight paint or pretend no paint exists.
+- Preserve source DOM and compositing; measurement must never change the source
+  document or the document subsequently sent to export.
 
-**Integration order is essential:** configured stroke width is in final artboard
-pixels. Do not outline/clip it once in source space and later pretend the width
-control still works. For each placement candidate, bake/restyle using existing
-stroke semantics, map the original viewport into that candidate's coordinates,
-outline/intersect affected paint, measure the clipped icon, then append the shadow
-and measure the composite. Source-width, anisotropic and non-scaling pens must
-retain their current coordinate-space rules. Every settings change rebuilds from
-the original SVG, not a previously outlined result. Avoid restroking newly created
-clipping edges through inherited/global stroke properties.
+### Step 4 — use consistent trustworthy bounds throughout the shadow decision
 
-`geom/ops.ts`/`outline.ts` provide an M/L/C/Z representation, **not a general
-curve-region Boolean intersection engine**. A rectangle-aware, curve-preserving
-intersection capability or vetted browser-compatible geometry dependency must
-be proven before this branch is called implemented. Demonstrate winding/holes,
-tangent contacts, disjoint components, degenerates and numeric determinism. Plain
-polyline clipping of control points, canvas raster masks, retained `<clipPath>`
-wrappers or an assumed EPS clipping shortcut are not acceptable substitutes.
-No dependency is selected or installed in this research change. A library decision
-must include licensing, offline/single-HTML bundling, curve precision, resource
-limits and test/runtime support; WASM or a server is not assumed available.
+- Primary integration owners: `prepare.ts::shadowSourceFrame`,
+  `viewrepair.ts::repairStrokeFrame`, `place.ts::overflowsSourceFrame` and the new
+  focused viewport measurement API. Audit all callers before changing signatures.
+- Both the minor-repair geometry/paint check **and** the final overflow veto must
+  agree on measurement semantics. Tight preflight followed by the old conservative
+  hull veto would simply reintroduce this warning.
+- For these flags, accept tight contained paint without changing the source frame.
+  Do not extend to a false negative hull minY as a workaround.
+- For actual minor stroke-only overflow, preserve existing **2%** policy and
+  **0.002** precision. The source frame may extend only under that existing policy.
+- Keep refusal for actual off-frame geometry, deliberately clipped wide strokes,
+  unsupported clips/masks/filters/patterns, unsupported paints and other vetoes.
+  Do not globally turn `overflowsSourceFrame` into `false` or catch-and-ignore it.
+- Avoid globally replacing conservative placement/EPS bounds in the first change.
+  The source-frame check is the proven fault. `placeShadowFrame` and its candidate
+  measurement still need regression coverage: passing the preflight alone does
+  not prove final fit, source margins, shadow positioning or export correctness.
 
-### Step 4 — preserve paint and refuse unrepresentable cases atomically
+### Step 5 — share real output and verify the complete pipeline
 
-- Plan replacements on detached copies; commit only after all affected layers
-  validate. A failed repair leaves the source and existing committed outputs intact.
-- Preserve inherited visibility, hidden/zero-opacity subtree behavior, fill versus
-  stroke opacity, per-element/group opacity and paint order. Use the existing
-  repair compositing rules, rather than duplicating opacity on split fill/stroke.
-- Clipping changes object bounds, which can change `objectBoundingBox` gradients.
-  Freeze/retarget supported gradient coordinates to the pre-intersection paint
-  space so clipping does not stretch the gradient. EPS representability must be
-  verified separately. Keep existing named refusals for unsupported paints,
-  gradients, dash/transform combinations, masks, filters, patterns and group
-  compositing; do not silently flatten them incorrectly.
-- Retain vector curves/regions through optimization and clean export. Unsupported
-  general clips/masks must not bypass `bake.ts` coordinate-definition vetoes.
+- Preview and SVG/JPEG/EPS must consume the same preparation. No preview-only fix,
+  source rewrite, raster fallback, ad hoc `<clipPath>` wrapper or different export
+  image. Source/approved version and original source hash remain unchanged.
+- Both flags: Shadow on/off; source/content/pinned/MP artboards; null/explicit
+  padding; source/final stroke widths; rounded/butt/square and supported custom
+  endpoints; Expand strokes on/off. Test nested/reflected/anisotropic/non-scaling
+  variants without breaking earlier snowflake/bulb/leaf repairs.
+- Test near-edge curves, large negative controls with wholly in-frame paint,
+  actual exits, wide pens, genuine off-frame shapes, size-only/non-origin frames,
+  hidden/zero-opacity outliers and explicit unsupported clipping/compositing.
+- Retain existing real-clipping refusal tests and all old minor-repair limits.
+  They need **no expected-success migration** for this focused bounds correction.
+  Add positive flag tests; do not delete safety cases or loosen their assertions.
+- Validate final painted icon plus shadow is inside its final artboard within the
+  existing precision contract, preserves source margins appropriately and doesn't
+  reveal previously hidden geometry. Repeated preparation must be deterministic.
+- Run prepare → optimize → clean → SVG/JPEG/vector EPS, actual export commit,
+  record/readback, metadata and output-flag tests. Preserve genuine vector
+  gradients and format-specific honest failures. Use the existing real export
+  fixtures too, not just these new small SVGs.
+- Compare actual browser/native raster output against the source/reference under
+  the same style and viewport, excluding the newly added shadow. Combine bounded
+  antialias tolerance with analytic/region assertions. A similarity score alone
+  cannot authorize loss of a small feature or exposure of unseen geometry.
+- Review preview cache/preparation revisioning and compatibility of committed
+  repair diagnostics. Unchanged source/settings must not accidentally reuse a
+  failed preview after preparation changes. Do not log full SVGs or private inputs.
 
-### Step 5 — share preparation and make repair traceable
+### Step 6 — performance, documentation and release gates
 
-- Main integration owners: `prepare.ts`, `viewrepair.ts`, viewport-bound helper,
-  `geom/path.ts`/`outline.ts`/stroke measurement and `place.ts` candidate staging.
-  Proposed new geometry/viewport-repair helpers must follow existing lib ownership
-  and quality limits rather than growing `prepare.ts` into a monolith.
-- Preview, SVG, JPEG raster input and vector EPS all consume the same repaired
-  prepared document. No preview-only fix or format-specific artwork divergence.
-- Reuse the existing non-uniform-stroke repair; do not regress editable unaffected
-  shapes, selected endpoints, exact final widths or previous bulb/leaf repairs.
-- Add concise repair mode/revision/counts to preparation/export diagnostics using
-  an explicitly reviewed backward-compatible record shape. Keep original source
-  hashes; do not log full SVG, prompts or private content. Refresh preview cache
-  versioning for changed preparation and verify failed/partial exports can rerun;
-  review committed-package invalidation rather than assuming unchanged settings
-  imply identical output after a repair algorithm change.
-- Existing full AS-IS export stays byte identical when no new processing is
-  requested. Do not sneak an automatic source rewrite into the fast path.
-- Successful supported repair should show a valid prepared preview, not the old
-  unavailable note. Genuine unsupported cases keep a precise reason. Do not hide
-  the warning while still exporting the wrong picture.
+- Reuse one trustworthy source measurement per preparation where safe; don't
+  repeat full outline work in both guard stages. Use cheap contained-hull paths
+  and complete source/style/revision keys. No cross-source cached success.
+- Bound curve-root/outline work and preserve the recent Upload warm-gesture,
+  single-row projection and bulk-map budgets. Measure actual complex-icon tab
+  behavior before any browser latency claim; Node diagnostics are not paint time.
+- Run new failing-then-green tests; unchanged viewport/shadow/stroke/fit/preview/
+  export/format tests; types, lint, changed quality, docs, `verify:fast`, `verify`.
+  Keep all native alarms, source scope, isolation and coverage thresholds intact.
+- Update current automatic-repair/geometry/export contracts and source/test owners;
+  append measured evidence to the quality ledger without reading it; commit/push
+  only approved implementation scope. Every production function must meet limits.
+- Completion requires both actual flag previews and real supported exports to pass,
+  no unavailable note for this false-positive class, unchanged originals and
+  preserved real-clipping refusals. **That outcome is not yet claimed.**
 
-### Step 6 — verify actual appearance and all outputs
+## 5. Separate future feature — genuine viewport clipping (not needed here)
 
-Required regressions, written failing before implementation:
+If a different source truly paints outside its viewport, changing measurement
+cannot safely reveal that paint. An optional future capability could intersect
+supported painted vector regions with the original viewport, then add the shadow
+outside that old restriction. That is a separate feature requiring a proven
+curve-region Boolean engine, paint/compositing/gradient preservation and correct
+candidate-space pen handling; the current outline model is not such an engine.
 
-- Both exact flag SVGs: settings from the report, then Shadow on/off; source/
-  content/pinned/MP artboards; null/explicit padding; source/final widths; cap/join
-  choices; Expand strokes on/off; anisotropic/reflected/nested transforms.
-- False-positive control hulls versus true exits; near-edge and >2% cases;
-  deliberately clipped wide pens; far-off-frame objects; partial/multiple crossings;
-  compound holes and winding; non-origin, width/height-only, viewport aspect modes.
-- Hidden shapes, visibility overrides, opacity, inherited paints, dashes and
-  representable gradients; empty or fully clipped icons; malformed/nonfinite or
-  unrepresentable data must fail honestly rather than look like a successful icon.
-- Render equivalence against the original's **defined viewport/clip**, excluding
-  the newly requested shadow. Use actual browser/native raster rendering and an
-  explicitly bounded antialias tolerance plus geometric assertions. Image
-  similarity alone cannot authorize loss of a small feature or exposure of hidden
-  geometry. Source-with-settings references must use the same pen/styling policy.
-- Validate all final artwork plus shadow is inside the final artboard within the
-  unchanged precision contract. Validate no hidden/out-of-source paint was revealed.
-- Run real SVG → optimize → clean → SVG/JPEG/vector EPS, record/readback and metadata
-  checks. EPS is not allowed to rasterize artwork or rely on a separate app. Use
-  the existing real export test assets too; local readback is not stock ingestion
-  proof. Unsupported EPS compositing stays an honest partial-output result.
-- Repeated preparation is deterministic, original hashes/bytes stay unchanged,
-  preview equals the actual prepared export, toggling settings does not accumulate
-  outlines, and batch failure isolation/cancellation/undo/controls remain intact.
+Do not build this machinery merely to resolve these flags: their tight paint is
+already inside. Do not introduce a library, raster mask, arbitrary source crop,
+control-point polygon clipping or retained clip wrapper as a quick workaround.
+Current general clips/masks/filters/patterns/unknown viewport semantics remain
+honest refusals. No Boolean dependency is selected or installed by this plan.
 
-Existing `upload_shadow_geometry.test.ts` includes a refusal-based test to prevent
-revealing an out-of-frame rectangle. Do **not** simply delete it or flip `false`
-to `true`. For a newly supported clipped case, replace refusal-as-proxy with
-stronger visible-region/output assertions and retain explicit unsupported-refusal
-cases; document that expected-behavior migration. Existing `repairStrokeFrame`
-helper limits and its negative tests can remain unchanged. No harness isolation,
-assertion strength, native alarm, source scope or coverage threshold may weaken.
+## 6. Verification of the research delivery
 
-### Step 7 — bound work and release only after gates pass
+Existing real production tests ran unchanged: viewport repair **5/5**, shadow
+geometry **9/9**, stroke repair **19/19** — **33 tests / 3 files passed**. Docs
+navigation **4/4** and whitespace passed. Initial `verify:fast` / `verify` against
+`b32d1a3` passed all lanes: **3,066 tests / 292 files** each; full uninstrumented
+native/performance **30 / 5**; types/lint/quality/build passed. Coverage unchanged:
+statements/branches/functions/lines **95.54 / 90.23 / 98.32 / 98.37%**.
 
-- Cheap inside/outside tests first; intersect crossing regions only. Bound path
-  complexity, Boolean work, placement probes and memory. No unbounded retries,
-  arbitrary point dropping or silent low-resolution fallback. Cache only with
-  complete source/viewport/style/revision keys; no cross-source result leakage.
-- Probe placement cost with both supplied flags and a realistic multi-icon Upload
-  tab. Preserve the recent boot/summary/map/preview response budgets. Do not claim
-  a browser speedup from Node timings or a clipping repair from synthetic assets.
-- Run focused new tests and existing viewport/shadow/stroke/fit/live-preview/export
-  tests, types, lint, changed quality, docs, `verify:fast` and `verify`. Preserve
-  original tests/assets and all format acceptance gates.
-- Update current repair/geometry/export owner contracts and diagnostics; append
-  measured verification to the quality ledger without reading it. Commit/push
-  only the approved implemented scope. Do not declare both flag failures fixed
-  until exact-file preview and real exports pass with unchanged originals.
+After the supplied-file merge, actual-file diagnostics reproduced both failures
+and measured the tight bounds above without modifying source or adding code.
+Final post-merge focused/docs checks passed **37/37**. Both aggregate commands
+against supplied-fixture commit `8324120` again reported **ALL LANES PASSED**:
+`verify:fast` ran **3,066 / 292** (coverage lane 83.6 s); `verify` ran
+**3,066 / 292** (87.2 s) plus native/performance **30 / 5** (3.3 s). Types,
+lint, changed quality, build and whitespace passed; coverage remained unchanged.
+Source hashes were rechecked and still match. Logs: `post-merge-focused.log`,
+`post-merge-verify-fast.log`, `post-merge-verify-full.log` under the directory below.
+These checks establish research/current-baseline behavior, **not successful
+execution of a future fix**.
 
-## 5. Work completed now / verification
+Logs: `/home/user/viewport-research/` (not committed build/log artifacts). Current
+contract entry: [automatic repairs](../../current/sor/upload-auto-repair.md).
 
-Research only. Existing real production tests ran unchanged:
-
-- `tests/upload_viewrepair.test.ts`: **5/5 passed**.
-- `tests/upload_shadow_geometry.test.ts`: **9/9 passed**.
-- `tests/upload_stroke_repair.test.ts`: **19/19 passed**.
-- Total **33 tests / 3 files passed**. These confirm today's guard/repair contracts;
-  they do not validate missing flag files or a not-yet-implemented repair.
-
-Focused log: `/home/user/viewport-research/focused.log` (not a committed artifact).
-Current contract entry: [automatic repairs](../../current/sor/upload-auto-repair.md).
-Documentation navigation: **4/4 passed**; whitespace passed. Both
-`verify:fast -- --base b32d1a3` and `verify -- --base b32d1a3` completed with
-**ALL LANES PASSED**: each ran **3,066 tests / 292 files**, and the full gate's
-uninstrumented native/performance lane passed **30 tests / 5 files**. Types,
-lint, quality and build passed. Coverage stayed **95.54 / 90.23 / 98.32 / 98.37%**
-(statements/branches/functions/lines). Changed-production quality correctly found
-no production changes. Logs: `/home/user/viewport-research/verify-fast.log` and
-`verify-full.log`. These gates validate the unchanged current implementation and
-documentation, **not the proposed future repair**. No new code/tests/assets,
-dependency changes, generated build outputs or weakened gates are committed.
-
-**Next action:** obtain both actual SVG files, then execute Step 1 before writing
-repair code. This delivery documents the solution and ordered work; it makes no
-production repair or per-file success claim.
+**Next action:** implement the focused tight-bounds repair only after approval to
+write code. Original files are present; the root cause is reproduced; the proposed
+fix is general and does not require changing their authored paths or viewport.
