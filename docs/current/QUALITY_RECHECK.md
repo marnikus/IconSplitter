@@ -3514,3 +3514,27 @@ isolation/dependency/storage-schema changes or generated artifacts committed.
   import scope, TDD and precise gate evidence:
   docs/archive/2026-10-26-import-selection-performance/README.md.
   Logs outside Git: /home/user/perf-import/.
+
+## 2026-10-26 — SVG to upload response research (baseline 01e08142)
+
+- Research/design only: no production behavior or package manifest/lock changes.
+  Full-panel fixtures use real UploadPanel/history/discovery/reducers/previews and
+  original download/settings algorithms; no provider calls or substituted geometry.
+- Added 7 diagnostic tests: 100/1,000 rows with zero/sparse/full persisted pins,
+  plus isolated real override-map reducer at 100/1,000/2,000 keys. Raw single-run
+  evidence and limitations: docs/archive/2026-10-26-upload-response-research/.
+- Confirmed repeated boot settings loads and panel summary invalidation on warm
+  gestures, triple selected effective-settings derivation on settings-open, and
+  quadratic override-map copying. Diagnostic 1,000-key patch/reset: 231.719 /
+  1233.745 ms with zero rows. These are not browser timings or a shipped speedup.
+- Current proposed response redesign and owners routed from Upload docs; existing
+  controls/selectors/contracts remain unchanged. Browser and cold geometry latency
+  remain unmeasured; production implementation is still pending.
+- Focused diagnostics 7/7; Upload UI 84/84; docs 4/4; types/lint/whitespace passed
+  (20 existing lint warnings); changed-production quality found no source changes.
+- Final verify:fast and verify at 01e08142: ALL LANES PASSED, each 3042 tests /
+  289 files; full native/perf lane 30 tests / 5 files passed. Coverage unchanged:
+  statements/branches/functions/lines 95.52/90.21/98.31/98.37%.
+- Earlier fast attempts failed the existing transient Metadata ready toast wait;
+  unchanged focused/full/final-fast checks passed. Timing-sensitive check remains
+  noted, not claimed fixed. No assertions, timeouts, gates or isolation weakened.

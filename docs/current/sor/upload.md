@@ -96,3 +96,9 @@ opt-in class as Generate SVG → Requesty; design
 Metadata and export use the app-wide [shared progress header](process-progress.md), visible across tab switches with real counts and retained terminal summaries.
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](upload-file-metadata.md).
+
+## Remaining response work
+
+Full-tab measurements and the **proposed, not implemented** Upload-specific
+[response redesign](upload-response.md) distinguish warm orchestration, quadratic
+local settings updates and unmeasured cold preview work.

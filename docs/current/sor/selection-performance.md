@@ -92,3 +92,7 @@ current sorting and SVG work; [integration evidence](../../archive/2026-10-26-im
 The source plan’s serialization figures are historical Node measurements, **not**
 a new browser latency claim. The updated browser harness records real history;
 its end-to-end comparison remains unmeasured in this integration.
+
+Upload still has work outside the shared list boundary: see the
+[Upload-specific response research/redesign](upload-response.md). Its diagnostic
+tests exercise the full panel; they are not a new browser speedup claim.

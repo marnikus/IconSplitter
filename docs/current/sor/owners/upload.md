@@ -43,3 +43,7 @@ Format selection, probes, planner and record delivery: [formats](../upload-forma
 Named export-default snapshots: `lib/upload/settingspresets.ts`,
 `upload/settingspresetstore.ts`, `settingspresetsmodel.ts`, `UploadSettingsPresets.tsx`.
 [Preset contract and tests](../upload-settings-presets.md).
+
+Full-panel and override-map response diagnostics: `tests/upload_response_research.test.tsx`,
+`tests/upload_response_reducer_research.test.ts`;
+[proposed redesign and phase owners](../upload-response.md). No production change yet.
