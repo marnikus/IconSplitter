@@ -4,6 +4,7 @@
 // Building it here keeps useSvgGen itself a five-line composition.
 
 import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
+import { checkedInView } from "../lib/reviewselect";
 import { providerLabel } from "../lib/svgconfig";
 import { SCAN_IDLE } from "../lib/scanseq";
 import { requestCount } from "../lib/svgbatch";
@@ -173,7 +174,7 @@ function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" 
   );
   const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
-  const affected = useMemo(() => visible.filter((r) => checked.includes(r.source.id)).map((r) => r.source.id), [visible, checked]);
+  const affected = useMemo(() => checkedInView(visible.map((r) => r.source.id), checked), [visible, checked]);
   // The same size the confirmation and the runner use — shown before any send.
   // The effort tier is deliberately absent: it never shrinks the batch.
   const requests = useMemo(

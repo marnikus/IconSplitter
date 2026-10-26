@@ -9,3 +9,5 @@ The shell and session are shared by every tab. [Global history and undo](topics/
 The shell has five tabs; the original Selection tab is removed. A session saved
 on that old tab opens Selection V2, retaining valid review and checked state.
 The shared review helpers and persistent handle/sidecar keys remain compatible.
+
+[Large-list selection performance](selection-performance.md) owns the indexed checked-row projection, presentation invalidation and reproducible Chromium response benchmarks. Selection gestures/history remain unchanged.

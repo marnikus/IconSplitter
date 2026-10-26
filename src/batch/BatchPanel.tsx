@@ -60,12 +60,16 @@ function usePreviewSetup(v: View, onReviewed: (relPath: string, count: number) =
 
 /** I-68: a stored preview is stale when it was rendered under other settings. */
 function useRowStale(v: View, preview: Preview) {
+  const rows = v.core.s.rows;
+  const byPath = useMemo(() => new Map(rows.map((r) => [r.relPath, r])), [rows]);
+  const entries = preview.previews;
+  const split = v.core.s.preset.split;
+  const merges = v.rowMerges;
   return useCallback((relPath: string) => {
-    const e = preview.previews.get(relPath);
+    const e = entries.get(relPath);
     if (!e) return false;
-    const row = v.core.s.rows.find((r) => r.relPath === relPath);
-    return isStaleEntry(e, expectedKeyFor(row, v.core.s.preset.split, v.rowMerges));
-  }, [v, preview]);
+    return isStaleEntry(e, expectedKeyFor(byPath.get(relPath), split, merges));
+  }, [entries, byPath, split, merges]);
 }
 
 export default function BatchPanel({ active = true }: { active?: boolean }) {

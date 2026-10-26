@@ -1,7 +1,9 @@
 // ScanTable.tsx — Batch folders list + review (approved/declined/warning) + preview
 // 9-col flex grid, yellow warning line for not-4
 
-import { memo, useCallback, useEffect, useRef } from "react";
+import { useCheckedRows, useCheckedRow, type RegisterCheckedRow } from "../ui/checkedrows";
+import { sameRowData, useRowPresentation } from "../ui/rowpresentation";
+import { memo, useCallback, useMemo } from "react";
 import type { Row, RowMergeMap } from "./useBatch";
 import { selectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
@@ -72,7 +74,7 @@ function Footer({ count }: { count: number }) {
 function CheckCell({ r, toggle }: { r: Row; toggle: (rel: string) => void }) {
   const disabled = r.status === "missing" || r.status === "deleted";
   return (
-    <input type="checkbox" className="svg-check" data-testid={`row-select-${r.relPath}`} checked={r.selected} disabled={disabled} aria-label={`Select ${r.name}`} title="Checkbox changes checks only" onClick={(e) => e.stopPropagation()} onChange={() => toggle(r.relPath)} />
+    <input type="checkbox" className="svg-check" data-testid={`row-select-${r.relPath}`} disabled={disabled} aria-label={`Select ${r.name}`} title="Checkbox changes checks only" onClick={(e) => e.stopPropagation()} onChange={() => toggle(r.relPath)} />
   );
 }
 
@@ -180,57 +182,60 @@ function RowMergeCell({ r, globalFrac, rowMerges, setRowMerge, clearRowMerge }: 
 function rowClass(r: Row, active: boolean): string {
   const review = r.review ?? "pending";
   const isWarning = review === "warning";
-  return `svg-row batch-row ${r.status} ${review}${active ? " active" : ""}${r.selected ? " selected" : ""}${isWarning ? " warning-row" : ""}`;
+  return `svg-row batch-row ${r.status} ${review}${active ? " active" : ""}${isWarning ? " warning-row" : ""}`;
 }
 
 function rowStyle(_review: BatchReviewStatus): React.CSSProperties | undefined {
   return undefined;
 }
 
-function RowViewInner({ r, toggle, selectRow, selectActive, copyPath, locate, thumbFor, thumb, activeId, previews, rowMerges, globalFrac, setRowMerge, clearRowMerge, decide, rowStale }: { r: Row } & ScanTableProps) {
+type Presentation = Omit<ScanTableProps, "rows" | "activeId" | "previews" | "rowStale">;
+interface RowProps { r: Row; a: Presentation; active: boolean; register: RegisterCheckedRow; entry: PreviewEntry | undefined; stale: boolean }
+
+function RowViewInner({ r, a, active, register, entry, stale }: RowProps) {
   const disabled = r.status === "missing" || r.status === "deleted";
-  const active = isActive(r.relPath, activeId);
-  const ref = useActiveScroll(active);
-  const onRowClick = useRowClick(r, disabled, selectRow, selectActive);
-  const onKeyDown = useRowKey(r, disabled, selectActive);
-  const entry = previews?.get(r.relPath);
-  const review = r.review ?? "pending";
+  const ref = useCheckedRow(r.relPath, active, register);
+  const onRowClick = useRowClick(r, disabled, a.selectRow, a.selectActive);
+  const onKeyDown = useRowKey(r, disabled, a.selectActive);
   return (
-    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={rowClass(r, active)} onClick={onRowClick} onKeyDown={onKeyDown} style={rowStyle(review)}>
-      <CheckCell r={r} toggle={toggle} />
-      <BatchThumbInfoCell r={r} thumbFor={thumbFor} thumb={thumb} />
-      <RowMergeCell r={r} globalFrac={globalFrac ?? null} rowMerges={rowMerges ?? {}} setRowMerge={setRowMerge} clearRowMerge={clearRowMerge} />
-      <PreviewCell entry={entry} stale={rowStale?.(r.relPath) ?? false} />
-      <ReviewCell review={review} />
-      <DecisionActions r={r} decide={decide} />
-      <DateCell mtime={r.mtime} />
-      <ScanStatusCell r={r} locate={locate} />
-      <OpenCell r={r} copyPath={copyPath} />
+    <div ref={ref} role="listitem" tabIndex={disabled ? -1 : 0} aria-current={active ? "true" : undefined} data-testid={`batch-row-${r.relPath}`} className={rowClass(r, active)} onClick={onRowClick} onKeyDown={onKeyDown} style={rowStyle(r.review)}>
+      <CheckCell r={r} toggle={a.toggle} />
+      <RowContent r={r} a={a} entry={entry} stale={stale} />
     </div>
   );
 }
 
-/** Everything a row renders from; unchanged everywhere ⇒ skip the re-render. */
-type RowDeps = ScanTableProps & { r: Row };
-const ROW_DEPS: { get: (p: RowDeps) => unknown }[] = [
-  { get: (p) => p.previews?.get(p.r.relPath) },
-  { get: (p) => p.r.relPath }, { get: (p) => p.r.review }, { get: (p) => p.r.selected },
-  { get: (p) => p.r.status }, { get: (p) => p.activeId }, { get: (p) => p.thumb },
-  { get: (p) => p.rowMerges }, { get: (p) => p.globalFrac }, { get: (p) => p.rowStale },
-];
-const sameRowDeps = (a: RowDeps, b: RowDeps): boolean => ROW_DEPS.every(({ get }) => get(a) === get(b));
+const RowView = memo(RowViewInner, (a, b) => a.active === b.active && sameContent(a, b));
+type ContentProps = Omit<RowProps, "active" | "register">;
+const RowContent = memo(function RowContent({ r, a, entry, stale }: ContentProps) {
+  return <>
+    <BatchThumbInfoCell r={r} thumbFor={a.thumbFor} thumb={a.thumb} />
+    <RowMergeCell r={r} globalFrac={a.globalFrac ?? null} rowMerges={a.rowMerges ?? {}} setRowMerge={a.setRowMerge} clearRowMerge={a.clearRowMerge} />
+    <PreviewCell entry={entry} stale={stale} />
+    <ReviewCell review={r.review ?? "pending"} />
+    <DecisionActions r={r} decide={a.decide} />
+    <DateCell mtime={r.mtime} />
+    <ScanStatusCell r={r} locate={a.locate} />
+    <OpenCell r={r} copyPath={a.copyPath} />
+  </>;
+}, sameContent);
 
-/** Skip a re-render when nothing this row shows has changed (scroll churn). */
-const RowView = memo(RowViewInner, sameRowDeps);
+function sameContent(a: ContentProps, b: ContentProps): boolean {
+  return a.a === b.a && a.entry === b.entry && a.stale === b.stale && sameRowData(a.r, b.r, "selected");
+}
 
 export default function ScanTable(props: ScanTableProps) {
+  const { rows, activeId, previews, rowStale, ...presentation } = props;
+  const a = useRowPresentation(presentation, ["thumbFor"]);
+  const checked = useMemo(() => rows.filter((r) => r.selected).map((r) => r.relPath), [rows]);
+  const register = useCheckedRows(checked);
   return (
     <div className="svg-panel" data-testid="scan-table">
       <Header rows={props.rows} />
       <div className="pair-table">
         <Columns />
         <div className="svg-rows" role="list" aria-label="Batch images" data-testid="batch-rows">
-          {props.rows.length === 0 ? <p className="svg-empty">No _AI images found in this folder.</p> : props.rows.map((r) => <RowView key={r.relPath} r={r} {...props} />)}
+          {rows.length === 0 ? <p className="svg-empty">No _AI images found in this folder.</p> : rows.map((r) => <RowView key={r.relPath} r={r} a={a} register={register} active={isActive(r.relPath, activeId)} entry={previews?.get(r.relPath)} stale={rowStale?.(r.relPath) ?? false} />)}
         </div>
       </div>
       <Footer count={props.rows.length} />
@@ -265,12 +270,4 @@ function useRowKey(r: Row, disabled: boolean, selectActive: ScanTableProps["sele
     },
     [r, disabled, selectActive],
   );
-}
-
-function useActiveScroll(active: boolean) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (active) ref.current?.scrollIntoView?.({ block: "nearest" });
-  }, [active]);
-  return ref;
 }

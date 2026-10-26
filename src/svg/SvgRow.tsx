@@ -9,7 +9,8 @@
 // valid SVG exists, and the active row is visually distinct from a merely
 // checked one.
 
-import { useEffect, useRef } from "react";
+import { memo } from "react";
+import { useCheckedRow, type RegisterCheckedRow } from "../ui/checkedrows";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
@@ -47,20 +48,30 @@ export interface SvgRowActions {
   preferVersion: (id: string, version: number) => Promise<string | null>;
 }
 
-export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }) {
-  const active = row.source.id === a.activeId;
-  const checked = a.checked.includes(row.source.id);
-  const ref = useActiveScroll(active);
+export type SvgRowPresentation = Omit<SvgRowActions, "checked" | "activeId">;
+
+function SvgRowView({ row, a, active, register }: { row: SvgRow; a: SvgRowPresentation; active: boolean; register: RegisterCheckedRow }) {
+  const ref = useCheckedRow(row.source.id, active, register);
   const id = row.source.id;
   return (
     <div ref={ref} role="listitem" data-testid={`svg-row-${id}`} tabIndex={active ? 0 : -1}
       aria-current={active ? "true" : undefined}
-      className={`svg-row ${row.review}${active ? " active" : ""}${checked ? " selected" : ""}${row.corrupt ? " corrupt" : ""}`}
+      className={`svg-row ${row.review}${active ? " active" : ""}${row.corrupt ? " corrupt" : ""}`}
       onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
       onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") { e.preventDefault(); a.selectRow(id, "replace"); } }}>
-      <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`} checked={checked}
+      <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`}
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
+      <RowContent row={row} a={a} />
+    </div>
+  );
+}
+
+export default memo(SvgRowView);
+
+const RowContent = memo(function RowContent({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
+  const id = row.source.id;
+  return <>
       <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
         aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }}
         onPreferSvg={(sourceId, version) => void a.preferVersion(sourceId, version)} />
@@ -70,12 +81,11 @@ export default function SvgRowView({ row, a }: { row: SvgRow; a: SvgRowActions }
       <UsageCell row={row} />
       <FileActions row={row} a={a} />
       <DecisionActions row={row} a={a} />
-    </div>
-  );
-}
+  </>;
+});
 
 /** Location / copy / code / history — all disabled until a version exists. */
-function FileActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
+function FileActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
   const id = row.source.id;
   // The version Copy hands out is the version the preview shows — one owner.
   const target = previewTargetOf(row);
@@ -97,7 +107,7 @@ function FileActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
 }
 
 /** The row's own generate/regenerate and its approve/decline/needs-review. */
-function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowActions }) {
+function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
   const id = row.source.id;
   const shown = shownVersion(row);
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -124,15 +134,6 @@ function ImageRegenButton({ id, running, onClick }: { id: string; running: boole
       title={running ? "This AI source image is being regenerated" : "Regenerate this AI source image via the image connection"}
       onClick={onClick}>{running ? "◍ Regenerating…" : "◍ Regenerate image"}</button>
   );
-}
-
-/** Keeps the active row in view while the arrow keys walk the list. */
-function useActiveScroll(active: boolean) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (active) ref.current?.scrollIntoView?.({ block: "nearest" });
-  }, [active]);
-  return ref;
 }
 
 function FileCell({ row }: { row: SvgRow }) {

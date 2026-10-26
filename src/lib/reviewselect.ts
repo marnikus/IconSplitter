@@ -13,7 +13,10 @@ export function toggleChecked(checked: readonly string[], id: string): string[] 
 
 /** Adds (`on`) or removes every id in `ids` — select-all / deselect-all. */
 export function setChecked(checked: readonly string[], ids: readonly string[], on: boolean): string[] {
-  if (!on) return checked.filter((x) => !ids.includes(x));
+  if (!on) {
+    const removed = new Set(ids);
+    return checked.filter((x) => !removed.has(x));
+  }
   return [...new Set([...checked, ...ids])];
 }
 

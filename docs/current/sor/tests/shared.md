@@ -55,3 +55,5 @@ Shared progress arithmetic/layout and cross-tab adapter tests: [process progress
 Harness architecture and benchmark instructions: [test harness](../../TEST_HARNESS.md).
 
 All-tab audio: `completion_sound.test.ts`, `process_completion_sound.test.tsx`, `sheets_completion_sound.test.tsx` and real UI runner assertions listed in the [sound contract](../process-progress.md#completion-sound-on-every-tab).
+
+* [Large-list selection work, projection, invalidation and Chromium measurements](../selection-performance.md#verification-and-timing): `selection_response.test.tsx`, `checkedrows.test.tsx`, `rowpresentation.test.tsx`.

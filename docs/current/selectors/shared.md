@@ -93,3 +93,12 @@ contenteditable — so undo still works after using the zoom slider or a checkbo
 Shared process header/accessibility and Upload portal selectors: [process progress](../sor/process-progress.md#handles).
 
 Completion sound is global across tabs; existing `process-sound`, `process-sound-enabled` and `process-sound-test` remain below Generate SVG. Pointer/keyboard capture on `app-shell` silently unlocks audio for all task starts; [contract](../sor/process-progress.md#completion-sound-on-every-tab).
+
+## Large-list selection state
+
+The existing row/check handles in Batch, Selection V2, Generate SVG and Upload
+are unchanged. Assert native `HTMLInputElement.checked` (or semantic checked
+state), not the HTML `checked` attribute. `.selected` is the row highlight;
+`aria-current` and tab order still describe the separate active row.
+[One canonical selection / layout projection](../sor/selection-performance.md)
+updates all mounted inputs/classes before paint; filtering retains hidden checks.

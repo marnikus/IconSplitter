@@ -6,6 +6,10 @@ import type { CSSProperties } from "react";
 import type { Decision, ViewPair } from "../lib/reviewfilter";
 import type { SideThumbFor } from "../selection/thumbs";
 import ReviewRow from "./ReviewRow";
+import { useCheckedRows } from "../ui/checkedrows";
+import { useRowPresentation } from "../ui/rowpresentation";
+
+export type ReviewPresentation = Pick<ReviewListProps, "thumb" | "thumbFor" | "onRowClick" | "toggleCheck" | "decide" | "openSide">;
 
 /** The modifier keys of a row click — see lib/reviewselect.selectIntent. */
 export interface RowMods {
@@ -37,6 +41,9 @@ const COLUMNS = [
 ];
 
 export default function ReviewList(p: ReviewListProps) {
+  const register = useCheckedRows(p.checked);
+  const presentation = useRowPresentation({ thumb: p.thumb, thumbFor: p.thumbFor, onRowClick: p.onRowClick,
+    toggleCheck: p.toggleCheck, decide: p.decide, openSide: p.openSide }, ["thumbFor"]);
   const style = { "--v2-thumb": `${p.thumb}px` } as CSSProperties;
   return (
     <section className="v2-panel" data-testid="v2-list" style={style}>
@@ -48,7 +55,7 @@ export default function ReviewList(p: ReviewListProps) {
         <div className="v2-rows" role="list" aria-label="Image review pairs" data-testid="v2-rows">
           {p.rows.length === 0
             ? <ListEmpty total={p.total} clearFilters={p.clearFilters} />
-            : p.rows.map((row) => <ReviewRow key={row.pairId} row={row} p={p} />)}
+            : p.rows.map((row) => <ReviewRow key={row.pairId} row={row} p={presentation} active={row.pairId === p.activeId} register={register} />)}
         </div>
       </div>
       <footer className="v2-list-footer">

@@ -413,7 +413,7 @@
   min-height: calc(var(--v2-thumb) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
 }
 
 .v2-row:hover { background: #10182b; }
@@ -458,7 +458,7 @@
   min-height: calc(var(--svg-thumb, 84px) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
   width: 100%;
   min-width: 0;
   content-visibility: auto;
@@ -1354,7 +1354,7 @@
   min-height: calc(var(--svg-thumb) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
 }
 
 .svg-row:hover { background: #10182b; }
@@ -1840,7 +1840,7 @@
   min-height: calc(var(--svg-thumb) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
 }
 
 .up-row:hover { background: #10182b; }

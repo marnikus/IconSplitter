@@ -5,9 +5,9 @@ import { getAppState, patchBatch } from "../state/appstore";
 import { useAppState } from "../state/useAppState";
 import { useOptionalHistory } from "../state/HistoryProvider";
 import { applyRowGesture, checkState, checkedInView, nextVisibleId, sameRowSelection, setChecked, toggleChecked, type CheckState, type SelectIntent } from "../lib/reviewselect";
-import { selectableIds, toLowerSet, isRowSelected, selectionLabel } from "../lib/batchselect";
+import { selectableIds, toLowerSet, selectionLabel } from "../lib/batchselect";
 
-type BatchRow = { relPath: string; status: string };
+type BatchRow = { relPath: string; status: string; selected?: boolean };
 type BatchCore = { s: { rows: BatchRow[] }; setSelected: (r: string[], on: boolean) => void };
 
 export interface BatchSelection {
@@ -38,8 +38,8 @@ function useSyncCoreRows(core: BatchCore, checked: string[]): void {
     const pruned = checked.filter((id) => known.has(id.toLowerCase()));
     if (pruned.length !== checked.length) patchBatch({ checked: pruned });
     const set = toLowerSet(pruned);
-    const toCheck = core.s.rows.filter((r) => set.has(r.relPath.toLowerCase()) && !isRowSelected(core.s.rows as any, r.relPath)).map((r) => r.relPath);
-    const toUncheck = core.s.rows.filter((r) => !set.has(r.relPath.toLowerCase()) && isRowSelected(core.s.rows as any, r.relPath)).map((r) => r.relPath);
+    const toCheck = core.s.rows.filter((r) => set.has(r.relPath.toLowerCase()) && !r.selected).map((r) => r.relPath);
+    const toUncheck = core.s.rows.filter((r) => !set.has(r.relPath.toLowerCase()) && r.selected).map((r) => r.relPath);
     if (toCheck.length) core.setSelected(toCheck, true);
     if (toUncheck.length) core.setSelected(toUncheck, false);
   }, [core.s.rows, checked]);

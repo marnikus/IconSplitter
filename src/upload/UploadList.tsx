@@ -1,3 +1,5 @@
+import { useCheckedRows } from "../ui/checkedrows";
+import { useRowPresentation } from "../ui/rowpresentation";
 // UploadList.tsx — the icon list of the "SVG to upload" tab (design §4.2): head
 // with the row count and the attention counters, the column header, the
 // scrolling rows, and the footer line. The list holds no state of its own:
@@ -13,13 +15,16 @@ export interface UploadListProps {
 }
 
 export default function UploadList({ g, actions }: UploadListProps) {
+  const { checked, activeId, ...presentation } = actions;
+  const a = useRowPresentation(presentation);
+  const register = useCheckedRows(checked);
   return (
     <div className="svg-panel" data-testid="upload-list">
       <ListHead g={g} />
       <div className="pair-table">
         <Columns />
         <div className="svg-rows" role="listbox" aria-label="Approved SVGs to export" data-testid="upload-rows">
-          {g.visible.map((row) => <UploadRowView key={row.source.id} row={row} a={actions} />)}
+          {g.visible.map((row) => <UploadRowView key={row.source.id} row={row} a={a} register={register} active={row.source.id === activeId} />)}
           {g.visible.length === 0 && <p className="svg-empty" data-testid="upload-empty">No approved SVG matches these filters.</p>}
         </div>
       </div>

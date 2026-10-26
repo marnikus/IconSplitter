@@ -1,3 +1,5 @@
+import { useCheckedRows } from "../ui/checkedrows";
+import { useRowPresentation } from "../ui/rowpresentation";
 // SvgList.tsx — the source list of the Generate SVG tab (prompt §2): head with
 // the row count and the attention counters, the column header, the scrolling
 // rows, and the footer line with the hotkey hints. The list holds no state of
@@ -14,11 +16,30 @@ export interface SvgListProps {
 }
 
 export default function SvgList({ g, actions }: SvgListProps) {
+  const { checked, activeId, ...presentation } = actions;
+  const a = useRowPresentation(presentation);
+  const register = useCheckedRows(checked);
+  return (
+    <div className="svg-panel" data-testid="svg-list">
+      <ListHead g={g} />
+      <div className="pair-table">
+        <Columns />
+        <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
+          {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={a} register={register} active={row.source.id === activeId} />)}
+          {g.visible.length === 0 && <p className="svg-empty" data-testid="svg-empty">No approved source matches these filters.</p>}
+        </div>
+      </div>
+      <Footer shown={g.visible.length} total={g.rows.length} />
+    </div>
+  );
+}
+
+/** Attention counts and source identity, independent of row selection. */
+function ListHead({ g }: { g: SvgGenApi }) {
   const running = g.rows.filter((r) => r.running).length;
   const queued = g.visible.filter((r) => r.queued && !r.running).length;
   const attention = g.rows.filter((r) => r.status === "failed" || r.corrupt).length;
   return (
-    <div className="svg-panel" data-testid="svg-list">
       <header className="svg-head">
         <div className="svg-title">
           <h1>APPROVED SOURCES / SVG OUTPUT</h1>
@@ -31,15 +52,6 @@ export default function SvgList({ g, actions }: SvgListProps) {
           <span className="needs" data-testid="svg-attention-count">{attention} need attention</span>
         </div>
       </header>
-      <div className="pair-table">
-        <Columns />
-        <div className="svg-rows" role="listbox" aria-label="SVG generation sources" data-testid="svg-rows">
-          {g.visible.map((row) => <SvgRow key={row.source.id} row={row} a={actions} />)}
-          {g.visible.length === 0 && <p className="svg-empty" data-testid="svg-empty">No approved source matches these filters.</p>}
-        </div>
-      </div>
-      <Footer shown={g.visible.length} total={g.rows.length} />
-    </div>
   );
 }
 
