@@ -49,3 +49,14 @@ Reproducible Chromium fixture/runner: `tools/perf/selection-response.html`,
 `tools/selection-response-bench.mjs`; production build config
 `tools/perf/vite.selection.config.ts`. [Plan, methodology and measured results](../../archive/2026-10-26-selection-response/README.md).
 Timing results are fixture/browser measurements, not universal hardware guarantees.
+
+## End-to-end interaction cost (open)
+
+List projection is inexpensive; the **round trip** around it is not. Every panel
+subscribes to the whole app store, every selection gesture copies the whole
+checked array into a history entry, and the provider serializes and writes the
+whole timeline synchronously. Those costs are outside the list component and
+therefore outside the measurements above. Measured 1,000/5,000-row figures and
+the redesign (slice selectors, deltas, deferred history persistence, per-panel
+summaries) are in [the plan](../../archive/2026-10-26-selection-response-v2/README.md);
+history and session formats stay as stated above until that work lands.
