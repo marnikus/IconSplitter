@@ -120,7 +120,11 @@ function serveDist(url, res) {
     return json(res, 404, { reason: hint });
   }
   const data = readFileSync(file);
-  res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream", "content-length": data.length });
+  res.writeHead(200, {
+    "content-type": MIME[path.extname(file)] ?? "application/octet-stream",
+    "content-length": data.length,
+    "cache-control": "no-store",
+  });
   res.end(data);
   return data.length;
 }

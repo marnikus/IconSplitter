@@ -78,6 +78,9 @@ describe("local loopback Explicit FTPS bridge", () => {
       body: "{}",
     });
     expect(blocked.status).toBe(403);
+
+    const rootPage = await fetch(`${h.url}/`);
+    expect(rootPage.headers.get("cache-control")).toBe("no-store");
   });
 
   it("surfaces untrusted server cert SHA-256 under strict TLS, succeeds when pinned, and rejects bad passwords", async () => {
