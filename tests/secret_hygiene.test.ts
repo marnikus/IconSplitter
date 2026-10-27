@@ -60,6 +60,26 @@ describe("the global log never leaks a key", () => {
     localStorage.clear();
     resetLogStore();
   });
+
+  it("drops FTP username and password fields from logged data and ids", () => {
+    localStorage.clear();
+    resetLogStore();
+    log({
+      feature: "stockUpload",
+      action: "ftps-test",
+      ids: { preset: "shutterstock", username: "artist@example.com" },
+      data: { ok: false, username: "artist@example.com", password: "MySecretPassword99", ftpUser: "artist", ftpPass: "MySecretPassword99" },
+    });
+    flushLog();
+    const state = getLogState();
+    const copied = formatLogText(state.entries);
+    expect(copied).not.toContain("artist@example.com");
+    expect(copied).not.toContain("MySecretPassword99");
+    expect(state.entries[0].data).toEqual({ ok: false });
+    expect(state.entries[0].ids).toEqual({ preset: "shutterstock" });
+    localStorage.clear();
+    resetLogStore();
+  });
 });
 
 describe("secret hygiene", () => {

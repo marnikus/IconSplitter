@@ -24,6 +24,7 @@ const getters: { [K in keyof AppState]: () => AppState[K] } = {
   v2: (): AppState["v2"] => getAppState().v2,
   svg: (): AppState["svg"] => getAppState().svg,
   upload: (): AppState["upload"] => getAppState().upload,
+  stockUpload: (): AppState["stockUpload"] => getAppState().stockUpload,
   batch: (): AppState["batch"] => getAppState().batch,
   prefs: (): AppState["prefs"] => getAppState().prefs,
 };

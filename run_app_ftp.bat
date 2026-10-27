@@ -1,0 +1,36 @@
+@echo off
+rem ============================================================
+rem  Icon Splitter - Build & Open through Local FTPS Helper
+rem  Builds the app, starts the local loopback helper, and opens
+rem  http://127.0.0.1:47391/ so both Stock FTPS uploads and
+rem  Inkscape EPS conversion work seamlessly from the same origin.
+rem ============================================================
+setlocal
+cd /d "%~dp0"
+
+where node >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] Node.js was not found on this machine.
+    echo         Install the LTS version from https://nodejs.org/
+    echo         then re-run this file.
+    pause
+    exit /b 1
+)
+
+echo.
+echo === Building Icon Splitter ===
+call npm run build
+if errorlevel 1 (
+    echo [ERROR] Build failed.
+    pause
+    exit /b 1
+)
+
+echo.
+echo === Starting local FTPS helper and opening Icon Splitter ===
+start "Icon Splitter - Local Helper" cmd /k node tools\bridge\server.mjs %*
+timeout /t 2 >nul
+start "" "http://127.0.0.1:47391/"
+echo.
+echo The app is open at http://127.0.0.1:47391/ - keep the helper window open.
+timeout /t 5 >nul

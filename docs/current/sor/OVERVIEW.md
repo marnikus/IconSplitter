@@ -4,7 +4,7 @@ The five current modes are routed from [the current-doc index](../README.md). Pr
 
 ## 1. What this is
 
-A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -45,8 +45,16 @@ A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
    MP JPEG from the vectors, optionally writes a genuine EPS, and commits a
    validated per-icon package (`<pair-folder>/export/<base>.svg|.jpg|.eps` +
    one `export.json`) atomically. The approved source and its sidecar are
-   never touched. There is NO automatic website uploading — the package is the
-   deliverable.
+   never touched.
+6. **Upload** (`stockUpload`, Chrome/Edge + local helper) — lists **only**
+   committed packages inside `export/` folders recorded in `export.json`
+   ([I-80](invariants/upload.md#i-80)), lets you review/zoom previews, manage
+   shared row badges, edit and re-embed XMP/IPTC/RDF metadata locally, and
+   upload selected same-stem representations (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
+   to one or more configured stock FTPS presets (seeded with **Shutterstock**,
+   `ftps.shutterstock.com:21` Explicit FTPS) after explicit confirmation via
+   the local loopback helper (`tools/bridge/server.mjs`), with local-only
+   non-expanded credentials ([I-81](invariants/upload.md#i-81)).
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`

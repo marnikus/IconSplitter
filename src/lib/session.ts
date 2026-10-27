@@ -18,9 +18,11 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload";
+export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "stockUpload";
 
-export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selectionV2", "generateSvg", "upload"];
+export const TAB_IDS: readonly TabId[] = [
+  "sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload",
+];
 
 /** Selection V2 review state; the JSON slice name stays compatible with saved sessions. */
 export interface SessionSelection {
@@ -57,6 +59,13 @@ export interface SessionUpload {
   anchorId: string | null;
 }
 
+/** What only the Upload (stock FTPS) tab adds: its own selection and active row. */
+export interface SessionStockUpload {
+  checked: string[];
+  activeId: string | null;
+  anchorId: string | null;
+}
+
 /** What only the Batch folders tab adds: its own selection, active row and anchor. */
 export interface SessionBatch {
   checked: string[];
@@ -73,6 +82,7 @@ export interface SessionState {
   selectionV2: SessionV2;
   svg: SessionSvg;
   upload: SessionUpload;
+  stockUpload?: SessionStockUpload;
   batch: SessionBatch;
 }
 
@@ -85,12 +95,14 @@ export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: 
 
 export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
 
+export const DEFAULT_STOCK_UPLOAD: SessionStockUpload = { checked: [], activeId: null, anchorId: null };
+
 export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchorId: null };
 
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
-  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, batch: DEFAULT_BATCH,
+  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, stockUpload: DEFAULT_STOCK_UPLOAD, batch: DEFAULT_BATCH,
 };
 
 /**
@@ -131,6 +143,7 @@ function toSession(raw: unknown): SessionState {
     selectionV2: parseV2(raw.selectionV2),
     svg: parseSvgSlice(raw.svg),
     upload: parseUploadSlice(raw.upload),
+    stockUpload: parseUploadSlice(raw.stockUpload),
     batch: parseBatchSlice(raw.batch),
   };
 }

@@ -15,6 +15,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { convertEps, findInkscape } from "./inkscape.mjs";
+import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 47391;
@@ -37,6 +38,7 @@ const config = {
   dist: path.resolve(args.dist ?? path.join(HERE, "..", "..", "dist")),
   timeoutMs: Number(process.env.BRIDGE_TIMEOUT_MS ?? 60000),
   maxBytes: Number(process.env.BRIDGE_MAX_BYTES ?? 20 * 1024 * 1024),
+  ftpMaxBytes: Number(process.env.BRIDGE_FTP_MAX_BYTES ?? 120 * 1024 * 1024),
   tmpRoot: process.env.BRIDGE_TMP,
 };
 
@@ -50,7 +52,7 @@ function cors(req, res) {
   res.setHeader("access-control-allow-origin", origin);
   res.setHeader("vary", "origin");
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type");
+  res.setHeader("access-control-allow-headers", "content-type, x-ftps-config");
   res.setHeader("access-control-expose-headers", "x-inkscape-version");
   if (req.headers["access-control-request-private-network"] === "true") res.setHeader("access-control-allow-private-network", "true");
   return true;
@@ -81,7 +83,7 @@ function readBody(req, limit) {
 
 function health(res, port) {
   const inkscape = findInkscape(config.inkscape);
-  return json(res, 200, { ok: inkscape.found, inkscape, port });
+  return json(res, 200, { ok: inkscape.found, inkscape, ftps: { ready: true }, port });
 }
 
 async function convert(req, res) {
@@ -129,6 +131,9 @@ async function route(req, res, port) {
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return 0; }
   if (req.method === "GET" && url === "/health") return health(res, port);
   if (req.method === "POST" && url === "/convert/eps") return convert(req, res);
+  if (req.method === "POST" && url === "/ftps/test") return handleFtpsTest(req, res, json);
+  if (req.method === "POST" && url === "/ftps/upload") return handleFtpsUpload(req, res, config.ftpMaxBytes, json);
+  if (req.method === "POST" && url === "/ftps/close") return handleFtpsClose(req, res, json);
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
 }

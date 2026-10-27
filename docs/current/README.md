@@ -11,7 +11,8 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 | Selection V2 | [sor/selection](sor/selection.md#behaviour) 7 → [selectors/selection](selectors/selection.md) 8 | [pair files](sor/topics/pair-files.md) 3 | [selection](sor/invariants/selection.md) 4 |
 | Generate SVG | [sor/svg-generation](sor/svg-generation.md) 8 → [selectors/svg-generation](selectors/svg-generation.md) 7 | [results](sor/svg-generation-results.md) 7, [task prompts](sor/svg-generation-prompts.md) 2, [run control](sor/svg-parallel-runs.md) 3; handles: [list](selectors/svg-generation-list.md) 7, [run](selectors/svg-generation-run.md) 5, [dialogs](selectors/svg-generation-dialogs.md) 7 | [svg](sor/invariants/svg.md) 8, [run](sor/invariants/svg-run.md) 5 |
 | AI-source image edits | [sor/svg-image-edits](sor/svg-image-edits.md) 2 → [selectors/svg-image-edits](selectors/svg-image-edits.md) 7 | [storage](sor/storage/svg.md) 4, [auto Apply / progress](sor/svg-image-auto-apply.md) 3 | [I-71/I-72](sor/invariants/svg-image-edits.md) 4 |
-| SVG to upload | [sor/upload](sor/upload.md) → [selectors/upload](selectors/upload.md) | [response](sor/upload-response.md), [layout](sor/upload-settings.md), [presets](sor/upload-settings-presets.md), [local](sor/upload-local-settings.md), [padding](sor/upload-padding.md), [geometry](sor/upload-geometry.md), [repairs](sor/upload-auto-repair.md), [caps](sor/upload-stroke-endpoints.md), [badge](sor/upload-badge.md), [row labels](sor/upload-row-badges.md), [size guide](sor/upload-sizeguide.md), [metadata](sor/upload-metadata.md), [acceptance](sor/upload-metadata-acceptance.md), [export](sor/upload-export.md), [formats](sor/upload-formats.md), [file metadata](sor/upload-file-metadata.md), [Adobe validation](sor/upload-adobe-validation.md), [progress](sor/process-progress.md), [EPS](sor/upload-eps.md), [gradients](sor/upload-eps-gradients.md); handles: [list](selectors/upload-list.md), [dialogs](selectors/upload-dialogs.md), [template](selectors/upload-badge-template.md) | [upload](sor/invariants/upload.md) |
+| SVG to upload | [sor/upload](sor/upload.md) → [selectors/upload](selectors/upload.md) | [response](sor/upload-response.md), [layout](sor/upload-settings.md), [presets](sor/upload-settings-presets.md), [local](sor/upload-local-settings.md), [padding](sor/upload-padding.md), [geometry](sor/upload-geometry.md), [repairs](sor/upload-auto-repair.md), [caps](sor/upload-stroke-endpoints.md), [badge](sor/upload-badge.md), [labels](sor/upload-row-badges.md), [guide](sor/upload-sizeguide.md), [meta](sor/upload-metadata.md), [accept](sor/upload-metadata-acceptance.md), [export](sor/upload-export.md), [formats](sor/upload-formats.md), [carriers](sor/upload-file-metadata.md), [Adobe](sor/upload-adobe-validation.md), [EPS](sor/upload-eps.md), [gradients](sor/upload-eps-gradients.md); [list](selectors/upload-list.md), [dialogs](selectors/upload-dialogs.md), [template](selectors/upload-badge-template.md) | [upload](sor/invariants/upload.md) |
+| Upload (FTPS) | [sor/stock-upload](sor/stock-upload.md) → [selectors/stock-upload](selectors/stock-upload.md) | [labels](sor/upload-row-badges.md), [carriers](sor/upload-file-metadata.md) | [I-80/I-81](sor/invariants/upload.md#i-80) |
 | Shell / log / undo | [sor/shared](sor/shared.md) 1 → [selectors/shared](selectors/shared.md) 6 | [state sorting](sor/list-state-sorting.md), [progress/sound](sor/process-progress.md) 8, [undo](sor/topics/state-history.md) 7, [log](sor/topics/log.md) 4, [keys](sor/topics/secret-store.md) 4 | [shared](sor/invariants/shared.md) 4 |
 | Root paths / folders | [path invariants](sor/invariants/paths.md) 4 | [capture](sor/invariants/paths-capture.md) 5, [scope](sor/invariants/paths-scope.md) 4; history: [topics](sor/topics/README.md) | — |
 | Docs only | this page + [RULE 17](rules/DOCS_AND_SAFETY.md#rule-17) | — | — |
@@ -32,17 +33,10 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 
 ## 3. Conventions
 
-- `name.md` links to its `name-<part>.md` detail and back. `owners/`, `storage/`,
-  `tests/` and `invariants/` use one page per area behind a small index.
-- Link to each fact’s one owner.
-- Content stays in its owning page; split above9KB into a `-<part>` sibling
-  and route it above (RULE 17/18).
-- [SYSTEM_OF_RECORD](SYSTEM_OF_RECORD.md) (§1–§20) and
-  [UI_SELECTORS](UI_SELECTORS.md) (A–S) only keep old anchors working. Don't
-  start from them.
+- `name.md` links to `name-<part>.md` and back; `owners/`, `storage/`, `tests/` and `invariants/` use one page per area.
+- Link to each fact's one owner; split pages above 9 KB into `-<part>` siblings (RULE 17/18).
+- [SYSTEM_OF_RECORD](SYSTEM_OF_RECORD.md) and [UI_SELECTORS](UI_SELECTORS.md) only preserve legacy anchors.
 
 ## 4. Do not load
 
-`QUALITY_RECHECK.md` (append one dated entry without reading it),
-`../archive/**` and [the history index](../HISTORY_INDEX.md) unless the task
-names that history, `design/**/*.html`, and `dist/`. [Deep dives](sor/topics/README.md) are background; current contracts win.
+`QUALITY_RECHECK.md` (append one dated entry without reading), `../archive/**` and [history index](../HISTORY_INDEX.md) unless needed, `design/**/*.html`, `dist/`. [Deep dives](sor/topics/README.md) are background; current contracts win.

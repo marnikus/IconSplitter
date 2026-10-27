@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has five modes (tabs across the top):
+It has six modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -34,8 +34,14 @@ It has five modes (tabs across the top):
   the artwork as it ships (or pinned to a size, or scaled to N megapixels)
   with the chosen background and stroke width, conceptual metadata from the model,
   SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
-  `export.json`. Nothing is uploaded to any website by the app. Also
-  Chrome/Edge only.
+  `export.json`. Also Chrome/Edge only.
+* **Upload** — scans strictly `export/` folders with a committed `export.json`
+  and lists already-exported stock packages, with zoomed previews, shared row
+  badges, local metadata editing + in-place XMP/IPTC/RDF re-embedding, stock
+  FTP/FTPS presets (seeded with **Shutterstock** Explicit FTPS on
+  `ftps.shutterstock.com:21`), local-only non-expanded credentials, and
+  multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`) uploads through the local
+  loopback helper (`run_ftp_bridge.bat` / `run_app_ftp.bat`).
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
@@ -69,8 +75,10 @@ Double-click these files in the project folder, in order:
 | `install_dependencies.bat` | Checks that Node.js is present and runs `npm ci` (clean install from `package-lock.json`) |
 | `run_app.bat` | Builds the app and **opens it in your default browser** as a standalone browser app (no server needed) |
 | `run_dev_server.bat` | Starts the live-reload dev server at http://localhost:5173/ and opens the browser (use this while editing code; press `Ctrl+C` in the window to stop) |
-| `run_inkscape_bridge.bat` | Starts the **Inkscape EPS helper** on http://127.0.0.1:47391 (optional — see below); keep its window open while exporting |
+| `run_inkscape_bridge.bat` | Starts the **Inkscape EPS & FTPS helper** on http://127.0.0.1:47391 (optional — see below); keep its window open while exporting or uploading |
+| `run_ftp_bridge.bat` | Starts the **local FTPS helper** on http://127.0.0.1:47391 for the **Upload** tab |
 | `run_app_inkscape.bat` | Builds the app, starts the helper and opens the app **through it** (`http://127.0.0.1:47391/`) — the no-fuss way to use the Inkscape converter |
+| `run_app_ftp.bat` | Builds the app, starts the local FTPS helper and opens `http://127.0.0.1:47391/` ready for stock FTPS uploads |
 
 Typical first run:
 

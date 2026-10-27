@@ -18,11 +18,14 @@ import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
-import { getAppState, patchBatch, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
+import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges"] as const;
+export const ENTRY_TYPES = [
+  "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
+  "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges",
+] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
@@ -56,6 +59,7 @@ function applySelectionEntry(entry: HistoryEntry, value: unknown): boolean | nul
     case "batchChecked": return applyBatchChecked(value);
     case "svgChecked": return applyTabChecked(value, () => getAppState().svg.checked, patchSvg, "generateSvg");
     case "uploadChecked": return applyTabChecked(value, () => getAppState().upload.checked, patchUpload, "upload");
+    case "stockUploadChecked": return applyTabChecked(value, () => getAppState().stockUpload.checked, patchStockUpload, "stockUpload");
     default: return null;
   }
 }

@@ -2,11 +2,12 @@
 
 import { pruneRowSelection, sameRowSelection, type RowSelection } from "../lib/reviewselect";
 
-export type CheckableList = "generateSvg" | "upload";
+export type CheckableList = "generateSvg" | "upload" | "stockUpload";
 
 const targets: Record<CheckableList, ReadonlySet<string> | null> = {
   generateSvg: null,
   upload: null,
+  stockUpload: null,
 };
 
 /** A completed scan, including an empty one, replaces the known source set. */
@@ -24,4 +25,5 @@ export function selectionTargetsKnown(tab: CheckableList, selection: RowSelectio
 export function resetListTargets(): void {
   targets.generateSvg = null;
   targets.upload = null;
+  targets.stockUpload = null;
 }

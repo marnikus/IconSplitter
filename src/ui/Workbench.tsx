@@ -8,6 +8,7 @@ import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
+import StockUploadPanel from "../stockupload/StockUploadPanel";
 import UploadPanel from "../upload/UploadPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
@@ -24,6 +25,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
+  { id: "stockUpload", label: "Upload", testid: "tab-stock-upload" },
 ];
 
 export default function Workbench() {
@@ -45,6 +47,7 @@ function Shell() {
         <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
         <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
+        <div id="stock-upload-progress-mount" data-testid="stock-upload-progress-mount"></div>
       </div>
       <Nav tab={tab} />
       <main ref={mainRef} className="app-main" data-testid="app-main">
@@ -98,6 +101,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
         <SvgPanel active={tab === "generateSvg"} />
       </div>
       <UploadWorkspace active={tab === "upload"} />
+      <StockUploadWorkspace active={tab === "stockUpload"} />
     </>
   );
 }
@@ -108,6 +112,13 @@ function UploadWorkspace({ active }: { active: boolean }) {
   useEffect(() => { if (active) setVisited(true); }, [active]);
   if (!active && !visited) return null;
   return <div className="up-shell px-4 py-3" data-testid="upload-shell" hidden={!active}><UploadPanel active={active} /></div>;
+}
+
+function StockUploadWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="up-shell px-4 py-3" data-testid="stock-upload-shell" hidden={!active}><StockUploadPanel active={active} /></div>;
 }
 
 function TabWrapper({ children }: { children: React.ReactNode }) {

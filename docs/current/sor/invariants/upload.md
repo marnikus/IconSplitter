@@ -75,3 +75,22 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   or more ids; multi-apply toggles one catalog badge on the checked ids; the
   list filter is All / none / any / one id. They are never exported or sent.
   Pinned by `upload_rowbadge`, `upload_rowbadge_store`, `upload_rowbadge_ui`.
+
+<a id="i-80"></a>
+* **I-80 (Stock Upload lists only recorded `export/` artifacts, RULE 4/13 —
+  2026-10-27):** the `"Upload"` (`stockUpload`) tab discovers items strictly
+  from folders named `export` (including when the picked root itself is named
+  `export`) that contain a valid committed `export.json`, and includes only
+  output files both recorded in `export.json` and physically present (`size >
+  0`) inside that `export` folder. Unrecorded stray files in `export/` and
+  upstream files outside `export/` are never listed. Pinned by
+  `stockupload_discovery` and `stockupload_ui`.
+
+<a id="i-81"></a>
+* **I-81 (Stock FTP credentials are local-only and never expanded, RULE 20 —
+  2026-10-27):** FTP/FTPS usernames and passwords are stored exclusively in the
+  device's IndexedDB `secrets` store (`stock-ftp-cred:<presetId>`, with
+  in-memory session fallback when IndexedDB is unavailable), never in
+  `localStorage`, `export.json`, presets, or logs, and are never expanded or
+  echoed back in the UI after saving. Pinned by `stockupload_credvault`,
+  `secret_hygiene`, and `stockupload_ui`.

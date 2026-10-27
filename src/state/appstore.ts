@@ -10,7 +10,8 @@
 import { DEFAULT_PREFS, type ReviewPrefs } from "../lib/reviewprefs";
 import { resetListTargets } from "./listtargets";
 import {
-  DEFAULT_SESSION, type SessionBatch, type SessionSelection, type SessionState, type SessionSvg, type SessionUpload, type SessionV2, type TabId,
+  DEFAULT_SESSION, DEFAULT_STOCK_UPLOAD,
+  type SessionBatch, type SessionSelection, type SessionState, type SessionStockUpload, type SessionSvg, type SessionUpload, type SessionV2, type TabId,
 } from "../lib/session";
 
 export interface AppState {
@@ -24,6 +25,8 @@ export interface AppState {
   svg: SessionSvg;
   /** SVG to upload tab: its own checkbox selection (stable pair ids). */
   upload: SessionUpload;
+  /** Upload (stock FTPS) tab: its own checkbox selection (stable pair ids). */
+  stockUpload: SessionStockUpload;
   /** Batch folders tab: its own selection, active row and anchor. */
   batch: SessionBatch;
   /** Held in memory only — selectionv2/prefsstore is its single writer. */
@@ -39,7 +42,9 @@ const listeners = new Set<Listener>();
 export function initialAppState(session: SessionState, prefs: ReviewPrefs): AppState {
   return {
     tab: session.tab, sheets: session.sheets,
-    view: session.selection, v2: session.selectionV2, svg: session.svg, upload: session.upload, batch: session.batch, prefs,
+    view: session.selection, v2: session.selectionV2, svg: session.svg,
+    upload: session.upload, stockUpload: session.stockUpload ?? DEFAULT_STOCK_UPLOAD,
+    batch: session.batch, prefs,
   };
 }
 
@@ -90,6 +95,10 @@ export function patchUpload(patch: Partial<SessionUpload>): void {
   setAppState({ upload: { ...state.upload, ...patch } });
 }
 
+export function patchStockUpload(patch: Partial<SessionStockUpload>): void {
+  setAppState({ stockUpload: { ...state.stockUpload, ...patch } });
+}
+
 export function patchBatch(patch: Partial<SessionBatch>): void {
   setAppState({ batch: { ...state.batch, ...patch } });
 }
@@ -108,7 +117,10 @@ export function resetAppStore(next: AppState = initialAppState(DEFAULT_SESSION, 
 
 /** The restart projection. Prefs stay out — prefsstore already owns them. */
 export function sessionOf(s: AppState): SessionState {
-  return { tab: s.tab, sheets: s.sheets, selection: s.view, selectionV2: s.v2, svg: s.svg, upload: s.upload, batch: s.batch };
+  return {
+    tab: s.tab, sheets: s.sheets, selection: s.view, selectionV2: s.v2,
+    svg: s.svg, upload: s.upload, stockUpload: s.stockUpload, batch: s.batch,
+  };
 }
 
 function notify(): void {

@@ -149,9 +149,20 @@ describe("applyEntry", () => {
     await expect(applyEntry(entry("uploadRowBadges"), { v: 9 })).resolves.toBe(false);
   });
 
+  it("restores stockUploadChecked list state from a history payload", async () => {
+    await expect(applyEntry(
+      entry("stockUploadChecked", ["export::icon_01"]),
+      { ids: ["export::icon_01"], active: "export::icon_01", anchor: "export::icon_01" },
+    )).resolves.toBe(true);
+    expect(getAppState().stockUpload).toEqual({
+      checked: ["export::icon_01"], activeId: "export::icon_01", anchorId: "export::icon_01",
+    });
+    await expect(applyEntry(entry("stockUploadChecked"), "invalid")).resolves.toBe(false);
+  });
+
   it("refuses a kind it does not know instead of guessing", async () => {
     await expect(applyEntry(entry("deleteFiles"), { all: true })).resolves.toBe(false);
-    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges"]);
+    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges"]);
   });
 });
 

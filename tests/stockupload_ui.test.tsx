@@ -1,0 +1,218 @@
+import "fake-indexeddb/auto";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearKnownRoots } from "../src/lib/knownroots";
+import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
+import { MANDATORY_TAGS } from "../src/lib/upload/meta";
+import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
+import { HistoryProvider } from "../src/state/HistoryProvider";
+import { getAppState, resetAppStore } from "../src/state/appstore";
+import StockUploadPanel from "../src/stockupload/StockUploadPanel";
+import { resetStockHistory } from "../src/stockupload/historystore";
+import { resetUploadJournal } from "../src/stockupload/journal";
+import { resetFtpCredentialsForTests } from "../src/stockupload/keystore";
+import { resetStockPresets } from "../src/stockupload/presetstore";
+import HistoryBar from "../src/ui/HistoryBar";
+import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
+import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { settle, waitUntil } from "./helpers/quiet";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const stored = new Map<string, unknown>();
+vi.mock("../src/batch/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/batch/store")>();
+  return {
+    ...actual,
+    saveHandles: vi.fn(async (name: string, handles: unknown) => { stored.set(name, handles); }),
+    loadHandles: vi.fn(async (name: string) => stored.get(name) ?? null),
+  };
+});
+
+let host: HTMLDivElement;
+let ui: Root;
+const q = (id: string) => host.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+
+function clickEl(el: HTMLElement): Promise<void> {
+  return act(async () => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function setInput(el: HTMLInputElement | HTMLTextAreaElement, value: string): Promise<void> {
+  return act(async () => {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    setter?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function makeWorkspace(): FakeDir {
+  const root = new FakeDir("stock_ws");
+  const packA = new FakeDir("icons_a");
+  const expA = new FakeDir("export");
+  packA.children.set("export", expA);
+  root.children.set("icons_a", packA);
+
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
+  const eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 10 10 lineto stroke\n%%EOF\n";
+
+  const rec = newExportRecord({
+    pair: { id: "item-star", base: "star_icon", suffix: "", dir: "icons_a" },
+    source: { svgPath: "icons_a/star_icon_AI.svg", version: 1, approval: "approved", fingerprint: "10:1" },
+    settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: "f" },
+    svgo: { enabled: true, version: "3", config: "default", beforeBytes: 10, afterBytes: 10, beforeHash: "0", afterHash: "0" },
+    epsEnabled: true,
+    now: "2026-10-27T10:00:00.000Z",
+  });
+  rec.stage = "committed";
+  rec.status = "processed";
+  rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
+  rec.outputs = {
+    svg: { path: "icons_a/export/star_icon.svg", bytes: svg.length, hash: "sha256:s" },
+    jpg: null,
+    eps: { path: "icons_a/export/star_icon.eps", bytes: eps.length, hash: "sha256:e" },
+  };
+  const json = serializeExportRecord(rec);
+  expA.children.set("export.json", new FakeFile("export.json", json.length, 1000, json));
+  expA.children.set("star_icon.svg", new FakeFile("star_icon.svg", svg.length, 1000, svg));
+  expA.children.set("star_icon.eps", new FakeFile("star_icon.eps", eps.length, 1000, eps));
+  // Unrecorded stray file in export/ -> MUST NOT create a second row
+  expA.children.set("orphan.svg", new FakeFile("orphan.svg", svg.length, 1000, svg));
+
+  return root;
+}
+
+describe("Upload (stockUpload) tab UI", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    stored.clear();
+    clearKnownRoots();
+    resetAppStore();
+    resetRowBadges();
+    resetStockPresets();
+    resetStockHistory();
+    resetUploadJournal();
+    await resetFtpCredentialsForTests();
+    vi.stubGlobal("showDirectoryPicker", () => Promise.reject(new Error("picker not needed")));
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    ui = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => ui.unmount());
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+
+    const uploadedConfigs: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/health")) {
+        return new Response(JSON.stringify({ ok: true, ftps: { ready: true } }), { status: 200 });
+      }
+      if (u.endsWith("/ftps/upload")) {
+        const hdr = (init?.headers as Record<string, string>)?.["x-ftps-config"] ?? "";
+        uploadedConfigs.push(hdr);
+        return new Response(JSON.stringify({ ok: true, bytes: 42 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+
+    act(() => {
+      ui.render(
+        <HistoryProvider>
+          <HistoryBar />
+          <StockUploadPanel active />
+        </HistoryProvider>,
+      );
+    });
+
+    await waitUntil(() => q("stock-row-item-star") !== null, "exported row loaded");
+    expect(host.querySelectorAll("[data-testid='stock-rows'] [role='listitem']")).toHaveLength(1);
+    expect(q("stock-folder-path")).not.toBeNull();
+    expect(q("stock-location-item-star")).not.toBeNull();
+
+    // Shutterstock preset is selected by default
+    const presetSelect = q("stock-ftp-preset-select") as HTMLSelectElement;
+    expect(presetSelect.value).toBe("shutterstock");
+    expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("ftps.shutterstock.com");
+
+    // Save local-only credentials — inputs clear immediately and secret never appears in DOM or localStorage
+    await setInput(q("stock-ftp-user") as HTMLInputElement, "my_shutter_login");
+    await setInput(q("stock-ftp-pass") as HTMLInputElement, "SuperSecret#999");
+    await clickEl(q("stock-ftp-cred-save")!);
+    await waitUntil(() => q("stock-ftp-cred-status")?.textContent?.includes("Saved locally") === true, "creds saved");
+    expect((q("stock-ftp-user") as HTMLInputElement).value).toBe("");
+    expect((q("stock-ftp-pass") as HTMLInputElement).value).toBe("");
+    expect(host.innerHTML).not.toContain("SuperSecret#999");
+    expect(host.innerHTML).not.toContain("my_shutter_login");
+    for (let i = 0; i < localStorage.length; i++) {
+      expect(localStorage.getItem(localStorage.key(i)!)).not.toContain("SuperSecret#999");
+    }
+
+    // Zoom slider updates row preview size
+    await setInput(q("stock-upload-zoom") as HTMLInputElement, "180");
+    await settle();
+    expect(q("stock-upload-panel")?.getAttribute("style")).toContain("180px");
+
+    // Check row & undo/redo via stockUploadChecked
+    await clickEl(q("stock-check-item-star")!);
+    await settle();
+    expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
+    await clickEl(q("hist-undo")!);
+    await settle();
+    expect(getAppState().stockUpload.checked).toEqual([]);
+    await clickEl(q("hist-redo")!);
+    await settle();
+    expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
+
+    // Add a badge and apply to selected row — synced into shared rowbadgestore
+    await clickEl(q("stock-rowbadges-open")!);
+    await settle();
+    await setInput(q("upload-rowbadge-new-name") as HTMLInputElement, "Ready");
+    await clickEl(q("upload-rowbadge-add")!);
+    await clickEl(q("upload-rowbadge-close")!);
+    await settle();
+    const badgeId = getRowBadgeState().catalog[0].id;
+    await clickEl(q("upload-rowbadge-apply")!);
+    await settle();
+    await clickEl(q(`upload-rowbadge-apply-${badgeId}`)!);
+    await settle();
+    expect(getRowBadgeState().assigned["item-star"]).toEqual([badgeId]);
+
+    // Click row to expand editable metadata (no AI buttons), edit & accept -> re-embeds into SVG & EPS
+    await clickEl(q("stock-row-item-star")!);
+    await settle();
+    expect(q("stock-meta-fields-item-star")).not.toBeNull();
+    await setInput(q("stock-meta-title-item-star") as HTMLInputElement, "Minimal line icon showing bright star shine");
+    await setInput(q("stock-meta-description-item-star") as HTMLTextAreaElement, "Clean minimalist vector line icon showing bright shining star symbol");
+    await setInput(q("stock-meta-tags-item-star") as HTMLTextAreaElement, [...MANDATORY_TAGS, "star", "shine", "astronomy", "sparkle"].join(", "));
+    await clickEl(q("stock-meta-accept-item-star")!);
+    await waitUntil(() => q("stock-meta-state-item-star")?.textContent?.includes("accepted") === true, "metadata accepted");
+
+    // Choose formats: SVG + EPS + ZIP (raster off since test fixture has SVG+EPS)
+    await clickEl(q("stock-format-raster")!); // uncheck default raster
+    await clickEl(q("stock-format-svg")!);    // check svg
+    await clickEl(q("stock-format-zip")!);    // check zip (eps is already checked by default)
+    await settle();
+
+    // Click Upload -> Confirm upload -> sends 3 files (svg, eps, zip) sharing stem star_icon
+    await clickEl(q("stock-upload-start")!);
+    await settle();
+    expect(q("stock-upload-confirm-dialog")).not.toBeNull();
+    await clickEl(q("stock-upload-confirm-go")!);
+    await waitUntil(() => uploadedConfigs.length === 3, "3 files uploaded");
+
+    const sentFiles = uploadedConfigs.map((b64) => JSON.parse(atob(b64)).fileName as string);
+    expect(sentFiles).toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
+  });
+});

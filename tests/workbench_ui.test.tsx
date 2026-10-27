@@ -112,16 +112,23 @@ describe("the shell", () => {
     expect(q("[data-testid='padding-slider']")).toBeNull();
   });
 
-  it("offers the SVG to upload tab right after Generate SVG, and opens its panel", async () => {
+  it("offers the SVG to upload and Upload tabs right after Generate SVG, and opens their panels", async () => {
     mountWorkbench();
     const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
-    expect(tabs).toEqual(["tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload"]);
+    expect(tabs).toEqual([
+      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload", "tab-stock-upload",
+    ]);
     await click("[data-testid='tab-upload']");
     await settle();
     expect(getAppState().tab).toBe("upload");
     // this DOM has no File System Access API, so the panel renders its note
     expect(q("[data-testid='upload-unsupported']")).not.toBeNull();
     expect(q("[data-testid='upload-panel']")).toBeNull();
+
+    await click("[data-testid='tab-stock-upload']");
+    await settle();
+    expect(getAppState().tab).toBe("stockUpload");
+    expect(q("[data-testid='stock-upload-unsupported']")).not.toBeNull();
   });
 });
 

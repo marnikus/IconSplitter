@@ -8,6 +8,7 @@ Never edit existing archived designs to match later changes.
 
 | Folder | What it records |
 |---|---|
+| `archive/2026-10-27-stock-upload-tab-plan/README.md` | Architecture & TDD implementation plan (no code yet) for the 6th `"Upload"` tab: strict `export/` + `export.json` exported-only discovery, `JPEG/PNG` → `SVG` thumbnail zoom preview, shared row badges, local metadata re-embedding, Shutterstock Explicit FTPS (`ftps.shutterstock.com:21`) preset + extensible stock FTP presets, local-only non-expanded IndexedDB credentials, multi-site & multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`) upload over `tools/bridge/` |
 | `archive/2026-10-26-selection-response-v2/README.md` | Plan plus its implementation (2026-10-26, second pass): end-to-end selection response at 1,000+ rows — measured store fan-out, full-array history entries, synchronous timeline persistence and a quadratic SVG count; delta history, slice selectors, per-panel summaries, ordered steps with acceptance criteria. Shipped: D1/D2/D3/D5/D6/D7, D4 (deferred timeline writes), D8 via a content-keyed Batch view; the browser re-measure needs a Chromium runtime |
 | `archive/2026-10-26-selection-response/README.md` / `results.md` | Prior large-list pass: indexed checked-row projection, list-only Chromium measurements, and the workloads it did not cover |
 | `archive/2026-10-24-remove-selection-v1/README.md` | Remove the original Selection tab/exclusive UI; retain V2 and shared review/IO, migrate saved tab and remove sidebar state |

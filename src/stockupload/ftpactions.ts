@@ -1,0 +1,129 @@
+// ftpactions.ts — Stock FTP preset mutations, local-only credential actions,
+// and connection test (credentials never enter React state or localStorage).
+
+import { useMemo, useRef } from "react";
+import { testBridgeFtps } from "../lib/stockupload/bridgeclient";
+import {
+  addCustomStockPreset, patchStockPreset, removeStockPreset,
+  SHUTTERSTOCK_PRESET, toggleTargetPreset,
+} from "../lib/stockupload/presets";
+import type { StockFtpPreset, StockPresetState, UploadFormatKey } from "../lib/stockupload/types";
+import { clearFtpCredentials, readFtpCredentials, saveFtpCredentials } from "./keystore";
+import { setStockPresetState } from "./presetstore";
+
+export interface FtpTestStatus {
+  busy: boolean;
+  ok: boolean | null;
+  note: string;
+  certSha256: string | null;
+}
+
+export interface StockFtpActions {
+  selectPreset: (id: string) => void;
+  addPreset: (name: string) => void;
+  deletePreset: (id: string) => void;
+  resetShutterstock: () => void;
+  updatePreset: (id: string, patch: Partial<StockFtpPreset>) => void;
+  toggleTarget: (id: string) => void;
+  setFormat: (key: UploadFormatKey, enabled: boolean) => void;
+  saveCreds: (presetId: string, username: string, password: string) => Promise<boolean>;
+  forgetCreds: (presetId: string) => Promise<void>;
+  testConnection: (presetId: string) => Promise<void>;
+  trustPinnedCert: (presetId: string, sha256: string) => void;
+}
+
+export interface FtpCtx {
+  presetState: StockPresetState;
+  bridgeUrl: string;
+  say: (msg: string, err?: boolean) => void;
+  setCredSaved: (presetId: string, saved: boolean) => void;
+  setTestStatus: (s: FtpTestStatus) => void;
+}
+
+async function performSaveCreds(
+  c: FtpCtx, presetId: string, username: string, password: string,
+): Promise<boolean> {
+  const outcome = await saveFtpCredentials(presetId, { username, password });
+  if (outcome === "empty") {
+    c.say("Enter both username and password — empty fields never overwrite saved credentials", true);
+    return false;
+  }
+  c.setCredSaved(presetId, true);
+  const msg = outcome === "device"
+    ? "Credentials saved locally on this device only"
+    : "Credentials kept in local session memory only";
+  c.say(msg, outcome === "session");
+  return true;
+}
+
+async function performTestConnection(c: FtpCtx, presetId: string): Promise<void> {
+  const preset = c.presetState.presets.find((p) => p.id === presetId);
+  if (!preset) return;
+  const creds = await readFtpCredentials(presetId);
+  if (creds === null) {
+    c.setTestStatus({ busy: false, ok: false, note: "Save local credentials first before testing.", certSha256: null });
+    return;
+  }
+  c.setTestStatus({ busy: true, ok: null, note: "Connecting over FTPS…", certSha256: null });
+  const res = await testBridgeFtps(c.bridgeUrl, preset, creds);
+  const note = res.ok ? "Connected & authenticated via Explicit FTPS" : res.reason;
+  c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: res.serverCertSha256 });
+}
+
+function buildPresetListCrud(ref: { current: FtpCtx }): Pick<
+  StockFtpActions, "selectPreset" | "addPreset" | "deletePreset" | "resetShutterstock"
+> {
+  return {
+    selectPreset: (id) => {
+      const st = ref.current.presetState;
+      if (st.presets.some((p) => p.id === id)) setStockPresetState({ ...st, activePresetId: id });
+      ref.current.setTestStatus({ busy: false, ok: null, note: "", certSha256: null });
+    },
+    addPreset: (name) => {
+      setStockPresetState(addCustomStockPreset(ref.current.presetState, name));
+      ref.current.say(`Added stock FTP preset "${name.trim() || "Custom Stock"}"`);
+    },
+    deletePreset: (id) => {
+      setStockPresetState(removeStockPreset(ref.current.presetState, id));
+      void clearFtpCredentials(id);
+      ref.current.setCredSaved(id, false);
+    },
+    resetShutterstock: () => {
+      setStockPresetState(patchStockPreset(ref.current.presetState, "shutterstock", SHUTTERSTOCK_PRESET));
+      ref.current.say("Shutterstock FTPS settings restored to defaults");
+    },
+  };
+}
+
+function buildPresetFieldOps(ref: { current: FtpCtx }): Pick<
+  StockFtpActions, "updatePreset" | "toggleTarget" | "setFormat" | "trustPinnedCert"
+> {
+  return {
+    updatePreset: (id, patch) => setStockPresetState(patchStockPreset(ref.current.presetState, id, patch)),
+    toggleTarget: (id) => setStockPresetState(toggleTargetPreset(ref.current.presetState, id)),
+    setFormat: (key, enabled) => {
+      const st = ref.current.presetState;
+      setStockPresetState({ ...st, formats: { ...st.formats, [key]: enabled } });
+    },
+    trustPinnedCert: (id, sha256) => {
+      setStockPresetState(patchStockPreset(ref.current.presetState, id, { tlsPolicy: "pinned", pinnedCertSha256: sha256 }));
+      ref.current.say("Pinned server TLS certificate SHA-256 fingerprint");
+    },
+  };
+}
+
+export function useStockFtpActions(ctx: FtpCtx): StockFtpActions {
+  const ref = useRef(ctx);
+  ref.current = ctx;
+  return useMemo(() => ({
+    ...buildPresetListCrud(ref),
+    ...buildPresetFieldOps(ref),
+    saveCreds: (presetId, username, password) => performSaveCreds(ref.current, presetId, username, password),
+    forgetCreds: async (presetId) => {
+      await clearFtpCredentials(presetId);
+      ref.current.setCredSaved(presetId, false);
+      ref.current.say("Local credentials removed from this device");
+    },
+    testConnection: (presetId) => performTestConnection(ref.current, presetId),
+  }), []);
+}

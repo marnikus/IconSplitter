@@ -129,8 +129,20 @@ describe("pruneIds — stale ids never survive a rescan", () => {
 });
 
 describe("original Selection removal compatibility", () => {
-  it("keeps only the five supported tabs", () => {
-    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload"]);
+  it("keeps only the six supported tabs", () => {
+    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload"]);
+  });
+  it("round-trips the stockUpload tab and checked slice", () => {
+    const raw = serializeSession({
+      ...parseSession(null),
+      tab: "stockUpload",
+      stockUpload: { checked: ["export::icon_01"], activeId: "export::icon_01", anchorId: "export::icon_01" },
+    }, NOW);
+    const restored = parseSession(raw);
+    expect(restored.tab).toBe("stockUpload");
+    expect(restored.stockUpload).toEqual({
+      checked: ["export::icon_01"], activeId: "export::icon_01", anchorId: "export::icon_01",
+    });
   });
   it("moves old Selection sessions to V2 without losing review/check state", () => {
     const session = parseSession(asText({ tab: "selection" }));
