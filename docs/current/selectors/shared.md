@@ -37,6 +37,8 @@ source doc's "Missing Selectors" section.
 
 ## K. Workbench tabs — mode switch
 
+The sixth tab is `tab-stock-upload` (Upload); see [stock selectors](stock-upload.md).
+
 | Test id | Visible text | Notes |
 |---|---|---|
 | `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with the others |

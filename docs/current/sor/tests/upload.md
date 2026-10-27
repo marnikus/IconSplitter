@@ -131,3 +131,5 @@ drafts, retained open state, toggle/blur and Close/reopen.
 
 * `upload_tightbounds.test.ts`, `upload_flag_viewport.test.ts` — tight viewport
   math/safety and both flags; preview/package tests above. [Policy](../upload-auto-repair.md#tight-source-viewport-classification).
+
+[Stock/native tests](../stock-upload.md).

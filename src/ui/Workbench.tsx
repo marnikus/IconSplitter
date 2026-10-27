@@ -2,7 +2,10 @@
 // Shell is ONE viewport column: nav, scrolling tab area (app-main), log dock last (not overlay).
 
 import { useEffect, useRef, useState } from "react";
+import ExtensionPermissions from "./ExtensionPermissions";
 import App from "../App";
+import StockUploadPanel from "../stockupload/StockUploadPanel";
+import "../stockupload/stock.css";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
@@ -24,6 +27,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
+  { id: "stockUpload", label: "Upload", testid: "tab-stock-upload" },
 ];
 
 export default function Workbench() {
@@ -47,6 +51,7 @@ function Shell() {
         <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
       </div>
       <Nav tab={tab} />
+      <ExtensionPermissions />
       <main ref={mainRef} className="app-main" data-testid="app-main">
         <Panels tab={tab} />
       </main>
@@ -98,6 +103,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
         <SvgPanel active={tab === "generateSvg"} />
       </div>
       <UploadWorkspace active={tab === "upload"} />
+      <StockUploadPanel active={tab === "stockUpload"} />
     </>
   );
 }

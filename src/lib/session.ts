@@ -18,9 +18,9 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload";
+export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "stockUpload";
 
-export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selectionV2", "generateSvg", "upload"];
+export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload"];
 
 /** Selection V2 review state; the JSON slice name stays compatible with saved sessions. */
 export interface SessionSelection {

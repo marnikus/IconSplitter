@@ -1,0 +1,2 @@
+export const rawRecord = (hash = "a".repeat(64)) => ({ v: 1, pair: { id: "p" }, stage: "committed", status: "processed", timestamps: { committedAt: "2026-10-27T12:00:00Z" }, validation: { svg: true, jpeg: true, eps: true, json: true, readback: true }, outputs: { jpg: { path: "old/pair/export/flag.jpg", bytes: 3, hash }, svg: null, eps: null }, metadata: { state: "accepted", title: "A waving flag icon with pole", description: "A simple waving flag icon with a pole", tags: ["flag", "icon", "pole", "line", "vector", "web", "editable", "stroke", "pictogram", "symbol"] } });
+

@@ -48,6 +48,10 @@ Verification lives in the export path and fails **closed**: any failed check →
 
 * Sheets, splitting, reviews, previews and exports are processed **entirely client-side** and stay functional offline. Exports are never automatically uploaded; no analytics or unrelated network service may see user content.
 * An explicit, confirmed provider-backed generation/edit/metadata run may transmit **only its disclosed inputs** to the named, configured provider. Generate SVG sends selected AI images; AI-source image edits send the current main image, or one previewed composite containing the named selected icons, plus the complete effective prompt. Opening a dialog sends nothing; queued requests proceed only within the confirmed run and Stop blocks unsent ones. Never send an unpreviewed replacement image, a whole output folder, or any bytes outside such a run.
+* The separate [Upload](../sor/stock-upload.md) tab may send only confirmed,
+  verified exported files to its shipped stock descriptor through the optional
+  on-demand native host. This is an explicit stock-transfer exception, not an
+  automatic provider send. Stock credentials stay in the OS credential store.
 * API keys stay in the browser secret store; logs, journals and exports omit keys, image bytes, data URLs and full request payloads. Respect copyright: the user is responsible for owning the images they process; the app never fetches unrelated image URLs. Revoke object URLs when no longer needed.
 
 <a id="rule-22"></a>

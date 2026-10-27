@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "IconSplitter \u2014 local stock uploads",
+  "version": "1.0.0",
+  "description": "Offline IconSplitter with on-demand local FTPS companion. No resident service.",
+  "permissions": [
+    "nativeMessaging",
+    "unlimitedStorage"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open IconSplitter"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none';"
+  },
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}

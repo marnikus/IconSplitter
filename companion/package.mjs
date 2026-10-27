@@ -1,0 +1,24 @@
+import { execFileSync } from "node:child_process";
+import { copyFile, mkdir, writeFile, chmod } from "node:fs/promises";
+import { resolve } from "node:path";
+import { inject } from "postject";
+import { readFile } from "node:fs/promises";
+if (process.versions.node !== "22.12.0") throw new Error("Package with the repository-pinned Node22.12.0 runtime");
+execFileSync(process.execPath, ["build.mjs"], { stdio: "inherit" });
+const folder = resolve("build", `${process.platform}-${process.arch}`);
+await mkdir(folder, { recursive: true });
+const config = resolve("build/sea.json");
+await writeFile(config, JSON.stringify({ main: resolve("build/host.cjs"), output: resolve("build/host.blob"), disableExperimentalSEAWarning: true }));
+execFileSync(process.execPath, ["--experimental-sea-config", config], { stdio: "inherit" });
+const executable = resolve(folder, process.platform === "win32" ? "iconsplitter-stock.exe" : "iconsplitter-stock");
+await copyFile("NODE-LICENSE.txt", resolve(folder, "NODE-LICENSE.txt"));
+await copyFile("BASIC-FTP-LICENSE.txt", resolve(folder, "BASIC-FTP-LICENSE.txt"));
+await copyFile(process.execPath, executable); await chmod(executable, 0o755);
+if (process.platform === "darwin") execFileSync("codesign", ["--remove-signature", executable]);
+if (process.platform === "win32") execFileSync("signtool", ["remove", "/s", executable]);
+await inject(executable, "NODE_SEA_BLOB", await readFile("build/host.blob"), { sentinelFuse: "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2", machoSegmentName: "NODE_SEA" });
+if (process.platform === "darwin") execFileSync("codesign", ["--sign", "-", executable]);
+await writeFile(resolve(folder, "package.json"), JSON.stringify({ private: true, dependencies: { "@napi-rs/keyring": "2.1.2" } }));
+execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--omit=dev", "--no-audit", "--no-fund"], { cwd: folder, stdio: "inherit", shell: process.platform === "win32" });
+
+console.log(`Host package ready for this OS/architecture: ${folder}. Keep executable and node_modules together. No service installed.`);

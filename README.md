@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has five modes (tabs across the top):
+It has six modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -34,8 +34,12 @@ It has five modes (tabs across the top):
   the artwork as it ships (or pinned to a size, or scaled to N megapixels)
   with the chosen background and stroke width, conceptual metadata from the model,
   SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
-  `export.json`. Nothing is uploaded to any website by the app. Also
+  `export.json`. This tab does not transfer files to websites. Also
   Chrome/Edge only.
+
+* **Upload** — review committed exported packages and edit their metadata; the
+  optional extension edition transfers confirmed compatible files using a local,
+  on-demand FTPS companion. Credentials stay in the OS keyring; no daemon.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
@@ -45,6 +49,11 @@ modern browser — no server, no Python, no installation required.
 > pinned environment, exact commands, what to read per task, hard limits.
 
 ---
+
+
+**Optional stock Upload:** exported-package review and confirmed FTPS use the
+[extension + on-demand companion](docs/current/sor/stock-upload-setup.md).
+The standalone offline HTML and SVG to upload remain available; no resident service.
 
 ## Prerequisites
 

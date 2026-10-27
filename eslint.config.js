@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "node_modules/**", "coverage/**"] },
+  { ignores: ["dist/**", "node_modules/**", "coverage/**", "companion/build/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -39,8 +39,14 @@ export default tseslint.config(
     },
   },
   {
+    // Optional native production code gets the same hard new-code limits.
+    files: ["companion/src/**/*.ts", "extension/**/*.ts"],
+    rules: { complexity: ["error", 10], "max-depth": ["error", 4],
+      "max-params": ["error", 4], "max-lines-per-function": ["error", { max: 30, skipBlankLines: true, skipComments: true }] },
+  },
+  {
     // Node scripts (gate, hooks installer, the Inkscape helper, test fakes) run outside the browser.
-    files: ["tools/**/*.mjs", "tests/helpers/*.mjs", "*.config.js"],
+    files: ["tools/**/*.mjs", "tests/helpers/*.mjs", "*.config.js", "companion/*.mjs"],
     languageOptions: {
       globals: {
         process: "readonly",

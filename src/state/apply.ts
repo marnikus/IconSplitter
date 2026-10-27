@@ -6,6 +6,7 @@
 // guessing: the history cursor only moves on a `true` result, which is what
 // keeps a failed apply from corrupting the timeline.
 
+import { applyStockSelection } from "../stockupload/selection";
 import { isRecord } from "../lib/isrecord";
 import { parseSheetOpts } from "../lib/exportopts";
 import { parseFilter } from "../lib/reviewfilter";
@@ -22,7 +23,7 @@ import { getAppState, patchBatch, patchSvg, patchUpload, patchV2Selection, patch
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges"] as const;
+export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "stockSelection"] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
@@ -33,6 +34,7 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
 
 function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> {
   switch (entry.type) {
+    case "stockSelection": return applyStockSelection(value);
     case "decisions": return applyDecisions(entry.ids, value);
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);

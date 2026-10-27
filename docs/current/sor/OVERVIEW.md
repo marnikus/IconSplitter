@@ -1,10 +1,10 @@
 # Current system overview
 
-The five current modes are routed from [the current-doc index](../README.md). Provider requests are opt-in exceptions to local processing (RULE 20); no automatic website upload occurs. The old summary claimed that Generate SVG uploaded nothing, but a confirmed Requesty generation explicitly sends selected AI images.
+The six current modes are routed from [the current-doc index](../README.md). Provider requests are opt-in exceptions to local processing (RULE 20); stock transfers require a confirmed Upload batch. The old summary claimed that Generate SVG uploaded nothing, but a confirmed Requesty generation explicitly sends selected AI images.
 
 ## 1. What this is
 
-A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /
@@ -47,6 +47,10 @@ A browser app with five modes (top tabs, `src/ui/Workbench.tsx`):
    one `export.json`) atomically. The approved source and its sidecar are
    never touched. There is NO automatic website uploading — the package is the
    deliverable.
+
+6. **Upload** — [exported-package review](stock-upload.md), metadata-only refresh
+   and explicitly confirmed FTPS via an optional extension + on-demand native
+   host. Existing standalone HTML remains; no resident service.
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`

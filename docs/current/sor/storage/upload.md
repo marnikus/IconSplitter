@@ -42,3 +42,7 @@ See [format persistence/delivery](../upload-formats.md).
 Named Export settings presets use `iconSplitter.upload.exportPresets.v1`, a
 versioned `{v:1,presets:[{name,settings}]}` catalog, separate from active settings.
 Validation, bounds and verified-write behavior: [presets](../upload-settings-presets.md).
+
+## Separate stock credentials and storage
+
+See [stock Upload](../stock-upload.md) for its separate owners/storage/tests; existing SVG-to-upload owners above are unchanged.

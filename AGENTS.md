@@ -1,6 +1,7 @@
 # AGENTS.md — Icon Splitter agent entry
 
-Browser-only React 19 / Vite 7 / TypeScript app. Start here, then open **only** the
+Local-first React 19 / Vite 7 / TypeScript app. Optional extension/native stock
+transfer: [`stock-upload`](docs/current/sor/stock-upload.md). Start here, then open **only** the
 pages for your task in [`docs/current/README.md`](docs/current/README.md). Current
 contracts have one owner per topic; `docs/archive/` records history, not current
 instructions. The app builds into one self-contained `dist/index.html`.
@@ -11,7 +12,8 @@ instructions. The app builds into one self-contained `dist/index.html`.
   Never run plain `npm install` over foreign-platform `node_modules/`.
 - Never commit `node_modules/`, `dist/` or `coverage/`. A tracked local
   `dist/index.html` may be modified by a build: do not stage it.
-- Secrets live in the browser store (`src/state/safestorage.ts`). Never create
+- Provider secrets live in the browser store (`src/state/safestorage.ts`);
+  stock credentials live only in the companion OS keyring. Never create
   or touch `.env*`, `*.key` or `secrets.json`; secret-hygiene tests inspect even
   untracked text files. Do not put keys, prompts or image bytes in logs/journals.
 - Local image processing and exports stay in-browser. Only an explicit,
@@ -37,7 +39,7 @@ Every current page is ≤ 9 KB; never load a whole directory.
 
 | Task | Current owner |
 |---|---|
-| One of the five tabs | the tab's row in [the router](docs/current/README.md#1-task-read-packs) |
+| One of the six tabs | the tab's row in [the router](docs/current/README.md#1-task-read-packs) |
 | Persistence, pair history or root paths | [`sor/STORAGE.md`](docs/current/sor/STORAGE.md), [path invariants](docs/current/sor/invariants/paths.md) |
 | Which file / test owns X | [owners](docs/current/sor/OWNERS.md), [tests](docs/current/sor/TESTS.md) |
 | Commands, build or gates | [`CODE_VERIFICATION.md`](docs/current/CODE_VERIFICATION.md) |
@@ -46,7 +48,7 @@ Every current page is ≤ 9 KB; never load a whole directory.
 `src/lib/` owns pixel math, filesystem/pair logic and other pure algorithms.
 Tabs live in `src/App.tsx`, `src/{batch,selection,selectionv2,svg,upload}/`;
 shared state, UI and logs live in `src/{state,ui,log}/`. Tests are in `tests/`.
-The five modes and precise source/test owners are linked from the current-doc router.
+The six modes and precise source/test owners are linked from the current-doc router.
 
 ## Finish a change
 

@@ -48,3 +48,7 @@ Named export-default snapshots: `lib/upload/settingspresets.ts`,
 Full-panel/override-map diagnostics, targeted stale projection, artifact counts,
 shared selected-decoration derivation and preview deduplication:
 [implemented response contract and source/test owners](../upload-response.md).
+
+## Additional exported-package/native owners
+
+See [stock Upload](../stock-upload.md) for its separate owners/storage/tests; existing SVG-to-upload owners above are unchanged.

@@ -129,8 +129,8 @@ describe("pruneIds — stale ids never survive a rescan", () => {
 });
 
 describe("original Selection removal compatibility", () => {
-  it("keeps only the five supported tabs", () => {
-    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload"]);
+  it("keeps the six supported tabs including separate stock Upload", () => {
+    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload"]);
   });
   it("moves old Selection sessions to V2 without losing review/check state", () => {
     const session = parseSession(asText({ tab: "selection" }));

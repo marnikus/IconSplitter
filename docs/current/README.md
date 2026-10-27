@@ -1,19 +1,20 @@
-# Current docs — router
+# Docs router
 
-Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
+[AGENTS](../../AGENTS.md) → pick one task row. ≤9KB.
 
 ## 1. Task read packs
 
 | Task | Start (behaviour → handles) | Detail, only if touched | Invariants |
 |---|---|---|---|
-| Single sheets | [sor/sheets](sor/sheets.md) 2 → [selectors/sheets](selectors/sheets.md) 3 | — | [core](sor/invariants/core.md) 1 |
-| Batch folders | [sor/batch](sor/batch.md) 4 → [selectors/batch](selectors/batch.md) 5 | [four-point](sor/topics/four-point-batch.md) 3, [export names](sor/topics/export-naming.md) 4 | [batch](sor/invariants/batch.md) 2 |
-| Selection V2 | [sor/selection](sor/selection.md#behaviour) 7 → [selectors/selection](selectors/selection.md) 8 | [pair files](sor/topics/pair-files.md) 3 | [selection](sor/invariants/selection.md) 4 |
-| Generate SVG | [sor/svg-generation](sor/svg-generation.md) 8 → [selectors/svg-generation](selectors/svg-generation.md) 7 | [results](sor/svg-generation-results.md) 7, [task prompts](sor/svg-generation-prompts.md) 2, [run control](sor/svg-parallel-runs.md) 3; handles: [list](selectors/svg-generation-list.md) 7, [run](selectors/svg-generation-run.md) 5, [dialogs](selectors/svg-generation-dialogs.md) 7 | [svg](sor/invariants/svg.md) 8, [run](sor/invariants/svg-run.md) 5 |
-| AI-source image edits | [sor/svg-image-edits](sor/svg-image-edits.md) 2 → [selectors/svg-image-edits](selectors/svg-image-edits.md) 7 | [storage](sor/storage/svg.md) 4, [auto Apply / progress](sor/svg-image-auto-apply.md) 3 | [I-71/I-72](sor/invariants/svg-image-edits.md) 4 |
+| Single sheets | [sor/sheets](sor/sheets.md) → [selectors/sheets](selectors/sheets.md) | — | [core](sor/invariants/core.md) |
+| Batch folders | [sor/batch](sor/batch.md) → [selectors/batch](selectors/batch.md) | [four-point](sor/topics/four-point-batch.md), [export names](sor/topics/export-naming.md) | [batch](sor/invariants/batch.md) |
+| Selection V2 | [sor/selection](sor/selection.md#behaviour) → [selectors/selection](selectors/selection.md) | [pair files](sor/topics/pair-files.md) | [selection](sor/invariants/selection.md) |
+| Generate SVG | [sor/svg-generation](sor/svg-generation.md) → [selectors/svg-generation](selectors/svg-generation.md) | [results](sor/svg-generation-results.md), [task prompts](sor/svg-generation-prompts.md), [run control](sor/svg-parallel-runs.md); handles: [list](selectors/svg-generation-list.md), [run](selectors/svg-generation-run.md), [dialogs](selectors/svg-generation-dialogs.md) | [svg](sor/invariants/svg.md), [run](sor/invariants/svg-run.md) |
+| AI-source image edits | [sor/svg-image-edits](sor/svg-image-edits.md) → [selectors/svg-image-edits](selectors/svg-image-edits.md) | [storage](sor/storage/svg.md), [auto Apply / progress](sor/svg-image-auto-apply.md) | [I-71/I-72](sor/invariants/svg-image-edits.md) |
 | SVG to upload | [sor/upload](sor/upload.md) → [selectors/upload](selectors/upload.md) | [response](sor/upload-response.md), [layout](sor/upload-settings.md), [presets](sor/upload-settings-presets.md), [local](sor/upload-local-settings.md), [padding](sor/upload-padding.md), [geometry](sor/upload-geometry.md), [repairs](sor/upload-auto-repair.md), [caps](sor/upload-stroke-endpoints.md), [badge](sor/upload-badge.md), [row labels](sor/upload-row-badges.md), [size guide](sor/upload-sizeguide.md), [metadata](sor/upload-metadata.md), [acceptance](sor/upload-metadata-acceptance.md), [export](sor/upload-export.md), [formats](sor/upload-formats.md), [file metadata](sor/upload-file-metadata.md), [Adobe validation](sor/upload-adobe-validation.md), [progress](sor/process-progress.md), [EPS](sor/upload-eps.md), [gradients](sor/upload-eps-gradients.md); handles: [list](selectors/upload-list.md), [dialogs](selectors/upload-dialogs.md), [template](selectors/upload-badge-template.md) | [upload](sor/invariants/upload.md) |
-| Shell / log / undo | [sor/shared](sor/shared.md) 1 → [selectors/shared](selectors/shared.md) 6 | [state sorting](sor/list-state-sorting.md), [progress/sound](sor/process-progress.md) 8, [undo](sor/topics/state-history.md) 7, [log](sor/topics/log.md) 4, [keys](sor/topics/secret-store.md) 4 | [shared](sor/invariants/shared.md) 4 |
-| Root paths / folders | [path invariants](sor/invariants/paths.md) 4 | [capture](sor/invariants/paths-capture.md) 5, [scope](sor/invariants/paths-scope.md) 4; history: [topics](sor/topics/README.md) | — |
+| Stock Upload | [behaviour](sor/stock-upload.md) → [handles](selectors/stock-upload.md) | — | — |
+| Shell / log / undo | [sor/shared](sor/shared.md) → [selectors/shared](selectors/shared.md) | [state sorting](sor/list-state-sorting.md), [progress/sound](sor/process-progress.md), [undo](sor/topics/state-history.md), [log](sor/topics/log.md), [keys](sor/topics/secret-store.md) | [shared](sor/invariants/shared.md) |
+| Root paths / folders | [path invariants](sor/invariants/paths.md) | [capture](sor/invariants/paths-capture.md), [scope](sor/invariants/paths-scope.md); history: [topics](sor/topics/README.md) | — |
 | Docs only | this page + [RULE 17](rules/DOCS_AND_SAFETY.md#rule-17) | — | — |
 
 ## 2. Lookups (open one row)
@@ -28,7 +29,7 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 | Selection speed / gestures | [Performance](sor/selection-performance.md) → [RULE 25](rules/BEHAVIOR.md#rule-25) / [I-73](sor/invariants/shared.md#i-73) |
 | Commands and gates | [Code Verification](CODE_VERIFICATION.md); why a gate failed: [ratchet & CI](VERIFICATION_RATCHET.md) |
 | Harness / speed evidence | [test harness](TEST_HARNESS.md) |
-| What the app is | [five-mode overview](sor/OVERVIEW.md) |
+| What the app is | [six-mode overview](sor/OVERVIEW.md) |
 
 ## 3. Conventions
 

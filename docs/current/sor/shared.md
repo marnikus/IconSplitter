@@ -6,7 +6,7 @@ The shell and session are shared by every tab. [Global history and undo](topics/
 
 [Shared batch progress](process-progress.md) owns the common header, generic reporter, cross-tab Upload lifecycle, all-tab completion sound and selector contract.
 
-The shell has five tabs; the original Selection tab is removed. A session saved
+The shell has six tabs (including separate [stock Upload](stock-upload.md)); the original Selection tab is removed. A session saved
 on that old tab opens Selection V2, retaining valid review and checked state.
 The shared review helpers and persistent handle/sidecar keys remain compatible.
 
