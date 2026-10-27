@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 // UploadMetaFields.tsx — the editable, copiable metadata fields below an
 // active row (design §2.13): Title, Description and the Tags, EMPTY until
 // generated, each with its own copy button. Accept re-validates the edited
@@ -35,15 +36,18 @@ export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, o
       </div>
     );
   }
-  const m = meta.metadata;
-  return (
-    <div className="up-meta" data-testid={`upload-meta-fields-${id}`}>
-      <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} />
-      <UploadMetaRights id={id} metadata={m} onEdit={onEdit} />
-      <ValidationLine id={id} validation={meta.validation} />
-      <MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />
-    </div>
-  );
+  return <MetadataEditor id={id} metadata={meta.metadata} validation={meta.validation} onEdit={onEdit} onCopy={onCopy}
+    actions={<MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />} />;
+}
+
+/** One complete editor shared by source metadata and committed-file metadata. */
+export function MetadataEditor(p: { id: string; metadata: IconMetadata; validation: MetadataValidation | null; onEdit: (patch: Partial<IconMetadata>) => void; onCopy: UploadMetaFieldsProps["onCopy"]; actions: ReactNode }) {
+  return <div className="up-meta" data-testid={`upload-meta-fields-${p.id}`}>
+    <MetaFieldsGrid id={p.id} m={p.metadata} onEdit={p.onEdit} onCopy={p.onCopy} />
+    <UploadMetaRights id={p.id} metadata={p.metadata} onEdit={p.onEdit} />
+    <ValidationLine id={p.id} validation={p.validation} />
+    {p.actions}
+  </div>;
 }
 
 /** The three editable fields, each with its live count and copy button. */

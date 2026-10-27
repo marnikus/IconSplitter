@@ -6,6 +6,10 @@ import type { ReactNode } from "react";
 export interface BulkBarShellProps {
   testid: string;
   disabled?: boolean;
+  selectLabel?: string;
+  checkLabel?: string;
+  scopeLabel?: string;
+  rightTestid?: string;
   header: CheckState;
   checkedCount: number;
   visibleCount: number;
@@ -22,7 +26,7 @@ function Check({ p }: { p: BulkBarShellProps }) {
     <input
       type="checkbox"
       data-testid={`${p.testid.replace("-bulk", "")}-check-all`}
-      aria-label="Select all visible"
+      aria-label={p.checkLabel ?? "Select all visible"}
       disabled={p.disabled}
       checked={p.header === "all"}
       onChange={(e) => p.onToggleAll(e.target.checked)}
@@ -40,7 +44,7 @@ function Counts({ p }: { p: BulkBarShellProps }) {
         {p.checkedCount} selected
       </span>
       <span className="svg-scope-copy" data-testid={`${p.testid.replace("-bulk", "")}-scope`}>
-        across {p.visibleCount} visible
+        across {p.visibleCount} {p.scopeLabel ?? "visible"}
       </span>
       {p.hiddenCount !== undefined && p.hiddenCount > 0 && (
         <span className="svg-scope-copy warn" data-testid={`${p.testid.replace("-bulk", "")}-hidden`}>
@@ -60,13 +64,13 @@ export default function BulkBarShell(p: BulkBarShellProps) {
         <Counts p={p} />
         <span className="svg-divider" aria-hidden="true" />
         <button type="button" className="svg-btn" data-testid={`${p.testid.replace("-bulk", "")}-select-visible`} disabled={p.disabled} onClick={p.onSelectVisible}>
-          Select visible
+          {p.selectLabel ?? "Select visible"}
         </button>
         <button type="button" className="svg-btn" data-testid={`${p.testid.replace("-bulk", "")}-deselect`} disabled={p.disabled} onClick={p.onDeselectAll}>
           Deselect all
         </button>
       </div>
-      <div className="svg-bulk-right">{p.right}</div>
+      <div className="svg-bulk-right" data-testid={p.rightTestid}>{p.right}</div>
     </div>
   );
 }

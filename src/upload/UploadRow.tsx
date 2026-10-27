@@ -1,3 +1,4 @@
+import PackageRow, { PackageFileCell } from "../ui/PackageRow";
 // UploadRow.tsx — one approved SVG per row (design §4.2): checkbox, the framed
 // preview of the version that will be exported, file identity + the export
 // folder, the package status, the metadata state, the effective settings, and
@@ -9,8 +10,7 @@
 import { paddingLabel } from "../lib/upload/padding";
 import { memo } from "react";
 import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
-import { selectIntent, type SelectIntent } from "../lib/reviewselect";
-import { isRowGestureClick } from "../ui/rowgesture";
+import type { SelectIntent } from "../lib/reviewselect";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
   megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
@@ -63,18 +63,11 @@ function UploadRowView({ row, a, active = false, register }: { row: UploadRow; a
   const ref = useRowBinding(row.source.id, register);
   const id = row.source.id;
   const status = statusOf(row);
-  return (
-    <div ref={ref} role="listitem" data-testid={`upload-row-${id}`} tabIndex={-1}
-      className={`up-row ${status}`}
-      onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
-      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); a.selectRow(id, "replace"); } }}>
-      <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`}
-        aria-label={`Select ${row.source.svgName}`} onClick={(e) => e.stopPropagation()}
-        onChange={() => a.toggleCheck(id)} />
-      <RowContent row={row} a={a} />
-      {active && <RowDetail id={id} row={row} a={a} />}
-    </div>
-  );
+  return <PackageRow rowRef={ref} testid={`upload-row-${id}`} name={row.source.svgName} className={status}
+    checkTestid={`upload-check-${id}`} onSelect={intent => a.selectRow(id, intent)} onToggle={() => a.toggleCheck(id)}
+    detailTestid={`upload-detail-${id}`} detail={active ? <RowDetail id={id} row={row} a={a} /> : null}>
+    <RowContent row={row} a={a} />
+  </PackageRow>;
 }
 
 export default memo(UploadRowView);
@@ -98,29 +91,21 @@ const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: Upl
 /** The expandable detail: text only — the editable, copiable metadata fields. */
 function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPresentation }) {
   return (
-    <div className="up-detail" data-testid={`upload-detail-${id}`}>
-      <UploadMetaFields id={id} meta={row.meta}
-        onEdit={(patch) => a.editMetadata(id, patch)}
-        onAccept={() => a.acceptMetadata(id)}
-        onCopy={(field) => a.copyMeta(id, field)}
-        onRegenerate={() => a.requestMetadata([id])} />
-    </div>
+    <UploadMetaFields id={id} meta={row.meta}
+      onEdit={(patch) => a.editMetadata(id, patch)}
+      onAccept={() => a.acceptMetadata(id)}
+      onCopy={(field) => a.copyMeta(id, field)}
+      onRegenerate={() => a.requestMetadata([id])} />
   );
 }
 
 function FileCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
   const id = row.source.id;
-  return (
-    <div className="svg-file-main">
-      <div className="svg-file-name" title={row.source.svgName}>{row.source.svgName}</div>
-      <div className="svg-file-sub" data-testid={`upload-target-${id}`} title={row.source.svgPath}>{row.source.svgPath}</div>
-      <div className="svg-persist" data-testid={`upload-export-path-${id}`} title={`everything commits into ${exportDirOf(row.source.dirPath)}`}>
-        export → {exportDirOf(row.source.dirPath)} · approved v{row.source.version}
-        {row.source.approvedValid > 1 ? ` · ${row.source.approvedValid} approved versions` : ""}
-      </div>
-      <UploadRowBadges pairId={id} state={a.rowBadges} onToggle={a.toggleRowBadge} />
-    </div>
-  );
+  return <PackageFileCell name={row.source.svgName} path={row.source.svgPath} pathTestid={`upload-target-${id}`}
+    infoTestid={`upload-export-path-${id}`} infoTitle={`everything commits into ${exportDirOf(row.source.dirPath)}`}
+    info={<>export → {exportDirOf(row.source.dirPath)} · approved v{row.source.version}{row.source.approvedValid > 1 ? ` · ${row.source.approvedValid} approved versions` : ""}</>}>
+    <UploadRowBadges pairId={id} state={a.rowBadges} onToggle={a.toggleRowBadge} />
+  </PackageFileCell>;
 }
 
 /** The package status badge, the stage while a run is in flight, the error, the auto-fix note. */

@@ -52,3 +52,5 @@ shared selected-decoration derivation and preview deduplication:
 ## Additional exported-package/native owners
 
 See [stock Upload](../stock-upload.md) for its separate owners/storage/tests; existing SVG-to-upload owners above are unchanged.
+
+[Shared UI owners](../upload-shared-ui.md) covers SVG and exported Upload.

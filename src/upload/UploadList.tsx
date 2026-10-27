@@ -1,3 +1,4 @@
+import PackageList, { PackageListHead, PackageListFooter } from "../ui/PackageList";
 import { cloneElement, useMemo } from "react";
 import { useCheckedRows } from "../ui/checkedrows";
 import { useRowPresentation } from "../ui/rowpresentation";
@@ -30,61 +31,21 @@ export default function UploadList({ g, actions }: UploadListProps) {
     out[at] = cloneElement(base[at], { active: true });
     return out;
   }, [base, g.visible, activeId]);
-  return (
-    <div className="svg-panel" data-testid="upload-list">
-      <ListHead g={g} />
-      <div className="pair-table">
-        <Columns />
-        <div className="svg-rows" role="listbox" aria-label="Approved SVGs to export" data-testid="upload-rows">
-          {rows}
-          {g.visible.length === 0 && <p className="svg-empty" data-testid="upload-empty">No approved SVG matches these filters.</p>}
-        </div>
-      </div>
-      <ListFooter g={g} />
-    </div>
-  );
+  return <PackageList testid="upload-list" header={<ListHead g={g} />} footer={<ListFooter g={g} />}
+    label="Approved SVGs to export" rowsTestid="upload-rows" empty={g.visible.length === 0}
+    emptyText="No approved SVG matches these filters." emptyTestid="upload-empty">{rows}</PackageList>;
 }
 
 /** The head: the visible count and the attention counters. */
 function ListHead({ g }: { g: UploadApi }) {
   const running = g.rows.filter((r) => r.running !== null).length;
   const attention = g.rows.filter((r) => r.record?.status === "failed" || r.stale).length;
-  return (
-    <header className="svg-head">
-      <div className="svg-title">
-        <h1>APPROVED SVGS / EXPORT PACKAGES</h1>
-        <span data-testid="upload-row-count">{g.visible.length}</span>
-        <span>one package per pair</span>
-      </div>
-      <div className="svg-attention">
-        <span className="running" data-testid="upload-running-count">{running} in flight</span>
-        <span className="needs" data-testid="upload-attention-count">{attention} need attention</span>
-      </div>
-    </header>
-  );
-}
-
-/** The column header — static text, so it cannot drift from the row layout. */
-function Columns() {
-  return (
-    <div className="up-columns" aria-hidden="true">
-      <span />
-      <span>Approved SVG</span>
-      <span>File / export folder</span>
-      <span>Package</span>
-      <span>Metadata</span>
-      <span>Settings</span>
-      <span>Actions</span>
-    </div>
-  );
+  return <PackageListHead title="APPROVED SVGS / EXPORT PACKAGES" count={g.visible.length} countTestid="upload-row-count" scope="one package per pair"
+    attention={<div className="svg-attention"><span className="running" data-testid="upload-running-count">{running} in flight</span><span className="needs" data-testid="upload-attention-count">{attention} need attention</span></div>} />;
 }
 
 /** What the list says under itself: how much is shown, and the one hint. */
 function ListFooter({ g }: { g: UploadApi }) {
-  return (
-    <footer className="svg-list-footer">
-      <span data-testid="upload-footer-summary">{`Showing ${g.visible.length} of ${g.rows.length} approved SVGs`}</span>
-      <span className="svg-hints">↑↓ active · E/Q check/uncheck · click a row for metadata fields · Export writes into the pair's folder</span>
-    </footer>
-  );
+  return <PackageListFooter summaryTestid="upload-footer-summary" summary={`Showing ${g.visible.length} of ${g.rows.length} approved SVGs`}
+    hint="↑↓ active · E/Q check/uncheck · click a row for metadata fields · Export writes into the pair's folder" />;
 }

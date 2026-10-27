@@ -26,7 +26,9 @@ import UploadRowBadgeFilter from "./UploadRowBadgeFilter";
 import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
-import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import FolderSource from "../ui/FolderSource";
+import ProviderCardShell from "../ui/ProviderCardShell";
+import { Select, NumberField, TextField } from "../ui/fields";
 
 export interface UploadControlsProps {
   rootName: string;
@@ -76,32 +78,17 @@ export default function UploadControls(p: UploadControlsProps) {
 
 /** The folder button, the rescan, the scope copy, the audit line, the chips. */
 function SourceLine({ p }: { p: UploadControlsProps }) {
-  return (
-    <>
-      <div className="svg-toolbar">
-        <div className="svg-source">
-          <OpenFolderButton testid="upload-open-folder" onClick={p.onChooseRoot} />
-          {p.rootName !== "" && (
-            <button type="button" className="svg-btn" data-testid="upload-rescan" disabled={p.busy !== null} onClick={p.onRescan}>
-              {p.busy === null ? "↻ Rescan" : p.busy}
-            </button>
-          )}
-          <span className="svg-recursive" data-testid="upload-scope-copy">
-            Approved SVGs only · recursive · {p.discovery?.rows.length ?? 0} icons
-          </span>
-          {p.discovery !== null && <span className="svg-audit" data-testid="upload-audit">{auditLine(p.discovery)}</span>}
-        </div>
-        <div className="svg-summary">
-          <Chip value={p.counts.icons} label="icons" testid="upload-count-icons" />
-          <Chip value={p.counts.processed} label="processed" cls="approved" testid="upload-count-processed" />
-          <Chip value={p.counts.partial} label="partial" cls="failed" testid="upload-count-partial" />
-          <Chip value={p.counts.failed} label="failed" cls="failed" testid="upload-count-failed" />
-          <Chip value={p.counts.stale} label="stale" testid="upload-count-stale" />
-        </div>
-      </div>
-      <FolderPathRow root={p.root} testid="upload-folder-path" />
-    </>
-  );
+  return <FolderSource root={p.root} openTestid="upload-open-folder" pathTestid="upload-folder-path" rescanTestid="upload-rescan"
+    onOpen={p.onChooseRoot} onRescan={p.onRescan} rescanDisabled={p.busy !== null} showRescan={p.rootName !== ""}
+    rescanLabel={p.busy ?? "↻ Rescan"} scopeTestid="upload-scope-copy" scope={<>Approved SVGs only · recursive · {p.discovery?.rows.length ?? 0} icons</>}
+    audit={p.discovery !== null && <span className="svg-audit" data-testid="upload-audit">{auditLine(p.discovery)}</span>}
+    summary={<>
+      <Chip value={p.counts.icons} label="icons" testid="upload-count-icons" />
+      <Chip value={p.counts.processed} label="processed" cls="approved" testid="upload-count-processed" />
+      <Chip value={p.counts.partial} label="partial" cls="failed" testid="upload-count-partial" />
+      <Chip value={p.counts.failed} label="failed" cls="failed" testid="upload-count-failed" />
+      <Chip value={p.counts.stale} label="stale" testid="upload-count-stale" />
+    </>} />;
 }
 
 function Chip({ value, label, cls, testid }: { value: number; label: string; cls?: string; testid: string }) {
@@ -110,29 +97,14 @@ function Chip({ value, label, cls, testid }: { value: number; label: string; cls
 
 /** The Gemini provider card: the five request settings, the check, the key. */
 function ProviderCard({ p }: { p: UploadControlsProps }) {
-  return (
-    <div className={`svg-provider${p.providerOpen ? "" : " closed"}`} data-testid="upload-provider-card">
-      <div className="svg-provider-top">
-        <span><strong data-testid="upload-provider">{PROVIDER_NAME}</strong> · metadata generation</span>
-        <span data-testid="upload-limits">
-          {Math.round(p.gemini.timeoutMs / 1000)}s timeout · {p.gemini.retries} retries · {p.gemini.concurrency} parallel
-        </span>
-        <button type="button" className="svg-link" data-testid="upload-provider-toggle" aria-expanded={p.providerOpen}
-          aria-label={p.providerOpen ? "Minimize provider settings" : "Restore provider settings"}
-          onClick={() => p.onProviderOpen(!p.providerOpen)}>{p.providerOpen ? "Minimize" : "Restore"}</button>
-      </div>
-      {p.providerOpen && (
-        <>
-          <ProviderFields p={p} />
-          <ModelCheckField p={p} />
-          <div className="svg-provider-foot">
-            <KeyRow keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} onSave={p.onSaveKey} onForget={p.onForgetKey} />
-          </div>
-          <ProviderNote p={p} />
-        </>
-      )}
-    </div>
-  );
+  return <ProviderCardShell open={p.providerOpen} onOpen={p.onProviderOpen} testid="upload-provider-card" toggleTestid="upload-provider-toggle"
+    title={<><strong data-testid="upload-provider">{PROVIDER_NAME}</strong> · metadata generation</>}
+    details={<span data-testid="upload-limits">{Math.round(p.gemini.timeoutMs / 1000)}s timeout · {p.gemini.retries} retries · {p.gemini.concurrency} parallel</span>}>
+    <ProviderFields p={p} />
+    <ModelCheckField p={p} />
+    <div className="svg-provider-foot"><KeyRow keySet={p.keySet} keyMask={p.keyMask} keySource={p.keySource} onSave={p.onSaveKey} onForget={p.onForgetKey} /></div>
+    <ProviderNote p={p} />
+  </ProviderCardShell>;
 }
 
 /**
@@ -143,16 +115,8 @@ function ProviderCard({ p }: { p: UploadControlsProps }) {
 function ProviderFields({ p }: { p: UploadControlsProps }) {
   return (
     <div className="up-provider-grid" data-testid="upload-provider-grid">
-      <label className="svg-field">
-        <span className="svg-label">Model</span>
-        <input className="svg-input" data-testid="upload-model" aria-label="Gemini model id" spellCheck={false}
-          value={p.gemini.model} onChange={(e) => p.onGemini({ model: e.target.value })} />
-      </label>
-      <label className="svg-field up-field-wide">
-        <span className="svg-label">Endpoint</span>
-        <input className="svg-input" data-testid="upload-endpoint" aria-label="Gemini base URL" spellCheck={false}
-          value={p.gemini.baseUrl} onChange={(e) => p.onGemini({ baseUrl: e.target.value })} />
-      </label>
+      <TextField label="Model" testid="upload-model" ariaLabel="Gemini model id" spellCheck={false} value={p.gemini.model} onChange={model => p.onGemini({ model })} />
+      <TextField label="Endpoint" className="up-field-wide" testid="upload-endpoint" ariaLabel="Gemini base URL" spellCheck={false} value={p.gemini.baseUrl} onChange={baseUrl => p.onGemini({ baseUrl })} />
       <NumberField label="Timeout (s)" testid="upload-timeout" value={Math.round(p.gemini.timeoutMs / 1000)}
         min={TIMEOUT_MIN_MS / 1000} max={TIMEOUT_MAX_MS / 1000}
         onChange={(s) => p.onGemini({ timeoutMs: clampTimeoutMs(s * 1000) })} />
@@ -233,40 +197,10 @@ function FilterLine({ p }: { p: UploadControlsProps }) {
         options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"], ...STATE_SORT_OPTIONS]}
         onChange={(v) => p.onSort(v as UploadSort)} />
       <UploadRowBadgeFilter filter={p.filter} catalog={p.badgeCatalog} onFilter={p.onFilter} onOpen={p.onOpenRowBadges} />
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" data-testid="upload-search" type="search" aria-label="Search icons"
-          placeholder="Filename, folder or version…" value={p.filter.search}
-          onChange={(e) => p.onFilter({ search: e.target.value })} />
-      </label>
+      <TextField label="Search" testid="upload-search" type="search" ariaLabel="Search icons" placeholder="Filename, folder or version…"
+        value={p.filter.search} onChange={search => p.onFilter({ search })} />
       <span className="svg-result-copy" data-testid="upload-shown">Showing {p.shown} of {p.total}</span>
       <button type="button" className="svg-btn" data-testid="upload-clear-filters" onClick={p.onClearFilters}>× Clear filters</button>
     </div>
-  );
-}
-
-function Select({ label, testid, value, options, onChange }: {
-  label: string; testid: string; value: string; options: [string, string][]; onChange: (v: string) => void;
-}) {
-  return (
-    <label className="svg-field">
-      <span className="svg-label">{label}</span>
-      <select className="svg-input" data-testid={testid} aria-label={label} value={value}
-        onChange={(e) => onChange(e.target.value)}>
-        {options.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function NumberField({ label, testid, value, min, max, onChange }: {
-  label: string; testid: string; value: number; min: number; max: number; onChange: (n: number) => void;
-}) {
-  return (
-    <label className="svg-field">
-      <span className="svg-label">{label}</span>
-      <input className="svg-input" data-testid={testid} type="number" min={min} max={max} step={1}
-        aria-label={label} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
   );
 }

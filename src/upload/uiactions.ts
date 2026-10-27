@@ -1,7 +1,7 @@
 // uiactions.ts — SVG to upload tab UI actions
 import { useCallback, useRef } from "react";
 import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
-import type { IconMetadata } from "../lib/upload/meta";
+import { copyMetadataField } from "./metacopy";
 import { selectionPayloads } from "../lib/selectiondelta";
 import { getAppState, patchUpload } from "../state/appstore";
 import type { UploadActions, UploadCtx } from "./actions";
@@ -104,14 +104,7 @@ function useCopyActions(ctx: UploadCtx): Pick<UiSlice, "copyMeta"> {
     const c = latest.current;
     const meta = c.rows.find((r) => r.source.id === id)?.meta.metadata ?? null;
     if (meta === null) return c.say("Nothing to copy yet — generate metadata first", true);
-    const text = metaText(meta, field);
-    void navigator.clipboard.writeText(text)
-      .then(() => c.say(`${field === "tags" ? "Tags" : field === "title" ? "Title" : "Description"} copied`))
-      .catch(() => c.say("The clipboard is blocked — select the text and copy it by hand", true));
+    void copyMetadataField(meta, field, c.say);
   }, []);
   return { copyMeta };
-}
-function metaText(meta: IconMetadata, field: "title" | "description" | "tags"): string {
-  if (field === "title") return meta.title;
-  return field === "description" ? meta.description : meta.tags.join(", ");
 }

@@ -3655,3 +3655,22 @@ real-browser acceptance. No live stock credentials/uploads; native/FTPS code
 unchanged. Install required a one-command engine-strict override for existing
 locked ESLint engine declarations; all gates used pinned22.12.0. Evidence:
 `docs/archive/2026-10-28-stock-upload-ui-parity/README.md`.
+
+## 2026-10-28 — Shared Upload component ownership audit
+
+User required actual previous-code reuse, not only matching CSS. Extracted the
+established SVG package list/head/columns/footer/row/file cell, provider/source,
+preview, modal/header, settings disclosure and text/toggle presentation; both
+workflows consume the same owners. SVG also reuses existing BulkBarShell and
+ui/fields; both editors share MetadataEditor and clipboard action. Stock uses
+existing checkState/checkedInView. Corrected nonexistent old up-group-* classes
+by reusing DisclosureGroup. CSS unchanged. TDD RED ownership/Enter/disclosure,
+then GREEN:18 architectural contracts, six primitive and15 stock UI tests.
+Pinned Node22.12 verify:fast + verify ALL LANES PASSED:3165/306, native30/5;
+library lines98.40%, functions98.38%; types, expanded lint0 errors/20 existing
+warnings, changed quality, docs/hygiene, offline + extension builds pass. No
+harness/budget/scope/algorithm weakening or new dependencies. Router size caught
+and wording shortened, not its limit raised. No live credentials/uploads and no
+pixel/browser/OS/stock acceptance claim. Current owners and boundaries:
+`docs/current/sor/upload-shared-ui.md`; research/evidence:
+`docs/archive/2026-10-28-upload-shared-owners/README.md`.

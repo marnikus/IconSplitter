@@ -1,3 +1,5 @@
+import { TextField } from "../ui/fields";
+import ProviderCardShell from "../ui/ProviderCardShell";
 import { useState } from "react";
 import { connectCompanion, extensionRuntime } from "../lib/stockupload/native";
 import { confirmStockAction } from "./confirmation";
@@ -15,16 +17,16 @@ export default function StockAccount({ disabled }: { disabled: boolean }) {
     } catch { setStatus("Companion/keychain unavailable, locked or busy. Install/approve the companion locally; no plaintext fallback."); }
     finally { client?.close(); setUsername(""); setPassword(""); setBusy(false); }
   }
-  return <section className={`svg-provider${open ? "" : " closed"}`} aria-label="Local Shutterstock account & transfer history">
-    <header className="svg-provider-top"><strong>Local Shutterstock account & transfer history</strong><button type="button" className="svg-link" data-testid="stock-account-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Minimize" : "Restore"}</button></header>
-    {open && <fieldset className="up-shadow-fields" disabled={disabled || busy || !extensionRuntime()}><p className="svg-note">Username and password go only to your OS credential store, not browser storage or exports.</p>
+  return <ProviderCardShell open={open} onOpen={setOpen} label="Local Shutterstock account & transfer history"
+    title={<strong>Local Shutterstock account & transfer history</strong>} toggleTestid="stock-account-toggle" toggleLabel="account settings">
+    <fieldset className="up-shadow-fields" disabled={disabled || busy || !extensionRuntime()}><p className="svg-note">Username and password go only to your OS credential store, not browser storage or exports.</p>
       <div className="svg-provider-fields">
-        <label className="svg-field"><span className="svg-label">Username/email</span><input className="svg-input" autoComplete="off" value={username} onChange={e => setUsername(e.target.value)} /></label>
-        <label className="svg-field"><span className="svg-label">Password</span><input className="svg-input" type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
+        <TextField label="Username/email" autoComplete="off" value={username} onChange={setUsername} />
+        <TextField label="Password" type="password" autoComplete="new-password" value={password} onChange={setPassword} />
       </div>
       <div className="up-bg-row"><button type="button" className="svg-btn tiny" disabled={!username || !password} onClick={() => void account("save")}>Save locally</button>
         <button type="button" className="svg-btn tiny" onClick={() => void account("forget")}>Forget account</button><button type="button" className="svg-btn tiny" onClick={() => void account("receipts")}>Transfer history</button>
         <button type="button" className="svg-btn tiny danger" onClick={() => void account("reconcile")}>Clear reconciled history</button></div>
-    </fieldset>}{open && <p className="svg-note" role="status">{status}</p>}
-  </section>;
+    </fieldset><p className="svg-note" role="status">{status}</p>
+  </ProviderCardShell>;
 }

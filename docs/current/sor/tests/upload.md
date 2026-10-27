@@ -133,3 +133,5 @@ drafts, retained open state, toggle/blur and Close/reopen.
   math/safety and both flags; preview/package tests above. [Policy](../upload-auto-repair.md#tight-source-viewport-classification).
 
 [Stock/native tests](../stock-upload.md).
+
+[Shared UI tests](../upload-shared-ui.md#tests).

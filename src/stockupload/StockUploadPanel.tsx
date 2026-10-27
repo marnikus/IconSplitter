@@ -5,7 +5,7 @@ import { badgesOf, rowMatchesBadge } from "../lib/upload/rowbadge";
 import { getRowBadgeState, subscribeRowBadges } from "../upload/rowbadgestore";
 import UploadRowBadgeSettings from "../upload/UploadRowBadgeSettings";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
-import { setChecked } from "../lib/reviewselect";
+import { setChecked, checkedInView, checkState } from "../lib/reviewselect";
 import { extensionRuntime } from "../lib/stockupload/native";
 import { useStockState } from "./state";
 import { useStockPreferences } from "./preferences";
@@ -27,7 +27,7 @@ export default function StockUploadPanel({ active }: { active: boolean }) {
   const [sort, setSort] = useState("name"), [reviewed, setReviewed] = useState("");
   const visible = state.rows.filter(r => `${r.name} ${r.dir}`.toLowerCase().includes(query.toLowerCase()) && rowMatchesBadge(badgesOf(badges, r.pairId), filter))
     .sort((a, b) => (sort === "path" ? a.dir.localeCompare(b.dir) : a.name.localeCompare(b.name)));
-  const ids = visible.map(r => r.id), selected = ids.filter(id => state.selection.checked.includes(id));
+  const ids = visible.map(r => r.id), selected = checkedInView(ids, state.selection.checked);
   const onSelect = (on: boolean) => { if (state.busy) return; commitStockSelection({ ...state.selection, checked: on ? setChecked(state.selection.checked, ids, true) : [] }, history); };
   const shortcuts = { activeId: state.selection.active, selectActive: () => commitStockSelection({ ...state.selection, checked: setChecked(state.selection.checked, [state.selection.active!], true) }, history), deselectActive: () => commitStockSelection({ ...state.selection, checked: setChecked(state.selection.checked, [state.selection.active!], false) }, history), selectVisible: () => onSelect(true), deselectAll: () => onSelect(false) };
   useSelectShortcuts(shortcuts, active && !state.busy && !showBadges && !confirmation); useStockNavigation(ids, active && !state.busy && !showBadges && !confirmation);
@@ -37,7 +37,7 @@ export default function StockUploadPanel({ active }: { active: boolean }) {
   return <section className="svg up" data-testid="stock-upload-panel" hidden={!active} style={{ "--svg-thumb": `${prefs.zoom}px` } as CSSProperties}>
     {!extensionRuntime() && <p className="svg-note warn">Standalone HTML keeps local review/editing. Automatic FTPS requires the optional extension edition and companion installed on your computer.</p>}
     <StockControls state={state} catalog={badges.catalog} query={query} filter={filter} sort={sort} onQuery={setQuery} onFilter={setFilter} onSort={setSort} onBadges={() => setShowBadges(true)} />
-    <StockToolbar prefs={prefs} update={update} selected={selected} visibleCount={ids.length} hiddenCount={state.selection.checked.length - selected.length} onToggleAll={on => { if (!state.busy) commitStockSelection({ ...state.selection, checked: setChecked(state.selection.checked, ids, on) }, history); }} badgeIds={visible.filter(r => selected.includes(r.id)).map(r => r.pairId)} badges={badges} onApply={badgeActions.onApply} onSelect={onSelect} plan={plan} busy={state.busy} canCancel={state.canCancel} epsReviewed={epsReviewed} onReview={on => setReviewed(on ? reviewKey : "")} />
+    <StockToolbar header={checkState(ids, state.selection.checked)} prefs={prefs} update={update} selected={selected} visibleCount={ids.length} hiddenCount={state.selection.checked.length - selected.length} onToggleAll={on => { if (!state.busy) commitStockSelection({ ...state.selection, checked: setChecked(state.selection.checked, ids, on) }, history); }} badgeIds={visible.filter(r => selected.includes(r.id)).map(r => r.pairId)} badges={badges} onApply={badgeActions.onApply} onSelect={onSelect} plan={plan} busy={state.busy} canCancel={state.canCancel} epsReviewed={epsReviewed} onReview={on => setReviewed(on ? reviewKey : "")} />
     <StockReport state={state} plan={plan} />
     <StockRows rows={visible} badges={badges} zoom={prefs.zoom} busy={state.busy} onToggle={badgeActions.onToggle} />
     <StockConfirmationDialog request={confirmation} active={active} />

@@ -1,9 +1,9 @@
+import { copyMetadataField } from "../upload/metacopy";
 import { useState } from "react";
 import type { StockPackage } from "../lib/stockupload/types";
 import { cleanMetadata, validateMetadata } from "../lib/upload/meta";
 import { refreshStockMetadata } from "../lib/stockupload/metadata";
-import { MetaFieldsGrid, ValidationLine } from "../upload/UploadMetaFields";
-import UploadMetaRights from "../upload/UploadMetaRights";
+import { MetadataEditor } from "../upload/UploadMetaFields";
 import { patchStock, stockState } from "./state";
 import { rescanStock } from "./actions";
 import { confirmStockAction } from "./confirmation";
@@ -18,17 +18,10 @@ export default function StockMetadata({ row, disabled }: { row: StockPackage; di
     finally { setSaving(false); patchStock({ busy: false }); await rescanStock(); }
   }
   const onEdit = (patch: Partial<typeof metadata>) => setMetadata(m => ({ ...m, ...patch }));
-  const onCopy = (field: "title" | "description" | "tags") => { void copyMetadata(field === "tags" ? metadata.tags.join(", ") : metadata[field]); };
-  return <fieldset className="up-shadow-fields up-meta" disabled={disabled || saving}><legend className="svg-label">Exported metadata</legend>
-    <MetaFieldsGrid id={`stock-${row.id}`} m={metadata} onEdit={onEdit} onCopy={onCopy} />
-    <UploadMetaRights id={`stock-${row.id}`} metadata={metadata} onEdit={onEdit} />
-    <ValidationLine id={`stock-${row.id}`} validation={edited ? validation : null} />
-    <div className="up-meta-actions"><button type="button" className="svg-btn tiny success" disabled={!edited || !validation.ok} onClick={() => void save()}>✓ Accept & embed metadata</button>
-      <small className="up-hint">Automatic validation. JPEG/EPS: XMP + IPTC-IIM; SVG: embedded metadata. No rerender.</small></div>
+  const onCopy = (field: "title" | "description" | "tags") => { void copyMetadataField(metadata, field, message => patchStock({ message })); };
+  return <fieldset className="up-shadow-fields" disabled={disabled || saving}><legend className="svg-label">Exported metadata</legend>
+    <MetadataEditor id={`stock-${row.id}`} metadata={metadata} validation={edited ? validation : null} onEdit={onEdit} onCopy={onCopy}
+      actions={<div className="up-meta-actions"><button type="button" className="svg-btn tiny success" disabled={!edited || !validation.ok} onClick={() => void save()}>✓ Accept & embed metadata</button>
+      <small className="up-hint">Automatic validation. JPEG/EPS: XMP + IPTC-IIM; SVG: embedded metadata. No rerender.</small></div>} />
   </fieldset>;
-}
-
-async function copyMetadata(text: string): Promise<void> {
-  try { await navigator.clipboard.writeText(text); patchStock({ message: "Metadata copied" }); }
-  catch { patchStock({ message: "Clipboard permission denied — select the text and copy it by hand" }); }
 }

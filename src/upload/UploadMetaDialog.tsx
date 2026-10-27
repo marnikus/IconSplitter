@@ -1,3 +1,4 @@
+import SvgModal, { ModalHeader } from "../ui/SvgModal";
 // UploadMetaDialog.tsx — the exact request, shown before any paid submission
 // (design §2.4/§5): the four facts, the images the request will carry (one per
 // selected icon, each rendered from its OWN approved SVG and sent unchanged),
@@ -12,22 +13,15 @@ import type { MetaDialog as MetaDialogModel } from "./types";
 
 /** The exact request, shown before any paid submission (design §2.4/§5). */
 export default function UploadMetaDialog({ g, dialog }: { g: UploadApi; dialog: MetaDialogModel }) {
-  return (
-    <div className="svg-backdrop" data-testid="upload-meta-backdrop" onClick={g.dismissDialog}>
-      <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="upload-meta-title"
-        onClick={(e) => e.stopPropagation()}>
-        <MetaDialogHead count={dialog.ids.length} mode={dialog.mode} thenExport={dialog.thenExport.length} onDismiss={g.dismissDialog} />
-        <div className="svg-modal-body">
-          <SentNote mode={dialog.mode} />
-          <ThenExportNote count={dialog.thenExport.length} />
-          <MetaFacts g={g} />
-          <MetaPreviews dialog={dialog} />
-          <MetaPrompt g={g} />
-          <DialogActions onDismiss={g.dismissDialog} onConfirm={g.confirmMetadata} disabled={dialog.preparing} mode={dialog.mode} />
-        </div>
-      </section>
-    </div>
-  );
+  return <SvgModal titleId="upload-meta-title" backdropTestid="upload-meta-backdrop" onDismiss={g.dismissDialog}
+    header={<MetaDialogHead count={dialog.ids.length} mode={dialog.mode} thenExport={dialog.thenExport.length} onDismiss={g.dismissDialog} />}>
+    <SentNote mode={dialog.mode} />
+    <ThenExportNote count={dialog.thenExport.length} />
+    <MetaFacts g={g} />
+    <MetaPreviews dialog={dialog} />
+    <MetaPrompt g={g} />
+    <DialogActions onDismiss={g.dismissDialog} onConfirm={g.confirmMetadata} disabled={dialog.preparing} mode={dialog.mode} />
+  </SvgModal>;
 }
 
 /** The dialog's title line — what is asked for, and what follows it. */
@@ -36,15 +30,8 @@ function MetaDialogHead({ count, mode, thenExport, onDismiss }: {
 }) {
   const icons = `icon${count === 1 ? "" : "s"}`;
   const action = mode === "regenerate" ? "Regenerate" : "Generate";
-  return (
-    <header className="svg-modal-head">
-      <h2 id="upload-meta-title">
-        {action} metadata for {count} {icons}
-        {thenExport > 0 ? `, then export ${thenExport}` : ""}
-      </h2>
-      <button type="button" className="svg-btn tiny" data-testid="upload-meta-cancel" onClick={onDismiss}>Cancel</button>
-    </header>
-  );
+  return <ModalHeader titleId="upload-meta-title" cancelTestid="upload-meta-cancel" onDismiss={onDismiss}
+    title={<>{action} metadata for {count} {icons}{thenExport > 0 ? `, then export ${thenExport}` : ""}</>} />;
 }
 
 /** What this ONE request does — and what regeneration replaces. */

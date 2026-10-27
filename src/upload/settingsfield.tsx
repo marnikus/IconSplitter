@@ -1,3 +1,4 @@
+import { ToggleField } from "../ui/fields";
 // settingsfield.tsx — what every row of the export settings dialog shares
 // (2026-10-08): the dialog's props, the inherited/overridden marker, and the
 // ONE write path a field change takes — the global defaults in the global
@@ -78,12 +79,6 @@ export function ToggleSetting({ p, effective, field, label, testid, hint }: {
   label: string; testid: string; hint: string;
 }) {
   const value = effective[field] as boolean;
-  return (
-    <label className="svg-field up-set-field">
-      <span className="svg-label">{label}<Marker p={p} field={field} testid={testid} /></span>
-      <input data-testid={`upload-set-${testid}`} type="checkbox" aria-label={label} checked={value}
-        onChange={(e) => change(p, field, e.target.checked)} />
-      <small className="up-hint">{hint}</small>
-    </label>
-  );
+  return <ToggleField label={label} testid={`upload-set-${testid}`} checked={value} onChange={on => change(p, field, on)}
+    marker={<Marker p={p} field={field} testid={testid} />} hint={hint} />;
 }

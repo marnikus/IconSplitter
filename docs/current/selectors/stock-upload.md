@@ -2,6 +2,8 @@
 
 [Behaviour and owners](../sor/stock-upload.md) · [setup](../sor/stock-upload-setup.md)
 
+[Shared component owners](../sor/upload-shared-ui.md).
+
 Semantic queries first; explicit handles for list/shell boundaries:
 
 | Test id | Meaning |
@@ -19,7 +21,8 @@ Semantic queries first; explicit handles for list/shell boundaries:
 | `stock-preset-{select,load,save-open,form,name,save,rename,rename-confirm,remove,remove-confirm,remove-cancel,edit-cancel,status}` | Shared compact preset controls; select alone never loads |
 | `stock-confirm-{cancel,continue}` | Existing SVG modal for transfer/account/metadata writes |
 | `stock-list` | JSON∩disk exported packages only |
-| `stock-row` | One package; use contained name/path to identify it |
+| `stock-row` | Shared PackageRow; contained `.svg-file-name` / `.svg-file-sub` identify it |
+| `stock-search`, `stock-sort`, `stock-destination` | Existing shared text/select fields |
 
 Reuse `upload-rowbadge-*` handles with the committed **pair ID**, not stock row ID;
 they denote shared badge controls/assignments. Metadata fields and Copy/rights/validation reuse `upload-meta-*` / `upload-copy-*`

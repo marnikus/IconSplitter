@@ -49,7 +49,7 @@ describe("separate exported-file Upload UI", () => {
     expect(host.querySelector('.pair-table > .up-columns')?.children).toHaveLength(7);
     expect(q('[data-testid="stock-row"]').classList.contains("up-row")).toBe(true);
     expect(q('[data-testid="stock-row"]').children).toHaveLength(7);
-    await click('[data-testid="stock-row"] strong');
+    await click('[data-testid="stock-row"] .svg-file-name');
     expect(host.querySelector('.up-detail .up-meta-field textarea.svg-input[aria-label=Description]')).not.toBeNull();
     expect(host.querySelector('.up-detail [data-testid^="upload-meta-creator-"]')).not.toBeNull();
     expect(host.querySelector('.up-detail [data-testid^="upload-copy-title-"]')).not.toBeNull();
@@ -103,7 +103,7 @@ describe("separate exported-file Upload UI", () => {
   });
   it("uses the shared metadata fields, copy buttons, word counts and validation feedback", async () => {
     const writeText = vi.fn(async () => undefined); vi.stubGlobal("navigator", { clipboard: { writeText } });
-    await click('[data-testid="stock-row"] strong');
+    await click('[data-testid="stock-row"] .svg-file-name');
     await click('[data-testid^="upload-copy-title-"]'); expect(writeText).toHaveBeenCalledWith("A waving flag icon with pole");
     await input('[aria-label="Title"]', "Short");
     expect(q('[data-testid^="upload-meta-validation-"]').textContent).toContain("5");
@@ -112,7 +112,7 @@ describe("separate exported-file Upload UI", () => {
     expect((host.querySelector('.up-meta-actions button') as HTMLButtonElement).disabled).toBe(false);
   });
   it("cancels a pending confirmation on Escape and suppresses underlying row shortcuts", async () => {
-    await click('[data-testid="stock-row"] strong');
+    await click('[data-testid="stock-row"] .svg-file-name');
     let task!: Promise<void>;
     await act(async () => { task = startStockUpload(stockState().rows[0].artifacts, false); });
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true })));
@@ -135,8 +135,21 @@ describe("separate exported-file Upload UI", () => {
     await act(async () => ui.render(<HistoryProvider><StockUploadPanel active={false} /></HistoryProvider>));
     await task; expect(host.querySelector('[role=dialog]')).toBeNull(); expect(stockState().busy).toBe(false);
   });
+  it("uses the same row Enter/Space activation and nested-control isolation as SVG to upload", async () => {
+    const row = q('[data-testid="stock-row"]');
+    await act(async () => row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+    expect(stockState().selection.active).toBe("one/export/export.json");
+    expect(stockState().selection.checked).toEqual([]);
+    await act(async () => row.querySelector("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true })));
+    expect(stockState().selection.checked).toEqual([]);
+  });
+  it("uses the actual existing disclosure component/styles for rejected export folders", async () => {
+    await act(async () => patchStock({ errors: ["Changed bytes — package rejected"] }));
+    expect(host.querySelector('details.up-shadow-dialog > summary.up-set-group-summary')?.textContent).toContain("1 rejected");
+    expect(host.querySelector('details > .up-set-group-content')?.textContent).toContain("Changed bytes");
+  });
   it("keeps Batch active/check semantics, Q/E and visible selection scope", async () => {
-    await click('[data-testid="stock-row"] strong'); expect(stockState().selection.active).toBe("one/export/export.json"); expect(stockState().selection.checked).toEqual([]);
+    await click('[data-testid="stock-row"] .svg-file-name'); expect(stockState().selection.active).toBe("one/export/export.json"); expect(stockState().selection.checked).toEqual([]);
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true })));
     expect(stockState().selection.checked).toEqual(["one/export/export.json"]);
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
@@ -146,7 +159,7 @@ describe("separate exported-file Upload UI", () => {
   });
   it("reuses full badge CRUD and labels and does not put stock passwords in browser preferences", async () => {
     await act(async () => { setRowBadgeState({ v: 1, catalog: [{ id: "b", name: "Ready", color: "#123456" }], assigned: {} }); });
-    await click('[data-testid="stock-row"] strong');
+    await click('[data-testid="stock-row"] .svg-file-name');
     await click('[data-testid="upload-rowbadge-toggle-p"]'); await click('[data-testid="upload-rowbadge-option-p-b"]');
     expect(getRowBadgeState().assigned.p).toEqual(["b"]); expect(host.textContent).toContain("Ready");
     expect(localStorage.getItem("iconSplitter.stockUpload.preferences.v1") || "").not.toMatch(/password|username/);

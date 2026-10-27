@@ -1,3 +1,4 @@
+import BulkBarShell from "../ui/BulkBarShell";
 // UploadBulkBar.tsx — the bulk bar of the "SVG to upload" tab (design §4.1/
 // §6): the header checkbox with an indeterminate state, the selection scope,
 // the PREVIEW settings (thumbnail zoom, the frame background), the export
@@ -61,35 +62,16 @@ export interface UploadBulkBarProps {
 const STROKE_TITLE = "Export stroke width in px, written on every visible stroke of every icon (the live previews show it). default = each SVG keeps its own widths.";
 
 export default function UploadBulkBar(p: UploadBulkBarProps) {
-  return (
-    <div className="svg-bulk" data-testid="upload-bulk">
-      <BulkLeft p={p} />
-      <BulkRight p={p} />
-    </div>
-  );
-}
-
-/** The selection half: header checkbox, counts, scope, select/deselect. */
-function BulkLeft({ p }: { p: UploadBulkBarProps }) {
-  return (
-    <div className="svg-bulk-left">
-      <input type="checkbox" data-testid="upload-check-all" aria-label="Select all visible icons"
-        checked={p.header === "all"} onChange={(e) => p.onToggleAll(e.target.checked)}
-        ref={(el) => { if (el) el.indeterminate = p.header === "some"; }} />
-      <span className="svg-selected-copy" data-testid="upload-selected-count">{p.checkedCount} selected</span>
-      <span className="svg-scope-copy" data-testid="upload-scope">across {p.visibleCount} approved SVGs</span>
-      <span className="svg-divider" aria-hidden="true" />
-      <button type="button" className="svg-btn" data-testid="upload-select-visible" onClick={p.onSelectVisible}>Select all visible</button>
-      <button type="button" className="svg-btn" data-testid="upload-deselect" onClick={p.onDeselectAll}>Deselect all</button>
-    </div>
-  );
+  return <BulkBarShell testid="upload-bulk" header={p.header} checkedCount={p.checkedCount} visibleCount={p.visibleCount}
+    checkLabel="Select all visible icons" selectLabel="Select all visible" scopeLabel="approved SVGs" rightTestid="upload-bulk-right"
+    onToggleAll={p.onToggleAll} onSelectVisible={p.onSelectVisible} onDeselectAll={p.onDeselectAll} right={<BulkRight p={p} />} />;
 }
 
 /** The action half: preview settings, progress, cancel and five bulk actions. */
 function BulkRight({ p }: { p: UploadBulkBarProps }) {
   const running = p.runningMeta + p.runningExport + Number(p.downloading === true);
   return (
-    <div className="svg-bulk-right" data-testid="upload-bulk-right">
+    <>
       <PreviewBg bg={p.bg} onBg={p.onBg} />
       <span className="svg-divider" aria-hidden="true" />
       <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} idPrefix="upload" title={STROKE_TITLE} />
@@ -105,7 +87,7 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
         <button type="button" className="svg-btn" data-testid="upload-cancel-run" onClick={p.onCancel}>Cancel run</button>
       )}
       <BulkActions p={p} />
-    </div>
+    </>
   );
 }
 

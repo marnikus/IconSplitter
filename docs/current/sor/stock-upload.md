@@ -24,7 +24,8 @@ shared by committed pair ID; selection IDs are physical package-relative paths.
 The selection, zoom, badge apply, upload, destination and format toolbar is pinned.
 Badge CRUD, colour, multi-apply and filtering reuse existing implementations.
 
-Upload uses the existing `up-shell` / `svg up` workspace, SVG controls/provider
+Both tabs consume the same [shared components](upload-shared-ui.md), not merely
+matching class names. Upload uses the existing `up-shell` / `svg up` workspace, SVG controls/provider
 card, `svg-bulkbar-pin` bulk shell, seven-column `up-row` package table and
 `up-detail` editor. There is no stock stylesheet or alternative design. Folder,
 badge/filter/catalog, metadata fields/rights/validation/Copy, thumbnail zoom and

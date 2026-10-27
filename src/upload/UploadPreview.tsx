@@ -1,3 +1,4 @@
+import PreviewFrame from "../ui/PreviewFrame";
 // UploadPreview.tsx — the framed preview of what a row EXPORTS. Mirrors
 // svg/SvgThumbs' SVG side: the document is sanitized and fitted by
 // lib/svgpreview inside a shadow root (never written back), inside a FRAME whose
@@ -37,11 +38,10 @@ export default function UploadPreview({ rootRef, rootToken, path, thumb, bg, tes
   const box = useMemo(() => zoomBoxFit(thumb, ratioOf(shown.svg)), [thumb, shown.svg]);
   const frame = previewFrame(bg);
   return (
-    <div className={`svg-preview-frame${frame.outline ? " contrast" : ""}`} data-testid={`${testid}-frame`}
-      style={{ width: box.width, height: box.height, background: frame.color }} data-bg={frame.color}>
+    <PreviewFrame box={box} color={frame.color} outline={frame.outline} testid={`${testid}-frame`}>
       <SvgPreviewBox code={shown.svg} box={box} testid={testid} label={label} version={version} />
       {shown.note !== null && <small className="up-hint up-prev-note" data-testid={`${testid}-note`}>{shown.note}</small>}
-    </div>
+    </PreviewFrame>
   );
 }
 
