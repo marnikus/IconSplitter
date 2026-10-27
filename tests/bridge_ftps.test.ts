@@ -70,6 +70,7 @@ describe("local loopback Explicit FTPS bridge", () => {
     const h = await startHelper();
     const probe = await probeBridgeFtps(h.url);
     expect(probe).toEqual({ ok: true });
+    expect(h.log.join("\n")).toContain("FTPS upload helper: READY");
 
     const blocked = await fetch(`${h.url}/ftps/test`, {
       method: "POST",

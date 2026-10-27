@@ -156,9 +156,10 @@ const server = createServer((req, res) => {
 server.listen(config.port, "127.0.0.1", () => {
   const port = server.address().port;
   const inkscape = findInkscape(config.inkscape);
-  console.log(`Inkscape helper listening on http://127.0.0.1:${port}  (loopback only)`);
-  console.log(inkscape.found ? `Inkscape ${inkscape.version} at ${inkscape.path}` : `Inkscape NOT found — ${inkscape.fix}`);
+  console.log("FTPS upload helper: READY (/ftps/test, /ftps/upload, /ftps/close — Inkscape not required for FTPS)");
+  console.log(inkscape.found ? `Inkscape ${inkscape.version} at ${inkscape.path}` : `Inkscape NOT found (optional, only for Inkscape EPS conversion) — ${inkscape.fix}`);
   console.log(`serving ${existsSync(path.join(config.dist, "index.html")) ? "the built app" : "NO built app yet"} from ${config.dist}`);
+  console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
 });
 server.on("error", (error) => {
   console.error(error.code === "EADDRINUSE" ? `port ${config.port} is already in use — is the helper already running? (or pass --port)` : error.message);
