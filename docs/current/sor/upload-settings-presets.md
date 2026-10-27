@@ -1,6 +1,8 @@
 # Named Export settings presets
 
 Part of [settings](upload-settings.md); independent of metadata prompt presets.
+`SettingsPresetControls` is also used by [exported Upload](stock-upload.md); only
+the presentation is shared. Each tab retains its own catalog and load action.
 
 ## Behavior
 

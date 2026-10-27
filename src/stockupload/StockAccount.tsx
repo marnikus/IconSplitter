@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { connectCompanion, extensionRuntime } from "../lib/stockupload/native";
+import { confirmStockAction } from "./confirmation";
 export default function StockAccount({ disabled }: { disabled: boolean }) {
   const [username, setUsername] = useState(""), [password, setPassword] = useState(""), [status, setStatus] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false), [open, setOpen] = useState(false);
   async function account(op: "save" | "forget" | "receipts" | "reconcile"): Promise<void> {
     const warning = op === "reconcile" ? "Only clear receipts after checking EVERY transferred/uncertain file in the stock portal. This permits duplicate transfers. Have you reconciled them?" : "Run the local companion for this account action? Passwords are kept only in your OS credential store.";
-    if (!window.confirm(warning)) return;
+    if (!await confirmStockAction("Confirm local account action", warning)) return;
     setBusy(true); let client;
     try {
       client = connectCompanion(); await client.hello();
@@ -14,12 +15,16 @@ export default function StockAccount({ disabled }: { disabled: boolean }) {
     } catch { setStatus("Companion/keychain unavailable, locked or busy. Install/approve the companion locally; no plaintext fallback."); }
     finally { client?.close(); setUsername(""); setPassword(""); setBusy(false); }
   }
-  return <details className="stock-account"><summary>Local Shutterstock account & transfer history</summary>
-    <fieldset disabled={disabled || busy || !extensionRuntime()}><p>Username and password go only to your OS credential store, not browser storage or exports.</p>
-      <label>Username/email <input autoComplete="off" value={username} onChange={e => setUsername(e.target.value)} /></label>
-      <label>Password <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
-      <button disabled={!username || !password} onClick={() => void account("save")}>Save locally</button>
-      <button onClick={() => void account("forget")}>Forget account</button><button onClick={() => void account("receipts")}>Transfer history</button>
-      <button onClick={() => void account("reconcile")}>Clear reconciled history</button>
-    </fieldset><p role="status">{status}</p></details>;
+  return <section className={`svg-provider${open ? "" : " closed"}`} aria-label="Local Shutterstock account & transfer history">
+    <header className="svg-provider-top"><strong>Local Shutterstock account & transfer history</strong><button type="button" className="svg-link" data-testid="stock-account-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Minimize" : "Restore"}</button></header>
+    {open && <fieldset className="up-shadow-fields" disabled={disabled || busy || !extensionRuntime()}><p className="svg-note">Username and password go only to your OS credential store, not browser storage or exports.</p>
+      <div className="svg-provider-fields">
+        <label className="svg-field"><span className="svg-label">Username/email</span><input className="svg-input" autoComplete="off" value={username} onChange={e => setUsername(e.target.value)} /></label>
+        <label className="svg-field"><span className="svg-label">Password</span><input className="svg-input" type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
+      </div>
+      <div className="up-bg-row"><button type="button" className="svg-btn tiny" disabled={!username || !password} onClick={() => void account("save")}>Save locally</button>
+        <button type="button" className="svg-btn tiny" onClick={() => void account("forget")}>Forget account</button><button type="button" className="svg-btn tiny" onClick={() => void account("receipts")}>Transfer history</button>
+        <button type="button" className="svg-btn tiny danger" onClick={() => void account("reconcile")}>Clear reconciled history</button></div>
+    </fieldset>}{open && <p className="svg-note" role="status">{status}</p>}
+  </section>;
 }

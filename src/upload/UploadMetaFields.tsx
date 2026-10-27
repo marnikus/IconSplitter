@@ -47,7 +47,7 @@ export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, o
 }
 
 /** The three editable fields, each with its live count and copy button. */
-function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
+export function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
   id: string; m: IconMetadata; onEdit: (patch: Partial<IconMetadata>) => void;
   onCopy: (field: "title" | "description" | "tags") => void;
 }) {
@@ -108,7 +108,7 @@ function Field({ id, label, testid, value, count, hint, multiline, onEdit, onCop
 }
 
 /** The last validation's errors (red) and warnings (yellow), never silent. */
-function ValidationLine({ id, validation }: { id: string; validation: MetadataValidation | null }) {
+export function ValidationLine({ id, validation }: { id: string; validation: MetadataValidation | null }) {
   if (validation === null) return null;
   return (
     <div className="up-meta-validation" data-testid={`upload-meta-validation-${id}`}>

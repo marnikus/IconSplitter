@@ -1,3 +1,4 @@
+import { confirmStockAction } from "./confirmation";
 import { saveHandles } from "../batch/store";
 import { ensurePermission } from "../batch/picker";
 import { pickFolderFor } from "../ui/pickroot";
@@ -27,7 +28,7 @@ export async function rescanStock(): Promise<void> {
 }
 export async function startStockUpload(files: StockArtifact[], epsReviewed: boolean): Promise<void> {
   if (stockState().busy || files.length === 0) return;
-  if (!window.confirm(`Transfer ${files.length} files (${(files.reduce((n, f) => n + f.bytes, 0) / 1e6).toFixed(1)} MB) via explicit TLS to ftps.shutterstock.com:21?\n${files.map(f => f.name).join("\n")}\nTransfer is NOT submission/review. No automatic retries. Continue?`)) return;
+  if (!await confirmStockAction("Confirm stock transfer", `Transfer ${files.length} files (${(files.reduce((n, f) => n + f.bytes, 0) / 1e6).toFixed(1)} MB) via explicit TLS to ftps.shutterstock.com:21?\n${files.map(f => f.name).join("\n")}\nTransfer is NOT submission/review. No automatic retries. Continue?`) || stockState().busy) return;
   controller = new AbortController(); const finishSound = startCompletionSound();
   patchStock({ busy: true, canCancel: true, receipts: [], message: "Checking confirmed exported files" });
   try {

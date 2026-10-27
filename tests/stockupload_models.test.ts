@@ -12,8 +12,12 @@ describe("stock settings are closed local non-secret data", () => {
   it("normalizes formats, zoom, preset names and only installed stock descriptors", () => {
     expect(parseStockPreferences(null).formats.raster).toBe(true); expect(readFormats(null).eps).toBe(true);
     const p = parseStockPreferences({ formats: { raster: false, eps: true, svg: true }, zoom: 500, destinations: ["other", "shutterstock", "shutterstock"], presets: [{ name: "x", formats: { raster: false } }, null, { name: "" }] });
-    expect(p.zoom).toBe(200); expect(p.formats).toEqual({ raster: false, eps: true, svg: true, zip: false }); expect(p.presets).toHaveLength(1); expect(p.destinations).toEqual(["shutterstock"]);
+    expect(p.zoom).toBe(500); expect(p.formats).toEqual({ raster: false, eps: true, svg: true, zip: false }); expect(p.presets).toHaveLength(1); expect(p.destinations).toEqual(["shutterstock"]);
     expect(readDestinations(["ftp://evil", "other"])).toEqual([]); expect(readDestinations(null)).toEqual(["shutterstock"]);
+  });
+  it("uses the same finite snapped 48–800 thumbnail range as SVG to upload", () => {
+    for (const [raw, expected] of [[1, 48], [900, 800], [101, 100], [NaN, 84], [Infinity, 84]]) expect(parseStockPreferences({ zoom: raw }).zoom).toBe(expected);
+    expect(parseStockPreferences({}).zoom).toBe(84);
   });
   it("keeps untrusted filenames out of native commands and paths", () => {
     for (const s of ["../a.jpg", "C:\\a.jpg", "a\r\nSTOR x.jpg", "file%2f.jpg", "CON.jpg", "a?.jpg", " a.jpg", ".hidden.jpg"]) expect(safeMediaName(s)).toBe(false);

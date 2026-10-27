@@ -1,12 +1,13 @@
+import { clampZoom, ZOOM_DEFAULT } from "../zoom";
 import { readDestinations } from "./destinations";
 import { isRecord } from "../isrecord";
 import type { FormatSelection } from "./types";
 export interface StockPreset { name: string; formats: FormatSelection }
 export interface StockPreferences { formats: FormatSelection; zoom: number; presets: StockPreset[]; destinations: string[] }
-export const DEFAULT_STOCK_PREFS: StockPreferences = { formats: { raster: true, svg: false, eps: true, zip: false }, zoom: 90, presets: [], destinations: ["shutterstock"] };
+export const DEFAULT_STOCK_PREFS: StockPreferences = { formats: { raster: true, svg: false, eps: true, zip: false }, zoom: ZOOM_DEFAULT, presets: [], destinations: ["shutterstock"] };
 export function parseStockPreferences(raw: unknown): StockPreferences {
   if (!isRecord(raw)) return DEFAULT_STOCK_PREFS;
-  return { formats: readFormats(raw.formats), zoom: typeof raw.zoom === "number" ? Math.max(48, Math.min(200, raw.zoom)) : 90,
+  return { formats: readFormats(raw.formats), zoom: typeof raw.zoom === "number" ? clampZoom(raw.zoom) : ZOOM_DEFAULT,
     destinations: readDestinations(raw.destinations), presets: readPresets(raw.presets) };
 }
 export function readFormats(raw: unknown): FormatSelection {

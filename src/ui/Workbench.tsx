@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import ExtensionPermissions from "./ExtensionPermissions";
 import App from "../App";
 import StockUploadPanel from "../stockupload/StockUploadPanel";
-import "../stockupload/stock.css";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
@@ -103,7 +102,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
         <SvgPanel active={tab === "generateSvg"} />
       </div>
       <UploadWorkspace active={tab === "upload"} />
-      <StockUploadPanel active={tab === "stockUpload"} />
+      <div className="up-shell px-4 py-3" hidden={tab !== "stockUpload"}><StockUploadPanel active={tab === "stockUpload"} /></div>
     </>
   );
 }

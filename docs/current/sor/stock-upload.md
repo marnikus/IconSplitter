@@ -24,6 +24,24 @@ shared by committed pair ID; selection IDs are physical package-relative paths.
 The selection, zoom, badge apply, upload, destination and format toolbar is pinned.
 Badge CRUD, colour, multi-apply and filtering reuse existing implementations.
 
+Upload uses the existing `up-shell` / `svg up` workspace, SVG controls/provider
+card, `svg-bulkbar-pin` bulk shell, seven-column `up-row` package table and
+`up-detail` editor. There is no stock stylesheet or alternative design. Folder,
+badge/filter/catalog, metadata fields/rights/validation/Copy, thumbnail zoom and
+compact preset editor are shared components. Zoom follows the same48–800px,
+step4, default84px rule as SVG to upload. The visible header checkbox preserves
+hidden checks; Deselect all clears all checks. Native work disables selection.
+
+Presets use the same on-demand inline Save as/Rename editor and inline removal
+confirmation as SVG Export settings, including Escape/Cancel. Selecting a name
+does not load it; explicit Load restores its format choices. Account controls
+use the existing minimizable provider card; passwords never become preferences.
+Transfer, account and metadata-write confirmations use the existing SVG modal
+HTML/classes, not browser confirm/prompt dialogs. Escape, Cancel, backdrop or
+leaving/unmounting an unconfirmed workspace cancels without starting work;
+keyboard focus is contained and list shortcuts are suspended while it is open.
+Confirmed in-flight transfers still survive in-app tab changes.
+
 Metadata edits validate/auto-accept and re-embed already-exported JPEG/SVG/EPS,
 read back, then update hashes and write export.json LAST. No source/rerender.
 A caught write failure attempts byte-exact rollback. A crash/failed rollback may

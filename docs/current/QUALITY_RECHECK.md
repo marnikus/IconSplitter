@@ -3638,3 +3638,20 @@ Added docs/archive/2026-10-27-companion-lifecycle-research/{README,lifecycle}.md
 - Node22.12.0/npm10: types, expanded lint, changed quality, verify:fast and verify PASS;3128/304 complete suite, native perf30/5 unchanged; lib lines98.40%, all new stock lib functions100% covered. Extension external-script build and Linux-x64 SEA temporary-HOME registration/origin/hello/cancel/uninstall smoke PASS. npm production workspace audit0 reported advisories (not runtime/native-binary clearance).
 - Native synthetic handoff samples1/10/50/100MB:74/238/992/2050ms;55/61/72/86MiB RSS sampled at handoff, not peak; synthetic sink, not browser/FTPS throughput. No speed-target claim.
 - No live stock credentials/login/upload. Real target Chrome/Edge, Windows/macOS packaging/signing, OS credential-store prompts and stock ingestion/review remain explicit manual gates; current setup page records hard-kill reconciliation and remote LIST/STOR race limitations.
+
+## 2026-10-28 — Upload UI parity correction
+
+Replaced the rejected independent stock theme with existing svg/up shell,
+controls/provider/table/row/detail/modal markup and shared bulk, SVG zoom,
+metadata/rights/Copy/validation, badge and inline preset components. Deleted
+stock.css/import; index.css unchanged. TDD witnessed RED before implementation.
+Pinned Node22.12.0 final verify:fast + verify ALL LANES PASSED:3139/304, plus
+independent native30/5; library lines98.40%, functions98.38%. Expanded lint0
+errors/20 existing warnings, types/changed quality/docs/hygiene/offline and
+extension builds pass. First fast gate caught docs router size (fixed); a later
+run hit existing badge readiness once, then focused and both full gates passed
+unchanged. No test/harness/threshold weakening. DOM parity is not screenshot or
+real-browser acceptance. No live stock credentials/uploads; native/FTPS code
+unchanged. Install required a one-command engine-strict override for existing
+locked ESLint engine declarations; all gates used pinned22.12.0. Evidence:
+`docs/archive/2026-10-28-stock-upload-ui-parity/README.md`.

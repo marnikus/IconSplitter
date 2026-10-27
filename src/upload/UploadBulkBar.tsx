@@ -12,8 +12,8 @@
 // SELECTION only.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
+import UploadThumbnailZoom from "./UploadThumbnailZoom";
 import PreviewStroke from "../svg/PreviewStroke";
-import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadgeApply from "./UploadRowBadgeApply";
 
@@ -94,7 +94,7 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
       <span className="svg-divider" aria-hidden="true" />
       <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} idPrefix="upload" title={STROKE_TITLE} />
       <span className="svg-divider" aria-hidden="true" />
-      <Zoom thumb={p.thumb} onThumb={p.onThumb} />
+      <UploadThumbnailZoom thumb={p.thumb} onThumb={p.onThumb} />
       <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>
         ⚙ Export settings…
       </button>
@@ -153,21 +153,6 @@ function MetadataActions({ p }: { p: UploadBulkBarProps }) {
           : `${p.metaRegenerateCount} of ${p.checkedCount} selected already have metadata — one replacement request each`}>
         ↻ Regenerate metadata ({p.metaRegenerateCount})</button>
     </>
-  );
-}
-
-/** The ONE zoom value (display-only — never the output scale, design §2.12). */
-function Zoom({ thumb, onThumb }: { thumb: number; onThumb: (px: number) => void }) {
-  return (
-    <div className="svg-zoom">
-      <label htmlFor="upload-thumb">ZOOM</label>
-      <span aria-hidden="true">{ZOOM_MIN}</span>
-      <input id="upload-thumb" data-testid="upload-thumb" type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={ZOOM_STEP}
-        value={thumb} aria-label="Thumbnail maximum height"
-        onChange={(e) => onThumb(clampZoom(Number(e.target.value)))} />
-      <span aria-hidden="true">{ZOOM_MAX}</span>
-      <output className="svg-zoom-value" data-testid="upload-thumb-value" htmlFor="upload-thumb">{zoomLabel(thumb)}</output>
-    </div>
   );
 }
 

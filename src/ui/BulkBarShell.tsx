@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 export interface BulkBarShellProps {
   testid: string;
+  disabled?: boolean;
   header: CheckState;
   checkedCount: number;
   visibleCount: number;
@@ -22,6 +23,7 @@ function Check({ p }: { p: BulkBarShellProps }) {
       type="checkbox"
       data-testid={`${p.testid.replace("-bulk", "")}-check-all`}
       aria-label="Select all visible"
+      disabled={p.disabled}
       checked={p.header === "all"}
       onChange={(e) => p.onToggleAll(e.target.checked)}
       ref={(el) => {
@@ -57,10 +59,10 @@ export default function BulkBarShell(p: BulkBarShellProps) {
         <Check p={p} />
         <Counts p={p} />
         <span className="svg-divider" aria-hidden="true" />
-        <button type="button" className="svg-btn" data-testid={`${p.testid.replace("-bulk", "")}-select-visible`} onClick={p.onSelectVisible}>
+        <button type="button" className="svg-btn" data-testid={`${p.testid.replace("-bulk", "")}-select-visible`} disabled={p.disabled} onClick={p.onSelectVisible}>
           Select visible
         </button>
-        <button type="button" className="svg-btn" data-testid={`${p.testid.replace("-bulk", "")}-deselect`} onClick={p.onDeselectAll}>
+        <button type="button" className="svg-btn" data-testid={`${p.testid.replace("-bulk", "")}-deselect`} disabled={p.disabled} onClick={p.onDeselectAll}>
           Deselect all
         </button>
       </div>
