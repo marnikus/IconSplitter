@@ -3,7 +3,7 @@
 
 import crypto from "node:crypto";
 import net from "node:net";
-import { FtpsError, assertSafeFileName } from "../ftps/reply.mjs";
+import { FtpsError, assertSafeFileName, describeSocketError } from "../ftps/reply.mjs";
 import {
   buildClientKexInit, buildSessionCiphers, createEphemeralKex,
   enforceSshHostKeyPolicy, parseServerKexInit, verifyHostKeySignature,
@@ -17,8 +17,11 @@ function connectTcpWithBanner(host, port, timeoutMs) {
   return new Promise((resolve, reject) => {
     const sock = net.connect({ host, port });
     let buf = Buffer.alloc(0);
-    const timer = setTimeout(() => { sock.destroy(); reject(new FtpsError("timeout", "SFTP connection timed out")); }, timeoutMs);
-    sock.once("error", (err) => { clearTimeout(timer); reject(new FtpsError("network", `SFTP socket error: ${err.message}`)); });
+    const timer = setTimeout(() => { sock.destroy(); reject(new FtpsError("timeout", `SFTP connection to ${host}:${port} timed out`)); }, timeoutMs);
+    sock.once("error", (err) => {
+      clearTimeout(timer);
+      reject(new FtpsError("network", `SFTP socket error (${host}:${port}): ${describeSocketError(err)}`));
+    });
     sock.once("connect", () => sock.write(`${CLIENT_BANNER}\r\n`));
     const onData = (chunk) => {
       buf = Buffer.concat([buf, chunk]);
@@ -73,7 +76,7 @@ function createPacketDriver(sock, framing, timeoutMs) {
     try { for (const p of framing.pushChunk(chunk)) dispatchPacket(p); }
     catch (err) { failAll(err instanceof FtpsError ? err : new FtpsError("ftp", err.message)); sock.destroy(); }
   });
-  sock.on("error", (err) => failAll(new FtpsError("network", err.message)));
+  sock.on("error", (err) => failAll(new FtpsError("network", describeSocketError(err, "SFTP socket error"))));
   sock.on("close", () => failAll(new FtpsError("network", "SFTP connection closed")));
 
   return {

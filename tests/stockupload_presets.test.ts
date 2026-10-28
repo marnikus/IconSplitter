@@ -176,4 +176,27 @@ describe("stock FTP/SFTP presets — Shutterstock & Adobe Stock defaults", () =>
     }));
     expect(full.presets.slice(0, 2).map((p) => p.id)).toEqual(["shutterstock", "adobe-stock"]);
   });
+
+  it("auto-heals stale Adobe Stock localStorage entries that had FTPS (:21) back to SFTP (:22)", () => {
+    const staleAdobe = JSON.stringify({
+      v: 1,
+      presets: [
+        SHUTTERSTOCK_PRESET,
+        {
+          ...ADOBE_STOCK_PRESET,
+          protocol: "ftps-explicit",
+          port: 21,
+          tlsPolicy: "accept-self-signed",
+        },
+      ],
+      activePresetId: "adobe-stock",
+      checkedTargets: ["adobe-stock"],
+      formats: { raster: false, svg: true, eps: true, zip: false },
+    });
+    const healed = parseStockPresetState(staleAdobe);
+    const adobe = healed.presets.find((p) => p.id === "adobe-stock")!;
+    expect(adobe.protocol).toBe("sftp");
+    expect(adobe.port).toBe(22);
+    expect(adobe.tlsPolicy).toBe("accept-self-signed");
+  });
 });

@@ -56,7 +56,8 @@ function toFailure(raw: unknown, creds: FtpCredentials, protocol?: FtpProtocol):
     return { code: "helper-down", reason: OUTDATED_SFTP_REASON, serverCertSha256: null };
   }
   const code = typeof raw.code === "string" ? (raw.code as FtpsErrorCode) : "ftp";
-  const reason = redactCredentials(rawReason, creds);
+  const nonEmpty = rawReason.trim() !== "" ? rawReason : `Connection failed (${code})`;
+  const reason = redactCredentials(nonEmpty, creds);
   const cert = typeof raw.serverCertSha256 === "string" ? raw.serverCertSha256 : null;
   return { code, reason, serverCertSha256: cert };
 }

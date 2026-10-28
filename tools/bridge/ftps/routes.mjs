@@ -5,7 +5,7 @@
 import crypto from "node:crypto";
 import { openSftpSession } from "../sftp/client.mjs";
 import { openFtpsSession } from "./client.mjs";
-import { FtpsError } from "./reply.mjs";
+import { FtpsError, describeSocketError } from "./reply.mjs";
 
 const SESSION_IDLE_MS = 15000;
 const sessions = new Map();
@@ -15,7 +15,7 @@ function openTransportSession(cfg) {
 }
 
 function scrubSecrets(text, cfg) {
-  let out = String(text ?? "FTPS failure");
+  let out = typeof text === "string" && text.trim() !== "" ? text.trim() : "Connection failed";
   for (const raw of [cfg?.password, cfg?.username]) {
     const s = typeof raw === "string" ? raw.trim() : "";
     if (s !== "") out = out.split(s).join("••••••••");
@@ -105,7 +105,7 @@ export async function handleFtpsTest(req, res, jsonReply) {
     const code = err instanceof FtpsError ? err.code : "network";
     const cert = err instanceof FtpsError ? err.serverCertSha256 : null;
     return jsonReply(res, statusForCode(code), {
-      ok: false, code, reason: scrubSecrets(err?.message, cfg), serverCertSha256: cert,
+      ok: false, code, reason: scrubSecrets(describeSocketError(err, "Connection failed"), cfg), serverCertSha256: cert,
     });
   }
 }
@@ -148,7 +148,7 @@ export async function handleFtpsUpload(req, res, maxBytes, jsonReply) {
     const code = err instanceof FtpsError ? err.code : "network";
     const cert = err instanceof FtpsError ? err.serverCertSha256 : null;
     return jsonReply(res, statusForCode(code), {
-      ok: false, code, reason: scrubSecrets(err?.message, cfg), serverCertSha256: cert,
+      ok: false, code, reason: scrubSecrets(describeSocketError(err, "Upload failed"), cfg), serverCertSha256: cert,
     });
   }
 }

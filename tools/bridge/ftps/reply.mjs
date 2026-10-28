@@ -8,6 +8,18 @@ export class FtpsError extends Error {
   }
 }
 
+export function describeSocketError(err, fallback = "socket connection failed") {
+  if (typeof err?.message === "string" && err.message.trim() !== "") return err.message.trim();
+  if (Array.isArray(err?.errors)) {
+    for (const sub of err.errors) {
+      if (typeof sub?.message === "string" && sub.message.trim() !== "") return sub.message.trim();
+      if (typeof sub?.code === "string" && sub.code !== "") return `connect ${sub.code}`;
+    }
+  }
+  if (typeof err?.code === "string" && err.code !== "") return `connect ${err.code}`;
+  return fallback;
+}
+
 export function assertSafeCommandToken(value, label) {
   if (typeof value !== "string" || /[\r\n\0]/.test(value)) {
     throw new FtpsError("bad-request", `invalid ${label}`);
@@ -88,7 +100,7 @@ export function createReplyReader(initialStream) {
   }
 
   function onError(err) {
-    fail(err instanceof FtpsError ? err : new FtpsError("network", err.message || "socket error"));
+    fail(err instanceof FtpsError ? err : new FtpsError("network", describeSocketError(err, "socket error")));
   }
 
   function onClose() {

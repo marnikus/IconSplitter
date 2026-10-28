@@ -123,16 +123,17 @@ function EndpointFields({ active, onPatch }: {
 function ProtocolAndFolderFields({ active, onPatch }: {
   active: StockFtpPreset; onPatch: (p: Partial<StockFtpPreset>) => void;
 }) {
+  const sftpOnly = active.template === "adobe-stock";
   return (
     <>
       <label className="svg-field">
         <span className="svg-label">Protocol / Encryption</span>
         <select className="svg-input" data-testid="stock-ftp-protocol" value={active.protocol}
-          onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
-          <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>
+          disabled={sftpOnly} onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
+          {!sftpOnly && <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>}
           <option value="sftp">SFTP (SSH :22)</option>
-          <option value="ftps-implicit">Implicit FTPS (TLS :990)</option>
-          <option value="ftp">Plain FTP (unencrypted)</option>
+          {!sftpOnly && <option value="ftps-implicit">Implicit FTPS (TLS :990)</option>}
+          {!sftpOnly && <option value="ftp">Plain FTP (unencrypted)</option>}
         </select>
       </label>
       <label className="svg-field">
@@ -270,14 +271,22 @@ function CredentialButtons(p: {
   );
 }
 
+function testBannerPresentation(s: FtpTestStatus): { tone: string; label: string } | null {
+  if (s.busy) return { tone: "busy", label: `⟳ ${s.note || "Testing connection…"}` };
+  if (s.ok === true) return { tone: "ok", label: `✓ ${s.note || "Connected"}` };
+  if (s.ok === false || s.note !== "") return { tone: "err", label: `✕ ${s.note || "Connection failed"}` };
+  return null;
+}
+
 function TestResultNote({ active, testStatus, onTrust }: {
   active: StockFtpPreset; testStatus: FtpTestStatus; onTrust: (id: string, sha: string) => void;
 }) {
-  if (testStatus.note === "") return null;
+  const banner = testBannerPresentation(testStatus);
+  if (!banner) return null;
   const keyNoun = active.protocol === "sftp" ? "SSH host key" : "server certificate";
   return (
-    <div className="svg-toolbar" style={{ gap: 8 }} data-testid="stock-ftp-test-note">
-      <small className={testStatus.ok === false ? "svg-error" : "svg-note"}>{testStatus.note}</small>
+    <div className={`stock-test-banner ${banner.tone}`} role="status" data-testid="stock-ftp-test-note">
+      <span>{banner.label}</span>
       {testStatus.ok === false && testStatus.certSha256 && (
         <button type="button" className="svg-btn tiny primary" data-testid="stock-ftp-trust-cert"
           onClick={() => onTrust(active.id, testStatus.certSha256!)}>

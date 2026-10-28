@@ -322,6 +322,7 @@ describe("Upload (stockUpload) tab UI", () => {
       "auto-reconnected after trusting host key",
     );
     expect(testAttempts).toBe(2);
+    expect(q("stock-toast")?.textContent).toContain("Connected & authenticated via SFTP");
 
     // Target Adobe Stock only (uncheck Shutterstock, check Adobe Stock) and upload SVG + EPS
     await clickEl(q("stock-target-check-shutterstock")!);

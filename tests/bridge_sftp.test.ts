@@ -191,4 +191,37 @@ describe("local loopback SFTP bridge (Adobe Stock port 22 protocol)", () => {
       expect(res.reason).toMatch(/older FTPS-only|run_ftp_bridge\.bat/i);
     }
   });
+
+  it("never returns an empty error reason when Happy Eyeballs TCP connect emits AggregateError (localhost closed port)", async () => {
+    const h = await startHelper();
+    // Pick an ephemeral port, close it immediately, and connect to "localhost" (IPv6 ::1 + IPv4 127.0.0.1 -> AggregateError with message === "")
+    const net = await import("node:net");
+    const closedPort = await new Promise<number>((resolve) => {
+      const srv = net.createServer();
+      srv.listen(0, () => {
+        const p = (srv.address() as { port: number }).port;
+        srv.close(() => resolve(p));
+      });
+    });
+
+    const ftpsRes = await testBridgeFtps(
+      h.url,
+      { ...ADOBE_STOCK_PRESET, protocol: "ftps-explicit", host: "localhost", port: closedPort, timeoutMs: 5000 },
+      { username: "204439525", password: "secret" },
+    );
+    expect(ftpsRes.ok).toBe(false);
+    if (!ftpsRes.ok) {
+      expect(ftpsRes.reason.trim().length).toBeGreaterThan(5);
+    }
+
+    const sftpRes = await testBridgeFtps(
+      h.url,
+      { ...ADOBE_STOCK_PRESET, protocol: "sftp", host: "localhost", port: closedPort, timeoutMs: 5000 },
+      { username: "204439525", password: "secret" },
+    );
+    expect(sftpRes.ok).toBe(false);
+    if (!sftpRes.ok) {
+      expect(sftpRes.reason.trim().length).toBeGreaterThan(5);
+    }
+  });
 });

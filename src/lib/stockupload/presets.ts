@@ -132,12 +132,20 @@ function defaultNameFor(template: StockTemplate): string {
   return template === "adobe-stock" ? ADOBE_STOCK_PRESET.name : "Stock FTP";
 }
 
+function resolvePresetTransport(raw: Record<string, unknown>, template: StockTemplate): {
+  protocol: FtpProtocol; port: number;
+} {
+  const protocol: FtpProtocol = template === "adobe-stock" ? "sftp" : normalizeProtocol(raw.protocol);
+  const spec = presetFieldsOf(protocol);
+  const rawPort = template === "adobe-stock" && raw.port === 21 ? 22 : raw.port;
+  return { protocol, port: clampPort(rawPort, spec.defaultPort) };
+}
+
 function parsePreset(raw: unknown): StockFtpPreset | null {
   if (!isRecord(raw) || typeof raw.id !== "string" || raw.id.trim() === "") return null;
   const id = raw.id.trim().slice(0, 48);
   const template = normalizeTemplate(raw.template, id);
-  const protocol = normalizeProtocol(raw.protocol);
-  const spec = presetFieldsOf(protocol);
+  const { protocol, port } = resolvePresetTransport(raw, template);
   const fallbackName = defaultNameFor(template);
   const name = typeof raw.name === "string" && raw.name.trim() !== "" ? raw.name.trim().slice(0, 60) : fallbackName;
   return {
@@ -146,7 +154,7 @@ function parsePreset(raw: unknown): StockFtpPreset | null {
     template,
     protocol,
     host: normalizeHost(raw.host, defaultHostFor(template)),
-    port: clampPort(raw.port, spec.defaultPort),
+    port,
     remoteDir: normalizeRemoteDir(raw.remoteDir),
     passive: raw.passive !== false,
     tlsPolicy: normalizeTlsPolicy(raw.tlsPolicy),

@@ -65,14 +65,17 @@ function protocolSuccessLabel(preset: StockFtpPreset): string {
 async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise<void> {
   const creds = await readFtpCredentials(preset.id);
   if (creds === null) {
-    c.setTestStatus({ busy: false, ok: false, note: "Save local credentials first before testing.", certSha256: null });
+    const missing = "Save local credentials first before testing.";
+    c.setTestStatus({ busy: false, ok: false, note: missing, certSha256: null });
+    c.say(missing, true);
     return;
   }
   const protoLabel = preset.protocol === "sftp" ? "SFTP" : "FTPS";
-  c.setTestStatus({ busy: true, ok: null, note: `Connecting over ${protoLabel}…`, certSha256: null });
+  c.setTestStatus({ busy: true, ok: null, note: `Connecting to ${preset.host}:${preset.port} over ${protoLabel}…`, certSha256: null });
   const res = await testBridgeFtps(c.bridgeUrl, preset, creds);
-  const note = res.ok ? protocolSuccessLabel(preset) : res.reason;
+  const note = (res.ok ? protocolSuccessLabel(preset) : res.reason).trim() || "Connection failed";
   c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: res.serverCertSha256 });
+  c.say(note, !res.ok);
 }
 
 async function performTestConnection(c: FtpCtx, presetId: string): Promise<void> {

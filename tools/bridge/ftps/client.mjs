@@ -5,7 +5,9 @@ import crypto from "node:crypto";
 import net from "node:net";
 import tls from "node:tls";
 import { negotiatePassivePort } from "./pasv.mjs";
-import { FtpsError, assertSafeCommandToken, assertSafeFileName, createReplyReader } from "./reply.mjs";
+import {
+  FtpsError, assertSafeCommandToken, assertSafeFileName, createReplyReader, describeSocketError,
+} from "./reply.mjs";
 
 function certSha256Of(tlsSocket) {
   const peer = tlsSocket.getPeerCertificate(true);
@@ -38,7 +40,10 @@ function connectTcp(host, port, timeoutMs) {
       reject(new FtpsError("timeout", `TCP connection to ${host}:${port} timed out`));
     }, timeoutMs);
     sock.once("connect", () => { clearTimeout(timer); resolve(sock); });
-    sock.once("error", (err) => { clearTimeout(timer); reject(new FtpsError("network", err.message)); });
+    sock.once("error", (err) => {
+      clearTimeout(timer);
+      reject(new FtpsError("network", `FTPS TCP connect to ${host}:${port} failed: ${describeSocketError(err)}`));
+    });
   });
 }
 
@@ -55,7 +60,7 @@ function upgradeToTls(rawSocket, host, timeoutMs, session) {
       reject(new FtpsError("timeout", "TLS handshake timed out"));
     }, timeoutMs);
     secure.once("secureConnect", () => { clearTimeout(timer); resolve(secure); });
-    secure.once("error", (err) => { clearTimeout(timer); reject(new FtpsError("cert", err.message)); });
+    secure.once("error", (err) => { clearTimeout(timer); reject(new FtpsError("cert", describeSocketError(err, "TLS handshake failed"))); });
   });
 }
 
