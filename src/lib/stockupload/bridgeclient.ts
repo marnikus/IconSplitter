@@ -3,10 +3,11 @@
 
 import { isRecord } from "../isrecord";
 import { redactCredentials, type FtpCredentials } from "./credvault";
-import type { StockFtpPreset } from "./types";
+import type { FtpProtocol, StockFtpPreset } from "./types";
 
 export const DEFAULT_FTP_BRIDGE_URL = "http://127.0.0.1:47391";
 export const BRIDGE_FIX_HINT = "start run_ftp_bridge.bat (or run_inkscape_bridge.bat) on this machine";
+const OUTDATED_SFTP_REASON = "Local helper on 127.0.0.1:47391 is an older FTPS-only instance — close that helper cmd window and run run_ftp_bridge.bat to enable SFTP (:22)";
 
 export type FtpsErrorCode = "helper-down" | "bad-request" | "auth" | "cert" | "network" | "ftp" | "timeout";
 
@@ -44,28 +45,42 @@ function trimSlash(url: string): string {
   return url.trim().replace(/\/+$/, "") || DEFAULT_FTP_BRIDGE_URL;
 }
 
-function toFailure(raw: unknown, creds: FtpCredentials): {
+function toFailure(raw: unknown, creds: FtpCredentials, protocol?: FtpProtocol): {
   code: FtpsErrorCode;
   reason: string;
   serverCertSha256: string | null;
 } {
   if (!isRecord(raw)) return { code: "ftp", reason: "unexpected helper response", serverCertSha256: null };
+  const rawReason = typeof raw.reason === "string" ? raw.reason : "FTPS error";
+  if (protocol === "sftp" && /^FTPS\b/i.test(rawReason)) {
+    return { code: "helper-down", reason: OUTDATED_SFTP_REASON, serverCertSha256: null };
+  }
   const code = typeof raw.code === "string" ? (raw.code as FtpsErrorCode) : "ftp";
-  const reason = redactCredentials(typeof raw.reason === "string" ? raw.reason : "FTPS error", creds);
+  const reason = redactCredentials(rawReason, creds);
   const cert = typeof raw.serverCertSha256 === "string" ? raw.serverCertSha256 : null;
   return { code, reason, serverCertSha256: cert };
+}
+
+function hasReadyFlag(body: unknown, key: string): boolean {
+  return isRecord(body) && isRecord(body[key]) && body[key].ready === true;
 }
 
 export async function probeBridgeFtps(
   bridgeUrl = DEFAULT_FTP_BRIDGE_URL,
   fetchImpl: typeof fetch = globalThis.fetch,
+  opts?: { requireSftp?: boolean },
 ): Promise<BridgeProbeResult> {
   try {
     const res = await fetchImpl(`${trimSlash(bridgeUrl)}/health`);
     if (!res.ok) return { ok: false, reason: `local helper answered HTTP ${res.status} — ${BRIDGE_FIX_HINT}` };
     const body: unknown = await res.json();
-    if (isRecord(body) && isRecord(body.ftps) && body.ftps.ready === true) return { ok: true };
-    return { ok: false, reason: `local helper does not expose FTPS/SFTP — restart ${BRIDGE_FIX_HINT}` };
+    if (!hasReadyFlag(body, "ftps")) {
+      return { ok: false, reason: `local helper does not expose FTPS/SFTP — restart ${BRIDGE_FIX_HINT}` };
+    }
+    if (opts?.requireSftp && !hasReadyFlag(body, "sftp")) {
+      return { ok: false, reason: OUTDATED_SFTP_REASON };
+    }
+    return { ok: true };
   } catch {
     return { ok: false, reason: `local FTPS/SFTP helper is not running — ${BRIDGE_FIX_HINT}` };
   }
@@ -88,7 +103,7 @@ export async function testBridgeFtps(
     if (res.ok && isRecord(body) && body.ok === true) {
       return { ok: true, serverCertSha256: typeof body.serverCertSha256 === "string" ? body.serverCertSha256 : null };
     }
-    return { ok: false, ...toFailure(body, creds) };
+    return { ok: false, ...toFailure(body, creds, preset.protocol) };
   } catch {
     return { ok: false, code: "helper-down", reason: `cannot reach local FTPS/SFTP helper — ${BRIDGE_FIX_HINT}`, serverCertSha256: null };
   }
@@ -117,7 +132,7 @@ export async function uploadBridgeFtps(input: BridgeUploadInput): Promise<Bridge
     if (res.ok && isRecord(body) && body.ok === true) {
       return { ok: true, bytes: typeof body.bytes === "number" ? body.bytes : input.bytes.byteLength };
     }
-    return { ok: false, ...toFailure(body, input.creds) };
+    return { ok: false, ...toFailure(body, input.creds, input.preset.protocol) };
   } catch (err) {
     if ((err as Error)?.name === "AbortError") {
       return { ok: false, code: "network", reason: "upload cancelled", serverCertSha256: null };

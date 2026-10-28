@@ -10,4 +10,6 @@ export interface FakeSftpServer {
 export function startFakeSftpServer(opts?: {
   username?: string;
   password?: string;
+  awsPolicy2024?: boolean;
+  maxChannelPacket?: number;
 }): Promise<FakeSftpServer>;

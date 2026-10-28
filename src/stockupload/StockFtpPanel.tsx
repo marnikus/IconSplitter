@@ -107,7 +107,7 @@ function EndpointFields({ active, onPatch }: {
     <>
       <label className="svg-field">
         <span className="svg-label">Host</span>
-        <input className="svg-input" data-testid="stock-ftp-host" value={active.host}
+        <input className="svg-input" style={{ minWidth: 250 }} data-testid="stock-ftp-host" value={active.host}
           onChange={(e) => onPatch({ host: e.target.value })} placeholder={hostHint} />
       </label>
       <label className="svg-field">
@@ -155,9 +155,9 @@ function SecurityFields({ active, bridgeUrl, onBridgeUrl, onPatch }: {
         <span className="svg-label">{isSftp ? "SSH host key check" : "TLS certificate check"}</span>
         <select className="svg-input" data-testid="stock-ftp-tls" value={active.tlsPolicy}
           onChange={(e) => onPatch({ tlsPolicy: e.target.value as TlsPolicy })}>
-          <option value="strict">{isSftp ? "Require pinned host key" : "Verify CA certificate"}</option>
-          <option value="pinned">Pin server SHA-256 fingerprint</option>
-          <option value="accept-self-signed">{isSftp ? "Trust unknown SSH host key" : "Trust unknown server cert"}</option>
+          <option value="strict">{isSftp ? "Ask to trust & pin on first connect" : "Verify CA certificate"}</option>
+          <option value="pinned">{isSftp ? "Pinned SSH host key (SHA-256)" : "Pin server SHA-256 fingerprint"}</option>
+          <option value="accept-self-signed">{isSftp ? "Always trust unknown SSH host key" : "Trust unknown server cert"}</option>
         </select>
       </label>
       {active.tlsPolicy === "pinned" && (
@@ -279,9 +279,9 @@ function TestResultNote({ active, testStatus, onTrust }: {
     <div className="svg-toolbar" style={{ gap: 8 }} data-testid="stock-ftp-test-note">
       <small className={testStatus.ok === false ? "svg-error" : "svg-note"}>{testStatus.note}</small>
       {testStatus.ok === false && testStatus.certSha256 && (
-        <button type="button" className="svg-btn tiny" data-testid="stock-ftp-trust-cert"
+        <button type="button" className="svg-btn tiny primary" data-testid="stock-ftp-trust-cert"
           onClick={() => onTrust(active.id, testStatus.certSha256!)}>
-          Trust & pin {keyNoun} ({testStatus.certSha256.slice(0, 12)}…)
+          Trust & pin {keyNoun} ({testStatus.certSha256.slice(0, 12)}…) & connect
         </button>
       )}
     </div>

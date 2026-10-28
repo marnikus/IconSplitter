@@ -37,7 +37,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr "127.0.0.1:47391" ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":47391 " ^| findstr "LISTENING"') do (
     taskkill /F /PID %%p >nul 2>nul
 )
 

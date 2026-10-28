@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   closeBridgeFtpsSession,
+  probeBridgeFtps,
   testBridgeFtps,
   uploadBridgeFtps,
 } from "../src/lib/stockupload/bridgeclient";
@@ -137,5 +138,57 @@ describe("local loopback SFTP bridge (Adobe Stock port 22 protocol)", () => {
     expect(combinedLog).not.toContain("icon_01.eps");
     expect(combinedLog).not.toContain("210333617");
     expect(combinedLog).not.toContain("AdobeGeneratedPass!99");
+  });
+
+  it("connects & uploads to AWS Transfer Family SFTP (rsa-sha2-512 + aes256-ctr + hmac-sha2-256-etm@openssh.com + 16KB channel packet)", async () => {
+    const h = await startHelper();
+    const health = await (await fetch(`${h.url}/health`)).json();
+    expect(health.sftp).toEqual({ ready: true });
+
+    const sftp = await startFakeSftpServer({
+      username: "204439525",
+      password: "AdobeAwsTransferPass#2026",
+      awsPolicy2024: true,
+    });
+    liveSftp.push(sftp);
+
+    const preset = makeAdobePreset(sftp.port, { tlsPolicy: "accept-self-signed" });
+    const creds = { username: "204439525", password: "AdobeAwsTransferPass#2026" };
+
+    const testRes = await testBridgeFtps(h.url, preset, creds);
+    expect(testRes).toEqual({ ok: true, serverCertSha256: sftp.hostKeySha256 });
+
+    const bigEps = new Uint8Array(50_000);
+    for (let i = 0; i < bigEps.length; i += 1) bigEps[i] = (i * 17 + 3) & 0xff;
+    const upRes = await uploadBridgeFtps({
+      bridgeUrl: h.url, preset, creds, fileName: "aws_icon.eps", bytes: bigEps,
+    });
+    expect(upRes).toEqual({ ok: true, bytes: bigEps.byteLength });
+    expect(new Uint8Array(sftp.uploaded.get("/aws_icon.eps")!)).toEqual(bigEps);
+  });
+
+  it("detects an outdated FTPS-only local helper when testing or probing SFTP (:22)", async () => {
+    const oldHelperFetch = (async (url: string | URL) => {
+      const u = String(url);
+      if (u.endsWith("/health")) {
+        return new Response(JSON.stringify({ ok: true, ftps: { ready: true } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        ok: false, code: "network", reason: "FTPS control connection closed unexpectedly", serverCertSha256: null,
+      }), { status: 502 });
+    }) as typeof fetch;
+
+    const probe = await probeBridgeFtps("http://127.0.0.1:47391", oldHelperFetch, { requireSftp: true });
+    expect(probe.ok).toBe(false);
+    if (!probe.ok) expect(probe.reason).toMatch(/outdated|FTPS-only|run_ftp_bridge\.bat/i);
+
+    const res = await testBridgeFtps("http://127.0.0.1:47391", ADOBE_STOCK_PRESET, {
+      username: "204439525", password: "secret",
+    }, oldHelperFetch);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe("helper-down");
+      expect(res.reason).toMatch(/older FTPS-only|run_ftp_bridge\.bat/i);
+    }
   });
 });

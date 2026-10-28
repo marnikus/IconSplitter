@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import net from "node:net";
 import { FtpsError, assertSafeFileName } from "../ftps/reply.mjs";
 import {
-  buildClientKexInit, buildSessionCiphers, createEphemeralX25519,
+  buildClientKexInit, buildSessionCiphers, createEphemeralKex,
   enforceSshHostKeyPolicy, parseServerKexInit, verifyHostKeySignature,
 } from "./kex.mjs";
 import { createSshFraming, SshReader, sshBool, sshStr, u32, u64 } from "./wire.mjs";
@@ -53,7 +53,7 @@ function createPacketDriver(sock, framing, timeoutMs) {
 
   function dispatchPacket(pkt) {
     const msg = pkt[0];
-    if (msg === 2 || msg === 4 || msg === 7) return; // IGNORE, DEBUG, EXT_INFO
+    if (msg === 2 || msg === 4 || msg === 7 || msg === 53) return; // IGNORE, DEBUG, EXT_INFO, USERAUTH_BANNER
     if (msg === 80) { // GLOBAL_REQUEST -> reply REQUEST_FAILURE if want_reply
       const r = new SshReader(pkt.subarray(1));
       r.str();
@@ -98,7 +98,7 @@ async function performHandshakeAndAuth(drv, framing, serverBanner, cfg) {
   drv.send(clientKex);
   const serverKex = await drv.waitMsg([20]);
   const negotiated = parseServerKexInit(serverKex);
-  const eph = createEphemeralX25519();
+  const eph = createEphemeralKex(negotiated.kexAlgo);
   drv.send(Buffer.concat([Buffer.from([30]), sshStr(eph.qC)]));
 
   const reply = await drv.waitMsg([31]);
@@ -121,9 +121,9 @@ async function performHandshakeAndAuth(drv, framing, serverBanner, cfg) {
 
   drv.send(Buffer.from([21])); // NEWKEYS
   const ciphers = buildSessionCiphers(kMpint, h, h, negotiated);
-  framing.activateTx(ciphers.txCipher, ciphers.txMacKey);
+  framing.activateTx(ciphers.txCipher, ciphers.txMacKey, ciphers.macC2S);
   await drv.waitMsg([21]);
-  framing.activateRx(ciphers.rxCipher, ciphers.rxMacKey);
+  framing.activateRx(ciphers.rxCipher, ciphers.rxMacKey, ciphers.macS2C);
 
   drv.send(Buffer.concat([Buffer.from([5]), sshStr("ssh-userauth")]));
   await drv.waitMsg([6]);
@@ -175,6 +175,7 @@ async function openSftpChannel(drv, timeoutMs) {
   r.u32();
   const remoteChan = r.u32();
   let peerWindow = r.u32();
+  const maxChanChunk = Math.max(4096, Math.min(r.u32() - 64, 30000));
   const windowWaiters = [];
   let sftpBuf = Buffer.alloc(0);
   const pending = new Map();
@@ -210,7 +211,7 @@ async function openSftpChannel(drv, timeoutMs) {
     let off = 0;
     while (off < raw.length) {
       while (peerWindow === 0) await new Promise((res) => windowWaiters.push(res));
-      const take = Math.min(raw.length - off, peerWindow, 30000);
+      const take = Math.min(raw.length - off, peerWindow, maxChanChunk);
       peerWindow -= take;
       drv.send(Buffer.concat([Buffer.from([94]), u32(remoteChan), sshStr(raw.subarray(off, off + take))]));
       off += take;
@@ -235,7 +236,7 @@ async function openSftpChannel(drv, timeoutMs) {
     sendChannelBytes(Buffer.concat([u32(initInner.length), initInner])).catch(reject);
   });
 
-  return { remoteChan, requestSftp };
+  return { remoteChan, requestSftp, maxWriteChunk: Math.min(WRITE_CHUNK_BYTES, maxChanChunk - 128) };
 }
 
 function expectSftpOk(pkt, opName) {
@@ -257,7 +258,7 @@ export async function openSftpSession(cfg) {
 
   try {
     const hostKeySha256 = await performHandshakeAndAuth(drv, framing, serverBanner, cfg);
-    const { remoteChan, requestSftp } = await openSftpChannel(drv, timeoutMs);
+    const { remoteChan, requestSftp, maxWriteChunk } = await openSftpChannel(drv, timeoutMs);
 
     async function resolveRemoteBase() {
       const rawDir = typeof cfg.remoteDir === "string" ? cfg.remoteDir.trim() : "/";
@@ -281,8 +282,8 @@ export async function openSftpSession(cfg) {
         const openPkt = await requestSftp(3, [sshStr(remotePath), u32(0x1a), u32(0)]);
         if (openPkt[0] !== 102) expectSftpOk(openPkt, "OPEN");
         const handle = new SshReader(openPkt.subarray(5)).bytes();
-        for (let off = 0; off < bytes.length; off += WRITE_CHUNK_BYTES) {
-          const slice = bytes.subarray(off, Math.min(bytes.length, off + WRITE_CHUNK_BYTES));
+        for (let off = 0; off < bytes.length; off += maxWriteChunk) {
+          const slice = bytes.subarray(off, Math.min(bytes.length, off + maxWriteChunk));
           const writePkt = await requestSftp(6, [sshStr(handle), u64(off), sshStr(slice)]);
           expectSftpOk(writePkt, "WRITE");
         }

@@ -1,4 +1,4 @@
-// wire.mjs — SSH-2 binary primitives and stateful AES-CTR + HMAC-SHA2-256 packet framing (RFC 4251/4253).
+// wire.mjs — SSH-2 binary primitives and stateful AES-CTR + HMAC-SHA2 (ETM & MTE) framing (RFC 4251/4253 + OpenSSH ETM).
 
 import crypto from "node:crypto";
 import { FtpsError } from "../ftps/reply.mjs";
@@ -81,29 +81,44 @@ export class SshReader {
   }
 }
 
+function macSpec(macAlgo) {
+  const etm = String(macAlgo ?? "").endsWith("-etm@openssh.com");
+  const hash = String(macAlgo ?? "").includes("sha2-512") ? "sha512" : "sha256";
+  return { etm, hash, len: hash === "sha512" ? 64 : 32 };
+}
+
+function padCount(unalignedLen, blockSize) {
+  const rem = unalignedLen % blockSize;
+  const pad = rem === 0 ? blockSize : blockSize - rem;
+  return pad < 4 ? pad + blockSize : pad;
+}
+
 export function createSshFraming() {
-  let txCipher = null;
-  let txMacKey = null;
-  let rxCipher = null;
-  let rxMacKey = null;
+  let tx = null;
+  let rx = null;
   let txSeq = 0;
   let rxSeq = 0;
   let rxBuf = Buffer.alloc(0);
   let firstBlock = null;
 
   function encodePacket(payload) {
-    const bs = txCipher ? 16 : 8;
-    const rem = (5 + payload.length) % bs;
-    let padLen = rem === 0 ? bs : bs - rem;
-    if (padLen < 4) padLen += bs;
-    const plain = Buffer.concat([
-      u32(1 + payload.length + padLen), Buffer.from([padLen]), payload, crypto.randomBytes(padLen),
-    ]);
     const seq = txSeq;
     txSeq = (txSeq + 1) >>> 0;
-    if (!txCipher) return plain;
-    const mac = crypto.createHmac("sha256", txMacKey).update(u32(seq)).update(plain).digest();
-    return Buffer.concat([txCipher.update(plain), mac]);
+    if (!tx) {
+      const padLen = padCount(5 + payload.length, 8);
+      return Buffer.concat([u32(1 + payload.length + padLen), Buffer.from([padLen]), payload, crypto.randomBytes(padLen)]);
+    }
+    if (tx.etm) {
+      const padLen = padCount(1 + payload.length, 16);
+      const lenBuf = u32(1 + payload.length + padLen);
+      const enc = tx.cipher.update(Buffer.concat([Buffer.from([padLen]), payload, crypto.randomBytes(padLen)]));
+      const mac = crypto.createHmac(tx.hash, tx.macKey).update(u32(seq)).update(lenBuf).update(enc).digest();
+      return Buffer.concat([lenBuf, enc, mac]);
+    }
+    const padLen = padCount(5 + payload.length, 16);
+    const plain = Buffer.concat([u32(1 + payload.length + padLen), Buffer.from([padLen]), payload, crypto.randomBytes(padLen)]);
+    const mac = crypto.createHmac(tx.hash, tx.macKey).update(u32(seq)).update(plain).digest();
+    return Buffer.concat([tx.cipher.update(plain), mac]);
   }
 
   function decodePlainPacket() {
@@ -111,27 +126,42 @@ export function createSshFraming() {
     const pktLen = rxBuf.readUInt32BE(0);
     if (pktLen < 5 || pktLen > MAX_PACKET_LEN) throw new FtpsError("ftp", "invalid SSH packet length");
     if (rxBuf.length < 4 + pktLen) return null;
-    const padLen = rxBuf[4];
-    const payload = Buffer.from(rxBuf.subarray(5, 4 + pktLen - padLen));
+    const payload = Buffer.from(rxBuf.subarray(5, 4 + pktLen - rxBuf[4]));
     rxBuf = rxBuf.subarray(4 + pktLen);
     rxSeq = (rxSeq + 1) >>> 0;
     return payload;
   }
 
-  function decodeEncryptedPacket() {
+  function decodeEtmPacket() {
+    if (rxBuf.length < 4) return null;
+    const pktLen = rxBuf.readUInt32BE(0);
+    if (pktLen < 5 || pktLen > MAX_PACKET_LEN || pktLen % 16 !== 0) {
+      throw new FtpsError("ftp", "invalid encrypted ETM SSH packet length");
+    }
+    if (rxBuf.length < 4 + pktLen + rx.len) return null;
+    const gotMac = rxBuf.subarray(4 + pktLen, 4 + pktLen + rx.len);
+    const expMac = crypto.createHmac(rx.hash, rx.macKey).update(u32(rxSeq)).update(rxBuf.subarray(0, 4 + pktLen)).digest();
+    if (!crypto.timingSafeEqual(gotMac, expMac)) throw new FtpsError("ftp", "SSH ETM packet MAC verification failed");
+    const plainBody = rx.cipher.update(rxBuf.subarray(4, 4 + pktLen));
+    rxBuf = rxBuf.subarray(4 + pktLen + rx.len);
+    rxSeq = (rxSeq + 1) >>> 0;
+    return Buffer.from(plainBody.subarray(1, pktLen - plainBody[0]));
+  }
+
+  function decodeMtePacket() {
     if (!firstBlock) {
       if (rxBuf.length < 16) return null;
-      firstBlock = rxCipher.update(rxBuf.subarray(0, 16));
+      firstBlock = rx.cipher.update(rxBuf.subarray(0, 16));
     }
     const pktLen = firstBlock.readUInt32BE(0);
     if (pktLen < 5 || pktLen > MAX_PACKET_LEN) throw new FtpsError("ftp", "invalid encrypted SSH packet length");
-    if (rxBuf.length < 4 + pktLen + 32) return null;
-    const rest = 4 + pktLen > 16 ? rxCipher.update(rxBuf.subarray(16, 4 + pktLen)) : Buffer.alloc(0);
+    if (rxBuf.length < 4 + pktLen + rx.len) return null;
+    const rest = 4 + pktLen > 16 ? rx.cipher.update(rxBuf.subarray(16, 4 + pktLen)) : Buffer.alloc(0);
     const plain = Buffer.concat([firstBlock, rest]);
-    const gotMac = rxBuf.subarray(4 + pktLen, 4 + pktLen + 32);
-    const expMac = crypto.createHmac("sha256", rxMacKey).update(u32(rxSeq)).update(plain).digest();
+    const gotMac = rxBuf.subarray(4 + pktLen, 4 + pktLen + rx.len);
+    const expMac = crypto.createHmac(rx.hash, rx.macKey).update(u32(rxSeq)).update(plain).digest();
     firstBlock = null;
-    rxBuf = rxBuf.subarray(4 + pktLen + 32);
+    rxBuf = rxBuf.subarray(4 + pktLen + rx.len);
     rxSeq = (rxSeq + 1) >>> 0;
     if (!crypto.timingSafeEqual(gotMac, expMac)) throw new FtpsError("ftp", "SSH packet MAC verification failed");
     return Buffer.from(plain.subarray(5, 4 + pktLen - plain[4]));
@@ -139,13 +169,13 @@ export function createSshFraming() {
 
   return {
     encodePacket,
-    activateTx(cipher, macKey) { txCipher = cipher; txMacKey = macKey; },
-    activateRx(cipher, macKey) { rxCipher = cipher; rxMacKey = macKey; },
+    activateTx(cipher, macKey, macAlgo) { tx = { cipher, macKey, ...macSpec(macAlgo) }; },
+    activateRx(cipher, macKey, macAlgo) { rx = { cipher, macKey, ...macSpec(macAlgo) }; },
     pushChunk(chunk) {
       rxBuf = Buffer.concat([rxBuf, chunk]);
       const out = [];
       while (true) {
-        const pkt = rxCipher ? decodeEncryptedPacket() : decodePlainPacket();
+        const pkt = !rx ? decodePlainPacket() : (rx.etm ? decodeEtmPacket() : decodeMtePacket());
         if (pkt === null) break;
         out.push(pkt);
       }

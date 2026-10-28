@@ -125,7 +125,7 @@ describe("Upload (stockUpload) tab UI", () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
       const u = String(url);
       if (u.endsWith("/health")) {
-        return new Response(JSON.stringify({ ok: true, ftps: { ready: true } }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, ftps: { ready: true }, sftp: { ready: true } }), { status: 200 });
       }
       if (u.endsWith("/ftps/upload")) {
         const hdr = (init?.headers as Record<string, string>)?.["x-ftps-config"] ?? "";
@@ -229,11 +229,23 @@ describe("Upload (stockUpload) tab UI", () => {
     const ws = makeWorkspace();
     stored.set("__stock_upload__", { source: ws });
 
+    let testAttempts = 0;
     const uploadedPayloads: Array<{ host: string; port: number; protocol: string; fileName: string }> = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
       const u = String(url);
       if (u.endsWith("/health")) {
-        return new Response(JSON.stringify({ ok: true, ftps: { ready: true } }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, ftps: { ready: true }, sftp: { ready: true } }), { status: 200 });
+      }
+      if (u.endsWith("/ftps/test")) {
+        testAttempts += 1;
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        const fakeKey = "ab".repeat(32);
+        if (body.tlsPolicy !== "pinned" || body.pinnedCertSha256 !== fakeKey) {
+          return new Response(JSON.stringify({
+            ok: false, code: "cert", reason: `Untrusted SSH host key (SHA-256: ${fakeKey})`, serverCertSha256: fakeKey,
+          }), { status: 495 });
+        }
+        return new Response(JSON.stringify({ ok: true, serverCertSha256: fakeKey }), { status: 200 });
       }
       if (u.endsWith("/ftps/upload")) {
         const hdr = (init?.headers as Record<string, string>)?.["x-ftps-config"] ?? "";
@@ -300,6 +312,16 @@ describe("Upload (stockUpload) tab UI", () => {
     await waitUntil(() => q("stock-ftp-cred-status")?.textContent?.includes("Saved locally") === true, "adobe creds saved");
     expect(host.innerHTML).not.toContain("210333617");
     expect(host.innerHTML).not.toContain("AdobeGenSecret#42");
+
+    // Test connection -> prompts unknown SSH host key -> clicking Trust & pin auto-reconnects immediately (like FileZilla!)
+    await clickEl(q("stock-ftp-test")!);
+    await waitUntil(() => q("stock-ftp-trust-cert") !== null, "host key trust button shown");
+    await clickEl(q("stock-ftp-trust-cert")!);
+    await waitUntil(
+      () => q("stock-ftp-test-note")?.textContent?.includes("Connected & authenticated via SFTP") === true,
+      "auto-reconnected after trusting host key",
+    );
+    expect(testAttempts).toBe(2);
 
     // Target Adobe Stock only (uncheck Shutterstock, check Adobe Stock) and upload SVG + EPS
     await clickEl(q("stock-target-check-shutterstock")!);

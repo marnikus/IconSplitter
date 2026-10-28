@@ -62,10 +62,8 @@ function protocolSuccessLabel(preset: StockFtpPreset): string {
     : "Connected & authenticated via FTPS";
 }
 
-async function performTestConnection(c: FtpCtx, presetId: string): Promise<void> {
-  const preset = c.presetState.presets.find((p) => p.id === presetId);
-  if (!preset) return;
-  const creds = await readFtpCredentials(presetId);
+async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise<void> {
+  const creds = await readFtpCredentials(preset.id);
   if (creds === null) {
     c.setTestStatus({ busy: false, ok: false, note: "Save local credentials first before testing.", certSha256: null });
     return;
@@ -75,6 +73,12 @@ async function performTestConnection(c: FtpCtx, presetId: string): Promise<void>
   const res = await testBridgeFtps(c.bridgeUrl, preset, creds);
   const note = res.ok ? protocolSuccessLabel(preset) : res.reason;
   c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: res.serverCertSha256 });
+}
+
+async function performTestConnection(c: FtpCtx, presetId: string): Promise<void> {
+  const preset = c.presetState.presets.find((p) => p.id === presetId);
+  if (!preset) return;
+  await performTestWithPreset(c, preset);
 }
 
 function buildPresetListCrud(ref: { current: FtpCtx }): Pick<
@@ -115,8 +119,11 @@ function buildPresetFieldOps(ref: { current: FtpCtx }): Pick<
       setStockPresetState({ ...st, formats: { ...st.formats, [key]: enabled } });
     },
     trustPinnedCert: (id, sha256) => {
-      setStockPresetState(patchStockPreset(ref.current.presetState, id, { tlsPolicy: "pinned", pinnedCertSha256: sha256 }));
+      const next = patchStockPreset(ref.current.presetState, id, { tlsPolicy: "pinned", pinnedCertSha256: sha256 });
+      setStockPresetState(next);
       ref.current.say("Pinned server SHA-256 fingerprint");
+      const updated = next.presets.find((p) => p.id === id);
+      if (updated) void performTestWithPreset({ ...ref.current, presetState: next }, updated);
     },
   };
 }

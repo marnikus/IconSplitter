@@ -83,8 +83,10 @@ function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { tex
 
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
   if (!c.r.root.current) return;
-  c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Probing local FTPS helper…" } } });
-  const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl);
+  c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Probing local FTPS/SFTP helper…" } } });
+  const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
+    requireSftp: plan.targets.some((t) => t.protocol === "sftp"),
+  });
   if (!probe.ok) {
     c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
     c.say(probe.reason, true);

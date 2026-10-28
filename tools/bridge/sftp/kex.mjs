@@ -1,5 +1,5 @@
-// kex.mjs — SSH-2 curve25519-sha256 key exchange, host-key signature check,
-// SHA-256 fingerprint pinning, and RFC 4253 cipher/MAC key derivation.
+// kex.mjs — SSH-2 curve25519-sha256 / ecdh-sha2-nistp256 key exchange, host-key
+// signature check, SHA-256 fingerprint pinning, and RFC 4253 + OpenSSH ETM key derivation.
 
 import crypto from "node:crypto";
 import { FtpsError } from "../ftps/reply.mjs";
@@ -8,10 +8,22 @@ import { SshReader, sshMpint, sshNameList, sshStr, u32 } from "./wire.mjs";
 const SPKI_X25519 = Buffer.from("302a300506032b656e032100", "hex");
 const SPKI_ED25519 = Buffer.from("302a300506032b6570032100", "hex");
 
-export const KEX_ALGOS = ["curve25519-sha256", "curve25519-sha256@libssh.org"];
-export const HOST_KEY_ALGOS = ["ssh-ed25519", "ecdsa-sha2-nistp256", "rsa-sha2-256", "rsa-sha2-512"];
-export const CIPHER_ALGOS = ["aes128-ctr", "aes256-ctr"];
-export const MAC_ALGOS = ["hmac-sha2-256"];
+export const KEX_ALGOS = ["curve25519-sha256", "curve25519-sha256@libssh.org", "ecdh-sha2-nistp256"];
+export const HOST_KEY_ALGOS = [
+  "ssh-ed25519", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+  "rsa-sha2-512", "rsa-sha2-256",
+];
+export const CIPHER_ALGOS = ["aes256-ctr", "aes192-ctr", "aes128-ctr"];
+export const MAC_ALGOS = [
+  "hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com",
+  "hmac-sha2-256", "hmac-sha2-512",
+];
+
+const ECDSA_CURVES = {
+  "ecdsa-sha2-nistp256": { sshCurve: "nistp256", jwkCrv: "P-256", coordLen: 32, hash: "sha256" },
+  "ecdsa-sha2-nistp384": { sshCurve: "nistp384", jwkCrv: "P-384", coordLen: 48, hash: "sha384" },
+  "ecdsa-sha2-nistp521": { sshCurve: "nistp521", jwkCrv: "P-521", coordLen: 66, hash: "sha512" },
+};
 
 export function buildClientKexInit() {
   return Buffer.concat([
@@ -39,7 +51,7 @@ function negotiateFirst(clientList, serverList, label) {
 }
 
 export function parseServerKexInit(payload) {
-  const r = new SshReader(payload.subarray(17)); // msg(1) + cookie(16)
+  const r = new SshReader(payload.subarray(17));
   const kex = r.nameList();
   const hostKeys = r.nameList();
   const c2sCipher = r.nameList();
@@ -56,7 +68,15 @@ export function parseServerKexInit(payload) {
   };
 }
 
-export function createEphemeralX25519() {
+export function createEphemeralKex(kexAlgo = "curve25519-sha256") {
+  if (kexAlgo === "ecdh-sha2-nistp256") {
+    const ecdh = crypto.createECDH("prime256v1");
+    const qC = ecdh.generateKeys();
+    return {
+      qC,
+      computeSharedMpint: (qS) => sshMpint(ecdh.computeSecret(qS)),
+    };
+  }
   const { publicKey, privateKey } = crypto.generateKeyPairSync("x25519");
   const qC = publicKey.export({ type: "spki", format: "der" }).subarray(-32);
   return {
@@ -86,22 +106,27 @@ function verifyRsaSig(rKey, sigAlgo, sigBytes, exchangeHash) {
   return crypto.verify(hashAlgo, exchangeHash, pub, sigBytes);
 }
 
-function verifyEcdsaP256Sig(rKey, sigBytes, exchangeHash) {
-  rKey.str(); // "nistp256"
+function verifyEcdsaSig(rKey, spec, sigBytes, exchangeHash) {
+  if (rKey.str() !== spec.sshCurve) return false;
   const q = rKey.bytes();
-  if (q.length !== 65 || q[0] !== 4) return false;
+  const n = spec.coordLen;
+  if (q.length !== 1 + 2 * n || q[0] !== 4) return false;
   const pub = crypto.createPublicKey({
-    key: { kty: "EC", crv: "P-256", x: q.subarray(1, 33).toString("base64url"), y: q.subarray(33, 65).toString("base64url") },
+    key: {
+      kty: "EC", crv: spec.jwkCrv,
+      x: q.subarray(1, 1 + n).toString("base64url"),
+      y: q.subarray(1 + n, 1 + 2 * n).toString("base64url"),
+    },
     format: "jwk",
   });
   const rs = new SshReader(sigBytes);
   const rVal = stripLeadingZero(rs.bytes());
   const sVal = stripLeadingZero(rs.bytes());
-  if (rVal.length > 32 || sVal.length > 32) return false;
-  const p1363 = Buffer.alloc(64);
-  rVal.copy(p1363, 32 - rVal.length);
-  sVal.copy(p1363, 64 - sVal.length);
-  return crypto.verify("sha256", exchangeHash, { key: pub, dsaEncoding: "ieee-p1363" }, p1363);
+  if (rVal.length > n || sVal.length > n) return false;
+  const p1363 = Buffer.alloc(2 * n);
+  rVal.copy(p1363, n - rVal.length);
+  sVal.copy(p1363, 2 * n - sVal.length);
+  return crypto.verify(spec.hash, exchangeHash, { key: pub, dsaEncoding: "ieee-p1363" }, p1363);
 }
 
 export function verifyHostKeySignature(hostKeyBlob, sigBlob, exchangeHash) {
@@ -118,8 +143,9 @@ export function verifyHostKeySignature(hostKeyBlob, sigBlob, exchangeHash) {
   if (keyType === "ssh-rsa" && (sigAlgo === "rsa-sha2-256" || sigAlgo === "rsa-sha2-512")) {
     return verifyRsaSig(rKey, sigAlgo, sigBytes, exchangeHash);
   }
-  if (keyType === "ecdsa-sha2-nistp256" && sigAlgo === "ecdsa-sha2-nistp256") {
-    return verifyEcdsaP256Sig(rKey, sigBytes, exchangeHash);
+  const ecSpec = ECDSA_CURVES[keyType];
+  if (ecSpec && sigAlgo === keyType) {
+    return verifyEcdsaSig(rKey, ecSpec, sigBytes, exchangeHash);
   }
   return false;
 }
@@ -147,15 +173,23 @@ function deriveStream(kMpint, h, sessionId, letter, length) {
   return Buffer.concat([k1, k2]).subarray(0, length);
 }
 
+function cipherSpec(sshCipher) {
+  if (sshCipher === "aes256-ctr") return { nodeName: "aes-256-ctr", keyLen: 32 };
+  if (sshCipher === "aes192-ctr") return { nodeName: "aes-192-ctr", keyLen: 24 };
+  return { nodeName: "aes-128-ctr", keyLen: 16 };
+}
+
 export function buildSessionCiphers(kMpint, h, sessionId, negotiated) {
-  const c2sLen = negotiated.cipherC2S === "aes256-ctr" ? 32 : 16;
-  const s2cLen = negotiated.cipherS2C === "aes256-ctr" ? 32 : 16;
-  const c2sAlgo = negotiated.cipherC2S === "aes256-ctr" ? "aes-256-ctr" : "aes-128-ctr";
-  const s2cAlgo = negotiated.cipherS2C === "aes256-ctr" ? "aes-256-ctr" : "aes-128-ctr";
+  const c2s = cipherSpec(negotiated.cipherC2S);
+  const s2c = cipherSpec(negotiated.cipherS2C);
+  const txMacLen = negotiated.macC2S.includes("sha2-512") ? 64 : 32;
+  const rxMacLen = negotiated.macS2C.includes("sha2-512") ? 64 : 32;
   return {
-    txCipher: crypto.createCipheriv(c2sAlgo, deriveStream(kMpint, h, sessionId, "C", c2sLen), deriveStream(kMpint, h, sessionId, "A", 16)),
-    rxCipher: crypto.createDecipheriv(s2cAlgo, deriveStream(kMpint, h, sessionId, "D", s2cLen), deriveStream(kMpint, h, sessionId, "B", 16)),
-    txMacKey: deriveStream(kMpint, h, sessionId, "E", 32),
-    rxMacKey: deriveStream(kMpint, h, sessionId, "F", 32),
+    txCipher: crypto.createCipheriv(c2s.nodeName, deriveStream(kMpint, h, sessionId, "C", c2s.keyLen), deriveStream(kMpint, h, sessionId, "A", 16)),
+    rxCipher: crypto.createDecipheriv(s2c.nodeName, deriveStream(kMpint, h, sessionId, "D", s2c.keyLen), deriveStream(kMpint, h, sessionId, "B", 16)),
+    txMacKey: deriveStream(kMpint, h, sessionId, "E", txMacLen),
+    rxMacKey: deriveStream(kMpint, h, sessionId, "F", rxMacLen),
+    macC2S: negotiated.macC2S,
+    macS2C: negotiated.macS2C,
   };
 }

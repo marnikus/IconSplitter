@@ -3653,3 +3653,5 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - Removed split `src/lib/stockupload/stockbadges.ts`, `Stock sites` column, `stock-site-pill-*` pending pills, and `stock-filter-status` dropdown (`StockUploadList.tsx`, `StockUploadRow.tsx`, `StockUploadControls.tsx`, `rowlist.ts`).
 - Hardcoded `Shutterstock` and `Adobe Stock` badges directly in the single general `src/lib/upload/rowbadge.ts` catalog (`HARDCODED_STOCK_BADGES`, `ensureHardcodedBadges`, `assignNamedBadge`) shared via `src/upload/rowbadgestore.ts`.
 - Verified with `tests/{stockupload_badges,stockupload_runner,stockupload_ui,upload_rowbadge,upload_rowbadge_store,upload_rowbadge_ui}.test.*`, `node tools/quality.mjs --changed --allow-legacy`, and `npm run verify`.
+
+- 2026-10-28: AWS Transfer Family SFTP (`hmac-sha2-256-etm@openssh.com`, `rsa-sha2-512`/`ecdsa`, channel max-packet), outdated FTPS-only helper detection, and one-click host-key trust & auto-reconnect (`src/lib/stockupload/bridgeclient.ts`, `src/stockupload/{ftpactions,panelops,StockFtpPanel}.ts*`, `tools/bridge/{server,sftp/*}.mjs`) — `quality.mjs --files` GATE PASSED + full `npm run verify`.
