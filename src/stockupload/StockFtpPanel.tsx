@@ -22,9 +22,11 @@ export default function StockFtpPanel(p: StockFtpPanelProps) {
   const protoBadge = active.protocol === "sftp" ? "SFTP stock preset" : "FTPS stock preset";
   return (
     <div className={`svg-provider${p.ftpOpen ? "" : " closed"}`} data-testid="stock-ftp-panel">
-      <div className="svg-provider-top">
+      <div className="svg-provider-top" style={{ flexWrap: "wrap", gap: 8 }}>
         <span><strong data-testid="stock-ftp-active-name">{active.name}</strong> · {protoBadge}</span>
         <span>{active.host || "no host"}:{active.port} · {active.protocol}</span>
+        <QuickPresetSwitch presets={p.presetState.presets} activeId={active.id} ftpOpen={p.ftpOpen}
+          actions={p.actions} onToggleOpen={p.onToggleOpen} />
         <button type="button" className="svg-link" data-testid="stock-ftp-toggle" aria-expanded={p.ftpOpen}
           onClick={() => p.onToggleOpen(!p.ftpOpen)}>{p.ftpOpen ? "Minimize" : "Restore"}</button>
       </div>
@@ -36,6 +38,21 @@ export default function StockFtpPanel(p: StockFtpPanelProps) {
         </>
       )}
     </div>
+  );
+}
+
+function QuickPresetSwitch(p: {
+  presets: readonly StockFtpPreset[]; activeId: string; ftpOpen: boolean;
+  actions: StockFtpActions; onToggleOpen: (open: boolean) => void;
+}) {
+  return (
+    <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }} role="group" aria-label="Quick stock preset switch">
+      {p.presets.map((pr) => (
+        <button key={pr.id} type="button" data-testid={`stock-ftp-quick-${pr.id}`}
+          className={`svg-btn tiny${pr.id === p.activeId ? " primary" : ""}`}
+          onClick={() => { p.actions.selectPreset(pr.id); if (!p.ftpOpen) p.onToggleOpen(true); }}>{pr.name}</button>
+      ))}
+    </span>
   );
 }
 

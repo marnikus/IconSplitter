@@ -127,13 +127,19 @@ function normalizeHost(raw: unknown, fallback: string): string {
   return clean.slice(0, 253);
 }
 
+function defaultNameFor(template: StockTemplate): string {
+  if (template === "shutterstock") return SHUTTERSTOCK_PRESET.name;
+  return template === "adobe-stock" ? ADOBE_STOCK_PRESET.name : "Stock FTP";
+}
+
 function parsePreset(raw: unknown): StockFtpPreset | null {
   if (!isRecord(raw) || typeof raw.id !== "string" || raw.id.trim() === "") return null;
   const id = raw.id.trim().slice(0, 48);
   const template = normalizeTemplate(raw.template, id);
   const protocol = normalizeProtocol(raw.protocol);
   const spec = presetFieldsOf(protocol);
-  const name = typeof raw.name === "string" && raw.name.trim() !== "" ? raw.name.trim().slice(0, 60) : "Stock FTP";
+  const fallbackName = defaultNameFor(template);
+  const name = typeof raw.name === "string" && raw.name.trim() !== "" ? raw.name.trim().slice(0, 60) : fallbackName;
   return {
     id,
     name,

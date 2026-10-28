@@ -3643,3 +3643,8 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - Guaranteed built-in presets (`Shutterstock`, `Adobe Stock`) always occupy slots 1-2 regardless of `MAX_STOCK_PRESETS` and healed legacy single-preset `localStorage` snapshots immediately on load (`src/lib/stockupload/presets.ts`, `src/stockupload/presetstore.ts`).
 - Added stale `dist/index.html` detection & auto-rebuild (`tools/bridge/distfresh.mjs`, `tools/bridge/server.mjs`), loopback helper replacement (`/shutdown`), and port `47391` cleanup + auto-build in all `.bat` helper launchers (`run_ftp_bridge.bat`, `run_app_ftp.bat`, `run_inkscape_bridge.bat`, `run_app_inkscape.bat`) so `git pull` never serves a stale pre-Adobe-Stock bundle.
 - Verified with `tests/{stockupload_presets,bridge_ftps,bridge_sftp,bridge_inkscape,stockupload_ui}.test.*`, `node tools/quality.mjs --changed --allow-legacy`, and `npm run verify`.
+
+### 2026-10-28 — Stamp dist/index.html with src SHA-256, add quick preset switch, and rebuild dist/index.html with Adobe Stock
+- Added `computeSrcFingerprint` and `<meta name="iconsplitter-src-hash">` build stamping (`tools/bridge/distfresh.mjs`, `vite.config.ts`) so `isDistStale` detects outdated `dist/index.html` bundles even when `git pull`/`rebase` gives an older `dist/index.html` a newer `mtime`.
+- Added quick preset switcher buttons (`Shutterstock`, `Adobe Stock`) in the `StockFtpPanel` top bar alongside `stock-ftp-preset-select` and built-in name fallback healing (`src/stockupload/StockFtpPanel.tsx`, `src/lib/stockupload/presets.ts`).
+- Verified with `tests/bridge_ftps.test.ts`, `tests/stockupload_ui.test.tsx`, `node tools/quality.mjs --changed --allow-legacy`, and `npm run verify`.

@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isDistStale } from "../tools/bridge/distfresh.mjs";
+import { computeSrcFingerprint, isDistStale } from "../tools/bridge/distfresh.mjs";
 import { afterEach, describe, expect, it } from "vitest";
 import { closeBridgeFtpsSession, probeBridgeFtps, testBridgeFtps, uploadBridgeFtps } from "../src/lib/stockupload/bridgeclient";
 import type { StockFtpPreset } from "../src/lib/stockupload/types";
@@ -170,8 +170,16 @@ describe("local loopback Explicit FTPS bridge", () => {
       utimesSync(srcFile, nowSec, nowSec);
       expect(isDistStale(distHtml, [nested])).toBe(true);
 
-      // Rebuild distHtml newer than srcFile -> fresh
+      // Even if git rebase/checkout gave an older distHtml a NEWER mtime than src/,
+      // missing or mismatched source-hash meta tag MUST still mark it stale!
       utimesSync(distHtml, nowSec + 10, nowSec + 10);
+      expect(isDistStale(distHtml, [nested])).toBe(true);
+
+      // Fresh build stamped with current computeSrcFingerprint -> fresh (false)
+      const fp = computeSrcFingerprint([nested]);
+      expect(fp).toMatch(/^[0-9a-f]{64}$/);
+      writeFileSync(distHtml, `<!doctype html><head><meta name="iconsplitter-src-hash" content="${fp}"></head></html>`);
+      utimesSync(distHtml, nowSec + 15, nowSec + 15);
       expect(isDistStale(distHtml, [nested])).toBe(false);
     } finally {
       rmSync(tmp, { recursive: true, force: true });

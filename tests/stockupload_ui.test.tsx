@@ -253,6 +253,13 @@ describe("Upload (stockUpload) tab UI", () => {
 
     await waitUntil(() => q("stock-row-item-star") !== null, "exported row loaded");
 
+    // Both Shutterstock and Adobe Stock appear in the drop list AND quick-switch header buttons
+    const presetSelect = q("stock-ftp-preset-select") as HTMLSelectElement;
+    const optionLabels = Array.from(presetSelect.options).map((o) => o.textContent);
+    expect(optionLabels).toEqual(["Shutterstock", "Adobe Stock"]);
+    expect(q("stock-ftp-quick-shutterstock")?.textContent).toContain("Shutterstock");
+    expect(q("stock-ftp-quick-adobe-stock")?.textContent).toContain("Adobe Stock");
+
     // Unique per-stock badges exist automatically and both stocks start as pending on the row
     const initialCatalog = getRowBadgeState().catalog;
     const shutterBadge = initialCatalog.find((b) => b.id === "stock:shutterstock");

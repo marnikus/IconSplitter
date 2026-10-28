@@ -1,19 +1,52 @@
-// distfresh.mjs — detects when `dist/index.html` is missing or older than `src/`
-// (e.g. right after `git pull`) and triggers an automatic single-flight `npm run build`.
+// distfresh.mjs — detects when `dist/index.html` is missing, older than `src/`,
+// or stamped with a different `src/` SHA-256 (e.g. after `git pull` / `git rebase`)
+// and triggers an automatic single-flight `npm run build`.
 
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-function newestMtimeMs(targetPath) {
-  if (!existsSync(targetPath)) return 0;
+function collectWatchedFiles(targetPath, out) {
+  if (!existsSync(targetPath)) return;
   const st = statSync(targetPath);
-  if (!st.isDirectory()) return st.mtimeMs;
-  let newest = st.mtimeMs;
-  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist") continue;
-    const childMax = newestMtimeMs(path.join(targetPath, entry.name));
-    if (childMax > newest) newest = childMax;
+  if (!st.isDirectory()) {
+    out.push(targetPath);
+    return;
+  }
+  const entries = readdirSync(targetPath, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== "dist")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    collectWatchedFiles(path.join(targetPath, entry.name), out);
+  }
+}
+
+export function computeSrcFingerprint(watchPaths) {
+  const hash = createHash("sha256");
+  for (const root of watchPaths) {
+    const resolvedRoot = path.resolve(root);
+    const files = [];
+    collectWatchedFiles(resolvedRoot, files);
+    for (const file of files) {
+      const rel = path.relative(resolvedRoot, file).replace(/\\/g, "/");
+      hash.update(`${rel}\0`, "utf8");
+      hash.update(readFileSync(file));
+      hash.update("\0", "utf8");
+    }
+  }
+  return hash.digest("hex");
+}
+
+function newestMtimeMs(watchPaths) {
+  let newest = 0;
+  for (const root of watchPaths) {
+    const files = [];
+    collectWatchedFiles(root, files);
+    for (const file of files) {
+      const mtime = statSync(file).mtimeMs;
+      if (mtime > newest) newest = mtime;
+    }
   }
   return newest;
 }
@@ -22,11 +55,10 @@ export function isDistStale(distHtmlPath, watchPaths) {
   if (!existsSync(distHtmlPath)) return true;
   const distStat = statSync(distHtmlPath);
   if (!distStat.isFile() || distStat.size === 0) return true;
-  const distMtime = distStat.mtimeMs;
-  for (const watchPath of watchPaths) {
-    if (newestMtimeMs(watchPath) > distMtime) return true;
-  }
-  return false;
+  if (newestMtimeMs(watchPaths) > distStat.mtimeMs) return true;
+  const expected = computeSrcFingerprint(watchPaths);
+  const html = readFileSync(distHtmlPath, "utf8");
+  return !html.includes(`name="iconsplitter-src-hash" content="${expected}"`);
 }
 
 let inFlightBuild = null;
