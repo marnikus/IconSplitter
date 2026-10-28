@@ -1,4 +1,4 @@
-// StockFtpPanel.tsx — stock FTP presets dropdown, per-stock connection fields,
+// StockFtpPanel.tsx — stock FTP/SFTP presets dropdown, per-stock varying fields,
 // and local-only non-expanded credentials card (never displays stored secrets).
 
 import { useState } from "react";
@@ -19,10 +19,11 @@ export interface StockFtpPanelProps {
 export default function StockFtpPanel(p: StockFtpPanelProps) {
   const active = p.presetState.presets.find((s) => s.id === p.presetState.activePresetId) ?? p.presetState.presets[0];
   const saved = Boolean(p.credSaved[active.id]);
+  const protoBadge = active.protocol === "sftp" ? "SFTP stock preset" : "FTPS stock preset";
   return (
     <div className={`svg-provider${p.ftpOpen ? "" : " closed"}`} data-testid="stock-ftp-panel">
       <div className="svg-provider-top">
-        <span><strong data-testid="stock-ftp-active-name">{active.name}</strong> · FTPS stock preset</span>
+        <span><strong data-testid="stock-ftp-active-name">{active.name}</strong> · {protoBadge}</span>
         <span>{active.host || "no host"}:{active.port} · {active.protocol}</span>
         <button type="button" className="svg-link" data-testid="stock-ftp-toggle" aria-expanded={p.ftpOpen}
           onClick={() => p.onToggleOpen(!p.ftpOpen)}>{p.ftpOpen ? "Minimize" : "Restore"}</button>
@@ -55,9 +56,9 @@ function PresetSelectorBar({ presetState, active, actions }: {
           {presetState.presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
         </select>
       </label>
-      {active.template === "shutterstock" ? (
-        <button type="button" className="svg-btn tiny" data-testid="stock-ftp-reset-shutterstock"
-          onClick={actions.resetShutterstock}>↺ Reset Shutterstock defaults</button>
+      {active.template !== "custom" ? (
+        <button type="button" className="svg-btn tiny" data-testid="stock-ftp-reset-builtin"
+          onClick={() => actions.resetBuiltin(active.id)}>↺ Reset {active.name} defaults</button>
       ) : (
         <button type="button" className="svg-btn tiny danger" data-testid="stock-ftp-delete"
           onClick={() => actions.deletePreset(active.id)}>Remove preset</button>
@@ -76,7 +77,7 @@ function ConnectionFields({ active, bridgeUrl, onBridgeUrl, actions }: {
   return (
     <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
       <EndpointFields active={active} onPatch={patch} />
-      <TlsFields active={active} bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} onPatch={patch} />
+      <SecurityFields active={active} bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} onPatch={patch} />
     </div>
   );
 }
@@ -84,12 +85,13 @@ function ConnectionFields({ active, bridgeUrl, onBridgeUrl, actions }: {
 function EndpointFields({ active, onPatch }: {
   active: StockFtpPreset; onPatch: (p: Partial<StockFtpPreset>) => void;
 }) {
+  const hostHint = active.template === "adobe-stock" ? "sftp.contributor.adobestock.com" : "ftps.shutterstock.com";
   return (
     <>
       <label className="svg-field">
         <span className="svg-label">Host</span>
         <input className="svg-input" data-testid="stock-ftp-host" value={active.host}
-          onChange={(e) => onPatch({ host: e.target.value })} placeholder="ftps.shutterstock.com" />
+          onChange={(e) => onPatch({ host: e.target.value })} placeholder={hostHint} />
       </label>
       <label className="svg-field">
         <span className="svg-label">Port</span>
@@ -107,11 +109,12 @@ function ProtocolAndFolderFields({ active, onPatch }: {
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">Encryption</span>
+        <span className="svg-label">Protocol / Encryption</span>
         <select className="svg-input" data-testid="stock-ftp-protocol" value={active.protocol}
           onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
-          <option value="ftps-explicit">Explicit FTPS (AUTH TLS)</option>
-          <option value="ftps-implicit">Implicit FTPS (TLS 990)</option>
+          <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>
+          <option value="sftp">SFTP (SSH :22)</option>
+          <option value="ftps-implicit">Implicit FTPS (TLS :990)</option>
           <option value="ftp">Plain FTP (unencrypted)</option>
         </select>
       </label>
@@ -124,35 +127,59 @@ function ProtocolAndFolderFields({ active, onPatch }: {
   );
 }
 
-function TlsFields({ active, bridgeUrl, onBridgeUrl, onPatch }: {
+function SecurityFields({ active, bridgeUrl, onBridgeUrl, onPatch }: {
   active: StockFtpPreset; bridgeUrl: string; onBridgeUrl: (u: string) => void;
   onPatch: (p: Partial<StockFtpPreset>) => void;
 }) {
+  const isSftp = active.protocol === "sftp";
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">TLS certificate check</span>
+        <span className="svg-label">{isSftp ? "SSH host key check" : "TLS certificate check"}</span>
         <select className="svg-input" data-testid="stock-ftp-tls" value={active.tlsPolicy}
           onChange={(e) => onPatch({ tlsPolicy: e.target.value as TlsPolicy })}>
-          <option value="strict">Verify CA certificate</option>
+          <option value="strict">{isSftp ? "Require pinned host key" : "Verify CA certificate"}</option>
           <option value="pinned">Pin server SHA-256 fingerprint</option>
-          <option value="accept-self-signed">Trust unknown server cert</option>
+          <option value="accept-self-signed">{isSftp ? "Trust unknown SSH host key" : "Trust unknown server cert"}</option>
         </select>
       </label>
       {active.tlsPolicy === "pinned" && (
-        <label className="svg-field">
-          <span className="svg-label">Pinned SHA-256</span>
-          <input className="svg-input" data-testid="stock-ftp-pin" value={active.pinnedCertSha256}
-            onChange={(e) => onPatch({ pinnedCertSha256: e.target.value })} placeholder="64-hex SHA-256" />
-        </label>
+        <PinnedFingerprintField value={active.pinnedCertSha256} onPatch={onPatch} />
       )}
-      <label className="svg-field">
-        <span className="svg-label">Local FTPS helper</span>
-        <input className="svg-input" data-testid="stock-ftp-bridge-url" value={bridgeUrl}
-          onChange={(e) => onBridgeUrl(e.target.value)} />
-      </label>
+      <BridgeUrlField bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} />
     </>
   );
+}
+
+function PinnedFingerprintField({ value, onPatch }: {
+  value: string; onPatch: (p: Partial<StockFtpPreset>) => void;
+}) {
+  return (
+    <label className="svg-field">
+      <span className="svg-label">Pinned SHA-256</span>
+      <input className="svg-input" data-testid="stock-ftp-pin" value={value}
+        onChange={(e) => onPatch({ pinnedCertSha256: e.target.value })} placeholder="64-hex SHA-256" />
+    </label>
+  );
+}
+
+function BridgeUrlField({ bridgeUrl, onBridgeUrl }: {
+  bridgeUrl: string; onBridgeUrl: (u: string) => void;
+}) {
+  return (
+    <label className="svg-field">
+      <span className="svg-label">Local FTPS/SFTP helper</span>
+      <input className="svg-input" data-testid="stock-ftp-bridge-url" value={bridgeUrl}
+        onChange={(e) => onBridgeUrl(e.target.value)} />
+    </label>
+  );
+}
+
+function credentialHelpCopy(active: StockFtpPreset): string {
+  if (active.template === "adobe-stock") {
+    return "Adobe Stock: in Contributor Portal → Upload → Learn More, copy your SFTP Member ID and click Generate password (standalone SVG/EPS/JPG/PNG only; no ZIPs). Saved locally only — never expanded.";
+  }
+  return "Username and password are stored ONLY in this browser's local device vault — never expanded, exported, or logged.";
 }
 
 function LocalCredentialsBox({ active, saved, testStatus, actions }: {
@@ -171,32 +198,33 @@ function LocalCredentialsBox({ active, saved, testStatus, actions }: {
         <span className={`svg-badge ${saved ? "processed" : "pending"}`} data-testid="stock-ftp-cred-status">
           {saved ? "Saved locally (never expanded)" : "No local credentials"}
         </span>
-        <CredentialInputs saved={saved} user={user} pass={pass} onUser={setUser} onPass={setPass} />
+        <CredentialInputs active={active} saved={saved} user={user} pass={pass} onUser={setUser} onPass={setPass} />
         <CredentialButtons activeId={active.id} saved={saved} canSave={user.trim() !== "" && pass !== ""}
           busy={testStatus.busy} onSave={onSave} actions={actions} />
       </div>
-      <TestResultNote activeId={active.id} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
-      <small className="up-hint">
-        Username and password are stored ONLY in this browser&apos;s local device vault — never expanded, exported, or logged.
-      </small>
+      <TestResultNote active={active} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
+      <small className="up-hint">{credentialHelpCopy(active)}</small>
     </div>
   );
 }
 
 function CredentialInputs(p: {
-  saved: boolean; user: string; pass: string;
+  active: StockFtpPreset; saved: boolean; user: string; pass: string;
   onUser: (v: string) => void; onPass: (v: string) => void;
 }) {
+  const isAdobe = p.active.template === "adobe-stock";
+  const userLabel = isAdobe ? "SFTP Member ID" : "Contributor email / username";
+  const passLabel = isAdobe ? "Generated SFTP password" : "Password";
+  const userHint = p.saved ? "Replace saved login…" : (isAdobe ? "e.g. 210333617" : "Enter username…");
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">Contributor email / username</span>
+        <span className="svg-label">{userLabel}</span>
         <input className="svg-input" type="text" autoComplete="off" data-testid="stock-ftp-user"
-          placeholder={p.saved ? "Replace saved username…" : "Enter username…"}
-          value={p.user} onChange={(e) => p.onUser(e.target.value)} />
+          placeholder={userHint} value={p.user} onChange={(e) => p.onUser(e.target.value)} />
       </label>
       <label className="svg-field">
-        <span className="svg-label">Password</span>
+        <span className="svg-label">{passLabel}</span>
         <input className="svg-input" type="password" autoComplete="new-password" data-testid="stock-ftp-pass"
           placeholder={p.saved ? "Replace saved password…" : "Enter password…"}
           value={p.pass} onChange={(e) => p.onPass(e.target.value)} />
@@ -225,17 +253,18 @@ function CredentialButtons(p: {
   );
 }
 
-function TestResultNote({ activeId, testStatus, onTrust }: {
-  activeId: string; testStatus: FtpTestStatus; onTrust: (id: string, sha: string) => void;
+function TestResultNote({ active, testStatus, onTrust }: {
+  active: StockFtpPreset; testStatus: FtpTestStatus; onTrust: (id: string, sha: string) => void;
 }) {
   if (testStatus.note === "") return null;
+  const keyNoun = active.protocol === "sftp" ? "SSH host key" : "server certificate";
   return (
     <div className="svg-toolbar" style={{ gap: 8 }} data-testid="stock-ftp-test-note">
       <small className={testStatus.ok === false ? "svg-error" : "svg-note"}>{testStatus.note}</small>
       {testStatus.ok === false && testStatus.certSha256 && (
         <button type="button" className="svg-btn tiny" data-testid="stock-ftp-trust-cert"
-          onClick={() => onTrust(activeId, testStatus.certSha256!)}>
-          Trust & pin server certificate ({testStatus.certSha256.slice(0, 12)}…)
+          onClick={() => onTrust(active.id, testStatus.certSha256!)}>
+          Trust & pin {keyNoun} ({testStatus.certSha256.slice(0, 12)}…)
         </button>
       )}
     </div>

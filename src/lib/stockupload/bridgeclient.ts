@@ -1,4 +1,4 @@
-// bridgeclient.ts — browser HTTP client for the local loopback FTPS helper
+// bridgeclient.ts — browser HTTP client for the local loopback FTPS/SFTP helper
 // (`http://127.0.0.1:47391/ftps/*`). Redacts credentials from any error message.
 
 import { isRecord } from "../isrecord";
@@ -65,9 +65,9 @@ export async function probeBridgeFtps(
     if (!res.ok) return { ok: false, reason: `local helper answered HTTP ${res.status} — ${BRIDGE_FIX_HINT}` };
     const body: unknown = await res.json();
     if (isRecord(body) && isRecord(body.ftps) && body.ftps.ready === true) return { ok: true };
-    return { ok: false, reason: `local helper does not expose FTPS — restart ${BRIDGE_FIX_HINT}` };
+    return { ok: false, reason: `local helper does not expose FTPS/SFTP — restart ${BRIDGE_FIX_HINT}` };
   } catch {
-    return { ok: false, reason: `local FTPS helper is not running — ${BRIDGE_FIX_HINT}` };
+    return { ok: false, reason: `local FTPS/SFTP helper is not running — ${BRIDGE_FIX_HINT}` };
   }
 }
 
@@ -90,7 +90,7 @@ export async function testBridgeFtps(
     }
     return { ok: false, ...toFailure(body, creds) };
   } catch {
-    return { ok: false, code: "helper-down", reason: `cannot reach local FTPS helper — ${BRIDGE_FIX_HINT}`, serverCertSha256: null };
+    return { ok: false, code: "helper-down", reason: `cannot reach local FTPS/SFTP helper — ${BRIDGE_FIX_HINT}`, serverCertSha256: null };
   }
 }
 
@@ -122,7 +122,7 @@ export async function uploadBridgeFtps(input: BridgeUploadInput): Promise<Bridge
     if ((err as Error)?.name === "AbortError") {
       return { ok: false, code: "network", reason: "upload cancelled", serverCertSha256: null };
     }
-    return { ok: false, code: "helper-down", reason: `cannot reach local FTPS helper — ${BRIDGE_FIX_HINT}`, serverCertSha256: null };
+    return { ok: false, code: "helper-down", reason: `cannot reach local FTPS/SFTP helper — ${BRIDGE_FIX_HINT}`, serverCertSha256: null };
   }
 }
 

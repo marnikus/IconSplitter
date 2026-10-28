@@ -3,7 +3,7 @@ import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { discoverExportedItems } from "../src/lib/stockupload/discovery";
 import { buildStockUploadPlan } from "../src/lib/stockupload/plan";
-import { SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
+import { ADOBE_STOCK_PRESET, SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
 import type { StockFtpPreset } from "../src/lib/stockupload/types";
 import { loadStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { markUploadInFlight, recoverInterruptedUploads, resetUploadJournal } from "../src/stockupload/journal";
@@ -133,5 +133,23 @@ describe("stock upload planner, batch runner and crash journal", () => {
     expect(count).toBe(1);
     expect(loadStockHistory()["icon-9"].shutterstock.status).toBe("interrupted");
     expect(recoverInterruptedUploads()).toBe(0);
+  });
+
+  it("emits Adobe Stock submission guideline warnings for ZIP archives, subfolders, and missing 5-49 keywords", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { svg: true, eps: true });
+    const found = await discoverExportedItems(root);
+
+    const plan = buildStockUploadPlan({
+      items: found.items,
+      checkedIds: ["icon-1"],
+      presets: [{ ...ADOBE_STOCK_PRESET, remoteDir: "/nested" }],
+      checkedTargets: ["adobe-stock"],
+      formats: { raster: false, svg: true, eps: true, zip: true },
+    });
+
+    expect(plan.warnings.some((w) => w.includes("Adobe Stock") && w.includes("ZIP"))).toBe(true);
+    expect(plan.warnings.some((w) => w.includes("Adobe Stock") && w.includes("root '/'"))).toBe(true);
+    expect(plan.warnings.some((w) => w.includes("Adobe Stock") && w.includes("5–49 keywords"))).toBe(true);
   });
 });

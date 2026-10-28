@@ -1,11 +1,11 @@
-// ftpactions.ts — Stock FTP preset mutations, local-only credential actions,
+// ftpactions.ts — Stock FTP/SFTP preset mutations, local-only credential actions,
 // and connection test (credentials never enter React state or localStorage).
 
 import { useMemo, useRef } from "react";
 import { testBridgeFtps } from "../lib/stockupload/bridgeclient";
 import {
   addCustomStockPreset, patchStockPreset, removeStockPreset,
-  SHUTTERSTOCK_PRESET, toggleTargetPreset,
+  resetBuiltinStockPreset, toggleTargetPreset,
 } from "../lib/stockupload/presets";
 import type { StockFtpPreset, StockPresetState, UploadFormatKey } from "../lib/stockupload/types";
 import { clearFtpCredentials, readFtpCredentials, saveFtpCredentials } from "./keystore";
@@ -22,7 +22,7 @@ export interface StockFtpActions {
   selectPreset: (id: string) => void;
   addPreset: (name: string) => void;
   deletePreset: (id: string) => void;
-  resetShutterstock: () => void;
+  resetBuiltin: (id: string) => void;
   updatePreset: (id: string, patch: Partial<StockFtpPreset>) => void;
   toggleTarget: (id: string) => void;
   setFormat: (key: UploadFormatKey, enabled: boolean) => void;
@@ -56,6 +56,12 @@ async function performSaveCreds(
   return true;
 }
 
+function protocolSuccessLabel(preset: StockFtpPreset): string {
+  return preset.protocol === "sftp"
+    ? "Connected & authenticated via SFTP (SSH port 22)"
+    : "Connected & authenticated via FTPS";
+}
+
 async function performTestConnection(c: FtpCtx, presetId: string): Promise<void> {
   const preset = c.presetState.presets.find((p) => p.id === presetId);
   if (!preset) return;
@@ -64,14 +70,15 @@ async function performTestConnection(c: FtpCtx, presetId: string): Promise<void>
     c.setTestStatus({ busy: false, ok: false, note: "Save local credentials first before testing.", certSha256: null });
     return;
   }
-  c.setTestStatus({ busy: true, ok: null, note: "Connecting over FTPS…", certSha256: null });
+  const protoLabel = preset.protocol === "sftp" ? "SFTP" : "FTPS";
+  c.setTestStatus({ busy: true, ok: null, note: `Connecting over ${protoLabel}…`, certSha256: null });
   const res = await testBridgeFtps(c.bridgeUrl, preset, creds);
-  const note = res.ok ? "Connected & authenticated via Explicit FTPS" : res.reason;
+  const note = res.ok ? protocolSuccessLabel(preset) : res.reason;
   c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: res.serverCertSha256 });
 }
 
 function buildPresetListCrud(ref: { current: FtpCtx }): Pick<
-  StockFtpActions, "selectPreset" | "addPreset" | "deletePreset" | "resetShutterstock"
+  StockFtpActions, "selectPreset" | "addPreset" | "deletePreset" | "resetBuiltin"
 > {
   return {
     selectPreset: (id) => {
@@ -88,9 +95,11 @@ function buildPresetListCrud(ref: { current: FtpCtx }): Pick<
       void clearFtpCredentials(id);
       ref.current.setCredSaved(id, false);
     },
-    resetShutterstock: () => {
-      setStockPresetState(patchStockPreset(ref.current.presetState, "shutterstock", SHUTTERSTOCK_PRESET));
-      ref.current.say("Shutterstock FTPS settings restored to defaults");
+    resetBuiltin: (id) => {
+      const next = resetBuiltinStockPreset(ref.current.presetState, id);
+      setStockPresetState(next);
+      const label = next.presets.find((p) => p.id === id)?.name ?? "Stock";
+      ref.current.say(`${label} settings restored to defaults`);
     },
   };
 }
@@ -107,7 +116,7 @@ function buildPresetFieldOps(ref: { current: FtpCtx }): Pick<
     },
     trustPinnedCert: (id, sha256) => {
       setStockPresetState(patchStockPreset(ref.current.presetState, id, { tlsPolicy: "pinned", pinnedCertSha256: sha256 }));
-      ref.current.say("Pinned server TLS certificate SHA-256 fingerprint");
+      ref.current.say("Pinned server SHA-256 fingerprint");
     },
   };
 }

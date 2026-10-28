@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADOBE_STOCK_PRESET,
   DEFAULT_STOCK_STATE,
   SHUTTERSTOCK_PRESET,
   addCustomStockPreset,
@@ -9,16 +10,16 @@ import {
   patchStockPreset,
   presetFieldsOf,
   removeStockPreset,
+  resetBuiltinStockPreset,
   serializeStockPresetState,
   toggleFormatFlag,
   toggleTargetPreset,
 } from "../src/lib/stockupload/presets";
 import { loadStockPresetState, resetStockPresetStore, saveStockPresetState } from "../src/stockupload/presetstore";
 
-describe("stock FTP presets and Shutterstock default", () => {
-  it("seeds Shutterstock Explicit FTPS (ftps.shutterstock.com:21, /) as the sole initial connection", () => {
-    expect(DEFAULT_STOCK_STATE.presets).toHaveLength(1);
-    expect(DEFAULT_STOCK_STATE.presets[0]).toEqual(SHUTTERSTOCK_PRESET);
+describe("stock FTP/SFTP presets — Shutterstock & Adobe Stock defaults", () => {
+  it("seeds both Shutterstock Explicit FTPS (:21) and Adobe Stock SFTP (:22)", () => {
+    expect(DEFAULT_STOCK_STATE.presets).toEqual([SHUTTERSTOCK_PRESET, ADOBE_STOCK_PRESET]);
     expect(SHUTTERSTOCK_PRESET).toMatchObject({
       id: "shutterstock",
       name: "Shutterstock",
@@ -30,43 +31,86 @@ describe("stock FTP presets and Shutterstock default", () => {
       passive: true,
       tlsPolicy: "strict",
     });
+    expect(ADOBE_STOCK_PRESET).toMatchObject({
+      id: "adobe-stock",
+      name: "Adobe Stock",
+      template: "adobe-stock",
+      protocol: "sftp",
+      host: "sftp.contributor.adobestock.com",
+      port: 22,
+      remoteDir: "/",
+      tlsPolicy: "strict",
+    });
     expect(DEFAULT_STOCK_STATE.activePresetId).toBe("shutterstock");
     expect(DEFAULT_STOCK_STATE.checkedTargets).toEqual(["shutterstock"]);
   });
 
-  it("varies visible protocol fields and default ports across Explicit FTPS, Implicit FTPS, and plain FTP", () => {
-    expect(presetFieldsOf("ftps-explicit")).toEqual({ usesTls: true, defaultPort: 21, unencryptedWarning: false });
-    expect(presetFieldsOf("ftps-implicit")).toEqual({ usesTls: true, defaultPort: 990, unencryptedWarning: false });
-    expect(presetFieldsOf("ftp")).toEqual({ usesTls: false, defaultPort: 21, unencryptedWarning: true });
-
-    const switched = patchStockPreset(DEFAULT_STOCK_STATE, "shutterstock", { protocol: "ftps-implicit" });
-    expect(switched.presets[0].port).toBe(990);
+  it("migrates older localStorage snapshots that lacked Adobe Stock by appending missing built-in presets", () => {
+    const legacy = JSON.stringify({
+      v: 1,
+      presets: [SHUTTERSTOCK_PRESET],
+      activePresetId: "shutterstock",
+      checkedTargets: ["shutterstock"],
+      formats: { raster: true, svg: true, eps: true, zip: false },
+    });
+    const parsed = parseStockPresetState(legacy);
+    expect(parsed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock"]);
   });
 
-  it("adds, edits, checks/unchecks multi-FTP targets, toggles format checkboxes, and removes custom presets", () => {
+  it("varies protocol fields and default ports across Explicit FTPS, SFTP, Implicit FTPS, and plain FTP", () => {
+    expect(presetFieldsOf("ftps-explicit")).toEqual({
+      usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false,
+    });
+    expect(presetFieldsOf("sftp")).toEqual({
+      usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false,
+    });
+    expect(presetFieldsOf("ftps-implicit")).toEqual({
+      usesTls: true, usesSshHostKey: false, defaultPort: 990, unencryptedWarning: false,
+    });
+    expect(presetFieldsOf("ftp")).toEqual({
+      usesTls: false, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: true,
+    });
+
+    const toSftp = patchStockPreset(DEFAULT_STOCK_STATE, "shutterstock", { protocol: "sftp" });
+    expect(toSftp.presets[0].port).toBe(22);
+
+    const restored = resetBuiltinStockPreset(toSftp, "shutterstock");
+    expect(restored.presets[0]).toEqual(SHUTTERSTOCK_PRESET);
+  });
+
+  it("adds, edits, checks/unchecks multi-site targets, toggles formats, and protects built-in presets from deletion", () => {
     const added = addCustomStockPreset(DEFAULT_STOCK_STATE, "Dreamstime");
-    expect(added.presets).toHaveLength(2);
-    const secondId = added.presets[1].id;
-    expect(added.activePresetId).toBe(secondId);
-    expect(added.checkedTargets).toContain(secondId);
+    expect(added.presets).toHaveLength(3);
+    const customId = added.presets[2].id;
+    expect(added.activePresetId).toBe(customId);
+    expect(added.checkedTargets).toContain(customId);
+
+    // Built-in presets cannot be removed
+    expect(removeStockPreset(added, "adobe-stock").presets).toHaveLength(3);
 
     const toggled = toggleTargetPreset(added, "shutterstock");
-    expect(toggled.checkedTargets).toEqual([secondId]);
+    expect(toggled.checkedTargets).toEqual([customId]);
 
     const fmt = toggleFormatFlag(toggled, "zip");
     expect(fmt.formats.zip).toBe(true);
 
-    const removed = removeStockPreset(fmt, secondId);
-    expect(removed.presets).toHaveLength(1);
+    const removed = removeStockPreset(fmt, customId);
+    expect(removed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock"]);
     expect(removed.activePresetId).toBe("shutterstock");
     expect(removed.checkedTargets).toEqual([]);
   });
 
-  it("normalizes remote paths and certificate SHA-256 fingerprints and recovers from corrupt payloads", () => {
+  it("normalizes remote paths, sftp:// host prefixes, and SHA-256 fingerprints and recovers from corrupt payloads", () => {
     expect(normalizeRemoteDir("")).toBe("/");
     expect(normalizeRemoteDir("uploads/icons/")).toBe("/uploads/icons");
     expect(normalizeRemoteDir("/../../etc/passwd")).toBe("/etc/passwd");
+    expect(normalizeCertFingerprint("SHA256:aa:bb:cc:11")).toBe("aabbcc11");
     expect(normalizeCertFingerprint("aa:bb:cc:11")).toBe("aabbcc11");
+
+    const edited = patchStockPreset(DEFAULT_STOCK_STATE, "adobe-stock", {
+      host: "sftp://sftp.contributor.adobestock.com/extra",
+    });
+    expect(edited.presets[1].host).toBe("sftp.contributor.adobestock.com");
 
     expect(parseStockPresetState("not json")).toEqual(DEFAULT_STOCK_STATE);
     expect(parseStockPresetState(JSON.stringify({ v: 99 }))).toEqual(DEFAULT_STOCK_STATE);
@@ -77,18 +121,23 @@ describe("stock FTP presets and Shutterstock default", () => {
     resetStockPresetStore();
     const tampered = JSON.stringify({
       v: 1,
-      presets: [{ ...SHUTTERSTOCK_PRESET, username: "leak@example.com", password: "secret" }],
-      activePresetId: "shutterstock",
-      checkedTargets: ["shutterstock"],
+      presets: [
+        { ...SHUTTERSTOCK_PRESET, username: "leak@example.com", password: "secret" },
+        { ...ADOBE_STOCK_PRESET, username: "210333617", password: "generated-sftp-password" },
+      ],
+      activePresetId: "adobe-stock",
+      checkedTargets: ["shutterstock", "adobe-stock"],
       formats: { raster: true, svg: true, eps: false, zip: true },
     });
     const parsed = parseStockPresetState(tampered);
-    expect(JSON.stringify(parsed)).not.toContain("leak@example.com");
-    expect(JSON.stringify(parsed)).not.toContain("secret");
+    const rawJson = JSON.stringify(parsed);
+    expect(rawJson).not.toContain("leak@example.com");
+    expect(rawJson).not.toContain("210333617");
+    expect(rawJson).not.toContain("generated-sftp-password");
 
     saveStockPresetState(parsed);
     const reloaded = loadStockPresetState();
-    expect(reloaded.formats).toEqual({ raster: true, svg: true, eps: false, zip: true });
+    expect(reloaded.activePresetId).toBe("adobe-stock");
     expect(serializeStockPresetState(reloaded)).not.toContain("password");
   });
 });

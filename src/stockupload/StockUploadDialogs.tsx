@@ -1,5 +1,5 @@
-// StockUploadDialogs.tsx — row-badge catalog dialog, FTPS preflight confirmation
-// modal, and cross-tab portal progress header.
+// StockUploadDialogs.tsx — row-badge catalog dialog, FTPS/SFTP preflight
+// confirmation modal, and cross-tab portal progress header.
 
 import { createPortal } from "react-dom";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
@@ -45,7 +45,7 @@ function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}>
         <header className="svg-modal-head">
-          <h2 id="stock-upload-confirm-title">Confirm FTPS Upload</h2>
+          <h2 id="stock-upload-confirm-title">Confirm Stock Upload</h2>
           <button type="button" className="svg-btn tiny" onClick={onCancel}>Close</button>
         </header>
         <ConfirmPlanBody plan={plan} />
@@ -54,7 +54,7 @@ function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
             Cancel
           </button>
           <button type="button" className="svg-btn primary" data-testid="stock-upload-confirm-go" onClick={onConfirm}>
-            ⇪ Start FTPS Upload
+            ⇪ Start Upload
           </button>
         </footer>
       </section>
@@ -92,7 +92,7 @@ function StockProgressPortal({ g }: { g: StockUploadApi }) {
     <ProcessProgressBar
       prefix="stock-upload"
       theme="svg"
-      title="Uploading to stock FTPS"
+      title="Uploading to stock sites"
       detail={p.label}
       done={p.done}
       total={p.total}

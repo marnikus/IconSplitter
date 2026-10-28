@@ -88,7 +88,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
 
 <a id="i-81"></a>
 * **I-81 (Stock FTP credentials are local-only and never expanded, RULE 20 —
-  2026-10-27):** FTP/FTPS usernames and passwords are stored exclusively in the
+  2026-10-27):** FTP/FTPS/SFTP usernames and passwords are stored exclusively in the
   device's IndexedDB `secrets` store (`stock-ftp-cred:<presetId>`, with
   in-memory session fallback when IndexedDB is unavailable), never in
   `localStorage`, `export.json`, presets, or logs, and are never expanded or

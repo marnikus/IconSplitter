@@ -1,4 +1,4 @@
-// presets.ts — Stock FTP/FTPS preset definitions, protocol-varying field rules
+// presets.ts — Stock FTP/FTPS/SFTP preset definitions, protocol-varying field rules
 // and validate-on-read normalization (RULE 13/20). Credentials never exist here.
 
 import { isRecord } from "../isrecord";
@@ -26,6 +26,25 @@ export const SHUTTERSTOCK_PRESET: StockFtpPreset = {
   timeoutMs: DEFAULT_TIMEOUT,
 };
 
+export const ADOBE_STOCK_PRESET: StockFtpPreset = {
+  id: "adobe-stock",
+  name: "Adobe Stock",
+  template: "adobe-stock",
+  protocol: "sftp",
+  host: "sftp.contributor.adobestock.com",
+  port: 22,
+  remoteDir: "/",
+  passive: true,
+  tlsPolicy: "strict",
+  pinnedCertSha256: "",
+  timeoutMs: DEFAULT_TIMEOUT,
+};
+
+export const BUILTIN_STOCK_PRESETS: readonly StockFtpPreset[] = [
+  SHUTTERSTOCK_PRESET,
+  ADOBE_STOCK_PRESET,
+];
+
 export const DEFAULT_FORMAT_FLAGS: StockFormatFlags = {
   raster: true,
   svg: false,
@@ -35,7 +54,7 @@ export const DEFAULT_FORMAT_FLAGS: StockFormatFlags = {
 
 export const DEFAULT_STOCK_STATE: StockPresetState = {
   v: STOCK_PRESETS_VERSION,
-  presets: [SHUTTERSTOCK_PRESET],
+  presets: [...BUILTIN_STOCK_PRESETS],
   activePresetId: SHUTTERSTOCK_PRESET.id,
   checkedTargets: [SHUTTERSTOCK_PRESET.id],
   formats: DEFAULT_FORMAT_FLAGS,
@@ -43,14 +62,22 @@ export const DEFAULT_STOCK_STATE: StockPresetState = {
 
 export interface ProtocolFieldSpec {
   usesTls: boolean;
+  usesSshHostKey: boolean;
   defaultPort: number;
   unencryptedWarning: boolean;
 }
 
 export function presetFieldsOf(protocol: FtpProtocol): ProtocolFieldSpec {
-  if (protocol === "ftps-implicit") return { usesTls: true, defaultPort: 990, unencryptedWarning: false };
-  if (protocol === "ftp") return { usesTls: false, defaultPort: 21, unencryptedWarning: true };
-  return { usesTls: true, defaultPort: 21, unencryptedWarning: false };
+  if (protocol === "sftp") {
+    return { usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false };
+  }
+  if (protocol === "ftps-implicit") {
+    return { usesTls: true, usesSshHostKey: false, defaultPort: 990, unencryptedWarning: false };
+  }
+  if (protocol === "ftp") {
+    return { usesTls: false, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: true };
+  }
+  return { usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false };
 }
 
 export function normalizeRemoteDir(raw: unknown): string {
@@ -61,15 +88,27 @@ export function normalizeRemoteDir(raw: unknown): string {
 
 export function normalizeCertFingerprint(raw: unknown): string {
   if (typeof raw !== "string") return "";
-  return raw.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 64);
+  return raw.trim().replace(/^sha-?256:/i, "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 64);
 }
 
 function normalizeProtocol(raw: unknown): FtpProtocol {
-  return raw === "ftps-implicit" || raw === "ftp" ? raw : "ftps-explicit";
+  if (raw === "sftp" || raw === "ftps-implicit" || raw === "ftp") return raw;
+  return "ftps-explicit";
 }
 
 function normalizeTlsPolicy(raw: unknown): TlsPolicy {
   return raw === "pinned" || raw === "accept-self-signed" ? raw : "strict";
+}
+
+function normalizeTemplate(raw: unknown, id: string): StockTemplate {
+  if (raw === "shutterstock" || id === "shutterstock") return "shutterstock";
+  if (raw === "adobe-stock" || id === "adobe-stock") return "adobe-stock";
+  return "custom";
+}
+
+function defaultHostFor(template: StockTemplate): string {
+  if (template === "shutterstock") return SHUTTERSTOCK_PRESET.host;
+  return template === "adobe-stock" ? ADOBE_STOCK_PRESET.host : "";
 }
 
 function clampPort(raw: unknown, fallback: number): number {
@@ -84,22 +123,23 @@ function clampTimeout(raw: unknown): number {
 
 function normalizeHost(raw: unknown, fallback: string): string {
   if (typeof raw !== "string") return fallback;
-  const clean = raw.trim().replace(/^ftps?:\/\//i, "").replace(/\/.*$/, "");
+  const clean = raw.trim().replace(/^(?:sftp|ftps?):\/\//i, "").replace(/\/.*$/, "");
   return clean.slice(0, 253);
 }
 
 function parsePreset(raw: unknown): StockFtpPreset | null {
   if (!isRecord(raw) || typeof raw.id !== "string" || raw.id.trim() === "") return null;
+  const id = raw.id.trim().slice(0, 48);
+  const template = normalizeTemplate(raw.template, id);
   const protocol = normalizeProtocol(raw.protocol);
   const spec = presetFieldsOf(protocol);
-  const template: StockTemplate = raw.template === "shutterstock" ? "shutterstock" : "custom";
   const name = typeof raw.name === "string" && raw.name.trim() !== "" ? raw.name.trim().slice(0, 60) : "Stock FTP";
   return {
-    id: raw.id.trim().slice(0, 48),
+    id,
     name,
     template,
     protocol,
-    host: normalizeHost(raw.host, template === "shutterstock" ? SHUTTERSTOCK_PRESET.host : ""),
+    host: normalizeHost(raw.host, defaultHostFor(template)),
     port: clampPort(raw.port, spec.defaultPort),
     remoteDir: normalizeRemoteDir(raw.remoteDir),
     passive: raw.passive !== false,
@@ -119,7 +159,7 @@ function parseFormats(raw: unknown): StockFormatFlags {
   };
 }
 
-function dedupePresets(list: StockFtpPreset[]): StockFtpPreset[] {
+function ensureBuiltinsAndDedupe(list: StockFtpPreset[]): StockFtpPreset[] {
   const seen = new Set<string>();
   const out: StockFtpPreset[] = [];
   for (const item of list) {
@@ -127,7 +167,13 @@ function dedupePresets(list: StockFtpPreset[]): StockFtpPreset[] {
     seen.add(item.id);
     out.push(item);
   }
-  return out.length > 0 ? out : [SHUTTERSTOCK_PRESET];
+  for (const builtin of BUILTIN_STOCK_PRESETS) {
+    if (!seen.has(builtin.id) && out.length < MAX_STOCK_PRESETS) {
+      seen.add(builtin.id);
+      out.push(builtin);
+    }
+  }
+  return out.length > 0 ? out : [...BUILTIN_STOCK_PRESETS];
 }
 
 export function parseStockPresetState(text: string | null): StockPresetState {
@@ -135,7 +181,7 @@ export function parseStockPresetState(text: string | null): StockPresetState {
   try {
     const raw: unknown = JSON.parse(text);
     if (!isRecord(raw) || raw.v !== STOCK_PRESETS_VERSION || !Array.isArray(raw.presets)) return DEFAULT_STOCK_STATE;
-    const presets = dedupePresets(raw.presets.flatMap((p) => parsePreset(p) ?? []));
+    const presets = ensureBuiltinsAndDedupe(raw.presets.flatMap((p) => parsePreset(p) ?? []));
     const ids = new Set(presets.map((p) => p.id));
     const activePresetId = typeof raw.activePresetId === "string" && ids.has(raw.activePresetId)
       ? raw.activePresetId : presets[0].id;
@@ -171,6 +217,11 @@ export function patchStockPreset(
   return { ...state, presets };
 }
 
+export function resetBuiltinStockPreset(state: StockPresetState, id: string): StockPresetState {
+  const builtin = BUILTIN_STOCK_PRESETS.find((b) => b.id === id);
+  return builtin ? patchStockPreset(state, id, builtin) : state;
+}
+
 export function addCustomStockPreset(state: StockPresetState, name = "Custom Stock"): StockPresetState {
   if (state.presets.length >= MAX_STOCK_PRESETS) return state;
   const existing = new Set(state.presets.map((p) => p.id));
@@ -199,9 +250,9 @@ export function addCustomStockPreset(state: StockPresetState, name = "Custom Sto
 }
 
 export function removeStockPreset(state: StockPresetState, id: string): StockPresetState {
-  if (state.presets.length <= 1) return state;
+  const target = state.presets.find((p) => p.id === id);
+  if (!target || target.template !== "custom" || state.presets.length <= 1) return state;
   const presets = state.presets.filter((p) => p.id !== id);
-  if (presets.length === 0) return state;
   return {
     ...state,
     presets,

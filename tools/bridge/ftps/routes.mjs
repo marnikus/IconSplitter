@@ -3,11 +3,16 @@
 // scrubs credentials from any returned error reason; aborts immediately on browser disconnect (RULE 7).
 
 import crypto from "node:crypto";
+import { openSftpSession } from "../sftp/client.mjs";
 import { openFtpsSession } from "./client.mjs";
 import { FtpsError } from "./reply.mjs";
 
 const SESSION_IDLE_MS = 15000;
 const sessions = new Map();
+
+function openTransportSession(cfg) {
+  return cfg.protocol === "sftp" ? openSftpSession(cfg) : openFtpsSession(cfg);
+}
 
 function scrubSecrets(text, cfg) {
   let out = String(text ?? "FTPS failure");
@@ -48,14 +53,14 @@ function touchPoolEntry(key, session) {
 
 async function acquireSession(cfg) {
   const key = poolIdOf(cfg);
-  if (!key) return { session: await openFtpsSession(cfg), pooled: false, key: null };
+  if (!key) return { session: await openTransportSession(cfg), pooled: false, key: null };
   const hit = sessions.get(key);
   if (hit && hit.session.isAlive()) {
     clearTimeout(hit.timer);
     return { session: hit.session, pooled: true, key };
   }
   if (hit) sessions.delete(key);
-  const fresh = await openFtpsSession(cfg);
+  const fresh = await openTransportSession(cfg);
   sessions.set(key, { session: fresh, sessionKey: cfg.sessionKey, timer: null });
   return { session: fresh, pooled: true, key };
 }
@@ -90,7 +95,7 @@ export async function handleFtpsTest(req, res, jsonReply) {
   try {
     cfg = JSON.parse(raw.toString("utf8"));
     validateConfig(cfg);
-    const session = await openFtpsSession(cfg);
+    const session = await openTransportSession(cfg);
     res.once("close", () => { if (!res.writableEnded) session.destroy(); });
     await session.noop();
     const cert = session.serverCertSha256;

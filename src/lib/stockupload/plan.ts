@@ -88,6 +88,38 @@ function collectPreflightErrors(
   return errs;
 }
 
+function hasValidAdobeMetadata(item: ExportedItem): boolean {
+  const m = item.record.metadata;
+  if (m === null) return false;
+  const titleLen = m.title.trim().length;
+  const tagCount = m.tags.filter((t) => t.trim() !== "").length;
+  return titleLen >= 1 && titleLen <= 200 && tagCount >= 5 && tagCount <= 49;
+}
+
+function collectAdobeStockWarnings(
+  targets: readonly StockFtpPreset[],
+  rows: readonly ExportedItem[],
+  tasks: readonly PlannedTransfer[],
+): string[] {
+  const adobeTargets = targets.filter((t) => t.template === "adobe-stock");
+  if (adobeTargets.length === 0) return [];
+  const adobeIds = new Set(adobeTargets.map((t) => t.id));
+  const warns: string[] = [];
+  if (tasks.some((t) => adobeIds.has(t.targetId) && t.format === "zip")) {
+    warns.push("Adobe Stock does not accept ZIP archives — upload standalone SVG, EPS, or JPEG/PNG files.");
+  }
+  if (adobeTargets.some((t) => t.remoteDir !== "/")) {
+    warns.push("Adobe Stock SFTP requires uploading standalone files to root '/' (subfolders are not supported).");
+  }
+  if (tasks.some((t) => adobeIds.has(t.targetId) && t.estimatedBytes > 45 * 1024 * 1024)) {
+    warns.push("Adobe Stock maximum vector file size is 45 MB.");
+  }
+  if (rows.some((r) => !hasValidAdobeMetadata(r))) {
+    warns.push("Adobe Stock requires a 1–200 char title and 5–49 keywords per asset (no brand/artist/person names).");
+  }
+  return warns;
+}
+
 function collectShutterstockWarnings(targets: readonly StockFtpPreset[], tasks: readonly PlannedTransfer[]): string[] {
   if (!targets.some((t) => t.template === "shutterstock")) return [];
   const warns: string[] = [];
@@ -151,6 +183,9 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
     preflightErrors.push("None of the selected items have the requested exported format(s) on disk.");
   }
   const totalBytes = tasks.reduce((sum, t) => sum + t.estimatedBytes, 0);
-  const warnings = collectShutterstockWarnings(targets, tasks);
+  const warnings = [
+    ...collectShutterstockWarnings(targets, tasks),
+    ...collectAdobeStockWarnings(targets, selectedRows, tasks),
+  ];
   return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes };
 }

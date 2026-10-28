@@ -1,9 +1,9 @@
 @echo off
 rem ============================================================
-rem  Icon Splitter - Build & Open through Local FTPS Helper
+rem  Icon Splitter - Build & Open through Local FTPS/SFTP Helper
 rem  Builds the app, starts the local loopback helper, and opens
-rem  http://127.0.0.1:47391/ so both Stock FTPS uploads and
-rem  Inkscape EPS conversion work seamlessly from the same origin.
+rem  http://127.0.0.1:47391/ so Stock FTPS (:21) + SFTP (:22)
+rem  uploads and Inkscape EPS conversion work from one origin.
 rem ============================================================
 setlocal
 cd /d "%~dp0"

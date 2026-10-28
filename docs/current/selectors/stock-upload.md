@@ -10,7 +10,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 
 ## Stock FTP presets & local-only credentials (`StockFtpPanel.tsx`)
 - `stock-ftp-panel`, `stock-ftp-toggle`, `stock-ftp-active-name` — collapsible preset panel.
-- `stock-ftp-preset-select`, `stock-ftp-new-name`, `stock-ftp-add`, `stock-ftp-delete`, `stock-ftp-reset-shutterstock` — stock preset dropdown & CRUD.
+- `stock-ftp-preset-select`, `stock-ftp-new-name`, `stock-ftp-add`, `stock-ftp-delete`, `stock-ftp-reset-builtin` — stock preset dropdown & CRUD (`Shutterstock`, `Adobe Stock`, plus custom presets).
 - `stock-ftp-host`, `stock-ftp-port`, `stock-ftp-protocol`, `stock-ftp-remotedir`, `stock-ftp-tls`, `stock-ftp-pin`, `stock-ftp-bridge-url` — per-stock connection settings.
 - `stock-ftp-cred-status`, `stock-ftp-user`, `stock-ftp-pass`, `stock-ftp-cred-save`, `stock-ftp-cred-forget`, `stock-ftp-test`, `stock-ftp-test-note`, `stock-ftp-trust-cert` — local-only non-expanded credentials & connection test.
 

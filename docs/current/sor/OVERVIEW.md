@@ -51,8 +51,9 @@ A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
    ([I-80](invariants/upload.md#i-80)), lets you review/zoom previews, manage
    shared row badges, edit and re-embed XMP/IPTC/RDF metadata locally, and
    upload selected same-stem representations (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
-   to one or more configured stock FTPS presets (seeded with **Shutterstock**,
-   `ftps.shutterstock.com:21` Explicit FTPS) after explicit confirmation via
+   to one or more configured stock FTPS/SFTP presets (seeded with
+   **Shutterstock** `ftps.shutterstock.com:21` Explicit FTPS and **Adobe Stock**
+   `sftp.contributor.adobestock.com:22` SFTP) after explicit confirmation via
    the local loopback helper (`tools/bridge/server.mjs`), with local-only
    non-expanded credentials ([I-81](invariants/upload.md#i-81)).
 

@@ -2,9 +2,9 @@
 
 import type { ExportRecord } from "../upload/export";
 
-export type FtpProtocol = "ftps-explicit" | "ftps-implicit" | "ftp";
+export type FtpProtocol = "ftps-explicit" | "sftp" | "ftps-implicit" | "ftp";
 export type TlsPolicy = "strict" | "pinned" | "accept-self-signed";
-export type StockTemplate = "shutterstock" | "custom";
+export type StockTemplate = "shutterstock" | "adobe-stock" | "custom";
 export type UploadFormatKey = "raster" | "svg" | "eps" | "zip";
 
 export interface StockFormatFlags {

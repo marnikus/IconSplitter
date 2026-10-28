@@ -50,6 +50,14 @@ function setInput(el: HTMLInputElement | HTMLTextAreaElement, value: string): Pr
   });
 }
 
+function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
+  return act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    setter?.call(el, value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 function makeWorkspace(): FakeDir {
   const root = new FakeDir("stock_ws");
   const packA = new FakeDir("icons_a");
@@ -214,5 +222,75 @@ describe("Upload (stockUpload) tab UI", () => {
 
     const sentFiles = uploadedConfigs.map((b64) => JSON.parse(atob(b64)).fileName as string);
     expect(sentFiles).toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
+  });
+
+  it("supports Adobe Stock SFTP (:22) with SFTP Member ID / generated password fields, reset defaults, and standalone vector upload", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+
+    const uploadedPayloads: Array<{ host: string; port: number; protocol: string; fileName: string }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/health")) {
+        return new Response(JSON.stringify({ ok: true, ftps: { ready: true } }), { status: 200 });
+      }
+      if (u.endsWith("/ftps/upload")) {
+        const hdr = (init?.headers as Record<string, string>)?.["x-ftps-config"] ?? "";
+        uploadedPayloads.push(JSON.parse(atob(hdr)));
+        return new Response(JSON.stringify({ ok: true, bytes: 42 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+
+    act(() => {
+      ui.render(
+        <HistoryProvider>
+          <StockUploadPanel active />
+        </HistoryProvider>,
+      );
+    });
+
+    await waitUntil(() => q("stock-row-item-star") !== null, "exported row loaded");
+
+    // Switch stock dropdown to Adobe Stock
+    await setSelect(q("stock-ftp-preset-select") as HTMLSelectElement, "adobe-stock");
+    await settle();
+    expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("sftp.contributor.adobestock.com");
+    expect((q("stock-ftp-port") as HTMLInputElement).value).toBe("22");
+    expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("sftp");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("SFTP Member ID");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("Generated SFTP password");
+
+    // Edit host and verify built-in Reset restores Adobe Stock defaults
+    await setInput(q("stock-ftp-host") as HTMLInputElement, "custom.example.com");
+    expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("custom.example.com");
+    await clickEl(q("stock-ftp-reset-builtin")!);
+    expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("sftp.contributor.adobestock.com");
+
+    // Save local-only Adobe Stock SFTP credentials without expanding them
+    await setInput(q("stock-ftp-user") as HTMLInputElement, "210333617");
+    await setInput(q("stock-ftp-pass") as HTMLInputElement, "AdobeGenSecret#42");
+    await clickEl(q("stock-ftp-cred-save")!);
+    await waitUntil(() => q("stock-ftp-cred-status")?.textContent?.includes("Saved locally") === true, "adobe creds saved");
+    expect(host.innerHTML).not.toContain("210333617");
+    expect(host.innerHTML).not.toContain("AdobeGenSecret#42");
+
+    // Target Adobe Stock only (uncheck Shutterstock, check Adobe Stock) and upload SVG + EPS
+    await clickEl(q("stock-target-check-shutterstock")!);
+    await clickEl(q("stock-target-check-adobe-stock")!);
+    await clickEl(q("stock-format-raster")!);
+    await clickEl(q("stock-format-svg")!);
+    await clickEl(q("stock-check-item-star")!);
+    await settle();
+
+    await clickEl(q("stock-upload-start")!);
+    await settle();
+    await clickEl(q("stock-upload-confirm-go")!);
+    await waitUntil(() => uploadedPayloads.length === 2, "2 Adobe Stock vector files uploaded");
+
+    expect(uploadedPayloads.map((p) => ({ host: p.host, port: p.port, protocol: p.protocol, fileName: p.fileName }))).toEqual([
+      { host: "sftp.contributor.adobestock.com", port: 22, protocol: "sftp", fileName: "star_icon.svg" },
+      { host: "sftp.contributor.adobestock.com", port: 22, protocol: "sftp", fileName: "star_icon.eps" },
+    ]);
   });
 });

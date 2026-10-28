@@ -3628,3 +3628,8 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - Added `src/lib/stockupload/{types,credvault,presets,discovery,zippack,plan,bridgeclient}.ts`, `src/stockupload/*`, `tools/bridge/ftps/{reply,pasv,client,routes}.mjs`, `run_ftp_bridge.bat`, and `run_app_ftp.bat`.
 - Enforced I-80 (`export/` + committed `export.json` strict discovery) and I-81 (local-only non-expanded IndexedDB FTP credentials + log redaction).
 - Passed `tsc --noEmit`, `eslint`, `tools/quality.mjs --changed --allow-legacy` (37/37 files OK), and TDD test suites (`stockupload_*`, `bridge_ftps`, `workbench_ui`, `secret_hygiene`, `docs_navigation`).
+
+### 2026-10-28 — Adobe Stock SFTP preset, guidelines preflight & zero-dep SSH-2/SFTP v3 helper
+- Added `ADOBE_STOCK_PRESET` (`sftp.contributor.adobestock.com:22`, `protocol: "sftp"`, `remoteDir: "/"`), `resetBuiltinStockPreset`, automatic built-in preset backfill on legacy `localStorage` snapshots, and Adobe Stock preflight warnings (no `.zip` archives, root `/` only, `<= 45 MB`, `1-200` char title + `5-49` keywords) (`src/lib/stockupload/{types,presets,plan,bridgeclient}.ts`).
+- Implemented zero-dependency Node SSH-2 + SFTP v3 client (`tools/bridge/sftp/{wire,kex,client}.mjs`) and protocol dispatch in `tools/bridge/ftps/routes.mjs`, plus per-stock SFTP UI fields (`SFTP Member ID`, `Generated SFTP password`, SSH host-key SHA-256 pinning, built-in reset) in `src/stockupload/{ftpactions.ts,StockFtpPanel.tsx,StockUploadDialogs.tsx}`.
+- Verified with `tests/{stockupload_presets,stockupload_runner,bridge_sftp,stockupload_ui}.test.*` + `tests/helpers/fakesftp.mjs`, `node tools/quality.mjs --changed --allow-legacy`, and `npm run verify`.
