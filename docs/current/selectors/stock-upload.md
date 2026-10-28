@@ -24,6 +24,6 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 
 ## Rows & local metadata (`StockUploadRow.tsx`, `StockUploadMetaFields.tsx`)
 - `stock-rows`, `stock-row-<id>`, `stock-check-<id>`, `stock-prev-<id>` — row container, checkbox, and zoomed preview.
-- `stock-name-<id>`, `stock-path-<id>`, `stock-formats-<id>`, `stock-history-<id>` — stem, `export/` path, available formats, and per-site upload status.
+- `stock-name-<id>`, `stock-path-<id>`, `stock-formats-<id>`, `stock-history-<id>`, `stock-site-pill-<id>-<presetId>` — stem, `export/` path, available formats, and per-stock uploaded/pending pills.
 - `stock-location-<id>`, `stock-meta-btn-<id>` — copy folder path & expand metadata actions.
 - `stock-meta-fields-<id>`, `stock-meta-title-<id>`, `stock-meta-description-<id>`, `stock-meta-tags-<id>`, `stock-meta-accept-<id>`, `stock-meta-state-<id>` — local metadata editor & in-place carrier re-embedder.

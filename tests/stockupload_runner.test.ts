@@ -8,6 +8,7 @@ import type { StockFtpPreset } from "../src/lib/stockupload/types";
 import { loadStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { markUploadInFlight, recoverInterruptedUploads, resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
+import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 function addExported(root: FakeDir, id: string, dir: string, stem: string, formats: { jpg?: boolean; svg?: boolean; eps?: boolean }) {
@@ -151,5 +152,75 @@ describe("stock upload planner, batch runner and crash journal", () => {
     expect(plan.warnings.some((w) => w.includes("Adobe Stock") && w.includes("ZIP"))).toBe(true);
     expect(plan.warnings.some((w) => w.includes("Adobe Stock") && w.includes("root '/'"))).toBe(true);
     expect(plan.warnings.some((w) => w.includes("Adobe Stock") && w.includes("5–49 keywords"))).toBe(true);
+  });
+
+  it("automatically assigns each stock's unique named badge immediately as soon as a file is sent to that stock", async () => {
+    localStorage.clear();
+    resetStockHistory();
+    resetUploadJournal();
+    resetRowBadges();
+
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { svg: true });
+    addExported(root, "icon-2", "b", "moon_02", { svg: true });
+    const found = await discoverExportedItems(root);
+
+    const plan = buildStockUploadPlan({
+      items: found.items,
+      checkedIds: ["icon-1", "icon-2"],
+      presets: [SHUTTERSTOCK_PRESET, ADOBE_STOCK_PRESET],
+      checkedTargets: ["shutterstock", "adobe-stock"],
+      formats: { raster: false, svg: true, eps: false, zip: false },
+    });
+
+    const snapshotsAfterProgress: Array<{ step: number; icon1Badges: string[]; icon2Badges: string[] }> = [];
+
+    await executeStockUploadBatch(plan, {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "u", password: "p" }),
+      onProgress: (p) => {
+        const rb = getRowBadgeState();
+        snapshotsAfterProgress.push({
+          step: p.done,
+          icon1Badges: [...(rb.assigned["icon-1"] ?? [])],
+          icon2Badges: [...(rb.assigned["icon-2"] ?? [])],
+        });
+      },
+      uploadFn: async (inp) => {
+        // Fail moon_02 on Adobe Stock -> must NOT get Adobe Stock badge!
+        if (inp.preset.id === "adobe-stock" && inp.fileName === "moon_02.svg") {
+          return { ok: false, code: "ftp", reason: "rejected", serverCertSha256: null };
+        }
+        return { ok: true, bytes: inp.bytes.byteLength };
+      },
+      closeSessionFn: async () => undefined,
+    });
+
+    // Step 1: icon-1 sent to Shutterstock -> immediately has stock:shutterstock, icon-2 still has none!
+    expect(snapshotsAfterProgress[0]).toEqual({
+      step: 1,
+      icon1Badges: ["stock:shutterstock"],
+      icon2Badges: [],
+    });
+    // Step 2: icon-2 sent to Shutterstock -> both have stock:shutterstock; Adobe Stock still pending!
+    expect(snapshotsAfterProgress[1]).toEqual({
+      step: 2,
+      icon1Badges: ["stock:shutterstock"],
+      icon2Badges: ["stock:shutterstock"],
+    });
+    // Step 3: icon-1 sent to Adobe Stock -> icon-1 immediately gains stock:adobe-stock!
+    expect(snapshotsAfterProgress[2]).toEqual({
+      step: 3,
+      icon1Badges: ["stock:shutterstock", "stock:adobe-stock"],
+      icon2Badges: ["stock:shutterstock"],
+    });
+    // Step 4: icon-2 failed on Adobe Stock -> icon-2 keeps ONLY stock:shutterstock!
+    expect(snapshotsAfterProgress[3]).toEqual({
+      step: 4,
+      icon1Badges: ["stock:shutterstock", "stock:adobe-stock"],
+      icon2Badges: ["stock:shutterstock"],
+    });
   });
 });

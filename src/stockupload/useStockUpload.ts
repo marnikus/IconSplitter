@@ -5,13 +5,14 @@ import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { pruneRowSelection } from "../lib/reviewselect";
 import type { StockDiscovery } from "../lib/stockupload/discovery";
+import { ensureStockBadges } from "../lib/stockupload/stockbadges";
 import type { ExportedItem, StockHistoryMap, StockPresetState } from "../lib/stockupload/types";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import { useHistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchStockUpload } from "../state/appstore";
 import { rememberListTargets } from "../state/listtargets";
 import { useAppSlice } from "../state/useAppState";
-import { getRowBadgeState, subscribeRowBadges } from "../upload/rowbadgestore";
+import { getRowBadgeState, setRowBadgeState, subscribeRowBadges } from "../upload/rowbadgestore";
 import { useStockFtpActions, type StockFtpActions } from "./ftpactions";
 import { getStockHistory, subscribeStockHistory } from "./historystore";
 import { hasFtpCredentials } from "./keystore";
@@ -54,6 +55,12 @@ function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAct
   dispatch({ type: "patch", patch: { discovery: found } });
 }
 
+function syncPresetsBadges(presets: StockPresetState["presets"]): void {
+  const curBadges = getRowBadgeState();
+  const syncedBadges = ensureStockBadges(curBadges, presets);
+  if (syncedBadges !== curBadges) setRowBadgeState(syncedBadges);
+}
+
 function useBootEffects(
   r: StockRefs,
   presets: StockPresetState["presets"],
@@ -73,11 +80,10 @@ function useBootEffects(
   }, [r, dispatch, runScan]);
 
   useEffect(() => {
+    syncPresetsBadges(presets);
     let alive = true;
     for (const p of presets) {
-      void hasFtpCredentials(p.id).then((saved) => {
-        if (alive) dispatch({ type: "cred", id: p.id, saved });
-      });
+      void hasFtpCredentials(p.id).then((saved) => { if (alive) dispatch({ type: "cred", id: p.id, saved }); });
     }
     return () => { alive = false; };
   }, [presets, dispatch]);

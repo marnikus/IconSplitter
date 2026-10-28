@@ -37,12 +37,13 @@ It has six modes (tabs across the top):
   `export.json`. Also Chrome/Edge only.
 * **Upload** — scans strictly `export/` folders with a committed `export.json`
   and lists already-exported stock packages, with zoomed previews, shared row
-  badges, local metadata editing + in-place XMP/IPTC/RDF re-embedding, stock
-  FTPS/SFTP presets (seeded with **Shutterstock** Explicit FTPS on
-  `ftps.shutterstock.com:21` and **Adobe Stock** SFTP on
-  `sftp.contributor.adobestock.com:22`), local-only non-expanded credentials,
-  and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`) uploads through the local
-  loopback helper (`run_ftp_bridge.bat` / `run_app_ftp.bat`).
+  badges + automatic unique per-stock named badges assigned as soon as a file
+  is sent (marking uploaded vs pending per stock), local metadata editing +
+  in-place XMP/IPTC/RDF re-embedding, stock FTPS/SFTP presets (seeded with
+  **Shutterstock** Explicit FTPS on `ftps.shutterstock.com:21` and
+  **Adobe Stock** SFTP on `sftp.contributor.adobestock.com:22`), local-only
+  non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
+  uploads through the local loopback helper (`run_ftp_bridge.bat` / `run_app_ftp.bat`).
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

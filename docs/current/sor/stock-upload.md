@@ -14,7 +14,7 @@ Unrecorded files inside `export/`, uncommitted records, and source files outside
 
 - **Preview (`StockUploadPreview.tsx`)**: scales with the pinned thumbnail zoom slider (`stock-upload-zoom`), rendering available `JPEG/PNG` (revoked blob URL) first, else `SVG`, else an `EPS` badge.
 - **Identity & Location**: shows `<stem>`, primary `export/` path, available formats, and `Location` (`copyFolderText`).
-- **Row badges**: shares `iconSplitter.upload.rowBadges.v1` and global undo `uploadRowBadges` with `"SVG to upload"` via `useSyncExternalStore`.
+- **Row badges & automatic per-stock badges (`src/lib/stockupload/stockbadges.ts`)**: shares `iconSplitter.upload.rowBadges.v1` and global undo `uploadRowBadges` with `"SVG to upload"` via `useSyncExternalStore`. Each configured stock preset (`Shutterstock`, `Adobe Stock`, plus any custom stock) automatically gets a unique named badge (`stock:<presetId>`) with a distinct color, which is **automatically assigned** to an item row immediately as soon as a file is sent to that stock (`assignStockBadgeOnSend`), while each row also displays uploaded (`✓ <Stock>`) vs pending (`⏳ <Stock> · pending`) pills for every configured stock and supports `Pending: <Stock>` / `Uploaded: <Stock>` status filters.
 - **Local metadata (`src/stockupload/metaembed.ts`)**: clicking a row expands editable `Title`, `Description`, `Tags`, `Creator`, and `Copyright` (no AI controls). `Accept & embed` validates (`validateMetadata`) and atomically re-embeds XMP/IPTC/RDF in-place into existing `export/<stem>.{jpg,svg,eps}` files before updating `export.json`.
 
 ## 3. Stock FTPS/SFTP presets & local-only credentials

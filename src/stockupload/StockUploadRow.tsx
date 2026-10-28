@@ -4,6 +4,7 @@
 import { memo } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
+import { perStockMarkersOf, type PerStockMarker } from "../lib/stockupload/stockbadges";
 import type { ExportedItem, StockFtpPreset, StockHistoryMap } from "../lib/stockupload/types";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -120,21 +121,40 @@ function MetadataSummaryCell({ item, draft }: { item: ExportedItem; draft: Stock
   );
 }
 
+function pillBadgeClass(state: PerStockMarker["state"]): string {
+  if (state === "uploaded") return "processed";
+  if (state === "pending") return "pending";
+  if (state === "partial") return "partial";
+  return "failed";
+}
+
+function pillLabelOf(m: PerStockMarker): string {
+  if (m.state === "uploaded") return `✓ ${m.name}`;
+  if (m.state === "pending") return `⏳ ${m.name} · pending`;
+  return `${m.name}: ${m.state}`;
+}
+
+function pillStyleOf(m: PerStockMarker): { borderColor: string; background?: string } {
+  if (m.state === "uploaded") return { borderColor: m.color, background: `${m.color}2e` };
+  if (m.state === "pending") return { borderColor: `${m.color}66` };
+  return { borderColor: m.color };
+}
+
 function SiteHistoryCell({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
-  const sites = a.history[item.id] ?? {};
-  const entries = Object.entries(sites);
-  if (entries.length === 0) return <div className="svg-cell"><small>Not uploaded</small></div>;
+  const markers = perStockMarkersOf(item.id, a.presets, a.history, a.rowBadges);
   return (
-    <div className="svg-cell" data-testid={`stock-history-${item.id}`}>
-      {entries.map(([siteId, st]) => {
-        const name = a.presets.find((p) => p.id === siteId)?.name ?? siteId;
-        const cls = st.status === "uploaded" ? "processed" : st.status === "partial" ? "partial" : "failed";
-        return (
-          <span key={siteId} className={`svg-badge ${cls}`} title={st.error ?? st.uploadedAt}>
-            {name}: {st.status}
-          </span>
-        );
-      })}
+    <div className="svg-cell" data-testid={`stock-history-${item.id}`}
+      style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {markers.map((m) => (
+        <span key={m.presetId}
+          className={`svg-badge ${pillBadgeClass(m.state)}`}
+          style={pillStyleOf(m)}
+          data-testid={`stock-site-pill-${item.id}-${m.presetId}`}
+          data-status={m.state}
+          title={m.error ?? m.uploadedAt ?? `${m.name}: pending upload`}>
+          {pillLabelOf(m)}
+        </span>
+      ))}
     </div>
   );
 }

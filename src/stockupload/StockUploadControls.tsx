@@ -101,13 +101,31 @@ function StatusAndBadgeFilters({ g }: { g: StockUploadApi }) {
           onChange={(e) => g.setFilter({ uploadStatus: e.target.value as typeof f.uploadStatus })}>
           <option value="all">All statuses</option>
           <option value="not-uploaded">Not uploaded yet</option>
-          <option value="uploaded">Uploaded</option>
+          <option value="uploaded">Uploaded (any stock)</option>
           <option value="failed">Failed / partial</option>
+          <optgroup label="Pending by stock">
+            {g.presetState.presets.map((pr) => (
+              <option key={`p-${pr.id}`} value={`pending:${pr.id}`}>Pending: {pr.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Uploaded by stock">
+            {g.presetState.presets.map((pr) => (
+              <option key={`u-${pr.id}`} value={`uploaded:${pr.id}`}>Uploaded: {pr.name}</option>
+            ))}
+          </optgroup>
         </select>
       </label>
+      <BadgeFilterControl g={g} />
+    </>
+  );
+}
+
+function BadgeFilterControl({ g }: { g: StockUploadApi }) {
+  return (
+    <>
       <label className="svg-field">
         <span className="svg-label">Badge</span>
-        <select className="svg-input" data-testid="stock-filter-badge" aria-label="Badge" value={f.badge}
+        <select className="svg-input" data-testid="stock-filter-badge" aria-label="Badge" value={g.model.filter.badge}
           onChange={(e) => g.setFilter({ badge: e.target.value })}>
           <option value="all">All badges</option>
           <option value="none">No badges</option>

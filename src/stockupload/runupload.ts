@@ -7,8 +7,10 @@ import {
 } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
+import { assignStockBadgeOnSend } from "../lib/stockupload/stockbadges";
 import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey } from "../lib/stockupload/types";
 import { buildRepresentationZip } from "../lib/stockupload/zippack";
+import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight, markUploadInFlight } from "./journal";
 
@@ -142,20 +144,24 @@ function recordMissingCreds(
 function recordTaskResult(
   task: PlannedTransfer,
   res: { ok: true } | { ok: false; reason: string },
-  state: { targetName: string; trackers: Map<string, ItemTracker>; counters: RunCounters; deps: UploadBatchDeps },
+  state: { target: StockFtpPreset; trackers: Map<string, ItemTracker>; counters: RunCounters; deps: UploadBatchDeps },
 ): void {
   const tr = state.trackers.get(task.itemId)!;
   if (res.ok) {
     tr.succeeded.push(task.format);
     state.counters.uploadedFiles += 1;
+    setRowBadgeState(assignStockBadgeOnSend(getRowBadgeState(), state.target, task.itemId));
   } else {
     tr.lastError = res.reason;
     state.counters.failedFiles += 1;
     state.counters.lastError = res.reason;
   }
+  recordSiteUploadStatus(task.itemId, state.target.id, {
+    status: outcomeOf(tr), formats: [...tr.succeeded], uploadedAt: new Date().toISOString(), error: tr.lastError,
+  });
   state.counters.done += 1;
   state.deps.onProgress?.({
-    done: state.counters.done, total: state.counters.total, label: `${state.targetName} · ${task.fileName}`,
+    done: state.counters.done, total: state.counters.total, label: `${state.target.name} · ${task.fileName}`,
   });
 }
 
@@ -181,7 +187,7 @@ async function runTargetGroup(
       if (deps.signal.aborted) break;
       markUploadInFlight(task.itemId, target.id);
       const res = await runSingleTask(task, { target, creds, sessionKey, itemsById, deps });
-      recordTaskResult(task, res, { targetName: target.name, trackers, counters, deps });
+      recordTaskResult(task, res, { target, trackers, counters, deps });
     }
   } finally {
     await closeFn(deps.bridgeUrl, sessionKey);
