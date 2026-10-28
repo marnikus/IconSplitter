@@ -3648,3 +3648,8 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - Added `computeSrcFingerprint` and `<meta name="iconsplitter-src-hash">` build stamping (`tools/bridge/distfresh.mjs`, `vite.config.ts`) so `isDistStale` detects outdated `dist/index.html` bundles even when `git pull`/`rebase` gives an older `dist/index.html` a newer `mtime`.
 - Added quick preset switcher buttons (`Shutterstock`, `Adobe Stock`) in the `StockFtpPanel` top bar alongside `stock-ftp-preset-select` and built-in name fallback healing (`src/stockupload/StockFtpPanel.tsx`, `src/lib/stockupload/presets.ts`).
 - Verified with `tests/bridge_ftps.test.ts`, `tests/stockupload_ui.test.tsx`, `node tools/quality.mjs --changed --allow-legacy`, and `npm run verify`.
+
+### 2026-10-28 — Unify all badges into the single general row-badge system & remove Stock sites column
+- Removed split `src/lib/stockupload/stockbadges.ts`, `Stock sites` column, `stock-site-pill-*` pending pills, and `stock-filter-status` dropdown (`StockUploadList.tsx`, `StockUploadRow.tsx`, `StockUploadControls.tsx`, `rowlist.ts`).
+- Hardcoded `Shutterstock` and `Adobe Stock` badges directly in the single general `src/lib/upload/rowbadge.ts` catalog (`HARDCODED_STOCK_BADGES`, `ensureHardcodedBadges`, `assignNamedBadge`) shared via `src/upload/rowbadgestore.ts`.
+- Verified with `tests/{stockupload_badges,stockupload_runner,stockupload_ui,upload_rowbadge,upload_rowbadge_store,upload_rowbadge_ui}.test.*`, `node tools/quality.mjs --changed --allow-legacy`, and `npm run verify`.

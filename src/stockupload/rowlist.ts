@@ -1,34 +1,23 @@
 // rowlist.ts — pure filtering, sorting, header state & metadata draft helper.
 
 import { compareNames } from "../lib/scan";
-import { stockMarkerStateForItem } from "../lib/stockupload/stockbadges";
-import type { ExportedItem, StockHistoryMap, UploadFormatKey } from "../lib/stockupload/types";
+import type { ExportedItem, UploadFormatKey } from "../lib/stockupload/types";
 import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
 import { metadataRights } from "../lib/upload/rights";
 import { badgesOf, rowMatchesBadge, type RowBadgeState } from "../lib/upload/rowbadge";
 
 export type StockUploadSort = "name" | "path" | "selected";
 
-export type StockUploadStatusFilter =
-  | "all"
-  | "not-uploaded"
-  | "uploaded"
-  | "failed"
-  | `pending:${string}`
-  | `uploaded:${string}`;
-
 export interface StockListFilter {
   search: string;
   badge: string;
   format: "all" | UploadFormatKey;
-  uploadStatus: StockUploadStatusFilter;
 }
 
 export const ALL_STOCK_FILTER: StockListFilter = {
   search: "",
   badge: "all",
   format: "all",
-  uploadStatus: "all",
 };
 
 export interface StockMetaDraft {
@@ -69,38 +58,6 @@ function hasFormat(item: ExportedItem, fmt: UploadFormatKey): boolean {
   return item.files[fmt] !== null;
 }
 
-function matchesPerStockFilter(
-  itemId: string,
-  status: StockUploadStatusFilter,
-  history: StockHistoryMap,
-  rowBadges: RowBadgeState,
-): boolean | null {
-  if (status.startsWith("pending:")) {
-    const presetId = status.slice("pending:".length);
-    return stockMarkerStateForItem(itemId, presetId, history, rowBadges) !== "uploaded";
-  }
-  if (status.startsWith("uploaded:")) {
-    const presetId = status.slice("uploaded:".length);
-    return stockMarkerStateForItem(itemId, presetId, history, rowBadges) === "uploaded";
-  }
-  return null;
-}
-
-function matchesStatus(
-  item: ExportedItem,
-  status: StockUploadStatusFilter,
-  history: StockHistoryMap,
-  rowBadges: RowBadgeState,
-): boolean {
-  if (status === "all") return true;
-  const perStock = matchesPerStockFilter(item.id, status, history, rowBadges);
-  if (perStock !== null) return perStock;
-  const entries = Object.values(history[item.id] ?? {});
-  if (status === "not-uploaded") return entries.length === 0;
-  if (status === "uploaded") return entries.some((e) => e.status === "uploaded");
-  return entries.some((e) => e.status === "failed" || e.status === "partial" || e.status === "interrupted");
-}
-
 function matchesSearch(item: ExportedItem, needle: string): boolean {
   const q = needle.trim().toLowerCase();
   if (q === "") return true;
@@ -114,15 +71,13 @@ export function filterAndSortItems(args: {
   filter: StockListFilter;
   sort: StockUploadSort;
   rowBadges: RowBadgeState;
-  history: StockHistoryMap;
   checked: readonly string[];
 }): ExportedItem[] {
   const checkedSet = new Set(args.checked);
   const filtered = args.items.filter((item) =>
     matchesSearch(item, args.filter.search)
     && rowMatchesBadge(badgesOf(args.rowBadges, item.id), args.filter.badge)
-    && (args.filter.format === "all" || hasFormat(item, args.filter.format))
-    && matchesStatus(item, args.filter.uploadStatus, args.history, args.rowBadges),
+    && (args.filter.format === "all" || hasFormat(item, args.filter.format)),
   );
   return filtered.sort((a, b) => {
     if (args.sort === "selected") {

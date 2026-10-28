@@ -1,11 +1,10 @@
 // StockUploadRow.tsx — one exported item row: preview, stem + export/ path +
-// formats, badges, per-stock upload status, Location button & Metadata fields.
+// general row badges, formats, metadata summary, and actions.
 
 import { memo } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
-import { perStockMarkersOf, type PerStockMarker } from "../lib/stockupload/stockbadges";
-import type { ExportedItem, StockFtpPreset, StockHistoryMap } from "../lib/stockupload/types";
+import type { ExportedItem } from "../lib/stockupload/types";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
@@ -22,8 +21,6 @@ export interface StockRowPresentation {
   rootToken: number;
   rootRef: { current: DirHandleLike | null };
   rowBadges: RowBadgeState;
-  history: StockHistoryMap;
-  presets: readonly StockFtpPreset[];
   toggleCheck: (id: string) => void;
   selectRow: (id: string, intent: SelectIntent) => void;
   openLocation: (id: string) => void;
@@ -47,7 +44,7 @@ function StockUploadRowView({ item, a, active = false, register }: {
   const ref = useRowBinding(item.id, register);
   return (
     <div ref={ref} role="listitem" data-testid={`stock-row-${item.id}`} tabIndex={-1}
-      className="up-row processed"
+      className="up-row stock-up-row processed"
       onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(item.id, selectIntent(e)); }}
       onKeyDown={(e) => handleRowKey(e, item.id, a)}>
       <input type="checkbox" className="up-check" data-testid={`stock-check-${item.id}`}
@@ -57,7 +54,6 @@ function StockUploadRowView({ item, a, active = false, register }: {
       <FileIdentityCell item={item} a={a} />
       <FormatsCell item={item} />
       <MetadataSummaryCell item={item} draft={a.metaDraftOf(item)} />
-      <SiteHistoryCell item={item} a={a} />
       <RowActionsCell item={item} a={a} />
       {active && <ExpandedRowMeta item={item} a={a} />}
     </div>
@@ -117,44 +113,6 @@ function MetadataSummaryCell({ item, draft }: { item: ExportedItem; draft: Stock
     <div className="svg-cell" data-testid={`stock-meta-cell-${item.id}`}>
       <span className={`svg-badge ${draft.state}`}>{draft.state}</span>
       {draft.metadata.tags.length > 0 && <small>{draft.metadata.tags.length} tags</small>}
-    </div>
-  );
-}
-
-function pillBadgeClass(state: PerStockMarker["state"]): string {
-  if (state === "uploaded") return "processed";
-  if (state === "pending") return "pending";
-  if (state === "partial") return "partial";
-  return "failed";
-}
-
-function pillLabelOf(m: PerStockMarker): string {
-  if (m.state === "uploaded") return `✓ ${m.name}`;
-  if (m.state === "pending") return `⏳ ${m.name} · pending`;
-  return `${m.name}: ${m.state}`;
-}
-
-function pillStyleOf(m: PerStockMarker): { borderColor: string; background?: string } {
-  if (m.state === "uploaded") return { borderColor: m.color, background: `${m.color}2e` };
-  if (m.state === "pending") return { borderColor: `${m.color}66` };
-  return { borderColor: m.color };
-}
-
-function SiteHistoryCell({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
-  const markers = perStockMarkersOf(item.id, a.presets, a.history, a.rowBadges);
-  return (
-    <div className="svg-cell" data-testid={`stock-history-${item.id}`}
-      style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-      {markers.map((m) => (
-        <span key={m.presetId}
-          className={`svg-badge ${pillBadgeClass(m.state)}`}
-          style={pillStyleOf(m)}
-          data-testid={`stock-site-pill-${item.id}-${m.presetId}`}
-          data-status={m.state}
-          title={m.error ?? m.uploadedAt ?? `${m.name}: pending upload`}>
-          {pillLabelOf(m)}
-        </span>
-      ))}
     </div>
   );
 }

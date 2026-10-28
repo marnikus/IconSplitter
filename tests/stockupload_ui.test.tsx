@@ -222,7 +222,7 @@ describe("Upload (stockUpload) tab UI", () => {
 
     const sentFiles = uploadedConfigs.map((b64) => JSON.parse(atob(b64)).fileName as string);
     expect(sentFiles).toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
-    expect(getRowBadgeState().assigned["item-star"]).toEqual([badgeId, "stock:shutterstock"]);
+    expect(getRowBadgeState().assigned["item-star"]).toEqual([badgeId, "shutterstock"]);
   });
 
   it("supports Adobe Stock SFTP (:22) with SFTP Member ID / generated password fields, reset defaults, and standalone vector upload", async () => {
@@ -260,22 +260,22 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(q("stock-ftp-quick-shutterstock")?.textContent).toContain("Shutterstock");
     expect(q("stock-ftp-quick-adobe-stock")?.textContent).toContain("Adobe Stock");
 
-    // Unique per-stock badges exist automatically and both stocks start as pending on the row
+    // Hardcoded stock badges live in the ONE general badge system; no Stock sites column or pending pills!
     const initialCatalog = getRowBadgeState().catalog;
-    const shutterBadge = initialCatalog.find((b) => b.id === "stock:shutterstock");
-    const adobeBadge = initialCatalog.find((b) => b.id === "stock:adobe-stock");
+    const shutterBadge = initialCatalog.find((b) => b.id === "shutterstock");
+    const adobeBadge = initialCatalog.find((b) => b.id === "adobe-stock");
     expect(shutterBadge?.name).toBe("Shutterstock");
     expect(adobeBadge?.name).toBe("Adobe Stock");
     expect(shutterBadge?.color).not.toBe(adobeBadge?.color);
-    expect(q("stock-site-pill-item-star-shutterstock")?.getAttribute("data-status")).toBe("pending");
-    expect(q("stock-site-pill-item-star-adobe-stock")?.getAttribute("data-status")).toBe("pending");
+    expect(host.querySelector(".stock-up-columns")?.textContent).not.toContain("Stock sites");
+    expect(host.querySelector("[data-testid^='stock-site-pill-']")).toBeNull();
+    expect(q("stock-filter-status")).toBeNull();
 
-    // Adding a custom stock preset immediately adds its own unique named badge
+    // Adding a custom stock preset immediately adds its badge to the same general catalog
     await setInput(q("stock-ftp-new-name") as HTMLInputElement, "Dreamstime");
     await clickEl(q("stock-ftp-add")!);
     await settle();
     expect(getRowBadgeState().catalog.some((b) => b.name === "Dreamstime")).toBe(true);
-    expect(q("stock-site-pill-item-star-stock-3")?.getAttribute("data-status")).toBe("pending");
     await clickEl(q("stock-target-check-stock-3")!);
 
     // Switch stock dropdown to Adobe Stock
@@ -319,18 +319,16 @@ describe("Upload (stockUpload) tab UI", () => {
       { host: "sftp.contributor.adobestock.com", port: 22, protocol: "sftp", fileName: "star_icon.eps" },
     ]);
 
-    // Adobe Stock's unique badge is auto-assigned on the row, Adobe Stock is marked uploaded, and Shutterstock + Dreamstime stay pending!
+    // Adobe Stock's general badge is auto-assigned on the row; filter using the ONE general Badge filter!
     await settle();
-    expect(q("upload-rowbadge-chip-item-star-stock:adobe-stock")?.textContent).toBe("Adobe Stock");
-    expect(q("upload-rowbadge-chip-item-star-stock:shutterstock")).toBeNull();
-    expect(q("stock-site-pill-item-star-adobe-stock")?.getAttribute("data-status")).toBe("uploaded");
-    expect(q("stock-site-pill-item-star-shutterstock")?.getAttribute("data-status")).toBe("pending");
+    expect(q("upload-rowbadge-chip-item-star-adobe-stock")?.textContent).toBe("Adobe Stock");
+    expect(q("upload-rowbadge-chip-item-star-shutterstock")).toBeNull();
+    expect(host.querySelector("[data-testid^='stock-site-pill-']")).toBeNull();
 
-    // Per-stock pending filter shows items still pending Shutterstock vs hides items already uploaded to Adobe Stock
-    await setSelect(q("stock-filter-status") as HTMLSelectElement, "pending:shutterstock");
+    await setSelect(q("stock-filter-badge") as HTMLSelectElement, "adobe-stock");
     await settle();
     expect(host.querySelectorAll("[data-testid='stock-rows'] [role='listitem']")).toHaveLength(1);
-    await setSelect(q("stock-filter-status") as HTMLSelectElement, "pending:adobe-stock");
+    await setSelect(q("stock-filter-badge") as HTMLSelectElement, "shutterstock");
     await settle();
     expect(host.querySelectorAll("[data-testid='stock-rows'] [role='listitem']")).toHaveLength(0);
   });

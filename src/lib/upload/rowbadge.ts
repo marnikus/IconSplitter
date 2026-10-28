@@ -28,6 +28,11 @@ export interface RowBadgeState {
 
 export const EMPTY_ROW_BADGES: RowBadgeState = { v: ROW_BADGE_VERSION, catalog: [], assigned: {} };
 
+export const HARDCODED_STOCK_BADGES: readonly RowBadge[] = [
+  { id: "shutterstock", name: "Shutterstock", color: "#ff4b4b" },
+  { id: "adobe-stock", name: "Adobe Stock", color: "#3898ff" },
+];
+
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export function isHexColor(value: string): boolean {
@@ -175,4 +180,67 @@ export function applyState(value: unknown): RowBadgeState | null {
 
 export function statesEqual(a: RowBadgeState, b: RowBadgeState): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function normalizeLegacyStockId(id: string): string {
+  return id.startsWith("stock:") ? id.slice("stock:".length) : id;
+}
+
+function migrateLegacyStockIds(state: RowBadgeState): RowBadgeState {
+  const hasLegacy = state.catalog.some((b) => b.id.startsWith("stock:"));
+  if (!hasLegacy) return state;
+  const seen = new Set<string>();
+  const catalog: RowBadge[] = [];
+  for (const b of state.catalog) {
+    const id = normalizeLegacyStockId(b.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    catalog.push(id === b.id ? b : { ...b, id });
+  }
+  const assigned: Record<string, string[]> = {};
+  for (const [pairId, ids] of Object.entries(state.assigned)) {
+    assigned[pairId] = [...new Set(ids.map(normalizeLegacyStockId))].filter((id) => seen.has(id));
+  }
+  return { ...state, catalog, assigned };
+}
+
+export function ensureHardcodedBadges(state: RowBadgeState): RowBadgeState {
+  const clean = migrateLegacyStockIds(state);
+  const byId = new Map(clean.catalog.map((b) => [b.id, b]));
+  const hardcodedIds = new Set(HARDCODED_STOCK_BADGES.map((b) => b.id));
+  const head = HARDCODED_STOCK_BADGES.map((b) => byId.get(b.id) ?? b);
+  const rest = clean.catalog.filter((b) => !hardcodedIds.has(b.id));
+  const nextCatalog = [...head, ...rest].slice(0, ROW_BADGE_MAX);
+  const unchanged = clean === state
+    && nextCatalog.length === state.catalog.length
+    && nextCatalog.every((b, i) => b === state.catalog[i]);
+  return unchanged ? state : { ...clean, catalog: nextCatalog };
+}
+
+export function ensureNamedBadge(
+  state: RowBadgeState,
+  name: string,
+  preferredId?: string,
+): { state: RowBadgeState; id: string | null } {
+  const trimmed = normalizeName(name);
+  if (trimmed === "") return { state, id: null };
+  const existing = state.catalog.find(
+    (b) => (preferredId !== undefined && b.id === preferredId) || b.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (existing) return { state, id: existing.id };
+  if (state.catalog.length >= ROW_BADGE_MAX) return { state, id: null };
+  const idTaken = preferredId !== undefined && state.catalog.some((b) => b.id === preferredId);
+  const id = preferredId && !idTaken ? preferredId : nextBadgeId(state.catalog);
+  const badge: RowBadge = { id, name: trimmed, color: nextBadgeColor(state.catalog) };
+  return { state: { ...state, catalog: [...state.catalog, badge] }, id };
+}
+
+export function assignNamedBadge(
+  state: RowBadgeState,
+  pairId: string,
+  name: string,
+  preferredId?: string,
+): RowBadgeState {
+  const ensured = ensureNamedBadge(state, name, preferredId);
+  return ensured.id ? setBadgeOn(ensured.state, pairId, ensured.id, true) : ensured.state;
 }

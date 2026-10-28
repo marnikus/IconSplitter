@@ -13,8 +13,6 @@ function toRowPresentation(g: StockUploadApi): StockRowPresentation {
     rootToken: g.model.rootToken,
     rootRef: g.rootRef,
     rowBadges: g.rowBadges,
-    history: g.history,
-    presets: g.presetState.presets,
     toggleCheck: g.toggleCheck,
     selectRow: g.selectRow,
     openLocation: g.openLocation,
@@ -76,13 +74,12 @@ function ListHeader({ visibleCount }: { visibleCount: number }) {
 
 function ListColumns() {
   return (
-    <div className="up-columns" aria-hidden="true">
+    <div className="up-columns stock-up-columns" aria-hidden="true">
       <span />
       <span>Preview</span>
       <span>Item / export path</span>
       <span>Formats</span>
       <span>Metadata</span>
-      <span>Stock sites</span>
       <span>Actions</span>
     </div>
   );

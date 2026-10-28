@@ -1825,6 +1825,11 @@
   column-gap: 12px;
 }
 
+.stock-up-columns,
+.stock-up-row {
+  grid-template-columns: 34px max-content minmax(260px, 1fr) 130px 130px 170px;
+}
+
 .up-columns {
   padding: 0 12px;
   border-bottom: 1px solid var(--v2-line);

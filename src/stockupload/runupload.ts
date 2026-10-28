@@ -7,9 +7,9 @@ import {
 } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import { assignStockBadgeOnSend } from "../lib/stockupload/stockbadges";
 import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey } from "../lib/stockupload/types";
 import { buildRepresentationZip } from "../lib/stockupload/zippack";
+import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight, markUploadInFlight } from "./journal";
@@ -150,7 +150,8 @@ function recordTaskResult(
   if (res.ok) {
     tr.succeeded.push(task.format);
     state.counters.uploadedFiles += 1;
-    setRowBadgeState(assignStockBadgeOnSend(getRowBadgeState(), state.target, task.itemId));
+    const baseBadges = ensureHardcodedBadges(getRowBadgeState());
+    setRowBadgeState(assignNamedBadge(baseBadges, task.itemId, state.target.name, state.target.id));
   } else {
     tr.lastError = res.reason;
     state.counters.failedFiles += 1;

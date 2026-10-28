@@ -1,13 +1,15 @@
 // rowbadgestore.ts — localStorage IO for SVG-to-upload row badges (I-79).
 // Parsing lives in lib/upload/rowbadge; this module is the one writer.
 
-import { EMPTY_ROW_BADGES, parseRowBadgeState, type RowBadgeState } from "../lib/upload/rowbadge";
+import {
+  EMPTY_ROW_BADGES, ensureHardcodedBadges, parseRowBadgeState, type RowBadgeState,
+} from "../lib/upload/rowbadge";
 import { readKey, writeKey } from "../state/safestorage";
 
 export const ROW_BADGES_KEY = "iconSplitter.upload.rowBadges.v1";
 
 const listeners = new Set<() => void>();
-let state: RowBadgeState = readState();
+let state: RowBadgeState = ensureHardcodedBadges(readState());
 
 export function getRowBadgeState(): RowBadgeState {
   return state;

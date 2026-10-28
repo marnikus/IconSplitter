@@ -198,29 +198,29 @@ describe("stock upload planner, batch runner and crash journal", () => {
       closeSessionFn: async () => undefined,
     });
 
-    // Step 1: icon-1 sent to Shutterstock -> immediately has stock:shutterstock, icon-2 still has none!
+    // Step 1: icon-1 sent to Shutterstock -> immediately has general badge "shutterstock", icon-2 still has none!
     expect(snapshotsAfterProgress[0]).toEqual({
       step: 1,
-      icon1Badges: ["stock:shutterstock"],
+      icon1Badges: ["shutterstock"],
       icon2Badges: [],
     });
-    // Step 2: icon-2 sent to Shutterstock -> both have stock:shutterstock; Adobe Stock still pending!
+    // Step 2: icon-2 sent to Shutterstock -> both have "shutterstock"
     expect(snapshotsAfterProgress[1]).toEqual({
       step: 2,
-      icon1Badges: ["stock:shutterstock"],
-      icon2Badges: ["stock:shutterstock"],
+      icon1Badges: ["shutterstock"],
+      icon2Badges: ["shutterstock"],
     });
-    // Step 3: icon-1 sent to Adobe Stock -> icon-1 immediately gains stock:adobe-stock!
+    // Step 3: icon-1 sent to Adobe Stock -> icon-1 immediately gains "adobe-stock"!
     expect(snapshotsAfterProgress[2]).toEqual({
       step: 3,
-      icon1Badges: ["stock:shutterstock", "stock:adobe-stock"],
-      icon2Badges: ["stock:shutterstock"],
+      icon1Badges: ["shutterstock", "adobe-stock"],
+      icon2Badges: ["shutterstock"],
     });
-    // Step 4: icon-2 failed on Adobe Stock -> icon-2 keeps ONLY stock:shutterstock!
+    // Step 4: icon-2 failed on Adobe Stock -> icon-2 keeps ONLY "shutterstock"!
     expect(snapshotsAfterProgress[3]).toEqual({
       step: 4,
-      icon1Badges: ["stock:shutterstock", "stock:adobe-stock"],
-      icon2Badges: ["stock:shutterstock"],
+      icon1Badges: ["shutterstock", "adobe-stock"],
+      icon2Badges: ["shutterstock"],
     });
   });
 });

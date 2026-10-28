@@ -1,5 +1,5 @@
 // StockUploadControls.tsx — top controls of the "Upload" tab: Open folder +
-// full root path, Rescan, counts, StockFtpPanel, and Filter / Badges / Sort.
+// full root path, Rescan, counts, StockFtpPanel, and general Badge / Sort bar.
 
 import type { UploadFormatKey } from "../lib/stockupload/types";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
@@ -60,7 +60,7 @@ function FilterBar({ g }: { g: StockUploadApi }) {
   return (
     <div className="svg-toolbar" data-testid="stock-filters">
       <SearchAndFormatFilters g={g} />
-      <StatusAndBadgeFilters g={g} />
+      <BadgeFilterControl g={g} />
       <SortAndResetControls g={g} />
     </div>
   );
@@ -87,35 +87,6 @@ function SearchAndFormatFilters({ g }: { g: StockUploadApi }) {
           <option value="zip">ZIP available</option>
         </select>
       </label>
-    </>
-  );
-}
-
-function StatusAndBadgeFilters({ g }: { g: StockUploadApi }) {
-  const f = g.model.filter;
-  return (
-    <>
-      <label className="svg-field">
-        <span className="svg-label">Upload status</span>
-        <select className="svg-input" data-testid="stock-filter-status" value={f.uploadStatus}
-          onChange={(e) => g.setFilter({ uploadStatus: e.target.value as typeof f.uploadStatus })}>
-          <option value="all">All statuses</option>
-          <option value="not-uploaded">Not uploaded yet</option>
-          <option value="uploaded">Uploaded (any stock)</option>
-          <option value="failed">Failed / partial</option>
-          <optgroup label="Pending by stock">
-            {g.presetState.presets.map((pr) => (
-              <option key={`p-${pr.id}`} value={`pending:${pr.id}`}>Pending: {pr.name}</option>
-            ))}
-          </optgroup>
-          <optgroup label="Uploaded by stock">
-            {g.presetState.presets.map((pr) => (
-              <option key={`u-${pr.id}`} value={`uploaded:${pr.id}`}>Uploaded: {pr.name}</option>
-            ))}
-          </optgroup>
-        </select>
-      </label>
-      <BadgeFilterControl g={g} />
     </>
   );
 }

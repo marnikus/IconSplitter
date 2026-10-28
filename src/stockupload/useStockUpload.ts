@@ -5,16 +5,14 @@ import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { pruneRowSelection } from "../lib/reviewselect";
 import type { StockDiscovery } from "../lib/stockupload/discovery";
-import { ensureStockBadges } from "../lib/stockupload/stockbadges";
-import type { ExportedItem, StockHistoryMap, StockPresetState } from "../lib/stockupload/types";
-import type { RowBadgeState } from "../lib/upload/rowbadge";
+import type { ExportedItem, StockPresetState } from "../lib/stockupload/types";
+import { ensureHardcodedBadges, ensureNamedBadge, type RowBadgeState } from "../lib/upload/rowbadge";
 import { useHistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchStockUpload } from "../state/appstore";
 import { rememberListTargets } from "../state/listtargets";
 import { useAppSlice } from "../state/useAppState";
 import { getRowBadgeState, setRowBadgeState, subscribeRowBadges } from "../upload/rowbadgestore";
 import { useStockFtpActions, type StockFtpActions } from "./ftpactions";
-import { getStockHistory, subscribeStockHistory } from "./historystore";
 import { hasFtpCredentials } from "./keystore";
 import {
   createStockRefs, initialStockModel, reduceStockModel,
@@ -35,7 +33,6 @@ export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockF
   rootRef: { current: DirHandleLike | null };
   presetState: StockPresetState;
   rowBadges: RowBadgeState;
-  history: StockHistoryMap;
   items: ExportedItem[];
   visible: ExportedItem[];
   checked: string[];
@@ -56,9 +53,12 @@ function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAct
 }
 
 function syncPresetsBadges(presets: StockPresetState["presets"]): void {
-  const curBadges = getRowBadgeState();
-  const syncedBadges = ensureStockBadges(curBadges, presets);
-  if (syncedBadges !== curBadges) setRowBadgeState(syncedBadges);
+  const start = getRowBadgeState();
+  let next = ensureHardcodedBadges(start);
+  for (const preset of presets) {
+    next = ensureNamedBadge(next, preset.name, preset.id).state;
+  }
+  if (next !== start) setRowBadgeState(next);
 }
 
 function useBootEffects(
@@ -115,12 +115,11 @@ function useDerivedList(
   model: StockUploadModel,
   checked: readonly string[],
   rowBadges: RowBadgeState,
-  history: StockHistoryMap,
 ) {
   const items = useMemo(() => model.discovery?.items ?? [], [model.discovery]);
   const visible = useMemo(() => filterAndSortItems({
-    items, filter: model.filter, sort: model.sort, rowBadges, history, checked,
-  }), [items, model.filter, model.sort, rowBadges, history, checked]);
+    items, filter: model.filter, sort: model.sort, rowBadges, checked,
+  }), [items, model.filter, model.sort, rowBadges, checked]);
   const header = useMemo(() => stockHeaderState(visible, checked), [visible, checked]);
   return { items, visible, header };
 }
@@ -134,11 +133,10 @@ export function useStockUpload(): StockUploadApi {
   const selSlice = useAppSlice("stockUpload");
   const presetState = useSyncExternalStore(subscribeStockPresets, getStockPresetState);
   const rowBadges = useSyncExternalStore(subscribeRowBadges, getRowBadgeState);
-  const history = useSyncExternalStore(subscribeStockHistory, getStockHistory);
   const say = useToast(r, dispatch);
   const runScan = useScanTrigger(r, dispatch, say);
   useBootEffects(r, presetState.presets, dispatch, runScan);
-  const { items, visible, header } = useDerivedList(model, selSlice.checked, rowBadges, history);
+  const { items, visible, header } = useDerivedList(model, selSlice.checked, rowBadges);
   const selection = useStockSelectionActions(visible, hist);
   const badges = useStockRowBadgeActions(hist, say, (id) => {
     if (model.filter.badge === id) dispatch({ type: "filter", patch: { badge: "all" } });
@@ -150,7 +148,7 @@ export function useStockUpload(): StockUploadApi {
   });
   const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, r, dispatch, say, runScan });
   return {
-    supported: fsSupported(), model, rootRef: r.root, presetState, rowBadges, history,
+    supported: fsSupported(), model, rootRef: r.root, presetState, rowBadges,
     items, visible, checked: selSlice.checked, activeId: selSlice.activeId, header,
     ...selection, ...badges, ...ftp, ...ops,
   };
