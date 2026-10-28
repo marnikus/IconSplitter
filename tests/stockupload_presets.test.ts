@@ -15,7 +15,9 @@ import {
   toggleFormatFlag,
   toggleTargetPreset,
 } from "../src/lib/stockupload/presets";
-import { loadStockPresetState, resetStockPresetStore, saveStockPresetState } from "../src/stockupload/presetstore";
+import {
+  STOCK_PRESETS_KEY, loadStockPresetState, resetStockPresetStore, saveStockPresetState,
+} from "../src/stockupload/presetstore";
 
 describe("stock FTP/SFTP presets — Shutterstock & Adobe Stock defaults", () => {
   it("seeds both Shutterstock Explicit FTPS (:21) and Adobe Stock SFTP (:22)", () => {
@@ -139,5 +141,39 @@ describe("stock FTP/SFTP presets — Shutterstock & Adobe Stock defaults", () =>
     const reloaded = loadStockPresetState();
     expect(reloaded.activePresetId).toBe("adobe-stock");
     expect(serializeStockPresetState(reloaded)).not.toContain("password");
+  });
+
+  it("guarantees Adobe Stock and Shutterstock exist first even when legacy localStorage had MAX_STOCK_PRESETS items, and heals localStorage on load", () => {
+    localStorage.clear();
+    resetStockPresetStore();
+
+    // 1. Legacy single-preset localStorage is healed immediately in localStorage on loadStockPresetState()
+    localStorage.setItem(STOCK_PRESETS_KEY, JSON.stringify({
+      v: 1,
+      presets: [SHUTTERSTOCK_PRESET],
+      activePresetId: "shutterstock",
+      checkedTargets: ["shutterstock"],
+      formats: { raster: true, svg: false, eps: true, zip: false },
+    }));
+    const healed = loadStockPresetState();
+    expect(healed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock"]);
+    const storedAfterLoad = JSON.parse(localStorage.getItem(STOCK_PRESETS_KEY) ?? "{}") as { presets?: Array<{ id: string }> };
+    expect(storedAfterLoad.presets?.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock"]);
+
+    // 2. Even if 25 custom presets were in localStorage, built-in Shutterstock & Adobe Stock are never dropped
+    const customMany = Array.from({ length: 25 }, (_, i) => ({
+      ...SHUTTERSTOCK_PRESET,
+      id: `custom-${i + 1}`,
+      name: `Custom ${i + 1}`,
+      template: "custom",
+    }));
+    const full = parseStockPresetState(JSON.stringify({
+      v: 1,
+      presets: customMany,
+      activePresetId: "custom-1",
+      checkedTargets: ["custom-1"],
+      formats: { raster: true, svg: false, eps: true, zip: false },
+    }));
+    expect(full.presets.slice(0, 2).map((p) => p.id)).toEqual(["shutterstock", "adobe-stock"]);
   });
 });

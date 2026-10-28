@@ -8,8 +8,18 @@ import { readKey, writeKey } from "../state/safestorage";
 
 export const STOCK_PRESETS_KEY = "iconSplitter.stockUpload.presets.v1";
 
+function readAndHealPresetState(): StockPresetState {
+  const raw = readKey(STOCK_PRESETS_KEY);
+  const parsed = parseStockPresetState(raw);
+  if (raw !== null) {
+    const healed = serializeStockPresetState(parsed);
+    if (healed !== raw) writeKey(STOCK_PRESETS_KEY, healed);
+  }
+  return parsed;
+}
+
 const listeners = new Set<() => void>();
-let cached: StockPresetState = parseStockPresetState(readKey(STOCK_PRESETS_KEY));
+let cached: StockPresetState = readAndHealPresetState();
 
 function notify(): void {
   for (const fn of listeners) fn();
@@ -25,7 +35,7 @@ export function subscribeStockPresets(fn: () => void): () => void {
 }
 
 export function loadStockPresetState(): StockPresetState {
-  cached = parseStockPresetState(readKey(STOCK_PRESETS_KEY));
+  cached = readAndHealPresetState();
   return cached;
 }
 

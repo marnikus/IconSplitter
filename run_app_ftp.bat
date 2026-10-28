@@ -1,9 +1,9 @@
 @echo off
 rem ============================================================
 rem  Icon Splitter - Build & Open through Local FTPS/SFTP Helper
-rem  Builds the app, starts the local loopback helper, and opens
-rem  http://127.0.0.1:47391/ so Stock FTPS (:21) + SFTP (:22)
-rem  uploads and Inkscape EPS conversion work from one origin.
+rem  Builds the latest app, replaces any older helper on
+rem  127.0.0.1:47391, and opens http://127.0.0.1:47391/ so both
+rem  Shutterstock FTPS (:21) and Adobe Stock SFTP (:22) work.
 rem ============================================================
 setlocal
 cd /d "%~dp0"
@@ -36,8 +36,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr "127.0.0.1:47391" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%p >nul 2>nul
+)
+
 echo.
-echo === Starting local FTPS helper and opening Icon Splitter ===
+echo === Starting local FTPS/SFTP helper and opening Icon Splitter ===
 start "Icon Splitter - Local Helper" cmd /k node tools\bridge\server.mjs %*
 timeout /t 2 >nul
 start "" "http://127.0.0.1:47391/"

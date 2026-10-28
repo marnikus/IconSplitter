@@ -10,14 +10,16 @@
 //   node tools/bridge/server.mjs [--port 47391] [--inkscape <path>] [--dist <dir>]
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
 
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, "..", "..");
 const DEFAULT_PORT = 47391;
 const ALLOWED_ORIGIN = /^(null|https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
@@ -35,7 +37,8 @@ const args = parseArgs(process.argv.slice(2));
 const config = {
   port: Number(args.port ?? process.env.BRIDGE_PORT ?? DEFAULT_PORT),
   inkscape: args.inkscape,
-  dist: path.resolve(args.dist ?? path.join(HERE, "..", "..", "dist")),
+  dist: path.resolve(args.dist ?? path.join(REPO_ROOT, "dist")),
+  autoBuildDist: args.dist === undefined && !process.env.VITEST && args["no-auto-build"] === undefined,
   timeoutMs: Number(process.env.BRIDGE_TIMEOUT_MS ?? 60000),
   maxBytes: Number(process.env.BRIDGE_MAX_BYTES ?? 20 * 1024 * 1024),
   ftpMaxBytes: Number(process.env.BRIDGE_FTP_MAX_BYTES ?? 120 * 1024 * 1024),
@@ -112,9 +115,17 @@ function enqueue(job) {
 }
 
 /** `dist/` at `/`: index.html for `/`, files below dist only (no path escape), honest 404s. */
-function serveDist(url, res) {
+async function serveDist(url, res) {
   const rel = url === "/" ? "index.html" : decodeURIComponent(url.slice(1));
   const file = path.resolve(config.dist, rel);
+  if (rel === "index.html" && config.autoBuildDist) {
+    const watch = [path.join(REPO_ROOT, "src"), path.join(REPO_ROOT, "index.html")];
+    if (isDistStale(file, watch)) {
+      console.log("Source files are newer than dist/index.html — rebuilding latest UI (`npm run build`)...");
+      const built = await rebuildDistAsync(REPO_ROOT);
+      if (!built.ok) console.error(`Auto-build failed: ${built.reason}`);
+    }
+  }
   if (!file.startsWith(config.dist + path.sep) || !existsSync(file) || !statSync(file).isFile()) {
     const hint = rel === "index.html" ? `no built app at ${config.dist} — run "npm run build" (or run_app_inkscape.bat) first` : "not found";
     return json(res, 404, { reason: hint });
@@ -133,6 +144,11 @@ async function route(req, res, port) {
   const url = (req.url ?? "/").split("?")[0];
   if (!cors(req, res)) return json(res, 403, { reason: "only a local page (file://, localhost, 127.0.0.1) may use this helper" });
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return 0; }
+  if (req.method === "POST" && url === "/shutdown" && req.headers["x-bridge-control"] === "restart") {
+    const out = json(res, 200, { ok: true });
+    setTimeout(() => process.exit(0), 50);
+    return out;
+  }
   if (req.method === "GET" && url === "/health") return health(res, port);
   if (req.method === "POST" && url === "/convert/eps") return convert(req, res);
   if (req.method === "POST" && url === "/ftps/test") return handleFtpsTest(req, res, json);
@@ -157,15 +173,39 @@ const server = createServer((req, res) => {
     });
 });
 
-server.listen(config.port, "127.0.0.1", () => {
-  const port = server.address().port;
-  const inkscape = findInkscape(config.inkscape);
-  console.log("FTPS upload helper: READY (/ftps/test, /ftps/upload, /ftps/close — FTPS :21 + SFTP :22, Inkscape not required)");
-  console.log(inkscape.found ? `Inkscape ${inkscape.version} at ${inkscape.path}` : `Inkscape NOT found (optional, only for Inkscape EPS conversion) — ${inkscape.fix}`);
-  console.log(`serving ${existsSync(path.join(config.dist, "index.html")) ? "the built app" : "NO built app yet"} from ${config.dist}`);
-  console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
-});
+let retriedReplace = false;
+function requestPreviousHelperExit(port, cb) {
+  const req = httpRequest(
+    { host: "127.0.0.1", port, path: "/shutdown", method: "POST", headers: { "x-bridge-control": "restart" }, timeout: 800 },
+    (res) => { res.resume(); setTimeout(() => cb(res.statusCode === 200), 250); },
+  );
+  req.on("error", () => cb(false));
+  req.end();
+}
+
+function startListening() {
+  server.listen(config.port, "127.0.0.1", () => {
+    const port = server.address().port;
+    const inkscape = findInkscape(config.inkscape);
+    console.log("FTPS upload helper: READY (/ftps/test, /ftps/upload, /ftps/close — FTPS :21 + SFTP :22, Inkscape not required)");
+    console.log(inkscape.found ? `Inkscape ${inkscape.version} at ${inkscape.path}` : `Inkscape NOT found (optional, only for Inkscape EPS conversion) — ${inkscape.fix}`);
+    console.log(`serving ${existsSync(path.join(config.dist, "index.html")) ? "the built app" : "NO built app yet"} from ${config.dist}`);
+    console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
+  });
+}
+
 server.on("error", (error) => {
+  if (error.code === "EADDRINUSE" && config.port === DEFAULT_PORT && !retriedReplace) {
+    retriedReplace = true;
+    requestPreviousHelperExit(config.port, (replaced) => {
+      if (replaced) { startListening(); return; }
+      console.error(`port ${config.port} is already in use — close the older helper window first (or pass --port)`);
+      process.exit(1);
+    });
+    return;
+  }
   console.error(error.code === "EADDRINUSE" ? `port ${config.port} is already in use — is the helper already running? (or pass --port)` : error.message);
   process.exit(1);
 });
+
+startListening();

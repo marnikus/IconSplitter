@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isDistStale } from "../tools/bridge/distfresh.mjs";
 import { afterEach, describe, expect, it } from "vitest";
 import { closeBridgeFtpsSession, probeBridgeFtps, testBridgeFtps, uploadBridgeFtps } from "../src/lib/stockupload/bridgeclient";
 import type { StockFtpPreset } from "../src/lib/stockupload/types";
@@ -147,5 +148,33 @@ describe("local loopback Explicit FTPS bridge", () => {
     expect(combinedLog).not.toContain("icon_01.jpg");
     expect(combinedLog).not.toContain("icon_01.eps");
     expect(combinedLog).not.toContain("artist@ss.test");
+  });
+
+  it("detects when dist/index.html is missing or older than src/ after git pull so server.mjs auto-rebuilds", () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), "iconsplitter-distfresh-"));
+    try {
+      const distHtml = path.join(tmp, "dist-index.html");
+      const srcDir = path.join(tmp, "src");
+      rmSync(srcDir, { recursive: true, force: true });
+      const nested = mkdtempSync(path.join(tmp, "src-"));
+      const srcFile = path.join(nested, "presets.ts");
+      writeFileSync(srcFile, "export const ADOBE = true;\n");
+
+      // Missing dist/index.html -> stale
+      expect(isDistStale(distHtml, [nested])).toBe(true);
+
+      // Write distHtml older than srcFile (simulating git pull updating src/ after an earlier build)
+      writeFileSync(distHtml, "<!doctype html><html>old build</html>");
+      const nowSec = Math.floor(Date.now() / 1000);
+      utimesSync(distHtml, nowSec - 120, nowSec - 120);
+      utimesSync(srcFile, nowSec, nowSec);
+      expect(isDistStale(distHtml, [nested])).toBe(true);
+
+      // Rebuild distHtml newer than srcFile -> fresh
+      utimesSync(distHtml, nowSec + 10, nowSec + 10);
+      expect(isDistStale(distHtml, [nested])).toBe(false);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

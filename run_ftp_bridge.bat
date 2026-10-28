@@ -1,10 +1,10 @@
 @echo off
 rem ============================================================
 rem  Icon Splitter - Local FTPS/SFTP & Inkscape helper
-rem  Builds the latest app bundle into dist\index.html, then
-rem  starts the local loopback helper on 127.0.0.1:47391 so the
-rem  browser app's "Upload" tab is always up-to-date and can
-rem  transfer files over FTPS (:21) and SFTP (:22).
+rem  Builds the latest app bundle into dist\index.html, stops any
+rem  older helper on 127.0.0.1:47391, and starts the fresh helper
+rem  so the "Upload" tab always has Shutterstock FTPS (:21) and
+rem  Adobe Stock SFTP (:22).
 rem ============================================================
 setlocal
 cd /d "%~dp0"
@@ -35,6 +35,10 @@ if errorlevel 1 (
     echo [ERROR] Build failed.
     pause
     exit /b 1
+)
+
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr "127.0.0.1:47391" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%p >nul 2>nul
 )
 
 echo.

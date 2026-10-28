@@ -160,20 +160,22 @@ function parseFormats(raw: unknown): StockFormatFlags {
 }
 
 function ensureBuiltinsAndDedupe(list: StockFtpPreset[]): StockFtpPreset[] {
-  const seen = new Set<string>();
-  const out: StockFtpPreset[] = [];
+  const byId = new Map<string, StockFtpPreset>();
   for (const item of list) {
+    if (!byId.has(item.id)) byId.set(item.id, item);
+  }
+  const out: StockFtpPreset[] = [];
+  const seen = new Set<string>();
+  for (const builtin of BUILTIN_STOCK_PRESETS) {
+    out.push(byId.get(builtin.id) ?? builtin);
+    seen.add(builtin.id);
+  }
+  for (const item of byId.values()) {
     if (seen.has(item.id) || out.length >= MAX_STOCK_PRESETS) continue;
     seen.add(item.id);
     out.push(item);
   }
-  for (const builtin of BUILTIN_STOCK_PRESETS) {
-    if (!seen.has(builtin.id) && out.length < MAX_STOCK_PRESETS) {
-      seen.add(builtin.id);
-      out.push(builtin);
-    }
-  }
-  return out.length > 0 ? out : [...BUILTIN_STOCK_PRESETS];
+  return out;
 }
 
 export function parseStockPresetState(text: string | null): StockPresetState {
