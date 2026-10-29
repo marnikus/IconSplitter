@@ -106,5 +106,7 @@ Never edit existing archived designs to match later changes.
 | `archive/2026-10-27-stock-upload-tab-plan/README.md` | Upload (`stockUpload`) tab — strict `export/` + `export.json` discovery, local-only credentials, Explicit FTPS (`:21`) & SFTP (`:22`) bridge |
 | `archive/2026-10-29-getty-images-upload/README.md` | Getty Images / iStock (`contributors.gettyimages.com` → `esp.gettyimages.com`) — research, paired `EPS + JPG` rules, ESP HTTPS API (`:443`) + ESP CSV export & unified badge |
 
+| `archive/2026-10-29-getty-web-automation/research.md` | Getty contributor web upload research, evidence, limitations and permission gate; proposed bridge workflow in `archive/2026-10-29-getty-web-automation/design.md` |
+
 Archived docs are dated by the day they were written and never edited afterwards.
 

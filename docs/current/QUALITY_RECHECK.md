@@ -3661,3 +3661,5 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - 2026-10-29 Getty Images / iStock ESP (`getty-images` / `esp-https`): `node tools/quality.mjs --files ...` GATE PASSED (all modified/created `src/` files <300 LOC, fn LOC <=30, CC <=10, params <=4).
 
 - 2026-10-29: Getty ESP 403 fix (`authentication.gettyimages.com` OAuth2 PKCE + `/v3/countries` scope probe) & `_getty_esp_batches/` paired EPS+JPG+CSV batch stager — `quality.mjs` passed across 14 `src/` files + bridge & UI TDD suites.
+
+- 2026-10-29 — Getty web automation research/design only: `npm run verify -- --base f7cd889217fe8388f08939d8edadec2d3a41beba` passed all lanes after `npm run setup` restored platform dependencies; coverage lane 105.2 s, build lane 7.1 s. No live Getty calls or application code changes.
