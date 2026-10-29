@@ -3,8 +3,10 @@ import JSZip from "jszip";
 import { readBytesAt, readTextAt } from "../src/lib/fs";
 import { discoverExportedItems } from "../src/lib/stockupload/discovery";
 import { buildStockUploadPlan } from "../src/lib/stockupload/plan";
-import { GETTY_IMAGES_PRESET, SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
+import { ADOBE_STOCK_PRESET, GETTY_IMAGES_PRESET, SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
+import { readEpsIptc } from "../src/lib/upload/epsiptc";
+import { readJpegIptc } from "../src/lib/upload/jpegiptc";
 import { readXmpMetadataFromEps } from "../src/lib/upload/epsmetadata";
 import { metadataBlock, newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { readXmpMetadata } from "../src/lib/upload/jpeg";
@@ -46,9 +48,9 @@ describe("upload-only title and description combination", () => {
     const jpg = sent.find((f) => f.fileName.endsWith(".jpg"))!;
     const vector = sent.find((f) => f.fileName.endsWith(".svg"))!;
     const postscript = sent.find((f) => f.fileName.endsWith(".eps"))!;
-    expect(readXmpMetadata(jpg.bytes)).toMatchObject({ ...meta, title: joined });
-    expect(readEmbeddedMetadata(new TextDecoder().decode(vector.bytes))).toMatchObject({ ...meta, title: joined });
-    expect(readXmpMetadataFromEps(new TextDecoder().decode(postscript.bytes))).toMatchObject({ ...meta, title: joined });
+    expect(readXmpMetadata(jpg.bytes)).toMatchObject({ ...meta, title: joined, description: joined });
+    expect(readEmbeddedMetadata(new TextDecoder().decode(vector.bytes))).toMatchObject({ ...meta, title: joined, description: joined });
+    expect(readXmpMetadataFromEps(new TextDecoder().decode(postscript.bytes))).toMatchObject({ ...meta, title: joined, description: joined });
     expect(await readBytesAt(root, "export/icon.jpg")).toEqual(jpeg);
     expect(await readTextAt(root, "export/icon.svg")).toBe(svg);
     expect(await readTextAt(root, "export/icon.eps")).toBe(eps);
@@ -73,6 +75,70 @@ describe("upload-only title and description combination", () => {
 });
 
 describe("combined upload metadata edge cases", () => {
+  it("sends the full single-line title in Shutterstock caption fields while retaining Adobe description", async () => {
+    const { root, json, item } = await fixture();
+    const title = "Location pinpointing on a foldable paper navigation map";
+    const description = "Finding a specific point of interest. Map and pin show location";
+    const expected = `${title}. ${description}`;
+    item.record.metadata!.title = title; item.record.metadata!.description = description;
+    const targets = [SHUTTERSTOCK_PRESET, ADOBE_STOCK_PRESET];
+    const plan = buildStockUploadPlan({ items: [item], checkedIds: ["one"], presets: targets, checkedTargets: targets.map((t) => t.id), formats: { raster: true, svg: false, eps: true, zip: false }, combineTitleDescription: true });
+    const outgoing: Record<string, Record<string, Uint8Array>> = {};
+    const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "", signal: new AbortController().signal, loadCreds: async () => ({ username: "u", password: "p" }), closeSessionFn: async () => undefined, uploadFn: async (input) => { (outgoing[input.preset.id] ??= {})[input.fileName] = input.bytes; return { ok: true, bytes: input.bytes.length }; } });
+    expect(result.failedFiles).toBe(0);
+    for (const target of targets) {
+      const files = outgoing[target.id];
+      const jpgXmp = readXmpMetadata(files["icon.jpg"]);
+      const jpgIptc = readJpegIptc(files["icon.jpg"]);
+      const epsText = new TextDecoder().decode(files["icon.eps"]);
+      const epsXmp = readXmpMetadataFromEps(epsText);
+      const epsIptc = readEpsIptc(epsText);
+      for (const value of [jpgXmp, jpgIptc, epsXmp, epsIptc]) {
+        expect(value?.title).toBe(expected);
+        expect(value?.description).toBe(target.id === "shutterstock" ? expected : description);
+      }
+    }
+    expect(await readTextAt(root, "export/export.json")).toBe(json);
+    expect(await readBytesAt(root, "export/icon.jpg")).toEqual(jpeg);
+    expect(await readTextAt(root, "export/icon.eps")).toBe(eps);
+  });
+  it("uses the Shutterstock caption for a custom preset pointing to Shutterstock's FTPS host", async () => {
+    const { root, item } = await fixture();
+    const target = { ...SHUTTERSTOCK_PRESET, id: "custom-stock", template: "custom" as const, host: "FTPS.SHUTTERSTOCK.COM" };
+    const plan = buildStockUploadPlan({ items: [item], checkedIds: ["one"], presets: [target], checkedTargets: [target.id], formats: { raster: true, svg: false, eps: false, zip: false }, combineTitleDescription: true });
+    let actual = "";
+    const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "", signal: new AbortController().signal, loadCreds: async () => ({ username: "u", password: "p" }), closeSessionFn: async () => undefined, uploadFn: async (input) => { actual = readJpegIptc(input.bytes)?.description ?? ""; return { ok: true, bytes: input.bytes.length }; } });
+    expect(result.failedFiles).toBe(0); expect(actual).toBe(joined);
+  });
+  it("normalizes line separators and controls in both parts before combining", async () => {
+    const { combinedTitle } = await import("../src/lib/stockupload/sendmeta");
+    expect(combinedTitle("  Location\r\npinpointing\t on\u2028a map. ", " Finding\u0000a specific\u2029 point ")).toBe("Location pinpointing on a map. Finding a specific point");
+  });
+  it("sends a normalized single-line Shutterstock caption even with controls in accepted text", async () => {
+    const { root, item } = await fixture();
+    item.record.metadata!.title = "Location\r\npinpointing on a map.";
+    item.record.metadata!.description = "Finding\u0000a point\u2028of interest";
+    const expected = "Location pinpointing on a map. Finding a point of interest";
+    const plan = buildStockUploadPlan({ items: [item], checkedIds: ["one"], presets: [SHUTTERSTOCK_PRESET], checkedTargets: ["shutterstock"], formats: { raster: true, svg: false, eps: false, zip: true }, combineTitleDescription: true });
+    const sent: Record<string, Uint8Array> = {};
+    const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "", signal: new AbortController().signal, loadCreds: async () => ({ username: "u", password: "p" }), closeSessionFn: async () => undefined, uploadFn: async (input) => { sent[input.fileName] = input.bytes; return { ok: true, bytes: input.bytes.length }; } });
+    expect(result.failedFiles).toBe(0);
+    const archived = await JSZip.loadAsync(sent["icon.zip"]);
+    for (const bytes of [sent["icon.jpg"], await archived.file("icon.jpg")!.async("uint8array")]) {
+      expect(readJpegIptc(bytes)).toMatchObject({ title: expected, description: expected });
+      expect(readXmpMetadata(bytes)).toMatchObject({ title: expected, description: expected });
+    }
+    expect(item.record.metadata!.title).toContain("\r\n");
+    expect(item.record.metadata!.description).toContain("\u0000");
+  });
+  it("never silently truncates Shutterstock's caption", async () => {
+    const { root, item } = await fixture();
+    item.record.metadata!.description = "a".repeat(2001);
+    const plan = buildStockUploadPlan({ items: [item], checkedIds: ["one"], presets: [SHUTTERSTOCK_PRESET], checkedTargets: ["shutterstock"], formats: { raster: true, svg: false, eps: false, zip: false }, combineTitleDescription: true });
+    let uploads = 0;
+    const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "", signal: new AbortController().signal, loadCreds: async () => ({ username: "u", password: "p" }), closeSessionFn: async () => undefined, uploadFn: async () => { uploads++; return { ok: true, bytes: 0 }; } });
+    expect(uploads).toBe(0); expect(result.failedFiles).toBe(1); expect(result.lastError).toMatch(/caption.*2000/i);
+  });
   it("uses one separator and handles whitespace or missing parts without adding stray dots", async () => {
     const { combinedTitle } = await import("../src/lib/stockupload/sendmeta");
     expect(combinedTitle("  Title. ", "  Description  ")).toBe("Title. Description");

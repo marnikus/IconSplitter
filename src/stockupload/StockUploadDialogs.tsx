@@ -1,6 +1,8 @@
 // StockUploadDialogs.tsx — row-badge catalog dialog, FTPS/SFTP preflight
 // confirmation modal, and cross-tab portal progress header.
 
+import { usesShutterstockCaption } from "../lib/stockupload/sendmeta";
+
 import { createPortal } from "react-dom";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
@@ -79,6 +81,7 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
         Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
       </p>
       {plan.combineTitleDescription && <p className="svg-warning">Title + description will be combined in upload copies only. Stock sites may limit title length; originals remain unchanged.</p>}
+      {plan.combineTitleDescription && plan.targets.some(usesShutterstockCaption) && <p className="svg-note">Shutterstock caption will also contain the combined text so it can be imported as the listing description.</p>}
       {plan.skippedMissing.length > 0 && (
         <p className="svg-warning">
           ⚠ {plan.skippedMissing.length} requested format file(s) do not exist in `export/` and will be skipped.

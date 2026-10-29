@@ -49,7 +49,7 @@ interface ItemTracker {
 }
 
 async function resolveTransferBytes(
-  root: DirHandleLike, item: ExportedItem, task: PlannedTransfer, combine: boolean,
+  root: DirHandleLike, item: ExportedItem, task: PlannedTransfer, options: { combine: boolean; target: StockFtpPreset },
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
   let bytes: Uint8Array | null;
   if (task.format === "zip" && task.relPath === null) {
@@ -60,8 +60,8 @@ async function resolveTransferBytes(
     bytes = task.relPath ? await readBytesAt(root, task.relPath) : null;
   }
   if (!bytes?.byteLength) return { ok: false, reason: `${task.fileName} could not be read` };
-  if (!combine) return { ok: true, bytes };
-  try { return { ok: true, bytes: await prepareMetadataCopy(item, task.fileName, bytes) }; }
+  if (!options.combine) return { ok: true, bytes };
+  try { return { ok: true, bytes: await prepareMetadataCopy(item, task.fileName, bytes, options.target) }; }
   catch (err) { return { ok: false, reason: (err as Error).message || "Could not prepare upload metadata" }; }
 }
 
@@ -117,7 +117,7 @@ async function runSingleTask(
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const item = ctx.itemsById.get(task.itemId);
   if (!item) return { ok: false, reason: "item no longer present" };
-  const payload = await resolveTransferBytes(ctx.deps.root, item, task, ctx.combine);
+  const payload = await resolveTransferBytes(ctx.deps.root, item, task, { combine: ctx.combine, target: ctx.target });
   if (!payload.ok) return payload;
   const upload = ctx.deps.uploadFn ?? uploadBridgeFtps;
   const res = await upload({

@@ -129,6 +129,7 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-check-item-star")!);
     await clickEl(q("stock-upload-start")!);
     expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Title + description");
+    expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Shutterstock caption");
   });
 
   it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {

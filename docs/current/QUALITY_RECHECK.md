@@ -3670,3 +3670,9 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - `npm run verify:fast`: PASS after correcting a test-only TypeScript typed-array annotation.
 - `npm run verify`: PASS — types, lint, changed-file quality gate, native performance budgets (30 tests), 3,162 tests across 308 files with coverage, and build. Overall coverage: statements 95.15%, branches 89.21%, functions 98.36%, lines 98.1%. Lint reports 21 existing warnings. Some unrelated test-environment network attempts to router.requesty.ai were blocked; no live stock transfer was performed.
 - Scope quality gate: `plan.ts` 198 lines/27 functions; `pngxmp.ts` 67/8; `sendmeta.ts` 86/8; `StockUploadBulkBar.tsx` 148/22; `StockUploadDialogs.tsx` 119/9; `esptransfer.ts` 66/10; `panelops.ts` 206/37; `prefsstore.ts` 50/2; `runupload.ts` 266/18 — all pass.
+
+## 2026-10-29 — Shutterstock combined caption correction
+
+- TDD: the user's exact two-field example failed against the outgoing Shutterstock caption before the fix; new tests also failed for line/control normalization, overlong caption handling, custom Shutterstock host and confirmation disclosure. They now pass for outgoing JPEG/EPS XMP and IPTC, multi-target Shutterstock/Adobe, ZIP, source immutability and unchanged Adobe description. No live stock transfer was performed.
+- `npm run verify:fast`: PASS. `npm run verify`: PASS — types, lint, changed-file quality, 30 native performance tests, 3,167 tests across 308 files with coverage, and build. Overall coverage: statements 95.2%, branches 89.28%, functions 98.41%, lines 98.15%.
+- Explicit quality gate: `sendmeta.ts` 99 lines/10 functions, `StockUploadDialogs.tsx` 122/9, `runupload.ts` 266/18 — all pass; `npx tsc --noEmit` passed after final nonfunctional import placement. Existing local `dist/index.html` restored after build and excluded from commit.

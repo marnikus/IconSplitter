@@ -9,22 +9,35 @@ import { sameMetadata } from "../upload/rights";
 import { buildXmpPacket, readXmpPacket } from "../upload/xmp";
 import type { IconMetadata } from "../upload/meta";
 import { embedPngXmp } from "./pngxmp";
-import type { ExportedItem } from "./types";
+import type { ExportedItem, StockFtpPreset } from "./types";
+
+function singleLine(text: string): string {
+  return text.replace(/[\s\p{Cc}\p{Zl}\p{Zp}]+/gu, " ").trim();
+}
 
 export function combinedTitle(title: string, description: string): string {
-  const first = title.trim();
-  const second = description.trim();
+  const first = singleLine(title);
+  const second = singleLine(description);
   if (!first) return second;
   if (!second) return first;
   return `${first.replace(/\.+$/u, "")}. ${second}`;
 }
 
-function uploadMetadata(item: ExportedItem): IconMetadata {
+export function usesShutterstockCaption(target: StockFtpPreset): boolean {
+  return target.template === "shutterstock" || target.host.trim().toLowerCase() === "ftps.shutterstock.com";
+}
+
+function uploadMetadata(item: ExportedItem, target?: StockFtpPreset): IconMetadata {
   const meta = item.record.metadata;
-  if (!meta || !meta.title.trim() || !meta.description.trim()) {
+  if (!meta || !singleLine(meta.title) || !singleLine(meta.description)) {
     throw new Error("Accepted title and description are required to combine upload metadata.");
   }
-  return { title: combinedTitle(meta.title, meta.description), description: meta.description,
+  const title = combinedTitle(meta.title, meta.description);
+  const mirrorCaption = target !== undefined && usesShutterstockCaption(target);
+  if (mirrorCaption && new TextEncoder().encode(title).length > 2000) {
+    throw new Error("Shutterstock caption exceeds the 2000-byte IPTC limit; shorten the title or description.");
+  }
+  return { title, description: mirrorCaption ? title : meta.description,
     tags: meta.tags, creator: meta.creator, copyright: meta.copyright };
 }
 
@@ -79,7 +92,7 @@ async function embedArchive(bytes: Uint8Array, meta: IconMetadata): Promise<Uint
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }
 
-export async function prepareMetadataCopy(item: ExportedItem, fileName: string, bytes: Uint8Array): Promise<Uint8Array> {
-  const meta = uploadMetadata(item);
+export async function prepareMetadataCopy(item: ExportedItem, fileName: string, bytes: Uint8Array, target?: StockFtpPreset): Promise<Uint8Array> {
+  const meta = uploadMetadata(item, target);
   return formatOf(fileName) === "zip" ? embedArchive(bytes, meta) : embedCarrier(fileName, bytes, meta);
 }

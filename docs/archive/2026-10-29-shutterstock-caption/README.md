@@ -1,0 +1,5 @@
+# Shutterstock caption mapping
+
+Shutterstock may import the listing description from the XMP description or IPTC Caption/Abstract rather than the XMP title/IPTC headline; this explains the observed description-only result. [Microstock metadata overview](https://xpiksapp.com/blog/metadata/) describes that common mapping. The earlier outgoing copy only changed title fields. With the opt-in checkbox, Shutterstock-targeted copies now mirror the normalized full combined title into both description/caption fields as well as title fields. Adobe and other targets retain the original separate description. Originals and accepted metadata remain unchanged.
+
+The combined caption is rejected above 2,000 UTF-8 bytes so the existing IPTC mirror will not silently truncate it. Newlines and control characters are reduced to spaces. Automated tests inspect the outgoing JPEG XMP and IPTC and EPS XMP and IPTC for the user's exact example, both targets in a single batch, custom Shutterstock FTPS host, ZIP, malformed controls, length and unchanged files. No live Shutterstock transfer was performed; provider-side extraction remains unverified.

@@ -50,7 +50,9 @@ It has six modes (tabs across the top):
   uploads through the local loopback helper (`run_ftp_bridge.bat` /
   `run_app_ftp.bat`). An optional **Title + description** checkbox combines
   accepted title and description for outgoing file copies only; original files
-  and `export.json` remain unchanged. Stock sites may limit title length.
+  and `export.json` remain unchanged. For Shutterstock the combined text is
+  also placed in the outgoing caption; Adobe retains its separate description.
+  Stock sites may limit title length.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
