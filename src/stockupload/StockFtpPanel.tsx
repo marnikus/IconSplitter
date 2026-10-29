@@ -19,6 +19,7 @@ export interface StockFtpPanelProps {
 }
 
 function protocolBadgeCopy(protocol: FtpProtocol): string {
+  if (protocol === "getty-web") return "Getty Images web upload (background browser)";
   if (protocol === "esp-batch") return "Getty ESP Batch Folder (Web / DeepMeta 4)";
   if (protocol === "esp-https") return "Getty ESP Partner API (:443)";
   return protocol === "sftp" ? "SFTP stock preset" : "FTPS stock preset";
@@ -26,6 +27,7 @@ function protocolBadgeCopy(protocol: FtpProtocol): string {
 
 function endpointSummary(active: StockFtpPreset): string {
   if (active.protocol === "esp-batch") return `${active.remoteDir} → esp.gettyimages.com`;
+  if (active.protocol === "getty-web") return `https://${active.host || "esp.gettyimages.com"}${active.remoteDir}`;
   return `${active.host || "no host"}:${active.port} · ${active.protocol}`;
 }
 
@@ -100,7 +102,9 @@ function PresetActionButtons({ active, actions, onDownloadGettyCsv }: {
         <button type="button" className="svg-btn tiny danger" data-testid="stock-ftp-delete"
           onClick={() => actions.deletePreset(active.id)}>Remove preset</button>
       )}
-      {active.template === "getty-images" && <GettyPortalButtons onDownloadGettyCsv={onDownloadGettyCsv} />}
+      {(active.template === "getty-images" || active.template === "getty-web") && (
+        <GettyPortalButtons onDownloadGettyCsv={active.template === "getty-images" ? onDownloadGettyCsv : undefined} />
+      )}
     </>
   );
 }
@@ -150,6 +154,7 @@ function ConnectionFields({ active, bridgeUrl, onBridgeUrl, actions }: {
 
 function defaultHostHint(active: StockFtpPreset): string {
   if (active.template === "adobe-stock") return "sftp.contributor.adobestock.com";
+  if (active.template === "getty-web") return "esp.gettyimages.com";
   return active.template === "getty-images" ? "api.gettyimages.com" : "ftps.shutterstock.com";
 }
 
@@ -174,6 +179,7 @@ function HostPortFields({ active, onPatch }: {
 
 function folderLabelOf(protocol: FtpProtocol): string {
   if (protocol === "esp-batch") return "Staged ESP batch folder (in workspace)";
+  if (protocol === "getty-web") return "Contributor page path";
   if (protocol === "esp-https") return "ESP batches endpoint / ID";
   return "Remote folder";
 }
@@ -188,6 +194,7 @@ function ProtocolAndFolderFields({ active, onPatch }: {
         <span className="svg-label">Connection method / Protocol</span>
         <select className="svg-input" data-testid="stock-ftp-protocol" value={active.protocol}
           disabled={sftpOnly} onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
+          {!sftpOnly && <option value="getty-web">Getty Images web upload (browser automation)</option>}
           {!sftpOnly && <option value="esp-https">Getty ESP Partner API (:443 OAuth2 PKCE)</option>}
           {!sftpOnly && <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>}
           <option value="sftp">SFTP (SSH :22)</option>

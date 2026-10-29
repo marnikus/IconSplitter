@@ -5,6 +5,10 @@ import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import {
   closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadInput, type BridgeUploadResult,
 } from "../lib/stockupload/bridgeclient";
+import { GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName } from "../lib/stockupload/gettyweb";
+import {
+  closeBridgeGettyWeb, type GettyWebResult, type GettyWebUploadInput,
+} from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey } from "../lib/stockupload/types";
@@ -13,6 +17,7 @@ import { buildRepresentationZip } from "../lib/stockupload/zippack";
 import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
+import { uploadGettyWebGroup } from "./gettywebtransfer";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight, markUploadInFlight } from "./journal";
 
@@ -31,6 +36,8 @@ export interface UploadBatchDeps {
   onCertWarning?: (presetId: string, sha256: string) => void;
   uploadFn?: (input: BridgeUploadInput) => Promise<BridgeUploadResult>;
   closeSessionFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
+  gettyWebUploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
+  closeGettyWebFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
 }
 
 export interface UploadBatchSummary {
@@ -187,21 +194,45 @@ function reportNetworkCertificate(res: { ok: boolean; reason?: string }, target:
   }
 }
 
+type UploadResult = BridgeUploadResult | GettyWebResult | { ok: true } | { ok: false; reason: string };
+
+interface GroupRun {
+  plan: StockUploadPlan; target: StockFtpPreset; tasks: PlannedTransfer[]; deps: UploadBatchDeps;
+  creds: FtpCredentials; sessionKey: string; itemsById: ReadonlyMap<string, ExportedItem>;
+}
+
+/** One group = one icon for Getty protocols, one file for every other stock. */
+function uploadGroup(run: GroupRun): Promise<UploadResult> {
+  const { plan, target, tasks, deps, creds, sessionKey, itemsById } = run;
+  const item = itemsById.get(tasks[0].itemId);
+  if (target.protocol === "esp-https") {
+    return uploadEspGroup({ tasks, missing: plan.skippedMissing, root: deps.root, bridgeUrl: deps.bridgeUrl,
+      target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn, item, combine: plan.combineTitleDescription });
+  }
+  if (target.protocol === "getty-web") {
+    return uploadGettyWebGroup({ tasks, missing: plan.skippedMissing, root: deps.root, target, creds, item,
+      combine: plan.combineTitleDescription, batchName: gettyWebBatchName(new Date(), plan.selectedRows.length),
+      submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey, bridgeUrl: deps.bridgeUrl, signal: deps.signal,
+      uploadFn: deps.gettyWebUploadFn });
+  }
+  return runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps, combine: plan.combineTitleDescription });
+}
+
+function groupUploadTasks(target: StockFtpPreset, targetTasks: PlannedTransfer[]): PlannedTransfer[][] {
+  const perIcon = target.protocol === "esp-https" || target.protocol === "getty-web";
+  return perIcon ? groupEspTasks(targetTasks) : targetTasks.map((task) => [task]);
+}
+
 async function runNetworkGroups(ctx: {
   plan: StockUploadPlan; target: StockFtpPreset; targetTasks: PlannedTransfer[]; deps: UploadBatchDeps;
   counters: RunCounters; trackers: Map<string, ItemTracker>; creds: FtpCredentials; sessionKey: string;
   itemsById: ReadonlyMap<string, ExportedItem>;
 }): Promise<void> {
   const { plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById } = ctx;
-  const groups = target.protocol === "esp-https" ? groupEspTasks(targetTasks) : targetTasks.map((task) => [task]);
-  for (const tasks of groups) {
+  for (const tasks of groupUploadTasks(target, targetTasks)) {
     if (deps.signal.aborted) break;
     markUploadInFlight(tasks[0].itemId, target.id);
-    const res = target.protocol === "esp-https"
-      ? await uploadEspGroup({ tasks, missing: plan.skippedMissing, root: deps.root, bridgeUrl: deps.bridgeUrl,
-        target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn,
-        item: itemsById.get(tasks[0].itemId), combine: plan.combineTitleDescription })
-      : await runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps, combine: plan.combineTitleDescription });
+    const res = await uploadGroup({ plan, target, tasks, deps, creds, sessionKey, itemsById });
     if (!res.ok) reportNetworkCertificate(res, target, deps);
     for (const task of tasks) recordTaskResult(task, res, { target, trackers, counters, deps });
   }
@@ -226,7 +257,10 @@ async function runNetworkTargetGroup(
   try {
     await runNetworkGroups({ plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById });
   } finally {
-    await (deps.closeSessionFn ?? closeBridgeFtpsSession)(deps.bridgeUrl, sessionKey);
+    const close = target.protocol === "getty-web"
+      ? (deps.closeGettyWebFn ?? closeBridgeGettyWeb)
+      : (deps.closeSessionFn ?? closeBridgeFtpsSession);
+    await close(deps.bridgeUrl, sessionKey);
     flushTargetStatuses(target.id, trackers);
   }
 }

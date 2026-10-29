@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
+import { gettyWebHealth, handleGettyWebClose, handleGettyWebTest, handleGettyWebUpload } from "./gettyweb/routes.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
 
@@ -56,7 +57,7 @@ function cors(req, res) {
   res.setHeader("access-control-allow-origin", origin);
   res.setHeader("vary", "origin");
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type, x-ftps-config");
+  res.setHeader("access-control-allow-headers", "content-type, x-ftps-config, x-getty-web-config");
   res.setHeader("access-control-expose-headers", "x-inkscape-version");
   if (req.headers["access-control-request-private-network"] === "true") res.setHeader("access-control-allow-private-network", "true");
   return true;
@@ -85,9 +86,27 @@ function readBody(req, limit) {
   });
 }
 
+function readBinaryBody(req, limit) {
+  if (Number(req.headers["content-length"] ?? 0) > limit) return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) { req.pause(); resolve(null); return; }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
 function health(res, port) {
   const inkscape = findInkscape(config.inkscape);
-  return json(res, 200, { ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true }, port });
+  return json(res, 200, {
+    ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true },
+    gettyWeb: gettyWebHealth(), port,
+  });
 }
 
 async function convert(req, res) {
@@ -158,6 +177,11 @@ async function route(req, res, port) {
   if (req.method === "POST" && url === "/ftps/test") return handleFtpsTest(req, res, json);
   if (req.method === "POST" && url === "/ftps/upload") return handleFtpsUpload(req, res, config.ftpMaxBytes, json);
   if (req.method === "POST" && url === "/ftps/close") return handleFtpsClose(req, res, json);
+  if (req.method === "POST" && url === "/getty-web/upload") {
+    return handleGettyWebUpload(req, res, readBinaryBody, json, config.ftpMaxBytes);
+  }
+  if (req.method === "POST" && url === "/getty-web/test") return handleGettyWebTest(req, res, readBody, json);
+  if (req.method === "POST" && url === "/getty-web/close") return handleGettyWebClose(req, res, readBody, json);
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
 }

@@ -3,9 +3,10 @@
 import { useMemo, useRef } from "react";
 import { copyFolderText } from "../lib/copypath";
 import { probeBridgeFtps } from "../lib/stockupload/bridgeclient";
+import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
 import { buildStockUploadPlan, type StockUploadPlan } from "../lib/stockupload/plan";
-import type { ExportedItem, StockPresetState } from "../lib/stockupload/types";
+import type { ExportedItem, StockFtpPreset, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
 import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
@@ -89,18 +90,27 @@ function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { tex
   return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s)`, err: false };
 }
 
+/** Probes the loopback helper exactly for the protocols this run will use. */
+async function probeUploadHelpers(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise<string | null> {
+  const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
+    requireSftp: targets.some((t) => t.protocol === "sftp"),
+    requireEsp: targets.some((t) => t.protocol === "esp-https"),
+  });
+  if (!probe.ok) return probe.reason;
+  if (!targets.some((t) => t.protocol === "getty-web")) return null;
+  const gettyWeb = await probeBridgeGettyWeb(c.model.prefs.bridgeUrl, globalThis.fetch);
+  return gettyWeb.ok ? null : gettyWeb.reason;
+}
+
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
   if (!c.r.root.current) return;
   const networkTargets = plan.targets.filter((t) => t.protocol !== "esp-batch");
   c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Preparing upload batch…" } } });
   if (networkTargets.length > 0) {
-    const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
-      requireSftp: networkTargets.some((t) => t.protocol === "sftp"),
-      requireEsp: networkTargets.some((t) => t.protocol === "esp-https"),
-    });
-    if (!probe.ok) {
+    const failure = await probeUploadHelpers(c, networkTargets);
+    if (failure !== null) {
       c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
-      c.say(probe.reason, true);
+      c.say(failure, true);
       return;
     }
   }

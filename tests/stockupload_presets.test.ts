@@ -3,6 +3,7 @@ import {
   ADOBE_STOCK_PRESET,
   DEFAULT_STOCK_STATE,
   GETTY_IMAGES_PRESET,
+  GETTY_WEB_PRESET,
   SHUTTERSTOCK_PRESET,
   addCustomStockPreset,
   normalizeCertFingerprint,
@@ -21,12 +22,23 @@ import {
 } from "../src/stockupload/presetstore";
 
 describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images ESP", () => {
-  it("seeds Shutterstock (:21), Adobe Stock (:22), and Getty Images ESP HTTPS (:443)", () => {
+  it("seeds Shutterstock (:21), Adobe Stock (:22), Getty Images ESP HTTPS (:443) and the Getty web upload", () => {
     expect(DEFAULT_STOCK_STATE.presets).toEqual([
       SHUTTERSTOCK_PRESET,
       ADOBE_STOCK_PRESET,
       GETTY_IMAGES_PRESET,
+      GETTY_WEB_PRESET,
     ]);
+    expect(GETTY_WEB_PRESET).toMatchObject({
+      id: "getty-images-web",
+      name: "Getty Images (web upload)",
+      template: "getty-web",
+      protocol: "getty-web",
+      host: "esp.gettyimages.com",
+      port: 443,
+      remoteDir: "/contribute",
+      tlsPolicy: "strict",
+    });
     expect(SHUTTERSTOCK_PRESET).toMatchObject({
       id: "shutterstock",
       name: "Shutterstock",
@@ -117,7 +129,7 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
       formats: { raster: true, svg: true, eps: true, zip: false },
     });
     const parsed = parseStockPresetState(legacy);
-    expect(parsed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images"]);
+    expect(parsed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images", "getty-images-web"]);
   });
 
   it("varies protocol fields and default ports across ESP Batch, Explicit FTPS, SFTP, Getty ESP HTTPS, Implicit FTPS, and plain FTP", () => {
@@ -131,6 +143,9 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
       usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false,
     });
     expect(presetFieldsOf("esp-https")).toEqual({
+      usesTls: true, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false,
+    });
+    expect(presetFieldsOf("getty-web")).toEqual({
       usesTls: true, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false,
     });
     expect(presetFieldsOf("ftps-implicit")).toEqual({
@@ -156,14 +171,14 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
 
   it("adds, edits, checks/unchecks multi-site targets, toggles formats, and protects built-in presets from deletion", () => {
     const added = addCustomStockPreset(DEFAULT_STOCK_STATE, "Dreamstime");
-    expect(added.presets).toHaveLength(4);
-    const customId = added.presets[3].id;
+    expect(added.presets).toHaveLength(5);
+    const customId = added.presets[4].id;
     expect(added.activePresetId).toBe(customId);
     expect(added.checkedTargets).toContain(customId);
 
     // Built-in presets cannot be removed
-    expect(removeStockPreset(added, "adobe-stock").presets).toHaveLength(4);
-    expect(removeStockPreset(added, "getty-images").presets).toHaveLength(4);
+    expect(removeStockPreset(added, "adobe-stock").presets).toHaveLength(5);
+    expect(removeStockPreset(added, "getty-images").presets).toHaveLength(5);
 
     const toggled = toggleTargetPreset(added, "shutterstock");
     expect(toggled.checkedTargets).toEqual([customId]);
@@ -172,7 +187,7 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
     expect(fmt.formats.zip).toBe(true);
 
     const removed = removeStockPreset(fmt, customId);
-    expect(removed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images"]);
+    expect(removed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images", "getty-images-web"]);
     expect(removed.activePresetId).toBe("shutterstock");
     expect(removed.checkedTargets).toEqual([]);
   });
@@ -219,7 +234,7 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
     expect(serializeStockPresetState(reloaded)).not.toContain("apiSecret");
   });
 
-  it("guarantees all three built-in presets exist first even when legacy localStorage had MAX_STOCK_PRESETS items, and heals localStorage on load", () => {
+  it("guarantees every built-in preset exists first even when legacy localStorage had MAX_STOCK_PRESETS items, and heals localStorage on load", () => {
     localStorage.clear();
     resetStockPresetStore();
 
@@ -231,9 +246,9 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
       formats: { raster: true, svg: false, eps: true, zip: false },
     }));
     const healed = loadStockPresetState();
-    expect(healed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images"]);
+    expect(healed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images", "getty-images-web"]);
     const storedAfterLoad = JSON.parse(localStorage.getItem(STOCK_PRESETS_KEY) ?? "{}") as { presets?: Array<{ id: string }> };
-    expect(storedAfterLoad.presets?.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images"]);
+    expect(storedAfterLoad.presets?.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images", "getty-images-web"]);
 
     const customMany = Array.from({ length: 25 }, (_, i) => ({
       ...SHUTTERSTOCK_PRESET,
@@ -248,7 +263,7 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
       checkedTargets: ["custom-1"],
       formats: { raster: true, svg: false, eps: true, zip: false },
     }));
-    expect(full.presets.slice(0, 3).map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images"]);
+    expect(full.presets.slice(0, 4).map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images", "getty-images-web"]);
   });
 
   it("auto-heals stale Adobe Stock localStorage entries that had FTPS (:21) back to SFTP (:22)", () => {

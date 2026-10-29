@@ -18,7 +18,9 @@ export function normalizeCertFingerprint(raw: unknown): string {
   return raw.trim().replace(/^sha-?256:/i, "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 64);
 }
 
-const KNOWN_PROTOCOLS = new Set<string>(["esp-batch", "esp-https", "ftps-explicit", "sftp", "ftps-implicit", "ftp"]);
+const KNOWN_PROTOCOLS = new Set<string>([
+  "esp-batch", "esp-https", "getty-web", "ftps-explicit", "sftp", "ftps-implicit", "ftp",
+]);
 
 export function normalizeProtocol(raw: unknown, fallback: FtpProtocol = "ftps-explicit"): FtpProtocol {
   return typeof raw === "string" && KNOWN_PROTOCOLS.has(raw) ? (raw as FtpProtocol) : fallback;

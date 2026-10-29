@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 export { DEFAULT_TIMEOUT, TIMEOUT_MAX, TIMEOUT_MIN, normalizeCertFingerprint, normalizeRemoteDir };
-export const STOCK_PRESETS_VERSION = 2;
+export const STOCK_PRESETS_VERSION = 3;
 export const MAX_STOCK_PRESETS = 20;
 
 export const SHUTTERSTOCK_PRESET: StockFtpPreset = {
@@ -56,10 +56,25 @@ export const GETTY_IMAGES_PRESET: StockFtpPreset = {
   timeoutMs: DEFAULT_TIMEOUT,
 };
 
+export const GETTY_WEB_PRESET: StockFtpPreset = {
+  id: "getty-images-web",
+  name: "Getty Images (web upload)",
+  template: "getty-web",
+  protocol: "getty-web",
+  host: "esp.gettyimages.com",
+  port: 443,
+  remoteDir: "/contribute",
+  passive: true,
+  tlsPolicy: "strict",
+  pinnedCertSha256: "",
+  timeoutMs: DEFAULT_TIMEOUT,
+};
+
 export const BUILTIN_STOCK_PRESETS: readonly StockFtpPreset[] = [
   SHUTTERSTOCK_PRESET,
   ADOBE_STOCK_PRESET,
   GETTY_IMAGES_PRESET,
+  GETTY_WEB_PRESET,
 ];
 
 export const DEFAULT_FORMAT_FLAGS: StockFormatFlags = {
@@ -89,6 +104,7 @@ const PROTOCOL_SPECS: Record<FtpProtocol, ProtocolFieldSpec> = {
   "ftps-explicit": { usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false },
   sftp: { usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false },
   "esp-https": { usesTls: true, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false },
+  "getty-web": { usesTls: true, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false },
   "ftps-implicit": { usesTls: true, usesSshHostKey: false, defaultPort: 990, unencryptedWarning: false },
   ftp: { usesTls: false, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: true },
 };
@@ -178,11 +194,16 @@ function healGettyPreset(p: StockFtpPreset): StockFtpPreset {
   return p;
 }
 
+/** v1 = original two sites, v2 = Getty ESP HTTPS, v3 = the Getty web upload. */
+function isKnownPresetVersion(version: unknown): boolean {
+  return version === 1 || version === 2 || version === 3;
+}
+
 export function parseStockPresetState(text: string | null): StockPresetState {
   if (!text) return DEFAULT_STOCK_STATE;
   try {
     const raw: unknown = JSON.parse(text);
-    if (!isRecord(raw) || (raw.v !== 1 && raw.v !== 2) || !Array.isArray(raw.presets)) return DEFAULT_STOCK_STATE;
+    if (!isRecord(raw) || !isKnownPresetVersion(raw.v) || !Array.isArray(raw.presets)) return DEFAULT_STOCK_STATE;
     const parsedList = raw.presets.flatMap((p) => {
       const item = parsePreset(p);
       return item ? [healGettyPreset(item)] : [];

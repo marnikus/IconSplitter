@@ -282,7 +282,7 @@ describe("Upload (stockUpload) tab UI", () => {
     // Shutterstock, Adobe Stock, and Getty Images appear in the drop list AND quick-switch header buttons
     const presetSelect = q("stock-ftp-preset-select") as HTMLSelectElement;
     const optionLabels = Array.from(presetSelect.options).map((o) => o.textContent);
-    expect(optionLabels).toEqual(["Shutterstock", "Adobe Stock", "Getty Images"]);
+    expect(optionLabels).toEqual(["Shutterstock", "Adobe Stock", "Getty Images", "Getty Images (web upload)"]);
     expect(q("stock-ftp-quick-shutterstock")?.textContent).toContain("Shutterstock");
     expect(q("stock-ftp-quick-adobe-stock")?.textContent).toContain("Adobe Stock");
     expect(q("stock-ftp-quick-getty-images")?.textContent).toContain("Getty Images");
@@ -306,7 +306,7 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-ftp-add")!);
     await settle();
     expect(getRowBadgeState().catalog.some((b) => b.name === "Dreamstime")).toBe(true);
-    await clickEl(q("stock-target-check-stock-4")!);
+    await clickEl(q("stock-target-check-stock-5")!);
 
     // Switch stock dropdown to Adobe Stock
     await setSelect(q("stock-ftp-preset-select") as HTMLSelectElement, "adobe-stock");

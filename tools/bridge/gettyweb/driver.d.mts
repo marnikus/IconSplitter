@@ -1,0 +1,10 @@
+export const PAGE_PRELUDE: string;
+export const DRIVER_STEPS: string[];
+export const readPageInfo: () => any;
+export const fillLoginForm: (arg: { username: string; password: string }) => any;
+export const openCreateBatchDialog: () => any;
+export const openSubmissionTypeMenu: () => any;
+export const chooseSubmissionTypeOption: (arg: { label: string }) => any;
+export const fillBatchDetails: (arg: { batchName: string; briefCode?: string }) => any;
+export const submitBatchCreation: () => any;
+export const readUploadState: (arg: { names?: string[] }) => any;

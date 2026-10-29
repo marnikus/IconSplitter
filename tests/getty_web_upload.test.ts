@@ -1,0 +1,148 @@
+// Getty Images web-upload rules and loopback client: what may be sent, how the
+// staged header is built, and how failures are scrubbed before they reach the
+// UI. No browser and no live account is involved.
+
+import { describe, expect, it, vi } from "vitest";
+import {
+  GETTY_WEB_ERROR_HINT, GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName, gettyWebFileOrder,
+  isGettyWebPreset, validateGettyWebTasks,
+} from "../src/lib/stockupload/gettyweb";
+import {
+  closeBridgeGettyWeb, probeBridgeGettyWeb, testBridgeGettyWeb, uploadBridgeGettyWeb,
+} from "../src/lib/stockupload/gettywebclient";
+import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
+import type { PlannedTransfer, SkippedFormat } from "../src/lib/stockupload/plan";
+
+const CREDS = { username: "contributor@example.com", password: "GettyPass!42" };
+
+function task(format: PlannedTransfer["format"], fileName: string, itemId = "item-1"): PlannedTransfer {
+  return { itemId, stem: fileName.replace(/\.[^.]+$/, ""), targetId: "getty-images-web", targetName: "Getty Images (web upload)", format, fileName, relPath: `export/${fileName}`, estimatedBytes: 10 };
+}
+
+const JPEG = task("raster", "icon_a.jpeg");
+const EPS = task("eps", "icon_a.eps");
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function decodeHeader(value: string): Record<string, unknown> {
+  return JSON.parse(atob(value)) as Record<string, unknown>;
+}
+
+describe("Getty web upload rules", () => {
+  it("builds a dated batch name from the plan size", () => {
+    const now = new Date("2026-10-29T12:00:00Z");
+    expect(gettyWebBatchName(now, 1)).toBe("IconSplitter 2026-10-29 (1 icon)");
+    expect(gettyWebBatchName(now, 3)).toBe("IconSplitter 2026-10-29 (3 icons)");
+    expect(gettyWebBatchName(now, 3).length).toBeLessThanOrEqual(60);
+  });
+
+  it("accepts a JPEG plus optional matching EPS and puts the JPEG first", () => {
+    expect(validateGettyWebTasks([JPEG], [])).toBeNull();
+    expect(validateGettyWebTasks([EPS, JPEG], [])).toBeNull();
+    expect(gettyWebFileOrder([EPS, JPEG]).map((t) => t.fileName)).toEqual(["icon_a.jpeg", "icon_a.eps"]);
+  });
+
+  it("refuses PNG-only, SVG, ZIP, mismatched stems, and vanished files", () => {
+    expect(validateGettyWebTasks([task("raster", "icon_a.png")], [])).toContain("JPEG per icon");
+    expect(validateGettyWebTasks([JPEG, task("svg", "icon_a.svg")], [])).toContain("SVG and ZIP are not supported");
+    expect(validateGettyWebTasks([JPEG, task("eps", "other.eps")], [])).toContain("matching filenames");
+    const missing: SkippedFormat[] = [{ itemId: "item-1", stem: "icon_a", format: "eps" }];
+    expect(validateGettyWebTasks([JPEG, EPS], missing)).toContain("missing on disk");
+  });
+
+  it("only treats the getty-web protocol as a web upload preset", () => {
+    expect(isGettyWebPreset(GETTY_WEB_PRESET)).toBe(true);
+    expect(GETTY_WEB_PRESET.host).toBe("esp.gettyimages.com");
+    expect(GETTY_WEB_PRESET.remoteDir).toBe("/contribute");
+    expect(isGettyWebPreset({ ...GETTY_WEB_PRESET, protocol: "esp-https" })).toBe(false);
+  });
+});
+
+describe("Getty web loopback client", () => {
+  it("sends both files in order with credentials only inside the loopback header", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true, batchId: "68445204", accepted: ["icon_a.jpeg", "icon_a.eps"] }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }, { name: "icon_a.eps", bytes: new Uint8Array([4, 5]) }],
+      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result).toEqual({ ok: true, batchId: "68445204", accepted: ["icon_a.jpeg", "icon_a.eps"] });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:47391/getty-web/upload");
+    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
+    expect(header).toMatchObject({
+      protocol: "getty-web", host: "esp.gettyimages.com", username: CREDS.username, password: CREDS.password,
+      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      files: [{ name: "icon_a.jpeg", bytes: 3 }, { name: "icon_a.eps", bytes: 2 }],
+    });
+  });
+
+  it("scrubs a password echoed by the helper and keeps the failure code", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(401, { ok: false, code: "auth", reason: `bad login ${CREDS.password}` }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("auth");
+      expect(result.reason).not.toContain(CREDS.password);
+      expect(result.reason).toContain("••••••••");
+    }
+  });
+
+  it("reports cancellation and an unreachable helper distinctly", async () => {
+    const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
+    const cancelled = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: vi.fn(async () => { throw abort; }),
+    });
+    expect(cancelled).toEqual({ ok: false, code: "cancelled", reason: "upload cancelled" });
+
+    const down = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: vi.fn(async () => { throw new Error("ECONNREFUSED"); }),
+    });
+    expect(down.ok).toBe(false);
+    if (!down.ok) {
+      expect(down.code).toBe("helper-down");
+      expect(down.reason).toContain("run_ftp_bridge.bat");
+    }
+  });
+
+  it("probes the helper for the Getty web capability and a browser", async () => {
+    const okFetch = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "found" } }));
+    expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", okFetch)).toEqual({ ok: true });
+
+    const noBrowser = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "missing" } }));
+    const missing = await probeBridgeGettyWeb("http://127.0.0.1:47391", noBrowser);
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.reason).toContain("Chrome");
+
+    const outdated = vi.fn(async () => jsonResponse(200, { ftps: { ready: true } }));
+    const old = await probeBridgeGettyWeb("http://127.0.0.1:47391", outdated);
+    expect(old.ok).toBe(false);
+    if (!old.ok) expect(old.reason).toContain("restart run_ftp_bridge.bat");
+
+    const offline = vi.fn(async () => { throw new Error("refused"); });
+    const down = await probeBridgeGettyWeb("http://127.0.0.1:47391", offline);
+    expect(down.ok).toBe(false);
+    if (!down.ok) expect(down.reason).toContain(GETTY_WEB_ERROR_HINT.slice(0, 10));
+  });
+
+  it("tests the sign-in and closes the pooled session through their own routes", async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls.push(url);
+      return url.endsWith("/getty-web/test") ? jsonResponse(200, { ok: true, signedIn: true }) : jsonResponse(200, { ok: true });
+    }) as unknown as typeof fetch;
+    expect(await testBridgeGettyWeb("http://127.0.0.1:47391", GETTY_WEB_PRESET, CREDS, fetchImpl)).toEqual({ ok: true });
+    await closeBridgeGettyWeb("http://127.0.0.1:47391", "run-123", fetchImpl);
+    expect(calls).toEqual(["http://127.0.0.1:47391/getty-web/test", "http://127.0.0.1:47391/getty-web/close"]);
+  });
+});

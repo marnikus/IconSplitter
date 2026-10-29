@@ -6,12 +6,13 @@ import type { DirHandleLike } from "../lib/fs";
 import {
   checkBridgeEspOAuthStatus, startBridgeEspOAuth, testBridgeFtps,
 } from "../lib/stockupload/bridgeclient";
+import { testBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import type { ExtraCredentials, FtpCredentials } from "../lib/stockupload/credvault";
 import {
   addCustomStockPreset, patchStockPreset, removeStockPreset,
   resetBuiltinStockPreset, toggleTargetPreset,
 } from "../lib/stockupload/presets";
-import type { StockFtpPreset, StockPresetState, UploadFormatKey } from "../lib/stockupload/types";
+import type { FtpProtocol, StockFtpPreset, StockPresetState, UploadFormatKey } from "../lib/stockupload/types";
 import { probeEspStageFolder } from "./espstage";
 import { clearFtpCredentials, readFtpCredentials, saveFtpCredentials } from "./keystore";
 import { setStockPresetState } from "./presetstore";
@@ -62,12 +63,14 @@ async function performSaveCreds(c: FtpCtx, presetId: string, creds: FtpCredentia
 }
 
 function protocolSuccessLabel(preset: StockFtpPreset): string {
+  if (preset.protocol === "getty-web") return "Signed in to the Getty / iStock contributor site in a background browser";
   if (preset.protocol === "esp-https") return "Connected & authenticated via Getty ESP HTTPS (port 443)";
   if (preset.protocol === "sftp") return "Connected & authenticated via SFTP (SSH port 22)";
   return "Connected & authenticated via FTPS";
 }
 
 function protocolShortName(preset: StockFtpPreset): string {
+  if (preset.protocol === "getty-web") return "Getty web upload";
   if (preset.protocol === "esp-https") return "Getty ESP HTTPS";
   return preset.protocol === "sftp" ? "SFTP" : "FTPS";
 }
@@ -81,6 +84,14 @@ async function performTestEspStage(c: FtpCtx, preset: StockFtpPreset): Promise<v
   c.say(note, !res.ok);
 }
 
+async function performTestGettyWeb(c: FtpCtx, preset: StockFtpPreset, creds: FtpCredentials): Promise<void> {
+  c.setTestStatus({ busy: true, ok: null, note: `Signing in to ${preset.host}/contribute in a background browser…`, certSha256: null });
+  const res = await testBridgeGettyWeb(c.bridgeUrl, preset, creds);
+  const note = (res.ok ? protocolSuccessLabel(preset) : res.reason).trim() || "Getty web sign-in failed";
+  c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: null });
+  c.say(note, !res.ok);
+}
+
 async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise<void> {
   if (preset.protocol === "esp-batch") {
     await performTestEspStage(c, preset);
@@ -90,9 +101,15 @@ async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise
   if (creds === null) {
     const missing = preset.protocol === "esp-https"
       ? "Save your Getty ESP API Key locally first."
-      : "Save local credentials first before testing.";
+      : preset.protocol === "getty-web"
+        ? "Save the Getty contributor e-mail and password locally first."
+        : "Save local credentials first before testing.";
     c.setTestStatus({ busy: false, ok: false, note: missing, certSha256: null });
     c.say(missing, true);
+    return;
+  }
+  if (preset.protocol === "getty-web") {
+    await performTestGettyWeb(c, preset, creds);
     return;
   }
   const protoLabel = protocolShortName(preset);
@@ -142,15 +159,18 @@ async function performAuthorizeEspOAuth(c: FtpCtx, presetId: string): Promise<vo
   void pollOAuthCompletion(c, started.state);
 }
 
+/** Getty protocol switches also move host/port/path to that transport's endpoint. */
+const GETTY_PROTOCOL_ENDPOINTS: Partial<Record<FtpProtocol, Pick<StockFtpPreset, "host" | "port" | "remoteDir">>> = {
+  "esp-https": { host: "api.gettyimages.com", port: 443, remoteDir: "/esp/submission/v1/submission_batches" },
+  "esp-batch": { host: "esp.gettyimages.com", port: 443, remoteDir: "/_getty_esp_batches" },
+  "getty-web": { host: "esp.gettyimages.com", port: 443, remoteDir: "/contribute" },
+};
+
 function enrichGettyProtocolPatch(cur: StockFtpPreset | undefined, patch: Partial<StockFtpPreset>): Partial<StockFtpPreset> {
-  if (!cur || cur.template !== "getty-images" || !patch.protocol || patch.protocol === cur.protocol) return patch;
-  if (patch.protocol === "esp-https") {
-    return { host: "api.gettyimages.com", port: 443, remoteDir: "/esp/submission/v1/submission_batches", ...patch };
-  }
-  if (patch.protocol === "esp-batch") {
-    return { host: "esp.gettyimages.com", port: 443, remoteDir: "/_getty_esp_batches", ...patch };
-  }
-  return patch;
+  const gettyTemplate = cur?.template === "getty-images" || cur?.template === "getty-web";
+  if (!cur || !gettyTemplate || !patch.protocol || patch.protocol === cur.protocol) return patch;
+  const endpoint = GETTY_PROTOCOL_ENDPOINTS[patch.protocol];
+  return endpoint ? { ...endpoint, ...patch } : patch;
 }
 
 function buildPresetListCrud(ref: { current: FtpCtx }): Pick<

@@ -1,0 +1,63 @@
+// gettyweb.ts — pure rules for the Getty Images / iStock *web* upload: the
+// legacy contributor site (esp.gettyimages.com/contribute) signs in with the
+// saved e-mail/password, creates one batch, and the page's own uploader takes
+// the JPEG (+ optional matching EPS). Metadata already embedded in `export/`
+// files travels inside those files. No key, no OAuth, no submission for review.
+
+import type { PlannedTransfer, SkippedFormat } from "./plan";
+import type { StockFtpPreset } from "./types";
+
+export const GETTY_WEB_SUBMISSION_TYPE = "iStock creative illustration";
+export const GETTY_WEB_MAX_BATCH_NAME = 60;
+export const GETTY_WEB_ERROR_HINT =
+  "start run_ftp_bridge.bat (or run_inkscape_bridge.bat) on this machine, then retry";
+
+export function isGettyWebPreset(preset: StockFtpPreset): boolean {
+  return preset.protocol === "getty-web";
+}
+
+/** Batch name the bridge types into Getty's Create Batch dialog. */
+export function gettyWebBatchName(now: Date, itemCount: number): string {
+  const stamp = now.toISOString().slice(0, 10);
+  const plural = itemCount === 1 ? "icon" : "icons";
+  return `IconSplitter ${stamp} (${Math.max(itemCount, 0)} ${plural})`.slice(0, GETTY_WEB_MAX_BATCH_NAME);
+}
+
+function pairOf(tasks: readonly PlannedTransfer[]): { raster: PlannedTransfer | null; vector: PlannedTransfer | null } {
+  return {
+    raster: tasks.find((t) => t.format === "raster") ?? null,
+    vector: tasks.find((t) => t.format === "eps") ?? null,
+  };
+}
+
+function stemOf(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0 ? fileName.slice(0, dot) : fileName;
+}
+
+/** Getty web upload takes one JPEG per icon and an optional matching EPS. */
+export function validateGettyWebTasks(
+  tasks: readonly PlannedTransfer[],
+  missing: readonly SkippedFormat[],
+): string | null {
+  const { raster, vector } = pairOf(tasks);
+  if (!raster || !/\.jpe?g$/i.test(raster.fileName)) {
+    return "Getty Images accepts a JPEG per icon — enable JPEG/PNG and export a JPEG first.";
+  }
+  if (tasks.some((t) => t.format !== "raster" && t.format !== "eps")) {
+    return "Getty Images web upload takes the JPEG and an optional matching EPS only — SVG and ZIP are not supported.";
+  }
+  if (missing.some((m) => m.itemId === raster.itemId && (m.format === "raster" || m.format === "eps"))) {
+    return "A selected Getty file is missing on disk; nothing was uploaded for this icon.";
+  }
+  if (vector && stemOf(raster.fileName) !== stemOf(vector.fileName)) {
+    return "Getty EPS and JPEG must have matching filenames.";
+  }
+  return null;
+}
+
+/** The files one item contributes, in upload order (JPEG first, EPS second). */
+export function gettyWebFileOrder(tasks: readonly PlannedTransfer[]): PlannedTransfer[] {
+  const { raster, vector } = pairOf(tasks);
+  return [raster, vector].filter((t): t is PlannedTransfer => t !== null);
+}
