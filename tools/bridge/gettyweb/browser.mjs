@@ -68,9 +68,15 @@ function launchArgs(profileDir, headed) {
     "--no-first-run", "--no-default-browser-check", "--disable-extensions",
     "--disable-background-networking", "--disable-sync", "--disable-translate",
     "--disable-features=Translate,MediaRouter", "--mute-audio",
+    "--remote-allow-origins=*",
     "about:blank",
   ];
   return args.filter(Boolean);
+}
+
+/** Removes a DevToolsActivePort left behind by an earlier run. */
+function clearActivePort(dir) {
+  try { rmSync(path.join(dir, "DevToolsActivePort"), { force: true }); } catch { /* nothing to clear */ }
 }
 
 /** Reads Chrome's DevToolsActivePort file: line 1 port, line 2 browser path. */
@@ -99,10 +105,7 @@ export function parseCdpEndpoint(raw) {
 }
 
 async function browserSocketFromHttp(endpoint) {
-  const res = await fetch(`http://${endpoint.host}/json/version`, { signal: AbortSignal.timeout(5000) });
-  const body = await res.json();
-  const socket = typeof body?.webSocketDebuggerUrl === "string" ? body.webSocketDebuggerUrl : "";
-  return /^ws:\/\/(127\.0\.0\.1|\[::1\]|localhost)[:/]/.test(socket) ? socket : null;
+  return socketFromPort(Number(endpoint.port || 9222), 5000);
 }
 
 /**
@@ -115,32 +118,113 @@ export function resolveProfileDir(raw) {
   return value === "" ? null : path.resolve(value);
 }
 
+/** Lock files a running Chrome/Edge keeps inside its profile folder. */
+const PROFILE_LOCKS = ["SingletonLock", "SingletonCookie", "SingletonSocket", "lockfile"];
+
+/** Lock file names present in a profile folder (a browser may already own it). */
+export function profileLocks(dir) {
+  const value = typeof dir === "string" ? dir.trim() : "";
+  if (value === "") return [];
+  return PROFILE_LOCKS.filter((name) => existsSync(path.join(value, name)));
+}
+
+/**
+ * Whether a profile folder can be reused: attach to a browser that already
+ * answers on its DevTools port, launch in a free folder, and never fight a
+ * browser that holds the folder without exposing a port.
+ */
+export function decideProfileUse({ locked, answers }) {
+  if (answers) return "attach";
+  return locked ? "busy" : "launch";
+}
+
+/** The DevTools WebSocket of one loopback port, or null when nothing answers. */
+async function socketFromPort(port, timeoutMs = 2000) {
+  if (!Number.isInteger(port) || port <= 0) return null;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(timeoutMs) });
+    const body = await res.json();
+    const socket = typeof body?.webSocketDebuggerUrl === "string" ? body.webSocketDebuggerUrl : "";
+    return /^ws:\/\/(127\.0\.0\.1|\[::1\]|localhost)[:/]/.test(socket) ? socket : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A browser already running on this profile folder, if its port still answers. */
+async function existingBrowser(dir, probe) {
+  const active = readActivePort(dir);
+  if (!active) return null;
+  const socket = await probe(active.port);
+  return socket === null ? null : { port: active.port, socket };
+}
+
+/** Closes the browser including its child processes (Windows keeps a tree). */
+function killTree(child) {
+  if (child.exitCode !== null) return;
+  if (process.platform === "win32" && typeof child.pid === "number") {
+    try {
+      spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)], { stdio: "ignore" });
+      return;
+    } catch {
+      // fall through to the plain kill below
+    }
+  }
+  try { child.kill(); } catch { /* already gone */ }
+}
+
+function profileBusyFix(dir) {
+  return `the Chrome/Edge profile folder ${dir} is in use by a browser window that does not expose a DevTools port — close that browser window (or delete the folder) and retry, or set GETTY_WEB_CDP`;
+}
+
 /**
  * Launches a browser profile and returns its loopback DevTools WebSocket.
- * `stop()` closes the browser; only a throwaway profile is deleted.
+ * `stop()` closes the browser; only a throwaway profile is deleted. The socket
+ * is verified before it is handed out, so a stale DevToolsActivePort from a
+ * previous run is never mistaken for a live browser.
  */
 export async function launchBrowser(options = {}) {
   const found = findBrowser(options.env ?? process.env);
   if (!found.found) return { ok: false, code: "browser", reason: found.fix };
+  const probe = options.probeSocket ?? socketFromPort;
+  const spawnFn = options.spawnFn ?? spawn;
   const reusable = resolveProfileDir(options.profileDir);
+  if (reusable !== null) {
+    const running = await existingBrowser(reusable, probe);
+    if (running) return { ok: true, ...running, stop: () => {} };
+    const locked = profileLocks(reusable).length > 0;
+    if (decideProfileUse({ locked, answers: false }) === "busy") {
+      return { ok: false, code: "browser", reason: profileBusyFix(reusable) };
+    }
+    clearActivePort(reusable);
+  }
   const profileDir = reusable ?? mkdtempSync(path.join(tmpdir(), "getty-web-profile-"));
-  const child = spawn(found.path, launchArgs(profileDir, options.headed === true), { stdio: "ignore" });
+  const child = spawnFn(found.path, launchArgs(profileDir, options.headed === true), { stdio: "ignore" });
   const stop = () => {
-    if (child.exitCode === null) child.kill();
+    killTree(child);
     if (reusable !== null) return;
     try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* profile already gone */ }
   };
   const deadline = Date.now() + (options.timeoutMs ?? LAUNCH_TIMEOUT_MS);
+  let lastPort = null;
   while (Date.now() < deadline) {
     const active = readActivePort(profileDir);
     if (active) {
-      return { ok: true, port: active.port, socket: `ws://127.0.0.1:${active.port}${active.wsPath}`, stop };
+      lastPort = active.port;
+      const socket = await probe(active.port);
+      if (socket) return { ok: true, port: active.port, socket, stop };
     }
-    if (child.exitCode !== null) break;
+    if (child.exitCode !== null && active === null && lastPort === null) break;
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
   stop();
-  return { ok: false, code: "browser", reason: "the browser did not open a DevTools port — close other debugging browsers or set GETTY_WEB_CDP" };
+  const where = reusable === null ? "the temporary profile" : `the profile folder ${reusable}`;
+  const port = lastPort === null ? "" : ` (DevTools port ${lastPort} did not accept a connection)`;
+  return {
+    ok: false,
+    code: "browser",
+    reason: `the browser did not open a usable DevTools port${port} — close any Chrome/Edge window using ${where} and retry, or set GETTY_WEB_CDP`,
+  };
 }
 
 /** Attach to a browser the user started, else launch one. */

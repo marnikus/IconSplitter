@@ -3751,3 +3751,29 @@ account here, so live behaviour remains untested):
 - Honest gap: whether Getty accepts the typed value and how its Arkose check
   behaves can only be settled on the live page; the failure reason now carries
   the screen summary (`inputs`, `buttons`, `angular-js`) to close that gap fast.
+
+## 2026-10-29 — Getty web browser launch: attach, stale ports, self-check
+
+Reported after the Angular sign-in fix: "now it not run browser to log in but only
+get error — browser debugging socket failed". That text comes from the CDP client
+when the WebSocket to the browser is refused, so the launch half was hardened and
+made self-describing. Measured on this checkout (Node 22.22.3, 2 cores, no Chrome
+installed here):
+
+- Focused: `tests/getty_web_browser.test.ts` 10 passed (profile locks,
+  attach/launch/busy decision, stale `DevToolsActivePort` ignored, socket reasons
+  with port + folder, missing-browser hint), `tests/bridge_getty_web.test.ts`
+  14 passed (adds `--getty-check` for a missing browser and for a browser that
+  never opens a port), plus driver 22 / sign-in 9 / cdp / finalize / upload /
+  runner suites.
+- `npm run verify:fast` → Types PASS 5.2 s, Lint PASS (0 errors / 21 warnings)
+  2.8 s, Quality gate (changed) PASS 0.9 s, Tests + coverage PASS 108.8 s,
+  Build PASS 7.6 s.
+- Sandbox note for whoever repeats this: a bare `npx vitest run --coverage` does
+  **not** set `PERF_BUDGETS=coverage`, so `tests/algo_efficiency.test.ts` keeps
+  its 200 ms budget and fails on this 2-core box (measured 408 ms instrumented)
+  while the real lane passes. One run also hit an unrelated flaky
+  `tests/upload_output_formats_ui.test.tsx` case that passes on rerun.
+- `docs/current/sor/stock-upload-getty-web.md` stayed inside the 9,000-byte
+  agent read budget (8,941) after adding the profile/self-check section, and the
+  captured Getty handles moved to `selectors/stock-upload.md`.

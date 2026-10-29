@@ -37,6 +37,23 @@ function stageFiles(dir, files) {
   });
 }
 
+/**
+ * The honest reason a launched browser's DevTools socket refused a connection —
+ * a stale port or a profile another window still owns, never the raw error.
+ */
+export function cdpFailureReason(err, browser) {
+  const port = Number(browser?.port ?? 0);
+  const where = typeof browser?.profileDir === "string" && browser.profileDir !== ""
+    ? `the profile folder ${browser.profileDir}`
+    : "the browser's throwaway profile";
+  const at = port > 0 ? ` (DevTools port ${port})` : "";
+  const detail = String(err?.message ?? "").trim();
+  const hint = /refused|failed|ECONNREFUSED|closed/i.test(detail)
+    ? `close any Chrome/Edge window still using ${where} and retry`
+    : detail.slice(0, 200) || "the browser page could not be prepared";
+  return `the browser opened${at} but its debugging socket did not answer — ${hint}, or set GETTY_WEB_CDP`;
+}
+
 /** Signs in and prepares the batches page; returns a reusable session. */
 export async function openGettySession(options) {
   const browser = await connectBrowser({
@@ -49,7 +66,11 @@ export async function openGettySession(options) {
     browser.stop();
   };
   try {
-    await connection.ready;
+    const readyFailure = await connection.ready.then(() => null).catch((err) => err);
+    if (readyFailure !== null) {
+      cleanup();
+      return { ok: false, code: "browser", reason: cdpFailureReason(readyFailure, browser) };
+    }
     const page = await openPage(connection);
     const info = await openContributePage(connection, page.sessionId, options.url);
     const signedIn = info.signedIn ? { ok: true } : await ensureSignedIn(connection, page.sessionId, {
@@ -63,7 +84,8 @@ export async function openGettySession(options) {
     return { ok: true, session: buildSession({ connection, page, browser, options, cleanup }) };
   } catch (err) {
     cleanup();
-    return { ok: false, code: "browser", reason: (err).message || "the browser page could not be prepared" };
+    const reason = String(err?.message ?? "").trim();
+    return { ok: false, code: "browser", reason: reason === "" ? "the browser page could not be prepared" : reason };
   }
 }
 

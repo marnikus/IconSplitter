@@ -46,6 +46,19 @@ async function startHelper(extraArgs: string[] = []): Promise<Helper> {
   return helper;
 }
 
+/** Runs the helper's own one-command browser self-check and returns its log. */
+async function runGettyCheck(env: Record<string, string | undefined> = {}): Promise<{ code: number | null; log: string }> {
+  const child = spawn(process.execPath, [SERVER, "--getty-check"], {
+    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", GETTY_WEB_BROWSER: NO_BROWSER, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const log: string[] = [];
+  child.stdout?.on("data", (chunk: Buffer) => log.push(chunk.toString()));
+  child.stderr?.on("data", (chunk: Buffer) => log.push(chunk.toString()));
+  const code = await new Promise<number | null>((resolve) => child.once("exit", resolve));
+  return { code, log: log.join("") };
+}
+
 afterEach(async () => {
   for (const helper of live.splice(0)) {
     helper.child.kill();
@@ -68,6 +81,23 @@ async function postConfig(url: string, route: string, config: Record<string, unk
   });
   return { status: res.status, json: await res.json() as Record<string, unknown> };
 }
+
+describe("Getty web browser self-check", () => {
+  it("exits non-zero and names the missing browser when none is installed", async () => {
+    const check = await runGettyCheck();
+    expect(check.code).toBe(1);
+    expect(check.log).toContain("NOT FOUND");
+    expect(check.log).toContain("GETTY_WEB_BROWSER");
+    expect(check.log).not.toContain("listening on");
+  });
+
+  it("reports a browser that never opens a usable DevTools port instead of hanging", async () => {
+    const check = await runGettyCheck({ GETTY_WEB_BROWSER: process.execPath });
+    expect(check.code).toBe(1);
+    expect(check.log).toContain("did not open a usable DevTools port");
+    expect(check.log).toContain("GETTY_WEB_CDP");
+  });
+});
 
 describe("Getty web helper routes", () => {
   it("advertises the Getty web capability and the missing browser in /health", async () => {

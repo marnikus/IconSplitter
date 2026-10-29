@@ -10,6 +10,7 @@
 //   node tools/bridge/server.mjs [--port 47391] [--inkscape <path>] [--dist <dir>]
 //   Getty web: [--getty-headed] [--getty-cdp <loopback devtools url>]
 //              [--getty-profile <dir>]  (reuse a profile so Getty remembers it)
+//              [--getty-check]  (launch, verify the DevTools socket, exit)
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
 
 import { createServer, request as httpRequest } from "node:http";
@@ -18,7 +19,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
+import { connectBrowser, findBrowser, resolveProfileDir } from "./gettyweb/browser.mjs";
+import { openCdp } from "./gettyweb/cdp.mjs";
 import { gettyWebHealth, handleGettyWebClose, handleGettyWebTest, handleGettyWebUpload } from "./gettyweb/routes.mjs";
+import { cdpFailureReason } from "./gettyweb/session.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
 
@@ -241,6 +245,45 @@ function startListening() {
   });
 }
 
+/**
+ * `--getty-check`: prove the Getty web browser can be launched and driven on
+ * this machine, print exactly which step fails, and exit — no app needed.
+ */
+async function runGettyCheck() {
+  const found = findBrowser();
+  console.log(found.found ? `browser: ${found.path}` : `browser: NOT FOUND — ${found.fix}`);
+  if (!found.found) return 1;
+  const started = await connectBrowser({
+    headed: process.env.GETTY_WEB_HEADED === "1",
+    profileDir: process.env.GETTY_WEB_PROFILE,
+    cdpUrl: process.env.GETTY_WEB_CDP,
+  });
+  if (!started.ok) {
+    console.log(`launch: FAILED — ${started.reason}`);
+    return 1;
+  }
+  console.log(`devtools: port ${started.port}`);
+  const connection = openCdp(started.socket);
+  try {
+    await connection.ready;
+    console.log("socket: OK — the Getty web upload can drive this browser");
+    return 0;
+  } catch (error) {
+    const profileDir = resolveProfileDir(process.env.GETTY_WEB_PROFILE) ?? undefined;
+    console.log(`socket: FAILED — ${cdpFailureReason(error, { port: started.port, profileDir })}`);
+    return 1;
+  } finally {
+    connection.close();
+    started.stop();
+  }
+}
+
+if (args["getty-check"] === true) {
+  runGettyCheck()
+    .then((code) => process.exit(code))
+    .catch((error) => { console.log(`check: FAILED — ${error?.message ?? "unknown error"}`); process.exit(1); });
+}
+
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE" && config.port === DEFAULT_PORT && !retriedReplace) {
     retriedReplace = true;
@@ -255,4 +298,4 @@ server.on("error", (error) => {
   process.exit(1);
 });
 
-startListening();
+if (args["getty-check"] !== true) startListening();
