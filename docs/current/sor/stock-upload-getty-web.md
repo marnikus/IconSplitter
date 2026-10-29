@@ -20,15 +20,18 @@ browser.
    `sessionKey` per target.
 4. `uploadBridgeGettyWeb` posts the bytes to `/getty-web/upload`; the helper
    stages them, signs in once, creates **one** batch and hands every file to the
-   page's own uploader (`DOM.setFileInputFiles`).
+   page's own uploader (`DOM.setFileInputFiles`). Stray dialogs/snackbars are
+   dismissed first — a leftover snackbar blocks Getty's uploader.
 5. Getty's uploader transfers; the helper waits until the batch page lists the
    files. A listed contribution **counts as uploaded** at once — recognition
-   finishes afterwards — and the wait then lasts until it is ready.
+   finishes afterwards — and the wait then lasts until it is ready. Every icon
+   stays in that one batch; nothing is submitted until the run is finished.
 6. **Metadata:** per contribution it selects the card by stem, types the accepted
    title, description, keywords and **today's date** into Date Created, and saves —
    never overwriting Getty's IPTC/XMP prefill.
-7. **Complete:** it clicks the batch's Complete/Submit control and accepts the
-   confirmation, so the run ends submitted.
+7. **Complete once:** after the last icon the run posts `/getty-web/finish`, which
+   refuses while any contribution is missing, then clicks Complete/Submit and
+   accepts the confirmation. A per-icon submit used to lock the batch after icon 1.
 8. `/getty-web/close` shuts the browser and deletes the staged files; an idle
    session closes after five minutes. A visible window is only let go.
 
@@ -38,8 +41,7 @@ writes through `angular.element(el)` too: the page is `ng-app="SignInApp"` and
 AngularJS ignores a plain `.value =`, which submits an empty form. It then presses
 submit or Enter / `form.requestSubmit()`, takes a "sign in with password" option
 on an SSO screen and returns to `/contribute`. A stalled run names the step and
-summarizes the screen — `page "Sign in - ESP"; 2 input(s); buttons: Sign in` —
-never a value.
+summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
 
 ## 3. Background, headed, attach, profile and self-check
 
@@ -53,15 +55,15 @@ never a value.
   a new device. It holds Getty cookies; the helper never deletes it.
 - `--getty-check` launches once, verifies the DevTools socket, prints
   `browser:`/`launch:`/`devtools:`/`socket:` and exits.
-- `--getty-reset --getty-profile <folder>` ends the browser holding that folder
-  (only that one), clears its stale locks, exits.
+- `--getty-reset --getty-profile <folder>` ends the browser holding that folder,
+  clears its stale locks, exits.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
 - `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
   (180 s) and `GETTY_WEB_READY_TIMEOUT_MS` (120 s) bound the two waits.
 
 **A vector pair is one contribution.** Getty lists the EPS name only, so files are
-matched by **stem** (`.jpg` and `.eps` of an icon = one card, one drawer).
+matched by **stem** (`.jpg` and `.eps` = one card, one drawer).
 
 **One profile, one browser — freed by the helper.** A browser answering on the
 folder's port is attached to. A locked folder without a port means a leftover
@@ -91,31 +93,29 @@ go, and its throwaway profile goes when Chrome exits.
 The prelude declares its own constants and each step runs inside an IIFE, so it
 can be re-injected without redeclaring globals. A helper that named a module
 constant once arrived as a bare `hidden,checkbox,…` list.
-Captured Batches handles — `create-batch-button`, the dialog
-(`[role=dialog][aria-labelledby=create-batch-dialog]` or `data-cy`),
+Captured Batches handles — `create-batch-button`, the dialog,
 `create-batch-submission-type` (MUI: mousedown, portal `role=listbox`),
 `submission_name`, `event_id`, `create-batch-confirm-button`, the contribution
-uploader `input[type="file"][data-cy="upload-button-file-input"]`, the cards and
-the metadata drawer — batch id from `/contribute/batches/<id>`. Every handle and
-the wait rules are in [selectors/stock-upload](../selectors/stock-upload.md).
+uploader, the cards and the metadata drawer — and the wait/dismiss rules are in
+[selectors/stock-upload](../selectors/stock-upload.md).
 
 Sign-in has no captured handles: `fillLoginForm`, `focusLoginField`,
 `inspectSignIn`, `choosePasswordOption`, `submitLogin` match behaviour, as
 described in the selectors page.
 
-Codes map to HTTP: `bad-request` 400 (config, host, file rules), `auth` 401
-(rejected sign-in, signed out mid-run), `browser` 503 (no executable, launch
-failure, busy profile, refused socket, unreachable `GETTY_WEB_CDP`), `timeout` 504
-(no batch page / names missing / control never ready), `cancelled` 499, `page` 502
-(selector not found). A refused socket names its port and says to retry (the
-helper frees its own folder). Reasons are scrubbed of identifier and password.
+Codes map to HTTP: `bad-request` 400 (config, host, file rules; 409 for a finish
+with no open batch), `auth` 401 (rejected sign-in, signed out mid-run), `browser`
+503 (no executable, launch failure, busy profile, refused socket), `timeout` 504
+(no batch page / names missing / control never ready / a contribution absent at
+`finish`), `cancelled` 499, `page` 502 (selector not found). A refused socket names
+its port and says to retry (the helper frees its own folder). Reasons are scrubbed
+of identifier and password.
 
 ## 6. Honest limits
 
 - Built against captured markup plus a local helper, **not** a live account:
-  selector drift is a `page` failure naming the step. Only the hidden
-  contribution uploader is targeted: release inputs are never used, so a missing
-  uploader fails instead of attaching to the wrong control.
+  selector drift is a `page` failure naming the step. Only the hidden contribution
+  uploader is targeted — release inputs are never used.
 - A listed card means Getty has the bytes, not that it accepted them.
 - An interrupted run can leave a batch short; a duplicate is the only recovery.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed with
@@ -125,8 +125,7 @@ helper frees its own folder). Reasons are scrubbed of identifier and password.
 - The helper types the saved identifier, guessing nothing.
 - Metadata editors and Complete use **label keywords** and row proximity —
   guesses **not** seen live. A missing editor is reported per file
-  (`row-not-found`, `filled-unsaved`, `embedded-only`); a missing Complete control
-  fails as `page`.
+  (`row-not-found`, `filled-unsaved`, `embedded-only`).
 - `completed: true` means the control was clicked and confirmed, not that Getty
   passed the files. An incomplete run says `files uploaded but the batch was not
   completed — submit it on the Getty contributor page`.

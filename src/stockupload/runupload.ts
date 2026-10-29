@@ -1,23 +1,27 @@
 // runupload.ts — batch FTPS transfer runner with per-item/per-site isolation,
 // single-login session reuse per target, cancellation (RULE 7), and crash journal.
 
-import { readBytesAt, type DirHandleLike } from "../lib/fs";
+import type { DirHandleLike } from "../lib/fs";
 import {
   closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadInput, type BridgeUploadResult,
 } from "../lib/stockupload/bridgeclient";
 import { GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName } from "../lib/stockupload/gettyweb";
-import { closeBridgeGettyWeb, type GettyWebResult, type GettyWebUploadInput } from "../lib/stockupload/gettywebclient";
+import {
+  closeBridgeGettyWeb, type GettyWebFinishInput, type GettyWebResult, type GettyWebUploadInput,
+} from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey } from "../lib/stockupload/types";
-import { prepareMetadataCopy } from "../lib/stockupload/sendmeta";
-import { buildRepresentationZip } from "../lib/stockupload/zippack";
+import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
+import { finishGettyWebRun } from "./gettywebfinish";
 import { completionNote, uploadGettyWebGroup } from "./gettywebtransfer";
 import { recordSiteUploadStatus } from "./historystore";
-import { clearUploadInFlight, markUploadInFlight } from "./journal";
+import { markUploadInFlight } from "./journal";
+import { flushTargetStatuses, outcomeOf } from "./statusflush";
+import type { ItemTracker } from "./trackers";
+import { resolveTransferBytes } from "./transferpayload";
 
 export interface UploadProgressStep {
   done: number;
@@ -36,6 +40,7 @@ export interface UploadBatchDeps {
   closeSessionFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
   gettyWebUploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
   closeGettyWebFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
+  finishGettyWebFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
 }
 
 export interface UploadBatchSummary {
@@ -44,49 +49,6 @@ export interface UploadBatchSummary {
   cancelled: boolean;
   lastError: string | null;
   stagedDir?: string | null;
-}
-
-interface ItemTracker {
-  expected: number;
-  succeeded: UploadFormatKey[];
-  missingCount: number;
-  lastError: string | null;
-}
-
-async function resolveTransferBytes(
-  root: DirHandleLike, item: ExportedItem, task: PlannedTransfer, combine: boolean,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
-  let bytes: Uint8Array | null;
-  if (task.format === "zip" && task.relPath === null) {
-    const packed = await buildRepresentationZip(root, item);
-    if (!packed.ok) return packed;
-    bytes = packed.bytes;
-  } else {
-    bytes = task.relPath ? await readBytesAt(root, task.relPath) : null;
-  }
-  if (!bytes?.byteLength) return { ok: false, reason: `${task.fileName} could not be read` };
-  if (!combine) return { ok: true, bytes };
-  try { return { ok: true, bytes: await prepareMetadataCopy(item, task.fileName, bytes) }; }
-  catch (err) { return { ok: false, reason: (err as Error).message || "Could not prepare upload metadata" }; }
-}
-
-function outcomeOf(tr: ItemTracker): StockUploadOutcome {
-  if (tr.succeeded.length === 0) return "failed";
-  if (tr.succeeded.length === tr.expected && tr.missingCount === 0) return "uploaded";
-  return "partial";
-}
-
-function flushTargetStatuses(targetId: string, trackers: Map<string, ItemTracker>): void {
-  const now = new Date().toISOString();
-  for (const [itemId, tr] of trackers.entries()) {
-    clearUploadInFlight(itemId, targetId);
-    recordSiteUploadStatus(itemId, targetId, {
-      status: outcomeOf(tr),
-      formats: tr.succeeded,
-      uploadedAt: now,
-      error: tr.lastError,
-    });
-  }
 }
 
 interface RunCounters {
@@ -225,16 +187,33 @@ async function runNetworkGroups(ctx: {
   plan: StockUploadPlan; target: StockFtpPreset; targetTasks: PlannedTransfer[]; deps: UploadBatchDeps;
   counters: RunCounters; trackers: Map<string, ItemTracker>; creds: FtpCredentials; sessionKey: string;
   itemsById: ReadonlyMap<string, ExportedItem>;
-}): Promise<void> {
+}): Promise<number> {
   const { plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById } = ctx;
+  let uploaded = 0;
   for (const tasks of groupUploadTasks(target, targetTasks)) {
     if (deps.signal.aborted) break;
     markUploadInFlight(tasks[0].itemId, target.id);
     const res = await uploadGroup({ plan, target, tasks, deps, creds, sessionKey, itemsById });
     if (!res.ok) reportNetworkCertificate(res, target, deps);
+    else uploaded += 1;
     counters.lastError = completionNote(res) ?? counters.lastError;
     for (const task of tasks) recordTaskResult(task, res, { target, trackers, counters, deps });
   }
+  return uploaded;
+}
+
+/** Submits the run's one batch once the last icon is in it, and says so. */
+async function submitGettyBatch(
+  target: StockFtpPreset, creds: FtpCredentials, deps: UploadBatchDeps,
+  run: { counters: RunCounters; sessionKey: string; uploaded: number },
+): Promise<void> {
+  const { counters, sessionKey, uploaded } = run;
+  if (target.protocol !== "getty-web" || deps.signal.aborted) return;
+  const fin = await finishGettyWebRun({
+    bridgeUrl: deps.bridgeUrl, preset: target, creds, sessionKey, uploaded, finishFn: deps.finishGettyWebFn,
+  });
+  if (fin.error ?? fin.note) counters.lastError = fin.error ?? fin.note;
+  if (fin.submitted) deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
 }
 
 async function runNetworkTargetGroup(
@@ -254,7 +233,8 @@ async function runNetworkTargetGroup(
   const itemsById = new Map(plan.selectedRows.map((r) => [r.id, r]));
   const sessionKey = `${target.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   try {
-    await runNetworkGroups({ plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById });
+    const uploaded = await runNetworkGroups({ plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById });
+    await submitGettyBatch(target, creds, deps, { counters, sessionKey, uploaded });
   } finally {
     const close = target.protocol === "getty-web"
       ? (deps.closeGettyWebFn ?? closeBridgeGettyWeb)

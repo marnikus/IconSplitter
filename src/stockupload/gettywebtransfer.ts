@@ -59,9 +59,13 @@ async function combineMetadata(input: GettyWebGroupInput, files: GettyWebFile[])
 const GETTY_WEB_NOT_COMPLETED_NOTE =
   "files uploaded but the batch was not completed — submit it on the Getty contributor page";
 
-/** A Getty web upload that uploaded but stopped before Complete needs a manual finish. */
-export function completionNote(res: { ok: boolean; completed?: boolean }): string | null {
-  if (!res.ok || res.completed) return null;
+/**
+ * A Getty web upload that uploaded but stopped before Complete needs a manual
+ * finish. Per-icon uploads defer completion on purpose (`deferCompletion`), so
+ * this only speaks for the single finish call at the end of the run.
+ */
+export function completionNote(res: { ok: boolean; completed?: boolean; deferCompletion?: boolean }): string | null {
+  if (!res.ok || res.completed || res.deferCompletion) return null;
   return GETTY_WEB_NOT_COMPLETED_NOTE;
 }
 
@@ -76,11 +80,13 @@ export async function uploadGettyWebGroup(input: GettyWebGroupInput): Promise<Ge
   if (typeof files === "string") return failed(files);
   const send = input.uploadFn ?? uploadBridgeGettyWeb;
   const metadata = input.item ? gettyWebMetadataOf(input.item) : null;
-  return send({
+  const result = await send({
     bridgeUrl: input.bridgeUrl, preset: input.target, creds: input.creds, files,
     batchName: input.batchName, submissionType: input.submissionType,
     metadata,
-    complete: true,
+    // Every icon lands in the same batch; the run submits it once at the end.
+    complete: false,
     sessionKey: input.sessionKey, signal: input.signal,
   });
+  return result.ok ? { ...result, deferCompletion: true } : result;
 }

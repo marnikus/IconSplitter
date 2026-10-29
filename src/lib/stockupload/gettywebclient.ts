@@ -1,5 +1,6 @@
 // gettywebclient.ts — browser client for the loopback helper's Getty web routes
-// (`/getty-web/upload`, `/getty-web/test`, `/getty-web/close`). Credentials go
+// (`/getty-web/upload`, `/getty-web/finish`, `/getty-web/test`, `/getty-web/close`).
+// Credentials go
 // only into the loopback request; every returned reason is scrubbed before it
 // can reach the log or the UI.
 
@@ -30,6 +31,8 @@ export type GettyWebResult =
     ok: true; batchId: string | null; accepted: string[]; completed: boolean;
     completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
     metadata: GettyWebFileReport[];
+    /** Set when this upload only filled the batch; the run submits it at the end. */
+    deferCompletion?: boolean;
   }
   | { ok: false; code: GettyWebErrorCode; reason: string };
 
@@ -47,7 +50,11 @@ export interface GettyWebUploadInput {
   submissionType: string;
   /** Accepted title/description/keywords typed into the file's editor. */
   metadata?: GettyWebMetadataPayload | null;
-  /** Click the batch's Complete/Submit control after the metadata is saved. */
+  /**
+   * Click the batch's Complete/Submit control after the metadata is saved. One
+   * icon of a multi-icon run must not submit the batch: the run calls
+   * `finishBridgeGettyWeb` once, after the last icon.
+   */
   complete?: boolean;
   sessionKey?: string;
   signal?: AbortSignal;
@@ -148,6 +155,40 @@ export async function testBridgeGettyWeb(
     });
     const body: unknown = await res.json();
     return res.ok ? { ok: true } : parseFailure(body, creds, res.status);
+  } catch {
+    return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
+  }
+}
+
+export interface GettyWebFinishInput {
+  bridgeUrl: string;
+  preset: StockFtpPreset;
+  creds: FtpCredentials;
+  sessionKey: string;
+  fetchImpl?: typeof fetch;
+}
+
+async function finishFailure(res: Response, creds: FtpCredentials): Promise<GettyWebResult> {
+  // A helper without the finish route predates this client: name the fix, not a 404.
+  if (res.status === 404) return { ok: false, code: "bad-request", reason: OUTDATED_GETTY_WEB_REASON };
+  return parseFailure(await res.json(), creds, res.status);
+}
+
+/**
+ * Submits the run's single batch after the last icon. The helper refuses while a
+ * contribution of the run is missing, so a half-uploaded batch is never locked.
+ */
+export async function finishBridgeGettyWeb(input: GettyWebFinishInput): Promise<GettyWebResult> {
+  const config = encodeBase64Utf8(JSON.stringify({
+    ...input.preset, username: input.creds.username, password: input.creds.password,
+    sessionKey: input.sessionKey,
+  }));
+  const fetchFn = input.fetchImpl ?? globalThis.fetch;
+  try {
+    const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/finish`, {
+      method: "POST", headers: { "content-type": "text/plain" }, body: config,
+    });
+    return res.ok ? parseSuccess(await res.json(), []) : await finishFailure(res, input.creds);
   } catch {
     return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
   }

@@ -21,6 +21,7 @@ export const fillMetadataFields: (arg: { title: string; description: string; key
 export const openFileMetadata: (arg: { fileName: string }) => any;
 export const saveMetadataEditor: () => any;
 export const closeMetadataEditor: () => any;
+export const dismissPageDialogs: () => any;
 export const completeBatch: () => any;
 export const confirmCompletion: () => any;
 export const readCompletionState: () => any;

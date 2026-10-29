@@ -3904,3 +3904,14 @@ browser):
 - Docs: `sor/stock-upload-getty-web.md` 8,924 bytes and
   `selectors/stock-upload.md` 5,772 bytes (budget 9,000); the sign-in matching
   rules moved into the selectors page to stay inside it.
+
+## 2026-10-29 — Getty batch submitted once, after the last icon
+
+Cause: every per-icon upload asked the helper to complete the batch, so icon 1
+submitted it and icon 2 stalled on the locked uploader. Verified measured run:
+Types PASS (3.6 s), Lint PASS (1.2 s, 0 errors / 21 warnings), Quality gate
+(changed) PASS (0.7 s, 8 files), Tests + coverage PASS (100.2 s), Build PASS
+(6.8 s). Focused suites: getty_web_batch 13, getty_web_driver 31,
+getty_web_upload 12, getty_web_finalize 7, bridge_getty_web 17,
+stockupload_getty_web/…_ui 92 in total. Docs: SOR 8,935 B / 9,000 B, selectors
+6,062 B.

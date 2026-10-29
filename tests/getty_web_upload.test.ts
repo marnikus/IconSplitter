@@ -8,7 +8,7 @@ import {
   isGettyWebPreset, validateGettyWebTasks,
 } from "../src/lib/stockupload/gettyweb";
 import {
-  closeBridgeGettyWeb, probeBridgeGettyWeb, testBridgeGettyWeb, uploadBridgeGettyWeb,
+  closeBridgeGettyWeb, finishBridgeGettyWeb, probeBridgeGettyWeb, testBridgeGettyWeb, uploadBridgeGettyWeb,
 } from "../src/lib/stockupload/gettywebclient";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 import type { PlannedTransfer, SkippedFormat } from "../src/lib/stockupload/plan";
@@ -152,5 +152,47 @@ describe("Getty web loopback client", () => {
     expect(await testBridgeGettyWeb("http://127.0.0.1:47391", GETTY_WEB_PRESET, CREDS, fetchImpl)).toEqual({ ok: true });
     await closeBridgeGettyWeb("http://127.0.0.1:47391", "run-123", fetchImpl);
     expect(calls).toEqual(["http://127.0.0.1:47391/getty-web/test", "http://127.0.0.1:47391/getty-web/close"]);
+  });
+});
+
+describe("Getty web finish call", () => {
+  it("asks the helper to submit the run's one batch with the same session key", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, batchId: "68565609", accepted: [], completed: true,
+      completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+    }));
+    const result = await finishBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS, sessionKey: "run-7",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toMatchObject({ ok: true, batchId: "68565609", completed: true });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:47391/getty-web/finish");
+    expect(new Headers(init.headers).get("content-type")).toContain("text/plain");
+    const header = decodeHeader(String(init.body));
+    expect(header).toMatchObject({ protocol: "getty-web", username: CREDS.username, sessionKey: "run-7" });
+    expect(String(init.body)).not.toContain("GettyPass!42");
+  });
+
+  it("keeps the helper's refusal (a missing contribution) as the honest reason", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(504, {
+      ok: false, code: "timeout", reason: "Getty lists 1 of 2 contribution(s) — not completing the batch",
+    }));
+    const result = await finishBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS, sessionKey: "run-7",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    if (!result.ok) expect(result.reason).toContain("1 of 2 contribution(s)");
+  });
+
+  it("names an outdated helper when the finish route is missing", async () => {
+    const fetchImpl = vi.fn(async () => new Response("not found", { status: 404 }));
+    const result = await finishBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS, sessionKey: "run-7",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toMatchObject({ ok: false, code: "bad-request" });
+    if (!result.ok) expect(result.reason).toContain("restart run_ftp_bridge.bat");
   });
 });

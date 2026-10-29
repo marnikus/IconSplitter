@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
-import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, openContributePage } from "./contribute.mjs";
+import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage } from "./contribute.mjs";
 
 const LOGIN_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
@@ -116,7 +116,7 @@ export async function openGettySession(options) {
 function buildSession(ctx) {
   const { connection, page, options, cleanup } = ctx;
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
-  const state = { batchId: null };
+  const state = { batchId: null, expected: [] };
   let closed = false;
   const dropTemp = () => {
     try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
@@ -136,6 +136,11 @@ function buildSession(ctx) {
     },
     /** Stages bytes on this machine, then lets Getty's own uploader read them. */
     async upload(input) {
+      for (const file of input.files) {
+        if (typeof file?.name === "string" && file.name !== "" && !state.expected.includes(file.name)) {
+          state.expected.push(file.name);
+        }
+      }
       const paths = stageFiles(tempDir, input.files);
       const result = await attachFiles(connection, page.sessionId, {
         paths, names: input.files.map((f) => f.name),
@@ -151,6 +156,18 @@ function buildSession(ctx) {
       });
       return { ...done, state: { ...result.state, ...done.report?.state }, report: done.report, batchId: state.batchId };
     },
+    /**
+     * Submits the one batch of the run. Every icon uploads into it; completing
+     * after the first icon is what used to lock the batch and drop the rest.
+     */
+    async finish(input = {}) {
+      return finishBatch(connection, page.sessionId, {
+        expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
+        onProgress: options.onProgress,
+      });
+    },
+    /** Names this session has uploaded so far, for the finish report. */
+    get expected() { return [...state.expected]; },
     close() {
       if (closed) return;
       closed = true;

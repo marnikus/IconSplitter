@@ -174,6 +174,18 @@ describe("Getty web helper routes", () => {
     expect(tested.status).toBe(503);
   });
 
+  it("refuses to finish a batch it never opened, instead of launching a browser", async () => {
+    const helper = await startHelper();
+    const res = await fetch(`${helper.url}/getty-web/finish`, {
+      method: "POST", headers: { "content-type": "text/plain" }, body: configHeader(gettyConfig()),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json() as { ok: boolean; code: string; reason: string };
+    expect(body.ok).toBe(false);
+    expect(body.reason).toContain("upload at least one icon first");
+    expect(helper.log.join("\n")).not.toContain("GettyPass!42");
+  });
+
   it("closes pooled sessions without touching credentials", async () => {
     const helper = await startHelper();
     const res = await fetch(`${helper.url}/getty-web/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionKey: "run-1" }) });

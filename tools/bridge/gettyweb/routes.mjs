@@ -1,6 +1,7 @@
 // routes.mjs — loopback HTTP routes for the Getty Images / iStock *web* upload:
 //   POST /getty-web/upload  (x-getty-web-config header + staged file bytes)
 //   POST /getty-web/test    (sign in only, no batch, no files)
+//   POST /getty-web/finish  (submit the one batch every icon was uploaded into)
 //   POST /getty-web/close   (end the pooled browser session)
 // Privacy (RULE 20): the log never sees credentials, file names or page text;
 // every returned reason is scrubbed. The browser is launched by this helper on
@@ -223,6 +224,43 @@ export async function handleGettyWebTest(req, res, post, json) {
     }
     touch(acquired.key, acquired.entry);
     return json(res, 200, { ok: true, signedIn: true });
+  } catch (err) {
+    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
+  }
+}
+
+/**
+ * `POST /getty-web/finish`: submits the run's single batch after the last icon.
+ * Only an already-open session is used — a finish without uploads has nothing to
+ * submit, and creating a browser here would only hide that.
+ */
+export async function handleGettyWebFinish(req, res, post, json) {
+  const body = await post(req, 65536);
+  const cfg = parseConfig(body);
+  const invalid = validConfig(cfg);
+  if (invalid !== null) return json(res, 400, { ok: false, code: "bad-request", reason: invalid });
+  const url = contributeUrlOf(cfg);
+  const key = poolKeyOf(cfg, url);
+  const entry = sessions.get(key);
+  if (!entry?.session) {
+    return json(res, 409, {
+      ok: false, code: "bad-request",
+      reason: "no Getty batch is open for this run — upload at least one icon first",
+    });
+  }
+  try {
+    const result = await entry.session.finish({});
+    touch(key, entry);
+    if (!result?.ok) {
+      const code = result?.code ?? "page";
+      return json(res, statusFor(code), { ok: false, code, reason: scrub(result?.reason, cfg), state: result?.state ?? null });
+    }
+    const report = result.report ?? {};
+    return json(res, 200, {
+      ok: true, batchId: entry.session.batchId ?? null, accepted: [], completed: report.completion?.clicked === true,
+      completion: report.completion ?? null, metadata: [], contributions: report.contributions ?? null,
+      submitted: report.state?.submitted === true,
+    });
   } catch (err) {
     return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
   }

@@ -24,6 +24,13 @@ export function attachFiles(connection: any, sessionId: string, options: {
   signal?: AbortSignal;
 }): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any }>;
 export function todayIso(now?: Date): string;
+export function contributionCount(names: string[]): number;
+export function listedContributions(expected: string[], state: any): number;
+export function finishBatch(connection: any, sessionId: string, options?: {
+  expected?: string[];
+  onProgress?: (note: string) => void;
+  signal?: AbortSignal;
+}): Promise<any>;
 export function finalizeBatch(connection: any, sessionId: string, options: {
   files: Array<{
     name: string;

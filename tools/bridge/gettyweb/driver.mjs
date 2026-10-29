@@ -477,6 +477,25 @@ export function closeMetadataEditor() {
   return { closed: true, label: textOf(closer) };
 }
 
+/**
+ * Closes anything Getty left on screen that would block the next icon: an error
+ * snackbar from a failed field-restrictions load, a stale dialog. Never touches a
+ * dialog that has no dismiss control (the run must not guess).
+ */
+export function dismissPageDialogs() {
+  const scopes = [...document.querySelectorAll('[role=dialog], [role=alertdialog], [role=alert], [data-cy$="-error"]')]
+    .filter(visible);
+  const closed = [];
+  for (const scope of scopes) {
+    const control = [...scope.querySelectorAll("button, [role=button]")].filter(visible)
+      .find((el) => /^(dismiss|cancel|close|ok|got it|no thanks)$/i.test(textOf(el)));
+    if (!control) continue;
+    click(control);
+    closed.push(textOf(control));
+  }
+  return { dismissed: closed.length, labels: closed };
+}
+
 /** Clicks the batch's Complete / Submit control. */
 export function completeBatch() {
   const buttons = [...document.querySelectorAll("button, a, [role=button]")].filter(visible);
@@ -535,5 +554,5 @@ export const DRIVER_STEPS = [
   "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
   "fillMetadataFields", "openFileMetadata", "saveMetadataEditor", "closeMetadataEditor",
-  "completeBatch", "confirmCompletion", "readCompletionState",
+  "dismissPageDialogs", "completeBatch", "confirmCompletion", "readCompletionState",
 ];

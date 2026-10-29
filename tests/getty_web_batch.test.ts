@@ -1,7 +1,7 @@
 // Real serialized driver steps and CDP expressions against the supplied MUI
 // dialog shape. No queued success replies that could hide selector errors.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { attachFiles, createBatch } from "../tools/bridge/gettyweb/contribute.mjs";
+import { attachFiles, createBatch, finishBatch } from "../tools/bridge/gettyweb/contribute.mjs";
 
 const TYPE = "iStock creative illustration";
 const DIALOG = `<div role="dialog" aria-labelledby="create-batch-dialog" aria-modal="true">
@@ -278,5 +278,54 @@ describe("Getty web upload verification", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("completing one batch for several icons", () => {
+  const card = (name: string) => `
+    <div data-cy="grid-row"><div data-cy="item-card">
+      <div data-cy="image-card"></div>
+      <p data-cy="contribution-file-name">${name}</p>
+    </div></div>`;
+  const submit = `<button data-cy="open-upload-dialog-button">Upload</button>
+    <button type="button">SUBMIT</button><p>0 Not submitted</p>`;
+  const EXPECTED = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps", "icon-map-pin_5_02.jpg", "icon-map-pin_5_02.eps"];
+
+  it("refuses to submit a batch that is still missing a contribution", async () => {
+    document.body.innerHTML = submit + card("icon-map-pin_5_01.eps");
+    let clicks = 0;
+    document.querySelectorAll("button")[1].addEventListener("click", () => { clicks += 1; });
+    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED });
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    expect(result.reason).toContain("1 of 2 contribution(s)");
+    expect(clicks).toBe(0);
+  });
+
+  it("submits once when every contribution is listed, and reports the result", async () => {
+    document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + card("icon-map-pin_5_02.eps");
+    document.querySelectorAll("button")[1].addEventListener("click", () => {
+      document.body.insertAdjacentHTML("beforeend", "<p>Batch submitted for review</p>");
+    });
+    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED });
+    expect(result.ok).toBe(true);
+    expect(result.report.completion).toMatchObject({ clicked: true, label: "SUBMIT" });
+    expect(result.report.state.submitted).toBe(true);
+  });
+
+  it("dismisses a leftover dialog before attaching the next icon's files", async () => {
+    document.body.innerHTML = `${UPLOADER}
+      <div role="dialog"><p>An error has occurred. Please refresh the page.</p>
+        <button>Dismiss</button></div>`;
+    let dismissed = 0;
+    document.querySelector('[role="dialog"] button')!.addEventListener("click", () => { dismissed += 1; });
+    const page = new DomConnection();
+    const result = await attachFiles(page, "page", {
+      paths: ["/staged/icon-map-pin_5_02.jpg"], names: ["icon-map-pin_5_02.jpg"],
+      timeoutMs: 2000, readyTimeoutMs: 1000,
+    });
+    // The snackbar was dismissed before attaching, so the upload still went out.
+    expect(dismissed).toBe(1);
+    expect(page.attachmentCalls).toBe(1);
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
   });
 });

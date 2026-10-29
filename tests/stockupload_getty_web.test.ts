@@ -69,6 +69,7 @@ describe("Getty web upload in the batch runner", () => {
 
     const sent: GettyWebUploadInput[] = [];
     const closed: string[] = [];
+    const finished: string[] = [];
     const summary = await executeStockUploadBatch(plan, {
       root,
       bridgeUrl: "http://127.0.0.1:47391",
@@ -80,9 +81,16 @@ describe("Getty web upload in the batch runner", () => {
           ok: true,
           batchId: "68445204",
           accepted: input.files.map((f) => f.name),
-          completed: true,
-          completion: { clicked: true, label: "Complete", confirmed: true, confirmLabel: "Confirm" },
+          completed: false,
+          completion: null,
           metadata: [],
+        };
+      },
+      finishGettyWebFn: async (input) => {
+        finished.push(input.sessionKey);
+        return {
+          ok: true, batchId: "68445204", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
         };
       },
       closeGettyWebFn: async (_url, sessionKey) => { closed.push(sessionKey); },
@@ -95,11 +103,16 @@ describe("Getty web upload in the batch runner", () => {
     expect(sent.every((input) => input.submissionType === GETTY_WEB_SUBMISSION_TYPE)).toBe(true);
     expect(sent.every((input) => /^IconSplitter \d{4}-\d{2}-\d{2} \(2 icons\)$/.test(input.batchName))).toBe(true);
     expect(new Set(sent.map((input) => input.sessionKey)).size).toBe(1);
+    // One batch for all icons: nobody submits per icon, the run finishes once.
+    expect(sent.every((input) => input.complete === false)).toBe(true);
+    expect(finished).toEqual([sent[0].sessionKey]);
+    expect(finished).toHaveLength(1);
+    expect(summary.lastError).toBeNull();
     expect(closed).toEqual([sent[0].sessionKey]);
     expect(sent[0].creds.password).toBe("GettyPass!42");
   });
 
-  it("reports an un-submitted batch when the helper uploaded but did not complete", async () => {
+  it("reports an un-submitted batch when the finish call completes nothing", async () => {
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: false });
     const found = await discoverExportedItems(root);
@@ -112,11 +125,54 @@ describe("Getty web upload in the batch runner", () => {
         ok: true, batchId: "68445204", accepted: ["star_01.jpg"],
         completed: false, completion: null, metadata: [],
       }),
+      finishGettyWebFn: async () => ({
+        ok: true, batchId: "68445204", accepted: [], completed: false, completion: null, metadata: [],
+      }),
       closeGettyWebFn: async () => undefined,
     });
     expect(summary.failedFiles).toBe(0);
     expect(summary.uploadedFiles).toBe(1);
     expect(summary.lastError).toContain("not completed");
+  });
+
+  it("keeps the helper's own reason when the batch cannot be submitted", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: false });
+    const found = await discoverExportedItems(root);
+    const summary = await executeStockUploadBatch(planFor(found.items, { raster: true, svg: false, eps: false, zip: false }), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "1", accepted: ["star_01.jpg"], completed: false, completion: null, metadata: [],
+      }),
+      finishGettyWebFn: async () => ({
+        ok: false, code: "timeout",
+        reason: "Getty lists 1 of 2 contribution(s) — not completing the batch",
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary.uploadedFiles).toBe(1);
+    expect(summary.lastError).toContain("1 of 2 contribution(s)");
+  });
+
+  it("does not submit an empty batch when every icon failed", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: false });
+    const found = await discoverExportedItems(root);
+    let finishes = 0;
+    const summary = await executeStockUploadBatch(planFor(found.items, { raster: true, svg: false, eps: false, zip: false }), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({ ok: false, code: "page", reason: "no uploader" }),
+      finishGettyWebFn: async () => { finishes += 1; return { ok: true, batchId: null, accepted: [], completed: true, completion: null, metadata: [] }; },
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary.failedFiles).toBe(1);
+    expect(finishes).toBe(0);
   });
 
   it("fails a PNG-only plan before any browser upload is attempted", async () => {

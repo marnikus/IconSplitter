@@ -287,6 +287,9 @@ export function todayIso(now = new Date()) {
 
 /** Hands the staged files to the page's uploader and waits until they appear. */
 export async function attachFiles(connection, sessionId, options) {
+  // Getty may still show the error snackbar or a dialog from the previous icon;
+  // that blocks its uploader, which is how a 2-icon run stalled after the first.
+  await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
     sessionId, timeoutMs: 60000, intervalMs: 1000,
   });
@@ -330,6 +333,61 @@ async function fillEveryFileMetadata(connection, sessionId, options) {
     report.push(await fillOneFileMetadata(connection, sessionId, file, options));
   }
   return { aborted: false, report };
+}
+
+/** One contribution per distinct file stem — Getty lists a JPEG/EPS pair once. */
+export function contributionCount(names) {
+  const stems = new Set();
+  for (const name of names) {
+    const stem = stemOf(name);
+    if (stem !== "") stems.add(stem);
+  }
+  return stems.size;
+}
+
+/** How many of the run's contributions the batch page lists right now. */
+export function listedContributions(expected, state) {
+  const seen = new Set((state?.namesSeen ?? []).map(stemOf));
+  return [...new Set(expected.map(stemOf))].filter((stem) => seen.has(stem)).length;
+}
+
+/**
+ * Ends the run: submits the one batch every icon was uploaded into. Refuses when a
+ * contribution of the run is not on the page yet, because submitting early locks
+ * the batch and leaves the remaining icons out — the bug that dropped icon 2.
+ */
+export async function finishBatch(connection, sessionId, options = {}) {
+  if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
+  const expected = (Array.isArray(options.expected) ? options.expected : [])
+    .filter((name) => typeof name === "string" && name !== "");
+  const total = contributionCount(expected);
+  const state = await runDriverStep(connection, sessionId, "readUploadState", { names: expected });
+  const listed = listedContributions(expected, state);
+  if (total > 0 && listed < total) {
+    return {
+      ok: false, code: "timeout",
+      reason: `Getty lists ${listed} of ${total} contribution(s) — not completing the batch`, state,
+    };
+  }
+  await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  const clicked = await runDriverStep(connection, sessionId, "completeBatch");
+  if (!clicked?.clicked) {
+    return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", state };
+  }
+  await sleep(CONFIRM_SETTLE_MS);
+  const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion").catch(() => null);
+  await sleep(CONFIRM_SETTLE_MS);
+  const after = await runDriverStep(connection, sessionId, "readCompletionState");
+  options.onProgress?.(after.submitted ? "Getty shows the batch as submitted" : `batch completion sent (${clicked.label})`);
+  return {
+    ok: true,
+    report: {
+      metadata: [],
+      completion: { clicked: true, label: clicked.label, confirmed: confirmed?.confirmed === true, confirmLabel: confirmed?.label ?? null },
+      state: { submitted: after.submitted, canComplete: after.canComplete },
+      contributions: { expected: total, listed },
+    },
+  };
 }
 
 /**

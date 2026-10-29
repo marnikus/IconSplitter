@@ -349,6 +349,21 @@ describe("Getty contributor page steps", () => {
     expect(closed).toHaveBeenCalledTimes(1);
   });
 
+  it("dismisses a leftover snackbar or dialog without touching an undismissable one", () => {
+    mount(`
+      <div data-cy="field-restrictions-loaded-error">
+        <p>An error has occurred. Please refresh the page.</p>
+        <button data-cy="field-restrictions-loaded-error-dismiss-button">Dismiss</button>
+      </div>
+      <div role="dialog"><p>Uploading…</p></div>`);
+    let dismissed = 0;
+    document.querySelector("[data-cy$='-error'] button")!.addEventListener("click", () => { dismissed += 1; });
+    expect(driver.dismissPageDialogs()).toEqual({ dismissed: 1, labels: ["Dismiss"] });
+    expect(dismissed).toBe(1);
+    // A dialog with no dismiss control is left alone rather than guessed at.
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
   it("completes the batch and confirms its dialog", () => {
     mount('<main><button>Add files</button></main>');
     expect(driver.completeBatch()).toEqual({ clicked: false, label: null });

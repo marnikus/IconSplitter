@@ -22,7 +22,9 @@ import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
 import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
 import { openCdp } from "./gettyweb/cdp.mjs";
-import { gettyWebHealth, handleGettyWebClose, handleGettyWebTest, handleGettyWebUpload } from "./gettyweb/routes.mjs";
+import {
+  gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebTest, handleGettyWebUpload,
+} from "./gettyweb/routes.mjs";
 import { cdpFailureReason } from "./gettyweb/session.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
@@ -204,6 +206,7 @@ async function route(req, res, port) {
     return handleGettyWebUpload(req, res, readBinaryBody, json, config.ftpMaxBytes);
   }
   if (req.method === "POST" && url === "/getty-web/test") return handleGettyWebTest(req, res, readBody, json);
+  if (req.method === "POST" && url === "/getty-web/finish") return handleGettyWebFinish(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/close") return handleGettyWebClose(req, res, readBody, json);
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
