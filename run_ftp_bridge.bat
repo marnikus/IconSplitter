@@ -47,6 +47,7 @@ echo Keep this window open while uploading to Shutterstock (FTPS :21), Adobe Sto
 echo or Getty Images (web upload).
 echo Getty web sign-in: run  run_ftp_bridge.bat --getty-headed  once to watch the browser,
 echo   run  run_ftp_bridge.bat --getty-check  to test the Getty browser on its own,
+echo   run  run_ftp_bridge.bat --getty-reset --getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"  to free a stuck profile.
 echo   add  --getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"  to keep that sign-in.
 echo.
 node tools\bridge\server.mjs %*

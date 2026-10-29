@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  decideProfileUse, launchBrowser, profileLocks, resolveProfileDir,
+  decideProfileUse, launchBrowser, profileLocks, profileProcessIds, resetProfile, resolveProfileDir,
 } from "../tools/bridge/gettyweb/browser.mjs";
 import { cdpFailureReason } from "../tools/bridge/gettyweb/session.mjs";
 
@@ -52,6 +52,81 @@ describe("Getty web browser profile decisions", () => {
       writeFileSync(path.join(dir, "SingletonLock"), "host-1234");
       writeFileSync(path.join(dir, "lockfile"), "");
       expect(profileLocks(dir).sort()).toEqual(["SingletonLock", "lockfile"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Getty web profile reset", () => {
+  it("finds only the browsers that were started with this profile folder", () => {
+    const json = JSON.stringify([
+      { ProcessId: 4242, CommandLine: 'chrome.exe --headless=new --user-data-dir=/tmp/getty-profile --remote-debugging-port=0' },
+      { ProcessId: 4343, CommandLine: 'chrome.exe --user-data-dir=/tmp/getty-profile-old' },
+      { ProcessId: 4444, CommandLine: 'chrome.exe --user-data-dir="C:\\Users\\me\\AppData\\Local\\IconSplitter\\getty-profile"' },
+      { ProcessId: 4545, CommandLine: "msedge.exe --profile-directory=Default" },
+    ]);
+    expect(profileProcessIds(json, "/tmp/getty-profile")).toEqual([4242]);
+    expect(profileProcessIds(json, "C:\\Users\\me\\AppData\\Local\\IconSplitter\\getty-profile")).toEqual([4444]);
+  });
+
+  it("reads a ps listing too, and never a browser without the folder", () => {
+    const ps = [
+      "  4242 /usr/bin/google-chrome --headless=new --user-data-dir=/tmp/getty-profile",
+      "  4343 /usr/bin/google-chrome --user-data-dir=/tmp/other-profile",
+      "  4444 /usr/bin/msedge",
+    ].join("\n");
+    expect(profileProcessIds(ps, "/tmp/getty-profile")).toEqual([4242]);
+    expect(profileProcessIds("", "/tmp/getty-profile")).toEqual([]);
+    expect(profileProcessIds("garbage {{{", "/tmp/getty-profile")).toEqual([]);
+  });
+
+  it("kills that browser and clears the stale locks so the next launch is free", async () => {
+    const dir = tempProfile();
+    writeFileSync(path.join(dir, "SingletonLock"), "host-4242");
+    writeActivePort(dir, 61111);
+    const killed: number[][] = [];
+    try {
+      const result = await resetProfile(dir, {
+        listProcesses: async () => JSON.stringify([
+          { ProcessId: 4242, CommandLine: `chrome.exe --user-data-dir=${dir}` },
+        ]),
+        killPids: (pids: number[]) => { killed.push(pids); },
+      });
+      expect(result.reset).toBe(true);
+      expect(result.killed).toEqual([4242]);
+      expect(killed).toEqual([[4242]]);
+      expect(profileLocks(dir)).toEqual([]);
+      expect(profileProcessIds(`${dir}`, dir)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("clears stale locks left by a crashed browser even when no process matches", async () => {
+    const dir = tempProfile();
+    writeFileSync(path.join(dir, "SingletonLock"), "host-999");
+    writeFileSync(path.join(dir, "lockfile"), "");
+    try {
+      const result = await resetProfile(dir, { listProcesses: async () => "", killPids: () => {} });
+      expect(result).toEqual({ reset: true, killed: [], reason: null });
+      expect(profileLocks(dir)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says so when the process list cannot be read at all", async () => {
+    const dir = tempProfile();
+    writeFileSync(path.join(dir, "SingletonLock"), "host-999");
+    try {
+      const result = await resetProfile(dir, {
+        listProcesses: async () => { throw new Error("tasklist refused"); },
+        killPids: () => {},
+      });
+      expect(result.reset).toBe(false);
+      expect(result.reason).toContain("tasklist refused");
+      expect(result.reason).not.toContain(dir);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -107,22 +182,54 @@ describe("Getty web browser launch", () => {
     }
   });
 
-  it("says which folder is busy when a locked profile has no DevTools port", async () => {
+  it("kills the stuck browser on its own profile and relaunches, without any manual close", async () => {
+    const dir = tempProfile();
+    writeFileSync(path.join(dir, "SingletonLock"), "host-4242");
+    const killed: number[][] = [];
+    let spawned = 0;
+    try {
+      const launched = await launchBrowser({
+        profileDir: dir,
+        env: FAKE_BROWSER_ENV,
+        spawnFn: () => {
+          spawned += 1;
+          writeActivePort(dir, 65555);
+          return fakeChild();
+        },
+        probeSocket: async (port: number) => (port === 65555 ? "ws://127.0.0.1:65555/devtools/browser/fresh" : null),
+        listProcesses: async () => JSON.stringify([{ ProcessId: 4242, CommandLine: `chrome --user-data-dir=${dir}` }]),
+        killPids: (pids: number[]) => { killed.push(pids); },
+        timeoutMs: 2000,
+      });
+      expect(launched.ok).toBe(true);
+      expect(killed).toEqual([[4242]]);
+      expect(spawned).toBe(1);
+      if (launched.ok) expect(launched.port).toBe(65555);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("can be told not to touch a browser, and then names the folder", async () => {
     const dir = tempProfile();
     writeFileSync(path.join(dir, "SingletonLock"), "host-999");
+    let touched = false;
     try {
       const launched = await launchBrowser({
         profileDir: dir,
         env: FAKE_BROWSER_ENV,
         spawnFn: () => fakeChild(),
         probeSocket: async () => null,
+        resetProfile: false,
+        listProcesses: async () => { touched = true; return ""; },
+        killPids: () => { touched = true; },
         timeoutMs: 300,
       });
       expect(launched.ok).toBe(false);
+      expect(touched).toBe(false);
       if (!launched.ok) {
         expect(launched.code).toBe("browser");
         expect(launched.reason).toContain(dir);
-        expect(launched.reason).toContain("close");
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });

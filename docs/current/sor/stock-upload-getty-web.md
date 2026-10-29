@@ -16,7 +16,7 @@ a real Chrome/Edge here.
    password in the vault and presses **Test connection** or **Upload**; Getty
    takes either identifier in one field.
 2. `panelops.ts` probes `/health` (`gettyWeb.ready`, `gettyWeb.browser`); a
-   missing browser or older helper fails with a fix hint.
+   missing browser or older helper fails with a hint.
 3. `runupload.ts` groups tasks **per icon** (JPEG + optional EPS), as for ESP,
    and passes one `sessionKey` per target.
 4. `uploadBridgeGettyWeb` posts the bytes to `/getty-web/upload`; the helper
@@ -25,14 +25,14 @@ a real Chrome/Edge here.
 5. Getty's uploader does the transfer; the helper waits until the batch page
    lists the names (or times out) and returns the batch id.
 6. **Metadata:** per listed file it opens the row's editor, types the accepted
-   title, description and keywords, and saves — never overwriting values Getty
+   title, description and keywords, and saves — never overwriting what Getty
    prefilled from the file's XMP/IPTC.
 7. **Complete:** it clicks the batch's Complete/Submit control and accepts the
    confirmation dialog, so the run ends submitted.
 8. `/getty-web/close` shuts the browser and deletes the staged files; an idle
    session closes after five minutes.
 
-One session = one sign-in = one batch; nothing is reused across runs, except the
+One session = one sign-in = one batch; nothing is reused across runs except the
 optional profile folder in §3.
 
 **Sign-in is typed, not assigned.** Each poll focuses the identifier (then the
@@ -40,11 +40,10 @@ password) and inserts the saved text with real input events (`Input.insertText`)
 also writing through `angular.element(el)`: the ESP page is `ng-app="SignInApp"`
 and AngularJS ignores a plain `.value =`, which is how a filled form submits
 empty. It then presses submit or Enter / `form.requestSubmit()`, takes a "sign in
-with password" option on an SSO screen, and returns to `/contribute` when sign-in
-lands elsewhere. A stalled run names the step (challenge, unsent form, identifier
-step, rejected password) and summarizes the screen — `page "Sign in - ESP"; 2
-input(s): text#username, password#password; buttons: Sign in; angular-js` — never
-a value.
+with password" option on an SSO screen, and returns to `/contribute` afterwards. A
+stalled run names the step (challenge, unsent form, identifier step, rejected
+password) and summarizes the screen — `page "Sign in - ESP"; 2 input(s):
+text#username, password#password; buttons: Sign in; angular-js` — never a value.
 
 ## 3. Background, headed, attach, profile and self-check
 
@@ -54,19 +53,23 @@ a value.
   a run or clear an interactive verification.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) reuses one profile between
   runs, so a first sign-in's cookies survive and Getty stops treating each run as
-  a new device. It holds Getty cookies here; the helper never deletes it.
+  a new device. It holds Getty cookies; the helper never deletes it.
 - `--getty-check` launches once, verifies the DevTools socket and exits with
   `browser:` / `launch:` / `devtools:` / `socket:` lines.
+- `--getty-reset --getty-profile <folder>` ends the browser holding that folder
+  (only that one), clears its stale locks and exits.
 - `--getty-cdp http://127.0.0.1:9222` (= `GETTY_WEB_CDP`) attaches to a browser
   started with `--remote-debugging-port=9222` (loopback only).
 - `GETTY_WEB_BROWSER` overrides the executable, `GETTY_WEB_UPLOAD_TIMEOUT_MS` the
-  180 s per-icon wait.
+  180 s wait.
 
-**One profile, one browser.** A browser already answering on the folder's port is
-attached to; a locked folder without a port stops the run naming it. A stale
-`DevToolsActivePort` is deleted before launching and every port is verified over
-HTTP first, so a dead port is never mistaken for a live browser. Closing a session
-kills the whole browser tree (Windows too).
+**One profile, one browser — freed by the helper.** A browser answering on the
+folder's port is attached to. A locked folder without a port means a leftover
+window owns it, so the helper ends the browsers whose command line carries that
+exact `--user-data-dir`, clears the stale locks and launches again — no manual
+"close every window" step, no other browser touched. Only if that reset fails does
+the run stop, naming the folder. A stale `DevToolsActivePort` is deleted first and
+every port is verified over HTTP. Closing a session kills the browser tree.
 
 ## 4. What is sent
 
@@ -75,8 +78,8 @@ kills the whole browser tree (Windows too).
 - Title, description and keywords travel inside the exported JPEG/EPS
   (IPTC/XMP/RDF) *and* as a separate `metadata` field, so the helper can type them
   where an editor exists (an empty editor gets the value, a prefilled one is left
-  alone). Only `accepted` icons are sent (`gettyWebMetadataOf`), trimmed and capped
-  (title 200, description 2000, keywords 49 × 64, deduped). The in-memory **Title +
+  alone). Only `accepted` icons are sent (`gettyWebMetadataOf`), capped (title 200,
+  description 2000, keywords 49 × 64, deduped). The in-memory **Title +
   description** copy still applies to the uploaded copy.
 - Batch name `IconSplitter <UTC date> (<n> icons)`; submission type
   `iStock creative illustration` (`gettyweb.ts`/`runupload.ts`). Completion is
@@ -103,38 +106,35 @@ Codes map to HTTP: `bad-request` 400 (config, host, file rules), `auth` 401
 (rejected sign-in or signed out mid-run), `browser` 503 (no executable, launch
 failure, busy profile, refused socket, unreachable `GETTY_WEB_CDP`), `timeout`
 504 (no batch page / names missing), `cancelled` 499, `page` 502 (selector not
-found). A refused socket reads `the browser opened (DevTools port N) but its
-debugging socket did not answer — close any Chrome/Edge window still using the
-profile folder and retry, or set GETTY_WEB_CDP`. Reasons are scrubbed of the
-saved identifier and password.
+found). A refused socket names its DevTools port and says to retry, since the
+helper frees its own profile folder first. Reasons are scrubbed of the identifier
+and password.
 
 ## 6. Honest limits
 
 - Built against captured Batches/Create Batch markup plus a local helper, **not**
-  a live Getty account: selector drift is a `page` failure with the step named,
-  never a silent half-upload. The batch-detail upload input is matched generically
-  (`input[type="file"]`).
-- Per-file status scrapes the pipeline chips; a `namesSeen` hit means Getty
-  listed the file, not that it was accepted.
-- An interrupted run can leave a batch short of icons; a duplicate batch is the
-  only recovery.
+  a live Getty account: selector drift is a `page` failure with the step named.
+  The batch-detail upload input matches generically (`input[type="file"]`).
+- Per-file status scrapes the pipeline chips: a `namesSeen` hit means Getty listed
+  the file, not that it accepted it.
+- An interrupted run can leave a batch short of icons; a duplicate is the only
+  recovery.
 - Getty runs Arkose/funCaptcha on its sign-in and a human check **cannot** be
   automated: solve it once in the headed window with `--getty-profile`, then later
   runs reuse that cookie. The fraud script sits on every sign-in page, so it is
-  context only (`inspectSignIn().arkose`); a failure becomes "interactive check"
-  on captcha wording or a 2-factor request alone. Real typing and the Angular
-  bridge are proven against fake CDP and a DOM, not the live page — the failure
-  summary pins down a mismatch.
-- The helper types the saved string and guesses nothing; a saved e-mail on an
-  ID-only account fails on the identifier step.
+  context only (`inspectSignIn().arkose`). Real typing and the Angular bridge are
+  proven against fake CDP and a DOM, not the live page — the failure summary pins
+  down a mismatch.
+- The helper types the saved string and guesses nothing: an e-mail on an ID-only
+  account fails on the identifier step.
 - Metadata editors and the Complete control use **label keywords**
   (`title|headline`, `description|caption`, `keyword|tags`; `Save|Apply|Done`;
   `Complete|Submit|Finish`) plus row proximity — guesses **not** seen live. A
   missing editor is reported per file (`row-not-found`, `filled-unsaved`,
   `embedded-only`); a missing Complete control fails with `page` + the step.
 - `completed: true` means the control was clicked and confirmed, not that Getty
-  passed the files. An upload without completion says `files uploaded but the
-  batch was not completed — submit it on the Getty contributor page`.
+  passed the files. An incomplete run says `files uploaded but the batch was not
+  completed — submit it on the Getty contributor page`.
 
 ## 7. Invariants and tests
 
@@ -142,11 +142,10 @@ saved identifier and password.
   go only to the loopback helper, and are never logged or echoed.
 - Only `https://<…>.gettyimages.com` contributor paths are contacted; `..`,
   query strings and non-GETTY hosts are refused (`contributeUrlOf`).
-- Files are staged under a temp folder with sanitized leaf names, deleted on
-  close.
+- Files are staged in a temp folder with sanitized names, deleted on close.
 - Tests (`tests/`): `getty_web_driver` (page steps in a DOM), `getty_web_signin`
-  (typing order, SSO choice, reasons), `getty_web_browser` (profile locks,
-  attach/launch/busy, stale port, socket reasons), `getty_web_upload` (rules +
-  client), `getty_web_cdp` (framing), `bridge_getty_web` (spawned routes,
-  `--getty-headed`, `--getty-check`), `getty_web_finalize` (metadata +
-  complete), `stockupload_getty_web` (grouping, cancel, no creds).
+  (typing order, SSO choice, reasons), `getty_web_browser` (locks, launch,
+  automatic reset, stale port, socket reasons), `getty_web_upload` (rules +
+  client), `getty_web_cdp` (framing), `bridge_getty_web` (routes,
+  `--getty-headed`, `--getty-check`, `--getty-reset`), `getty_web_finalize`
+  (metadata + complete), `stockupload_getty_web` (grouping, cancel, no creds).

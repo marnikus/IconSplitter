@@ -11,6 +11,7 @@
 //   Getty web: [--getty-headed] [--getty-cdp <loopback devtools url>]
 //              [--getty-profile <dir>]  (reuse a profile so Getty remembers it)
 //              [--getty-check]  (launch, verify the DevTools socket, exit)
+//              [--getty-reset]  (end a stuck Getty browser, clear its profile)
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
 
 import { createServer, request as httpRequest } from "node:http";
@@ -19,7 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
-import { connectBrowser, findBrowser, resolveProfileDir } from "./gettyweb/browser.mjs";
+import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
 import { openCdp } from "./gettyweb/cdp.mjs";
 import { gettyWebHealth, handleGettyWebClose, handleGettyWebTest, handleGettyWebUpload } from "./gettyweb/routes.mjs";
 import { cdpFailureReason } from "./gettyweb/session.mjs";
@@ -246,6 +247,28 @@ function startListening() {
 }
 
 /**
+ * `--getty-reset`: end the browser that still holds the Getty profile folder
+ * (only that one) and clear its stale locks, without touching any other window.
+ */
+async function runGettyReset() {
+  const profileDir = resolveProfileDir(process.env.GETTY_WEB_PROFILE);
+  if (profileDir === null) {
+    console.log("reset: no profile folder to reset — pass --getty-profile <folder> (env GETTY_WEB_PROFILE) or use --getty-check");
+    return 1;
+  }
+  const result = await resetProfile(profileDir);
+  if (result.reset !== true) {
+    console.log(`reset: FAILED — ${result.reason ?? "the browser could not be ended"}`);
+    return 1;
+  }
+  const ended = result.killed.length === 0
+    ? "no browser was using the folder; its stale locks were cleared"
+    : `ended ${result.killed.length} browser process(es) using the folder`;
+  console.log(`reset: OK — ${ended}`);
+  return 0;
+}
+
+/**
  * `--getty-check`: prove the Getty web browser can be launched and driven on
  * this machine, print exactly which step fails, and exit — no app needed.
  */
@@ -278,6 +301,12 @@ async function runGettyCheck() {
   }
 }
 
+if (args["getty-reset"] === true) {
+  runGettyReset()
+    .then((code) => process.exit(code))
+    .catch((error) => { console.log(`reset: FAILED — ${error?.message ?? "unknown error"}`); process.exit(1); });
+}
+
 if (args["getty-check"] === true) {
   runGettyCheck()
     .then((code) => process.exit(code))
@@ -298,4 +327,4 @@ server.on("error", (error) => {
   process.exit(1);
 });
 
-if (args["getty-check"] !== true) startListening();
+if (args["getty-check"] !== true && args["getty-reset"] !== true) startListening();

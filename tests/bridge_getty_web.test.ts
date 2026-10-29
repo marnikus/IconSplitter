@@ -5,7 +5,7 @@
 // account or browser is involved.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -47,8 +47,11 @@ async function startHelper(extraArgs: string[] = []): Promise<Helper> {
 }
 
 /** Runs the helper's own one-command browser self-check and returns its log. */
-async function runGettyCheck(env: Record<string, string | undefined> = {}): Promise<{ code: number | null; log: string }> {
-  const child = spawn(process.execPath, [SERVER, "--getty-check"], {
+async function runGettyCheck(
+  env: Record<string, string | undefined> = {},
+  flags: string[] = ["--getty-check"],
+): Promise<{ code: number | null; log: string }> {
+  const child = spawn(process.execPath, [SERVER, ...flags], {
     env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", GETTY_WEB_BROWSER: NO_BROWSER, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -89,6 +92,28 @@ describe("Getty web browser self-check", () => {
     expect(check.log).toContain("NOT FOUND");
     expect(check.log).toContain("GETTY_WEB_BROWSER");
     expect(check.log).not.toContain("listening on");
+  });
+
+  it("resets a stuck Getty profile folder by itself, with no window to close", async () => {
+    const profile = mkdtempSync(path.join(tmpdir(), "getty-web-reset-test-"));
+    writeFileSync(path.join(profile, "SingletonLock"), "host-4242");
+    writeFileSync(path.join(profile, "DevToolsActivePort"), "61111\n/devtools/browser/dead\n");
+    try {
+      const check = await runGettyCheck({ GETTY_WEB_PROFILE: profile }, ["--getty-reset"]);
+      expect(check.code).toBe(0);
+      expect(check.log).toContain("reset:");
+      expect(existsSync(path.join(profile, "SingletonLock"))).toBe(false);
+      expect(existsSync(path.join(profile, "DevToolsActivePort"))).toBe(false);
+      expect(check.log).not.toContain("listening on");
+    } finally {
+      rmSync(profile, { recursive: true, force: true });
+    }
+  });
+
+  it("asks for a profile folder before resetting anything", async () => {
+    const check = await runGettyCheck({ GETTY_WEB_PROFILE: "" }, ["--getty-reset"]);
+    expect(check.code).toBe(1);
+    expect(check.log).toContain("--getty-profile");
   });
 
   it("reports a browser that never opens a usable DevTools port instead of hanging", async () => {

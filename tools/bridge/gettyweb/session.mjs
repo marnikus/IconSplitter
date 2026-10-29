@@ -49,7 +49,7 @@ export function cdpFailureReason(err, browser) {
   const at = port > 0 ? ` (DevTools port ${port})` : "";
   const detail = String(err?.message ?? "").trim();
   const hint = /refused|failed|ECONNREFUSED|closed/i.test(detail)
-    ? `close any Chrome/Edge window still using ${where} and retry`
+    ? `retry the upload (the helper frees its own ${where} first)`
     : detail.slice(0, 200) || "the browser page could not be prepared";
   return `the browser opened${at} but its debugging socket did not answer — ${hint}, or set GETTY_WEB_CDP`;
 }

@@ -3777,3 +3777,24 @@ installed here):
 - `docs/current/sor/stock-upload-getty-web.md` stayed inside the 9,000-byte
   agent read budget (8,941) after adding the profile/self-check section, and the
   captured Getty handles moved to `selectors/stock-upload.md`.
+
+## 2026-10-29 — Getty web: the helper frees its own stuck browser
+
+Follow-up: the previous fix told the user to close every Chrome/Edge window. That
+was the wrong ask — the helper now recovers by itself. Measured on this checkout
+(Node 22.22.3, 2 cores, no Chrome installed):
+
+- Focused: `tests/getty_web_browser.test.ts` 16 passed (adds
+  `profileProcessIds` over PowerShell JSON + `ps`, exact `--user-data-dir`
+  matching that ignores `…-old`, killing only those PIDs, stale-lock clearing with
+  no matching process, an unreadable process list, and a launch that resets then
+  relaunches) and `tests/bridge_getty_web.test.ts` 16 passed (adds `--getty-reset`
+  on a temp profile and its "no folder" refusal).
+- `npm run verify:fast` → Types PASS 16.4 s, Lint PASS (0 errors / 21 warnings)
+  13.7 s, Quality gate (changed) PASS 0.8 s, Tests + coverage PASS 118.2 s,
+  Build PASS 8.5 s.
+- `docs/current/sor/stock-upload-getty-web.md` trimmed to 8,978 bytes (budget
+  9,000) after documenting the automatic reset and `--getty-reset`.
+- Reset safety is covered by tests rather than by a live browser: only a process
+  whose command line names the helper's own profile folder is ended, and a folder
+  comparison is path-exact so `getty-profile-old` never matches `getty-profile`.
