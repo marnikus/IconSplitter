@@ -17,11 +17,15 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   is the form's `[type=submit]` or a control labelled
   `Sign in|Log in|Continue|Next|Submit`, else Enter / `form.requestSubmit()`;
   disabled fields stay candidates, because the page hydrates late.
-- Getty web cards: `[data-cy="contribution-file-name"]` names the contribution,
-  `[data-cy="not-ready-icon"]` (or `aria-label="not_ready_to_submit"`) marks it as
-  still processing, and the card's own picture (`[data-cy="image-thumbnail"]`, any
-  loaded/remote `img`) is the proof it uploaded. A card reading `Upload failed` is
-  a rejection, and its `ID: …` text (e.g. `FSPID51446`) is reported with it. Files are matched to a card by **stem**, since a JPEG/EPS pair
+- Getty web cards (captured after a real upload): `[data-cy="contribution-file-name"]`
+  names the contribution; the card's picture (`[data-cy="image-thumbnail"]`, any
+  loaded/remote `img`) is the proof it uploaded; `[data-cy="invalid-file-media"]`
+  ("Upload failed") is a rejection, reported with its `ID: …` text. Every card
+  carries `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests,
+  so that icon never decides an upload.
+- Getty web Complete: the control is matched by label among *enabled* buttons only;
+  `completionState` reports presence/enabled so the finish waits for Getty instead
+  of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair
   is listed once, under the EPS name. The metadata drawer uses
   `md-headline`/`md-caption`/`md-created_date`/`metadata-keyword-multiselect` and
   `save-metadata`, and only enables its fields once a card is selected.

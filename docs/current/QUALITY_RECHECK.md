@@ -3947,3 +3947,19 @@ gate (changed) PASS (0.7 s), Tests + coverage PASS (115.0 s), Build PASS (7.6 s)
 Focused suites: getty_web_driver 31, getty_web_batch 17, getty_web_upload 16,
 bridge_getty_web 20, stockupload_getty_web 10, Getty runs + UI 122 total. Docs:
 SOR 8,987 B / 9,000 B, selectors 6,439 B.
+
+## 2026-10-30 — Read the real batch page: invalid-file-media and a disabled Complete
+
+The captured batch page settled the contract: a rejected card renders
+`[data-cy="invalid-file-media"]` ("Upload failed"), a good one renders
+`[data-cy="image-thumbnail"]` with a CloudFront `src`, and **every** card carries
+`[data-cy="not-ready-icon"]` while Getty ingests — so that icon decides nothing.
+Detection now uses both the node and the text, the thumbnail alone marks an upload,
+and the finish waits (bounded, 120 s) for the Complete control to be *enabled*
+before clicking it (`completionState`), reporting `Getty has not enabled its SUBMIT
+control …` instead of clicking into nothing.
+Measured: Types PASS (4.2 s), Lint PASS (1.9 s, 0 errors / 21 warnings), Quality
+gate (changed) PASS (0.7 s), Tests + coverage PASS (99.3 s), Build PASS (6.7 s).
+Focused suites: getty_web_driver 32, getty_web_batch 19, getty_web_upload 16,
+bridge_getty_web 20, stockupload_getty_web 10, getty_web_finalize 7. Docs: SOR
+8,945 B / 9,000 B, selectors 6,687 B.

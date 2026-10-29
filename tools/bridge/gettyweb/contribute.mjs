@@ -376,6 +376,29 @@ export function failedContributions(expected, state) {
 }
 
 /**
+ * Getty enables Complete only once it has the files; a click on a disabled
+ * control does nothing, so the wait is honest and bounded instead of silent.
+ */
+async function waitForCompletionEnabled(connection, sessionId, options) {
+  const timeoutMs = options.completeTimeoutMs ?? 120000;
+  const deadline = Date.now() + timeoutMs;
+  let last = await runDriverStep(connection, sessionId, "completionState");
+  while (!last.enabled && Date.now() < deadline) {
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
+    options.onProgress?.("waiting for Getty to enable Complete");
+    await sleep(UPLOAD_POLL_MS);
+    last = await runDriverStep(connection, sessionId, "completionState");
+  }
+  if (last.enabled) return { ok: true };
+  return {
+    ok: false, code: "timeout",
+    reason: last.present
+      ? `Getty has not enabled its ${last.label ?? "Complete"} control after ${Math.round(timeoutMs / 1000)} s — the files may still be processing, so finish the batch on the contributor page`
+      : "Getty does not show a Complete/Submit control on this batch — finish it on the contributor page",
+  };
+}
+
+/**
  * Ends the run: submits the one batch every icon was uploaded into. Refuses when a
  * contribution of the run is not on the page yet, because submitting early locks
  * the batch and leaves the remaining icons out — the bug that dropped icon 2.
@@ -401,6 +424,8 @@ export async function finishBatch(connection, sessionId, options = {}) {
     };
   }
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  const ready = await waitForCompletionEnabled(connection, sessionId, options);
+  if (!ready.ok) return { ...ready, state };
   const clicked = await runDriverStep(connection, sessionId, "completeBatch");
   if (!clicked?.clicked) {
     return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", state };

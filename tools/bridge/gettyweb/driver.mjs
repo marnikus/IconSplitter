@@ -127,6 +127,9 @@ const CARD_PROCESSING = '[data-cy="not-ready-icon"], [aria-label="not_ready_to_s
 // successful contribution renders its thumbnail. That picture, not the arrival of
 // the row, is the proof that Getty accepted the file.
 const CARD_FAILED = /upload failed|failed to upload|upload error/i;
+// The captured page marks a rejected contribution with this node, whose text is
+// "Upload failed"; the text alone is also matched, for a layout that drops it.
+const CARD_FAILED_NODE = '[data-cy="invalid-file-media"], [data-cy*="invalid-file"], [data-cy*="upload-failed"]';
 const CARD_THUMBNAIL = '[data-cy="image-thumbnail"], [data-cy="image-card"] img, img';
 
 /** The contribution id Getty prints under a name (`ID: FSPID51446`). */
@@ -151,7 +154,7 @@ function uploadCards() {
     return {
       name, stem: fileStem(name), id: cardIdOf(scope),
       processing: Boolean(scope.querySelector(CARD_PROCESSING)),
-      failed: CARD_FAILED.test(textOf(scope)),
+      failed: Boolean(scope.querySelector(CARD_FAILED_NODE)) || CARD_FAILED.test(textOf(scope)),
       thumbnail: cardHasThumbnail(scope),
       el, scope,
     };
@@ -541,9 +544,30 @@ export function dismissPageDialogs() {
 }
 
 /** Clicks the batch's Complete / Submit control. */
+const COMPLETE_LABEL = /^(complete|complete batch|submit|submit batch|submit for review|send for review|finish)$/i;
+
+/**
+ * A control the page will actually take a click on: Getty disables Complete
+ * while files are still being ingested, so a disabled match is not a click.
+ */
+function usable(el) {
+  return visible(el) && el.getAttribute("aria-disabled") !== "true";
+}
+
+/** Whether the batch's Complete/Submit control can be clicked right now. */
+export function completionState() {
+  // `visible` already refuses a disabled element, so presence uses `shown`.
+  const buttons = [...document.querySelectorAll("button, a, [role=button]")].filter(shown);
+  const match = buttons.find((el) => COMPLETE_LABEL.test(textOf(el))) ?? null;
+  return match === null
+    ? { present: false, enabled: false, label: null }
+    : { present: true, enabled: usable(match), label: textOf(match) };
+}
+
+/** Clicks the batch's Complete / Submit control, only when it is enabled. */
 export function completeBatch() {
-  const buttons = [...document.querySelectorAll("button, a, [role=button]")].filter(visible);
-  const target = buttons.find((el) => /^(complete|complete batch|submit|submit batch|submit for review|send for review|finish)$/i.test(textOf(el)));
+  const buttons = [...document.querySelectorAll("button, a, [role=button]")].filter(usable);
+  const target = buttons.find((el) => COMPLETE_LABEL.test(textOf(el)));
   if (!target) return { clicked: false, label: null };
   click(target);
   return { clicked: true, label: textOf(target) };
@@ -593,7 +617,10 @@ export const PAGE_PRELUDE = [
   + `\nconst CARD_NAME = ${JSON.stringify(CARD_NAME)};`
   + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`
   + `\nconst CARD_FAILED = ${CARD_FAILED.toString()};`
-  + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`;
+  + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`
+  + `\nconst CARD_FAILED_NODE = ${JSON.stringify(CARD_FAILED_NODE)};`
+  + `\nconst COMPLETE_LABEL = ${COMPLETE_LABEL.toString()};`
+  + `\n${usable.toString()}`;
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [
@@ -601,5 +628,5 @@ export const DRIVER_STEPS = [
   "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
   "fillMetadataFields", "openFileMetadata", "saveMetadataEditor", "closeMetadataEditor",
-  "dismissPageDialogs", "completeBatch", "confirmCompletion", "readCompletionState",
+  "dismissPageDialogs", "completionState", "completeBatch", "confirmCompletion", "readCompletionState",
 ];

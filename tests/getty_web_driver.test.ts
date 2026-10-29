@@ -470,6 +470,53 @@ describe("Getty batch page as captured", () => {
     expect(bad.failures).toEqual([{ name: "icon-map-pin_5_01.eps", id: "FSPID51446" }]);
   });
 
+  it("reads the captured page: thumbnail = uploaded, invalid-file-media = failed", () => {
+    // Trimmed from the real batch page: every card carries the BlockIcon
+    // (not_ready_to_submit) while ingestion runs, so the icon proves nothing —
+    // the thumbnail or the "Upload failed" node is what decides.
+    const card = (name: string, id: string, body: string) => `
+      <div data-cy="grid-row"><div>
+        <div data-cy="item-card">
+          <div data-cy="image-card" style="margin: 10px; height: 111px;">${body}</div>
+          <div data-cy="item-info">
+            <svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>
+            <p data-cy="contribution-file-name">${name}</p>
+            <p data-cy="contribution-id-x">ID: ${id}</p>
+          </div>
+        </div>
+      </div></div>`;
+    const thumb = (stem: string) => `<img src="https://da5ld6t38lg51.cloudfront.net/submission/thumbnails/batch_68565984/1_${stem}.jpg" alt="icon" data-cy="image-thumbnail">`;
+    const failedCard = (name: string, id: string) => `
+      <div data-cy="grid-row"><div>
+        <div data-cy="item-card">
+          <div class="MuiGrid-root MuiGrid-container MuiGrid-direction-xs-column"><p data-cy="invalid-file-media">Upload failed</p></div>
+          <div data-cy="item-info">
+            <svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>
+            <p data-cy="contribution-file-name">${name}</p>
+            <p data-cy="contribution-id-y">ID: ${id}</p>
+          </div>
+        </div>
+      </div></div>`;
+    mount(card("icon-steps-to-goal_8_01_v2.eps", "2302602190", thumb("icon-steps-to-goal_8_01_v2"))
+      + failedCard("icon-steps-to-goal_9_03_v3.eps", "2302602220")
+      + card("icon-sync-arrows_10_01.eps", "2302602268", thumb("icon-sync-arrows_10_01")));
+    const names = [
+      "icon-steps-to-goal_8_01_v2.jpg", "icon-steps-to-goal_8_01_v2.eps",
+      "icon-steps-to-goal_9_03_v3.jpg", "icon-steps-to-goal_9_03_v3.eps",
+      "icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps",
+    ];
+    const state = driver.readUploadState({ names });
+    // Only the two cards with a picture are uploads.
+    expect(state.uploaded).toEqual([
+      "icon-steps-to-goal_8_01_v2.jpg", "icon-steps-to-goal_8_01_v2.eps",
+      "icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps",
+    ]);
+    expect(state.failed).toEqual(["icon-steps-to-goal_9_03_v3.jpg", "icon-steps-to-goal_9_03_v3.eps"]);
+    expect(state.failures).toEqual([{ name: "icon-steps-to-goal_9_03_v3.eps", id: "2302602220" }]);
+    // The BlockIcon is on every card, so it never decides an upload.
+    expect(state.processing).toBe(true);
+  });
+
   it("selects a card by stem so the metadata drawer wakes up", () => {
     mount(CARD_PAGE);
     // The drawer enables its fields for the selected contribution only.

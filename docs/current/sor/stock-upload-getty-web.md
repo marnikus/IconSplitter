@@ -24,18 +24,18 @@ a real browser.
    to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
    snackbars are dismissed first — one blocks Getty's uploader.
 5. Getty's uploader transfers. The helper waits until every file is listed, then
-   until each card proves its own outcome: **a thumbnail means uploaded**, the
-   text "Upload failed" means not — a listed row alone proves nothing. The app
-   marks an icon uploaded only when the response lists its stem, and names a
-   rejected file with Getty's id. `GET /getty-web/progress` feeds the panel the
+   until each card proves its own outcome: **a thumbnail means uploaded**,
+   `invalid-file-media` ("Upload failed") means not — a listed row proves nothing.
+   The app marks an icon uploaded only when the response lists its stem, and names
+   a rejected file with Getty's id. `GET /getty-web/progress` feeds the panel the
    live per-file counts while the one request is in flight.
 6. **Metadata:** per contribution it selects the card by stem, types the accepted
    title, description, keywords and **today's date** into Date Created, and saves —
    never overwriting Getty's IPTC/XMP prefill.
 7. **Complete once:** after the last icon the run posts `/getty-web/finish`. It
-   refuses while a contribution is missing **or says "Upload failed"**, so a
-   partial batch is never locked; otherwise it clicks Complete/Submit and accepts
-   the confirmation.
+   refuses while a contribution is missing **or says "Upload failed"**, then waits
+   (bounded) for Getty to enable Complete — every card carries
+   `not_ready_to_submit` while ingesting — clicks it and accepts the confirmation.
 8. `/getty-web/close` shuts the browser and deletes the staged files; an idle
    session closes after five minutes. A visible window is only let go.
 
@@ -49,18 +49,17 @@ summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
 
 ## 3. Background, headed, attach, profile and self-check
 
-- Default: `chrome --headless=new` with a throwaway profile, so a run never
-  steals focus.
-- `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window — needed to watch
-  a run or clear an interactive verification. A visible window is never killed: a
-  failed run leaves the page up, with the reason saying so.
+- Default: `chrome --headless=new` with a throwaway profile (never steals focus).
+- `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window for watching a run
+  or clearing a verification. A visible window is never killed: a failed run
+  leaves the page up and says so.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) reuses one profile between
-  runs, so a first sign-in's cookies survive. It holds Getty cookies; the helper
-  never deletes it.
+  runs, so a first sign-in's cookies survive. It holds Getty cookies and is never
+  deleted by the helper.
 - `--getty-check` launches once, verifies the DevTools socket, prints
-  `browser:`/`launch:`/`devtools:`/`socket:` and exits.
-- `--getty-reset --getty-profile <folder>` ends the browser holding that folder,
-  clears its stale locks, exits.
+  `browser:`, `launch:`, `devtools:`, `socket:` and exits.
+- `--getty-reset --getty-profile <folder>` ends the browser holding that folder
+  and clears its stale locks.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
 - `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
@@ -121,7 +120,7 @@ of identifier and password.
   selector drift is a `page` failure naming the step. Only the hidden contribution
   uploader is targeted — release inputs are never used.
 - A thumbnail means Getty took the file, not that it accepted it for review.
-- An interrupted run can leave a batch short; a duplicate is the only recovery.
+- An interrupted run can leave a batch short; a duplicate is the recovery.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed with
   `--getty-profile`, then runs reuse the cookie. Typing and the Angular bridge are
   proven against a fake CDP and a DOM, not the live page.
@@ -129,8 +128,7 @@ of identifier and password.
 - Metadata editors and Complete use **label keywords** and row proximity — guesses
   **not** seen live; a missing editor is reported per file.
 - `completed: true` means the control was clicked and confirmed, not that Getty
-  passed the files. An incomplete run says `files uploaded but the batch was not
-  completed — submit it on the Getty contributor page`.
+  passed the files; an incomplete run says so and leaves the batch to finish.
 
 ## 7. Invariants and tests
 

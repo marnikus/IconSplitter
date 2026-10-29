@@ -22,6 +22,7 @@ export const openFileMetadata: (arg: { fileName: string }) => any;
 export const saveMetadataEditor: () => any;
 export const closeMetadataEditor: () => any;
 export const dismissPageDialogs: () => any;
+export const completionState: () => { present: boolean; enabled: boolean; label: string | null };
 export const completeBatch: () => any;
 export const confirmCompletion: () => any;
 export const readCompletionState: () => any;

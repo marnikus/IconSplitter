@@ -355,6 +355,68 @@ describe("completing one batch for several icons", () => {
     expect(result.report.state.submitted).toBe(true);
   });
 
+  it("settles a captured batch page that mixes thumbnails with Upload failed", async () => {
+    mountBatchPage();
+    const withThumbnail = (name: string) => `
+      <div data-cy="grid-row"><div data-cy="item-card">
+        <div data-cy="image-card"><img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg"></div>
+        <p data-cy="contribution-file-name">${name}</p><p>ID: 2302602190</p>
+      </div></div>`;
+    const rejected = (name: string) => `
+      <div data-cy="grid-row"><div data-cy="item-card">
+        <div><p data-cy="invalid-file-media">Upload failed</p></div>
+        <p data-cy="contribution-file-name">${name}</p><p>ID: 2302602220</p>
+      </div></div>`;
+    document.body.insertAdjacentHTML("beforeend",
+      withThumbnail("icon-steps-to-goal_8_01_v2.eps") + rejected("icon-sync-arrows_10_01.eps"));
+    const names = [
+      "icon-steps-to-goal_8_01_v2.jpg", "icon-steps-to-goal_8_01_v2.eps",
+      "icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps",
+    ];
+    const result = await attachFiles(new DomConnection(), "page", {
+      paths: names.map((name) => `/staged/${name}`), names, timeoutMs: 2000, readyTimeoutMs: 500,
+    });
+    expect(result.ok).toBe(true);
+    // Two names prove an upload, two are a rejection Getty itself named.
+    expect(result.state.uploaded).toEqual(["icon-steps-to-goal_8_01_v2.jpg", "icon-steps-to-goal_8_01_v2.eps"]);
+    expect(result.state.failed).toEqual(["icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps"]);
+    expect(result.state.failures).toEqual([{ name: "icon-sync-arrows_10_01.eps", id: "2302602220" }]);
+  });
+
+  it("waits for Getty to enable Complete instead of clicking a disabled control", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + card("icon-map-pin_5_02.eps");
+      const button = document.querySelectorAll("button")[1] as HTMLButtonElement;
+      button.disabled = true;
+      let clicks = 0;
+      button.addEventListener("click", () => { clicks += 1; });
+      setTimeout(() => { button.disabled = false; }, 3000);
+      const pending = finishBatch(new DomConnection(), "page", { expected: EXPECTED, completeTimeoutMs: 10000 });
+      await vi.advanceTimersByTimeAsync(4000);
+      // Enablement plus the click's settle pauses.
+      await vi.advanceTimersByTimeAsync(4000);
+      const result = await pending;
+      expect(result.ok).toBe(true);
+      expect(result.report.completion).toMatchObject({ clicked: true, label: "SUBMIT" });
+      expect(clicks).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says the batch is still processing when Complete never enables", async () => {
+    document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + card("icon-map-pin_5_02.eps");
+    const button = document.querySelectorAll("button")[1] as HTMLButtonElement;
+    button.disabled = true;
+    let clicks = 0;
+    button.addEventListener("click", () => { clicks += 1; });
+    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED, completeTimeoutMs: 1 });
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    expect(result.reason).toContain("has not enabled its SUBMIT control");
+    expect(clicks).toBe(0);
+  });
+
   it("refuses to submit while a card says Upload failed", async () => {
     document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + `
       <div data-cy="grid-row"><div data-cy="item-card">
