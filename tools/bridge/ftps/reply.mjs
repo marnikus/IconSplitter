@@ -1,10 +1,14 @@
 // reply.mjs — RFC 959 FTP control-channel reply parser & input validation.
 
 export class FtpsError extends Error {
-  constructor(code, message, serverCertSha256 = null) {
+  // `detail` (optional): sanitized diagnostics `{ stage, httpStatus }` so the
+  // UI/console can show WHERE a multi-step protocol (Getty ESP) failed and the
+  // exact server status — never credentials, tokens or filenames.
+  constructor(code, message, serverCertSha256 = null, detail = null) {
     super(message);
     this.code = code;
     this.serverCertSha256 = serverCertSha256;
+    this.detail = detail;
   }
 }
 

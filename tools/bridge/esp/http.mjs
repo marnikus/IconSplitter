@@ -85,7 +85,9 @@ export function espHttpsRequest(opts) {
       (res) => {
         const chunks = [];
         res.on("data", (c) => chunks.push(c));
-        res.on("end", () => { clearTimeout(timer); resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks) }); });
+        // Headers are part of the protocol: S3 chunk PUTs answer with an
+        // `etag` header and auth failures may carry `www-authenticate`.
+        res.on("end", () => { clearTimeout(timer); resolve({ status: res.statusCode ?? 0, headers: res.headers ?? {}, body: Buffer.concat(chunks) }); });
       },
     );
     const timer = setTimeout(() => {

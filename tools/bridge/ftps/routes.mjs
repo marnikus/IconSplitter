@@ -1,9 +1,11 @@
 // routes.mjs — loopback HTTP routes for `/ftps/test`, `/ftps/upload` and `/ftps/close`.
-// Privacy (RULE 20): never logs credentials, hostnames, usernames or filenames;
-// scrubs credentials from any returned error reason; aborts immediately on browser disconnect (RULE 7).
+// Privacy (RULE 20): credentials/usernames are scrubbed from every returned
+// error reason AND from the helper-console failure line (stage + HTTP status
+// + error codes only, so users can read the full server diagnosis locally);
+// aborts immediately on browser disconnect (RULE 7).
 
 import crypto from "node:crypto";
-import { openEspSession } from "../esp/client.mjs";
+import { assertEspCredentials, openEspSession } from "../esp/client.mjs";
 import { openSftpSession } from "../sftp/client.mjs";
 import { openFtpsSession } from "./client.mjs";
 import { FtpsError, describeSocketError } from "./reply.mjs";
@@ -88,6 +90,23 @@ function validateConfig(cfg) {
   if (typeof cfg.username !== "string" || cfg.username.trim() === "" || typeof cfg.password !== "string" || cfg.password === "") {
     throw new FtpsError("bad-request", "missing FTPS credentials");
   }
+  // Getty ESP password-grant login additionally requires the ESP API key/secret;
+  // refuse here with the exact missing fields instead of sending a doomed token request.
+  if (cfg.protocol === "esp-https") assertEspCredentials(cfg);
+}
+
+/**
+ * The one failure exit for test/upload: full staged diagnostics to the helper
+ * console (the user's own machine) and the same scrubbed detail as JSON for the UI.
+ */
+function replyFailure(res, jsonReply, err, cfg, fallback) {
+  const code = err instanceof FtpsError ? err.code : "network";
+  const cert = err instanceof FtpsError ? err.serverCertSha256 : null;
+  const stage = err instanceof FtpsError ? (err.detail?.stage ?? null) : null;
+  const httpStatus = err instanceof FtpsError ? (err.detail?.httpStatus ?? null) : null;
+  const reason = scrubSecrets(describeSocketError(err, fallback), cfg);
+  console.error(`[bridge] ${cfg?.protocol ?? "ftps"} FAILED stage=${stage ?? "-"} http=${httpStatus ?? "-"} code=${code} — ${reason}`);
+  return jsonReply(res, statusForCode(code), { ok: false, code, reason, serverCertSha256: cert, stage, httpStatus });
 }
 
 export async function handleFtpsTest(req, res, jsonReply) {
@@ -104,11 +123,7 @@ export async function handleFtpsTest(req, res, jsonReply) {
     await session.quit();
     return jsonReply(res, 200, { ok: true, serverCertSha256: cert });
   } catch (err) {
-    const code = err instanceof FtpsError ? err.code : "network";
-    const cert = err instanceof FtpsError ? err.serverCertSha256 : null;
-    return jsonReply(res, statusForCode(code), {
-      ok: false, code, reason: scrubSecrets(describeSocketError(err, "Connection failed"), cfg), serverCertSha256: cert,
-    });
+    return replyFailure(res, jsonReply, err, cfg, "Connection failed");
   }
 }
 
@@ -122,8 +137,8 @@ export async function handleFtpsUpload(req, res, maxBytes, jsonReply) {
     cfg = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
     validateConfig(cfg);
   } catch (err) {
-    const code = err instanceof FtpsError ? err.code : "bad-request";
-    return jsonReply(res, 400, { ok: false, code, reason: scrubSecrets(err?.message, cfg) });
+    const wrapped = err instanceof FtpsError ? err : new FtpsError("bad-request", "invalid x-ftps-config header");
+    return replyFailure(res, jsonReply, wrapped, cfg, "Invalid upload configuration");
   }
 
   const body = await readBinaryBody(req, maxBytes);
@@ -140,18 +155,19 @@ export async function handleFtpsUpload(req, res, maxBytes, jsonReply) {
     acquired = await acquireSession(cfg);
     let killActive = () => acquired?.session.destroy();
     res.once("close", () => { if (!res.writableEnded) killActive(); });
-    await acquired.session.uploadFile(cfg.fileName, body, (fn) => { killActive = fn; });
+    const remote = await acquired.session.uploadFile(cfg.fileName, body, (fn) => { killActive = fn; }, { espPair: cfg.espPair });
     if (acquired.pooled && acquired.key) touchPoolEntry(acquired.key, acquired.session);
     else await acquired.session.quit();
-    return jsonReply(res, 200, { ok: true, bytes: body.length });
+    if (remote?.batchId) console.log(`[bridge] esp-https uploaded -> submission batch ${remote.batchId}, contribution ${remote.contributionId ?? "-"}`);
+    return jsonReply(res, 200, {
+      ok: true, bytes: body.length,
+      ...(remote?.batchId ? { espBatchId: String(remote.batchId) } : {}),
+      ...(remote?.contributionId ? { espContributionId: String(remote.contributionId) } : {}),
+    });
   } catch (err) {
     if (acquired?.key) sessions.delete(acquired.key);
     acquired?.session.destroy();
-    const code = err instanceof FtpsError ? err.code : "network";
-    const cert = err instanceof FtpsError ? err.serverCertSha256 : null;
-    return jsonReply(res, statusForCode(code), {
-      ok: false, code, reason: scrubSecrets(describeSocketError(err, "Upload failed"), cfg), serverCertSha256: cert,
-    });
+    return replyFailure(res, jsonReply, err, cfg, "Upload failed");
   }
 }
 

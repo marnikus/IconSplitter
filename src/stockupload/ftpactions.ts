@@ -9,8 +9,10 @@ import {
   resetBuiltinStockPreset, toggleTargetPreset,
 } from "../lib/stockupload/presets";
 import type { StockFtpPreset, StockPresetState, UploadFormatKey } from "../lib/stockupload/types";
+import { log } from "../log/logstore";
 import { clearFtpCredentials, readFtpCredentials, saveFtpCredentials } from "./keystore";
 import { setStockPresetState } from "./presetstore";
+import { connectionTestSpec } from "./stocklog";
 
 export interface FtpTestStatus {
   busy: boolean;
@@ -79,6 +81,10 @@ async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise
   const res = await testBridgeFtps(c.bridgeUrl, preset, creds);
   const note = (res.ok ? protocolSuccessLabel(preset) : res.reason).trim() || "Connection failed";
   c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: res.serverCertSha256 });
+  log(connectionTestSpec({
+    presetId: preset.id, ok: res.ok, note,
+    stage: res.ok ? null : res.stage, httpStatus: res.ok ? null : res.httpStatus, code: res.ok ? null : res.code,
+  }));
   c.say(note, !res.ok);
 }
 

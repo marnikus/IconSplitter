@@ -104,7 +104,7 @@ describe("stock upload planner, batch runner and crash journal", () => {
       uploadFn: async (inp) => {
         sent.push(inp.fileName);
         if (inp.fileName === "star_01.eps") {
-          return { ok: false, code: "ftp", reason: "disk quota", serverCertSha256: null };
+          return { ok: false, code: "ftp", reason: "disk quota", serverCertSha256: null, stage: null, httpStatus: null };
         }
         if (inp.fileName === "moon_02.jpg") controller.abort();
         return { ok: true, bytes: inp.bytes.byteLength };
@@ -191,7 +191,7 @@ describe("stock upload planner, batch runner and crash journal", () => {
       uploadFn: async (inp) => {
         // Fail moon_02 on Adobe Stock -> must NOT get Adobe Stock badge!
         if (inp.preset.id === "adobe-stock" && inp.fileName === "moon_02.svg") {
-          return { ok: false, code: "ftp", reason: "rejected", serverCertSha256: null };
+          return { ok: false, code: "ftp", reason: "rejected", serverCertSha256: null, stage: null, httpStatus: null };
         }
         return { ok: true, bytes: inp.bytes.byteLength };
       },

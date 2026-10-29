@@ -14,8 +14,10 @@ import { saveExportedMetadata } from "./metaembed";
 import type { StockModelAction, StockRefs, StockUploadModel } from "./model";
 import type { StockUploadPrefs } from "./prefsstore";
 import { ALL_STOCK_FILTER, initialMetaDraft, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
+import { log } from "../log/logstore";
 import { executeStockUploadBatch, type UploadBatchSummary } from "./runupload";
 import { rememberStockRoot } from "./scan";
+import { uploadRunSpec } from "./stocklog";
 
 export interface OpsCtx {
   model: StockUploadModel;
@@ -76,11 +78,14 @@ async function performAcceptMeta(c: OpsCtx, item: ExportedItem): Promise<void> {
 }
 
 function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { text: string; err: boolean } {
-  if (summary.cancelled) return { text: `Upload cancelled (${summary.uploadedFiles} file(s) sent)`, err: false };
+  const esp = summary.espBatchIds.length > 0
+    ? ` Getty ESP draft batch ${summary.espBatchIds.join(", ")} — review & submit for publication at esp.gettyimages.com.`
+    : "";
+  if (summary.cancelled) return { text: `Upload cancelled (${summary.uploadedFiles} file(s) sent).${esp}`, err: false };
   if (summary.failedFiles > 0) {
-    return { text: `Uploaded ${summary.uploadedFiles} file(s), ${summary.failedFiles} failed: ${summary.lastError ?? ""}`, err: true };
+    return { text: `Uploaded ${summary.uploadedFiles} file(s), ${summary.failedFiles} failed: ${summary.lastError ?? ""}${esp}`, err: true };
   }
-  return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s)`, err: false };
+  return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s).${esp}`, err: false };
 }
 
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
@@ -108,6 +113,7 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
   c.r.abort.current = null;
   c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
   const msg = summarizeBatch(summary, plan.targets.length);
+  log(uploadRunSpec(summary));
   c.say(msg.text, msg.err);
 }
 

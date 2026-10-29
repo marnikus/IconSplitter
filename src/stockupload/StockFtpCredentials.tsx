@@ -17,7 +17,7 @@ function credentialHelpCopy(active: StockFtpPreset): string {
     return "Adobe Stock: in Contributor Portal → Upload → Learn More, copy your SFTP Member ID and click Generate password (standalone SVG/EPS/JPG/PNG only; no ZIPs). Saved locally only — never expanded.";
   }
   if (active.template === "getty-images") {
-    return "Getty Images / iStock (contributors.gettyimages.com → esp.gettyimages.com): Creative vectors require paired <name>.eps + RGB <name>.jpg (min 1900×2800 px). Use Getty ESP HTTPS API (:443), switch to SFTP (:22) for Media Manager DAM, or click Download ESP CSV for browser/DeepMeta uploads. Saved locally only — never expanded.";
+    return "Getty Images / iStock ESP: direct upload needs your ESP login PLUS an ESP-enabled Getty API Key + Secret (client_id/secret, arranged via your Getty contact / the ESP API team — a plain developer search key has no ESP submission rights and Test will show the exact stage + HTTP + error code, also in the helper console and activity log). Creative vectors require paired <name>.eps + RGB <name>.jpg (min 1900×2800 px); files land as a draft batch in ESP — review & submit at esp.gettyimages.com. No ESP API access? Use Download ESP CSV with the ESP website or DeepMeta. Saved locally only — never expanded.";
   }
   return "Username and password are stored ONLY in this browser's local device vault — never expanded, exported, or logged.";
 }
@@ -42,7 +42,8 @@ export default function StockFtpCredentials({ active, saved, testStatus, actions
         {active.protocol === "esp-https" && (
           <EspApiInputs saved={saved} apiKey={apiKey} apiSecret={apiSecret} onKey={setApiKey} onSecret={setApiSecret} />
         )}
-        <CredentialButtons activeId={active.id} saved={saved} canSave={user.trim() !== "" && pass !== ""}
+        <CredentialButtons activeId={active.id} saved={saved}
+          canSave={user.trim() !== "" && pass !== "" && (active.protocol !== "esp-https" || (apiKey.trim() !== "" && apiSecret !== ""))}
           busy={testStatus.busy} onSave={onSave} actions={actions} />
       </div>
       <TestResultNote active={active} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
@@ -84,15 +85,15 @@ function EspApiInputs(p: {
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">Getty API Key</span>
+        <span className="svg-label">ESP API Key (required)</span>
         <input className="svg-input" type="password" autoComplete="new-password" data-testid="stock-ftp-apikey"
-          placeholder={p.saved ? "Replace API key…" : "Optional ESP client_id…"}
+          placeholder={p.saved ? "Replace API key…" : "ESP client_id (required)…"}
           value={p.apiKey} onChange={(e) => p.onKey(e.target.value)} />
       </label>
       <label className="svg-field">
-        <span className="svg-label">Getty API Secret</span>
+        <span className="svg-label">ESP API Secret (required)</span>
         <input className="svg-input" type="password" autoComplete="new-password" data-testid="stock-ftp-apisecret"
-          placeholder={p.saved ? "Replace API secret…" : "Optional ESP client_secret…"}
+          placeholder={p.saved ? "Replace API secret…" : "ESP client_secret (required)…"}
           value={p.apiSecret} onChange={(e) => p.onSecret(e.target.value)} />
       </label>
     </>

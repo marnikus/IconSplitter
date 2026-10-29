@@ -3,7 +3,7 @@
 
 import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import {
-  closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadInput, type BridgeUploadResult,
+  closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadInput, type BridgeUploadResult, type EspPairNames,
 } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
@@ -36,6 +36,8 @@ export interface UploadBatchSummary {
   failedFiles: number;
   cancelled: boolean;
   lastError: string | null;
+  /** Getty ESP submission batch ids created by this run (drafts — submit in ESP). */
+  espBatchIds: string[];
 }
 
 interface ItemTracker {
@@ -85,6 +87,24 @@ interface RunCounters {
   uploadedFiles: number;
   failedFiles: number;
   lastError: string | null;
+  espBatchIds: Set<string>;
+}
+
+/** Per-item ESP illustration pair (EPS vector slot + JPG raster slot) from the planned tasks. */
+function buildEspPairs(targetTasks: readonly PlannedTransfer[]): Map<string, EspPairNames> {
+  const pairs = new Map<string, EspPairNames>();
+  for (const t of targetTasks) {
+    if (t.format !== "eps" && t.format !== "raster") continue;
+    const pair = pairs.get(t.itemId) ?? {};
+    if (t.format === "eps") pair.epsFileName = t.fileName;
+    else pair.rasterFileName = t.fileName;
+    pairs.set(t.itemId, pair);
+  }
+  return pairs;
+}
+
+function espPairFor(pairs: ReadonlyMap<string, EspPairNames>, task: PlannedTransfer): EspPairNames | undefined {
+  return task.format === "eps" || task.format === "raster" ? pairs.get(task.itemId) : undefined;
 }
 
 function buildTrackers(plan: StockUploadPlan, targetTasks: readonly PlannedTransfer[]): Map<string, ItemTracker> {
@@ -105,9 +125,10 @@ async function runSingleTask(
     creds: FtpCredentials;
     sessionKey: string;
     itemsById: ReadonlyMap<string, ExportedItem>;
+    espPair?: EspPairNames;
     deps: UploadBatchDeps;
   },
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; espBatchId?: string } | { ok: false; reason: string }> {
   const item = ctx.itemsById.get(task.itemId);
   if (!item) return { ok: false, reason: "item no longer present" };
   const payload = await resolveTransferBytes(ctx.deps.root, item, task);
@@ -120,9 +141,10 @@ async function runSingleTask(
     fileName: task.fileName,
     bytes: payload.bytes,
     sessionKey: ctx.sessionKey,
+    ...(ctx.espPair ? { espPair: ctx.espPair } : {}),
     signal: ctx.deps.signal,
   });
-  if (res.ok) return { ok: true };
+  if (res.ok) return { ok: true, espBatchId: res.espBatchId };
   if (res.code === "cert" && res.serverCertSha256) ctx.deps.onCertWarning?.(ctx.target.id, res.serverCertSha256);
   return { ok: false, reason: res.reason };
 }
@@ -143,13 +165,14 @@ function recordMissingCreds(
 
 function recordTaskResult(
   task: PlannedTransfer,
-  res: { ok: true } | { ok: false; reason: string },
+  res: { ok: true; espBatchId?: string } | { ok: false; reason: string },
   state: { target: StockFtpPreset; trackers: Map<string, ItemTracker>; counters: RunCounters; deps: UploadBatchDeps },
 ): void {
   const tr = state.trackers.get(task.itemId)!;
   if (res.ok) {
     tr.succeeded.push(task.format);
     state.counters.uploadedFiles += 1;
+    if (res.espBatchId) state.counters.espBatchIds.add(res.espBatchId);
     const baseBadges = ensureHardcodedBadges(getRowBadgeState());
     setRowBadgeState(assignNamedBadge(baseBadges, task.itemId, state.target.name, state.target.id));
   } else {
@@ -181,13 +204,14 @@ async function runTargetGroup(
     return;
   }
   const itemsById = new Map(plan.selectedRows.map((r) => [r.id, r]));
+  const espPairs = target.protocol === "esp-https" ? buildEspPairs(targetTasks) : new Map<string, EspPairNames>();
   const sessionKey = `${target.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const closeFn = deps.closeSessionFn ?? closeBridgeFtpsSession;
   try {
     for (const task of targetTasks) {
       if (deps.signal.aborted) break;
       markUploadInFlight(task.itemId, target.id);
-      const res = await runSingleTask(task, { target, creds, sessionKey, itemsById, deps });
+      const res = await runSingleTask(task, { target, creds, sessionKey, itemsById, espPair: espPairFor(espPairs, task), deps });
       recordTaskResult(task, res, { target, trackers, counters, deps });
     }
   } finally {
@@ -201,7 +225,7 @@ export async function executeStockUploadBatch(
   deps: UploadBatchDeps,
 ): Promise<UploadBatchSummary> {
   const counters: RunCounters = {
-    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null,
+    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null, espBatchIds: new Set<string>(),
   };
   for (const target of plan.targets) {
     if (deps.signal.aborted) break;
@@ -212,5 +236,6 @@ export async function executeStockUploadBatch(
     failedFiles: counters.failedFiles,
     cancelled: deps.signal.aborted,
     lastError: counters.lastError,
+    espBatchIds: [...counters.espBatchIds],
   };
 }
