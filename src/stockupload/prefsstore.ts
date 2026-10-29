@@ -13,6 +13,7 @@ export interface StockUploadPrefs {
   bg: PreviewBackground;
   ftpOpen: boolean;
   bridgeUrl: string;
+  combineTitleDescription: boolean;
 }
 
 export const DEFAULT_STOCK_PREFS: StockUploadPrefs = {
@@ -20,6 +21,7 @@ export const DEFAULT_STOCK_PREFS: StockUploadPrefs = {
   bg: DEFAULT_PREVIEW_BACKGROUND,
   ftpOpen: true,
   bridgeUrl: DEFAULT_FTP_BRIDGE_URL,
+  combineTitleDescription: false,
 };
 
 export function loadStockPrefs(): StockUploadPrefs {
@@ -32,6 +34,7 @@ export function loadStockPrefs(): StockUploadPrefs {
       thumb: typeof raw.thumb === "number" ? clampZoom(raw.thumb) : DEFAULT_STOCK_PREFS.thumb,
       bg: parsePreviewBackground(raw.bg),
       ftpOpen: raw.ftpOpen !== false,
+      combineTitleDescription: raw.combineTitleDescription === true,
       bridgeUrl: typeof raw.bridgeUrl === "string" && raw.bridgeUrl.trim() !== ""
         ? raw.bridgeUrl.trim()
         : DEFAULT_FTP_BRIDGE_URL,

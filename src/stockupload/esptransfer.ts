@@ -3,11 +3,13 @@ import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import { uploadBridgeFtps, type BridgeUploadInput, type BridgeUploadResult } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, SkippedFormat } from "../lib/stockupload/plan";
-import type { StockFtpPreset } from "../lib/stockupload/types";
+import { prepareMetadataCopy } from "../lib/stockupload/sendmeta";
+import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 
 interface EspGroupInput {
   tasks: PlannedTransfer[]; missing: readonly SkippedFormat[]; root: DirHandleLike;
   bridgeUrl: string; target: StockFtpPreset; creds: FtpCredentials; sessionKey: string;
+  item?: ExportedItem; combine: boolean;
   signal: AbortSignal; uploadFn?: (input: BridgeUploadInput) => Promise<BridgeUploadResult>;
 }
 
@@ -50,5 +52,14 @@ export async function uploadEspGroup(input: EspGroupInput): Promise<BridgeUpload
   if (reason) return { ok: false, code: "bad-request", reason, serverCertSha256: null };
   const payload = await readEspFiles(input);
   if (!payload) return { ok: false, code: "bad-request", reason: "Getty illustration file could not be read.", serverCertSha256: null };
+  if (input.combine) {
+    if (!input.item) return { ok: false, code: "bad-request", reason: "Item no longer present", serverCertSha256: null };
+    try {
+      payload.bytes = await prepareMetadataCopy(input.item, payload.fileName, payload.bytes);
+      if (payload.pairedFile) payload.pairedFile.bytes = await prepareMetadataCopy(input.item, payload.pairedFile.fileName, payload.pairedFile.bytes);
+    } catch (err) {
+      return { ok: false, code: "bad-request", reason: (err as Error).message || "Could not prepare upload metadata", serverCertSha256: null };
+    }
+  }
   return (input.uploadFn ?? uploadBridgeFtps)(payload);
 }

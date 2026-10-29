@@ -30,9 +30,11 @@ export interface StockUploadPlanInput {
   presets: readonly StockFtpPreset[];
   checkedTargets: readonly string[];
   formats: StockFormatFlags;
+  combineTitleDescription?: boolean;
 }
 
 export interface StockUploadPlan {
+  combineTitleDescription: boolean;
   targets: StockFtpPreset[];
   selectedRows: ExportedItem[];
   selectedFormats: UploadFormatKey[];
@@ -191,5 +193,5 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
     ...collectAdobeStockWarnings(targets, selectedRows, tasks),
     ...collectGettyWarnings(targets, selectedRows, input.formats, tasks),
   ];
-  return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes };
+  return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes, combineTitleDescription: input.combineTitleDescription === true };
 }

@@ -54,6 +54,7 @@ function ActionCluster({ g }: { g: StockUploadApi }) {
       <UploadRowBadgeApply state={g.rowBadges} ids={g.checked} onApply={g.applyRowBadgeSelected} />
       <span className="svg-divider" aria-hidden="true" />
       <FormatCheckboxes g={g} />
+      <CombinedTitleOption g={g} />
       <span className="svg-divider" aria-hidden="true" />
       <TargetSiteCheckboxes g={g} />
       <UploadButtons g={g} />
@@ -99,6 +100,17 @@ function FormatCheckboxes({ g }: { g: StockUploadApi }) {
         </label>
       ))}
     </div>
+  );
+}
+
+function CombinedTitleOption({ g }: { g: StockUploadApi }) {
+  return (
+    <label className="svg-chip" title="Changes only upload copies, not your original files" style={{ cursor: "pointer" }}>
+      <input type="checkbox" data-testid="stock-combine-title-description"
+        checked={g.model.prefs.combineTitleDescription}
+        onChange={(e) => g.setPrefs({ combineTitleDescription: e.target.checked })} />
+      <span>Title + description</span>
+    </label>
   );
 }
 

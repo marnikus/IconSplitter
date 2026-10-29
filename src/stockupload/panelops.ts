@@ -125,6 +125,7 @@ function performStartUpload(c: OpsCtx): void {
   const plan = buildStockUploadPlan({
     items: c.items, checkedIds: c.checked, presets: c.presetState.presets,
     checkedTargets: c.presetState.checkedTargets, formats: c.presetState.formats,
+    combineTitleDescription: c.model.prefs.combineTitleDescription,
   });
   if (plan.preflightErrors.length > 0) { c.say(plan.preflightErrors[0], true); return; }
   c.dispatch({ type: "patch", patch: { dialog: { kind: "confirmUpload", plan } } });

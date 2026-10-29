@@ -3663,3 +3663,10 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - 2026-10-29: Getty ESP 403 fix (`authentication.gettyimages.com` OAuth2 PKCE + `/v3/countries` scope probe) & `_getty_esp_batches/` paired EPS+JPG+CSV batch stager — `quality.mjs` passed across 14 `src/` files + bridge & UI TDD suites.
 
 - 2026-10-29: Getty ESP multipart ingestion integration — targeted quality gate: 7/7 changed source files passed; tests cover paired upload and failure handling.
+
+## 2026-10-29 — upload-only combined title
+
+- TDD: new outgoing-copy and UI tests failed before implementation, then passed; focused stock-upload run passed. Originals and `export.json` checked unchanged; JPEG, SVG, EPS, PNG, ZIP and Getty-pair paths exercised with mocked transfers.
+- `npm run verify:fast`: PASS after correcting a test-only TypeScript typed-array annotation.
+- `npm run verify`: PASS — types, lint, changed-file quality gate, native performance budgets (30 tests), 3,162 tests across 308 files with coverage, and build. Overall coverage: statements 95.15%, branches 89.21%, functions 98.36%, lines 98.1%. Lint reports 21 existing warnings. Some unrelated test-environment network attempts to router.requesty.ai were blocked; no live stock transfer was performed.
+- Scope quality gate: `plan.ts` 198 lines/27 functions; `pngxmp.ts` 67/8; `sendmeta.ts` 86/8; `StockUploadBulkBar.tsx` 148/22; `StockUploadDialogs.tsx` 119/9; `esptransfer.ts` 66/10; `panelops.ts` 206/37; `prefsstore.ts` 50/2; `runupload.ts` 266/18 — all pass.

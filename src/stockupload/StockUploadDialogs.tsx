@@ -78,6 +78,7 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
       <p className="svg-note">
         Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
       </p>
+      {plan.combineTitleDescription && <p className="svg-warning">Title + description will be combined in upload copies only. Stock sites may limit title length; originals remain unchanged.</p>}
       {plan.skippedMissing.length > 0 && (
         <p className="svg-warning">
           ⚠ {plan.skippedMissing.length} requested format file(s) do not exist in `export/` and will be skipped.

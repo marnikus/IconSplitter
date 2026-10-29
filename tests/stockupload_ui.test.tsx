@@ -117,6 +117,20 @@ describe("Upload (stockUpload) tab UI", () => {
     vi.unstubAllGlobals();
   });
 
+  it("offers an opt-in combined title and discloses it before upload", async () => {
+    stored.set("__stock_upload__", { source: makeWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
+    const checkbox = q("stock-combine-title-description") as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    expect(checkbox.checked).toBe(false);
+    await clickEl(checkbox);
+    expect(checkbox.checked).toBe(true);
+    await clickEl(q("stock-check-item-star")!);
+    await clickEl(q("stock-upload-start")!);
+    expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Title + description");
+  });
+
   it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {
     const ws = makeWorkspace();
     stored.set("__stock_upload__", { source: ws });

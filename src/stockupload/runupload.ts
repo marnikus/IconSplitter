@@ -8,6 +8,7 @@ import {
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey } from "../lib/stockupload/types";
+import { prepareMetadataCopy } from "../lib/stockupload/sendmeta";
 import { buildRepresentationZip } from "../lib/stockupload/zippack";
 import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
@@ -48,18 +49,20 @@ interface ItemTracker {
 }
 
 async function resolveTransferBytes(
-  root: DirHandleLike,
-  item: ExportedItem,
-  task: PlannedTransfer,
+  root: DirHandleLike, item: ExportedItem, task: PlannedTransfer, combine: boolean,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
+  let bytes: Uint8Array | null;
   if (task.format === "zip" && task.relPath === null) {
     const packed = await buildRepresentationZip(root, item);
-    return packed.ok ? { ok: true, bytes: packed.bytes } : { ok: false, reason: packed.reason };
+    if (!packed.ok) return packed;
+    bytes = packed.bytes;
+  } else {
+    bytes = task.relPath ? await readBytesAt(root, task.relPath) : null;
   }
-  if (task.relPath === null) return { ok: false, reason: `${task.fileName} path missing` };
-  const bytes = await readBytesAt(root, task.relPath);
-  if (bytes === null || bytes.byteLength === 0) return { ok: false, reason: `${task.fileName} could not be read` };
-  return { ok: true, bytes };
+  if (!bytes?.byteLength) return { ok: false, reason: `${task.fileName} could not be read` };
+  if (!combine) return { ok: true, bytes };
+  try { return { ok: true, bytes: await prepareMetadataCopy(item, task.fileName, bytes) }; }
+  catch (err) { return { ok: false, reason: (err as Error).message || "Could not prepare upload metadata" }; }
 }
 
 function outcomeOf(tr: ItemTracker): StockUploadOutcome {
@@ -107,13 +110,14 @@ async function runSingleTask(
     target: StockFtpPreset;
     creds: FtpCredentials;
     sessionKey: string;
+    combine: boolean;
     itemsById: ReadonlyMap<string, ExportedItem>;
     deps: UploadBatchDeps;
   },
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const item = ctx.itemsById.get(task.itemId);
   if (!item) return { ok: false, reason: "item no longer present" };
-  const payload = await resolveTransferBytes(ctx.deps.root, item, task);
+  const payload = await resolveTransferBytes(ctx.deps.root, item, task, ctx.combine);
   if (!payload.ok) return payload;
   const upload = ctx.deps.uploadFn ?? uploadBridgeFtps;
   const res = await upload({
@@ -195,8 +199,9 @@ async function runNetworkGroups(ctx: {
     markUploadInFlight(tasks[0].itemId, target.id);
     const res = target.protocol === "esp-https"
       ? await uploadEspGroup({ tasks, missing: plan.skippedMissing, root: deps.root, bridgeUrl: deps.bridgeUrl,
-        target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn })
-      : await runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps });
+        target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn,
+        item: itemsById.get(tasks[0].itemId), combine: plan.combineTitleDescription })
+      : await runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps, combine: plan.combineTitleDescription });
     if (!res.ok) reportNetworkCertificate(res, target, deps);
     for (const task of tasks) recordTaskResult(task, res, { target, trackers, counters, deps });
   }

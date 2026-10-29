@@ -48,7 +48,9 @@ It has six modes (tabs across the top):
   It uses OAuth2 PKCE and keeps credentials local. Includes local-only
   non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
   uploads through the local loopback helper (`run_ftp_bridge.bat` /
-  `run_app_ftp.bat`).
+  `run_app_ftp.bat`). An optional **Title + description** checkbox combines
+  accepted title and description for outgoing file copies only; original files
+  and `export.json` remain unchanged. Stock sites may limit title length.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

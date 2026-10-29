@@ -19,6 +19,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-bulkbar-pin`, `stock-bulk`, `stock-check-all`, `stock-selected-count`, `stock-select-visible`, `stock-deselect` — pinned selection controls (`stockUploadChecked` undo).
 - `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom slider & preview background.
 - `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checkboxes.
+- `stock-combine-title-description` — opt-in locally persisted combination of accepted title and description in upload copies only.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
 - `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
 
