@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { chromium } from "playwright";
 import { inspectGettyBatch, snapshotGettyBatch } from "./files.mjs";
-import { createGettyBatch, getGettyBatchId, injectGettyFiles, openGettyBatchList } from "./portal.mjs";
+import { createGettyBatch, getGettyBatchId, injectGettyFiles, openGettyBatchList, openGettyUploadDialog } from "./portal.mjs";
 
 async function confirmed(terminal, message) {
   return (await terminal.question(`${message} Type YES to continue: `)).trim() === "YES";
@@ -44,11 +44,10 @@ async function main() {
     await createGettyBatch(page, batchName);
     const batchId = getGettyBatchId(page.url());
     if (!batchId) throw new Error("Getty did not show a verifiable new batch page.");
-    console.log("Batch opened. In the browser, open its file upload form (do not submit for inspection).");
-    console.log("File selection may immediately start an upload. Stay on this same batch page.");
-    if (!await confirmed(terminal, "The upload form is open and you want to select the listed files.")) return;
+    console.log("Batch opened. Opening Getty upload form and selecting the confirmed files.");
     phase = "file selection";
     try {
+      await openGettyUploadDialog(page, batchId);
       await injectGettyFiles(page, snapshot.files, batchId);
       console.log("Files were selected in the browser. Getty receipt has NOT been verified by this helper.");
     } catch {

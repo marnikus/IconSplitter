@@ -5,7 +5,7 @@ export function getGettyBatchId(address) {
   try {
     const url = new URL(address);
     if (url.origin !== "https://esp.gettyimages.com") return null;
-    return /^\/contribute\/batches\/(\d+)(?:\/|$)/.exec(url.pathname)?.[1] ?? null;
+    return /^\/contribute\/batches\/(\d+)\/?$/.exec(url.pathname)?.[1] ?? null;
   } catch { return null; }
 }
 
@@ -37,14 +37,33 @@ export async function createGettyBatch(page, batchName) {
   await page.waitForURL((url) => getGettyBatchId(url.href) !== null, { timeout: 30000 });
 }
 
-export async function injectGettyFiles(page, files, batchId) {
-  if (getGettyBatchId(page.url()) !== batchId || !batchId) throw new Error("Not on a verified Getty batch page; no files selected.");
-  const input = page.locator('input[type="file"][multiple]');
-  if (await input.count() !== 1) throw new Error("Expected exactly one multiple-file input; navigate to the Getty upload form and try manually.");
-  const accepted = (await input.getAttribute("accept") ?? "").toLowerCase().split(",").map((value) => value.trim());
-  if (!accepted.includes(".eps") || !accepted.some((value) => value === ".jpg" || value === ".jpeg" || value === "image/jpeg")) {
-    throw new Error("Cannot verify the Getty file input accepts EPS and JPEG; select the files manually.");
+function assertBatchPage(page, batchId) {
+  if (!batchId || getGettyBatchId(page.url()) !== batchId) {
+    throw new Error("Not on the expected Getty batch page; no files selected.");
   }
-  if (getGettyBatchId(page.url()) !== batchId || !batchId) throw new Error("Not on a verified Getty batch page; no files selected.");
+}
+
+export async function openGettyUploadDialog(page, batchId) {
+  assertBatchPage(page, batchId);
+  const dialog = page.locator("[data-cy=file-upload-dialog]:visible");
+  const button = page.locator("[data-cy=open-upload-dialog-button]:visible");
+  await dialog.or(button).first().waitFor({ state: "visible", timeout: 30000 });
+  assertBatchPage(page, batchId);
+  if (!await dialog.isVisible()) await button.click();
+  await dialog.waitFor({ state: "visible", timeout: 30000 });
+  assertBatchPage(page, batchId);
+}
+
+export async function injectGettyFiles(page, files, batchId) {
+  assertBatchPage(page, batchId);
+  const dialog = page.locator("[data-cy=file-upload-dialog]:visible");
+  if (!await dialog.isVisible()) throw new Error("Getty upload dialog is not open; no files selected.");
+  const input = page.locator("[data-cy=file-upload-dialog]:visible input[data-cy=upload-button-file-input][type=file][multiple]");
+  if (await input.count() !== 1) throw new Error("Expected one Getty device file input; select files manually.");
+  const accepted = (await input.getAttribute("accept") ?? "").toLowerCase().split(",").map((value) => value.trim());
+  if (!accepted.includes("image/jpeg") || !accepted.includes("application/postscript")) {
+    throw new Error("Getty file input does not advertise the expected JPEG and EPS types.");
+  }
+  assertBatchPage(page, batchId);
   await input.setInputFiles(files);
 }

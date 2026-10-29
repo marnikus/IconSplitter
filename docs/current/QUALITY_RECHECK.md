@@ -3665,3 +3665,9 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - 2026-10-29 — Getty web automation research/design only: `npm run verify -- --base f7cd889217fe8388f08939d8edadec2d3a41beba` passed all lanes after `npm run setup` restored platform dependencies; coverage lane 105.2 s, build lane 7.1 s. No live Getty calls or application code changes.
 
 - 2026-10-29 — Experimental assisted Getty web helper: focused fake-portal and UI tests passed; `npm run verify -- --base f7cd889217fe8388f08939d8edadec2d3a41beba` passed all lanes (coverage 94.4 s; build 5.8 s). Getty upload form and live receipt remain unverified; no live calls.
+
+### 2026-10-29 — Getty device-upload selector
+- Focused Getty bridge/UI tests: 2 files, 11 tests passed; typecheck passed.
+- `npm run verify -- --base c772943`: all lanes passed; coverage 116.8s, build 7.6s.
+- `npm run verify:fast -- --base c772943`: all lanes passed; coverage 99.2s, build 7.5s.
+- External Getty upload/receipt remains unverified; tests use fakes and no authenticated Getty upload was performed.

@@ -27,3 +27,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-name-<id>`, `stock-path-<id>`, `stock-formats-<id>`, `upload-rowbadge-chip-<id>-<badgeId>` — stem, `export/` path, available formats, and unified general row badges.
 - `stock-location-<id>`, `stock-meta-btn-<id>` — copy folder path & expand metadata actions.
 - `stock-meta-fields-<id>`, `stock-meta-title-<id>`, `stock-meta-description-<id>`, `stock-meta-tags-<id>`, `stock-meta-accept-<id>`, `stock-meta-state-<id>` — local metadata editor & in-place carrier re-embedder.
+
+## Getty web helper (external ESP UI, experimental)
+- Getty's `create-batch-button`, `create-batch-dialog`, `create-batch-submission-type`, `create-batch-submission-name`, `create-batch-confirm-button` — contributor-provided batch creation controls.
+- Getty's `open-upload-dialog-button`, `file-upload-dialog`, `upload-button-file-input` — observed upload form controls. The helper scopes the multiple-file input to the visible dialog and checks its MIME types; the separate `drag-n-drop-input` is not used. Getty can change these handles without notice.

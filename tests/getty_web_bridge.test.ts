@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Page } from "playwright";
 import { inspectGettyBatch, snapshotGettyBatch } from "../tools/getty-web/files.mjs";
-import { createGettyBatch, injectGettyFiles } from "../tools/getty-web/portal.mjs";
+import { createGettyBatch, getGettyBatchId, injectGettyFiles, openGettyUploadDialog } from "../tools/getty-web/portal.mjs";
 
 const dirs: string[] = [];
 async function folder() {
@@ -78,12 +78,35 @@ describe("Getty web local bridge", () => {
     await expect(snapshotGettyBatch(inspected)).rejects.toThrow(/changed/i);
   });
 
-  it("never selects files outside a verified Getty batch or when the input is ambiguous", async () => {
+  it("recognizes only a Getty numeric batch detail URL", () => {
+    expect(getGettyBatchId("https://esp.gettyimages.com/contribute/batches/123")).toBe("123");
+    expect(getGettyBatchId("https://esp.gettyimages.com/contribute/batches/123/")).toBe("123");
+    expect(getGettyBatchId("https://esp.gettyimages.com/contribute/batches/123/other")).toBeNull();
+    expect(getGettyBatchId("https://esp.gettyimages.com.evil.invalid/contribute/batches/123")).toBeNull();
+  });
+
+  it("opens the observed upload dialog when needed and does not click when already open", async () => {
+    const events: string[] = [];
+    const page = fakePage(events);
+    page.url = () => "https://esp.gettyimages.com/contribute/batches/123";
+    await openGettyUploadDialog(page as unknown as Page, "123");
+    expect(events).toContain("click:[data-cy=open-upload-dialog-button]:visible");
+    events.length = 0;
+    page.dialogVisible = true;
+    await openGettyUploadDialog(page as unknown as Page, "123");
+    expect(events).not.toContain("click:[data-cy=open-upload-dialog-button]:visible");
+    page.url = () => "https://esp.gettyimages.com/contribute/batches/456";
+    await expect(openGettyUploadDialog(page as unknown as Page, "123")).rejects.toThrow(/batch page/i);
+  });
+
+  it("targets Getty's device input, not the other multiple-file input, and fails closed on changes", async () => {
     const events: string[] = [];
     const page = fakePage(events);
     page.url = () => "https://other.invalid/contribute/batches/123";
     await expect(injectGettyFiles(page as unknown as Page, ["a.eps", "a.jpg"], "123")).rejects.toThrow(/batch page/i);
     page.url = () => "https://esp.gettyimages.com/contribute/batches/123";
+    await expect(injectGettyFiles(page as unknown as Page, ["a.eps", "a.jpg"], "123")).rejects.toThrow(/dialog/i);
+    page.dialogVisible = true;
     page.count = 2;
     await expect(injectGettyFiles(page as unknown as Page, ["a.eps", "a.jpg"], "123")).rejects.toThrow(/file input/i);
     page.count = 1;
@@ -92,9 +115,10 @@ describe("Getty web local bridge", () => {
     page.url = () => "https://esp.gettyimages.com/contribute/batches/123";
     page.accept = ".csv";
     await expect(injectGettyFiles(page as unknown as Page, ["a.eps", "a.jpg"], "123")).rejects.toThrow(/file input/i);
-    page.accept = ".eps,.jpg,.jpeg";
+    page.accept = "image/jpeg,application/postscript,image/x-eps";
+    page.dialogVisible = true;
     await injectGettyFiles(page as unknown as Page, ["a.eps", "a.jpg"], "123");
-    expect(events).toContain("files:a.eps,a.jpg");
+    expect(events).toContain("files:[data-cy=file-upload-dialog]:visible input[data-cy=upload-button-file-input][type=file][multiple]:a.eps,a.jpg");
   });
 });
 
@@ -102,7 +126,8 @@ function fakePage(events: string[]) {
   const page = {
     url: () => "https://esp.gettyimages.com/contribute/batches",
     count: 1,
-    accept: ".eps,.jpg",
+    accept: "image/jpeg,application/postscript,image/x-eps",
+    dialogVisible: false,
     submissionType: "istock_creative_illustration",
     locator(selector: string) {
       return {
@@ -111,7 +136,9 @@ function fakePage(events: string[]) {
         inputValue: async () => { events.push("check-type"); return page.submissionType; },
         count: async () => page.count,
         getAttribute: async () => page.accept,
-        setInputFiles: async (files: string[]) => { events.push(`files:${files.join(",")}`); },
+        isVisible: async () => page.dialogVisible,
+        or: () => ({ first: () => ({ waitFor: async () => undefined }) }),
+        setInputFiles: async (files: string[]) => { events.push(`files:${selector}:${files.join(",")}`); },
         waitFor: async () => undefined,
       };
     },
