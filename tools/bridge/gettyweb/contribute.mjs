@@ -15,6 +15,9 @@ const LOGIN_POLL_MS = 1500;
 const UPLOAD_POLL_MS = 1000;
 const CONFIRM_SETTLE_MS = 700;
 const NAV_RETRY_MS = 5000;
+// Never use the first generic file input: Getty also renders release uploaders.
+// This contribution input is deliberately hidden and accepts the vector pair.
+const CONTRIBUTION_FILE_INPUT = 'input[type="file"][data-cy="upload-button-file-input"][multiple]:not([disabled])';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -238,11 +241,11 @@ async function waitForFileNames(connection, sessionId, names, options) {
 
 /** Hands the staged files to the page's uploader and waits until they appear. */
 export async function attachFiles(connection, sessionId, options) {
-  const input = await waitFor(connection, 'document.querySelectorAll(\'input[type="file"]\').length > 0', {
+  const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
     sessionId, timeoutMs: 60000, intervalMs: 1000,
   });
-  if (!input.ok) return { ok: false, code: "page", reason: "the batch page has no file input", state: null };
-  const result = await setFiles(connection, options.paths, { sessionId });
+  if (!input.ok) return { ok: false, code: "page", reason: "Getty contribution uploader (Upload from device) did not become ready within 60 seconds; release inputs were not used", state: null };
+  const result = await setFiles(connection, options.paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
   if (!result.ok) return { ok: false, code: "page", reason: result.reason, state: null };
   options.onProgress?.(`${options.paths.length} file(s) attached to the batch page`);
   return waitForFileNames(connection, sessionId, options.names, options);
