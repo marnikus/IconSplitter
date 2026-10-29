@@ -159,6 +159,72 @@ describe("Getty contributor page steps", () => {
     expect(driver.readPageInfo().signedIn).toBe(false);
   });
 
+  it("writes through angular.element so an ng-model form is never submitted empty", () => {
+    const calls: string[] = [];
+    (window as unknown as { angular: unknown }).angular = {
+      element: () => ({
+        val(value?: string) { if (value !== undefined) calls.push(`val:${value}`); return ""; },
+        triggerHandler(name: string) { calls.push(`on:${name}`); },
+      }),
+    };
+    try {
+      mount('<form><input type="text" name="username" /><input type="password" name="password" /><button type="submit">Sign in</button></form>');
+      driver.fillLoginForm({ username: "1234567", password: "ContributorId!42" });
+      expect(calls).toContain("val:1234567");
+      expect(calls).toContain("val:ContributorId!42");
+      expect(calls).toContain("on:input");
+    } finally {
+      delete (window as unknown as { angular?: unknown }).angular;
+    }
+  });
+
+  it("still fills fields its framework keeps disabled until hydration", () => {
+    mount(`
+      <form>
+        <input type="text" name="username" disabled />
+        <input type="password" name="password" disabled />
+      </form>`);
+    expect(driver.readPageInfo().loginForm).toEqual({ email: true, password: true });
+    expect(driver.fillLoginForm({ username: "1234567", password: "ContributorId!42" }).filled).toBe(true);
+    expect(document.querySelector<HTMLInputElement>('input[name="username"]')!.value).toBe("1234567");
+    expect(document.querySelector<HTMLInputElement>('input[name="password"]')!.value).toBe("ContributorId!42");
+  });
+
+  it("focuses and clears one field so real keystrokes land in it", () => {
+    mount('<form><input type="text" name="username" value="stale@example.com" /></form>');
+    const focused = driver.focusLoginField({ which: "identifier" });
+    expect(focused).toEqual({ focused: true, type: "text" });
+    expect(document.querySelector<HTMLInputElement>('input[name="username"]')!.value).toBe("");
+    expect(driver.focusLoginField({ which: "password" })).toEqual({ focused: false, type: null });
+  });
+
+  it("describes a sign-in screen it is stuck on without reading any value", () => {
+    mount(`
+      <div ng-app="SignInApp">
+        <input type="text" name="username" value="1234567" />
+        <input type="password" name="password" value="SavedPassword!1" />
+        <button type="button">Sign in</button>
+      </div>`);
+    (window as unknown as { currentApplication?: string }).currentApplication = "sign-in";
+    (window as unknown as { experiences?: unknown }).experiences = {
+      frauddetectionprovidersigninarkose: { is_active: true },
+    };
+    try {
+      const report = driver.inspectSignIn();
+      expect(report).toMatchObject({ app: "sign-in", forms: 0, arkose: true, angular: false });
+      expect(report.inputs).toEqual(["text#username", "password#password"]);
+      expect(report.buttons).toEqual(["Sign in"]);
+      expect(JSON.stringify(report)).not.toContain("1234567");
+      expect(JSON.stringify(report)).not.toContain("SavedPassword!1");
+      // The fraud script is on every sign-in page, so it is context, not proof:
+      // only real captcha wording turns the failure into an interactive check.
+      expect(driver.readPageInfo().challenge).toBe(false);
+    } finally {
+      delete (window as unknown as { currentApplication?: string }).currentApplication;
+      delete (window as unknown as { experiences?: unknown }).experiences;
+    }
+  });
+
   it("opens the Create Batch dialog, fills it, and submits", () => {
     mount(DIALOG_PAGE);
     const create = document.querySelector<HTMLButtonElement>('[data-cy="create-batch-button"]')!;

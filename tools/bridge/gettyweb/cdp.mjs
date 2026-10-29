@@ -117,6 +117,16 @@ export async function waitFor(connection, expression, options = {}) {
   return { ok: false, value: last };
 }
 
+/** Types text as real input events into the focused element (key-event path). */
+export async function insertText(connection, text, sessionId) {
+  try {
+    await connection.send("Input.insertText", { text: String(text ?? "") }, sessionId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Navigates the page and waits for the load event to settle. */
 export async function navigate(connection, url, sessionId) {
   await connection.send("Page.enable", {}, sessionId);

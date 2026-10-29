@@ -1,4 +1,4 @@
-/* global document, location, Event, HTMLInputElement, HTMLTextAreaElement */
+/* global document, location, window, Event, HTMLInputElement, HTMLTextAreaElement */
 // driver.mjs — page-side steps for the Getty Images / iStock contributor upload
 // page (contribute.gettyimages.com). Every export here is a SELF-CONTAINED
 // function: `cdp.mjs` serializes it with Function.prototype.toString() and
@@ -19,6 +19,18 @@ function visible(el) {
   return true;
 }
 
+/**
+ * Rendered, whether or not the control is enabled. Sign-in pages keep fields
+ * disabled until their framework hydrates; those still accept a typed value,
+ * so reading/filling uses this and only clicking uses `visible`.
+ */
+function shown(el) {
+  if (!el) return false;
+  if (el.hidden || el.getAttribute("aria-hidden") === "true") return false;
+  if (typeof el.checkVisibility === "function" && !el.checkVisibility()) return false;
+  return true;
+}
+
 /** React ignores a plain `.value =` write; use the native setter + events. */
 function setNativeValue(el, value) {
   const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -27,6 +39,40 @@ function setNativeValue(el, value) {
   else el.value = value;
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/**
+ * AngularJS (the Getty ESP sign-in is `ng-app="SignInApp"`) only updates its
+ * model from jQuery-style events on the wrapped element, so hand the value to
+ * `angular.element(el)` as well — otherwise the form submits empty.
+ */
+function notifyAngular(el, value) {
+  try {
+    const ng = window.angular;
+    if (!ng || typeof ng.element !== "function") return false;
+    const wrapped = ng.element(el);
+    if (typeof wrapped.val === "function" && wrapped.val() !== value) wrapped.val(value);
+    for (const name of ["input", "change", "blur"]) {
+      if (typeof wrapped.triggerHandler === "function") wrapped.triggerHandler(name);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Writes one value the way every framework on these pages observes it. */
+function writeField(el, value) {
+  if (el.isContentEditable) {
+    el.focus?.();
+    el.textContent = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+  setNativeValue(el, value);
+  notifyAngular(el, value);
+  el.dispatchEvent(new Event("blur", { bubbles: true }));
+  return true;
 }
 
 function textOf(el) {
@@ -48,8 +94,12 @@ function firstVisible(selectors) {
   return null;
 }
 
+const NON_TEXT_INPUTS = ["hidden", "checkbox", "radio", "submit", "button", "image", "file", "range", "color", "date", "time"];
+
 function inputFields() {
-  return [...document.querySelectorAll("input")].filter(visible);
+  return [...document.querySelectorAll("input, [contenteditable=true]")]
+    .filter(shown)
+    .filter((el) => !NON_TEXT_INPUTS.includes(el.type ?? ""));
 }
 
 /**
@@ -67,9 +117,11 @@ function loginFields() {
   return { identifier: named ?? (password === null ? null : firstText), password };
 }
 
-/** The control that sends a sign-in step: submit button first, then its label. */
+/** The control that sends a sign-in step, looked for inside its own form first. */
 function submitControl() {
-  const controls = [...document.querySelectorAll("button, [type=submit], [role=button], a")].filter(visible);
+  const { identifier, password } = loginFields();
+  const scope = password?.form ?? identifier?.form ?? document;
+  const controls = [...scope.querySelectorAll("button, [type=submit], [role=button], a")].filter(visible);
   return controls.find((el) => el.type === "submit")
     ?? controls.find((el) => /^(sign ?in|log ?in|continue|next|submit|verify|confirm)$/i.test(textOf(el)))
     ?? null;
@@ -100,8 +152,11 @@ export function readPageInfo() {
     title: document.title.slice(0, 120),
     signedIn: password === null && Boolean(createButton || (onContribute && !identifier && !signInLink)),
     loginForm: { email: Boolean(identifier), password: Boolean(password) },
+    app: String(window.currentApplication ?? ""),
     challenge: /captcha|verify you are human|two-?factor|2fa|verification code|confirm your identity|unusual activity/i.test(`${document.title} ${bodyText}`),
-    fields: inputFields().slice(0, 6).map((el) => ({ type: el.type || "text", hasValue: String(el.value ?? "") !== "" })),
+    fields: inputFields().slice(0, 6).map((el) => ({
+      type: el.type || "text", name: (el.name || el.id || "").slice(0, 40), hasValue: String(el.value ?? "") !== "",
+    })),
     createBatch: Boolean(createButton),
     dialogOpen: Boolean(document.querySelector('[data-cy="create-batch-dialog"]')),
     batchId: batchMatch ? batchMatch[1] : null,
@@ -119,17 +174,53 @@ export function readPageInfo() {
 export function fillLoginForm({ username, password }) {
   const { identifier, password: passwordField } = loginFields();
   if (!passwordField && !identifier) return { filled: false, stage: "none", submitted: false };
-  if (identifier && username) setNativeValue(identifier, username);
-  if (passwordField && password) setNativeValue(passwordField, password);
+  if (identifier && username) writeField(identifier, username);
+  if (passwordField && password) writeField(passwordField, password);
   const submit = submitControl();
   const submitted = submit === null ? false : click(submit);
   return { filled: true, stage: passwordField ? "password" : "email", submitted };
 }
 
+/**
+ * Focuses (and clears) one sign-in field so the helper can type into it with
+ * real key events — the most reliable way to reach Angular/React models.
+ */
+export function focusLoginField({ which }) {
+  const { identifier, password } = loginFields();
+  const el = which === "password" ? password : identifier;
+  if (!el) return { focused: false, type: null };
+  el.focus?.();
+  if (el.isContentEditable) el.textContent = "";
+  else setNativeValue(el, "");
+  el.focus?.();
+  return { focused: document.activeElement === el, type: el.type || "text" };
+}
+
+/** What the sign-in screen actually offers, as short strings — never values. */
+export function inspectSignIn() {
+  const inputs = inputFields();
+  const buttons = [...document.querySelectorAll("button, [role=button], [type=submit]")].filter(shown)
+    .map((el) => textOf(el) || el.getAttribute("aria-label") || "").filter((label) => label !== "");
+  const sources = [...document.querySelectorAll("iframe, script")].map((el) => el.getAttribute("src") ?? "");
+  const fraudFlag = window.experiences?.frauddetectionprovidersigninarkose?.is_active === true;
+  return {
+    app: String(window.currentApplication ?? ""),
+    title: document.title.slice(0, 80),
+    angular: Boolean(window.angular),
+    inputs: inputs.slice(0, 8).map((el) => `${el.type || "text"}#${(el.name || el.id || "?").slice(0, 24)}`
+      + `${el.disabled ? "(disabled)" : ""}`),
+    buttons: [...new Set(buttons)].slice(0, 8),
+    forms: document.querySelectorAll("form").length,
+    arkose: fraudFlag || sources.some((src) => /arkose|funcaptcha|verify\.gettyimages/i.test(src)),
+  };
+}
+
 /** Clicks the "sign in with e-mail/password" option when Getty opens elsewhere. */
 export function choosePasswordOption() {
-  const control = [...document.querySelectorAll("button, a, [role=button], [role=tab]")].filter(visible)
-    .find((el) => /password/i.test(textOf(el))) ?? null;
+  const controls = [...document.querySelectorAll("button, a, [role=button], [role=tab]")].filter(visible);
+  const control = controls.find((el) => /password/i.test(textOf(el)))
+    ?? controls.find((el) => /^(use|continue with|sign in|log in)\b/i.test(textOf(el)) && !/google|apple|facebook/i.test(textOf(el)))
+    ?? null;
   if (!control) return { chosen: false, label: null };
   click(control);
   return { chosen: true, label: textOf(control) };
@@ -366,14 +457,14 @@ export function readCompletionState() {
  * serialized function finds `visible`, `firstVisible`, … in the page scope.
  */
 export const PAGE_PRELUDE = [
-  visible, setNativeValue, textOf, click, firstVisible, inputFields, loginFields, submitControl,
-  pageSignals, labelTextOf, setFieldValue,
+  visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
+  NON_TEXT_INPUTS, inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n");
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [
-  "readPageInfo", "fillLoginForm", "choosePasswordOption", "submitLogin",
+  "readPageInfo", "fillLoginForm", "focusLoginField", "inspectSignIn", "choosePasswordOption", "submitLogin",
   "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
   "fillMetadataFields", "openFileMetadata", "saveMetadataEditor", "closeMetadataEditor",

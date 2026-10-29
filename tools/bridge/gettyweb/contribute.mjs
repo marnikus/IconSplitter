@@ -5,7 +5,7 @@
 // driver.mjs; this file only sequences steps and waits.
 
 import * as driver from "./driver.mjs";
-import { navigate, runStep, setFiles, waitFor } from "./cdp.mjs";
+import { insertText, navigate, runStep, setFiles, waitFor } from "./cdp.mjs";
 
 const STEP_SOURCES = new Map(
   Object.entries(driver).filter(([name]) => driver.DRIVER_STEPS.includes(name)).map(([name, fn]) => [name, fn.toString()]),
@@ -46,18 +46,40 @@ async function openPasswordOption(connection, sessionId, info) {
   return chosen?.chosen === true ? runDriverStep(connection, sessionId, "readPageInfo") : info;
 }
 
+/** Presses Enter into one field with real key events, when it can be focused. */
+async function typeInto(connection, sessionId, which, value) {
+  if (typeof value !== "string" || value === "") return false;
+  const target = await runDriverStep(connection, sessionId, "focusLoginField", { which });
+  if (target?.focused !== true) return false;
+  return insertText(connection, value, sessionId);
+}
+
+/**
+ * Types the saved credentials the way a person does — focus, then real input
+ * events — and only then falls back to writing the values from the page
+ * (Angular/React forms ignore a plain `.value =`).
+ */
+async function typeCredentials(connection, sessionId, creds) {
+  const identifier = await typeInto(connection, sessionId, "identifier", creds.username);
+  const password = await typeInto(connection, sessionId, "password", creds.password);
+  await runDriverStep(connection, sessionId, "fillLoginForm", creds);
+  return identifier || password;
+}
+
 /** Fills the visible sign-in step; presses the control again if it did not take. */
 async function loginAttempt(connection, sessionId, creds, onProgress) {
   let info = await runDriverStep(connection, sessionId, "readPageInfo");
   if (info.signedIn) return { done: true, info };
   info = await openPasswordOption(connection, sessionId, info);
-  if (!info.loginForm.email && !info.loginForm.password) return { done: false, info, submitted: false };
+  if (!info.loginForm.email && !info.loginForm.password) {
+    const diagnostic = await runDriverStep(connection, sessionId, "inspectSignIn");
+    return { done: false, info, submitted: false, diagnostic };
+  }
   onProgress?.(`signing in at ${info.path}`);
-  const filled = (await runDriverStep(connection, sessionId, "fillLoginForm", creds)) ?? {};
-  const again = filled.filled === true && filled.submitted !== true
-    ? await runDriverStep(connection, sessionId, "submitLogin")
-    : null;
-  return { done: false, info, submitted: filled.submitted === true || again?.submitted === true };
+  await typeCredentials(connection, sessionId, creds);
+  const again = await runDriverStep(connection, sessionId, "submitLogin");
+  const diagnostic = await runDriverStep(connection, sessionId, "inspectSignIn");
+  return { done: false, info, submitted: again?.submitted === true, diagnostic };
 }
 
 const SIGN_IN_TIMEOUT = "Getty did not show the Batches page in time";
@@ -66,8 +88,29 @@ const SIGN_IN_UNSENT = "the sign-in form was filled but no sign-in control could
 const SIGN_IN_ID_STEP = "Getty stayed on the e-mail / account ID step — save the contributor e-mail or the numeric contributor ID you use on gettyimages.com, then retry";
 const SIGN_IN_REJECTED = "Getty did not accept the saved contributor password — check it, or run run_ftp_bridge.bat --getty-headed to watch the sign-in";
 
+/** One short line about the screen the run was stuck on (never a value). */
+export function describeSignInPage(diagnostic) {
+  if (!diagnostic) return "";
+  const parts = [];
+  const title = String(diagnostic.title ?? "").trim() || String(diagnostic.app ?? "").trim();
+  if (title !== "") parts.push(`page "${title}"`);
+  const inputs = Array.isArray(diagnostic.inputs) ? diagnostic.inputs : [];
+  parts.push(inputs.length === 0 ? "no text inputs" : `${inputs.length} input(s): ${inputs.join(", ")}`);
+  const buttons = Array.isArray(diagnostic.buttons) ? diagnostic.buttons.slice(0, 4) : [];
+  if (buttons.length > 0) parts.push(`buttons: ${buttons.join(" / ")}`);
+  if (diagnostic.angular === true) parts.push("angular-js");
+  if (diagnostic.arkose === true) parts.push("human-check iframe present");
+  return parts.join("; ");
+}
+
 /** The honest reason a sign-in stalled, from what the page showed. */
-export function signInFailure(info, submitted) {
+export function signInFailure(info, submitted, diagnostic) {
+  const base = failureBase(info, submitted);
+  const detail = describeSignInPage(diagnostic);
+  return detail === "" ? base : { ...base, reason: `${base.reason} — the page showed: ${detail}` };
+}
+
+function failureBase(info, submitted) {
   if (!info) return { ok: false, code: "timeout", reason: SIGN_IN_TIMEOUT };
   if (info.challenge === true) return { ok: false, code: "auth", reason: SIGN_IN_CHALLENGE };
   const hasForm = info.loginForm?.email === true || info.loginForm?.password === true;
@@ -101,17 +144,18 @@ async function revisitContributor(connection, sessionId, options, state) {
  */
 export async function ensureSignedIn(connection, sessionId, options) {
   const deadline = Date.now() + (options.timeoutMs ?? 120000);
-  const state = { last: null, submitted: false, nextNavAt: 0 };
+  const state = { last: null, submitted: false, nextNavAt: 0, diagnostic: null };
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
     const attempt = await loginAttempt(connection, sessionId, options.creds, options.onProgress);
     if (attempt.done) return { ok: true, info: attempt.info };
     state.submitted = state.submitted || attempt.submitted === true;
     state.last = attempt.info;
+    state.diagnostic = attempt.diagnostic ?? state.diagnostic;
     await revisitContributor(connection, sessionId, options, state);
     await sleep(options.pollMs ?? LOGIN_POLL_MS);
   }
-  return signInFailure(state.last, state.submitted);
+  return signInFailure(state.last, state.submitted, state.diagnostic);
 }
 
 async function chooseSubmissionType(connection, sessionId, label, onProgress) {

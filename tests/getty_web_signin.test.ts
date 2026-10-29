@@ -25,6 +25,7 @@ const ELSEWHERE = { signedIn: false, path: "/log-in/complete", loginForm: { emai
 class FakePage {
   steps: string[] = [];
   navigations: string[] = [];
+  inserts: string[] = [];
   queue: Record<string, unknown[]>;
   defaults: Record<string, unknown>;
 
@@ -36,6 +37,10 @@ class FakePage {
   send(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (method === "Page.navigate") {
       this.navigations.push(String(params.url));
+      return Promise.resolve({});
+    }
+    if (method === "Input.insertText") {
+      this.inserts.push(String(params.text));
       return Promise.resolve({});
     }
     if (method !== "Runtime.evaluate") return Promise.resolve({});
@@ -62,7 +67,21 @@ describe("Getty web sign-in", () => {
     );
     const result = await ensureSignedIn(cdp, "page-1", options());
     expect(result.ok).toBe(true);
-    expect(cdp.steps).toEqual(["readPageInfo", "fillLoginForm", "readPageInfo"]);
+    expect(cdp.steps).toEqual([
+      "readPageInfo", "focusLoginField", "focusLoginField", "fillLoginForm", "submitLogin", "inspectSignIn", "readPageInfo",
+    ]);
+  });
+
+  it("types the saved identifier and password as real input events", async () => {
+    const cdp = connect({
+      readPageInfo: [PASSWORD_ONLY, SIGNED_IN],
+      focusLoginField: [{ focused: true, type: "text" }, { focused: true, type: "password" }],
+      submitLogin: [{ submitted: true, method: "click", label: "Sign in" }],
+      inspectSignIn: [{ title: "Sign in - ESP", inputs: ["text#username", "password#password"], angular: true }],
+    });
+    const result = await ensureSignedIn(cdp, "page-1", options());
+    expect(result.ok).toBe(true);
+    expect(cdp.inserts).toEqual([CREDS.username, CREDS.password]);
   });
 
   it("presses the sign-in control a second time when filling did not submit", async () => {
@@ -75,9 +94,10 @@ describe("Getty web sign-in", () => {
     );
     const result = await ensureSignedIn(cdp, "page-1", options());
     expect(result.ok).toBe(true);
-    expect(cdp.steps).toEqual([
-      "readPageInfo", "fillLoginForm", "submitLogin", "readPageInfo", "fillLoginForm", "readPageInfo",
+    expect(cdp.steps.slice(0, 6)).toEqual([
+      "readPageInfo", "focusLoginField", "focusLoginField", "fillLoginForm", "submitLogin", "inspectSignIn",
     ]);
+    expect(cdp.steps.filter((name) => name === "submitLogin").length).toBeGreaterThan(1);
   });
 
   it("returns to the contributor page when sign-in lands somewhere else", async () => {
