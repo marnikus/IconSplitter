@@ -108,5 +108,7 @@ Never edit existing archived designs to match later changes.
 
 | `archive/2026-10-29-getty-web-automation/research.md` | Getty contributor web upload research, evidence, limitations and permission gate; proposed bridge workflow in `archive/2026-10-29-getty-web-automation/design.md` |
 
+| `archive/2026-10-29-getty-web-helper/README.md` | Experimental local Getty web helper: observed batch selectors, interactive sign-in, cautious file selection and remaining live verification |
+
 Archived docs are dated by the day they were written and never edited afterwards.
 

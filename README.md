@@ -85,6 +85,7 @@ Double-click these files in the project folder, in order:
 | `run_ftp_bridge.bat` | Builds the latest UI and starts the **local FTPS/SFTP helper** on http://127.0.0.1:47391 for the **Upload** tab |
 | `run_app_inkscape.bat` | Builds the app, starts the helper and opens the app **through it** (`http://127.0.0.1:47391/`) — the no-fuss way to use the Inkscape converter |
 | `run_app_ftp.bat` | Builds the app, starts the local FTPS/SFTP helper and opens `http://127.0.0.1:47391/` ready for Shutterstock FTPS & Adobe Stock SFTP uploads |
+| `run_getty_web.bat` | Experimental assisted Getty web helper for a previously staged EPS/JPG batch; install Chromium once with `npx playwright install chromium`, sign in yourself, and verify results on Getty |
 
 Typical first run:
 

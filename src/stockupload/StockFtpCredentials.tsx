@@ -14,7 +14,7 @@ export interface LocalCredentialsProps {
 
 function credentialHelpCopy(active: StockFtpPreset): string {
   if (active.protocol === "esp-batch") {
-    return "Getty Images / iStock offers no public contributor FTP/SFTP and restricts ESP API keys to approved partners. Click Upload below to stage paired <name>.eps + RGB <name>.jpg + getty_esp_metadata.csv into one flat folder, then drag all files into DeepMeta 4 or esp.gettyimages.com.";
+    return "Getty Images / iStock offers no public contributor FTP/SFTP and restricts ESP API keys to approved partners. Click Upload below to stage paired <name>.eps + RGB <name>.jpg + getty_esp_metadata.csv into one flat folder, then use run_getty_web.bat for the experimental Getty browser helper, or drag files into DeepMeta 4 or esp.gettyimages.com manually.";
   }
   if (active.protocol === "esp-https") {
     return "Getty ESP Partner API (authentication.gettyimages.com OAuth2 PKCE → api.gettyimages.com:443/esp/submission/v1): requires an approved Getty Partner API key with ESP Submission access. Standard v3 search keys return 403 Forbidden — use 'Getty ESP Batch Folder' above if you do not have partner API access.";

@@ -147,6 +147,7 @@ describe("Getty Images / iStock Upload UI (ESP Batch Folder default + OAuth2 Par
     await settle();
     expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("esp-batch");
     expect((q("stock-ftp-remotedir") as HTMLInputElement).value).toBe("/_getty_esp_batches");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("run_getty_web.bat");
     expect(q("stock-open-esp")).not.toBeNull();
     expect(q("stock-open-deepmeta")).not.toBeNull();
 
