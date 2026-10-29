@@ -15,9 +15,20 @@ export function signInFailure(
 ): { ok: false; code: "auth" | "timeout"; reason: string };
 export function describeSignInPage(diagnostic: any): string;
 export function createBatch(connection: any, sessionId: string, options: any): Promise<any>;
-export function attachFiles(connection: any, sessionId: string, options: any): Promise<any>;
+export function attachFiles(connection: any, sessionId: string, options: {
+  paths: string[];
+  names: string[];
+  timeoutMs?: number;
+  readyTimeoutMs?: number;
+  onProgress?: (note: string) => void;
+  signal?: AbortSignal;
+}): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any }>;
+export function todayIso(now?: Date): string;
 export function finalizeBatch(connection: any, sessionId: string, options: {
-  files: Array<{ name: string; metadata: { title: string; description: string; keywords: string[] } | null }>;
+  files: Array<{
+    name: string;
+    metadata: { title: string; description: string; keywords: string[]; dateCreated?: string } | null;
+  }>;
   complete?: boolean;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;

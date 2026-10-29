@@ -3873,3 +3873,34 @@ contribution uploader instead of release file inputs"). Measured here (Node
 - Docs: the uploader handle and the "release inputs are never used" rule are in
   `sor/stock-upload-getty-web.md` (8,978 bytes) and `selectors/stock-upload.md`
   (4,954 bytes), both under the 9,000-byte budget.
+
+## 2026-10-29 — Getty web: verify every file, count a listed card as uploaded
+
+A real 2-icon run attached the first icon's JPEG+EPS and then "failed to wait";
+only that pair reached Getty. The captured batch page explains it: a vector pair is
+listed **once**, under the EPS name (`contribution-file-name`), and the JPEG only
+appears as the drawer's raster row. `readUploadState` matched full file names
+against the page text, so `namesSeen.length === names.length` could never be 2 and
+every upload timed out after 180 s. Measured here (Node 22.22.3, 2 cores, no
+browser):
+
+- Files are matched to a card by **stem** (`icon-map-pin_5_01.jpg` and `.eps` are
+  one contribution), cards are read from `[data-cy="contribution-file-name"]`
+  (text is only a fallback), and the card's `not-ready-icon` reports recognition.
+- A listed card counts as uploaded immediately; the wait then continues until the
+  cards are ready — bounded, non-fatal, and reported ("Getty is still processing").
+  Timeouts now say how many files were listed (`Getty listed 1 of 2 file(s) in …`)
+  and `state.missing` names them.
+- Progress is reported per file (`Getty listed 1/2 file(s) — waiting for the rest`)
+  and `GETTY_WEB_READY_TIMEOUT_MS` (120 s) sits beside the existing 180 s.
+- The metadata drawer is opened by selecting the card by stem (Getty enables its
+  fields only for a selected contribution), and the required **Date Created** gets
+  today's date (`todayIso`, overridable by an accepted `dateCreated`). A pair is
+  filled once — the second file reports `same-contribution`.
+- `npm run verify:fast` → Types PASS 22.7 s, Lint PASS (0 errors / 21 warnings)
+  17.1 s, Quality gate (changed) PASS 0.8 s, Tests + coverage PASS 148.1 s,
+  Build PASS 9.9 s. Getty web: driver 29, batch 10, finalize 7, sign-in 9,
+  upload 9, cdp 10, bridge routes 16, stock upload 5 (+3 UI).
+- Docs: `sor/stock-upload-getty-web.md` 8,924 bytes and
+  `selectors/stock-upload.md` 5,772 bytes (budget 9,000); the sign-in matching
+  rules moved into the selectors page to stay inside it.

@@ -111,6 +111,29 @@ function inputFields() {
 }
 
 /**
+ * The contribution a file belongs to: Getty lists a vector pair once, under one
+ * of the two names (the EPS in the captured page), so files are matched by stem —
+ * `icon-map-pin_5_01.jpg` and `icon-map-pin_5_01.eps` are the same contribution.
+ */
+function fileStem(name) {
+  const leaf = String(name ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+}
+
+const CARD_NAME = '[data-cy="contribution-file-name"]';
+const CARD_PROCESSING = '[data-cy="not-ready-icon"], [aria-label="not_ready_to_submit"]';
+
+/** One entry per contribution card the batch page lists, with its ready flag. */
+function uploadCards() {
+  return [...document.querySelectorAll(CARD_NAME)].map((el) => {
+    const name = textOf(el);
+    const scope = el.closest('[data-cy="item-card"]') ?? el.closest('[data-cy="grid-row"]') ?? el.parentElement ?? el;
+    return { name, stem: fileStem(name), processing: Boolean(scope.querySelector(CARD_PROCESSING)), el, scope };
+  });
+}
+
+/**
  * The identifier and password fields of whatever sign-in step is on screen.
  * Getty accepts an e-mail *or* the numeric contributor ID in the same box, so
  * the identifier is matched by name/hint and then by plain text type.
@@ -315,14 +338,32 @@ export function submitBatchCreation() {
   return { clicked: true, reason: null };
 }
 
-/** Best-effort read of the batch page's per-file pipeline counters. */
+/**
+ * What the batch page shows for the files just handed to it. A contribution
+ * counts as uploaded the moment its card is listed, even while Getty is still
+ * processing it (`processing`), because the bytes are already on Getty's side.
+ */
 export function readUploadState({ names }) {
   const body = textOf(document.body).slice(0, 200000);
   const wanted = Array.isArray(names) ? names.filter((n) => typeof n === "string" && n !== "") : [];
+  const cards = uploadCards();
+  const lower = body.toLowerCase();
+  const listed = (name) => {
+    const stem = fileStem(name);
+    if (stem === "") return false;
+    // Cards are authoritative; a page without them (older layout) falls back to text.
+    return cards.length > 0 ? cards.some((card) => card.stem === stem) : lower.includes(stem);
+  };
   const count = (re) => Number((re.exec(body) ?? [])[1] ?? 0);
   return {
     url: location.href,
-    namesSeen: wanted.filter((name) => body.includes(name)),
+    namesSeen: wanted.filter(listed),
+    missing: wanted.filter((name) => !listed(name)),
+    contributions: cards.map((card) => card.name).slice(0, 50),
+    fileCount: cards.length,
+    processing: cards.some((card) => card.processing),
+    // A page without cards says nothing about processing, so it is not waited on.
+    ready: !cards.some((card) => card.processing),
     chips: {
       accepted: count(/(\d+)\s+Accepted\b/i),
       rejected: count(/(\d+)\s+Rejected\b/i),
@@ -362,37 +403,45 @@ function setFieldValue(el, value) {
  * `overwrite: false` keeps values Getty already prefilled from the file's
  * embedded XMP/IPTC, so an upload never silently rewrites accepted text.
  */
-export function fillMetadataFields({ title, description, keywords, overwrite }) {
+export function fillMetadataFields({ title, description, keywords, dateCreated, overwrite }) {
   const fields = [...document.querySelectorAll("input, textarea, [contenteditable=true]")].filter(visible);
   const find = (pattern) => fields.find((el) => pattern.test(labelTextOf(el))) ?? null;
   const targets = {
     title: find(/title|headline/i),
     description: find(/description|caption/i),
     keywords: find(/keyword|\btags?\b/i),
+    dateCreated: find(/date created|created date|created_date|creation date/i),
   };
-  const filled = {};
+  const filled = { title: false, description: false, keywords: false };
+  const present = {
+    title: targets.title !== null, description: targets.description !== null, keywords: targets.keywords !== null,
+  };
+  if (targets.dateCreated) present.dateCreated = true;
   for (const [key, el] of Object.entries(targets)) {
-    filled[key] = false;
     if (!el) continue;
     const current = el.isContentEditable ? (el.textContent ?? "") : String(el.value ?? "");
     if (!overwrite && current.trim() !== "") continue;
-    const value = key === "keywords" ? (Array.isArray(keywords) ? keywords.join(", ") : "") : (key === "title" ? title : description);
+    const value = key === "keywords" ? (Array.isArray(keywords) ? keywords.join(", ") : "")
+      : (key === "title" ? title : key === "dateCreated" ? dateCreated : description);
     if (typeof value !== "string" || value.trim() === "") continue;
     setFieldValue(el, value);
     filled[key] = true;
   }
-  return {
-    filled,
-    present: Object.fromEntries(Object.entries(targets).map(([key, el]) => [key, el !== null])),
-  };
+  return { filled, present };
 }
 
 /** Opens the metadata editor for one uploaded file (row button, else the row). */
 export function openFileMetadata({ fileName }) {
-  const needle = String(fileName ?? "").trim().toLowerCase();
-  if (needle === "") return { opened: false, method: "none", label: null };
+  const stem = fileStem(fileName);
+  if (stem === "") return { opened: false, method: "none", label: null };
+  // A batch card is selected by clicking it; the drawer enables only then.
+  const card = uploadCards().find((entry) => entry.stem === stem) ?? null;
+  if (card) {
+    click(card.scope.querySelector('[data-cy="image-card"]') ?? card.el);
+    return { opened: true, method: "card", label: card.name };
+  }
   const matches = [...document.querySelectorAll("a, span, p, td, div")]
-    .filter((el) => visible(el) && textOf(el).toLowerCase() === needle);
+    .filter((el) => visible(el) && fileStem(textOf(el)) === stem);
   const node = matches[matches.length - 1];
   if (!node) return { opened: false, method: "none", label: null };
   const row = node.closest("tr, li, [role=row], [data-testid*=row], section, article") ?? node.parentElement ?? node;
@@ -472,11 +521,13 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
+  fileStem, uploadCards, inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n")
   + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`
-  + `\nconst CREATE_BATCH_DIALOG_SELECTOR = ${JSON.stringify(CREATE_BATCH_DIALOG_SELECTOR)};`;
+  + `\nconst CREATE_BATCH_DIALOG_SELECTOR = ${JSON.stringify(CREATE_BATCH_DIALOG_SELECTOR)};`
+  + `\nconst CARD_NAME = ${JSON.stringify(CARD_NAME)};`
+  + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`;
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [

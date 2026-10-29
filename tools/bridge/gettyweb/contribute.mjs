@@ -223,8 +223,16 @@ export async function createBatch(connection, sessionId, options) {
   return { ok: true, batchId: String(created.value) };
 }
 
+const PROCESSING_NOTE = "Getty is still processing the uploaded file(s)";
+
+/**
+ * Waits until the batch page lists every file of this call. Getty lists a vector
+ * pair once (under the EPS name), so a card is matched by stem and counts as
+ * uploaded as soon as it appears — processing finishes after the bytes arrived.
+ */
 async function waitForFileNames(connection, sessionId, names, options) {
-  const deadline = Date.now() + (options.timeoutMs ?? 180000);
+  const timeoutMs = options.timeoutMs ?? 180000;
+  const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
@@ -232,11 +240,49 @@ async function waitForFileNames(connection, sessionId, names, options) {
     if (last.signInRequired) {
       return { ok: false, code: "auth", reason: "Getty signed the browser out during the upload", state: last };
     }
-    if (last.namesSeen.length === names.length) return { ok: true, state: last };
-    options.onProgress?.(`waiting for the page to accept ${names.length} file(s)`);
-    await new Promise((resolve) => setTimeout(resolve, remaining(deadline) === 0 ? 0 : UPLOAD_POLL_MS));
+    const seen = last.namesSeen.length;
+    if (seen === names.length) {
+      options.onProgress?.(`Getty listed ${seen}/${names.length} file(s)`);
+      return { ok: true, state: await waitForReady(connection, sessionId, names, options, last) };
+    }
+    options.onProgress?.(`Getty listed ${seen}/${names.length} file(s) — waiting for the rest`);
+    await sleep(remaining(deadline) === 0 ? 0 : UPLOAD_POLL_MS);
   }
-  return { ok: false, code: "timeout", reason: "Getty did not list the uploaded file names in time", state: last };
+  return {
+    ok: false,
+    code: "timeout",
+    reason: `Getty listed ${last?.namesSeen.length ?? 0} of ${names.length} file(s) in ${Math.round(timeoutMs / 1000)} s`,
+    state: last,
+  };
+}
+
+/**
+ * Recognition on Getty's side takes a while; the card appears first and loses
+ * its not-ready flag later. Being still processing is reported, never fatal.
+ */
+async function waitForReady(connection, sessionId, names, options, first) {
+  const deadline = Date.now() + (options.readyTimeoutMs ?? 120000);
+  let last = first;
+  while (!last.ready && Date.now() < deadline) {
+    if (options.signal?.aborted) return last;
+    options.onProgress?.(PROCESSING_NOTE);
+    await sleep(UPLOAD_POLL_MS);
+    last = await runDriverStep(connection, sessionId, "readUploadState", { names });
+  }
+  if (!last.ready) options.onProgress?.("the uploads are still processing — continuing");
+  return last;
+}
+
+/** The contribution a file belongs to; a vector pair shares one. */
+function stemOf(fileName) {
+  const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+}
+
+/** Today's date, the value Getty's required Date Created field gets. */
+export function todayIso(now = new Date()) {
+  return now.toISOString().slice(0, 10);
 }
 
 /** Hands the staged files to the page's uploader and waits until they appear. */
@@ -257,7 +303,7 @@ async function fillOneFileMetadata(connection, sessionId, file, options) {
   if (!opened.opened) return { name: file.name, status: "row-not-found" };
   const filled = await runDriverStep(connection, sessionId, "fillMetadataFields", {
     title: file.metadata.title, description: file.metadata.description,
-    keywords: file.metadata.keywords, overwrite: false,
+    keywords: file.metadata.keywords, dateCreated: file.metadata.dateCreated ?? todayIso(), overwrite: false,
   });
   const saved = (await runDriverStep(connection, sessionId, "saveMetadataEditor")) ?? { saved: false, label: null };
   await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
@@ -267,12 +313,20 @@ async function fillOneFileMetadata(connection, sessionId, file, options) {
 
 async function fillEveryFileMetadata(connection, sessionId, options) {
   const report = [];
+  const done = new Set();
   for (const file of options.files) {
     if (options.signal?.aborted) return { aborted: true, report };
     if (!file.metadata) {
       report.push({ name: file.name, status: "embedded-only" });
       continue;
     }
+    // A vector pair is one contribution: its drawer is filled once, not twice.
+    const stem = stemOf(file.name);
+    if (done.has(stem)) {
+      report.push({ name: file.name, status: "same-contribution" });
+      continue;
+    }
+    done.add(stem);
     report.push(await fillOneFileMetadata(connection, sessionId, file, options));
   }
   return { aborted: false, report };

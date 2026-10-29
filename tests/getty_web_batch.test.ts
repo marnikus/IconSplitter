@@ -182,3 +182,101 @@ it("waits for the hidden contribution uploader instead of using an existing rele
     vi.useRealTimers();
   }
 });
+
+// The captured batch page lists a vector pair once — under the EPS name — and the
+// card carries a not_ready_to_submit flag while Getty processes the image.
+const card = (name: string, processing = false) => `
+  <div data-cy="grid-row"><div data-cy="item-card">
+    <div data-cy="image-card"><img data-cy="image-thumbnail" alt="icon"></div>
+    <div data-cy="item-info">
+      ${processing ? '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>' : ""}
+      <p data-cy="contribution-file-name">${name}</p>
+    </div>
+  </div></div>`;
+
+/** A page that lists the contribution only after `delayMs`, like Getty does. */
+class LateCardPage extends DomConnection {
+  constructor(private readonly delayMs: number, private readonly name = "icon-map-pin_5_01.eps", private readonly processing = false) {
+    super();
+  }
+  override async send(method: string, params: Record<string, unknown>) {
+    const answer = await super.send(method, params);
+    if (method === "DOM.setFileInputFiles") {
+      setTimeout(() => document.body.insertAdjacentHTML("beforeend", card(this.name, this.processing)), this.delayMs);
+    }
+    return answer;
+  }
+}
+
+const PAIR = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"];
+const UPLOADER = `<button data-cy="open-upload-dialog-button">Upload</button>
+  <input type="file" multiple data-cy="upload-button-file-input" style="display:none">`;
+
+/** Mounts the batch page with its uploader, which is all attachFiles needs. */
+function mountBatchPage() {
+  document.body.innerHTML = UPLOADER;
+}
+
+describe("Getty web upload verification", () => {
+  it("counts a pair listed under one name as both files uploaded, and waits for the card", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new LateCardPage(4000);
+      const progress: string[] = [];
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/icon-map-pin_5_01.jpg", "/staged/icon-map-pin_5_01.eps"], names: PAIR,
+        onProgress: (line: string) => progress.push(line),
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(progress.some((line) => /Getty listed 0\/2/.test(line))).toBe(true);
+      await vi.advanceTimersByTimeAsync(4000);
+      const settled = await result;
+      expect(settled.ok).toBe(true);
+      expect(settled.state).toMatchObject({ contributions: ["icon-map-pin_5_01.eps"], fileCount: 1, ready: true });
+      expect(settled.state.namesSeen).toEqual(PAIR);
+      expect(progress.some((line) => /Getty listed 2\/2/.test(line))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps waiting while Getty is still processing the upload", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new LateCardPage(1000, "icon-map-pin_5_01.eps", true);
+      const progress: string[] = [];
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/icon-map-pin_5_01.jpg"], names: ["icon-map-pin_5_01.jpg"],
+        readyTimeoutMs: 3000, onProgress: (line: string) => progress.push(line),
+      });
+      await vi.advanceTimersByTimeAsync(5000);
+      const done = await result;
+      expect(done.ok).toBe(true);
+      expect(done.state.processing).toBe(true);
+      expect(progress.some((line) => /processing/i.test(line))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails with the count when a card never appears", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new DomConnection();
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/ghost.jpg", "/staged/ghost.eps"], names: ["ghost.jpg", "ghost.eps"],
+        timeoutMs: 3000, readyTimeoutMs: 1000,
+      });
+      await vi.advanceTimersByTimeAsync(4000);
+      const failed = await result;
+      expect(failed).toMatchObject({ ok: false, code: "timeout" });
+      expect(failed.reason).toContain("0 of 2");
+      expect(failed.state.missing).toEqual(["ghost.jpg", "ghost.eps"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

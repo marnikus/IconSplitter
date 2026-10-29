@@ -33,6 +33,34 @@ const DIALOG_PAGE = `${BATCHES_PAGE}
     <button data-cy="create-batch-confirm-button">Create</button>
   </div>`;
 
+// The captured batch detail page: a vector pair is listed once, by its EPS name,
+// and the JPEG only ever appears as the "Raster file" row of the metadata drawer.
+const CARD_PAGE = `
+  <header><h6 data-cy="batch-detail-header">IconSplitter 2026-10-29 (2 icons)</h6></header>
+  <button data-cy="open-upload-dialog-button">Upload</button>
+  <p>1 file</p>
+  <div data-cy="grid-row"><div>
+    <div data-cy="item-card">
+      <div data-cy="image-card"><img data-cy="image-thumbnail" alt="Location pinpointing"></div>
+      <div data-cy="item-info">
+        <svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>
+        <p data-cy="contribution-file-name">icon-map-pin_5_01.eps</p>
+        <p data-cy="contribution-id-514493389">ID: 2302596512</p>
+      </div>
+    </div>
+  </div></div>
+  <div data-cy="metadata-drawer">
+    <form data-cy="metadata-form">
+      <div data-cy="md-headline"><textarea name="headline" disabled></textarea></div>
+      <div data-cy="md-caption"><textarea name="caption" disabled></textarea></div>
+      <div data-cy="md-created_date"><textarea name="created_date" disabled></textarea></div>
+      <div data-cy="metadata-keyword-multiselect">
+        <textarea id="keywords" placeholder="Add keywords, separated by commas" disabled></textarea>
+      </div>
+      <button data-cy="save-metadata" disabled>Save metadata</button>
+    </form>
+  </div>`;
+
 function mount(html: string): void {
   document.body.innerHTML = html;
 }
@@ -381,5 +409,50 @@ describe("serialized Getty page steps", () => {
     for (const name of driver.DRIVER_STEPS) {
       expect(() => new Function(`${driver.PAGE_PRELUDE}\nreturn (${steps[name].toString()});`)()).not.toThrow();
     }
+  });
+});
+
+describe("Getty batch page as captured", () => {
+  it("counts a paired contribution once, by its stem, and reports it as processing", () => {
+    mount(CARD_PAGE);
+    const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"] });
+    // Getty lists the pair under one name; both sent files belong to that card.
+    expect(state.namesSeen).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
+    expect(state.contributions).toEqual(["icon-map-pin_5_01.eps"]);
+    expect(state.fileCount).toBe(1);
+    expect(state.processing).toBe(true);
+    expect(state.ready).toBe(false);
+    expect(driver.readUploadState({ names: ["other-icon.jpg"] }).namesSeen).toEqual([]);
+  });
+
+  it("reports the card as ready once Getty stops showing its not-ready flag", () => {
+    mount(CARD_PAGE.replace('<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', ""));
+    const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
+    expect(state.ready).toBe(true);
+    expect(state.processing).toBe(false);
+  });
+
+  it("selects a card by stem so the metadata drawer wakes up", () => {
+    mount(CARD_PAGE);
+    // The drawer enables its fields for the selected contribution only.
+    document.querySelector('[data-cy="image-card"]')!.addEventListener("click", () => {
+      for (const field of document.querySelectorAll<HTMLTextAreaElement>("[data-cy=metadata-form] textarea")) {
+        field.disabled = false;
+      }
+    });
+    const opened = driver.openFileMetadata({ fileName: "icon-map-pin_5_01.jpg" });
+    expect(opened).toEqual({ opened: true, method: "card", label: "icon-map-pin_5_01.eps" });
+    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="headline"]')!.disabled).toBe(false);
+    expect(driver.openFileMetadata({ fileName: "not-this-one.jpg" })).toEqual({ opened: false, method: "none", label: null });
+  });
+
+  it("types title, description, keywords and today's Date Created into the drawer", () => {
+    mount(CARD_PAGE.replace(/disabled/g, ""));
+    const filled = driver.fillMetadataFields({
+      title: "Foldable paper map", description: "Pin marking a spot.", keywords: ["map", "pin"], dateCreated: "2026-10-29",
+    });
+    expect(filled.filled).toMatchObject({ title: true, description: true, keywords: true, dateCreated: true });
+    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="headline"]')!.value).toBe("Foldable paper map");
+    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!.value).toBe("2026-10-29");
   });
 });

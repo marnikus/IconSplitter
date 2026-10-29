@@ -53,8 +53,8 @@ describe("Getty web automatic finalize", () => {
       signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
+    // star_01.jpg and star_01.eps are one contribution, so one drawer, not two.
     expect(cdp.steps).toEqual([
-      "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
       "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
       "completeBatch", "confirmCompletion", "readCompletionState",
     ]);
@@ -63,11 +63,34 @@ describe("Getty web automatic finalize", () => {
     if (result.ok) {
       expect(result.report.metadata).toEqual([
         { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
-        { name: "star_01.eps", status: "saved", fields: { title: true, description: true, keywords: true } },
+        { name: "star_01.eps", status: "same-contribution" },
       ]);
       expect(result.report.completion).toEqual({ clicked: true, label: "Submit batch", confirmed: true, confirmLabel: "Submit" });
       expect(result.report.state).toEqual({ submitted: true, canComplete: false });
     }
+  });
+
+  it("fills today's Date Created and one drawer per contribution across different icons", async () => {
+    const cdp = connection(successQueue());
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      complete: true, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
+    const filled = cdp.expressions.filter((expression) => expression.includes("fillMetadataFields"));
+    const today = new Date().toISOString().slice(0, 10);
+    expect(filled).toHaveLength(2);
+    expect(filled.every((expression) => expression.includes(`"dateCreated":"${today}"`))).toBe(true);
+  });
+
+  it("lets an accepted date override today's Date Created", async () => {
+    const cdp = connection(successQueue());
+    await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: { ...META, dateCreated: "2025-01-31" } }],
+      complete: false, signal: new AbortController().signal,
+    });
+    expect(cdp.expressions.some((expression) => expression.includes('"dateCreated":"2025-01-31"'))).toBe(true);
   });
 
   it("does not touch the editor when a file has no accepted metadata, but still completes", async () => {

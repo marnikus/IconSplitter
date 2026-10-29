@@ -140,6 +140,7 @@ function buildSession(ctx) {
       const result = await attachFiles(connection, page.sessionId, {
         paths, names: input.files.map((f) => f.name),
         timeoutMs: options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS,
+        readyTimeoutMs: options.readyTimeoutMs,
         onProgress: options.onProgress, signal: options.signal,
       });
       if (!result.ok) return { ...result, batchId: state.batchId };

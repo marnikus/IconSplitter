@@ -126,6 +126,7 @@ async function acquireSession(cfg, url) {
     headed: process.env.GETTY_WEB_HEADED === "1",
     profileDir: process.env.GETTY_WEB_PROFILE,
     uploadTimeoutMs: Number(process.env.GETTY_WEB_UPLOAD_TIMEOUT_MS ?? 180000),
+    readyTimeoutMs: Number(process.env.GETTY_WEB_READY_TIMEOUT_MS ?? 120000),
   });
   const entry = {
     session: opened.ok ? opened.session : null, timer: null,

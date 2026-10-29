@@ -12,6 +12,17 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-ftp-panel`, `stock-ftp-toggle`, `stock-ftp-active-name`, `stock-ftp-quick-<presetId>` — collapsible preset panel & quick preset switch (`Shutterstock`, `Adobe Stock`, `Getty Images`, plus custom presets).
 - `stock-ftp-preset-select`, `stock-ftp-new-name`, `stock-ftp-add`, `stock-ftp-delete`, `stock-ftp-reset-builtin`, `stock-getty-csv`, `stock-open-esp`, `stock-open-deepmeta` — stock preset dropdown, CRUD, built-in reset, Getty ESP metadata CSV export (`getty-esp-metadata.csv`), and direct launchers for `esp.gettyimages.com` & DeepMeta 4 (`deepmeta.creativ.zone`).
 - `stock-ftp-host`, `stock-ftp-port`, `stock-ftp-protocol`, `stock-ftp-remotedir`, `stock-ftp-tls`, `stock-ftp-pin`, `stock-ftp-bridge-url` — per-stock connection settings (`esp-https`, `getty-web`, `ftps-explicit`, `sftp`, `ftps-implicit`, `ftp`); the retired local batch option is not offered. `getty-web` shows "Getty Images web upload (browser automation)" and the contributor page path (`/contribute`).
+- Getty web sign-in (no captured ids): the identifier is the visible
+  username/account input, else the first text input beside the password; the submit
+  is the form's `[type=submit]` or a control labelled
+  `Sign in|Log in|Continue|Next|Submit`, else Enter / `form.requestSubmit()`;
+  disabled fields stay candidates, because the page hydrates late.
+- Getty web cards: `[data-cy="contribution-file-name"]` names the contribution and
+  `[data-cy="not-ready-icon"]` (or `aria-label="not_ready_to_submit"`) marks it as
+  still processing. Files are matched to a card by **stem**, since a JPEG/EPS pair
+  is listed once, under the EPS name. The metadata drawer uses
+  `md-headline`/`md-caption`/`md-created_date`/`metadata-keyword-multiselect` and
+  `save-metadata`, and only enables its fields once a card is selected.
 - Getty web waits: the Create Batch control, `input[name="submission_name"]` and
   `[data-cy="create-batch-confirm-button"]` must render enabled within 60 s (else a
   `timeout` failure naming the control); an open dialog or an already-chosen
