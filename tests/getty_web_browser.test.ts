@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   decideProfileUse, launchBrowser, profileLocks, profileProcessIds, resetProfile, resolveProfileDir,
 } from "../tools/bridge/gettyweb/browser.mjs";
-import { cdpFailureReason } from "../tools/bridge/gettyweb/session.mjs";
+import { cdpFailureReason, failureOutcome, releaseSession } from "../tools/bridge/gettyweb/session.mjs";
 
 function tempProfile(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "getty-web-browser-test-"));
@@ -279,5 +279,37 @@ describe("Getty web socket failure reason", () => {
     const reason = cdpFailureReason(new Error("boom"), { port: 9222 });
     expect(reason).toContain("9222");
     expect(reason).toContain("GETTY_WEB_CDP");
+  });
+});
+
+describe("Getty web visible window", () => {
+  it("keeps the sign-in page on screen when a headed run fails", () => {
+    const headed = failureOutcome(true, "the sign-in form never appeared");
+    expect(headed.keepOpen).toBe(true);
+    expect(headed.reason).toContain("the sign-in form never appeared");
+    expect(headed.reason).toContain("left open");
+
+    expect(failureOutcome(false, "the sign-in form never appeared")).toEqual({
+      keepOpen: false, reason: "the sign-in form never appeared",
+    });
+  });
+
+  it("never leaves an unnamed, empty reason behind in either mode", () => {
+    expect(failureOutcome(true, "  ").reason).toContain("could not be prepared");
+    expect(failureOutcome(false, undefined).reason).toBe("the browser page could not be prepared");
+  });
+
+  it("detaches from a visible window and closes a hidden one", () => {
+    const calls: string[] = [];
+    const session = { close: () => calls.push("close"), detach: () => calls.push("detach") };
+    expect(releaseSession(session, true)).toBe("kept");
+    expect(releaseSession(session, false)).toBe("closed");
+    expect(calls).toEqual(["detach", "close"]);
+  });
+
+  it("closes a session that cannot detach, whatever the mode", () => {
+    const calls: string[] = [];
+    expect(releaseSession({ close: () => calls.push("close") }, true)).toBe("closed");
+    expect(calls).toEqual(["close"]);
   });
 });

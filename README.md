@@ -45,8 +45,7 @@ It has six modes (tabs across the top):
   ESP API automatic paired JPEG/EPS ingestion over HTTPS, and **Getty Images
   (web upload)** browser automation). Getty ESP requires an API key provisioned
   by Getty; upload creates a contribution, not a submission for review. The web
-  upload preset needs only the contributor e-mail (or contributor ID) and
-  password: the local helper starts headless Chrome/Edge, signs in to
+  upload preset needs only the contributor ID (or e-mail) and password: the local helper starts headless Chrome/Edge, signs in to
   `esp.gettyimages.com/contribute`, creates one batch, hands the JPEG (+
   optional EPS) to that page's own uploader, fills the accepted metadata and
   completes the batch — run `run_ftp_bridge.bat --getty-headed` once if Getty

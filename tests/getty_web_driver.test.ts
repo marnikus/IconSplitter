@@ -341,6 +341,19 @@ describe("Getty contributor page steps", () => {
     expect(state.chips).toMatchObject({ inReview: 1 });
   });
 
+  it("runs the read steps with nothing but the injected prelude in scope", () => {
+    // Chrome evaluates `prelude ; (step)(arg)`, so every helper the prelude hands
+    // over has to exist there. A helper that is a plain array once serialized to a
+    // bare `hidden,checkbox,…` list and the first run died in the page with
+    // "ReferenceError: hidden is not defined".
+    const run = (name: string, arg: unknown): unknown => (
+      new Function(`${driver.PAGE_PRELUDE}; return (${(driver as unknown as Record<string, (a: unknown) => unknown>)[name].toString()})(${JSON.stringify(arg ?? null)});`)()
+    );
+    expect(run("readPageInfo", null)).toMatchObject({ signedIn: true, createBatch: true });
+    expect(run("readUploadState", { names: ["icon_a.jpg"] })).toMatchObject({ namesSeen: ["icon_a.jpg"] });
+    expect(run("inspectSignIn", null)).toMatchObject({ inputs: [], arkose: false });
+  });
+
   it("keeps every step serializable: prelude + source evaluates in a page-like scope", () => {
     expect(driver.PAGE_PRELUDE).toContain("function firstVisible");
     const steps = driver as unknown as Record<string, () => unknown>;

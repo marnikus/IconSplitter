@@ -94,12 +94,18 @@ function firstVisible(selectors) {
   return null;
 }
 
-const NON_TEXT_INPUTS = ["hidden", "checkbox", "radio", "submit", "button", "image", "file", "range", "color", "date", "time"];
-
+/**
+ * Every field that can hold a value. The skip list lives *inside* the function:
+ * the prelude is serialized with `Function.prototype.toString()`, so a helper
+ * that pointed at a module constant arrived in the page as a bare
+ * `hidden,checkbox,…` expression and the first step died with
+ * "ReferenceError: hidden is not defined".
+ */
 function inputFields() {
+  const skipped = ["hidden", "checkbox", "radio", "submit", "button", "image", "file", "range", "color", "date", "time"];
   return [...document.querySelectorAll("input, [contenteditable=true]")]
     .filter(shown)
-    .filter((el) => !NON_TEXT_INPUTS.includes(el.type ?? ""));
+    .filter((el) => !skipped.includes(el.type ?? ""));
 }
 
 /**
@@ -458,7 +464,7 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  NON_TEXT_INPUTS, inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
+  inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n");
 

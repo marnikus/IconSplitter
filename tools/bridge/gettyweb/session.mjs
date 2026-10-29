@@ -54,6 +54,30 @@ export function cdpFailureReason(err, browser) {
   return `the browser opened${at} but its debugging socket did not answer — ${hint}, or set GETTY_WEB_CDP`;
 }
 
+const KEPT_OPEN = "browser window was left open — check the sign-in page it shows";
+
+/**
+ * What a failure may do to the browser. A window the user asked to see
+ * (`--getty-headed`) is never killed: they have to be able to judge whether the
+ * saved credentials actually signed in.
+ */
+export function failureOutcome(headed, reason) {
+  const text = String(reason ?? "").trim() || "the browser page could not be prepared";
+  return headed === true
+    ? { keepOpen: true, reason: `${text} (the ${KEPT_OPEN})` }
+    : { keepOpen: false, reason: text };
+}
+
+/** Lets go of a session: a visible window stays, a hidden one is closed. */
+export function releaseSession(session, headed) {
+  if (headed === true && typeof session?.detach === "function") {
+    session.detach();
+    return "kept";
+  }
+  session?.close();
+  return "closed";
+}
+
 /** Signs in and prepares the batches page; returns a reusable session. */
 export async function openGettySession(options) {
   const browser = await connectBrowser({
@@ -65,27 +89,25 @@ export async function openGettySession(options) {
     connection.close();
     browser.stop();
   };
+  const fail = (code, reason) => {
+    const outcome = failureOutcome(options.headed, reason);
+    if (outcome.keepOpen) connection.close();
+    else cleanup();
+    return { ok: false, code, reason: outcome.reason, keptOpen: outcome.keepOpen };
+  };
   try {
     const readyFailure = await connection.ready.then(() => null).catch((err) => err);
-    if (readyFailure !== null) {
-      cleanup();
-      return { ok: false, code: "browser", reason: cdpFailureReason(readyFailure, browser) };
-    }
+    if (readyFailure !== null) return fail("browser", cdpFailureReason(readyFailure, browser));
     const page = await openPage(connection);
     const info = await openContributePage(connection, page.sessionId, options.url);
     const signedIn = info.signedIn ? { ok: true } : await ensureSignedIn(connection, page.sessionId, {
       creds: options.creds, url: options.url, timeoutMs: options.loginTimeoutMs ?? LOGIN_TIMEOUT_MS,
       onProgress: options.onProgress, signal: options.signal,
     });
-    if (!signedIn.ok) {
-      cleanup();
-      return { ok: false, code: signedIn.code, reason: signedIn.reason };
-    }
+    if (!signedIn.ok) return fail(signedIn.code, signedIn.reason);
     return { ok: true, session: buildSession({ connection, page, browser, options, cleanup }) };
   } catch (err) {
-    cleanup();
-    const reason = String(err?.message ?? "").trim();
-    return { ok: false, code: "browser", reason: reason === "" ? "the browser page could not be prepared" : reason };
+    return fail("browser", String(err?.message ?? "").trim());
   }
 }
 
@@ -94,6 +116,9 @@ function buildSession(ctx) {
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
   const state = { batchId: null };
   let closed = false;
+  const dropTemp = () => {
+    try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
+  };
   return {
     get batchId() { return state.batchId; },
     /** Creates the batch once for the whole run. */
@@ -127,7 +152,17 @@ function buildSession(ctx) {
       if (closed) return;
       closed = true;
       cleanup();
-      try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
+      dropTemp();
+    },
+    /**
+     * Leaves a visible window on screen for whoever asked to watch it; only this
+     * driver lets go (the staged files still go).
+     */
+    detach() {
+      if (closed) return;
+      closed = true;
+      connection.close();
+      dropTemp();
     },
   };
 }

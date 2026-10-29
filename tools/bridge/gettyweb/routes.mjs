@@ -8,7 +8,7 @@
 
 import crypto from "node:crypto";
 import { findBrowser } from "./browser.mjs";
-import { openGettySession } from "./session.mjs";
+import { openGettySession, releaseSession } from "./session.mjs";
 
 const SESSION_IDLE_MS = 5 * 60 * 1000;
 const MAX_TITLE = 200;
@@ -99,11 +99,13 @@ function poolKeyOf(cfg, url) {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
+const headed = () => process.env.GETTY_WEB_HEADED === "1";
+
 function touch(key, entry) {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
     sessions.delete(key);
-    entry.session.close();
+    releaseSession(entry.session, headed());
   }, SESSION_IDLE_MS);
   entry.timer.unref?.();
   sessions.set(key, entry);
@@ -117,7 +119,7 @@ async function acquireSession(cfg, url) {
     const oldest = sessions.keys().next().value;
     const stale = sessions.get(oldest);
     sessions.delete(oldest);
-    stale?.session.close();
+    releaseSession(stale?.session, headed());
   }
   const opened = await openGettySession({
     url, creds: { username: cfg.username.trim(), password: cfg.password },
@@ -236,7 +238,7 @@ export async function handleGettyWebClose(req, res, post, json) {
   for (const [key, entry] of sessions.entries()) {
     if (wanted !== null && entry.sessionKey !== wanted) continue;
     if (entry.timer) clearTimeout(entry.timer);
-    entry.session?.close();
+    releaseSession(entry.session, headed());
     sessions.delete(key);
   }
   return json(res, 200, { ok: true });

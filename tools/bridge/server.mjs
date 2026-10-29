@@ -287,6 +287,7 @@ async function runGettyCheck() {
   }
   console.log(`devtools: port ${started.port}`);
   const connection = openCdp(started.socket);
+  const visible = process.env.GETTY_WEB_HEADED === "1";
   try {
     await connection.ready;
     console.log("socket: OK — the Getty web upload can drive this browser");
@@ -297,7 +298,8 @@ async function runGettyCheck() {
     return 1;
   } finally {
     connection.close();
-    started.stop();
+    if (visible) console.log("window: LEFT OPEN — close it when you are done looking");
+    else started.stop();
   }
 }
 

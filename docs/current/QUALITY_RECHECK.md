@@ -3798,3 +3798,31 @@ was the wrong ask — the helper now recovers by itself. Measured on this checko
 - Reset safety is covered by tests rather than by a live browser: only a process
   whose command line names the helper's own profile folder is ended, and a folder
   comparison is path-exact so `getty-profile-old` never matches `getty-profile`.
+
+## 2026-10-29 — Getty web sign-in: the page prelude crash and the window that vanished
+
+Reported from a real Windows run: `--getty-headed` opened Chrome and it closed at
+once, `/getty-web/test` answered 503, and the app showed
+`ReferenceError: hidden is not defined`. Measured here (Node 22.22.3, 2 cores, no
+browser):
+
+- Root cause: the page prelude is serialized with `Function.prototype.toString()`,
+  and it listed the module array `NON_TEXT_INPUTS` as if it were a helper, so
+  every step began with the bare expression `hidden,checkbox,radio,…`. The
+  existing "keeps every step serializable" test only compiled the source
+  (`new Function`), which is legal for a comma expression. The new test evaluates
+  the prelude and calls the real read steps, reproducing the exact reported error
+  before the fix: 23 passed afterwards in `tests/getty_web_driver.test.ts`.
+- The skip list now lives inside `inputFields()`, so no prelude helper points at
+  module scope.
+- The window closed because every failure ran `cleanup()`. In headed mode a
+  failure now only detaches (`failureOutcome` / `releaseSession`, 4 new cases in
+  `tests/getty_web_browser.test.ts`, 20 total) and the reason ends with
+  "browser window was left open — check the sign-in page it shows". The idle
+  timer and `/getty-web/close` and `--getty-check` also leave a visible window.
+- `npm run verify:fast` → Types PASS 15.7 s, Lint PASS (0 errors / 21 warnings)
+  12.5 s, Quality gate (changed) PASS 0.6 s, Tests + coverage PASS 110.3 s,
+  Build PASS 7.2 s. Focused: driver 23, browser 20, bridge routes 16, sign-in 9,
+  96 across the eight Getty web suites.
+- `docs/current/sor/stock-upload-getty-web.md` stays at 8,977 bytes (budget
+  9,000) after documenting both rules.

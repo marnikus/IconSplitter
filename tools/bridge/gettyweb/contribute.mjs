@@ -85,7 +85,7 @@ async function loginAttempt(connection, sessionId, creds, onProgress) {
 const SIGN_IN_TIMEOUT = "Getty did not show the Batches page in time";
 const SIGN_IN_CHALLENGE = "Getty is asking for an interactive verification (captcha, 2-factor or new-device check) — run run_ftp_bridge.bat --getty-headed, sign in once in the window that opens, then retry";
 const SIGN_IN_UNSENT = "the sign-in form was filled but no sign-in control could be pressed — run run_ftp_bridge.bat --getty-headed to see what the page asks for";
-const SIGN_IN_ID_STEP = "Getty stayed on the e-mail / account ID step — save the contributor e-mail or the numeric contributor ID you use on gettyimages.com, then retry";
+const SIGN_IN_ID_STEP = "Getty stayed on the account ID step — save the numeric contributor ID (or e-mail) you use on gettyimages.com, then retry";
 const SIGN_IN_REJECTED = "Getty did not accept the saved contributor password — check it, or run run_ftp_bridge.bat --getty-headed to watch the sign-in";
 
 /** One short line about the screen the run was stuck on (never a value). */
