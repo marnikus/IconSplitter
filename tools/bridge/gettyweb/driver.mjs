@@ -167,15 +167,150 @@ export function readUploadState({ names }) {
   };
 }
 
+/** Everything a form field is labelled by: name/id/placeholder/aria/label text. */
+function labelTextOf(el) {
+  const parts = [el.getAttribute("name"), el.id, el.getAttribute("placeholder"), el.getAttribute("aria-label")];
+  if (el.labels && el.labels[0]) parts.push(el.labels[0].textContent);
+  const wrapping = el.closest("label");
+  if (wrapping) parts.push(wrapping.textContent);
+  return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** Writes a value the way React/MUI observes it, then commits chip-style keys. */
+function setFieldValue(el, value) {
+  if (el.isContentEditable) {
+    el.focus();
+    el.textContent = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+  setNativeValue(el, value);
+  el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+}
+
+/**
+ * Types title/description/keywords into whatever metadata editor is open.
+ * `overwrite: false` keeps values Getty already prefilled from the file's
+ * embedded XMP/IPTC, so an upload never silently rewrites accepted text.
+ */
+export function fillMetadataFields({ title, description, keywords, overwrite }) {
+  const fields = [...document.querySelectorAll("input, textarea, [contenteditable=true]")].filter(visible);
+  const find = (pattern) => fields.find((el) => pattern.test(labelTextOf(el))) ?? null;
+  const targets = {
+    title: find(/title|headline/i),
+    description: find(/description|caption/i),
+    keywords: find(/keyword|\btags?\b/i),
+  };
+  const filled = {};
+  for (const [key, el] of Object.entries(targets)) {
+    filled[key] = false;
+    if (!el) continue;
+    const current = el.isContentEditable ? (el.textContent ?? "") : String(el.value ?? "");
+    if (!overwrite && current.trim() !== "") continue;
+    const value = key === "keywords" ? (Array.isArray(keywords) ? keywords.join(", ") : "") : (key === "title" ? title : description);
+    if (typeof value !== "string" || value.trim() === "") continue;
+    setFieldValue(el, value);
+    filled[key] = true;
+  }
+  return {
+    filled,
+    present: Object.fromEntries(Object.entries(targets).map(([key, el]) => [key, el !== null])),
+  };
+}
+
+/** Opens the metadata editor for one uploaded file (row button, else the row). */
+export function openFileMetadata({ fileName }) {
+  const needle = String(fileName ?? "").trim().toLowerCase();
+  if (needle === "") return { opened: false, method: "none", label: null };
+  const matches = [...document.querySelectorAll("a, span, p, td, div")]
+    .filter((el) => visible(el) && textOf(el).toLowerCase() === needle);
+  const node = matches[matches.length - 1];
+  if (!node) return { opened: false, method: "none", label: null };
+  const row = node.closest("tr, li, [role=row], [data-testid*=row], section, article") ?? node.parentElement ?? node;
+  const control = [...row.querySelectorAll("button, a, [role=button]")].find((el) => visible(el)
+    && /edit|metadata|details|keyword|info/i.test(`${textOf(el)} ${el.getAttribute("aria-label") ?? ""}`));
+  if (control) {
+    click(control);
+    return { opened: true, method: "button", label: textOf(control) };
+  }
+  click(node);
+  return { opened: true, method: "row", label: null };
+}
+
+/** Saves the open metadata editor (Save / Save and close / Apply / Done). */
+export function saveMetadataEditor() {
+  const buttons = [...document.querySelectorAll("button, [role=button]")].filter(visible);
+  const save = buttons.find((el) => /^(save|save & close|save and close|save changes|apply|done|update)$/i.test(textOf(el))
+    || /^save/i.test(el.getAttribute("aria-label") ?? ""));
+  if (!save) return { saved: false, label: null };
+  click(save);
+  return { saved: true, label: textOf(save) };
+}
+
+/** Leaves a metadata editor that is still open (Close / Back / Cancel). */
+export function closeMetadataEditor() {
+  const dialogs = [...document.querySelectorAll("[role=dialog], [role=alertdialog]")].filter(visible);
+  const scope = dialogs.length > 0 ? dialogs[dialogs.length - 1] : null;
+  if (!scope) return { closed: false, label: null };
+  const buttons = [...scope.querySelectorAll("button, [role=button]")].filter(visible);
+  const closer = buttons.find((el) => /^(close|back|cancel|done)$/i.test(textOf(el)));
+  if (!closer) return { closed: false, label: null };
+  click(closer);
+  return { closed: true, label: textOf(closer) };
+}
+
+/** Clicks the batch's Complete / Submit control. */
+export function completeBatch() {
+  const buttons = [...document.querySelectorAll("button, a, [role=button]")].filter(visible);
+  const target = buttons.find((el) => /^(complete|complete batch|submit|submit batch|submit for review|send for review|finish)$/i.test(textOf(el)));
+  if (!target) return { clicked: false, label: null };
+  click(target);
+  return { clicked: true, label: textOf(target) };
+}
+
+/** Accepts a confirmation dialog raised by Complete/Submit, when there is one. */
+export function confirmCompletion() {
+  const dialogs = [...document.querySelectorAll("[role=dialog], [role=alertdialog]")].filter(visible);
+  const scope = dialogs.length > 0 ? dialogs[dialogs.length - 1] : null;
+  if (!scope) return { confirmed: false, label: null, dialog: false };
+  const buttons = [...scope.querySelectorAll("button, [role=button]")].filter(visible);
+  const confirm = buttons.find((el) => /^(submit|submit batch|submit for review|complete|complete batch|confirm|yes|send|ok)$/i.test(textOf(el)));
+  if (!confirm) return { confirmed: false, label: null, dialog: true };
+  click(confirm);
+  return { confirmed: true, label: textOf(confirm), dialog: true };
+}
+
+/** The batch page's current completion affordances and status text. */
+export function readCompletionState() {
+  const text = textOf(document.body).slice(0, 200000);
+  const buttons = [...document.querySelectorAll("button, a, [role=button]")].filter(visible).map(textOf).filter((t) => t !== "");
+  return {
+    url: location.href,
+    buttons: buttons.slice(0, 40),
+    canComplete: buttons.some((label) => /^(complete|submit|submit batch|finish)$/i.test(label)),
+    submitted: /batch (submitted|completed)|submitted for review/i.test(text),
+    chips: {
+      accepted: Number((/(\d+)\s+Accepted\b/i.exec(text) ?? [])[1] ?? 0),
+      inReview: Number((/(\d+)\s+In review\b/i.exec(text) ?? [])[1] ?? 0),
+      notSubmitted: Number((/(\d+)\s+Not submitted\b/i.exec(text) ?? [])[1] ?? 0),
+    },
+  };
+}
+
 /**
  * The helper sources above, injected ahead of every evaluated step so a
  * serialized function finds `visible`, `firstVisible`, … in the page scope.
  */
-export const PAGE_PRELUDE = [visible, setNativeValue, textOf, click, firstVisible, loginFields]
+export const PAGE_PRELUDE = [
+  visible, setNativeValue, textOf, click, firstVisible, loginFields, labelTextOf, setFieldValue,
+]
   .map((fn) => fn.toString()).join("\n");
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [
   "readPageInfo", "fillLoginForm", "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
+  "fillMetadataFields", "openFileMetadata", "saveMetadataEditor", "closeMetadataEditor",
+  "completeBatch", "confirmCompletion", "readCompletionState",
 ];

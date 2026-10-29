@@ -3,7 +3,7 @@
 // copy when enabled, and let the contributor page's own uploader take them.
 
 import { readBytesAt, type DirHandleLike } from "../lib/fs";
-import { gettyWebFileOrder, validateGettyWebTasks } from "../lib/stockupload/gettyweb";
+import { gettyWebFileOrder, gettyWebMetadataOf, validateGettyWebTasks } from "../lib/stockupload/gettyweb";
 import {
   uploadBridgeGettyWeb, type GettyWebFile, type GettyWebResult, type GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
@@ -56,6 +56,15 @@ async function combineMetadata(input: GettyWebGroupInput, files: GettyWebFile[])
   }
 }
 
+const GETTY_WEB_NOT_COMPLETED_NOTE =
+  "files uploaded but the batch was not completed — submit it on the Getty contributor page";
+
+/** A Getty web upload that uploaded but stopped before Complete needs a manual finish. */
+export function completionNote(res: { ok: boolean; completed?: boolean }): string | null {
+  if (!res.ok || res.completed) return null;
+  return GETTY_WEB_NOT_COMPLETED_NOTE;
+}
+
 /** Uploads one icon (JPEG + optional EPS) into the shared Getty web batch. */
 export async function uploadGettyWebGroup(input: GettyWebGroupInput): Promise<GettyWebResult> {
   const invalid = validateGettyWebTasks(input.tasks, input.missing);
@@ -66,9 +75,12 @@ export async function uploadGettyWebGroup(input: GettyWebGroupInput): Promise<Ge
   const files = await combineMetadata(input, read);
   if (typeof files === "string") return failed(files);
   const send = input.uploadFn ?? uploadBridgeGettyWeb;
+  const metadata = input.item ? gettyWebMetadataOf(input.item) : null;
   return send({
     bridgeUrl: input.bridgeUrl, preset: input.target, creds: input.creds, files,
     batchName: input.batchName, submissionType: input.submissionType,
+    metadata,
+    complete: true,
     sessionKey: input.sessionKey, signal: input.signal,
   });
 }

@@ -13,6 +13,9 @@ const STEP_SOURCES = new Map(
 
 const LOGIN_POLL_MS = 1500;
 const UPLOAD_POLL_MS = 1000;
+const CONFIRM_SETTLE_MS = 700;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Runs one named page step; unknown names fail loudly instead of silently. */
 export function runDriverStep(connection, sessionId, name, arg) {
@@ -124,4 +127,57 @@ export async function attachFiles(connection, sessionId, options) {
   if (!result.ok) return { ok: false, code: "page", reason: result.reason, state: null };
   options.onProgress?.(`${options.paths.length} file(s) attached to the batch page`);
   return waitForFileNames(connection, sessionId, options.names, options);
+}
+
+/** Opens one file's metadata editor, types the accepted text, and saves it. */
+async function fillOneFileMetadata(connection, sessionId, file, options) {
+  const opened = await runDriverStep(connection, sessionId, "openFileMetadata", { fileName: file.name });
+  if (!opened.opened) return { name: file.name, status: "row-not-found" };
+  const filled = await runDriverStep(connection, sessionId, "fillMetadataFields", {
+    title: file.metadata.title, description: file.metadata.description,
+    keywords: file.metadata.keywords, overwrite: false,
+  });
+  const saved = (await runDriverStep(connection, sessionId, "saveMetadataEditor")) ?? { saved: false, label: null };
+  await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
+  options.onProgress?.(`${file.name}: metadata ${saved.saved ? "saved" : "filled but no Save button"}`);
+  return { name: file.name, status: saved.saved ? "saved" : "filled-unsaved", fields: filled.filled };
+}
+
+async function fillEveryFileMetadata(connection, sessionId, options) {
+  const report = [];
+  for (const file of options.files) {
+    if (options.signal?.aborted) return { aborted: true, report };
+    if (!file.metadata) {
+      report.push({ name: file.name, status: "embedded-only" });
+      continue;
+    }
+    report.push(await fillOneFileMetadata(connection, sessionId, file, options));
+  }
+  return { aborted: false, report };
+}
+
+/**
+ * The automatic tail of a run: type each icon's accepted title/description/
+ * keywords into its editor (never overwriting what Getty prefilled), then
+ * click Complete/Submit and accept its confirmation dialog.
+ */
+export async function finalizeBatch(connection, sessionId, options) {
+  const filled = await fillEveryFileMetadata(connection, sessionId, options);
+  const report = { metadata: filled.report, completion: null, state: null };
+  if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };
+  if (options.complete === false) return { ok: true, report };
+  const clicked = await runDriverStep(connection, sessionId, "completeBatch");
+  if (!clicked.clicked) {
+    return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", report };
+  }
+  await sleep(CONFIRM_SETTLE_MS);
+  const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion");
+  await sleep(CONFIRM_SETTLE_MS);
+  const state = await runDriverStep(connection, sessionId, "readCompletionState");
+  report.completion = {
+    clicked: true, label: clicked.label, confirmed: confirmed.confirmed, confirmLabel: confirmed.label,
+  };
+  report.state = { submitted: state.submitted, canComplete: state.canComplete };
+  options.onProgress?.(state.submitted ? "Getty shows the batch as submitted" : `batch completion sent (${clicked.label})`);
+  return { ok: true, report };
 }

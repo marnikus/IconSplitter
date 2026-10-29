@@ -62,19 +62,27 @@ describe("Getty web upload rules", () => {
 
 describe("Getty web loopback client", () => {
   it("sends both files in order with credentials only inside the loopback header", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true, batchId: "68445204", accepted: ["icon_a.jpeg", "icon_a.eps"] }));
+    const reply = {
+      ok: true, batchId: "68445204", accepted: ["icon_a.jpeg", "icon_a.eps"],
+      completed: true, completion: { clicked: true, label: "Complete", confirmed: true },
+      metadata: [{ name: "icon_a.jpeg", status: "saved", fields: { title: true, description: true, keywords: true } }],
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(200, reply));
+    const metadata = { title: "Star", description: "A star icon", keywords: ["star", "icon"] };
     const result = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
       files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }, { name: "icon_a.eps", bytes: new Uint8Array([4, 5]) }],
-      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      metadata, complete: true, fetchImpl,
     });
-    expect(result).toEqual({ ok: true, batchId: "68445204", accepted: ["icon_a.jpeg", "icon_a.eps"] });
+    expect(result).toEqual(reply);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/upload");
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
     expect(header).toMatchObject({
       protocol: "getty-web", host: "esp.gettyimages.com", username: CREDS.username, password: CREDS.password,
       batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      metadata, complete: true,
       files: [{ name: "icon_a.jpeg", bytes: 3 }, { name: "icon_a.eps", bytes: 2 }],
     });
   });

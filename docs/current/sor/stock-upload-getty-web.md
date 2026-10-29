@@ -32,7 +32,14 @@ machine, and the app talks to it on `127.0.0.1` like every other stock transport
    `DOM.setFileInputFiles`.
 5. Getty's own uploader performs the transfer. The helper waits until the batch
    page lists the file names (or the wait times out) and returns the batch id.
-6. `/getty-web/close` shuts the browser and deletes the staged files when the
+6. **Metadata:** for every listed file the helper opens the row's metadata
+   editor, types the accepted title, description and keywords that travelled in
+   the upload payload, and saves. Fields Getty already prefilled from the file's
+   embedded XMP/IPTC are never overwritten.
+7. **Complete:** the helper then clicks the batch's Complete/Submit control and
+   accepts its confirmation dialog, so the run ends with the batch submitted
+   instead of waiting for a manual click.
+8. `/getty-web/close` shuts the browser and deletes the staged files when the
    target finishes; an idle session is closed after five minutes.
 
 One session = one sign-in = one batch. A second target or a second run signs in
@@ -54,13 +61,21 @@ again; nothing is reused across runs.
 
 - Exactly one JPEG per icon plus its matching-stem EPS when selected; SVG, PNG
   and ZIP are refused before the browser starts.
-- Title, description and keywords are **not** typed into the site: they already
-  travel inside the exported JPEG/EPS (IPTC/XMP/RDF) from `export/`. The optional
-  in-memory **Title + description** copy still applies to the uploaded copy.
+- Title, description and keywords also travel inside the exported JPEG/EPS
+  (IPTC/XMP/RDF) from `export/`, and the runner sends the same accepted text as a
+  separate `metadata` field so the helper can type it where an editable editor
+  exists. Empty editors get the value; a prefilled editor is left alone. The
+  optional in-memory **Title + description** copy still applies to the uploaded
+  copy.
+- Metadata is only sent for icons whose review state is `accepted`
+  (`gettyWebMetadataOf`), trimmed and capped (title 200, description 2000,
+  keywords 49 × 64 chars); keywords are deduped case-insensitively.
 - Batch name: `IconSplitter <UTC date> (<n> icons)`; submission type:
   `iStock creative illustration` — both fixed by `gettyweb.ts`/`runupload.ts`.
-- Submission is not performed: the batch is created and files land in it for the
-  contributor to review and submit on Getty.
+- Submission is attempted automatically (`complete: true`): clicking Complete is
+  best-effort and reports `completed`/`completion` so the panel can tell the user
+  whether the batch was actually submitted. Set `GETTY_WEB_COMPLETE=0` on the
+  helper to stop after the upload and leave the batch for manual review.
 
 ## 5. Page contract and failure codes
 
@@ -92,6 +107,18 @@ found). Every reason is scrubbed of the saved e-mail and password.
   duplicate batch is the only automatic recovery.
 - Login may require an interactive challenge; that is a `auth` failure with the
   headed-mode hint.
+- Metadata editors and the Complete control are matched by **label keywords**
+  (`title|headline`, `description|caption`, `keyword|tags`; `Save|Save and close|
+  Apply|Done`; `Complete|Submit|Finish`) plus row proximity — generic guesses
+  that were **not** seen live. A missing editor is reported per file
+  (`row-not-found`, `filled-unsaved`, `embedded-only`) and a missing Complete
+  control fails the run with `page` + the step name instead of submitting
+  something unexpected.
+- The helper never claims the outcome of Getty's review: `completed: true` means
+  the control was clicked and the dialog accepted, not that the files passed.
+- When the helper uploads but does not complete (opt-out or older helper), the
+  run summary says so — `files uploaded but the batch was not completed — submit
+  it on the Getty contributor page` — instead of reporting a plain success.
 
 ## 7. Invariants and tests
 
@@ -104,6 +131,7 @@ found). Every reason is scrubbed of the saved e-mail and password.
 - Tests: `tests/getty_web_driver.test.ts` (real page steps in a DOM),
   `tests/getty_web_upload.test.ts` (rules + loopback client),
   `tests/getty_web_cdp.test.ts` (protocol framing with a stand-in socket),
-  `tests/bridge_getty_web.test.ts` (spawned helper routes), and
-  `tests/stockupload_getty_web.test.ts` (runner grouping, cancellation, missing
-  credentials).
+  `tests/bridge_getty_web.test.ts` (spawned helper routes),
+  `tests/getty_web_finalize.test.ts` (metadata fill + auto complete step order,
+  embedded-only and opt-out paths), and `tests/stockupload_getty_web.test.ts`
+  (runner grouping, cancellation, missing credentials).

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
-import { attachFiles, createBatch, ensureSignedIn, openContributePage } from "./contribute.mjs";
+import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, openContributePage } from "./contribute.mjs";
 
 const LOGIN_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
@@ -91,7 +91,13 @@ function buildSession(ctx) {
         timeoutMs: options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS,
         onProgress: options.onProgress, signal: options.signal,
       });
-      return { ...result, batchId: state.batchId };
+      if (!result.ok) return { ...result, batchId: state.batchId };
+      const done = await finalizeBatch(connection, page.sessionId, {
+        files: input.files.map((file) => ({ name: file.name, metadata: input.metadata ?? null })),
+        complete: input.complete !== false,
+        onProgress: options.onProgress, signal: options.signal,
+      });
+      return { ...done, state: { ...result.state, ...done.report?.state }, report: done.report, batchId: state.batchId };
     },
     close() {
       if (closed) return;

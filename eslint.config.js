@@ -55,6 +55,7 @@ export default tseslint.config(
         AbortSignal: "readonly",
         WebSocket: "readonly",
         mkdtempSync: "readonly",
+        KeyboardEvent: "readonly",
       },
     },
   },

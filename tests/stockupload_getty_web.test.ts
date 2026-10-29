@@ -76,7 +76,14 @@ describe("Getty web upload in the batch runner", () => {
       loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
       gettyWebUploadFn: async (input) => {
         sent.push(input);
-        return { ok: true, batchId: "68445204", accepted: input.files.map((f) => f.name) };
+        return {
+          ok: true,
+          batchId: "68445204",
+          accepted: input.files.map((f) => f.name),
+          completed: true,
+          completion: { clicked: true, label: "Complete", confirmed: true, confirmLabel: "Confirm" },
+          metadata: [],
+        };
       },
       closeGettyWebFn: async (_url, sessionKey) => { closed.push(sessionKey); },
     });
@@ -92,6 +99,26 @@ describe("Getty web upload in the batch runner", () => {
     expect(sent[0].creds.password).toBe("GettyPass!42");
   });
 
+  it("reports an un-submitted batch when the helper uploaded but did not complete", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: false });
+    const found = await discoverExportedItems(root);
+    const summary = await executeStockUploadBatch(planFor(found.items, { raster: true, svg: false, eps: false, zip: false }), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "68445204", accepted: ["star_01.jpg"],
+        completed: false, completion: null, metadata: [],
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary.failedFiles).toBe(0);
+    expect(summary.uploadedFiles).toBe(1);
+    expect(summary.lastError).toContain("not completed");
+  });
+
   it("fails a PNG-only plan before any browser upload is attempted", async () => {
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: false, eps: true });
@@ -103,7 +130,7 @@ describe("Getty web upload in the batch runner", () => {
       bridgeUrl: "http://127.0.0.1:47391",
       signal: new AbortController().signal,
       loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
-      gettyWebUploadFn: async () => { calls += 1; return { ok: true, batchId: null, accepted: [] }; },
+      gettyWebUploadFn: async () => { calls += 1; return { ok: true, batchId: null, accepted: [], completed: false, completion: null, metadata: [] }; },
       closeGettyWebFn: async () => undefined,
     });
     expect(calls).toBe(0);
@@ -121,7 +148,7 @@ describe("Getty web upload in the batch runner", () => {
       bridgeUrl: "http://127.0.0.1:47391",
       signal: new AbortController().signal,
       loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
-      gettyWebUploadFn: async () => { calls += 1; return { ok: true, batchId: null, accepted: [] }; },
+      gettyWebUploadFn: async () => { calls += 1; return { ok: true, batchId: null, accepted: [], completed: false, completion: null, metadata: [] }; },
       closeGettyWebFn: async () => undefined,
     });
     expect(calls).toBe(0);
@@ -138,7 +165,7 @@ describe("Getty web upload in the batch runner", () => {
       bridgeUrl: "http://127.0.0.1:47391",
       signal: new AbortController().signal,
       loadCreds: async () => null,
-      gettyWebUploadFn: async () => { calls += 1; return { ok: true, batchId: null, accepted: [] }; },
+      gettyWebUploadFn: async () => { calls += 1; return { ok: true, batchId: null, accepted: [], completed: false, completion: null, metadata: [] }; },
     });
     expect(calls).toBe(0);
     expect(summary.failedFiles).toBe(1);

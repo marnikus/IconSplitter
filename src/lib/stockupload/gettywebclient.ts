@@ -13,8 +13,24 @@ const NO_BROWSER_REASON = "No Google Chrome or Microsoft Edge was found on this 
 
 export type GettyWebErrorCode = "helper-down" | "bad-request" | "auth" | "browser" | "page" | "timeout" | "cancelled" | "network";
 
+export interface GettyWebMetadataPayload {
+  title: string;
+  description: string;
+  keywords: string[];
+}
+
+export interface GettyWebFileReport {
+  name: string;
+  status: string;
+  fields?: Record<string, boolean>;
+}
+
 export type GettyWebResult =
-  | { ok: true; batchId: string | null; accepted: string[] }
+  | {
+    ok: true; batchId: string | null; accepted: string[]; completed: boolean;
+    completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
+    metadata: GettyWebFileReport[];
+  }
   | { ok: false; code: GettyWebErrorCode; reason: string };
 
 export interface GettyWebFile {
@@ -29,6 +45,10 @@ export interface GettyWebUploadInput {
   files: GettyWebFile[];
   batchName: string;
   submissionType: string;
+  /** Accepted title/description/keywords typed into the file's editor. */
+  metadata?: GettyWebMetadataPayload | null;
+  /** Click the batch's Complete/Submit control after the metadata is saved. */
+  complete?: boolean;
   sessionKey?: string;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
@@ -54,6 +74,8 @@ function uploadConfig(input: GettyWebUploadInput): string {
     sessionKey: input.sessionKey ?? "",
     batchName: input.batchName,
     submissionType: input.submissionType,
+    metadata: input.metadata ?? null,
+    complete: input.complete !== false,
     files: input.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
   }));
 }
@@ -68,10 +90,26 @@ function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok
 
 function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
   if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
+  const metadata = Array.isArray(raw.metadata)
+    ? raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
+      name: String(entry.name),
+      status: typeof entry.status === "string" ? entry.status : "unknown",
+      ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
+    }))
+    : [];
   return {
     ok: true,
     batchId: typeof raw.batchId === "string" ? raw.batchId : null,
     accepted: Array.isArray(raw.accepted) ? raw.accepted.filter((n): n is string => typeof n === "string") : fallback,
+    completed: raw.completed === true,
+    completion: isRecord(raw.completion)
+      ? {
+        clicked: raw.completion.clicked === true,
+        label: typeof raw.completion.label === "string" ? raw.completion.label : null,
+        confirmed: raw.completion.confirmed === true,
+      }
+      : null,
+    metadata,
   };
 }
 

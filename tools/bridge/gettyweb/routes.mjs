@@ -11,9 +11,29 @@ import { findBrowser } from "./browser.mjs";
 import { openGettySession } from "./session.mjs";
 
 const SESSION_IDLE_MS = 5 * 60 * 1000;
+const MAX_TITLE = 200;
+const MAX_DESCRIPTION = 2000;
+const MAX_KEYWORDS = 49;
+const MAX_KEYWORD = 64;
 const MAX_SESSIONS = 2;
 const GETTY_HOST = /(^|\.)gettyimages\.com$/i;
 const sessions = new Map();
+
+function cleanText(value, max) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+/** The accepted metadata typed into the page; never anything the app did not send. */
+export function sanitizeMetadata(raw) {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const title = cleanText(raw.title, MAX_TITLE);
+  if (title === "") return null;
+  const keywords = Array.isArray(raw.keywords)
+    ? raw.keywords.filter((k) => typeof k === "string").map((k) => cleanText(k, MAX_KEYWORD))
+      .filter((k) => k !== "").slice(0, MAX_KEYWORDS)
+    : [];
+  return { title, description: cleanText(raw.description, MAX_DESCRIPTION), keywords };
+}
 
 /** `/health` capability block; never launches a browser. */
 export function gettyWebHealth() {
@@ -140,7 +160,10 @@ async function performUpload(cfg, url, files) {
   touch(acquired.key, acquired.entry);
   const batch = await session.ensureBatch({ batchName: cfg.batchName, submissionType: cfg.submissionType });
   if (!batch.ok) return batch;
-  const uploaded = await session.upload({ files });
+  const uploaded = await session.upload({
+    files, metadata: sanitizeMetadata(cfg.metadata),
+    complete: cfg.complete !== false && process.env.GETTY_WEB_COMPLETE !== "0",
+  });
   return { ...uploaded, batchId: batch.batchId };
 }
 
@@ -172,6 +195,10 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
     return json(res, 200, {
       ok: true, batchId: result.batchId ?? null, accepted: result.state?.namesSeen ?? files.map((f) => f.name),
       chips: result.state?.chips ?? null,
+      completed: result.report?.completion?.clicked === true,
+      completion: result.report?.completion ?? null,
+      metadata: result.report?.metadata ?? [],
+      submitted: result.state?.submitted === true,
     });
   } catch (err) {
     return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });

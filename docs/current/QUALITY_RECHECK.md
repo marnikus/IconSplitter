@@ -3679,3 +3679,27 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - `npm run quality:changed`: PASS — `gettyweb.ts` 64 lines/11 fns, `gettywebclient.ts` 153/13, `gettywebtransfer.ts` 75/4, `runupload.ts` 300/20, `panelops.ts` 216/39, `ftpactions.ts` 246/32, `StockFtpPanel.tsx` 255/34, `StockFtpCredentials.tsx` 194/21, `presets.ts` 296/28 (`parseStockPresetState` reduced to CC 10 by a version helper).
 - `npm run verify:fast` and `npm run verify`: PASS — types, lint (0 errors; existing warnings only), changed-file quality gate, native perf budgets, tests + coverage, build (1,940 kB single-file `dist/index.html`, not staged). `npm ci` was run first because the checked-in `node_modules/` was from another platform; its changes are not staged.
 - Limits recorded in [the Getty web page](current/sor/stock-upload-getty-web.md#6-honest-limits): selectors verified against the captured Batches/Create Batch markup only; the batch-detail file input is matched generically; file status is best-effort text scraping; a run can leave a partial batch; interactive challenges need `GETTY_WEB_HEADED=1`.
+
+## 2026-10-29 — Getty web upload: automatic metadata + batch completion
+
+Follow-up on the Getty web target (PR #4): accepted title/description/keywords are
+now typed into each file's editor and the batch's Complete/Submit control is
+clicked automatically. Measured on this checkout (Node 22.22.3, sandbox with no
+Chrome installed):
+
+- Focused: `tests/getty_web_driver.test.ts`, `tests/getty_web_finalize.test.ts`,
+  `tests/getty_web_upload.test.ts`, `tests/getty_web_cdp.test.ts`,
+  `tests/bridge_getty_web.test.ts`, `tests/stockupload_getty_web.test.ts`,
+  `tests/stockupload_getty_web_ui.test.tsx`, `tests/stockupload_ui.test.tsx`,
+  `tests/stockupload_presets.test.ts`, `tests/docs_navigation.test.ts`
+  → 10 files / 70 tests passed.
+- `npx tsc --noEmit -p tsconfig.json` → clean.
+- `npm run quality:changed` → PASS (runupload.ts kept at 299 lines by moving
+  `completionNote` into `gettywebtransfer.ts`).
+- `npm run verify:fast` → Types PASS 8.0 s, Lint PASS (0 errors / 21 warnings)
+  1.8 s, Quality gate (changed) PASS 0.8 s, Tests + coverage PASS 123.9 s,
+  Build PASS 8.9 s (`dist/index.html` 1,941.45 kB / 599.68 kB gzip).
+- Limits stayed honest in `docs/current/sor/stock-upload-getty-web.md` §6: the
+  metadata-editor and Complete/Submit selectors are label guesswork never seen
+  live, and the launch/attach path is only exercised through fakes here because
+  this machine has no Google Chrome or Microsoft Edge.

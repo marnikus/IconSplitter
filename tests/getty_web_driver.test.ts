@@ -123,6 +123,82 @@ describe("Getty contributor page steps", () => {
     expect(driver.submitBatchCreation()).toEqual({ clicked: false, reason: "Create button not found" });
   });
 
+  it("fills title, description and keywords only where the editor is still empty", () => {
+    mount(`
+      <div role="dialog">
+        <label>Title <input name="title" value="" /></label>
+        <label>Description <textarea name="description"></textarea></label>
+        <label>Keywords <input name="keywords" value="" /></label>
+        <button>Save</button>
+      </div>`);
+    const title = document.querySelector<HTMLInputElement>('input[name="title"]')!;
+    const description = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const keywords = document.querySelector<HTMLInputElement>('input[name="keywords"]')!;
+    const result = driver.fillMetadataFields({
+      title: "Charity hand icon", description: "Open palm holding a heart.", keywords: ["charity", "care", "heart"], overwrite: false,
+    });
+    expect(result).toEqual({
+      filled: { title: true, description: true, keywords: true },
+      present: { title: true, description: true, keywords: true },
+    });
+    expect(title.value).toBe("Charity hand icon");
+    expect(description.value).toBe("Open palm holding a heart.");
+    expect(keywords.value).toBe("charity, care, heart");
+  });
+
+  it("never overwrites values Getty prefilled from embedded metadata", () => {
+    mount('<label>Title <input name="title" value="Prefilled from XMP" /></label><label>Keywords <input name="keywords" value="a, b" /></label>');
+    const result = driver.fillMetadataFields({ title: "New title", description: "d", keywords: ["c"], overwrite: false });
+    expect(result.filled.title).toBe(false);
+    expect(result.filled.keywords).toBe(false);
+    expect(result.present.description).toBe(false);
+    expect(document.querySelector<HTMLInputElement>('input[name="title"]')!.value).toBe("Prefilled from XMP");
+  });
+
+  it("opens a file's metadata editor from its row and saves it", () => {
+    mount(`
+      <table><tbody>
+        <tr><td><span>star_01.jpg</span></td><td><button>Edit metadata</button></td></tr>
+        <tr><td><span>moon_02.jpg</span></td><td><button>Edit metadata</button></td></tr>
+      </tbody></table>`);
+    const opened = vi.fn();
+    document.querySelectorAll("button")[0].addEventListener("click", opened);
+    expect(driver.openFileMetadata({ fileName: "star_01.jpg" })).toEqual({ opened: true, method: "button", label: "Edit metadata" });
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(driver.openFileMetadata({ fileName: "absent.jpg" })).toEqual({ opened: false, method: "none", label: null });
+
+    mount('<div role="dialog"><button>Cancel</button><button>Save and close</button></div>');
+    const saved = vi.fn();
+    document.querySelectorAll("button")[1].addEventListener("click", saved);
+    expect(driver.saveMetadataEditor()).toEqual({ saved: true, label: "Save and close" });
+    expect(saved).toHaveBeenCalledTimes(1);
+
+    const closed = vi.fn();
+    document.querySelectorAll("button")[0].addEventListener("click", closed);
+    expect(driver.closeMetadataEditor()).toEqual({ closed: true, label: "Cancel" });
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it("completes the batch and confirms its dialog", () => {
+    mount('<main><button>Add files</button></main>');
+    expect(driver.completeBatch()).toEqual({ clicked: false, label: null });
+    mount('<main><button>Add files</button><button>Submit batch</button></main>');
+    const submit = vi.fn();
+    document.querySelectorAll("button")[1].addEventListener("click", submit);
+    expect(driver.completeBatch()).toEqual({ clicked: true, label: "Submit batch" });
+    expect(submit).toHaveBeenCalledTimes(1);
+
+    expect(driver.confirmCompletion()).toEqual({ confirmed: false, label: null, dialog: false });
+    mount('<div role="dialog"><button>Cancel</button><button>Submit</button></div>');
+    expect(driver.confirmCompletion()).toEqual({ confirmed: true, label: "Submit", dialog: true });
+
+    mount('<main><button>Submit batch</button><p>Batch submitted for review</p><p>1 In review</p></main>');
+    const state = driver.readCompletionState();
+    expect(state.canComplete).toBe(true);
+    expect(state.submitted).toBe(true);
+    expect(state.chips).toMatchObject({ inReview: 1 });
+  });
+
   it("keeps every step serializable: prelude + source evaluates in a page-like scope", () => {
     expect(driver.PAGE_PRELUDE).toContain("function firstVisible");
     const steps = driver as unknown as Record<string, () => unknown>;

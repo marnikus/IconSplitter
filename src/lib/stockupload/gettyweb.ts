@@ -1,16 +1,58 @@
 // gettyweb.ts — pure rules for the Getty Images / iStock *web* upload: the
 // legacy contributor site (esp.gettyimages.com/contribute) signs in with the
-// saved e-mail/password, creates one batch, and the page's own uploader takes
-// the JPEG (+ optional matching EPS). Metadata already embedded in `export/`
-// files travels inside those files. No key, no OAuth, no submission for review.
+// saved e-mail/password, creates one batch, the page's own uploader takes the
+// JPEG (+ optional matching EPS), and the accepted metadata is typed into each
+// file's editor before the batch is completed. No key and no OAuth.
 
 import type { PlannedTransfer, SkippedFormat } from "./plan";
-import type { StockFtpPreset } from "./types";
+import type { ExportedItem, StockFtpPreset } from "./types";
 
 export const GETTY_WEB_SUBMISSION_TYPE = "iStock creative illustration";
 export const GETTY_WEB_MAX_BATCH_NAME = 60;
 export const GETTY_WEB_ERROR_HINT =
   "start run_ftp_bridge.bat (or run_inkscape_bridge.bat) on this machine, then retry";
+
+/** Title/description/keywords filled into Getty's per-file metadata editor. */
+export interface GettyWebMetadata {
+  title: string;
+  description: string;
+  keywords: string[];
+}
+
+export const GETTY_WEB_MAX_KEYWORDS = 49;
+const GETTY_WEB_MAX_TITLE = 200;
+const GETTY_WEB_MAX_DESCRIPTION = 2000;
+const GETTY_WEB_MAX_KEYWORD = 64;
+
+function cleanKeywords(tags: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of tags) {
+    const tag = raw.trim().replace(/\s+/g, " ").slice(0, GETTY_WEB_MAX_KEYWORD);
+    const key = tag.toLowerCase();
+    if (tag === "" || seen.has(key) || out.length >= GETTY_WEB_MAX_KEYWORDS) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
+/**
+ * The accepted metadata of an exported icon, ready to type into the page.
+ * `null` when nothing was accepted (the files' embedded metadata is then the
+ * only source) or when the title is empty — Getty needs a title.
+ */
+export function gettyWebMetadataOf(item: ExportedItem): GettyWebMetadata | null {
+  const meta = item.record.metadata;
+  if (meta === null || meta.state !== "accepted") return null;
+  const title = meta.title.trim().replace(/\s+/g, " ").slice(0, GETTY_WEB_MAX_TITLE);
+  if (title === "") return null;
+  return {
+    title,
+    description: meta.description.trim().replace(/\s+/g, " ").slice(0, GETTY_WEB_MAX_DESCRIPTION),
+    keywords: cleanKeywords(meta.tags),
+  };
+}
 
 export function isGettyWebPreset(preset: StockFtpPreset): boolean {
   return preset.protocol === "getty-web";

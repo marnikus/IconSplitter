@@ -4,3 +4,4 @@ export function filesFromBody(body: Buffer, config: any): Array<{ name: string; 
 export function handleGettyWebUpload(req: any, res: any, post: any, json: any, limit: number): Promise<any>;
 export function handleGettyWebTest(req: any, res: any, post: any, json: any): Promise<any>;
 export function handleGettyWebClose(req: any, res: any, post: any, json: any): Promise<any>;
+export function sanitizeMetadata(raw: unknown): { title: string; description: string; keywords: string[] } | null;

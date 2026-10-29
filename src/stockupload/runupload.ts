@@ -6,9 +6,7 @@ import {
   closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadInput, type BridgeUploadResult,
 } from "../lib/stockupload/bridgeclient";
 import { GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName } from "../lib/stockupload/gettyweb";
-import {
-  closeBridgeGettyWeb, type GettyWebResult, type GettyWebUploadInput,
-} from "../lib/stockupload/gettywebclient";
+import { closeBridgeGettyWeb, type GettyWebResult, type GettyWebUploadInput } from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey } from "../lib/stockupload/types";
@@ -17,7 +15,7 @@ import { buildRepresentationZip } from "../lib/stockupload/zippack";
 import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
-import { uploadGettyWebGroup } from "./gettywebtransfer";
+import { completionNote, uploadGettyWebGroup } from "./gettywebtransfer";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight, markUploadInFlight } from "./journal";
 
@@ -234,6 +232,7 @@ async function runNetworkGroups(ctx: {
     markUploadInFlight(tasks[0].itemId, target.id);
     const res = await uploadGroup({ plan, target, tasks, deps, creds, sessionKey, itemsById });
     if (!res.ok) reportNetworkCertificate(res, target, deps);
+    counters.lastError = completionNote(res) ?? counters.lastError;
     for (const task of tasks) recordTaskResult(task, res, { target, trackers, counters, deps });
   }
 }

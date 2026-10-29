@@ -87,6 +87,12 @@ function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { tex
       err: false,
     };
   }
+  if (summary.lastError) {
+    return {
+      text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s) — ${summary.lastError}`,
+      err: true,
+    };
+  }
   return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s)`, err: false };
 }
 
