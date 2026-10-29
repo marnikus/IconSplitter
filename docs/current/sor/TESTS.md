@@ -6,6 +6,7 @@ No frozen test count: consult the runner for current measurements. The focused s
 - [Selection and pairing](tests/selection.md)
 - [Generate SVG and AI-source image edits](tests/svg.md) · [prompt, regeneration and review suites](tests/svg-prompt-review.md)
 - [SVG to upload](tests/upload.md)
+- [Stock Upload and Getty ESP handoff](tests/stock-upload.md)
 - [Shared log, secrets and gate tooling](tests/shared.md)
 
 ## Acceptance expectation

@@ -117,6 +117,26 @@ describe("Upload (stockUpload) tab UI", () => {
     vi.unstubAllGlobals();
   });
 
+  it("offers Getty's official ESP route as a manual portal handoff, not an FTP target", async () => {
+    act(() => {
+      ui.render(
+        <HistoryProvider>
+          <StockUploadPanel active />
+        </HistoryProvider>,
+      );
+    });
+
+    const link = q("stock-getty-esp") as HTMLAnchorElement | null;
+    expect(link).not.toBeNull();
+    expect(link?.href).toBe("https://esp.gettyimages.com/sign-in?returnUrl=/");
+    expect(link?.target).toBe("_blank");
+    expect(link?.rel).toContain("noreferrer");
+    expect(q("stock-getty-handoff")?.textContent).toContain("manual upload in ESP");
+    expect(q("stock-getty-handoff")?.textContent).toContain("EPS");
+    expect(q("stock-getty-handoff")?.textContent).toContain("AI-generated");
+    expect(q("stock-target-check-getty-images")).toBeNull();
+  });
+
   it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {
     const ws = makeWorkspace();
     stored.set("__stock_upload__", { source: ws });

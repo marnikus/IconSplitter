@@ -3657,3 +3657,5 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - 2026-10-28: AWS Transfer Family SFTP (`hmac-sha2-256-etm@openssh.com`, `rsa-sha2-512`/`ecdsa`, channel max-packet), outdated FTPS-only helper detection, and one-click host-key trust & auto-reconnect (`src/lib/stockupload/bridgeclient.ts`, `src/stockupload/{ftpactions,panelops,StockFtpPanel}.ts*`, `tools/bridge/{server,sftp/*}.mjs`) — `quality.mjs --files` GATE PASSED + full `npm run verify`.
 
 - 2026-10-28: Auto-heal stale Adobe Stock FTPS(:21) presets to SFTP(:22), handle Node Happy Eyeballs empty-message AggregateError (`describeSocketError`), and add high-contrast Test connection status pill + toast (`src/lib/stockupload/{presets,bridgeclient}.ts`, `src/stockupload/{ftpactions,StockFtpPanel}.ts*`, `tools/bridge/{ftps,sftp}/*.mjs`) — `quality.mjs --files` GATE PASSED + full `npm run verify`.
+
+2026-10-29 — Getty ESP handoff: 22 focused stock-upload tests passed; docs navigation/link checks passed; `npm run verify` passed end-to-end in 118s (types, lint, quality, perf, coverage suite, build).

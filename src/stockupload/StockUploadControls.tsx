@@ -3,6 +3,7 @@
 
 import type { UploadFormatKey } from "../lib/stockupload/types";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import GettyContributorPortal from "./GettyContributorPortal";
 import StockFtpPanel from "./StockFtpPanel";
 import type { StockUploadSort } from "./rowlist";
 import { stockAuditLine } from "./scan";
@@ -22,6 +23,7 @@ export default function StockUploadControls({ g }: { g: StockUploadApi }) {
         onToggleOpen={(ftpOpen) => g.setPrefs({ ftpOpen })}
         onBridgeUrl={(bridgeUrl) => g.setPrefs({ bridgeUrl })}
       />
+      <GettyContributorPortal />
       <FilterBar g={g} />
     </section>
   );

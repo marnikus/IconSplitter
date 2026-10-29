@@ -1,4 +1,4 @@
-# Upload (`stockUpload`) — Stock FTPS & SFTP Uploader
+# Upload (`stockUpload`) — Stock FTPS/SFTP & Getty ESP handoff
 
 Handles: [selectors/stock-upload](../selectors/stock-upload.md) · Invariants: [I-80, I-81](invariants/upload.md#i-80).
 
@@ -17,7 +17,13 @@ Unrecorded files inside `export/`, uncommitted records, and source files outside
 - **Row badges & automatic per-stock badges (`src/lib/stockupload/stockbadges.ts`)**: shares `iconSplitter.upload.rowBadges.v1` and global undo `uploadRowBadges` with `"SVG to upload"` via `useSyncExternalStore`. Each configured stock preset (`Shutterstock`, `Adobe Stock`, plus any custom stock) automatically gets a unique named badge (`stock:<presetId>`) with a distinct color, which is **automatically assigned** to an item row immediately as soon as a file is sent to that stock (`assignStockBadgeOnSend`), while each row also displays uploaded (`✓ <Stock>`) vs pending (`⏳ <Stock> · pending`) pills for every configured stock and supports `Pending: <Stock>` / `Uploaded: <Stock>` status filters.
 - **Local metadata (`src/stockupload/metaembed.ts`)**: clicking a row expands editable `Title`, `Description`, `Tags`, `Creator`, and `Copyright` (no AI controls). `Accept & embed` validates (`validateMetadata`) and atomically re-embeds XMP/IPTC/RDF in-place into existing `export/<stem>.{jpg,svg,eps}` files before updating `export.json`.
 
-## 3. Stock FTPS/SFTP presets & local-only credentials
+## 3. Getty Images contributor handoff (ESP, not FTP)
+
+`GettyContributorPortal.tsx` provides a separate manual handoff to the official [Getty ESP contributor sign-in](https://esp.gettyimages.com/sign-in?returnUrl=/). Getty's contributor home routes **Upload** to ESP; no stock-contributor FTP/SFTP endpoint is published in the reviewed contributor guidance. Getty therefore is deliberately **not** an FTP preset, target checkbox, or item in FTPS/SFTP upload history. The app does not receive Getty credentials or claim that a portal visit/upload was completed.
+
+Getty's [Preparing Your Content](https://contributors.gettyimages.com/article_public.aspx?article_id=9146) guide requires vector illustration EPS to be CS6 compatible and paired with a high-quality raster of the same filename stem. It specifies RGB raster, minimum 1900 × 2800 px (4075 × 4075 recommended), and says Getty does not accept AI-generative-model submissions. Verify current Getty requirements and account eligibility in ESP before submitting exported files. Research decision and the distinction from newsroom / enterprise SFTP workflows: [Getty Images research](../../archive/2026-10-29-getty-images-contributor-upload/README.md).
+
+## 4. Stock FTPS/SFTP presets & local-only credentials
 
 - **Presets (`src/lib/stockupload/presets.ts`, `iconSplitter.stockUpload.presets.v1`)**: seeded with two built-in stock sites:
   - **Shutterstock** (`ftps.shutterstock.com`, port `21`, `ftps-explicit` / `AUTH TLS`, remote folder `/`, passive TLS).
@@ -25,7 +31,7 @@ Unrecorded files inside `export/`, uncommitted records, and source files outside
   Users can reset built-in presets or add/remove custom presets with protocol-specific fields (`ftps-explicit`, `sftp`, `ftps-implicit`, `ftp`) and server certificate / SSH host-key policies (`strict`, `pinned` SHA-256, `accept-self-signed`).
 - **Credentials (`src/lib/stockupload/credvault.ts`, [I-81](invariants/upload.md#i-81))**: username / SFTP Member ID and password live **only** in IndexedDB `iconSplitter/secrets` (`stock-ftp-cred:<presetId>`, session fallback if blocked). They are never written to `localStorage`, `export.json`, presets, or logs, and are **never expanded** in the UI (status badge + blank replace inputs + `Forget`).
 
-## 4. Multi-target, multi-format FTPS/SFTP transfer (`tools/bridge/{ftps,sftp}/`)
+## 5. Multi-target, multi-format FTPS/SFTP transfer (`tools/bridge/{ftps,sftp}/`)
 
 - **Pinned bar**: thumbnail zoom slider, `Apply badges`, same-stem format checkboxes (`JPEG/PNG`, `SVG`, `EPS`, `ZIP` packed deterministically in memory via `JSZip` without `export.json`), multi-upload target site checkboxes, and `Upload`.
 - **Confirmation & runner (`src/stockupload/runupload.ts`)**: `Upload` opens a preflight confirmation modal. Confirmed runs send files sequentially through the zero-dependency local loopback helper (`http://127.0.0.1:47391/ftps/*`, started via `run_ftp_bridge.bat` or `run_app_ftp.bat`), reusing one pooled Explicit FTPS or SFTP v3 session per target stock, isolating per-file errors, supporting mid-batch `Cancel`, and recording crash-safe status in `iconSplitter.stockUpload.{history,journal}.v1` (interrupted runs are never resent automatically).
