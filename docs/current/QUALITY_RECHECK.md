@@ -3659,3 +3659,5 @@ Implemented analytic extrema of affine-mapped represented cubic outlines and one
 - 2026-10-28: Auto-heal stale Adobe Stock FTPS(:21) presets to SFTP(:22), handle Node Happy Eyeballs empty-message AggregateError (`describeSocketError`), and add high-contrast Test connection status pill + toast (`src/lib/stockupload/{presets,bridgeclient}.ts`, `src/stockupload/{ftpactions,StockFtpPanel}.ts*`, `tools/bridge/{ftps,sftp}/*.mjs`) — `quality.mjs --files` GATE PASSED + full `npm run verify`.
 
 2026-10-29 — Getty ESP handoff: 22 focused stock-upload tests passed; docs navigation/link checks passed; `npm run verify` passed end-to-end in 118s (types, lint, quality, perf, coverage suite, build).
+
+2026-10-29 — Getty automation follow-up: 7 focused UI/docs tests passed; tsc, lint and changed-quality gates passed; `npm run verify` passed all lanes in 122s (20 pre-existing lint warnings, 0 errors).

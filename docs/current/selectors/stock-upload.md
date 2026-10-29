@@ -8,9 +8,10 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-upload-progress-mount` — cross-tab portal mount for in-flight FTPS progress.
 - `stock-open-folder`, `stock-rescan`, `stock-folder-path`, `stock-scope-copy`, `stock-audit` — folder picker, rescan, and full root path bar.
 
-## Getty contributor portal handoff (`GettyContributorPortal.tsx`)
-- `stock-getty-handoff` — manual ESP submission instructions; Getty is intentionally not a configured FTP/SFTP target.
-- `stock-getty-esp` — opens the official Getty ESP sign-in link in a new tab.
+## Getty ESP handoff and automation options (`GettyContributorPortal.tsx`)
+- `stock-getty-handoff` — ESP instructions, no-in-app-automation disclosure, DeepMeta/API references; Getty is not an FTP/SFTP target.
+- `stock-getty-esp` — official ESP sign-in link in a new tab.
+- `stock-getty-deepmeta`, `stock-getty-api-docs` — third-party DeepMeta and official Getty API information links in new tabs.
 
 ## Stock FTP presets & local-only credentials (`StockFtpPanel.tsx`)
 - `stock-ftp-panel`, `stock-ftp-toggle`, `stock-ftp-active-name` — collapsible preset panel.

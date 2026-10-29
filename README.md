@@ -44,9 +44,9 @@ It has six modes (tabs across the top):
   **Adobe Stock** SFTP on `sftp.contributor.adobestock.com:22`), local-only
   non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
   uploads through the local loopback helper (`run_ftp_bridge.bat` / `run_app_ftp.bat`).
-  Getty Images is provided as a separate manual handoff to its official ESP
-  contributor portal, not as an FTP target; Getty's vector EPS/raster pairing
-  and content rules must be checked before submission.
+  Getty Images is a separate ESP handoff, not an FTP target. The Upload tab links
+  to Getty's public API access info and the third-party DeepMeta workflow; it does
+  not automate Getty uploads. Check Getty's vector pair and content rules first.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

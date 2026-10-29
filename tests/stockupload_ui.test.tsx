@@ -133,7 +133,13 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(link?.rel).toContain("noreferrer");
     expect(q("stock-getty-handoff")?.textContent).toContain("manual upload in ESP");
     expect(q("stock-getty-handoff")?.textContent).toContain("EPS");
-    expect(q("stock-getty-handoff")?.textContent).toContain("AI-generated");
+    expect(q("stock-getty-handoff")?.textContent).toContain("generative-AI-created");
+
+    const deepMeta = q("stock-getty-deepmeta") as HTMLAnchorElement | null;
+    expect(deepMeta?.href).toBe("https://deepmeta.creativ.zone/en-GB/signin");
+    expect(deepMeta?.target).toBe("_blank");
+    expect(q("stock-getty-api-docs")).not.toBeNull();
+    expect(q("stock-getty-handoff")?.textContent).toContain("No automated Getty upload");
     expect(q("stock-target-check-getty-images")).toBeNull();
   });
 

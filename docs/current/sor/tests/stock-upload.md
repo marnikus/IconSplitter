@@ -2,7 +2,7 @@
 
 | Test | Contract |
 |---|---|
-| `tests/stockupload_ui.test.tsx` | Exported-only UI, local-only FTP credentials, transfer confirmation, Adobe SFTP behavior, and Getty's separate official ESP link/manual-upload disclosure; Getty must not appear as a transfer target. |
+| `tests/stockupload_ui.test.tsx` | Exported-only UI, local-only FTP credentials, transfer confirmation, Adobe SFTP behavior, and Getty ESP / DeepMeta / public API links plus no-automation disclosure; Getty must not appear as a transfer target. |
 | `tests/stockupload_presets.test.ts` | Built-in Shutterstock/Adobe defaults, custom protocol handling, and validate-on-read preset normalization. |
 | `tests/stockupload_runner.test.ts` | Confirmed FTPS/SFTP upload plans, per-file outcomes, progress and crash recovery. |
 | `tests/stockupload_discovery.test.ts` | Committed `export/` + `export.json` artifact scope and honest missing/corrupt file handling. |
