@@ -3852,3 +3852,24 @@ both sides of the work. Measured here (Node 22.22.3, 2 cores, no browser):
   sign-in 9, upload 9, finalize 5, bridge routes 16, stock upload 5.
 - Docs: `sor/stock-upload-getty-web.md` 8,983 bytes and
   `selectors/stock-upload.md` 4,813 bytes (budget 9,000 each).
+
+## 2026-10-29 — Getty web: the uploader input, not a release input
+
+Merged the next commit from `arena/fdb8d39a-iconsplitter` ("Target Getty
+contribution uploader instead of release file inputs"). Measured here (Node
+22.22.3, 2 cores, no browser):
+
+- `attachFiles` now waits for Getty's own hidden contribution uploader —
+  `input[type="file"][data-cy="upload-button-file-input"][multiple]` — and passes
+  that selector to `setFiles`, so a page that only shows a release input
+  (`model-release-input`, `property-release-input`) fails with `page` instead of
+  attaching icons to the wrong control. The wait is 60 s and says so.
+- `tests/getty_web_batch.test.ts` grew to 7 cases: the good page attaches once to
+  `upload-button-file-input` with both files, a release-only page attaches nothing
+  and fails, and a late uploader is still found after a release input exists.
+- `npm run verify:fast` → Types PASS 17.0 s, Lint PASS (0 errors / 21 warnings)
+  13.1 s, Quality gate (changed) PASS 2.6 s, Tests + coverage PASS 121.3 s,
+  Build PASS 7.8 s.
+- Docs: the uploader handle and the "release inputs are never used" rule are in
+  `sor/stock-upload-getty-web.md` (8,978 bytes) and `selectors/stock-upload.md`
+  (4,954 bytes), both under the 9,000-byte budget.
