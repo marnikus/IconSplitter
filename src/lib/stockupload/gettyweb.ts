@@ -72,10 +72,14 @@ function pairOf(tasks: readonly PlannedTransfer[]): { raster: PlannedTransfer | 
   };
 }
 
-function stemOf(fileName: string): string {
-  const dot = fileName.lastIndexOf(".");
-  return dot > 0 ? fileName.slice(0, dot) : fileName;
+/** The contribution a file belongs to; a vector pair shares one stem. */
+export function gettyWebStem(fileName: string): string {
+  const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
 }
+
+const stemOf = gettyWebStem;
 
 /** Getty web upload takes one JPEG per icon and an optional matching EPS. */
 export function validateGettyWebTasks(

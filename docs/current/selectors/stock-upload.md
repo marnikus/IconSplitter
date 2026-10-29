@@ -28,10 +28,10 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   `timeout` failure naming the control); an open dialog or an already-chosen
   submission type is never reopened; the batch id must differ from the one read
   before the click, or the run keeps waiting.
-- Getty web dismissals: before attaching the next icon's files and before
-  submitting, `[role=dialog]`, `[role=alert]` and `[data-cy$="-error"]` scopes get
-  their `Dismiss|Cancel|Close|OK|Got it` control clicked. A scope with no such
-  control is left alone — the helper never guesses.
+- Getty web dismissals: before attaching the run's files and before submitting,
+  `[role=dialog]`, `[role=alert]` and `[data-cy$="-error"]` scopes get their
+  `Dismiss|Cancel|Close|OK|Got it` control clicked. A scope with no such control is
+  left alone — the helper never guesses.
 - Getty contributor page (driven by the helper, not the app) — captured handles `[data-cy="create-batch-button"]`, `[role="dialog"][aria-labelledby="create-batch-dialog"]` *or* `[data-cy="create-batch-dialog"]`, `[data-cy="create-batch-submission-type"]` + `role=combobox` (opens on mousedown; options in a `role=listbox` portal), `input[name="submission_name"]`, `input[name="event_id"]`, `[data-cy="create-batch-confirm-button"]`, the hidden contribution uploader `input[type="file"][data-cy="upload-button-file-input"][multiple]` (release inputs such as `model-release-input` are never used); sign-in fields/buttons and the metadata editor + Complete control are matched by behaviour and label, never by a captured id.
 - `stock-ftp-cred-status`, `stock-ftp-user`, `stock-ftp-pass`, `stock-ftp-apikey`, `stock-ftp-apisecret`, `stock-ftp-cred-save`, `stock-ftp-cred-forget`, `stock-esp-oauth`, `stock-ftp-test`, `stock-ftp-test-note`, `stock-ftp-trust-cert` — local-only non-expanded credentials ("Getty contributor e-mail or account ID" + password for `getty-web`), Getty OAuth2 PKCE browser authorization, & connection test (for `getty-web` it signs the helper's background browser in without creating a batch).
 

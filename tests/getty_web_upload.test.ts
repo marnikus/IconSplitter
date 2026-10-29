@@ -71,9 +71,9 @@ describe("Getty web loopback client", () => {
     const metadata = { title: "Star", description: "A star icon", keywords: ["star", "icon"] };
     const result = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
-      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }, { name: "icon_a.eps", bytes: new Uint8Array([4, 5]) }],
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }, { name: "icon_a.eps", bytes: new Uint8Array([4, 5]) }], metadata }],
       batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
-      metadata, complete: true, fetchImpl,
+      complete: true, fetchImpl,
     });
     expect(result).toEqual(reply);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
@@ -82,16 +82,40 @@ describe("Getty web loopback client", () => {
     expect(header).toMatchObject({
       protocol: "getty-web", host: "esp.gettyimages.com", username: CREDS.username, password: CREDS.password,
       batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
-      metadata, complete: true,
-      files: [{ name: "icon_a.jpeg", bytes: 3 }, { name: "icon_a.eps", bytes: 2 }],
+      complete: true,
+      icons: [{ metadata, files: [{ name: "icon_a.jpeg", bytes: 3 }, { name: "icon_a.eps", bytes: 2 }] }],
     });
+  });
+
+  it("sends every icon of the run in one request, all pairs at once", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, batchId: "68565609", accepted: ["icon_a.jpeg", "icon_a.eps", "icon_b.jpeg", "icon_b.eps"],
+      completed: false, completion: null, metadata: [],
+    }));
+    const icon = (stem: string, size: number) => ({
+      files: [{ name: `${stem}.jpeg`, bytes: new Uint8Array(size) }, { name: `${stem}.eps`, bytes: new Uint8Array(size) }],
+      metadata: { title: stem, description: "", keywords: [] },
+    });
+    await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [icon("icon_a", 3), icon("icon_b", 2)],
+      batchName: "IconSplitter 2026-10-29 (2 icons)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      sessionKey: "run-7", fetchImpl,
+    });
+    // One call for the whole run: no per-icon request can stop after the first pair.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
+    expect(header.icons).toHaveLength(2);
+    expect(header).toMatchObject({ sessionKey: "run-7", complete: false });
+    expect((init.body as Blob).size).toBe(10);
   });
 
   it("scrubs a password echoed by the helper and keeps the failure code", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(401, { ok: false, code: "auth", reason: `bad login ${CREDS.password}` }));
     const result = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
-      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }],
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
       batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
     });
     expect(result.ok).toBe(false);
@@ -106,14 +130,14 @@ describe("Getty web loopback client", () => {
     const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
     const cancelled = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
-      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }],
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
       batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: vi.fn(async () => { throw abort; }),
     });
     expect(cancelled).toEqual({ ok: false, code: "cancelled", reason: "upload cancelled" });
 
     const down = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
-      files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }],
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
       batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: vi.fn(async () => { throw new Error("ECONNREFUSED"); }),
     });
     expect(down.ok).toBe(false);

@@ -241,6 +241,25 @@ describe("Getty web upload verification", () => {
     }
   });
 
+  it("hands every icon's pair to the uploader in one call and waits for all of them", async () => {
+    mountBatchPage();
+    const names = ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"];
+    const page = new DomConnection();
+    const insertCards = () => document.body.insertAdjacentHTML(
+      "beforeend", card("star_01.eps") + card("moon_02.eps"),
+    );
+    setTimeout(insertCards, 0);
+    const result = await attachFiles(page, "page", {
+      paths: names.map((name) => `/staged/${name}`), names,
+      timeoutMs: 3000, readyTimeoutMs: 1000,
+    });
+    expect(page.attachmentCalls).toBe(1);
+    expect(page.attached).toEqual(names.map((name) => `/staged/${name}`));
+    expect(result.ok).toBe(true);
+    expect(result.state.namesSeen).toEqual(names);
+    expect(result.state.contributions).toEqual(["star_01.eps", "moon_02.eps"]);
+  });
+
   it("keeps waiting while Getty is still processing the upload", async () => {
     vi.useFakeTimers();
     try {

@@ -3915,3 +3915,16 @@ Types PASS (3.6 s), Lint PASS (1.2 s, 0 errors / 21 warnings), Quality gate
 getty_web_upload 12, getty_web_finalize 7, bridge_getty_web 17,
 stockupload_getty_web/…_ui 92 in total. Docs: SOR 8,935 B / 9,000 B, selectors
 6,062 B.
+
+## 2026-10-29 — Every selected pair uploaded in one request
+
+Cause: each icon was its own helper request, so the run depended on Getty's
+uploader accepting a second attach after the first pair; the second pair never
+arrived. Now `uploadGettyWebRun` prepares every icon and sends one request
+(`icons: [{files, metadata}]`), the helper stages them all and hands them to the
+page uploader in a single `DOM.setFileInputFiles`, then the run finishes once.
+Measured: Types PASS (15.5 s), Lint PASS (13.6 s, 0 errors / 21 warnings),
+Quality gate (changed) PASS (0.7 s, 10 files), Tests + coverage PASS (112.4 s),
+Build PASS (6.9 s). Focused suites: getty_web_batch 14, getty_web_upload 13,
+bridge_getty_web 19, stockupload_getty_web 8, Getty runs + UI 96. Docs: SOR
+8,974 B / 9,000 B, selectors 6,056 B.

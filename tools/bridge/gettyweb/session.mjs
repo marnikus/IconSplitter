@@ -13,11 +13,19 @@ import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, o
 
 const LOGIN_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
+// The whole run is attached at once, so a long run needs more than one pair's time.
+const PER_EXTRA_FILE_MS = 30000;
 
 async function openPage(connection) {
   const target = await connection.send("Target.createTarget", { url: "about:blank" });
   const attached = await connection.send("Target.attachToTarget", { targetId: target.targetId, flatten: true });
   return { targetId: target.targetId, sessionId: attached.sessionId };
+}
+
+/** How long the page may take to list `fileCount` attached files. */
+export function uploadTimeoutFor(fileCount, baseMs = UPLOAD_TIMEOUT_MS) {
+  const extra = Math.max(0, Number(fileCount) - 2) * PER_EXTRA_FILE_MS;
+  return baseMs + extra;
 }
 
 /** Keeps the page file name but never a path segment from the user's disk. */
@@ -27,13 +35,31 @@ export function safeStagedName(fileName) {
   return base === "" || base === "." || base === ".." ? "icon.bin" : base;
 }
 
-function stageFiles(dir, files) {
-  return files.map((file, index) => {
-    const itemDir = path.join(dir, String(index));
-    mkdirSync(itemDir, { recursive: true });
-    const target = path.join(itemDir, safeStagedName(file.name));
-    writeFileSync(target, file.bytes);
-    return target;
+/**
+ * The icons of one request, in the shape the page flow wants: every icon owns its
+ * files (JPEG first) plus the metadata typed into that icon's editor.
+ */
+function iconsOf(input) {
+  const listed = Array.isArray(input?.icons) ? input.icons : null;
+  if (listed !== null) {
+    return listed.map((icon) => ({
+      files: Array.isArray(icon?.files) ? icon.files : [],
+      metadata: icon?.metadata ?? null,
+    }));
+  }
+  return [{ files: Array.isArray(input?.files) ? input.files : [], metadata: input?.metadata ?? null }];
+}
+
+/** Stages every icon in its own folder; returns the staged paths per icon. */
+function stageIcons(dir, icons) {
+  return icons.map((icon, index) => {
+    const iconDir = path.join(dir, String(index));
+    mkdirSync(iconDir, { recursive: true });
+    return icon.files.map((file) => {
+      const target = path.join(iconDir, safeStagedName(file.name));
+      writeFileSync(target, file.bytes);
+      return target;
+    });
   });
 }
 
@@ -134,24 +160,29 @@ function buildSession(ctx) {
       if (created.ok) state.batchId = created.batchId;
       return created;
     },
-    /** Stages bytes on this machine, then lets Getty's own uploader read them. */
+    /**
+     * Stages every icon of the run, then hands them to Getty in one attach — all
+     * pairs at once, not one pair per page visit. Nothing is submitted here: the
+     * run submits the batch once, after every icon is listed.
+     */
     async upload(input) {
-      for (const file of input.files) {
-        if (typeof file?.name === "string" && file.name !== "" && !state.expected.includes(file.name)) {
+      const icons = iconsOf(input);
+      const files = icons.flatMap((icon) => icon.files.map((file) => ({ name: file.name, metadata: icon.metadata })));
+      for (const file of files) {
+        if (typeof file.name === "string" && file.name !== "" && !state.expected.includes(file.name)) {
           state.expected.push(file.name);
         }
       }
-      const paths = stageFiles(tempDir, input.files);
+      const paths = stageIcons(tempDir, icons).flat();
       const result = await attachFiles(connection, page.sessionId, {
-        paths, names: input.files.map((f) => f.name),
-        timeoutMs: options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS,
+        paths, names: files.map((file) => file.name),
+        timeoutMs: uploadTimeoutFor(files.length, options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS),
         readyTimeoutMs: options.readyTimeoutMs,
         onProgress: options.onProgress, signal: options.signal,
       });
       if (!result.ok) return { ...result, batchId: state.batchId };
       const done = await finalizeBatch(connection, page.sessionId, {
-        files: input.files.map((file) => ({ name: file.name, metadata: input.metadata ?? null })),
-        complete: input.complete !== false,
+        files, complete: input.complete === true,
         onProgress: options.onProgress, signal: options.signal,
       });
       return { ...done, state: { ...result.state, ...done.report?.state }, report: done.report, batchId: state.batchId };

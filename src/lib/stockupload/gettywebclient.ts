@@ -41,19 +41,27 @@ export interface GettyWebFile {
   bytes: Uint8Array;
 }
 
+export interface GettyWebIcon {
+  /** The icon's JPEG first, its matching EPS second. */
+  files: GettyWebFile[];
+  /** Accepted title/description/keywords typed into that icon's editor. */
+  metadata?: GettyWebMetadataPayload | null;
+}
+
 export interface GettyWebUploadInput {
   bridgeUrl: string;
   preset: StockFtpPreset;
   creds: FtpCredentials;
-  files: GettyWebFile[];
+  /**
+   * Every icon the run uploads, sent in **one** request so the page gets all
+   * pairs in one attach. One icon is `[{ files: [jpg, eps?] }]`.
+   */
+  icons: GettyWebIcon[];
   batchName: string;
   submissionType: string;
-  /** Accepted title/description/keywords typed into the file's editor. */
-  metadata?: GettyWebMetadataPayload | null;
   /**
-   * Click the batch's Complete/Submit control after the metadata is saved. One
-   * icon of a multi-icon run must not submit the batch: the run calls
-   * `finishBridgeGettyWeb` once, after the last icon.
+   * Click the batch's Complete/Submit control after uploading. Uploads of a run
+   * must leave this false: the run calls `finishBridgeGettyWeb` once, at the end.
    */
   complete?: boolean;
   sessionKey?: string;
@@ -81,10 +89,17 @@ function uploadConfig(input: GettyWebUploadInput): string {
     sessionKey: input.sessionKey ?? "",
     batchName: input.batchName,
     submissionType: input.submissionType,
-    metadata: input.metadata ?? null,
-    complete: input.complete !== false,
-    files: input.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
+    complete: input.complete === true,
+    icons: input.icons.map((icon) => ({
+      metadata: icon.metadata ?? null,
+      files: icon.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
+    })),
   }));
+}
+
+/** Every staged byte of every icon, in the order the config lists them. */
+function uploadBody(input: GettyWebUploadInput): Blob {
+  return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
 }
 
 function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok: false; code: GettyWebErrorCode; reason: string } {
@@ -120,18 +135,18 @@ function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
   };
 }
 
-/** Sends one icon (JPEG + optional EPS) through the helper to the Getty page. */
+/** Sends every icon of the run (JPEG + optional EPS each) to the Getty page. */
 export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<GettyWebResult> {
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
   try {
     const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/upload`, {
       method: "POST",
       headers: { "content-type": "application/octet-stream", "x-getty-web-config": uploadConfig(input) },
-      body: new Blob(input.files.map((file) => file.bytes as BlobPart)),
+      body: uploadBody(input),
       signal: input.signal,
     });
     const body: unknown = await res.json();
-    if (res.ok) return parseSuccess(body, input.files.map((file) => file.name));
+    if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
     return parseFailure(body, input.creds, res.status);
   } catch (err) {
     if ((err as Error)?.name === "AbortError") return { ok: false, code: "cancelled", reason: "upload cancelled" };

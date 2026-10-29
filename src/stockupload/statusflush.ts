@@ -1,9 +1,12 @@
 // statusflush.ts — writes each item's upload outcome into the row status store.
 
-import type { StockUploadOutcome } from "../lib/stockupload/types";
+import type { PlannedTransfer } from "../lib/stockupload/plan";
+import type { StockFtpPreset, StockUploadOutcome } from "../lib/stockupload/types";
+import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
+import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
+import type { ItemTracker, RunCounters, UploadBatchDeps } from "./batchtypes";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight } from "./journal";
-import type { ItemTracker } from "./trackers";
 
 export function outcomeOf(tr: ItemTracker): StockUploadOutcome {
   if (tr.succeeded.length === 0) return "failed";
@@ -21,5 +24,55 @@ export function flushTargetStatuses(targetId: string, trackers: Map<string, Item
       uploadedAt: now,
       error: tr.lastError,
     });
+  }
+}
+
+/** Records one planned file's outcome and the progress line that goes with it. */
+export function recordTaskResult(
+  task: PlannedTransfer,
+  res: { ok: true } | { ok: false; reason: string },
+  state: { target: StockFtpPreset; trackers: Map<string, ItemTracker>; counters: RunCounters; deps: UploadBatchDeps },
+): void {
+  const tr = state.trackers.get(task.itemId)!;
+  if (res.ok) {
+    tr.succeeded.push(task.format);
+    state.counters.uploadedFiles += 1;
+    const baseBadges = ensureHardcodedBadges(getRowBadgeState());
+    setRowBadgeState(assignNamedBadge(baseBadges, task.itemId, state.target.name, state.target.id));
+  } else {
+    tr.lastError = res.reason;
+    state.counters.failedFiles += 1;
+    state.counters.lastError = res.reason;
+  }
+  recordSiteUploadStatus(task.itemId, state.target.id, {
+    status: outcomeOf(tr), formats: [...tr.succeeded], uploadedAt: new Date().toISOString(), error: tr.lastError,
+  });
+  state.counters.done += 1;
+  state.deps.onProgress?.({
+    done: state.counters.done, total: state.counters.total, label: `${state.target.name} · ${task.fileName}`,
+  });
+}
+
+/** A target without saved credentials fails every one of its files, not one. */
+export function recordMissingCreds(
+  target: StockFtpPreset,
+  taskCount: number,
+  state: { trackers: Map<string, ItemTracker>; counters: RunCounters; deps: UploadBatchDeps },
+): void {
+  const msg = `No saved credentials for ${target.name}`;
+  for (const tr of state.trackers.values()) tr.lastError = msg;
+  state.counters.failedFiles += taskCount;
+  state.counters.done += taskCount;
+  state.counters.lastError = msg;
+  state.deps.onProgress?.({ done: state.counters.done, total: state.counters.total, label: `${target.name}: missing credentials` });
+  flushTargetStatuses(target.id, state.trackers);
+}
+
+/** Surfaces an FTPS certificate warning (the run does not repeat that prompt). */
+export function reportNetworkCertificate(
+  res: { ok: boolean; reason?: string }, target: StockFtpPreset, deps: UploadBatchDeps,
+): void {
+  if ("code" in res && res.code === "cert" && "serverCertSha256" in res && typeof res.serverCertSha256 === "string") {
+    deps.onCertWarning?.(target.id, res.serverCertSha256);
   }
 }

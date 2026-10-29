@@ -1,5 +1,5 @@
-// The Getty web target inside the batch runner: one icon per browser upload,
-// JPEG first with an optional EPS, one shared batch name, one session close.
+// The Getty web target inside the batch runner: every selected icon in one
+// browser upload, JPEG first with an optional EPS, one shared batch, one close.
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildStockUploadPlan } from "../src/lib/stockupload/plan";
@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 
 describe("Getty web upload in the batch runner", () => {
-  it("sends one JPEG+EPS pair per icon into one shared batch and closes the session once", async () => {
+  it("sends every selected pair in one upload call, then closes the session once", async () => {
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
     addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
@@ -80,7 +80,7 @@ describe("Getty web upload in the batch runner", () => {
         return {
           ok: true,
           batchId: "68445204",
-          accepted: input.files.map((f) => f.name),
+          accepted: input.icons.flatMap((icon) => icon.files.map((f) => f.name)),
           completed: false,
           completion: null,
           metadata: [],
@@ -97,19 +97,49 @@ describe("Getty web upload in the batch runner", () => {
     });
 
     expect(summary).toMatchObject({ uploadedFiles: 4, failedFiles: 0, cancelled: false });
-    expect(sent).toHaveLength(2);
-    expect(sent[0].files.map((f) => f.name)).toEqual(["star_01.jpg", "star_01.eps"]);
-    expect(sent[1].files.map((f) => f.name)).toEqual(["moon_02.jpg", "moon_02.eps"]);
-    expect(sent.every((input) => input.submissionType === GETTY_WEB_SUBMISSION_TYPE)).toBe(true);
-    expect(sent.every((input) => /^IconSplitter \d{4}-\d{2}-\d{2} \(2 icons\)$/.test(input.batchName))).toBe(true);
-    expect(new Set(sent.map((input) => input.sessionKey)).size).toBe(1);
+    // All pairs at once: one request, not one per icon.
+    expect(sent).toHaveLength(1);
+    expect(sent[0].icons.map((icon) => icon.files.map((f) => f.name))).toEqual([
+      ["star_01.jpg", "star_01.eps"], ["moon_02.jpg", "moon_02.eps"],
+    ]);
+    expect(sent[0].submissionType).toBe(GETTY_WEB_SUBMISSION_TYPE);
+    expect(sent[0].batchName).toMatch(/^IconSplitter \d{4}-\d{2}-\d{2} \(2 icons\)$/);
     // One batch for all icons: nobody submits per icon, the run finishes once.
-    expect(sent.every((input) => input.complete === false)).toBe(true);
+    expect(sent[0].complete).toBe(false);
     expect(finished).toEqual([sent[0].sessionKey]);
-    expect(finished).toHaveLength(1);
     expect(summary.lastError).toBeNull();
     expect(closed).toEqual([sent[0].sessionKey]);
     expect(sent[0].creds.password).toBe("GettyPass!42");
+  });
+
+  it("keeps the icons Getty listed and names the one it did not, before submitting once", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    let finishes = 0;
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      // Getty listed the first pair only: the second icon must not be called uploaded.
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "68565609", accepted: ["star_01.jpg", "star_01.eps"],
+        completed: false, completion: null, metadata: [],
+      }),
+      finishGettyWebFn: async () => {
+        finishes += 1;
+        return {
+          ok: true, batchId: "68565609", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+        };
+      },
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2 });
+    expect(summary.lastError).toContain("Getty did not list moon_02");
+    expect(finishes).toBe(1);
   });
 
   it("reports an un-submitted batch when the finish call completes nothing", async () => {

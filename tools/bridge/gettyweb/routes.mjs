@@ -17,6 +17,8 @@ const MAX_DESCRIPTION = 2000;
 const MAX_KEYWORDS = 49;
 const MAX_KEYWORD = 64;
 const MAX_SESSIONS = 2;
+const MAX_ICONS = 50;
+const MAX_FILES_PER_ICON = 2;
 const GETTY_HOST = /(^|\.)gettyimages\.com$/i;
 const sessions = new Map();
 
@@ -137,6 +139,7 @@ async function acquireSession(cfg, url) {
   return { key, entry, fresh: true, failure: opened.ok ? null : opened };
 }
 
+/** Takes one icon's declared bytes from the front of `body`; null if short. */
 function splitFiles(body, files) {
   const out = [];
   let offset = 0;
@@ -146,19 +149,43 @@ function splitFiles(body, files) {
     out.push({ name: String(file?.name ?? ""), bytes: body.subarray(offset, offset + size) });
     offset += size;
   }
+  return out;
+}
+
+/** The icons of a request: the whole run in one call, or one legacy icon. */
+export function iconsFromConfig(cfg) {
+  if (Array.isArray(cfg?.icons)) {
+    if (cfg.icons.length === 0 || cfg.icons.length > MAX_ICONS) return null;
+    const icons = cfg.icons.map((icon) => ({
+      files: Array.isArray(icon?.files) ? icon.files : [],
+      metadata: sanitizeMetadata(icon?.metadata),
+    }));
+    const valid = icons.every((icon) => icon.files.length > 0 && icon.files.length <= MAX_FILES_PER_ICON);
+    return valid ? icons : null;
+  }
+  const files = Array.isArray(cfg?.files) ? cfg.files : [];
+  if (files.length === 0 || files.length > MAX_FILES_PER_ICON) return null;
+  return [{ files, metadata: sanitizeMetadata(cfg?.metadata) }];
+}
+
+/** Reads every staged file of every icon out of the body, or why it cannot. */
+export function iconsFromBody(body, cfg) {
+  const icons = iconsFromConfig(cfg);
+  if (!icons) return null;
+  const out = [];
+  let offset = 0;
+  for (const icon of icons) {
+    const files = splitFiles(body.subarray(offset), icon.files);
+    if (!files) return null;
+    if (!files.every((file) => /\.(jpe?g|eps)$/i.test(file.name))) return null;
+    offset += files.reduce((sum, file) => sum + file.bytes.length, 0);
+    out.push({ files, metadata: icon.metadata });
+  }
+  if (offset !== body.length) return null;
   return offset === body.length ? out : null;
 }
 
-/** Reads the staged files out of the request body, or says why it cannot. */
-export function filesFromBody(body, cfg) {
-  const listed = Array.isArray(cfg?.files) ? cfg.files : [];
-  if (listed.length === 0 || listed.length > 2) return null;
-  const files = splitFiles(body, listed);
-  if (!files) return null;
-  return files.every((file) => /\.(jpe?g|eps)$/i.test(file.name)) ? files : null;
-}
-
-async function performUpload(cfg, url, files) {
+async function performUpload(cfg, url, icons) {
   const acquired = await acquireSession(cfg, url);
   const session = acquired.entry.session;
   if (!session) return acquired.failure;
@@ -166,8 +193,9 @@ async function performUpload(cfg, url, files) {
   const batch = await session.ensureBatch({ batchName: cfg.batchName, submissionType: cfg.submissionType });
   if (!batch.ok) return batch;
   const uploaded = await session.upload({
-    files, metadata: sanitizeMetadata(cfg.metadata),
-    complete: cfg.complete !== false && process.env.GETTY_WEB_COMPLETE !== "0",
+    icons,
+    // The run submits its one batch itself; nothing here may lock it early.
+    complete: cfg.complete === true && process.env.GETTY_WEB_COMPLETE !== "0",
   });
   return { ...uploaded, batchId: batch.batchId };
 }
@@ -186,11 +214,11 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
   }
   const body = await post(req, limit);
   if (body === null) return json(res, 413, { ok: false, code: "bad-request", reason: "the request body was too large" });
-  const files = filesFromBody(body, cfg);
-  if (!files) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain one JPEG and an optional matching EPS" });
+  const icons = iconsFromBody(body, cfg);
+  if (!icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
   const url = contributeUrlOf(cfg);
   try {
-    const result = await performUpload(cfg, url, files);
+    const result = await performUpload(cfg, url, icons);
     if (!result?.ok) {
       const code = result?.code ?? "page";
       return json(res, statusFor(code), {
@@ -198,7 +226,7 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       });
     }
     return json(res, 200, {
-      ok: true, batchId: result.batchId ?? null, accepted: result.state?.namesSeen ?? files.map((f) => f.name),
+      ok: true, batchId: result.batchId ?? null, accepted: result.state?.namesSeen ?? icons.flatMap((icon) => icon.files.map((f) => f.name)),
       chips: result.state?.chips ?? null,
       completed: result.report?.completion?.clicked === true,
       completion: result.report?.completion ?? null,

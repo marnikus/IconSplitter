@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
-import { contributeUrlOf, filesFromBody } from "../tools/bridge/gettyweb/routes.mjs";
-import { safeStagedName } from "../tools/bridge/gettyweb/session.mjs";
+import { contributeUrlOf, iconsFromBody } from "../tools/bridge/gettyweb/routes.mjs";
+import { safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 
 const SERVER = path.resolve("tools/bridge/server.mjs");
@@ -216,11 +216,38 @@ describe("Getty web pure route helpers", () => {
   it("splits the concatenated body by the declared file sizes", () => {
     const body = Buffer.from([1, 2, 3, 4, 5]);
     const cfg = { files: [{ name: "a.jpeg", bytes: 3 }, { name: "a.eps", bytes: 2 }] };
-    const files = filesFromBody(body, cfg);
-    expect(files?.map((f) => [f.name, [...f.bytes]])).toEqual([["a.jpeg", [1, 2, 3]], ["a.eps", [4, 5]]]);
-    expect(filesFromBody(body, { files: [{ name: "a.jpeg", bytes: 4 }, { name: "a.eps", bytes: 4 }] })).toBeNull();
-    expect(filesFromBody(body, { files: [{ name: "a.zip", bytes: 5 }] })).toBeNull();
-    expect(filesFromBody(body, { files: [] })).toBeNull();
+    const [icon] = iconsFromBody(body, cfg) ?? [];
+    expect(icon?.files.map((f) => [f.name, [...f.bytes]])).toEqual([["a.jpeg", [1, 2, 3]], ["a.eps", [4, 5]]]);
+    expect(iconsFromBody(body, { files: [{ name: "a.jpeg", bytes: 4 }, { name: "a.eps", bytes: 4 }] })).toBeNull();
+    expect(iconsFromBody(body, { files: [{ name: "a.zip", bytes: 5 }] })).toBeNull();
+    expect(iconsFromBody(body, { files: [] })).toBeNull();
+  });
+
+  it("takes every icon of the run from one body, keeping each icon's files together", () => {
+    const body = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const cfg = {
+      icons: [
+        { files: [{ name: "a.jpeg", bytes: 2 }, { name: "a.eps", bytes: 1 }], metadata: { title: "A", keywords: [] } },
+        { files: [{ name: "b.jpeg", bytes: 6 }], metadata: null },
+      ],
+    };
+    const icons = iconsFromBody(body, cfg);
+    expect(icons?.map((icon) => icon.files.map((f) => [f.name, [...f.bytes]]))).toEqual([
+      [["a.jpeg", [1, 2]], ["a.eps", [3]]],
+      [["b.jpeg", [4, 5, 6, 7, 8, 9]]],
+    ]);
+    expect(icons?.[0].metadata).toMatchObject({ title: "A" });
+    expect(icons?.[1].metadata).toBeNull();
+    // A body that does not add up, or an icon without files, is refused.
+    expect(iconsFromBody(body, { icons: [{ files: [{ name: "a.jpeg", bytes: 2 }] }, { files: [] }] })).toBeNull();
+    expect(iconsFromBody(body, { icons: [{ files: [{ name: "a.jpeg", bytes: 3 }, { name: "a.eps", bytes: 1 }, { name: "c.eps", bytes: 1 }] }] })).toBeNull();
+    expect(iconsFromBody(body, { icons: [] })).toBeNull();
+  });
+
+  it("gives a longer wait to a run that sends several pairs at once", () => {
+    expect(uploadTimeoutFor(2)).toBe(180000);
+    expect(uploadTimeoutFor(4)).toBe(240000);
+    expect(uploadTimeoutFor(6, 60000)).toBe(180000);
   });
 
   it("keeps the staged file name and strips any path segment", () => {

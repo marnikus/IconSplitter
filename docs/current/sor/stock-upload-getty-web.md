@@ -16,16 +16,17 @@ browser.
    password in the vault, then presses **Test connection** or **Upload**.
 2. `panelops.ts` probes `/health` (`gettyWeb.ready`, `gettyWeb.browser`); a
    missing browser or an old helper fails with a hint.
-3. `runupload.ts` groups tasks **per icon** (JPEG + optional EPS) and passes one
-   `sessionKey` per target.
-4. `uploadBridgeGettyWeb` posts the bytes to `/getty-web/upload`; the helper
-   stages them, signs in once, creates **one** batch and hands every file to the
-   page's own uploader (`DOM.setFileInputFiles`). Stray dialogs/snackbars are
-   dismissed first — a leftover snackbar blocks Getty's uploader.
-5. Getty's uploader transfers; the helper waits until the batch page lists the
-   files. A listed contribution **counts as uploaded** at once — recognition
-   finishes afterwards — and the wait then lasts until it is ready. Every icon
-   stays in that one batch; nothing is submitted until the run is finished.
+3. `runupload.ts` groups tasks **per icon** (JPEG + optional EPS), one `sessionKey`
+   per target. `getty-web` is the one protocol that does not send one request per
+   icon: `uploadGettyWebRun` posts every icon together.
+4. `/getty-web/upload` takes the whole run (`icons: [{files, metadata}]`); the
+   helper stages it, signs in once, creates **one** batch and hands **all** files
+   to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
+   snackbars are dismissed first — one blocks Getty's uploader.
+5. Getty's uploader transfers; the helper waits until the batch page lists every
+   file. A listed contribution **counts as uploaded** at once — recognition
+   finishes afterwards — and the wait then lasts until it is ready. The app marks
+   an icon uploaded only when the response lists its stem.
 6. **Metadata:** per contribution it selects the card by stem, types the accepted
    title, description, keywords and **today's date** into Date Created, and saves —
    never overwriting Getty's IPTC/XMP prefill.
@@ -119,13 +120,12 @@ of identifier and password.
 - A listed card means Getty has the bytes, not that it accepted them.
 - An interrupted run can leave a batch short; a duplicate is the only recovery.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed with
-  `--getty-profile`, then runs reuse the cookie. The fraud script is context only
-  (`inspectSignIn().arkose`); typing and the Angular bridge are proven against a
-  fake CDP and a DOM, not the live page.
+  `--getty-profile`, then runs reuse the cookie. Typing and the Angular bridge are
+  proven against a fake CDP and a DOM, not the live page.
 - The helper types the saved identifier, guessing nothing.
-- Metadata editors and Complete use **label keywords** and row proximity —
-  guesses **not** seen live. A missing editor is reported per file
-  (`row-not-found`, `filled-unsaved`, `embedded-only`).
+- Metadata editors and Complete use **label keywords** and row proximity — guesses
+  **not** seen live. A missing editor is reported per file (`row-not-found`,
+  `filled-unsaved`, `embedded-only`).
 - `completed: true` means the control was clicked and confirmed, not that Getty
   passed the files. An incomplete run says `files uploaded but the batch was not
   completed — submit it on the Getty contributor page`.
