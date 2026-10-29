@@ -2,6 +2,8 @@
 // proves request/response bookkeeping, event routing, page-step serialization
 // and file attachment without needing Chrome on the test machine.
 
+import { createContext, runInContext } from "node:vm";
+import { PAGE_PRELUDE } from "../tools/bridge/gettyweb/driver.mjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   evaluate, openCdp, runStep, setFiles, stepExpression, waitFor,
@@ -92,7 +94,7 @@ describe("DevTools protocol client", () => {
   it("serializes a page step as prelude + self-contained function + JSON argument", () => {
     const expression = stepExpression("function helper() { return 1; }", "function step(arg) { return arg.n; }", { n: 5 });
     expect(expression).toContain("function helper()");
-    expect(expression).toContain(";(function step(arg) { return arg.n; })({\"n\":5})");
+    expect(expression).toContain(";return (function step(arg) { return arg.n; })({\"n\":5})");
     expect(() => new Function(`return ${expression}`)).not.toThrow();
   });
 
@@ -140,5 +142,17 @@ describe("DevTools protocol client", () => {
     socket.close();
     await expect(pending).rejects.toThrow("browser debugging socket closed");
     await expect(connection.send("Runtime.evaluate", {})).rejects.toThrow("browser debugging socket closed");
+  });
+});
+
+
+describe("persistent browser execution context", () => {
+  it("can inject the real prelude repeatedly without redeclaring page globals", () => {
+    const context = createContext({});
+    // Also survive lexical names left by an earlier helper version.
+    runInContext('const NON_TEXT_INPUTS = ["old"]; const CREATE_BATCH_DIALOG_SELECTOR = "old";', context);
+    const expression = stepExpression(PAGE_PRELUDE, 'function probe() { return NON_TEXT_INPUTS.includes("hidden"); }', undefined);
+    for (let i = 0; i < 5; i++) expect(runInContext(expression, context)).toBe(true);
+    expect(runInContext('NON_TEXT_INPUTS[0]', context)).toBe("old");
   });
 });

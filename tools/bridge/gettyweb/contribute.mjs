@@ -158,12 +158,24 @@ export async function ensureSignedIn(connection, sessionId, options) {
   return signInFailure(state.last, state.submitted, state.diagnostic);
 }
 
+// Wait for rendered, enabled controls; never retry a successful click/submit.
+async function waitForControl(connection, sessionId, selector) {
+  return waitFor(connection, `(() => {
+    const controls = [...document.querySelectorAll(${JSON.stringify(selector)})];
+    return controls.some(el => !el.disabled && !el.hidden
+      && el.getAttribute('aria-hidden') !== 'true'
+      && (typeof el.checkVisibility !== 'function' || el.checkVisibility()));
+  })()`, { sessionId, timeoutMs: 60000, intervalMs: 1000 });
+}
+
 async function chooseSubmissionType(connection, sessionId, label, onProgress) {
+  const control = await waitForControl(connection, sessionId, '[data-cy="create-batch-submission-type"] [role="combobox"]');
+  if (!control.ok) return { ok: false, reason: "Getty submission type control did not become ready within 60 seconds" };
   const menu = await runDriverStep(connection, sessionId, "openSubmissionTypeMenu", { label });
   if (!menu.opened) return { ok: false, reason: "submission type menu did not open" };
   if (menu.selected) return { ok: true, reason: null };
   const ready = await waitFor(connection, `Boolean(document.querySelector('[role="listbox"] [role="option"]'))`, {
-    sessionId, timeoutMs: 10000,
+    sessionId, timeoutMs: 60000, intervalMs: 1000,
   });
   if (!ready.ok) return { ok: false, reason: "Getty did not show the submission type options" };
   const chosen = await runDriverStep(connection, sessionId, "chooseSubmissionTypeOption", { label });
@@ -176,25 +188,32 @@ async function chooseSubmissionType(connection, sessionId, label, onProgress) {
 export async function createBatch(connection, sessionId, options) {
   if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
   const before = await runDriverStep(connection, sessionId, "readPageInfo");
+  const ready = await waitForControl(connection, sessionId,
+    `${driver.CREATE_BATCH_DIALOG_SELECTOR}, [data-cy="create-batch-button"]`);
+  if (!ready.ok) return { ok: false, code: "timeout", reason: "Getty Create Batch control did not become ready within 60 seconds" };
   const opened = await runDriverStep(connection, sessionId, "openCreateBatchDialog");
   if (!opened.clicked) return { ok: false, code: "page", reason: opened.reason };
   const dialog = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(driver.CREATE_BATCH_DIALOG_SELECTOR)}))`, {
-    sessionId, timeoutMs: 15000,
+    sessionId, timeoutMs: 60000, intervalMs: 1000,
   });
   if (!dialog.ok) return { ok: false, code: "page", reason: "the Create Batch dialog did not open" };
   const type = await chooseSubmissionType(connection, sessionId, options.submissionType || "iStock creative illustration", options.onProgress);
   if (!type.ok) return { ok: false, code: "page", reason: type.reason };
+  const nameReady = await waitForControl(connection, sessionId, 'input[name="submission_name"]');
+  if (!nameReady.ok) return { ok: false, code: "timeout", reason: "Getty batch name field did not become ready within 60 seconds" };
   const filled = await runDriverStep(connection, sessionId, "fillBatchDetails", {
     batchName: String(options.batchName ?? "").trim() || `IconSplitter ${new Date().toISOString()}`, briefCode: options.briefCode ?? "",
   });
   if (!filled.filled) return { ok: false, code: "page", reason: filled.reason };
+  const submitReady = await waitForControl(connection, sessionId, '[data-cy="create-batch-confirm-button"]');
+  if (!submitReady.ok) return { ok: false, code: "timeout", reason: "Getty Create button did not become ready within 60 seconds" };
   const submitted = await runDriverStep(connection, sessionId, "submitBatchCreation");
   if (!submitted.clicked) return { ok: false, code: "page", reason: submitted.reason };
   const created = await waitFor(connection, `(() => {
     const m = /\\/contribute\\/batches\\/(\\d+)/.exec(location.pathname);
     return m && m[1] !== ${JSON.stringify(before.batchId ?? null)} ? m[1] : null;
   })()`, {
-    sessionId, timeoutMs: options.timeoutMs ?? 60000,
+    sessionId, timeoutMs: options.timeoutMs ?? 60000, intervalMs: 1000,
   });
   if (!created.ok) return { ok: false, code: "timeout", reason: "Getty did not open the new batch page" };
   options.onProgress?.(`batch ${created.value} created`);
@@ -220,7 +239,7 @@ async function waitForFileNames(connection, sessionId, names, options) {
 /** Hands the staged files to the page's uploader and waits until they appear. */
 export async function attachFiles(connection, sessionId, options) {
   const input = await waitFor(connection, 'document.querySelectorAll(\'input[type="file"]\').length > 0', {
-    sessionId, timeoutMs: 30000,
+    sessionId, timeoutMs: 60000, intervalMs: 1000,
   });
   if (!input.ok) return { ok: false, code: "page", reason: "the batch page has no file input", state: null };
   const result = await setFiles(connection, options.paths, { sessionId });

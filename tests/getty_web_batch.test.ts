@@ -1,6 +1,6 @@
 // Real serialized driver steps and CDP expressions against the supplied MUI
 // dialog shape. No queued success replies that could hide selector errors.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attachFiles, createBatch } from "../tools/bridge/gettyweb/contribute.mjs";
 
 const TYPE = "iStock creative illustration";
@@ -54,10 +54,7 @@ class DomConnection {
     }
     if (method === "Runtime.evaluate") {
       const expression = String(params.expression);
-      const split = expression.lastIndexOf("\n;(");
-      const code = split < 0 ? `return (${expression})`
-        : `${expression.slice(0, split)}\nreturn ${expression.slice(split + 2)}`;
-      const value = new Function(code)();
+      const value = new Function(`return (${expression})`)();
       if (params.returnByValue === false) return { result: { objectId: "file-input" } };
       return { result: { value } };
     }
@@ -101,4 +98,36 @@ describe("Getty MUI batch creation and attachment", () => {
     expect(created).toMatchObject({ ok: false, code: "timeout" });
     expect(connection.attached).toEqual([]);
   });
+});
+
+
+it("polls until the Create Batch control becomes enabled after five seconds", async () => {
+  vi.useFakeTimers();
+  try {
+    const connection = new DomConnection();
+    const button = document.querySelector<HTMLButtonElement>("button")!;
+    button.disabled = true;
+    setTimeout(() => { button.disabled = false; }, 5000);
+    const result = createBatch(connection, "page", { batchName: "Delayed page" });
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(await result).toEqual({ ok: true, batchId: "987654" });
+    expect(connection.submittedName).toBe("Delayed page");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("gives up after sixty seconds without clicking an unavailable control", async () => {
+  vi.useFakeTimers();
+  try {
+    const connection = new DomConnection();
+    document.querySelector<HTMLButtonElement>("button")!.disabled = true;
+    const result = createBatch(connection, "page", {});
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(await result).toMatchObject({ ok: false, code: "timeout" });
+    expect(connection.submittedName).toBe("");
+    expect(connection.attached).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
 });

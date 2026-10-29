@@ -46,7 +46,7 @@ class FakePage {
     if (method !== "Runtime.evaluate") return Promise.resolve({});
     const expression = String(params.expression);
     if (expression === "document.readyState === 'complete'") return Promise.resolve({ result: { value: true } });
-    const tail = expression.slice(expression.lastIndexOf("\n;("));
+    const tail = expression.slice(expression.lastIndexOf("\n;return ("));
     const name = /\(function (\w+)/.exec(tail)?.[1] ?? "unknown";
     this.steps.push(name);
     const value = this.queue[name]?.length ? this.queue[name].shift() : this.defaults[name] ?? null;

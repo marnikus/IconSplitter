@@ -8,7 +8,7 @@ const DEFAULT_TIMEOUT_MS = 20000;
 /** Serializes a page driver step: helper prelude + one self-contained function. */
 export function stepExpression(prelude, stepSource, arg) {
   const payload = arg === undefined ? "" : JSON.stringify(arg);
-  return `${prelude}\n;(${stepSource})(${payload})`;
+  return `(() => {\n${prelude}\n;return (${stepSource})(${payload});\n})()`;
 }
 
 /**

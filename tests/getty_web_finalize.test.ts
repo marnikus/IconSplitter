@@ -19,7 +19,7 @@ class FakeConnection {
     if (method !== "Runtime.evaluate") return Promise.resolve({});
     const expression = String(params.expression);
     this.expressions.push(expression);
-    const tail = expression.slice(expression.lastIndexOf("\n;("));
+    const tail = expression.slice(expression.lastIndexOf("\n;return ("));
     const name = /\(function (\w+)/.exec(tail)?.[1] ?? "unknown";
     this.steps.push(name);
     const value = this.queue[name]?.shift() ?? null;
