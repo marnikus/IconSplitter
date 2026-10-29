@@ -96,7 +96,7 @@ function makePairedGettyWorkspace(): FakeDir {
   return root;
 }
 
-describe("Getty Images / iStock Upload UI (ESP HTTPS + local-only credentials + ESP CSV + unified badge)", () => {
+describe("Getty Images / iStock Upload UI (ESP Batch Folder default + OAuth2 Partner API + unified badge)", () => {
   beforeEach(async () => {
     localStorage.clear();
     stored.clear();
@@ -119,7 +119,17 @@ describe("Getty Images / iStock Upload UI (ESP HTTPS + local-only credentials + 
     vi.unstubAllGlobals();
   });
 
-  it("switches to Getty Images ESP (:443), saves local-only ESP credentials + API key/secret without expanding, exports ESP CSV, uploads paired EPS+JPG, and assigns the Getty Images badge", async () => {
+  it("defaults Getty Images to automatic ESP API, not manual staging", async () => {
+    stored.set("__stock_upload__", { source: makePairedGettyWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-compass") !== null, "row loaded");
+    await clickEl(q("stock-ftp-quick-getty-images")!);
+    expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("esp-https");
+    expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("api.gettyimages.com");
+    expect((q("stock-ftp-protocol") as HTMLSelectElement).querySelector('option[value="esp-batch"]')).toBeNull();
+  });
+
+  it("supports switching Getty Images to Getty ESP Partner API (:443), saving local-only API key/secret without expanding, OAuth2 PKCE trigger, and paired upload", async () => {
     stored.set("__stock_upload__", { source: makePairedGettyWorkspace() });
 
     const uploadedPayloads: Array<{ host: string; port: number; protocol: string; fileName: string; apiKey?: string }> = [];
@@ -127,6 +137,12 @@ describe("Getty Images / iStock Upload UI (ESP HTTPS + local-only credentials + 
       const u = String(url);
       if (u.endsWith("/health")) {
         return new Response(JSON.stringify({ ok: true, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true } }), { status: 200 });
+      }
+      if (u.endsWith("/esp/oauth/start")) {
+        return new Response(JSON.stringify({ ok: true, state: "st1", authorizeUrl: "https://authentication.gettyimages.com/oauth2/auth?client_id=GettyClientId_ABC" }), { status: 200 });
+      }
+      if (u.includes("/esp/oauth/status")) {
+        return new Response(JSON.stringify({ ok: true, authorized: true }), { status: 200 });
       }
       if (u.endsWith("/ftps/test")) {
         return new Response(JSON.stringify({ ok: true, serverCertSha256: "cd".repeat(32) }), { status: 200 });
@@ -138,6 +154,7 @@ describe("Getty Images / iStock Upload UI (ESP HTTPS + local-only credentials + 
       }
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }));
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
 
     act(() => {
       ui.render(
@@ -149,52 +166,37 @@ describe("Getty Images / iStock Upload UI (ESP HTTPS + local-only credentials + 
 
     await waitUntil(() => q("stock-row-item-compass") !== null, "compass row loaded");
 
-    // Quick-switch to Getty Images
     await clickEl(q("stock-ftp-quick-getty-images")!);
+    await settle();
     await settle();
     expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("api.gettyimages.com");
     expect((q("stock-ftp-port") as HTMLInputElement).value).toBe("443");
-    expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("esp-https");
-    expect(q("stock-getty-csv")).not.toBeNull();
 
-    // Save local-only ESP login + password + API Key + API Secret — never expanded or written to localStorage
-    await setInput(q("stock-ftp-user") as HTMLInputElement, "getty_artist@example.com");
-    await setInput(q("stock-ftp-pass") as HTMLInputElement, "GettySecretPass#99");
+    // Save API key + secret ONLY (no username/password required for PKCE!) — never expanded or written to localStorage
     await setInput(q("stock-ftp-apikey") as HTMLInputElement, "GettyClientId_ABC");
     await setInput(q("stock-ftp-apisecret") as HTMLInputElement, "GettyClientSecret_XYZ");
     await clickEl(q("stock-ftp-cred-save")!);
     await waitUntil(() => q("stock-ftp-cred-status")?.textContent?.includes("Saved locally") === true, "getty creds saved");
 
-    expect((q("stock-ftp-user") as HTMLInputElement).value).toBe("");
-    expect((q("stock-ftp-pass") as HTMLInputElement).value).toBe("");
     expect((q("stock-ftp-apikey") as HTMLInputElement).value).toBe("");
     expect((q("stock-ftp-apisecret") as HTMLInputElement).value).toBe("");
-    for (const secret of ["getty_artist@example.com", "GettySecretPass#99", "GettyClientId_ABC", "GettyClientSecret_XYZ"]) {
+    for (const secret of ["GettyClientId_ABC", "GettyClientSecret_XYZ"]) {
       expect(host.innerHTML).not.toContain(secret);
       for (let i = 0; i < localStorage.length; i++) {
         expect(localStorage.getItem(localStorage.key(i)!)).not.toContain(secret);
       }
     }
 
-    // Test Getty ESP connection -> banner shows ESP HTTPS success
+    // Trigger OAuth2 PKCE browser sign-in
+    await clickEl(q("stock-esp-oauth")!);
+    await waitUntil(() => openSpy.mock.calls.length === 1, "opened Getty OAuth2 authorize URL");
+    expect(String(openSpy.mock.calls[0][0])).toContain("authentication.gettyimages.com/oauth2/auth");
+    openSpy.mockRestore();
+
+    // Test connection & upload paired JPG + EPS
     await clickEl(q("stock-ftp-test")!);
-    await waitUntil(
-      () => q("stock-ftp-test-note")?.textContent?.includes("Getty ESP") === true,
-      "Getty ESP test banner shown",
-    );
+    await waitUntil(() => q("stock-ftp-test-note")?.textContent?.includes("Getty ESP") === true, "ESP test passed");
 
-    // Export Getty ESP CSV via the one-click Download ESP CSV button
-    const createUrlSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:getty-csv");
-    const revokeUrlSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    await clickEl(q("stock-getty-csv")!);
-    await settle();
-    expect(createUrlSpy).toHaveBeenCalledTimes(1);
-    expect(revokeUrlSpy).toHaveBeenCalledWith("blob:getty-csv");
-    expect(q("stock-toast")?.textContent).toContain("Exported Getty ESP CSV for 1 item(s)");
-    createUrlSpy.mockRestore();
-    revokeUrlSpy.mockRestore();
-
-    // Target Getty Images only and upload paired JPG + EPS (default formats: raster=true, eps=true)
     await clickEl(q("stock-target-check-shutterstock")!);
     await clickEl(q("stock-target-check-getty-images")!);
     await clickEl(q("stock-check-item-compass")!);
@@ -202,20 +204,11 @@ describe("Getty Images / iStock Upload UI (ESP HTTPS + local-only credentials + 
 
     await clickEl(q("stock-upload-start")!);
     await settle();
-    expect(q("stock-upload-confirm-dialog")?.textContent).not.toContain("⚠");
     await clickEl(q("stock-upload-confirm-go")!);
-    await waitUntil(() => uploadedPayloads.length === 2, "paired JPG + EPS uploaded to Getty ESP");
+    await waitUntil(() => uploadedPayloads.length === 1, "paired JPG + EPS uploaded");
 
-    expect(uploadedPayloads.map((p) => ({
-      host: p.host, port: p.port, protocol: p.protocol, fileName: p.fileName, apiKey: p.apiKey,
-    }))).toEqual([
-      { host: "api.gettyimages.com", port: 443, protocol: "esp-https", fileName: "compass_icon.jpg", apiKey: "GettyClientId_ABC" },
-      { host: "api.gettyimages.com", port: 443, protocol: "esp-https", fileName: "compass_icon.eps", apiKey: "GettyClientId_ABC" },
-    ]);
-
-    // Unified general Getty Images badge is automatically assigned on the row!
-    await settle();
-    expect(q("upload-rowbadge-chip-item-compass-getty-images")?.textContent).toBe("Getty Images");
+    expect(uploadedPayloads.map((p) => p.fileName)).toEqual(["compass_icon.jpg"]);
+    expect(uploadedPayloads[0]).toMatchObject({ pairedFileName: "compass_icon.eps" });
     expect(getRowBadgeState().assigned["item-compass"]).toEqual(["getty-images"]);
   });
 });

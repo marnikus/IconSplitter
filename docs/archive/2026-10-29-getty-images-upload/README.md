@@ -1,68 +1,36 @@
-# Getty Images / iStock (`contributors.gettyimages.com`) — Contributor Connection & Upload Research & Design
+# Getty Images / iStock (`contributors.gettyimages.com` · `esp.gettyimages.com`) Research & Connection Architecture (2026-10-29)
 
-**Date:** 2026-10-29  
-**Portal:** `https://contributors.gettyimages.com/home` → **Getty ESP:** `https://esp.gettyimages.com`  
-**API Root:** `https://api.gettyimages.com` (`/oauth2/token` + `/esp/submission/v1/...`)
+## 1. Why `POST https://api.gettyimages.com/oauth2/token` Returned `HTTP 403: Forbidden`
 
----
+Investigation of Getty Images' official API & OAuth2 documentation (`https://developers.gettyimages.com/api/`, `https://developer.gettyimages.com/docs/authorization/`, `https://developers.gettyimages.com/release-notes/`) and partner workflows (**DeepMeta 4** at `https://deepmeta.creativ.zone` and **qHero** at `https://qhero.com`) identified three distinct reasons `Test connection` returned `Getty ESP HTTP 403: Forbidden`:
 
-## 1. Research Findings: How Contributors Actually Connect & Upload to Getty Images / iStock
-
-Unlike Shutterstock (`ftps.shutterstock.com:21`, Explicit FTPS) and Adobe Stock (`sftp.contributor.adobestock.com:22`, SFTP), **Getty Images and iStock (`istockphoto.com`, owned by Getty Images) do NOT provide a public contributor FTP/FTPS/SFTP server for Creative Stills or Vector Illustrations**:
-
-1. **Unified Contributor Pipeline (`contributors.gettyimages.com/home` → `esp.gettyimages.com`)**:
-   - Getty Images retired legacy iStock FTP in February 2017. One contributor account and one submission platform — **Getty ESP (Enterprise / Enhanced Submission Platform, `https://esp.gettyimages.com`)** — feeds both **iStock** and **Getty Images** (official Contributor Help Articles `9146`, `10847`, `7170`).
-   - Mobile `Contributor by Getty Images` supports RF creative stills only; **all vector illustrations, batch stills, editorial non-live assets, and videos** are submitted through **ESP**.
-
-2. **Three Real Getty Images Connection & Ingest Channels**:
-   - **Channel 1 — Getty ESP HTTPS REST API (`esp-https`, `api.gettyimages.com:443`)** *(Primary programmatic channel)*:
-     - **OAuth 2.0 Token Exchange**: `POST https://api.gettyimages.com/oauth2/token` (`Content-Type: application/x-www-form-urlencoded`) using either:
-       - **Resource Owner Password Credentials (`grant_type=password`)** for ESP contributor accounts: `client_id=<Api-Key>&client_secret=<Api-Secret>&username=<ESP-Username>&password=<ESP-Password>`, or
-       - **Client Credentials (`grant_type=client_credentials`)**: `client_id=<Api-Key>&client_secret=<Api-Secret>`.
-       Returns `{ "access_token": "<token>", "token_type": "Bearer", "expires_in": 1800 }`.
-     - **ESP Submission Endpoints** (`Api-Key: <Api-Key>`, `Authorization: Bearer <token>`, `Accept: application/json`):
-       1. `GET /esp/submission/v1/submission_batches` — verifies account authorization and lists open batches.
-       2. `POST /esp/submission/v1/submission_batches` — creates a submission batch (`submission_name`, `submission_type: "getty_creative_still"`, `save_extracted_metadata: true`).
-       3. `POST /esp/submission/v1/submission_batches/{batch_id}/contributions` — registers each file (`file_name`, `mime_type`, `headline`, `caption`, `recorded_date`) and returns a presigned upload target (`storage_url` / `external_file_location`), followed by binary `PUT` upload of the asset bytes.
-     - *Partner API Key Note*: Getty restricts ESP Submission API keys (`Api-Key` + `Api-Secret`) to approved Getty/iStock developer/partner keys (such as DeepMeta, qHero, or enterprise contributor integrations).
-   - **Channel 2 — Getty ESP Web Portal / DeepMeta 4 + Official ESP CSV Metadata Import** *(Universal contributor workflow)*:
-     - Contributors without an ESP API key upload paired `.eps` + `.jpg` files in `https://esp.gettyimages.com` or **DeepMeta** (`https://www.deepmeta.com`) / **qHero** (`https://qhero.com`) and attach an **ESP Metadata CSV** file:
-       - Exact lowercase header columns: `file name,created date,title,description,country,brief code,keywords`
-       - Keywords are comma-separated inside double quotes (max `50` controlled-vocabulary terms; ESP auto-adds read-only orientation/color terms).
-       - Embedded JPEG IPTC/EXIF/XMP (`Headline`/`ObjectName`, `Caption`/`Description`, `Keywords`) is also extracted when `save_extracted_metadata` is enabled.
-   - **Channel 3 — Specialized Getty FTP / SFTP Ingest Endpoints** *(Enterprise DAM & Live Editorial only)*:
-     - **Getty Media Manager / Brandfolder Enterprise DAM**: `sftp://files.transfer.brandfolder.com:22` (**SFTP `:22` only**; plain FTP disabled; requires account-manager provisioned SFTP ingest credentials).
-     - **Getty Editorial Live News & Sport Picture Desk**: `feedsftp.gettyimages.com:21` (test: `ftp.newsandsport.gettyimages.com:21`) strictly for live assignments within 4 hours of an event; non-live content goes through `esp.gettyimages.com`.
+1. **OAuth2 Authorization Server Host Migration (`authentication.gettyimages.com`, not `api.gettyimages.com`)**:
+   - Getty migrated OAuth2 token and authorization endpoints off `api.gettyimages.com` onto **`https://authentication.gettyimages.com/oauth2/auth`** and **`https://authentication.gettyimages.com/oauth2/token`**.
+   - `api.gettyimages.com` is an AWS API Gateway resource server requiring an `api-key` header and mapped `/v3/*` or `/esp/*` paths; hitting `/oauth2/token` on `api.gettyimages.com` (or omitting `User-Agent` / `api-key`) returns AWS API Gateway's `HTTP 403 {"message":"Forbidden"}`.
+2. **Retirement of `grant_type=password` in Favor of OAuth 2.0 Authorization Code + PKCE (`S256`)**:
+   - Getty's OAuth2 server supports **`authorization_code` (with RFC 7636 PKCE `S256`)**, **`refresh_token`**, and **`client_credentials`**.
+   - Crucially, Getty's official Redirect URI policy explicitly allows **unregistered plain-HTTP loopback URIs** (`http://127.0.0.1:<port>/esp/oauth/callback` and `http://localhost:<port>/...`) without pre-registering the callback URL with Getty.
+   - Confidential clients send `client_secret` during token exchange; public PKCE clients must omit `client_secret` (our bridge retries without `client_secret` automatically if a public client rejects it).
+3. **API Tier Gate — Self-Service `/v3` Keys vs Partner `/esp/submission/v1` Keys**:
+   - Standard self-service keys from `developer.gettyimages.com` receive **Customer Catalog API v3** permissions (`GET /v3/countries`, `/v3/search/images`), **not** `ESP Contributor Submission` permissions (`/esp/submission/v1/submission_batches`).
+   - Calling `/esp/submission/v1/submission_batches` with a customer-only `/v3` key returns `HTTP 403 {"message":"Forbidden"}` until Getty Contributor Support / Partner Engineering grants **ESP Contributor Submission** access (the partner tier used by DeepMeta 4 and qHero).
+   - Probing `GET /v3/countries` whenever `/esp/submission/v1/submission_batches` returns `403` cleanly distinguishes *"valid Getty API key & OAuth2 token, but missing ESP Submission partner tier"* from *"invalid/inactive API key"*.
 
 ---
 
-## 2. Official Getty Images / iStock File & Metadata Rules
+## 2. How Contributors Actually Upload Vector Icons to Getty Images / iStock Today
 
-Per Getty Images Contributor Requirements (`contributors.gettyimages.com` Articles `9146` & `10847`):
+Getty Images and iStock offer **no public contributor FTP/FTPS/SFTP server** for Creative / Illustration uploads (`feedsftp.gettyimages.com:21` is Editorial live news `<24h` only; `files.transfer.brandfolder.com:22` is Enterprise Media Manager DAM only; account-rep FTP is issued only by special arrangement).
 
-1. **Vector / Illustration (`EPS` + `JPG` Same-Basename Pair Mandatory)**:
-   - **Vector file**: Adobe Illustrator **`EPS`** compatible with **Illustrator 10 / CS6**, RGB or CMYK vector paths, **all shapes closed**, stray points removed, custom brushes/effects expanded, all text converted to outlines, no embedded bitmaps/rasters.
-   - **Mandatory Raster Preview**: Every `.eps` file **must** be uploaded alongside a matching RGB **`.jpg`** file with the **exact same basename** (`<stem>.eps` + `<stem>.jpg`). Minimum JPEG preview dimensions: **`1900 × 2800 px`** (~`5.32 MP`), **`4075 × 4075 px`** (~`16.6 MP`) recommended. Standalone `.eps` without `<stem>.jpg` (or paired with `.png`) is incomplete.
-   - **Unsupported container/vector formats**: Standalone `.svg` and `.zip` archives are **not** accepted by Getty ESP.
-2. **Still / Raster (`JPEG`)**:
-   - RGB `JPG`, minimum **`3 MP`**, maximum **`256 MP`**, standard creative file ceiling **`50 MB`**, no upscaling.
-3. **Metadata & Content Compliance**:
-   - **Title (`headline`)** + **Description (`caption`)** + up to **`50` keywords** (`5–50` terms recommended; Getty ESP maps terms against its controlled vocabulary).
-   - **Generative AI Policy**: Getty Images / iStock strictly prohibits creative assets or reference images generated with generative AI tools (Midjourney, DALL-E, Stable Diffusion, etc.).
+Therefore, IconSplitter provides **three clean connection/upload modes** under the **Getty Images** preset:
 
----
-
-## 3. IconSplitter Implementation Design
-
-1. **Unified General Badge System (`src/lib/upload/rowbadge.ts`)**:
-   - Register `{ id: "getty-images", name: "Getty Images", color: "#14c997" }` in `HARDCODED_STOCK_BADGES` alongside `Shutterstock` and `Adobe Stock` — one general badge system, automatically assigned to an item row as soon as any file is uploaded to Getty Images.
-2. **Built-in Preset & Transport (`src/lib/stockupload/{types,presets}.ts`)**:
-   - Add protocol `"esp-https"` (`port: 443`, TLS verified/pinned/self-signed) and template `"getty-images"`.
-   - Seed `GETTY_IMAGES_PRESET` (`id: "getty-images"`, `name: "Getty Images"`, `protocol: "esp-https"`, `host: "api.gettyimages.com"`, `port: 443`, `remoteDir: "/esp/submission/v1/submission_batches"`), auto-appending it when migrating existing `localStorage` snapshots while allowing protocol switching (`esp-https`, `sftp`, `ftps-explicit`, `ftp`) for Media Manager SFTP or Editorial FTP accounts.
-3. **Local-Only Non-Expanded Credentials (`src/lib/stockupload/credvault.ts`, `StockFtpCredentials.tsx`)**:
-   - Extend `FtpCredentials` with optional `apiKey` and `apiSecret` stored strictly in IndexedDB `iconSplitter/secrets` (`stock-ftp-cred:getty-images`), never expanded into DOM inputs, never written to `localStorage`/`export.json`/logs, and scrubbed in both browser (`redactCredentials`) and bridge (`scrubSecrets`) plus `src/lib/log.ts`.
-4. **Loopback ESP HTTPS Bridge (`tools/bridge/esp/`)**:
-   - Zero-dependency Node `node:https` session driver (`openEspSession`) plugged into `/ftps/{test,upload,close}` and `/health` (`esp: { ready: true }`), handling OAuth2 token acquisition (`/oauth2/token`), TLS certificate pinning, single-batch creation/reuse per pooled upload session, contribution creation + binary `PUT` upload, and immediate `AbortSignal`/socket-close cancellation (`RULE 7`).
-5. **Preflight Pairing Warnings & One-Click ESP CSV Export (`src/lib/stockupload/{plan,gettycsv}.ts`)**:
-   - `buildStockUploadPlan` warns on `.svg`/`.zip`, `.eps` without matching `.jpg` (`raster` off or `.png` raster), `> 50 MB` files, and missing title/description or `> 50` keywords.
-   - `buildGettyEspCsv` + `Download ESP CSV` (`data-testid="stock-getty-csv"`) exports RFC-4180 `getty-esp-metadata.csv` (`file name,created date,title,description,country,brief code,keywords`) for direct import into `https://esp.gettyimages.com` or DeepMeta.
+1. **`esp-batch` — Getty ESP Batch Folder (`esp.gettyimages.com` / DeepMeta 4) *(Default — works for 100% of contributors with zero API keys)***:
+   - In IconSplitter, exported icons live in separate per-icon `<pair>/export/` folders (`pack_a/icon1/export/icon1.{eps,jpg}`, `pack_a/icon2/export/icon2.{eps,jpg}`). Neither `esp.gettyimages.com` nor DeepMeta 4 can ingest nested per-icon subfolders directly.
+   - Clicking **`Upload`** in `esp-batch` mode validates Getty's pairing/size/keyword rules, writes flat, non-overwriting (`RULE 23`) copies of every selected icon's `<stem>.eps` + RGB `<stem>.jpg` into `<root>/_getty_esp_batches/<batch>/`, generates **`getty_esp_metadata.csv`** (`file name,created date,title,description,country,brief code,keywords`) inside that exact same folder, and assigns the **`Getty Images`** badge in the unified general row-badge system.
+   - Contributors drag all files from `<root>/_getty_esp_batches/<batch>/` straight into **DeepMeta 4** (`https://deepmeta.creativ.zone` — applies `.csv` + `.eps` + `.jpg` simultaneously in one drop) or **Getty ESP** (`https://esp.gettyimages.com` → `iStock Creative Illustration` batch + CSV import).
+   - Because `_getty_esp_batches/` is not named `export` and has no `export.json`, `discoverExportedItems` (`I-80`) never re-discovers staged batch files as duplicate rows.
+2. **`esp-https` — Getty ESP Partner API (`:443` OAuth2 PKCE)**:
+   - For contributors/partners whose Getty API key has ESP Submission access enabled.
+   - Uses `https://authentication.gettyimages.com/oauth2/auth` + `/oauth2/token` (PKCE `S256` via `http://127.0.0.1:47391/esp/oauth/callback`, `refresh_token`, or `client_credentials`), sends `User-Agent`, `Api-Key`, and Bearer token headers to `https://api.gettyimages.com/esp/submission/v1/submission_batches`, and runs `/v3/countries` diagnostics on `403`.
+3. **`ftps-explicit` (`:21`) / `sftp` (`:22`)**:
+   - Available via the Protocol dropdown for account-rep FTP, Editorial `feedsftp.gettyimages.com:21`, Media Manager `files.transfer.brandfolder.com:22`, or aggregator FTP (`ftp.microstock.plus:21`).

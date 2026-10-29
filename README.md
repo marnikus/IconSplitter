@@ -42,10 +42,13 @@ It has six modes (tabs across the top):
   metadata editing + in-place XMP/IPTC/RDF re-embedding, built-in stock presets
   (**Shutterstock** Explicit FTPS on `ftps.shutterstock.com:21`, **Adobe Stock**
   SFTP on `sftp.contributor.adobestock.com:22`, and **Getty Images / iStock**
-  ESP HTTPS API on `api.gettyimages.com:443` + one-click Getty ESP CSV export),
-  local-only non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`,
-  `EPS`, `ZIP`) uploads through the local loopback helper (`run_ftp_bridge.bat`
-  / `run_app_ftp.bat`).
+  ESP API automatic paired JPEG/EPS ingestion over HTTPS). Getty requires an ESP
+  API key provisioned by Getty; upload creates a contribution, not a submission
+  for review. The API protocol is tested with a local mock, not a live account.
+  It uses OAuth2 PKCE and keeps credentials local. Includes local-only
+  non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
+  uploads through the local loopback helper (`run_ftp_bridge.bat` /
+  `run_app_ftp.bat`).
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any

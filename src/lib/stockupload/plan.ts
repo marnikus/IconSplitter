@@ -83,7 +83,9 @@ function collectPreflightErrors(
   if (rows.length === 0) errs.push("Select at least one exported item to upload.");
   if (checkedPresets.length === 0) errs.push("Check at least one target FTP website.");
   for (const p of checkedPresets) {
-    if (p.host.trim() === "") errs.push(`Stock preset "${p.name}" has no FTP host configured.`);
+    if (p.protocol !== "esp-batch" && p.host.trim() === "") {
+      errs.push(`Stock preset "${p.name}" has no FTP host configured.`);
+    }
   }
   if (formats.length === 0) errs.push("Select at least one file format (JPEG/PNG, SVG, EPS, or ZIP).");
   return errs;

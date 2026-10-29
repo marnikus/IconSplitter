@@ -1,14 +1,18 @@
 // ftpactions.ts — Stock FTPS/SFTP/ESP preset mutations, local-only credential
-// actions, and connection test (credentials never enter React state or localStorage).
+// actions, Getty OAuth2 PKCE browser sign-in, and connection/staging test.
 
 import { useMemo, useRef } from "react";
-import { testBridgeFtps } from "../lib/stockupload/bridgeclient";
+import type { DirHandleLike } from "../lib/fs";
+import {
+  checkBridgeEspOAuthStatus, startBridgeEspOAuth, testBridgeFtps,
+} from "../lib/stockupload/bridgeclient";
 import type { ExtraCredentials, FtpCredentials } from "../lib/stockupload/credvault";
 import {
   addCustomStockPreset, patchStockPreset, removeStockPreset,
   resetBuiltinStockPreset, toggleTargetPreset,
 } from "../lib/stockupload/presets";
 import type { StockFtpPreset, StockPresetState, UploadFormatKey } from "../lib/stockupload/types";
+import { probeEspStageFolder } from "./espstage";
 import { clearFtpCredentials, readFtpCredentials, saveFtpCredentials } from "./keystore";
 import { setStockPresetState } from "./presetstore";
 
@@ -30,12 +34,14 @@ export interface StockFtpActions {
   saveCreds: (presetId: string, username: string, password: string, extra?: ExtraCredentials) => Promise<boolean>;
   forgetCreds: (presetId: string) => Promise<void>;
   testConnection: (presetId: string) => Promise<void>;
+  authorizeEspOAuth: (presetId: string) => Promise<void>;
   trustPinnedCert: (presetId: string, sha256: string) => void;
 }
 
 export interface FtpCtx {
   presetState: StockPresetState;
   bridgeUrl: string;
+  rootRef: { current: DirHandleLike | null };
   say: (msg: string, err?: boolean) => void;
   setCredSaved: (presetId: string, saved: boolean) => void;
   setTestStatus: (s: FtpTestStatus) => void;
@@ -44,7 +50,7 @@ export interface FtpCtx {
 async function performSaveCreds(c: FtpCtx, presetId: string, creds: FtpCredentials): Promise<boolean> {
   const outcome = await saveFtpCredentials(presetId, creds);
   if (outcome === "empty") {
-    c.say("Enter both username and password — empty fields never overwrite saved credentials", true);
+    c.say("Enter credentials (or Getty API Key) before saving — empty fields never overwrite saved credentials", true);
     return false;
   }
   c.setCredSaved(presetId, true);
@@ -66,10 +72,25 @@ function protocolShortName(preset: StockFtpPreset): string {
   return preset.protocol === "sftp" ? "SFTP" : "FTPS";
 }
 
+async function performTestEspStage(c: FtpCtx, preset: StockFtpPreset): Promise<void> {
+  const res = await probeEspStageFolder(c.rootRef.current, preset.remoteDir);
+  const note = res.ok
+    ? `Getty ESP batch folder ready (${res.relBase}/) — click Upload to stage paired EPS + JPG + getty_esp_metadata.csv`
+    : res.reason;
+  c.setTestStatus({ busy: false, ok: res.ok, note, certSha256: null });
+  c.say(note, !res.ok);
+}
+
 async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise<void> {
+  if (preset.protocol === "esp-batch") {
+    await performTestEspStage(c, preset);
+    return;
+  }
   const creds = await readFtpCredentials(preset.id);
   if (creds === null) {
-    const missing = "Save local credentials first before testing.";
+    const missing = preset.protocol === "esp-https"
+      ? "Save your Getty ESP API Key locally first."
+      : "Save local credentials first before testing.";
     c.setTestStatus({ busy: false, ok: false, note: missing, certSha256: null });
     c.say(missing, true);
     return;
@@ -82,10 +103,54 @@ async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise
   c.say(note, !res.ok);
 }
 
-async function performTestConnection(c: FtpCtx, presetId: string): Promise<void> {
+async function pollOAuthCompletion(c: FtpCtx, state: string): Promise<void> {
+  for (let i = 0; i < 60; i += 1) {
+    const st = await checkBridgeEspOAuthStatus(c.bridgeUrl, state);
+    if (st.authorized) {
+      const msg = "Getty OAuth2 authorized — click Test connection or Upload";
+      c.setTestStatus({ busy: false, ok: true, note: msg, certSha256: null });
+      c.say(msg, false);
+      return;
+    }
+    if (st.error) {
+      c.setTestStatus({ busy: false, ok: false, note: st.error, certSha256: null });
+      c.say(st.error, true);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
+async function performAuthorizeEspOAuth(c: FtpCtx, presetId: string): Promise<void> {
   const preset = c.presetState.presets.find((p) => p.id === presetId);
   if (!preset) return;
-  await performTestWithPreset(c, preset);
+  const creds = await readFtpCredentials(preset.id);
+  if (!creds?.apiKey) {
+    const msg = "Save your Getty API Key locally first before starting OAuth2 sign-in.";
+    c.setTestStatus({ busy: false, ok: false, note: msg, certSha256: null });
+    c.say(msg, true);
+    return;
+  }
+  const started = await startBridgeEspOAuth(c.bridgeUrl, preset, creds);
+  if (!started.ok) {
+    c.setTestStatus({ busy: false, ok: false, note: started.reason, certSha256: null });
+    c.say(started.reason, true);
+    return;
+  }
+  window.open(started.authorizeUrl, "_blank", "noopener,noreferrer");
+  c.setTestStatus({ busy: true, ok: null, note: "Complete Getty / iStock sign-in in the opened browser tab…", certSha256: null });
+  void pollOAuthCompletion(c, started.state);
+}
+
+function enrichGettyProtocolPatch(cur: StockFtpPreset | undefined, patch: Partial<StockFtpPreset>): Partial<StockFtpPreset> {
+  if (!cur || cur.template !== "getty-images" || !patch.protocol || patch.protocol === cur.protocol) return patch;
+  if (patch.protocol === "esp-https") {
+    return { host: "api.gettyimages.com", port: 443, remoteDir: "/esp/submission/v1/submission_batches", ...patch };
+  }
+  if (patch.protocol === "esp-batch") {
+    return { host: "esp.gettyimages.com", port: 443, remoteDir: "/_getty_esp_batches", ...patch };
+  }
+  return patch;
 }
 
 function buildPresetListCrud(ref: { current: FtpCtx }): Pick<
@@ -119,7 +184,10 @@ function buildPresetFieldOps(ref: { current: FtpCtx }): Pick<
   StockFtpActions, "updatePreset" | "toggleTarget" | "setFormat" | "trustPinnedCert"
 > {
   return {
-    updatePreset: (id, patch) => setStockPresetState(patchStockPreset(ref.current.presetState, id, patch)),
+    updatePreset: (id, patch) => {
+      const cur = ref.current.presetState.presets.find((p) => p.id === id);
+      setStockPresetState(patchStockPreset(ref.current.presetState, id, enrichGettyProtocolPatch(cur, patch)));
+    },
     toggleTarget: (id) => setStockPresetState(toggleTargetPreset(ref.current.presetState, id)),
     setFormat: (key, enabled) => {
       const st = ref.current.presetState;
@@ -148,6 +216,10 @@ export function useStockFtpActions(ctx: FtpCtx): StockFtpActions {
       ref.current.setCredSaved(presetId, false);
       ref.current.say("Local credentials removed from this device");
     },
-    testConnection: (presetId) => performTestConnection(ref.current, presetId),
+    testConnection: async (presetId) => {
+      const preset = ref.current.presetState.presets.find((p) => p.id === presetId);
+      if (preset) await performTestWithPreset(ref.current, preset);
+    },
+    authorizeEspOAuth: (presetId) => performAuthorizeEspOAuth(ref.current, presetId),
   }), []);
 }

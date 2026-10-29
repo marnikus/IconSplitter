@@ -80,20 +80,29 @@ function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { tex
   if (summary.failedFiles > 0) {
     return { text: `Uploaded ${summary.uploadedFiles} file(s), ${summary.failedFiles} failed: ${summary.lastError ?? ""}`, err: true };
   }
+  if (summary.stagedDir) {
+    return {
+      text: `Staged ${summary.uploadedFiles} file(s) + getty_esp_metadata.csv into ${summary.stagedDir}/ — drag into esp.gettyimages.com or DeepMeta 4`,
+      err: false,
+    };
+  }
   return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s)`, err: false };
 }
 
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
   if (!c.r.root.current) return;
-  c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Probing local FTPS/SFTP helper…" } } });
-  const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
-    requireSftp: plan.targets.some((t) => t.protocol === "sftp"),
-    requireEsp: plan.targets.some((t) => t.protocol === "esp-https"),
-  });
-  if (!probe.ok) {
-    c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
-    c.say(probe.reason, true);
-    return;
+  const networkTargets = plan.targets.filter((t) => t.protocol !== "esp-batch");
+  c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Preparing upload batch…" } } });
+  if (networkTargets.length > 0) {
+    const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
+      requireSftp: networkTargets.some((t) => t.protocol === "sftp"),
+      requireEsp: networkTargets.some((t) => t.protocol === "esp-https"),
+    });
+    if (!probe.ok) {
+      c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
+      c.say(probe.reason, true);
+      return;
+    }
   }
   const controller = new AbortController();
   c.r.abort.current = controller;

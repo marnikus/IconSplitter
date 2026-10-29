@@ -1,5 +1,5 @@
 // StockFtpPanel.tsx — stock FTPS/SFTP/ESP presets dropdown, per-stock varying
-// fields, Getty ESP CSV export, and local-only non-expanded credentials card.
+// fields, Getty ESP CSV & portal launchers, and local-only credentials card.
 
 import { useState } from "react";
 import type { FtpProtocol, StockFtpPreset, StockPresetState, TlsPolicy } from "../lib/stockupload/types";
@@ -19,8 +19,14 @@ export interface StockFtpPanelProps {
 }
 
 function protocolBadgeCopy(protocol: FtpProtocol): string {
-  if (protocol === "esp-https") return "Getty ESP HTTPS preset";
+  if (protocol === "esp-batch") return "Getty ESP Batch Folder (Web / DeepMeta 4)";
+  if (protocol === "esp-https") return "Getty ESP Partner API (:443)";
   return protocol === "sftp" ? "SFTP stock preset" : "FTPS stock preset";
+}
+
+function endpointSummary(active: StockFtpPreset): string {
+  if (active.protocol === "esp-batch") return `${active.remoteDir} → esp.gettyimages.com`;
+  return `${active.host || "no host"}:${active.port} · ${active.protocol}`;
 }
 
 export default function StockFtpPanel(p: StockFtpPanelProps) {
@@ -30,7 +36,7 @@ export default function StockFtpPanel(p: StockFtpPanelProps) {
     <div className={`svg-provider${p.ftpOpen ? "" : " closed"}`} data-testid="stock-ftp-panel">
       <div className="svg-provider-top" style={{ flexWrap: "wrap", gap: 8 }}>
         <span><strong data-testid="stock-ftp-active-name">{active.name}</strong> · {protocolBadgeCopy(active.protocol)}</span>
-        <span>{active.host || "no host"}:{active.port} · {active.protocol}</span>
+        <span>{endpointSummary(active)}</span>
         <QuickPresetSwitch presets={p.presetState.presets} activeId={active.id} ftpOpen={p.ftpOpen}
           actions={p.actions} onToggleOpen={p.onToggleOpen} />
         <button type="button" className="svg-link" data-testid="stock-ftp-toggle" aria-expanded={p.ftpOpen}
@@ -94,11 +100,23 @@ function PresetActionButtons({ active, actions, onDownloadGettyCsv }: {
         <button type="button" className="svg-btn tiny danger" data-testid="stock-ftp-delete"
           onClick={() => actions.deletePreset(active.id)}>Remove preset</button>
       )}
-      {active.template === "getty-images" && onDownloadGettyCsv && (
+      {active.template === "getty-images" && <GettyPortalButtons onDownloadGettyCsv={onDownloadGettyCsv} />}
+    </>
+  );
+}
+
+function GettyPortalButtons({ onDownloadGettyCsv }: { onDownloadGettyCsv?: () => void }) {
+  return (
+    <>
+      {onDownloadGettyCsv && (
         <button type="button" className="svg-btn tiny" data-testid="stock-getty-csv" onClick={onDownloadGettyCsv}>
           ⇩ Download ESP CSV
         </button>
       )}
+      <a className="svg-btn tiny" data-testid="stock-open-esp" href="https://esp.gettyimages.com"
+        target="_blank" rel="noopener noreferrer">↗ Open Getty ESP</a>
+      <a className="svg-btn tiny" data-testid="stock-open-deepmeta" href="https://deepmeta.creativ.zone"
+        target="_blank" rel="noopener noreferrer">↗ Open DeepMeta 4</a>
     </>
   );
 }
@@ -121,8 +139,11 @@ function ConnectionFields({ active, bridgeUrl, onBridgeUrl, actions }: {
   const patch = (next: Partial<StockFtpPreset>) => actions.updatePreset(active.id, next);
   return (
     <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
-      <EndpointFields active={active} onPatch={patch} />
-      <SecurityFields active={active} bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} onPatch={patch} />
+      {active.protocol !== "esp-batch" && <HostPortFields active={active} onPatch={patch} />}
+      <ProtocolAndFolderFields active={active} onPatch={patch} />
+      {active.protocol !== "esp-batch" && (
+        <SecurityFields active={active} bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} onPatch={patch} />
+      )}
     </div>
   );
 }
@@ -132,7 +153,7 @@ function defaultHostHint(active: StockFtpPreset): string {
   return active.template === "getty-images" ? "api.gettyimages.com" : "ftps.shutterstock.com";
 }
 
-function EndpointFields({ active, onPatch }: {
+function HostPortFields({ active, onPatch }: {
   active: StockFtpPreset; onPatch: (p: Partial<StockFtpPreset>) => void;
 }) {
   return (
@@ -147,31 +168,35 @@ function EndpointFields({ active, onPatch }: {
         <input className="svg-input" type="number" min={1} max={65535} data-testid="stock-ftp-port"
           value={active.port} onChange={(e) => onPatch({ port: Number(e.target.value) })} />
       </label>
-      <ProtocolAndFolderFields active={active} onPatch={onPatch} />
     </>
   );
+}
+
+function folderLabelOf(protocol: FtpProtocol): string {
+  if (protocol === "esp-batch") return "Staged ESP batch folder (in workspace)";
+  if (protocol === "esp-https") return "ESP batches endpoint / ID";
+  return "Remote folder";
 }
 
 function ProtocolAndFolderFields({ active, onPatch }: {
   active: StockFtpPreset; onPatch: (p: Partial<StockFtpPreset>) => void;
 }) {
   const sftpOnly = active.template === "adobe-stock";
-  const dirLabel = active.protocol === "esp-https" ? "ESP batches endpoint / ID" : "Remote folder";
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">Protocol / Encryption</span>
+        <span className="svg-label">Connection method / Protocol</span>
         <select className="svg-input" data-testid="stock-ftp-protocol" value={active.protocol}
           disabled={sftpOnly} onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
+          {!sftpOnly && <option value="esp-https">Getty ESP Partner API (:443 OAuth2 PKCE)</option>}
           {!sftpOnly && <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>}
           <option value="sftp">SFTP (SSH :22)</option>
-          {!sftpOnly && <option value="esp-https">Getty ESP HTTPS API (:443)</option>}
           {!sftpOnly && <option value="ftps-implicit">Implicit FTPS (TLS :990)</option>}
           {!sftpOnly && <option value="ftp">Plain FTP (unencrypted)</option>}
         </select>
       </label>
       <label className="svg-field">
-        <span className="svg-label">{dirLabel}</span>
+        <span className="svg-label">{folderLabelOf(active.protocol)}</span>
         <input className="svg-input" data-testid="stock-ftp-remotedir" value={active.remoteDir}
           onChange={(e) => onPatch({ remoteDir: e.target.value })} />
       </label>

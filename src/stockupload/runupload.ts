@@ -11,6 +11,7 @@ import type { ExportedItem, StockFtpPreset, StockUploadOutcome, UploadFormatKey 
 import { buildRepresentationZip } from "../lib/stockupload/zippack";
 import { assignNamedBadge, ensureHardcodedBadges } from "../lib/upload/rowbadge";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
+import { groupEspTasks, uploadEspGroup } from "./esptransfer";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight, markUploadInFlight } from "./journal";
 
@@ -36,6 +37,7 @@ export interface UploadBatchSummary {
   failedFiles: number;
   cancelled: boolean;
   lastError: string | null;
+  stagedDir?: string | null;
 }
 
 interface ItemTracker {
@@ -85,6 +87,7 @@ interface RunCounters {
   uploadedFiles: number;
   failedFiles: number;
   lastError: string | null;
+  stagedDir: string | null;
 }
 
 function buildTrackers(plan: StockUploadPlan, targetTasks: readonly PlannedTransfer[]): Map<string, ItemTracker> {
@@ -166,7 +169,40 @@ function recordTaskResult(
   });
 }
 
-async function runTargetGroup(
+function rejectLocalEspStage(plan: StockUploadPlan, target: StockFtpPreset, deps: UploadBatchDeps, counters: RunCounters): void {
+  const tasks = plan.tasks.filter((t) => t.targetId === target.id);
+  const trackers = buildTrackers(plan, tasks);
+  const result = { ok: false as const, reason: "Local staging is not an upload. Select the Getty ESP API connection." };
+  for (const task of tasks) recordTaskResult(task, result, { target, trackers, counters, deps });
+  flushTargetStatuses(target.id, trackers);
+}
+
+function reportNetworkCertificate(res: { ok: boolean; reason?: string }, target: StockFtpPreset, deps: UploadBatchDeps): void {
+  if ("code" in res && res.code === "cert" && "serverCertSha256" in res && typeof res.serverCertSha256 === "string") {
+    deps.onCertWarning?.(target.id, res.serverCertSha256);
+  }
+}
+
+async function runNetworkGroups(ctx: {
+  plan: StockUploadPlan; target: StockFtpPreset; targetTasks: PlannedTransfer[]; deps: UploadBatchDeps;
+  counters: RunCounters; trackers: Map<string, ItemTracker>; creds: FtpCredentials; sessionKey: string;
+  itemsById: ReadonlyMap<string, ExportedItem>;
+}): Promise<void> {
+  const { plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById } = ctx;
+  const groups = target.protocol === "esp-https" ? groupEspTasks(targetTasks) : targetTasks.map((task) => [task]);
+  for (const tasks of groups) {
+    if (deps.signal.aborted) break;
+    markUploadInFlight(tasks[0].itemId, target.id);
+    const res = target.protocol === "esp-https"
+      ? await uploadEspGroup({ tasks, missing: plan.skippedMissing, root: deps.root, bridgeUrl: deps.bridgeUrl,
+        target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn })
+      : await runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps });
+    if (!res.ok) reportNetworkCertificate(res, target, deps);
+    for (const task of tasks) recordTaskResult(task, res, { target, trackers, counters, deps });
+  }
+}
+
+async function runNetworkTargetGroup(
   plan: StockUploadPlan,
   target: StockFtpPreset,
   deps: UploadBatchDeps,
@@ -182,18 +218,25 @@ async function runTargetGroup(
   }
   const itemsById = new Map(plan.selectedRows.map((r) => [r.id, r]));
   const sessionKey = `${target.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const closeFn = deps.closeSessionFn ?? closeBridgeFtpsSession;
   try {
-    for (const task of targetTasks) {
-      if (deps.signal.aborted) break;
-      markUploadInFlight(task.itemId, target.id);
-      const res = await runSingleTask(task, { target, creds, sessionKey, itemsById, deps });
-      recordTaskResult(task, res, { target, trackers, counters, deps });
-    }
+    await runNetworkGroups({ plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById });
   } finally {
-    await closeFn(deps.bridgeUrl, sessionKey);
+    await (deps.closeSessionFn ?? closeBridgeFtpsSession)(deps.bridgeUrl, sessionKey);
     flushTargetStatuses(target.id, trackers);
   }
+}
+
+async function runTargetGroup(
+  plan: StockUploadPlan,
+  target: StockFtpPreset,
+  deps: UploadBatchDeps,
+  counters: RunCounters,
+): Promise<void> {
+  if (target.protocol === "esp-batch") {
+    rejectLocalEspStage(plan, target, deps, counters);
+    return;
+  }
+  await runNetworkTargetGroup(plan, target, deps, counters);
 }
 
 export async function executeStockUploadBatch(
@@ -201,7 +244,7 @@ export async function executeStockUploadBatch(
   deps: UploadBatchDeps,
 ): Promise<UploadBatchSummary> {
   const counters: RunCounters = {
-    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null,
+    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null, stagedDir: null,
   };
   for (const target of plan.targets) {
     if (deps.signal.aborted) break;
@@ -212,5 +255,6 @@ export async function executeStockUploadBatch(
     failedFiles: counters.failedFiles,
     cancelled: deps.signal.aborted,
     lastError: counters.lastError,
+    stagedDir: counters.stagedDir,
   };
 }

@@ -30,6 +30,7 @@ export interface BridgeUploadInput {
   creds: FtpCredentials;
   fileName: string;
   bytes: Uint8Array;
+  pairedFile?: { fileName: string; bytes: Uint8Array };
   sessionKey?: string;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
@@ -133,6 +134,7 @@ function buildUploadHeader(input: BridgeUploadInput): string {
     ...(input.creds.apiKey ? { apiKey: input.creds.apiKey } : {}),
     ...(input.creds.apiSecret ? { apiSecret: input.creds.apiSecret } : {}),
     fileName: input.fileName,
+    ...(input.pairedFile ? { pairedFileName: input.pairedFile.fileName, rasterBytes: input.bytes.byteLength } : {}),
     sessionKey: input.sessionKey,
   }));
 }
@@ -143,7 +145,7 @@ export async function uploadBridgeFtps(input: BridgeUploadInput): Promise<Bridge
     const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/ftps/upload`, {
       method: "POST",
       headers: { "content-type": "application/octet-stream", "x-ftps-config": buildUploadHeader(input) },
-      body: new Blob([input.bytes as BlobPart]),
+      body: new Blob([input.bytes as BlobPart, ...(input.pairedFile ? [input.pairedFile.bytes as BlobPart] : [])]),
       signal: input.signal,
     });
     const body: unknown = await res.json();
@@ -172,5 +174,57 @@ export async function closeBridgeFtpsSession(
     });
   } catch {
     // helper already stopped or session expired
+  }
+}
+
+function parseEspOAuthStartBody(
+  ok: boolean,
+  body: unknown,
+  creds: FtpCredentials,
+): { ok: true; state: string; authorizeUrl: string } | { ok: false; reason: string } {
+  if (ok && isRecord(body) && body.ok === true && typeof body.authorizeUrl === "string") {
+    return { ok: true, state: String(body.state ?? ""), authorizeUrl: body.authorizeUrl };
+  }
+  const raw = isRecord(body) && typeof body.reason === "string" ? body.reason : "Could not start Getty OAuth2 flow";
+  return { ok: false, reason: redactCredentials(raw, creds) };
+}
+
+export async function startBridgeEspOAuth(
+  bridgeUrl: string,
+  preset: StockFtpPreset,
+  creds: FtpCredentials,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<{ ok: true; state: string; authorizeUrl: string } | { ok: false; reason: string }> {
+  try {
+    const res = await fetchImpl(`${trimSlash(bridgeUrl)}/esp/oauth/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        apiKey: creds.apiKey ?? "",
+        apiSecret: creds.apiSecret ?? "",
+        host: preset.host,
+        port: preset.port,
+        tlsPolicy: preset.tlsPolicy,
+        pinnedCertSha256: preset.pinnedCertSha256,
+      }),
+    });
+    return parseEspOAuthStartBody(res.ok, await res.json(), creds);
+  } catch {
+    return { ok: false, reason: `cannot reach local FTPS/SFTP helper — ${BRIDGE_FIX_HINT}` };
+  }
+}
+
+export async function checkBridgeEspOAuthStatus(
+  bridgeUrl: string,
+  state: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<{ authorized: boolean; error: string | null }> {
+  try {
+    const res = await fetchImpl(`${trimSlash(bridgeUrl)}/esp/oauth/status?state=${encodeURIComponent(state)}`);
+    const body: unknown = await res.json();
+    if (!res.ok || !isRecord(body)) return { authorized: false, error: null };
+    return { authorized: body.authorized === true, error: typeof body.error === "string" ? body.error : null };
+  } catch {
+    return { authorized: false, error: null };
   }
 }

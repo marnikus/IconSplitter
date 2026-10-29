@@ -172,4 +172,6 @@ describe("Getty Images / iStock preflight rules & ESP CSV metadata builder", () 
     const jpgLine = lines.find((l) => l.startsWith("photo_02.jpg,"))!;
     expect(jpgLine).toContain(",2026-10-28,");
   });
+
+
 });

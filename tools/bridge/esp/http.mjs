@@ -73,19 +73,22 @@ function attachTlsPinGuard(req, tlsPolicy, pinnedCertSha256, onCertErr) {
   });
 }
 
+const DEFAULT_USER_AGENT = "IconSplitter-ESP-Bridge/1.0";
+
 export function espHttpsRequest(opts) {
   const {
-    host, port, method, path, headers, body,
+    host, port, method, path, headers = {}, body,
     tlsPolicy = "strict", pinnedCertSha256 = "", timeoutMs = 30000, onAbortHook,
   } = opts;
+  const mergedHeaders = { "user-agent": DEFAULT_USER_AGENT, ...headers };
   return new Promise((resolve, reject) => {
     let certErr = null;
     const req = https.request(
-      { host, port: Number(port), method, path, headers, rejectUnauthorized: false, agent: false },
+      { host, port: Number(port), method, path, headers: mergedHeaders, rejectUnauthorized: false, agent: false },
       (res) => {
         const chunks = [];
         res.on("data", (c) => chunks.push(c));
-        res.on("end", () => { clearTimeout(timer); resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks) }); });
+        res.on("end", () => { clearTimeout(timer); resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks), headers: res.headers }); });
       },
     );
     const timer = setTimeout(() => {

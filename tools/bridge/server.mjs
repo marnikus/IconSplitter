@@ -15,6 +15,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
+import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
 
@@ -142,6 +143,7 @@ async function serveDist(url, res) {
 
 async function route(req, res, port) {
   const url = (req.url ?? "/").split("?")[0];
+  if (req.method === "GET" && url === "/esp/oauth/callback") return handleEspOAuthCallback(req, res, port);
   if (!cors(req, res)) return json(res, 403, { reason: "only a local page (file://, localhost, 127.0.0.1) may use this helper" });
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return 0; }
   if (req.method === "POST" && url === "/shutdown" && req.headers["x-bridge-control"] === "restart") {
@@ -151,6 +153,8 @@ async function route(req, res, port) {
   }
   if (req.method === "GET" && url === "/health") return health(res, port);
   if (req.method === "POST" && url === "/convert/eps") return convert(req, res);
+  if (req.method === "POST" && url === "/esp/oauth/start") return handleEspOAuthStart(req, res, port, json);
+  if (req.method === "GET" && url === "/esp/oauth/status") return handleEspOAuthStatus(req, res, port, json);
   if (req.method === "POST" && url === "/ftps/test") return handleFtpsTest(req, res, json);
   if (req.method === "POST" && url === "/ftps/upload") return handleFtpsUpload(req, res, config.ftpMaxBytes, json);
   if (req.method === "POST" && url === "/ftps/close") return handleFtpsClose(req, res, json);

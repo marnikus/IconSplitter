@@ -2,7 +2,7 @@
 
 import type { ExportRecord } from "../upload/export";
 
-export type FtpProtocol = "ftps-explicit" | "sftp" | "esp-https" | "ftps-implicit" | "ftp";
+export type FtpProtocol = "esp-batch" | "esp-https" | "ftps-explicit" | "sftp" | "ftps-implicit" | "ftp";
 export type TlsPolicy = "strict" | "pinned" | "accept-self-signed";
 export type StockTemplate = "shutterstock" | "adobe-stock" | "getty-images" | "custom";
 export type UploadFormatKey = "raster" | "svg" | "eps" | "zip";
@@ -29,7 +29,7 @@ export interface StockFtpPreset {
 }
 
 export interface StockPresetState {
-  v: 1;
+  v: 1 | 2;
   presets: StockFtpPreset[];
   activePresetId: string;
   checkedTargets: string[];

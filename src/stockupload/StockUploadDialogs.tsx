@@ -62,13 +62,18 @@ function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
   );
 }
 
+function targetPlanLabel(t: StockUploadPlan["targets"][number]): string {
+  if (t.protocol === "esp-batch") return `${t.name} (ESP batch folder ${t.remoteDir}/)`;
+  return `${t.name} (${t.host}:${t.port})`;
+}
+
 function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
   return (
     <div className="svg-modal-body">
       <p>
         Upload <strong>{plan.tasks.length}</strong> file(s) ({formatBytes(plan.totalBytes)}) for{" "}
         <strong>{plan.selectedRows.length}</strong> item(s) across{" "}
-        <strong>{plan.targets.map((t) => `${t.name} (${t.host}:${t.port})`).join(", ")}</strong>.
+        <strong>{plan.targets.map(targetPlanLabel).join(", ")}</strong>.
       </p>
       <p className="svg-note">
         Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
