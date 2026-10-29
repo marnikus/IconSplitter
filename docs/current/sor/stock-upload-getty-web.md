@@ -19,7 +19,8 @@ browser.
 3. `runupload.ts` groups tasks **per icon** (JPEG + optional EPS), one `sessionKey`
    per target. `getty-web` is the one protocol that does not send one request per
    icon: `uploadGettyWebRun` posts every icon together.
-4. `/getty-web/upload` takes the whole run (`icons: [{files, metadata}]`); the
+4. `/getty-web/upload` takes the whole run (`icons: [{files, metadata}]`, up to
+   200 icons); the
    helper stages it, signs in once, creates **one** batch and hands **all** files
    to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
    snackbars are dismissed first — one blocks Getty's uploader.

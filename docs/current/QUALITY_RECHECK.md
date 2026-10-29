@@ -3928,3 +3928,6 @@ Quality gate (changed) PASS (0.7 s, 10 files), Tests + coverage PASS (112.4 s),
 Build PASS (6.9 s). Focused suites: getty_web_batch 14, getty_web_upload 13,
 bridge_getty_web 19, stockupload_getty_web 8, Getty runs + UI 96. Docs: SOR
 8,974 B / 9,000 B, selectors 6,056 B.
+Follow-up: `MAX_ICONS` raised to 200 so one run's whole selection fits the single
+request; Types/Lint/Quality gates re-run after the change: tsc clean, eslint 0
+errors / 21 warnings, quality gate PASS.
