@@ -341,7 +341,7 @@ export async function launchBrowser(options = {}) {
   return {
     ok: false,
     code: "browser",
-    reason: `the browser did not open a usable DevTools port${port} — close any Chrome/Edge window using ${where} and retry, or set GETTY_WEB_CDP`,
+    reason: `the browser did not open a usable DevTools port${port} — retry the upload (the helper frees ${where} on its own), or set GETTY_WEB_CDP`,
   };
 }
 
