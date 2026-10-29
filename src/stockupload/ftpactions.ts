@@ -102,7 +102,7 @@ async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise
     const missing = preset.protocol === "esp-https"
       ? "Save your Getty ESP API Key locally first."
       : preset.protocol === "getty-web"
-        ? "Save the Getty contributor e-mail and password locally first."
+        ? "Save the Getty contributor e-mail or account ID and password locally first."
         : "Save local credentials first before testing.";
     c.setTestStatus({ busy: false, ok: false, note: missing, certSha256: null });
     c.say(missing, true);

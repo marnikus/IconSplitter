@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { findBrowser, parseCdpEndpoint } from "../tools/bridge/gettyweb/browser.mjs";
+import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
 import { contributeUrlOf, filesFromBody } from "../tools/bridge/gettyweb/routes.mjs";
 import { safeStagedName } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
@@ -20,9 +20,9 @@ const NO_BROWSER = "/nonexistent/getty-web-browser";
 interface Helper { url: string; child: ChildProcess; log: string[]; tmp: string }
 const live: Helper[] = [];
 
-async function startHelper(): Promise<Helper> {
+async function startHelper(extraArgs: string[] = []): Promise<Helper> {
   const tmp = mkdtempSync(path.join(tmpdir(), "getty-web-bridge-test-"));
-  const child = spawn(process.execPath, [SERVER, "--port", "0"], {
+  const child = spawn(process.execPath, [SERVER, "--port", "0", ...extraArgs], {
     env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -76,6 +76,13 @@ describe("Getty web helper routes", () => {
     expect(body.gettyWeb).toMatchObject({ ready: true, browser: "missing" });
   });
 
+  it("opens a visible browser window when the helper starts with --getty-headed", async () => {
+    const helper = await startHelper(["--getty-headed"]);
+    const body = await (await fetch(`${helper.url}/health`)).json() as { gettyWeb?: Record<string, unknown> };
+    expect(body.gettyWeb).toMatchObject({ ready: true, headed: true });
+    expect(helper.log.join("\n")).toContain("VISIBLE window");
+  });
+
   it("refuses a non-Getty host, foreign protocols and missing credentials before launching anything", async () => {
     const helper = await startHelper();
     const privateHost = await postConfig(helper.url, "/getty-web/upload", gettyConfig({ host: "169.254.169.254" }));
@@ -124,6 +131,13 @@ describe("Getty web helper routes", () => {
 });
 
 describe("Getty web pure route helpers", () => {
+  it("treats an explicit profile folder as reusable and an empty one as throwaway", () => {
+    expect(resolveProfileDir("")).toBeNull();
+    expect(resolveProfileDir("   ")).toBeNull();
+    expect(resolveProfileDir(undefined)).toBeNull();
+    expect(resolveProfileDir("/tmp/getty-profile")).toBe(path.resolve("/tmp/getty-profile"));
+  });
+
   it("builds only https Getty contributor URLs and refuses path escapes", () => {
     expect(contributeUrlOf(GETTY_WEB_PRESET)).toBe("https://esp.gettyimages.com/contribute");
     expect(contributeUrlOf({ ...GETTY_WEB_PRESET, host: "evil.example.com" })).toBeNull();

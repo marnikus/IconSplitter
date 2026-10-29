@@ -8,6 +8,8 @@
 // counts — never content, never a file name from the package. No dependencies.
 //
 //   node tools/bridge/server.mjs [--port 47391] [--inkscape <path>] [--dist <dir>]
+//   Getty web: [--getty-headed] [--getty-cdp <loopback devtools url>]
+//              [--getty-profile <dir>]  (reuse a profile so Getty remembers it)
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
 
 import { createServer, request as httpRequest } from "node:http";
@@ -26,16 +28,32 @@ const DEFAULT_PORT = 47391;
 const ALLOWED_ORIGIN = /^(null|https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
 
-/** --flag value pairs from argv. */
+/** --flag value pairs from argv; a flag with no value becomes `true`. */
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i].startsWith("--")) { out[argv[i].slice(2)] = argv[i + 1]; i += 1; }
+    if (!argv[i].startsWith("--")) continue;
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith("--")) { out[argv[i].slice(2)] = true; continue; }
+    out[argv[i].slice(2)] = value;
+    i += 1;
   }
   return out;
 }
 
+/** Getty web flags so a first run can be watched without setting env vars. */
+function applyGettyFlags(parsed) {
+  if (["1", "true", true].includes(parsed["getty-headed"])) process.env.GETTY_WEB_HEADED = "1";
+  if (typeof parsed["getty-cdp"] === "string" && parsed["getty-cdp"] !== "") {
+    process.env.GETTY_WEB_CDP = parsed["getty-cdp"];
+  }
+  if (typeof parsed["getty-profile"] === "string" && parsed["getty-profile"] !== "") {
+    process.env.GETTY_WEB_PROFILE = parsed["getty-profile"];
+  }
+}
+
 const args = parseArgs(process.argv.slice(2));
+applyGettyFlags(args);
 const config = {
   port: Number(args.port ?? process.env.BRIDGE_PORT ?? DEFAULT_PORT),
   inkscape: args.inkscape,
@@ -218,6 +236,7 @@ function startListening() {
     console.log("FTPS upload helper: READY (/ftps/test, /ftps/upload, /ftps/close — FTPS :21 + SFTP :22, Inkscape not required)");
     console.log(inkscape.found ? `Inkscape ${inkscape.version} at ${inkscape.path}` : `Inkscape NOT found (optional, only for Inkscape EPS conversion) — ${inkscape.fix}`);
     console.log(`serving ${existsSync(path.join(config.dist, "index.html")) ? "the built app" : "NO built app yet"} from ${config.dist}`);
+    if (process.env.GETTY_WEB_HEADED === "1") console.log("Getty web browser: VISIBLE window (--getty-headed)");
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
   });
 }

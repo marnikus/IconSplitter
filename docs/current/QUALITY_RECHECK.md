@@ -3703,3 +3703,27 @@ Chrome installed):
   metadata-editor and Complete/Submit selectors are label guesswork never seen
   live, and the launch/attach path is only exercised through fakes here because
   this machine has no Google Chrome or Microsoft Edge.
+
+## 2026-10-29 — Getty web sign-in: account ID, headed window, reusable profile
+
+Reported failure: `Getty did not accept the saved contributor sign-in` with a
+saved contributor ID instead of an e-mail, and no way to see what the page asked
+for. Measured on this checkout (Node 22.22.3; still no Chrome in the sandbox, so
+the launch path stays fake-driven):
+
+- Focused: `tests/getty_web_driver.test.ts`, `tests/getty_web_signin.test.ts`,
+  `tests/getty_web_finalize.test.ts`, `tests/getty_web_upload.test.ts`,
+  `tests/getty_web_cdp.test.ts`, `tests/bridge_getty_web.test.ts`,
+  `tests/stockupload_getty_web.test.ts`, `tests/stockupload_getty_web_ui.test.tsx`,
+  `tests/docs_navigation.test.ts` → all passed (driver 20, sign-in 7, bridge 12).
+- `npm run verify:fast` → Types PASS 3.3 s, Lint PASS (0 errors / 21 warnings)
+  1.6 s, Quality gate (changed) PASS 0.6 s, Tests + coverage PASS 87.8 s,
+  Build PASS 6.1 s.
+- `docs/current/sor/stock-upload-getty-web.md` had to be compacted to 8,921 bytes
+  to stay inside the 9,000-byte agent read budget (`docs_navigation`), without
+  dropping a limit.
+- New knobs are verified where they can be: `--getty-headed` through a spawned
+  helper's `/health` + log line, `resolveProfileDir` as a pure function. Whether
+  Getty accepts a numeric contributor ID in its identifier field, and which
+  sign-in control a real page shows, remain unverified without a live account —
+  the first visible-window run is what settles them.

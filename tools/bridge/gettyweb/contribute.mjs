@@ -14,6 +14,7 @@ const STEP_SOURCES = new Map(
 const LOGIN_POLL_MS = 1500;
 const UPLOAD_POLL_MS = 1000;
 const CONFIRM_SETTLE_MS = 700;
+const NAV_RETRY_MS = 5000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -34,37 +35,83 @@ export async function openContributePage(connection, sessionId, url) {
   return runDriverStep(connection, sessionId, "readPageInfo");
 }
 
+/**
+ * Getty sometimes opens on an SSO/phone screen whose only way forward is a
+ * "sign in with password" option; pick it so the saved credentials get a form.
+ */
+async function openPasswordOption(connection, sessionId, info) {
+  const hasForm = info.loginForm.email || info.loginForm.password;
+  if (hasForm || info.challenge || /^\/contribute(\/|$)/.test(String(info.path ?? ""))) return info;
+  const chosen = await runDriverStep(connection, sessionId, "choosePasswordOption");
+  return chosen?.chosen === true ? runDriverStep(connection, sessionId, "readPageInfo") : info;
+}
+
+/** Fills the visible sign-in step; presses the control again if it did not take. */
 async function loginAttempt(connection, sessionId, creds, onProgress) {
-  const info = await runDriverStep(connection, sessionId, "readPageInfo");
+  let info = await runDriverStep(connection, sessionId, "readPageInfo");
   if (info.signedIn) return { done: true, info };
-  if (!info.loginForm.email && !info.loginForm.password) return { done: false, info };
+  info = await openPasswordOption(connection, sessionId, info);
+  if (!info.loginForm.email && !info.loginForm.password) return { done: false, info, submitted: false };
   onProgress?.(`signing in at ${info.path}`);
-  await runDriverStep(connection, sessionId, "fillLoginForm", creds);
-  return { done: false, info };
+  const filled = (await runDriverStep(connection, sessionId, "fillLoginForm", creds)) ?? {};
+  const again = filled.filled === true && filled.submitted !== true
+    ? await runDriverStep(connection, sessionId, "submitLogin")
+    : null;
+  return { done: false, info, submitted: filled.submitted === true || again?.submitted === true };
+}
+
+const SIGN_IN_TIMEOUT = "Getty did not show the Batches page in time";
+const SIGN_IN_CHALLENGE = "Getty is asking for an interactive verification (captcha, 2-factor or new-device check) — run run_ftp_bridge.bat --getty-headed, sign in once in the window that opens, then retry";
+const SIGN_IN_UNSENT = "the sign-in form was filled but no sign-in control could be pressed — run run_ftp_bridge.bat --getty-headed to see what the page asks for";
+const SIGN_IN_ID_STEP = "Getty stayed on the e-mail / account ID step — save the contributor e-mail or the numeric contributor ID you use on gettyimages.com, then retry";
+const SIGN_IN_REJECTED = "Getty did not accept the saved contributor password — check it, or run run_ftp_bridge.bat --getty-headed to watch the sign-in";
+
+/** The honest reason a sign-in stalled, from what the page showed. */
+export function signInFailure(info, submitted) {
+  if (!info) return { ok: false, code: "timeout", reason: SIGN_IN_TIMEOUT };
+  if (info.challenge === true) return { ok: false, code: "auth", reason: SIGN_IN_CHALLENGE };
+  const hasForm = info.loginForm?.email === true || info.loginForm?.password === true;
+  if (!hasForm) return { ok: false, code: "timeout", reason: SIGN_IN_TIMEOUT };
+  if (submitted !== true) return { ok: false, code: "auth", reason: SIGN_IN_UNSENT };
+  if (info.loginForm?.email === true && info.loginForm?.password !== true) {
+    return { ok: false, code: "auth", reason: SIGN_IN_ID_STEP };
+  }
+  return { ok: false, code: "auth", reason: SIGN_IN_REJECTED };
+}
+
+/** True when the browser sits on a Getty page that is neither sign-in nor /contribute. */
+function driftedAway(info) {
+  const path = String(info?.path ?? "");
+  if (!info || /^\/contribute(\/|$)/.test(path)) return false;
+  return info.loginForm?.email !== true && info.loginForm?.password !== true && info.challenge !== true;
+}
+
+/** Returns to the contributor page when sign-in ended on some other Getty page. */
+async function revisitContributor(connection, sessionId, options, state) {
+  if (options.url === undefined || Date.now() < state.nextNavAt || !driftedAway(state.last)) return;
+  options.onProgress?.("returning to the contributor page");
+  await navigate(connection, options.url, sessionId);
+  state.nextNavAt = Date.now() + NAV_RETRY_MS;
 }
 
 /**
- * Signs in and waits for the Batches surface. Two calls are needed when Getty
- * asks for the e-mail first and the password on the next screen.
+ * Signs in and waits for the Batches surface. Several attempts are needed when
+ * Getty asks for the identifier first, the password second, or lands on another
+ * page after signing in.
  */
 export async function ensureSignedIn(connection, sessionId, options) {
   const deadline = Date.now() + (options.timeoutMs ?? 120000);
-  let last = null;
+  const state = { last: null, submitted: false, nextNavAt: 0 };
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
     const attempt = await loginAttempt(connection, sessionId, options.creds, options.onProgress);
     if (attempt.done) return { ok: true, info: attempt.info };
-    last = attempt.info;
-    await new Promise((resolve) => setTimeout(resolve, LOGIN_POLL_MS));
+    state.submitted = state.submitted || attempt.submitted === true;
+    state.last = attempt.info;
+    await revisitContributor(connection, sessionId, options, state);
+    await sleep(options.pollMs ?? LOGIN_POLL_MS);
   }
-  const onLoginPage = Boolean(last?.loginForm?.email || last?.loginForm?.password);
-  return {
-    ok: false,
-    code: onLoginPage ? "auth" : "timeout",
-    reason: onLoginPage
-      ? "Getty did not accept the saved contributor sign-in — check the e-mail/password, or start the helper with GETTY_WEB_HEADED=1 to finish an interactive verification"
-      : "Getty did not show the Batches page in time",
-  };
+  return signInFailure(state.last, state.submitted);
 }
 
 async function chooseSubmissionType(connection, sessionId, label, onProgress) {

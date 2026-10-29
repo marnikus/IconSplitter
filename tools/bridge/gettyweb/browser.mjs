@@ -106,16 +106,28 @@ async function browserSocketFromHttp(endpoint) {
 }
 
 /**
- * Launches a dedicated, disposable browser profile and returns its loopback
- * DevTools WebSocket. `stop()` closes the browser and deletes the profile.
+ * A reusable profile directory when the user asked for one, else `null` (a
+ * throwaway profile). Reusing a profile is what stops Getty's "remember this
+ * device" verification from firing on every run.
+ */
+export function resolveProfileDir(raw) {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  return value === "" ? null : path.resolve(value);
+}
+
+/**
+ * Launches a browser profile and returns its loopback DevTools WebSocket.
+ * `stop()` closes the browser; only a throwaway profile is deleted.
  */
 export async function launchBrowser(options = {}) {
   const found = findBrowser(options.env ?? process.env);
   if (!found.found) return { ok: false, code: "browser", reason: found.fix };
-  const profileDir = mkdtempSync(path.join(tmpdir(), "getty-web-profile-"));
+  const reusable = resolveProfileDir(options.profileDir);
+  const profileDir = reusable ?? mkdtempSync(path.join(tmpdir(), "getty-web-profile-"));
   const child = spawn(found.path, launchArgs(profileDir, options.headed === true), { stdio: "ignore" });
   const stop = () => {
     if (child.exitCode === null) child.kill();
+    if (reusable !== null) return;
     try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* profile already gone */ }
   };
   const deadline = Date.now() + (options.timeoutMs ?? LAUNCH_TIMEOUT_MS);

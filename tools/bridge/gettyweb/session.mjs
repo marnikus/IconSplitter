@@ -39,7 +39,9 @@ function stageFiles(dir, files) {
 
 /** Signs in and prepares the batches page; returns a reusable session. */
 export async function openGettySession(options) {
-  const browser = await connectBrowser({ headed: options.headed, cdpUrl: options.cdpUrl, env: options.env });
+  const browser = await connectBrowser({
+    headed: options.headed, cdpUrl: options.cdpUrl, profileDir: options.profileDir, env: options.env,
+  });
   if (!browser.ok) return browser;
   const connection = openCdp(browser.socket);
   const cleanup = () => {
@@ -51,7 +53,7 @@ export async function openGettySession(options) {
     const page = await openPage(connection);
     const info = await openContributePage(connection, page.sessionId, options.url);
     const signedIn = info.signedIn ? { ok: true } : await ensureSignedIn(connection, page.sessionId, {
-      creds: options.creds, timeoutMs: options.loginTimeoutMs ?? LOGIN_TIMEOUT_MS,
+      creds: options.creds, url: options.url, timeoutMs: options.loginTimeoutMs ?? LOGIN_TIMEOUT_MS,
       onProgress: options.onProgress, signal: options.signal,
     });
     if (!signedIn.ok) {

@@ -122,6 +122,7 @@ async function acquireSession(cfg, url) {
   const opened = await openGettySession({
     url, creds: { username: cfg.username.trim(), password: cfg.password },
     headed: process.env.GETTY_WEB_HEADED === "1",
+    profileDir: process.env.GETTY_WEB_PROFILE,
     uploadTimeoutMs: Number(process.env.GETTY_WEB_UPLOAD_TIMEOUT_MS ?? 180000),
   });
   const entry = {

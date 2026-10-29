@@ -43,7 +43,10 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":47391 " ^| findstr "LISTENI
 
 echo.
 echo === Local FTPS/SFTP helper (http://127.0.0.1:47391) ===
-echo Keep this window open while uploading to Shutterstock (FTPS :21) or Adobe Stock (SFTP :22).
+echo Keep this window open while uploading to Shutterstock (FTPS :21), Adobe Stock (SFTP :22)
+echo or Getty Images (web upload).
+echo Getty web sign-in: run  run_ftp_bridge.bat --getty-headed  once to watch the browser,
+echo   add  --getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"  to keep that sign-in.
 echo.
 node tools\bridge\server.mjs %*
 pause

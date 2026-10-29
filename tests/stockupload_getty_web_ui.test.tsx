@@ -53,7 +53,7 @@ describe("Getty web upload preset UI", () => {
       root.render(<StockFtpCredentials active={GETTY_WEB_PRESET} saved testStatus={IDLE} actions={actions} />);
     });
     const text = host.textContent ?? "";
-    expect(text).toContain("Getty contributor e-mail");
+    expect(text).toContain("Getty contributor e-mail or account ID");
     expect(text).toContain("Getty contributor password");
     expect(text).toContain("esp.gettyimages.com/contribute");
     expect(text).toContain("never expanded");

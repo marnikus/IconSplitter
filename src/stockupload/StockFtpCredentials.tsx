@@ -14,7 +14,7 @@ export interface LocalCredentialsProps {
 
 function credentialHelpCopy(active: StockFtpPreset): string {
   if (active.protocol === "getty-web") {
-    return "Getty Images / iStock web upload: the local helper signs in to esp.gettyimages.com/contribute with these saved credentials in a background Chrome/Edge window, click Create Batch once, then hand each JPEG (+ optional EPS) to that page's own uploader. Title/description/tags travel inside the exported files; the batch is created, not submitted for review. Credentials stay in this browser's local device vault — never expanded, exported, or logged. Nothing is sent until you press Upload or Test connection.";
+    return "Getty Images / iStock web upload: the local helper signs in to esp.gettyimages.com/contribute with these saved credentials in a background Chrome/Edge window, clicks Create Batch once, hands each JPEG (+ optional EPS) to that page's own uploader, types the accepted title/description/keywords into each file, then completes the batch. If Getty asks for a verification (captcha / new device), start the helper with run_ftp_bridge.bat --getty-headed and finish it once in that window. Credentials stay in this browser's local device vault — never expanded, exported, or logged. Nothing is sent until you press Upload or Test connection.";
   }
   if (active.protocol === "esp-batch") {
     return "Getty Images / iStock offers no public contributor FTP/SFTP and restricts ESP API keys to approved partners. Click Upload below to stage paired <name>.eps + RGB <name>.jpg + getty_esp_metadata.csv into one flat folder, then drag all files into DeepMeta 4 or esp.gettyimages.com.";
@@ -88,7 +88,11 @@ function loginLabels(active: StockFtpPreset): { user: string; pass: string; hint
   if (active.template === "adobe-stock") return { user: "SFTP Member ID", pass: "Generated SFTP password", hint: "e.g. 210333617" };
   if (active.protocol === "esp-https") return { user: "ESP login (optional with PKCE)", pass: "ESP password (optional)", hint: "Enter username…" };
   if (active.protocol === "getty-web") {
-    return { user: "Getty contributor e-mail", pass: "Getty contributor password", hint: "you@example.com" };
+    return {
+      user: "Getty contributor e-mail or account ID",
+      pass: "Getty contributor password",
+      hint: "you@example.com or your contributor ID",
+    };
   }
   return { user: "Contributor email / username", pass: "Password", hint: "Enter username…" };
 }

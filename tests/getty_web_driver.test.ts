@@ -83,6 +83,82 @@ describe("Getty contributor page steps", () => {
     expect(document.querySelector<HTMLInputElement>('input[name="password"]')!.value).toBe("SecondScreen!9");
   });
 
+  it("signs in with the numeric contributor ID when that is the identifier on the page", () => {
+    mount(`
+      <form id="login">
+        <label>E-mail or contributor ID <input type="text" name="username" /></label>
+        <input type="password" name="password" />
+        <button type="submit">Sign in</button>
+      </form>`);
+    window.history.replaceState({}, "", "/log-in");
+    expect(driver.readPageInfo().loginForm).toEqual({ email: true, password: true });
+    const result = driver.fillLoginForm({ username: "1234567", password: "ContributorId!42" });
+    expect(result).toEqual({ filled: true, stage: "password", submitted: true });
+    expect(document.querySelector<HTMLInputElement>('input[name="username"]')!.value).toBe("1234567");
+    expect(document.querySelector<HTMLInputElement>('input[name="password"]')!.value).toBe("ContributorId!42");
+  });
+
+  it("reports what a stalled sign-in page shows without exposing typed values", () => {
+    mount(`
+      <form>
+        <input type="text" name="username" value="1234567" />
+        <input type="password" name="password" value="SavedPassword!1" />
+        <p>Verify you are human</p>
+        <button type="button">Sign in with Google</button>
+        <button type="button">Sign in with password</button>
+      </form>`);
+    const info = driver.readPageInfo();
+    expect(info.challenge).toBe(true);
+    expect(info.fields.map((f: { type: string; hasValue: boolean }) => [f.type, f.hasValue]))
+      .toEqual([["text", true], ["password", true]]);
+    expect(JSON.stringify(info)).not.toContain("1234567");
+    expect(JSON.stringify(info)).not.toContain("SavedPassword!1");
+  });
+
+  it("chooses the password option when the page opens on another sign-in method", () => {
+    mount(`
+      <div role="dialog">
+        <button type="button">Sign in with Google</button>
+        <button type="button">Sign in with password</button>
+      </div>`);
+    const chosen = vi.fn();
+    [...document.querySelectorAll("button")][1]!.addEventListener("click", chosen);
+    expect(driver.choosePasswordOption()).toEqual({ chosen: true, label: "Sign in with password" });
+    expect(chosen).toHaveBeenCalledTimes(1);
+    expect(driver.readPageInfo().loginForm).toEqual({ email: false, password: false });
+  });
+
+  it("presses a Continue control that is not a form submit button", () => {
+    mount(`
+      <form>
+        <input type="text" name="username" />
+        <button type="button" data-cy="signin-continue">Continue</button>
+      </form>`);
+    const pressed = vi.fn();
+    document.querySelector("button")!.addEventListener("click", pressed);
+    expect(driver.fillLoginForm({ username: "1234567", password: "ContributorId!42" }))
+      .toEqual({ filled: true, stage: "email", submitted: true });
+    expect(pressed).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to Enter and the form's own submit when no control is on screen", () => {
+    mount('<form><input type="password" name="password" /></form>');
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector("form")!.addEventListener("submit", submitted);
+    expect(driver.fillLoginForm({ username: "1234567", password: "ContributorId!42" }).submitted).toBe(false);
+    expect(driver.submitLogin()).toMatchObject({ submitted: true });
+    expect(submitted).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a /contribute page as signed in unless it still asks to sign in", () => {
+    window.history.replaceState({}, "", "/contribute/batches");
+    mount('<main><p>Loading your batches…</p></main>');
+    expect(driver.readPageInfo().signedIn).toBe(true);
+
+    mount('<main><a href="/log-in">Sign in</a></main>');
+    expect(driver.readPageInfo().signedIn).toBe(false);
+  });
+
   it("opens the Create Batch dialog, fills it, and submits", () => {
     mount(DIALOG_PAGE);
     const create = document.querySelector<HTMLButtonElement>('[data-cy="create-batch-button"]')!;

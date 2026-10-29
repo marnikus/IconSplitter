@@ -48,13 +48,42 @@ function firstVisible(selectors) {
   return null;
 }
 
-/** The sign-in fields on screen, matched without CSS case-insensitive flags. */
+function inputFields() {
+  return [...document.querySelectorAll("input")].filter(visible);
+}
+
+/**
+ * The identifier and password fields of whatever sign-in step is on screen.
+ * Getty accepts an e-mail *or* the numeric contributor ID in the same box, so
+ * the identifier is matched by name/hint and then by plain text type.
+ */
 function loginFields() {
-  const inputs = [...document.querySelectorAll("input")].filter(visible);
+  const inputs = inputFields();
   const password = inputs.find((el) => el.type === "password") ?? null;
-  const email = inputs.find((el) => el.type === "email" || el.autocomplete === "username"
-    || /email|user|login/i.test(`${el.name} ${el.id} ${el.placeholder}`)) ?? null;
-  return { email, password };
+  const candidates = inputs.filter((el) => el !== password);
+  const named = candidates.find((el) => el.type === "email" || el.autocomplete === "username"
+    || /email|user|login|account|member|contributor/i.test(`${el.name} ${el.id} ${el.placeholder ?? ""} ${labelTextOf(el)}`)) ?? null;
+  const firstText = candidates.find((el) => ["text", "email", "tel", "number", ""].includes(el.type)) ?? null;
+  return { identifier: named ?? (password === null ? null : firstText), password };
+}
+
+/** The control that sends a sign-in step: submit button first, then its label. */
+function submitControl() {
+  const controls = [...document.querySelectorAll("button, [type=submit], [role=button], a")].filter(visible);
+  return controls.find((el) => el.type === "submit")
+    ?? controls.find((el) => /^(sign ?in|log ?in|continue|next|submit|verify|confirm)$/i.test(textOf(el)))
+    ?? null;
+}
+
+/** Everything that tells the sign-in state apart, without reading any value. */
+function pageSignals() {
+  const { identifier, password } = loginFields();
+  const createButton = firstVisible(['[data-cy="create-batch-button"]']);
+  const signInLink = [...document.querySelectorAll("a, button, [role=button]")]
+    .filter((el) => !el.hidden && el.getAttribute("aria-hidden") !== "true")
+    .find((el) => /^(sign ?in|log ?in)/i.test(textOf(el))) ?? null;
+  const onContribute = /^\/contribute(\/|$)/.test(location.pathname) && !/log-?in|sign-?in|auth/i.test(location.href);
+  return { identifier, password, createButton, signInLink, onContribute };
 }
 
 /**
@@ -62,14 +91,17 @@ function loginFields() {
  * surface rendered and no password field is asking to be filled.
  */
 export function readPageInfo() {
-  const { email, password } = loginFields();
-  const createButton = firstVisible(['[data-cy="create-batch-button"]']);
+  const { identifier, password, createButton, signInLink, onContribute } = pageSignals();
   const batchMatch = /\/contribute\/batches\/(\d+)/.exec(location.pathname);
+  const bodyText = textOf(document.body).slice(0, 20000);
   return {
     url: location.href,
     path: location.pathname,
-    signedIn: Boolean(createButton) && !password,
-    loginForm: { email: Boolean(email), password: Boolean(password) },
+    title: document.title.slice(0, 120),
+    signedIn: password === null && Boolean(createButton || (onContribute && !identifier && !signInLink)),
+    loginForm: { email: Boolean(identifier), password: Boolean(password) },
+    challenge: /captcha|verify you are human|two-?factor|2fa|verification code|confirm your identity|unusual activity/i.test(`${document.title} ${bodyText}`),
+    fields: inputFields().slice(0, 6).map((el) => ({ type: el.type || "text", hasValue: String(el.value ?? "") !== "" })),
     createBatch: Boolean(createButton),
     dialogOpen: Boolean(document.querySelector('[data-cy="create-batch-dialog"]')),
     batchId: batchMatch ? batchMatch[1] : null,
@@ -85,15 +117,46 @@ export function readPageInfo() {
  * password on the next screen, so the caller waits and calls again.
  */
 export function fillLoginForm({ username, password }) {
-  const { email: emailField, password: passwordField } = loginFields();
-  if (!passwordField && !emailField) return { filled: false, stage: "none", submitted: false };
-  if (emailField && username) setNativeValue(emailField, username);
+  const { identifier, password: passwordField } = loginFields();
+  if (!passwordField && !identifier) return { filled: false, stage: "none", submitted: false };
+  if (identifier && username) setNativeValue(identifier, username);
   if (passwordField && password) setNativeValue(passwordField, password);
-  const submit = firstVisible([
-    'button[type=submit]', "form button", '[data-cy="login-submit"]', '[data-testid="submit"]',
-  ]);
-  const submitted = submit ? click(submit) : false;
+  const submit = submitControl();
+  const submitted = submit === null ? false : click(submit);
   return { filled: true, stage: passwordField ? "password" : "email", submitted };
+}
+
+/** Clicks the "sign in with e-mail/password" option when Getty opens elsewhere. */
+export function choosePasswordOption() {
+  const control = [...document.querySelectorAll("button, a, [role=button], [role=tab]")].filter(visible)
+    .find((el) => /password/i.test(textOf(el))) ?? null;
+  if (!control) return { chosen: false, label: null };
+  click(control);
+  return { chosen: true, label: textOf(control) };
+}
+
+/** Presses sign-in again: the button when there is one, else Enter/the form. */
+export function submitLogin() {
+  const control = submitControl();
+  if (control !== null) {
+    click(control);
+    return { submitted: true, method: "click", label: textOf(control) };
+  }
+  const { identifier, password } = loginFields();
+  const field = password ?? identifier;
+  if (field === null) return { submitted: false, method: "none", label: null };
+  field.focus?.();
+  for (const type of ["keydown", "keypress", "keyup"]) {
+    field.dispatchEvent(new KeyboardEvent(type, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
+  }
+  const form = field.form ?? field.closest("form");
+  if (form === null) return { submitted: true, method: "keyboard", label: null };
+  try {
+    form.requestSubmit();
+  } catch {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  }
+  return { submitted: true, method: "form", label: null };
 }
 
 /** Clicks "Create Batch" on the batches page. */
@@ -303,13 +366,15 @@ export function readCompletionState() {
  * serialized function finds `visible`, `firstVisible`, … in the page scope.
  */
 export const PAGE_PRELUDE = [
-  visible, setNativeValue, textOf, click, firstVisible, loginFields, labelTextOf, setFieldValue,
+  visible, setNativeValue, textOf, click, firstVisible, inputFields, loginFields, submitControl,
+  pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n");
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [
-  "readPageInfo", "fillLoginForm", "openCreateBatchDialog", "openSubmissionTypeMenu",
+  "readPageInfo", "fillLoginForm", "choosePasswordOption", "submitLogin",
+  "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
   "fillMetadataFields", "openFileMetadata", "saveMetadataEditor", "closeMetadataEditor",
   "completeBatch", "confirmCompletion", "readCompletionState",
