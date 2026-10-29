@@ -88,7 +88,7 @@ export function espHttpsRequest(opts) {
       (res) => {
         const chunks = [];
         res.on("data", (c) => chunks.push(c));
-        res.on("end", () => { clearTimeout(timer); resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks) }); });
+        res.on("end", () => { clearTimeout(timer); resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks), headers: res.headers }); });
       },
     );
     const timer = setTimeout(() => {

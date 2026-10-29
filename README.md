@@ -42,9 +42,10 @@ It has six modes (tabs across the top):
   metadata editing + in-place XMP/IPTC/RDF re-embedding, built-in stock presets
   (**Shutterstock** Explicit FTPS on `ftps.shutterstock.com:21`, **Adobe Stock**
   SFTP on `sftp.contributor.adobestock.com:22`, and **Getty Images / iStock**
-  default `_getty_esp_batches/` paired `<name>.eps` + RGB `<name>.jpg` +
-  `getty_esp_metadata.csv` batch staging for `esp.gettyimages.com` / DeepMeta 4
-  plus `authentication.gettyimages.com` OAuth2 PKCE Partner API), local-only
+  ESP API automatic paired JPEG/EPS ingestion over HTTPS). Getty requires an ESP
+  API key provisioned by Getty; upload creates a contribution, not a submission
+  for review. The API protocol is tested with a local mock, not a live account.
+  It uses OAuth2 PKCE and keeps credentials local. Includes local-only
   non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
   uploads through the local loopback helper (`run_ftp_bridge.bat` /
   `run_app_ftp.bat`).

@@ -188,7 +188,6 @@ function ProtocolAndFolderFields({ active, onPatch }: {
         <span className="svg-label">Connection method / Protocol</span>
         <select className="svg-input" data-testid="stock-ftp-protocol" value={active.protocol}
           disabled={sftpOnly} onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
-          {!sftpOnly && <option value="esp-batch">Getty ESP Batch Folder (Web / DeepMeta 4 — no API key)</option>}
           {!sftpOnly && <option value="esp-https">Getty ESP Partner API (:443 OAuth2 PKCE)</option>}
           {!sftpOnly && <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>}
           <option value="sftp">SFTP (SSH :22)</option>

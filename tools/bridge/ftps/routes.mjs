@@ -139,9 +139,21 @@ export async function handleFtpsUpload(req, res, maxBytes, jsonReply) {
   let acquired = null;
   try {
     acquired = await acquireSession(cfg);
+    let aborted = false;
     let killActive = () => acquired?.session.destroy();
-    res.once("close", () => { if (!res.writableEnded) killActive(); });
-    await acquired.session.uploadFile(cfg.fileName, body, (fn) => { killActive = fn; });
+    res.once("close", () => { if (!res.writableEnded) { aborted = true; killActive(); } });
+    const abortHook = (fn) => { killActive = fn; if (aborted) fn(); };
+    if (cfg.protocol === "esp-https") {
+      const n = cfg.rasterBytes ?? body.length;
+      if (!Number.isSafeInteger(n) || n <= 0 || n > body.length || (cfg.pairedFileName && n === body.length)) {
+        throw new FtpsError("bad-request", "invalid Getty pair lengths");
+      }
+      const raster = { name: cfg.fileName, bytes: body.subarray(0, n) };
+      const vector = cfg.pairedFileName ? { name: cfg.pairedFileName, bytes: body.subarray(n) } : undefined;
+      await acquired.session.uploadContribution(raster, vector, abortHook);
+    } else {
+      await acquired.session.uploadFile(cfg.fileName, body, abortHook);
+    }
     if (acquired.pooled && acquired.key) touchPoolEntry(acquired.key, acquired.session);
     else await acquired.session.quit();
     return jsonReply(res, 200, { ok: true, bytes: body.length });

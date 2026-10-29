@@ -30,6 +30,7 @@ export interface BridgeUploadInput {
   creds: FtpCredentials;
   fileName: string;
   bytes: Uint8Array;
+  pairedFile?: { fileName: string; bytes: Uint8Array };
   sessionKey?: string;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
@@ -133,6 +134,7 @@ function buildUploadHeader(input: BridgeUploadInput): string {
     ...(input.creds.apiKey ? { apiKey: input.creds.apiKey } : {}),
     ...(input.creds.apiSecret ? { apiSecret: input.creds.apiSecret } : {}),
     fileName: input.fileName,
+    ...(input.pairedFile ? { pairedFileName: input.pairedFile.fileName, rasterBytes: input.bytes.byteLength } : {}),
     sessionKey: input.sessionKey,
   }));
 }
@@ -143,7 +145,7 @@ export async function uploadBridgeFtps(input: BridgeUploadInput): Promise<Bridge
     const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/ftps/upload`, {
       method: "POST",
       headers: { "content-type": "application/octet-stream", "x-ftps-config": buildUploadHeader(input) },
-      body: new Blob([input.bytes as BlobPart]),
+      body: new Blob([input.bytes as BlobPart, ...(input.pairedFile ? [input.pairedFile.bytes as BlobPart] : [])]),
       signal: input.signal,
     });
     const body: unknown = await res.json();

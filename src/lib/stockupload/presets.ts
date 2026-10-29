@@ -46,10 +46,10 @@ export const GETTY_IMAGES_PRESET: StockFtpPreset = {
   id: "getty-images",
   name: "Getty Images",
   template: "getty-images",
-  protocol: "esp-batch",
-  host: "esp.gettyimages.com",
+  protocol: "esp-https",
+  host: "api.gettyimages.com",
   port: 443,
-  remoteDir: "/_getty_esp_batches",
+  remoteDir: "/esp/submission/v1/submission_batches",
   passive: true,
   tlsPolicy: "strict",
   pinnedCertSha256: "",
@@ -170,14 +170,10 @@ function ensureBuiltinsAndDedupe(list: StockFtpPreset[]): StockFtpPreset[] {
   return out;
 }
 
-function healLegacyV1Preset(p: StockFtpPreset, version: number): StockFtpPreset {
-  if (
-    version === 1
-    && p.template === "getty-images"
-    && p.protocol === "esp-https"
-    && p.host === "api.gettyimages.com"
-  ) {
-    return { ...GETTY_IMAGES_PRESET };
+function healGettyPreset(p: StockFtpPreset): StockFtpPreset {
+  if (p.template === "getty-images" && p.protocol === "esp-batch") {
+    return { ...p, protocol: GETTY_IMAGES_PRESET.protocol, host: GETTY_IMAGES_PRESET.host,
+      port: GETTY_IMAGES_PRESET.port, remoteDir: GETTY_IMAGES_PRESET.remoteDir };
   }
   return p;
 }
@@ -187,10 +183,9 @@ export function parseStockPresetState(text: string | null): StockPresetState {
   try {
     const raw: unknown = JSON.parse(text);
     if (!isRecord(raw) || (raw.v !== 1 && raw.v !== 2) || !Array.isArray(raw.presets)) return DEFAULT_STOCK_STATE;
-    const ver = raw.v;
     const parsedList = raw.presets.flatMap((p) => {
       const item = parsePreset(p);
-      return item ? [healLegacyV1Preset(item, ver)] : [];
+      return item ? [healGettyPreset(item)] : [];
     });
     const presets = ensureBuiltinsAndDedupe(parsedList);
     const ids = new Set(presets.map((p) => p.id));

@@ -224,3 +224,49 @@ describe("stock upload planner, batch runner and crash journal", () => {
     });
   });
 });
+
+it("sends Getty EPS and JPG together once and badges only after the pair succeeds", async () => {
+  const { GETTY_IMAGES_PRESET } = await import("../src/lib/stockupload/presets");
+  localStorage.clear(); resetStockHistory(); resetRowBadges();
+  const root = new FakeDir("ws");
+  addExported(root, "icon-pair", "a", "star", { jpg: true, eps: true });
+  const found = await discoverExportedItems(root);
+  const target = { ...GETTY_IMAGES_PRESET, protocol: "esp-https" as const, host: "api.gettyimages.com", remoteDir: "/esp/submission/v1/submission_batches" };
+  const plan = buildStockUploadPlan({ items: found.items, checkedIds: ["icon-pair"], presets: [target], checkedTargets: [target.id], formats: { raster: true, eps: true, svg: false, zip: false } });
+  const calls: unknown[] = [];
+  const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "http://127.0.0.1", signal: new AbortController().signal, loadCreds: async () => ({ username: "", password: "", apiKey: "key" }), closeSessionFn: async () => undefined, uploadFn: async (input) => { calls.push(input); return { ok: false, code: "ftp", reason: "completion failed", serverCertSha256: null }; } });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ fileName: "star.jpg", pairedFile: { fileName: "star.eps" } });
+  expect(result.failedFiles).toBe(2);
+  expect(getRowBadgeState().assigned["icon-pair"] ?? []).not.toContain("getty-images");
+});
+
+it("never reports local ESP staging as a Getty upload or assigns its badge", async () => {
+  const { GETTY_IMAGES_PRESET } = await import("../src/lib/stockupload/presets");
+  localStorage.clear(); resetStockHistory(); resetRowBadges();
+  const root = new FakeDir("ws");
+  addExported(root, "legacy", "a", "star", { jpg: true, eps: true });
+  const found = await discoverExportedItems(root);
+  const target = { ...GETTY_IMAGES_PRESET, protocol: "esp-batch" as const };
+  const plan = buildStockUploadPlan({ items: found.items, checkedIds: ["legacy"], presets: [target], checkedTargets: [target.id], formats: { raster: true, eps: true, svg: false, zip: false } });
+  const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "", signal: new AbortController().signal, loadCreds: async () => null });
+  expect(result.uploadedFiles).toBe(0);
+  expect(result.failedFiles).toBe(2);
+  expect(getRowBadgeState().assigned["legacy"] ?? []).not.toContain("getty-images");
+  expect(root.children.has("_getty_esp_batches")).toBe(false);
+});
+
+it("blocks an incomplete selected Getty pair and uploads neither file", async () => {
+  const { GETTY_IMAGES_PRESET } = await import("../src/lib/stockupload/presets");
+  localStorage.clear(); resetStockHistory(); resetRowBadges();
+  const root = new FakeDir("ws");
+  addExported(root, "missing-eps", "a", "star", { jpg: true });
+  const found = await discoverExportedItems(root);
+  const plan = buildStockUploadPlan({ items: found.items, checkedIds: ["missing-eps"], presets: [GETTY_IMAGES_PRESET], checkedTargets: ["getty-images"], formats: { raster: true, eps: true, svg: false, zip: false } });
+  let calls = 0;
+  const result = await executeStockUploadBatch(plan, { root, bridgeUrl: "", signal: new AbortController().signal, loadCreds: async () => ({ username: "", password: "", apiKey: "key" }), closeSessionFn: async () => undefined, uploadFn: async () => { calls++; return { ok: true, bytes: 10 }; } });
+  expect(calls).toBe(0);
+  expect(result.failedFiles).toBe(1);
+  expect(result.lastError).toContain("missing");
+  expect(getRowBadgeState().assigned["missing-eps"] ?? []).not.toContain("getty-images");
+});

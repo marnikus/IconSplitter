@@ -52,17 +52,17 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
       id: "getty-images",
       name: "Getty Images",
       template: "getty-images",
-      protocol: "esp-batch",
-      host: "esp.gettyimages.com",
+      protocol: "esp-https",
+      host: "api.gettyimages.com",
       port: 443,
-      remoteDir: "/_getty_esp_batches",
+      remoteDir: "/esp/submission/v1/submission_batches",
       tlsPolicy: "strict",
     });
     expect(DEFAULT_STOCK_STATE.activePresetId).toBe("shutterstock");
     expect(DEFAULT_STOCK_STATE.checkedTargets).toEqual(["shutterstock"]);
   });
 
-  it("auto-heals legacy v1 Getty Images presets stuck on broken api.gettyimages.com esp-https to esp-batch, while keeping explicit v2 esp-https", () => {
+  it("preserves legacy v1 and v2 Getty API presets", () => {
     const legacyV1 = JSON.stringify({
       v: 1,
       presets: [
@@ -88,9 +88,9 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
     });
     const healed = parseStockPresetState(legacyV1);
     expect(healed.presets.find((p) => p.id === "getty-images")).toMatchObject({
-      protocol: "esp-batch",
-      host: "esp.gettyimages.com",
-      remoteDir: "/_getty_esp_batches",
+      protocol: "esp-https",
+      host: "api.gettyimages.com",
+      remoteDir: "/esp/submission/v1/submission_batches",
     });
 
     const explicitV2 = serializeStockPresetState(
@@ -273,4 +273,11 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
     expect(adobe.port).toBe(22);
     expect(adobe.tlsPolicy).toBe("accept-self-signed");
   });
+});
+
+it("uses the automatic ESP API by default and migrates old local-batch presets", () => {
+  expect(GETTY_IMAGES_PRESET).toMatchObject({ protocol: "esp-https", host: "api.gettyimages.com", remoteDir: "/esp/submission/v1/submission_batches" });
+  const old = { ...GETTY_IMAGES_PRESET, protocol: "esp-batch", host: "esp.gettyimages.com", remoteDir: "/_getty_esp_batches" };
+  const parsed = parseStockPresetState(JSON.stringify({ v: 2, presets: [old], activePresetId: "getty-images", checkedTargets: ["getty-images"] }));
+  expect(parsed.presets.find((p) => p.id === "getty-images")).toMatchObject({ protocol: "esp-https", host: "api.gettyimages.com" });
 });

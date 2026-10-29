@@ -141,33 +141,18 @@ describe("local loopback Getty ESP HTTPS bridge (api.gettyimages.com:443 protoco
     const epsBytes = new TextEncoder().encode("%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n");
     const sessionKey = "getty-pair-run-1";
 
-    const upJpg = await uploadBridgeFtps({
-      bridgeUrl: h.url,
-      preset,
-      creds,
-      fileName: "rocket_01.jpg",
-      bytes: jpgBytes,
-      sessionKey,
+    const uploaded = await uploadBridgeFtps({
+      bridgeUrl: h.url, preset, creds, fileName: "rocket_01.jpg", bytes: jpgBytes, sessionKey,
+      pairedFile: { fileName: "rocket_01.eps", bytes: epsBytes },
     });
-    expect(upJpg).toEqual({ ok: true, bytes: jpgBytes.byteLength });
-
-    const upEps = await uploadBridgeFtps({
-      bridgeUrl: h.url,
-      preset,
-      creds,
-      fileName: "rocket_01.eps",
-      bytes: epsBytes,
-      sessionKey,
-    });
-    expect(upEps).toEqual({ ok: true, bytes: epsBytes.byteLength });
-
+    expect(uploaded.ok).toBe(true);
     await closeBridgeFtpsSession(h.url, sessionKey);
-
     expect(esp.state.tokenRequests).toBe(1);
     expect(esp.state.batchCreations).toBe(1);
-    expect(esp.state.contributions).toHaveLength(2);
+    expect(esp.state.contributions).toHaveLength(1);
     expect(esp.state.uploadedFiles.get("batch-901/rocket_01.jpg")?.toString("utf8")).toBe("FAKE-RGB-JPEG-4075x4075");
     expect(esp.state.uploadedFiles.get("batch-901/rocket_01.eps")?.toString("utf8")).toBe("%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n");
+
   });
 
   it("sends User-Agent header, rejects missing apiKey cleanly, diagnoses v3-only 403 Forbidden on /esp/submission/v1, and completes OAuth2 PKCE (S256) flow", async () => {
@@ -191,8 +176,8 @@ describe("local loopback Getty ESP HTTPS bridge (api.gettyimages.com:443 protoco
     expect(missingKeyRes.ok).toBe(false);
     expect(espV3Only.state.tokenRequests).toBe(0);
     if (!missingKeyRes.ok) {
-      expect(missingKeyRes.reason).toContain("API Key");
-      expect(missingKeyRes.reason).toContain("ESP Batch Folder");
+      expect(missingKeyRes.reason).toContain("API key");
+      expect(missingKeyRes.reason).toContain("Getty");
     }
 
     const v3ForbiddenRes = await testBridgeFtps(h.url, v3Preset, {
@@ -206,7 +191,7 @@ describe("local loopback Getty ESP HTTPS bridge (api.gettyimages.com:443 protoco
     if (!v3ForbiddenRes.ok) {
       expect(v3ForbiddenRes.reason).toContain("v3 OK");
       expect(v3ForbiddenRes.reason).toContain("ESP Contributor Submission");
-      expect(v3ForbiddenRes.reason).toContain("ESP Batch Folder");
+      expect(v3ForbiddenRes.reason).toContain("Getty Support");
     }
 
     const espPkce = await startFakeEspServer({

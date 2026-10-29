@@ -84,12 +84,13 @@ export async function startFakeEspServer(expected) {
     batches: [],
     contributions: [],
     uploadedFiles: new Map(),
+    chunks: new Map(),
   };
 
   function checkBearer(req, res) {
     const auth = req.headers.authorization ?? "";
     const apiKey = req.headers["api-key"] ?? "";
-    if (auth !== `Bearer ${issuedToken}` || apiKey !== expected.apiKey) {
+    if (![ `Bearer ${issuedToken}`, `Token token=${issuedToken}` ].includes(auth) || apiKey !== expected.apiKey) {
       sendJson(res, 401, { message: "Invalid access token or Api-Key" });
       return false;
     }
@@ -186,32 +187,38 @@ export async function startFakeEspServer(expected) {
       return sendJson(res, 201, batch);
     }
 
-    const contribMatch = /^\/esp\/submission\/v1\/submission_batches\/([^/]+)\/contributions$/.exec(url);
-    if (req.method === "POST" && contribMatch) {
+    if (req.method === "POST" && url === "/esp/ingestion/v1/contributions") {
       if (!checkBearer(req, res)) return;
-      const batchId = contribMatch[1];
-      const payload = JSON.parse(body.toString("utf8"));
-      const item = payload.contribution ?? payload;
+      const item = JSON.parse(body.toString("utf8"));
       const id = `c-${state.contributions.length + 1}`;
-      const record = {
-        id,
-        submission_batch_id: batchId,
-        file_name: item.file_name,
-        mime_type: item.mime_type,
-        storage_url: `https://127.0.0.1:${port}/s3-upload/${batchId}/${encodeURIComponent(item.file_name)}`,
-      };
-      state.contributions.push(record);
-      return sendJson(res, 201, record);
+      state.contributions.push({ id, ...item });
+      return sendJson(res, 201, { contribution_id: id });
     }
-
-    const s3Match = /^\/s3-upload\/([^/]+)\/(.+)$/.exec(url);
-    if (req.method === "PUT" && s3Match) {
-      const batchId = s3Match[1];
-      const fileName = decodeURIComponent(s3Match[2]);
-      state.uploadedFiles.set(`${batchId}/${fileName}`, Buffer.from(body));
-      res.writeHead(200);
-      res.end();
-      return;
+    const ingest = /^\/esp\/ingestion\/v1\/contributions\/([^/]+)(?:\/(authorize_chunk))?$/.exec(url);
+    if (ingest && req.method === "GET" && ingest[2]) {
+      if (!checkBearer(req, res)) return;
+      const raster = fullUrl.searchParams.get("raster_file");
+      const part = fullUrl.searchParams.get("part_number");
+      const digest = fullUrl.searchParams.get("encrypted_payload");
+      const uploadUrl = `https://127.0.0.1:${port}/s3/${ingest[1]}/${raster}/${part}?digest=${digest}`;
+      return sendJson(res, 200, { upload_url: uploadUrl, headers: { "x-fake-signed": "yes" } });
+    }
+    if (ingest && req.method === "PUT" && !ingest[2]) {
+      if (!checkBearer(req, res)) return;
+      const item = state.contributions.find((c) => c.id === ingest[1]);
+      const parsed = JSON.parse(body.toString("utf8"));
+      const chunks = parsed.etags.map((entry) => state.chunks.get(`${item.id}/${parsed.raster_file}/${entry.part_number}`));
+      if (chunks.some((c) => !c)) return sendJson(res, 400, { message: "missing part" });
+      const name = parsed.raster_file ? item.raster_file_name : item.file_name;
+      state.uploadedFiles.set(`${item.submission_batch_id}/${name}`, Buffer.concat(chunks));
+      return sendJson(res, 200, {});
+    }
+    const s3 = /^\/s3\/([^/]+)\/(true|false)\/(\d+)$/.exec(url);
+    if (s3 && req.method === "PUT") {
+      if (req.headers.authorization || req.headers["api-key"] || req.headers["x-fake-signed"] !== "yes") return sendJson(res, 400, {});
+      if (crypto.createHash("sha256").update(body).digest("hex") !== fullUrl.searchParams.get("digest")) return sendJson(res, 400, {});
+      state.chunks.set(`${s3[1]}/${s3[2]}/${s3[3]}`, body);
+      res.writeHead(200, { etag: '"test-etag"' }); res.end(); return;
     }
 
     sendJson(res, 404, { message: `Unknown route ${req.method} ${url}` });

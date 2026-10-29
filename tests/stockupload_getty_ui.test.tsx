@@ -49,14 +49,6 @@ function setInput(el: HTMLInputElement | HTMLTextAreaElement, value: string): Pr
   });
 }
 
-function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
-  return act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-    setter?.call(el, value);
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-}
-
 function makePairedGettyWorkspace(): FakeDir {
   const root = new FakeDir("getty_ws");
   const pack = new FakeDir("icons_g");
@@ -127,57 +119,14 @@ describe("Getty Images / iStock Upload UI (ESP Batch Folder default + OAuth2 Par
     vi.unstubAllGlobals();
   });
 
-  it("defaults Getty Images to ESP Batch Folder (zero API keys, zero bridge), tests batch folder, stages paired EPS+JPG+CSV, and assigns the Getty Images badge", async () => {
-    const ws = makePairedGettyWorkspace();
-    stored.set("__stock_upload__", { source: ws });
-    // Stub fetch to FAIL if called — proving esp-batch works 100% locally without the bridge helper!
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("bridge offline"))));
-
-    act(() => {
-      ui.render(
-        <HistoryProvider>
-          <StockUploadPanel active />
-        </HistoryProvider>,
-      );
-    });
-
-    await waitUntil(() => q("stock-row-item-compass") !== null, "compass row loaded");
-
+  it("defaults Getty Images to automatic ESP API, not manual staging", async () => {
+    stored.set("__stock_upload__", { source: makePairedGettyWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-compass") !== null, "row loaded");
     await clickEl(q("stock-ftp-quick-getty-images")!);
-    await settle();
-    expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("esp-batch");
-    expect((q("stock-ftp-remotedir") as HTMLInputElement).value).toBe("/_getty_esp_batches");
-    expect(q("stock-open-esp")).not.toBeNull();
-    expect(q("stock-open-deepmeta")).not.toBeNull();
-
-    // Test batch folder succeeds with zero credentials & zero bridge!
-    await clickEl(q("stock-ftp-test")!);
-    await waitUntil(
-      () => q("stock-ftp-test-note")?.textContent?.includes("_getty_esp_batches") === true,
-      "batch folder ready banner",
-    );
-
-    // Select Getty Images only and run Upload -> stages EPS + JPG + getty_esp_metadata.csv into _getty_esp_batches/
-    await clickEl(q("stock-target-check-shutterstock")!);
-    await clickEl(q("stock-target-check-getty-images")!);
-    await clickEl(q("stock-check-item-compass")!);
-    await settle();
-
-    await clickEl(q("stock-upload-start")!);
-    await settle();
-    await clickEl(q("stock-upload-confirm-go")!);
-    await waitUntil(
-      () => q("upload-rowbadge-chip-item-compass-getty-images") !== null,
-      "Getty Images badge assigned after ESP batch staging",
-    );
-
-    const batchesRoot = ws.children.get("_getty_esp_batches") as FakeDir | undefined;
-    expect(batchesRoot).toBeDefined();
-    const [batchDir] = [...batchesRoot!.children.values()] as FakeDir[];
-    expect(batchDir.children.has("compass_icon.jpg")).toBe(true);
-    expect(batchDir.children.has("compass_icon.eps")).toBe(true);
-    expect(batchDir.children.has("getty_esp_metadata.csv")).toBe(true);
-    expect(getRowBadgeState().assigned["item-compass"]).toEqual(["getty-images"]);
+    expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("esp-https");
+    expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("api.gettyimages.com");
+    expect((q("stock-ftp-protocol") as HTMLSelectElement).querySelector('option[value="esp-batch"]')).toBeNull();
   });
 
   it("supports switching Getty Images to Getty ESP Partner API (:443), saving local-only API key/secret without expanding, OAuth2 PKCE trigger, and paired upload", async () => {
@@ -219,7 +168,6 @@ describe("Getty Images / iStock Upload UI (ESP Batch Folder default + OAuth2 Par
 
     await clickEl(q("stock-ftp-quick-getty-images")!);
     await settle();
-    await setSelect(q("stock-ftp-protocol") as HTMLSelectElement, "esp-https");
     await settle();
     expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("api.gettyimages.com");
     expect((q("stock-ftp-port") as HTMLInputElement).value).toBe("443");
@@ -257,9 +205,10 @@ describe("Getty Images / iStock Upload UI (ESP Batch Folder default + OAuth2 Par
     await clickEl(q("stock-upload-start")!);
     await settle();
     await clickEl(q("stock-upload-confirm-go")!);
-    await waitUntil(() => uploadedPayloads.length === 2, "paired JPG + EPS uploaded");
+    await waitUntil(() => uploadedPayloads.length === 1, "paired JPG + EPS uploaded");
 
-    expect(uploadedPayloads.map((p) => p.fileName)).toEqual(["compass_icon.jpg", "compass_icon.eps"]);
+    expect(uploadedPayloads.map((p) => p.fileName)).toEqual(["compass_icon.jpg"]);
+    expect(uploadedPayloads[0]).toMatchObject({ pairedFileName: "compass_icon.eps" });
     expect(getRowBadgeState().assigned["item-compass"]).toEqual(["getty-images"]);
   });
 });

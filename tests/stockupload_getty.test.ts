@@ -6,8 +6,6 @@ import { GETTY_IMAGES_PRESET } from "../src/lib/stockupload/presets";
 import { metadataBlock, newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { metadataFingerprint, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
-import { executeStockUploadBatch } from "../src/stockupload/runupload";
-import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 function makeRecordMeta(meta: IconMetadata) {
@@ -175,57 +173,5 @@ describe("Getty Images / iStock preflight rules & ESP CSV metadata builder", () 
     expect(jpgLine).toContain(",2026-10-28,");
   });
 
-  it("stages paired EPS + RGB JPG + getty_esp_metadata.csv into _getty_esp_batches/<batch>/ without credentials or bridge, assigns Getty Images badge, and never pollutes export/ discovery", async () => {
-    resetRowBadges();
-    const root = new FakeDir("ws");
-    addGettyFixture(root, {
-      id: "icon-a", dir: "pack_a", stem: "star", rasterExt: "jpg", eps: true, metadata: VALID_META,
-    });
-    addGettyFixture(root, {
-      id: "icon-b", dir: "pack_b", stem: "star", rasterExt: "jpg", eps: true, metadata: VALID_META,
-    });
 
-    const foundBefore = await discoverExportedItems(root);
-    expect(foundBefore.items).toHaveLength(2);
-
-    const plan = buildStockUploadPlan({
-      items: foundBefore.items,
-      checkedIds: ["icon-a", "icon-b"],
-      presets: [GETTY_IMAGES_PRESET],
-      checkedTargets: ["getty-images"],
-      formats: { raster: true, svg: false, eps: true, zip: false },
-    });
-
-    const summary = await executeStockUploadBatch(plan, {
-      root,
-      bridgeUrl: "http://127.0.0.1:1",
-      signal: new AbortController().signal,
-      loadCreds: async () => null,
-    });
-    expect(summary.failedFiles).toBe(0);
-    expect(summary.uploadedFiles).toBe(4);
-    expect(summary.stagedDir).toMatch(/^_getty_esp_batches\//);
-
-    // Verify staged files + CSV inside _getty_esp_batches/<batch>/ (collision-safe stems star + star_2)
-    const batchesRoot = root.children.get("_getty_esp_batches") as FakeDir | undefined;
-    expect(batchesRoot).toBeDefined();
-    const [batchDir] = [...batchesRoot!.children.values()] as FakeDir[];
-    expect(batchDir.children.has("star.jpg")).toBe(true);
-    expect(batchDir.children.has("star.eps")).toBe(true);
-    expect(batchDir.children.has("star_2.jpg")).toBe(true);
-    expect(batchDir.children.has("star_2.eps")).toBe(true);
-    const csvFile = batchDir.children.get("getty_esp_metadata.csv") as FakeFile | undefined;
-    expect(csvFile).toBeDefined();
-    const csvText = await (await csvFile!.getFile()).text();
-    expect(csvText).toContain("star.eps,");
-    expect(csvText).toContain("star_2.eps,");
-
-    // Verify unified Getty Images badge assigned to both items
-    expect(getRowBadgeState().assigned["icon-a"]).toEqual(["getty-images"]);
-    expect(getRowBadgeState().assigned["icon-b"]).toEqual(["getty-images"]);
-
-    // Verify re-scanning root does NOT re-discover _getty_esp_batches/ copies!
-    const foundAfter = await discoverExportedItems(root);
-    expect(foundAfter.items.map((i) => i.id)).toEqual(["icon-a", "icon-b"]);
-  });
 });
