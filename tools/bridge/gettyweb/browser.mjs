@@ -289,7 +289,8 @@ function profileBusyFix(dir) {
 
 /**
  * Launches a browser profile and returns its loopback DevTools WebSocket.
- * `stop()` closes the browser; only a throwaway profile is deleted. The socket
+ * `stop()` closes the browser unless keepOpen is requested; temporary profiles
+ * are then removed only after the user closes Chrome. The socket
  * is verified before it is handed out, so a stale DevToolsActivePort from a
  * previous run is never mistaken for a live browser.
  */
@@ -318,7 +319,16 @@ export async function launchBrowser(options = {}) {
   }
   const profileDir = reusable ?? mkdtempSync(path.join(tmpdir(), "getty-web-profile-"));
   const child = spawnFn(found.path, launchArgs(profileDir, options.headed === true), { stdio: "ignore" });
-  const stop = () => {
+  const removeTemporaryProfile = () => {
+    if (reusable !== null) return;
+    try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* profile already gone */ }
+  };
+  child.once("exit", removeTemporaryProfile);
+  const stop = ({ keepOpen = false } = {}) => {
+    if (keepOpen) {
+      child.unref?.();
+      return;
+    }
     killTree(child);
     if (reusable !== null) return;
     try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* profile already gone */ }

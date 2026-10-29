@@ -3826,3 +3826,29 @@ browser):
   96 across the eight Getty web suites.
 - `docs/current/sor/stock-upload-getty-web.md` stays at 8,977 bytes (budget
   9,000) after documenting both rules.
+
+## 2026-10-29 — Getty web: merged batch/portal fixes from the parallel branch
+
+Brought `arena/fdb8d39a-iconsplitter` (three commits) into this branch and kept
+both sides of the work. Measured here (Node 22.22.3, 2 cores, no browser):
+
+- Taken from the other branch: the Create Batch dialog now matches
+  `[role="dialog"][aria-labelledby="create-batch-dialog"]` as well as the
+  `data-cy` handle; the MUI submission-type select is opened with `mousedown` and
+  its portal options awaited; the Create control, the name field and the Create
+  button must render enabled within 60 s (a `timeout` naming the control); the
+  batch id must differ from the one read before the click; a blank batch name gets
+  a generated one; and `stepExpression` wraps every step in an IIFE so the prelude
+  can be re-injected into a persistent page without redeclaring its constants.
+- Kept from this branch: the automatic profile reset (`resetProfile`,
+  `--getty-reset`), the headed-window rules (`failureOutcome`, `releaseSession`,
+  `detach`) and the prelude fix proven by actually evaluating the steps.
+- Reconciled: `inputFields` uses the module list again and `PAGE_PRELUDE` declares
+  it, so there is one source; `browser.stop({ keepOpen })` leaves a visible window
+  alive and the throwaway profile is removed when that Chrome exits.
+- `npm run verify:fast` → Types PASS 16.8 s, Lint PASS (0 errors / 21 warnings)
+  14.5 s, Quality gate (changed) PASS 0.7 s, Tests + coverage PASS 115.7 s,
+  Build PASS 7.2 s. Getty web suites: driver 25, browser 21, batch 5, cdp 10,
+  sign-in 9, upload 9, finalize 5, bridge routes 16, stock upload 5.
+- Docs: `sor/stock-upload-getty-web.md` 8,983 bytes and
+  `selectors/stock-upload.md` 4,813 bytes (budget 9,000 each).

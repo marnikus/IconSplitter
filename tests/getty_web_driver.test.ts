@@ -232,7 +232,7 @@ describe("Getty contributor page steps", () => {
     create.addEventListener("click", clicked);
 
     expect(driver.openCreateBatchDialog()).toEqual({ clicked: true, reason: null });
-    expect(clicked).toHaveBeenCalledTimes(1);
+    expect(clicked).not.toHaveBeenCalled(); // the dialog is already open
     expect(driver.readPageInfo().dialogOpen).toBe(true);
 
     expect(driver.fillBatchDetails({ batchName: "IconSplitter 2026-10-29 (3 icons)" })).toEqual({ filled: true, reason: null });
@@ -361,6 +361,25 @@ describe("Getty contributor page steps", () => {
       const source = steps[name].toString();
       expect(() => new Function("document", "location", "Event", `return (${source});`)).not.toThrow();
       expect(() => new Function(`${driver.PAGE_PRELUDE}; return (${source});`)).not.toThrow();
+    }
+  });
+});
+
+// Execute the actual wire-format script, not just module functions: module
+// scope can otherwise hide missing declarations in the browser prelude.
+describe("serialized Getty page steps", () => {
+  it("reads the login page with a declared non-text input list", () => {
+    document.body.innerHTML = LOGIN_PAGE + '<input type="hidden" name="token" />';
+    const read = new Function(`${driver.PAGE_PRELUDE}\nreturn (${driver.readPageInfo.toString()})();`);
+    const info = read();
+    expect(info.loginForm).toEqual({ email: true, password: true });
+    expect(info.fields).toHaveLength(2);
+  });
+
+  it("can evaluate every exported step with the actual browser prelude", () => {
+    const steps = driver as unknown as Record<string, (...args: never[]) => unknown>;
+    for (const name of driver.DRIVER_STEPS) {
+      expect(() => new Function(`${driver.PAGE_PRELUDE}\nreturn (${steps[name].toString()});`)()).not.toThrow();
     }
   });
 });
