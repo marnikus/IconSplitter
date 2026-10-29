@@ -7,6 +7,7 @@ import {
   GETTY_WEB_ERROR_HINT, GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName, gettyWebFileOrder,
   isGettyWebPreset, validateGettyWebTasks,
 } from "../src/lib/stockupload/gettyweb";
+import { gettyWebProgress } from "../src/lib/stockupload/gettyprogress";
 import {
   closeBridgeGettyWeb, finishBridgeGettyWeb, probeBridgeGettyWeb, testBridgeGettyWeb, uploadBridgeGettyWeb,
 } from "../src/lib/stockupload/gettywebclient";
@@ -75,7 +76,8 @@ describe("Getty web loopback client", () => {
       batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true, fetchImpl,
     });
-    expect(result).toEqual(reply);
+    // `failed` is normalized even when the helper reports none.
+    expect(result).toEqual({ ...reply, failed: [] });
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/upload");
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
@@ -176,6 +178,44 @@ describe("Getty web loopback client", () => {
     expect(await testBridgeGettyWeb("http://127.0.0.1:47391", GETTY_WEB_PRESET, CREDS, fetchImpl)).toEqual({ ok: true });
     await closeBridgeGettyWeb("http://127.0.0.1:47391", "run-123", fetchImpl);
     expect(calls).toEqual(["http://127.0.0.1:47391/getty-web/test", "http://127.0.0.1:47391/getty-web/close"]);
+  });
+});
+
+describe("Getty web live progress", () => {
+  it("reads the per-file counts the helper reports for a running upload", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, progress: { phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4 },
+    }));
+    const progress = await gettyWebProgress("http://127.0.0.1:47391", "run 7", fetchImpl as unknown as typeof fetch);
+    expect(progress).toEqual({ phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4 });
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toBe("http://127.0.0.1:47391/getty-web/progress?sessionKey=run%207");
+  });
+
+  it("says nothing when the helper has no progress route or is gone", async () => {
+    const missing = vi.fn(async () => jsonResponse(404, { ok: false }));
+    expect(await gettyWebProgress("http://127.0.0.1:47391", "run-7", missing as unknown as typeof fetch)).toBeNull();
+    const down = vi.fn(async () => { throw new Error("ECONNREFUSED"); });
+    expect(await gettyWebProgress("http://127.0.0.1:47391", "run-7", down as unknown as typeof fetch)).toBeNull();
+  });
+
+  it("never counts a file Getty rejected, and names it with its id", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, batchId: "2302569283",
+      accepted: ["icon_a.jpeg", "icon_a.eps"],
+      failed: [{ name: "icon-megaphone.eps", id: "FSPID51446" }],
+      completed: false, completion: null, metadata: [],
+    }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.accepted).toEqual(["icon_a.jpeg", "icon_a.eps"]);
+      expect(result.failed).toEqual([{ name: "icon-megaphone.eps", id: "FSPID51446" }]);
+    }
   });
 });
 

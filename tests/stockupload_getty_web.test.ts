@@ -1,14 +1,14 @@
 // The Getty web target inside the batch runner: every selected icon in one
 // browser upload, JPEG first with an optional EPS, one shared batch, one close.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildStockUploadPlan } from "../src/lib/stockupload/plan";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 import { GETTY_WEB_SUBMISSION_TYPE } from "../src/lib/stockupload/gettyweb";
 import { discoverExportedItems } from "../src/lib/stockupload/discovery";
 import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
-import { resetStockHistory } from "../src/stockupload/historystore";
+import { getStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
 import { resetRowBadges } from "../src/upload/rowbadgestore";
@@ -51,6 +51,10 @@ function planFor(items: Awaited<ReturnType<typeof discoverExportedItems>>["items
     checkedTargets: [GETTY_WEB_PRESET.id], formats,
   });
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   localStorage.clear();
@@ -112,6 +116,42 @@ describe("Getty web upload in the batch runner", () => {
     expect(sent[0].creds.password).toBe("GettyPass!42");
   });
 
+  it("shows Getty's own per-file progress while the one upload is in flight", async () => {
+    vi.useFakeTimers();
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const labels: string[] = [];
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const run = executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      onProgress: (step) => labels.push(step.label),
+      gettyWebUploadFn: async (input) => {
+        await gate;
+        return {
+          ok: true, batchId: "68565609",
+          accepted: input.icons.flatMap((icon) => icon.files.map((f) => f.name)),
+          failed: [], completed: false, completion: null, metadata: [],
+        };
+      },
+      gettyWebProgressFn: async () => ({ phase: "uploading", total: 4, uploaded: 2, failed: 0, listed: 3 }),
+      finishGettyWebFn: async () => ({
+        ok: true, batchId: "68565609", accepted: [], completed: true,
+        completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    await vi.advanceTimersByTimeAsync(2100);
+    release!();
+    await run;
+    expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
+  });
+
   it("keeps the icons Getty listed and names the one it did not, before submitting once", async () => {
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
@@ -138,8 +178,43 @@ describe("Getty web upload in the batch runner", () => {
       closeGettyWebFn: async () => undefined,
     });
     expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2 });
-    expect(summary.lastError).toContain("Getty did not list moon_02");
+    expect(summary.lastError).toContain("no thumbnail for moon_02");
     expect(finishes).toBe(1);
+  });
+
+  it("never marks a pair Getty answered with Upload failed as uploaded", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "icon-megaphone_5_01", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const badges: string[] = [];
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "2302569283", accepted: ["star_01.jpg", "star_01.eps"],
+        failed: [{ name: "icon-megaphone_5_01.eps", id: "FSPID51446" }],
+        completed: false, completion: null, metadata: [],
+      }),
+      finishGettyWebFn: async () => ({
+        ok: false, code: "page",
+        reason: 'Getty reports "Upload failed" for 1 of 2 contribution(s) — remove or re-upload them, then finish the batch',
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2 });
+    expect(summary.lastError).toContain("Upload failed");
+    badges.push(summary.lastError ?? "");
+    // The rejected pair is named with Getty's own id, never called uploaded.
+    expect(badges.join(" ")).toContain("FSPID51446");
+    // And the row store agrees: that icon is failed, only the good one is uploaded.
+    const history = getStockHistory();
+    const statuses = Object.values(history).flatMap((byTarget) => Object.entries(byTarget));
+    const byStatus = (want: string) => statuses.filter(([, entry]) => entry.status === want).length;
+    expect(byStatus("uploaded")).toBe(1);
+    expect(byStatus("failed")).toBe(1);
   });
 
   it("reports an un-submitted batch when the finish call completes nothing", async () => {

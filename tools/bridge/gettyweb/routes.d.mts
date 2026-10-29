@@ -6,4 +6,5 @@ export function handleGettyWebUpload(req: any, res: any, post: any, json: any, l
 export function handleGettyWebTest(req: any, res: any, post: any, json: any): Promise<any>;
 export function handleGettyWebFinish(req: any, res: any, post: any, json: any): Promise<any>;
 export function handleGettyWebClose(req: any, res: any, post: any, json: any): Promise<any>;
+export function handleGettyWebProgress(req: any, res: any, json: any): any;
 export function sanitizeMetadata(raw: unknown): { title: string; description: string; keywords: string[] } | null;

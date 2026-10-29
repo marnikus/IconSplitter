@@ -17,9 +17,11 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   is the form's `[type=submit]` or a control labelled
   `Sign in|Log in|Continue|Next|Submit`, else Enter / `form.requestSubmit()`;
   disabled fields stay candidates, because the page hydrates late.
-- Getty web cards: `[data-cy="contribution-file-name"]` names the contribution and
+- Getty web cards: `[data-cy="contribution-file-name"]` names the contribution,
   `[data-cy="not-ready-icon"]` (or `aria-label="not_ready_to_submit"`) marks it as
-  still processing. Files are matched to a card by **stem**, since a JPEG/EPS pair
+  still processing, and the card's own picture (`[data-cy="image-thumbnail"]`, any
+  loaded/remote `img`) is the proof it uploaded. A card reading `Upload failed` is
+  a rejection, and its `ID: …` text (e.g. `FSPID51446`) is reported with it. Files are matched to a card by **stem**, since a JPEG/EPS pair
   is listed once, under the EPS name. The metadata drawer uses
   `md-headline`/`md-caption`/`md-created_date`/`metadata-keyword-multiselect` and
   `save-metadata`, and only enables its fields once a card is selected.
@@ -28,6 +30,8 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   `timeout` failure naming the control); an open dialog or an already-chosen
   submission type is never reopened; the batch id must differ from the one read
   before the click, or the run keeps waiting.
+- Getty web progress: `GET /getty-web/progress?sessionKey=…` returns the live
+  `{phase,total,uploaded,failed,listed}` counts only — no names, no page text.
 - Getty web dismissals: before attaching the run's files and before submitting,
   `[role=dialog]`, `[role=alert]` and `[data-cy$="-error"]` scopes get their
   `Dismiss|Cancel|Close|OK|Got it` control clicked. A scope with no such control is

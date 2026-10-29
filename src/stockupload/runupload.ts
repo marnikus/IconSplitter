@@ -12,7 +12,7 @@ import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
 import { finishGettyWebRun } from "./gettywebfinish";
-import { completionNote, uploadGettyWebRun } from "./gettywebtransfer";
+import { completionNote, uploadGettyWebRun, watchGettyProgress } from "./gettywebtransfer";
 import { markUploadInFlight } from "./journal";
 import {
   flushTargetStatuses, recordMissingCreds, recordTaskResult, reportNetworkCertificate,
@@ -123,13 +123,19 @@ async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
     tasks, missing: ctx.plan.skippedMissing, item: ctx.itemsById.get(tasks[0].itemId),
   }));
   for (const icon of icons) markUploadInFlight(icon.tasks[0].itemId, ctx.target.id);
+  // Getty reports each file while the one request is in flight; show that live.
+  const stop = watchGettyProgress(
+    { bridgeUrl: ctx.deps.bridgeUrl, sessionKey: ctx.sessionKey, targetName: ctx.target.name },
+    (label) => ctx.deps.onProgress?.({ done: ctx.counters.done, total: ctx.counters.total, label }),
+    ctx.deps.gettyWebProgressFn,
+  );
   const res = await uploadGettyWebRun({
     icons, root: ctx.deps.root, target: ctx.target, creds: ctx.creds,
     combine: ctx.plan.combineTitleDescription,
     batchName: gettyWebBatchName(new Date(), ctx.plan.selectedRows.length),
     submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: ctx.sessionKey,
     bridgeUrl: ctx.deps.bridgeUrl, signal: ctx.deps.signal, uploadFn: ctx.deps.gettyWebUploadFn,
-  });
+  }).finally(stop);
   let uploaded = 0;
   icons.forEach((icon, index) => {
     const outcome = res.icons[index] ?? { ok: false, reason: res.reason };
@@ -152,7 +158,9 @@ async function submitGettyBatch(
   const fin = await finishGettyWebRun({
     bridgeUrl: deps.bridgeUrl, preset: target, creds, sessionKey, uploaded, finishFn: deps.finishGettyWebFn,
   });
-  if (fin.error ?? fin.note) counters.lastError = fin.error ?? fin.note;
+  // Keep both: the per-icon reason names the file, the finish reason the batch.
+  if (fin.error) counters.lastError = [counters.lastError, fin.error].filter(Boolean).join(" — ");
+  else if (fin.note) counters.lastError = fin.note;
   if (fin.submitted) deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
 }
 

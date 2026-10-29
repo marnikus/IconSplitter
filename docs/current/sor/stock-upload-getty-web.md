@@ -5,10 +5,9 @@ Parent: [stock-upload](stock-upload.md). Handles: [selectors/stock-upload](../se
 ## 1. Why this exists and why it is a bridge job
 
 Getty's ESP **API** preset (`esp-https`) needs a Partner API key; a website login
-uploads through `esp.gettyimages.com/contribute`. The app cannot drive it —
-first-party cookie on `gettyimages.com`, no CORS-enabled login or upload
-endpoint — so the **loopback helper** (`tools/bridge/gettyweb/`) drives a real
-browser.
+uploads through `esp.gettyimages.com/contribute`. The app cannot drive it — no
+CORS-enabled login — so the **loopback helper** (`tools/bridge/gettyweb/`) drives
+a real browser.
 
 ## 2. Flow
 
@@ -24,37 +23,40 @@ browser.
    helper stages it, signs in once, creates **one** batch and hands **all** files
    to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
    snackbars are dismissed first — one blocks Getty's uploader.
-5. Getty's uploader transfers; the helper waits until the batch page lists every
-   file. A listed contribution **counts as uploaded** at once — recognition
-   finishes afterwards — and the wait then lasts until it is ready. The app marks
-   an icon uploaded only when the response lists its stem.
+5. Getty's uploader transfers. The helper waits until every file is listed, then
+   until each card proves its own outcome: **a thumbnail means uploaded**, the
+   text "Upload failed" means not — a listed row alone proves nothing. The app
+   marks an icon uploaded only when the response lists its stem, and names a
+   rejected file with Getty's id. `GET /getty-web/progress` feeds the panel the
+   live per-file counts while the one request is in flight.
 6. **Metadata:** per contribution it selects the card by stem, types the accepted
    title, description, keywords and **today's date** into Date Created, and saves —
    never overwriting Getty's IPTC/XMP prefill.
-7. **Complete once:** after the last icon the run posts `/getty-web/finish`, which
-   refuses while any contribution is missing, then clicks Complete/Submit and
-   accepts the confirmation. A per-icon submit used to lock the batch after icon 1.
+7. **Complete once:** after the last icon the run posts `/getty-web/finish`. It
+   refuses while a contribution is missing **or says "Upload failed"**, so a
+   partial batch is never locked; otherwise it clicks Complete/Submit and accepts
+   the confirmation.
 8. `/getty-web/close` shuts the browser and deletes the staged files; an idle
    session closes after five minutes. A visible window is only let go.
 
 **Sign-in is typed, not assigned.** Each poll focuses the identifier (then the
 password), inserts the saved text with real input events (`Input.insertText`) and
 writes through `angular.element(el)` too: the page is `ng-app="SignInApp"` and
-AngularJS ignores a plain `.value =`, which submits an empty form. It then presses
-submit or Enter / `form.requestSubmit()`, takes a "sign in with password" option
-on an SSO screen and returns to `/contribute`. A stalled run names the step and
+AngularJS ignores `.value =`, which submits an empty form. It then presses submit
+or Enter / `form.requestSubmit()`, takes a "sign in with password" option on an
+SSO screen and returns to `/contribute`. A stalled run names the step and
 summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
 
 ## 3. Background, headed, attach, profile and self-check
 
-- Default: `chrome --headless=new` with a throwaway `--user-data-dir`, so a run
-  never steals focus.
+- Default: `chrome --headless=new` with a throwaway profile, so a run never
+  steals focus.
 - `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window — needed to watch
   a run or clear an interactive verification. A visible window is never killed: a
   failed run leaves the page up, with the reason saying so.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) reuses one profile between
-  runs, so a first sign-in's cookies survive and Getty stops treating each run as
-  a new device. It holds Getty cookies; the helper never deletes it.
+  runs, so a first sign-in's cookies survive. It holds Getty cookies; the helper
+  never deletes it.
 - `--getty-check` launches once, verifies the DevTools socket, prints
   `browser:`/`launch:`/`devtools:`/`socket:` and exits.
 - `--getty-reset --getty-profile <folder>` ends the browser holding that folder,
@@ -65,7 +67,7 @@ summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
   (180 s) and `GETTY_WEB_READY_TIMEOUT_MS` (120 s) bound the two waits.
 
 **A vector pair is one contribution.** Getty lists the EPS name only, so files are
-matched by **stem** (`.jpg` and `.eps` = one card, one drawer).
+matched by **stem** (`.jpg` + `.eps` = one card, one drawer).
 
 **One profile, one browser — freed by the helper.** A browser answering on the
 folder's port is attached to. A locked folder without a port means a leftover
@@ -118,15 +120,14 @@ of identifier and password.
 - Built against captured markup plus a local helper, **not** a live account:
   selector drift is a `page` failure naming the step. Only the hidden contribution
   uploader is targeted — release inputs are never used.
-- A listed card means Getty has the bytes, not that it accepted them.
+- A thumbnail means Getty took the file, not that it accepted it for review.
 - An interrupted run can leave a batch short; a duplicate is the only recovery.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed with
   `--getty-profile`, then runs reuse the cookie. Typing and the Angular bridge are
   proven against a fake CDP and a DOM, not the live page.
 - The helper types the saved identifier, guessing nothing.
 - Metadata editors and Complete use **label keywords** and row proximity — guesses
-  **not** seen live. A missing editor is reported per file (`row-not-found`,
-  `filled-unsaved`, `embedded-only`).
+  **not** seen live; a missing editor is reported per file.
 - `completed: true` means the control was clicked and confirmed, not that Getty
   passed the files. An incomplete run says `files uploaded but the batch was not
   completed — submit it on the Getty contributor page`.

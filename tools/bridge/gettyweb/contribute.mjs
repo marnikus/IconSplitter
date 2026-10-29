@@ -28,10 +28,6 @@ export function runDriverStep(connection, sessionId, name, arg) {
   return runStep(connection, driver.PAGE_PRELUDE, source, arg, sessionId);
 }
 
-function remaining(deadline) {
-  return Math.max(0, deadline - Date.now());
-}
-
 /** Opens the contributor app (it redirects to sign-in when needed). */
 export async function openContributePage(connection, sessionId, url) {
   await navigate(connection, url, sessionId);
@@ -223,12 +219,11 @@ export async function createBatch(connection, sessionId, options) {
   return { ok: true, batchId: String(created.value) };
 }
 
-const PROCESSING_NOTE = "Getty is still processing the uploaded file(s)";
-
 /**
- * Waits until the batch page lists every file of this call. Getty lists a vector
- * pair once (under the EPS name), so a card is matched by stem and counts as
- * uploaded as soon as it appears — processing finishes after the bytes arrived.
+ * Waits until the batch page lists every file of this call, then until each card
+ * proves its outcome: a thumbnail means Getty took the file, "Upload failed"
+ * means it did not. Only those two states are terminal — a listed row without a
+ * picture is still on its way.
  */
 async function waitForFileNames(connection, sessionId, names, options) {
   const timeoutMs = options.timeoutMs ?? 180000;
@@ -236,41 +231,53 @@ async function waitForFileNames(connection, sessionId, names, options) {
   let last = null;
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
-    last = await runDriverStep(connection, sessionId, "readUploadState", { names });
+    last = await readState(connection, sessionId, names);
+    options.onState?.(last);
     if (last.signInRequired) {
       return { ok: false, code: "auth", reason: "Getty signed the browser out during the upload", state: last };
     }
-    const seen = last.namesSeen.length;
-    if (seen === names.length) {
-      options.onProgress?.(`Getty listed ${seen}/${names.length} file(s)`);
-      return { ok: true, state: await waitForReady(connection, sessionId, names, options, last) };
-    }
-    options.onProgress?.(`Getty listed ${seen}/${names.length} file(s) — waiting for the rest`);
-    await sleep(remaining(deadline) === 0 ? 0 : UPLOAD_POLL_MS);
+    if (last.namesSeen.length === names.length) break;
+    options.onProgress?.(`Getty listed ${last.namesSeen.length}/${names.length} file(s) — waiting for the rest`);
+    await sleep(UPLOAD_POLL_MS);
   }
-  return {
-    ok: false,
-    code: "timeout",
-    reason: `Getty listed ${last?.namesSeen.length ?? 0} of ${names.length} file(s) in ${Math.round(timeoutMs / 1000)} s`,
-    state: last,
-  };
+  if (!last || last.namesSeen.length < names.length) {
+    return {
+      ok: false, code: "timeout",
+      reason: `Getty listed ${last?.namesSeen.length ?? 0} of ${names.length} file(s) in ${Math.round(timeoutMs / 1000)} s`,
+      state: last,
+    };
+  }
+  options.onProgress?.(`Getty listed ${names.length}/${names.length} file(s)`);
+  return waitForVerified(connection, sessionId, names, options, last);
+}
+
+async function readState(connection, sessionId, names) {
+  return runDriverStep(connection, sessionId, "readUploadState", { names });
+}
+
+function settled(state, names) {
+  return names.every((name) => state.uploaded.includes(name) || state.failed.includes(name));
 }
 
 /**
- * Recognition on Getty's side takes a while; the card appears first and loses
- * its not-ready flag later. Being still processing is reported, never fatal.
+ * Recognition plus the thumbnail take a moment; a failed card is terminal at
+ * once. Anything unresolved after the bound is reported, never called uploaded.
  */
-async function waitForReady(connection, sessionId, names, options, first) {
+async function waitForVerified(connection, sessionId, names, options, first) {
   const deadline = Date.now() + (options.readyTimeoutMs ?? 120000);
   let last = first;
-  while (!last.ready && Date.now() < deadline) {
-    if (options.signal?.aborted) return last;
-    options.onProgress?.(PROCESSING_NOTE);
+  while (!settled(last, names) && Date.now() < deadline) {
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
+    options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)`);
     await sleep(UPLOAD_POLL_MS);
-    last = await runDriverStep(connection, sessionId, "readUploadState", { names });
+    last = await readState(connection, sessionId, names);
+    options.onState?.(last);
   }
-  if (!last.ready) options.onProgress?.("the uploads are still processing — continuing");
-  return last;
+  const stuck = names.length - last.uploaded.length - last.failed.length;
+  if (stuck > 0) options.onProgress?.(`${stuck} file(s) are still processing — continuing`);
+  const rejected = last.failed.length > 0 ? `, ${last.failed.length} rejected` : "";
+  options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)${rejected}`);
+  return { ok: true, state: last };
 }
 
 /** The contribution a file belongs to; a vector pair shares one. */
@@ -301,6 +308,12 @@ export async function attachFiles(connection, sessionId, options) {
 }
 
 /** Opens one file's metadata editor, types the accepted text, and saves it. */
+function wasRejected(file, options) {
+  const stem = stemOf(file.name);
+  return (options.failed ?? []).some((name) => stemOf(name) === stem);
+}
+
+/** Opens one file's metadata editor, types the accepted text, and saves it. */
 async function fillOneFileMetadata(connection, sessionId, file, options) {
   const opened = await runDriverStep(connection, sessionId, "openFileMetadata", { fileName: file.name });
   if (!opened.opened) return { name: file.name, status: "row-not-found" };
@@ -321,6 +334,11 @@ async function fillEveryFileMetadata(connection, sessionId, options) {
     if (options.signal?.aborted) return { aborted: true, report };
     if (!file.metadata) {
       report.push({ name: file.name, status: "embedded-only" });
+      continue;
+    }
+    // A file Getty rejected has no editor to fill.
+    if (wasRejected(file, options)) {
+      report.push({ name: file.name, status: "upload-failed" });
       continue;
     }
     // A vector pair is one contribution: its drawer is filled once, not twice.
@@ -351,6 +369,12 @@ export function listedContributions(expected, state) {
   return [...new Set(expected.map(stemOf))].filter((stem) => seen.has(stem)).length;
 }
 
+/** How many of the run's contributions Getty itself marked "Upload failed". */
+export function failedContributions(expected, state) {
+  const failed = new Set((state?.failed ?? []).map(stemOf));
+  return [...new Set(expected.map(stemOf))].filter((stem) => failed.has(stem)).length;
+}
+
 /**
  * Ends the run: submits the one batch every icon was uploaded into. Refuses when a
  * contribution of the run is not on the page yet, because submitting early locks
@@ -367,6 +391,13 @@ export async function finishBatch(connection, sessionId, options = {}) {
     return {
       ok: false, code: "timeout",
       reason: `Getty lists ${listed} of ${total} contribution(s) — not completing the batch`, state,
+    };
+  }
+  const failed = failedContributions(expected, state);
+  if (failed > 0) {
+    return {
+      ok: false, code: "page",
+      reason: `Getty reports "Upload failed" for ${failed} of ${total} contribution(s) — remove or re-upload them, then finish the batch`, state,
     };
   }
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);

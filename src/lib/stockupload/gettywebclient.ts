@@ -26,9 +26,20 @@ export interface GettyWebFileReport {
   fields?: Record<string, boolean>;
 }
 
+/** A contribution Getty itself answered with "Upload failed". */
+export interface GettyWebRejection {
+  name: string;
+  id: string | null;
+}
+
 export type GettyWebResult =
   | {
-    ok: true; batchId: string | null; accepted: string[]; completed: boolean;
+    ok: true; batchId: string | null;
+    /** Names whose card shows a thumbnail: Getty took these files. */
+    accepted: string[];
+    /** Names Getty answered with "Upload failed" — never counted as uploaded. */
+    failed?: GettyWebRejection[];
+    completed: boolean;
     completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
     metadata: GettyWebFileReport[];
     /** Set when this upload only filled the batch; the run submits it at the end. */
@@ -123,6 +134,12 @@ function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
     ok: true,
     batchId: typeof raw.batchId === "string" ? raw.batchId : null,
     accepted: Array.isArray(raw.accepted) ? raw.accepted.filter((n): n is string => typeof n === "string") : fallback,
+    failed: Array.isArray(raw.failed)
+      ? raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
+        name: String(entry.name),
+        id: typeof entry.id === "string" ? entry.id : null,
+      }))
+      : [],
     completed: raw.completed === true,
     completion: isRecord(raw.completion)
       ? {

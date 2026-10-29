@@ -7,9 +7,10 @@ import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import {
   gettyWebFileOrder, gettyWebMetadataOf, gettyWebStem, validateGettyWebTasks,
 } from "../lib/stockupload/gettyweb";
+import { gettyWebProgress, type GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import {
-  uploadBridgeGettyWeb, type GettyWebFile, type GettyWebIcon, type GettyWebResult,
-  type GettyWebUploadInput,
+  uploadBridgeGettyWeb, type GettyWebFile, type GettyWebIcon, type GettyWebRejection,
+  type GettyWebResult, type GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, SkippedFormat } from "../lib/stockupload/plan";
@@ -95,13 +96,22 @@ async function prepareIcons(input: GettyWebRunInput): Promise<GettyWebIcon[] | s
   return prepared;
 }
 
-/** A listed contribution covers its whole pair; anything else is not uploaded. */
-function outcomeOf(icon: GettyWebIconInput, accepted: readonly string[]): GettyWebIconOutcome {
-  if (accepted.length === 0) return { ok: true, reason: "" };
-  const listed = new Set(accepted.map(gettyWebStem));
+/**
+ * Only a card that shows a thumbnail proves Getty took the file; a card reading
+ * "Upload failed" is named as such, and anything else is not claimed as uploaded.
+ */
+function outcomeOf(
+  icon: GettyWebIconInput, accepted: readonly string[], failed: readonly GettyWebRejection[],
+): GettyWebIconOutcome {
   const stems = gettyWebFileOrder(icon.tasks).map((task) => gettyWebStem(task.fileName));
-  if (stems.some((stem) => listed.has(stem))) return { ok: true, reason: "" };
-  return { ok: false, reason: `Getty did not list ${stems[0] ?? "this icon"}` };
+  const stemOf = (name: string) => gettyWebStem(name);
+  const rejected = failed.find((entry) => stems.includes(stemOf(entry.name)));
+  if (rejected) {
+    const id = rejected.id ? ` (${rejected.id})` : "";
+    return { ok: false, reason: `Getty reports "Upload failed" for ${rejected.name}${id}` };
+  }
+  if (accepted.some((name) => stems.includes(stemOf(name)))) return { ok: true, reason: "" };
+  return { ok: false, reason: `Getty shows no thumbnail for ${stems[0] ?? "this icon"} — not counted as uploaded` };
 }
 
 const GETTY_WEB_NOT_COMPLETED_NOTE =
@@ -132,7 +142,43 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
     complete: false, sessionKey: input.sessionKey, signal: input.signal,
   });
   if (!res.ok) return failed(input, res.reason);
-  const outcomes = input.icons.map((icon) => outcomeOf(icon, res.accepted ?? []));
+  const outcomes = input.icons.map((icon) => outcomeOf(icon, res.accepted ?? [], res.failed ?? []));
   const reason = outcomes.find((entry) => !entry.ok)?.reason ?? "";
   return { ok: reason === "", reason, icons: outcomes, deferCompletion: true };
+}
+
+/** The panel line for a live upload reading: what Getty has taken so far. */
+export function progressLabel(progress: GettyWebProgress, targetName: string): string {
+  const of = progress.total > 0 ? ` of ${progress.total}` : "";
+  const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
+  if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)`;
+  return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}`;
+}
+
+const PROGRESS_POLL_MS = 2000;
+
+/**
+ * Polls the helper while the one upload request is in flight, so the panel shows
+ * Getty's own per-file progress instead of sitting still until the batch lands.
+ * Returns its stop function; a missing progress route (older helper) is harmless.
+ */
+export function watchGettyProgress(
+  input: { bridgeUrl: string; sessionKey: string; targetName: string },
+  onProgress: (label: string) => void,
+  poll: (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null> = gettyWebProgress,
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+  const tick = async () => {
+    const progress = await poll(input.bridgeUrl, input.sessionKey).catch(() => null);
+    if (stopped || progress === null) return;
+    onProgress(progressLabel(progress, input.targetName));
+    if (progress.phase === "done" || progress.phase === "failed") return;
+    timer = setTimeout(() => void tick(), PROGRESS_POLL_MS);
+  };
+  timer = setTimeout(() => void tick(), PROGRESS_POLL_MS);
+  return () => {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+  };
 }

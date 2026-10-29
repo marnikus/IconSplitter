@@ -185,12 +185,16 @@ it("waits for the hidden contribution uploader instead of using an existing rele
 
 // The captured batch page lists a vector pair once — under the EPS name — and the
 // card carries a not_ready_to_submit flag while Getty processes the image.
-const card = (name: string, processing = false) => `
+// A card Getty accepted renders its thumbnail; a rejected one says "Upload failed".
+const card = (name: string, processing = false, failed = false) => `
   <div data-cy="grid-row"><div data-cy="item-card">
-    <div data-cy="image-card"><img data-cy="image-thumbnail" alt="icon"></div>
+    <div data-cy="image-card">
+      ${failed ? "<p>Upload failed</p>" : `<img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg">`}
+    </div>
     <div data-cy="item-info">
       ${processing ? '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>' : ""}
       <p data-cy="contribution-file-name">${name}</p>
+      <p>ID: FSPID51446</p>
     </div>
   </div></div>`;
 
@@ -235,6 +239,9 @@ describe("Getty web upload verification", () => {
       expect(settled.ok).toBe(true);
       expect(settled.state).toMatchObject({ contributions: ["icon-map-pin_5_01.eps"], fileCount: 1, ready: true });
       expect(settled.state.namesSeen).toEqual(PAIR);
+      // A picture in the card is what counts as uploaded.
+      expect(settled.state.uploaded).toEqual(PAIR);
+      expect(settled.state.failed).toEqual([]);
       expect(progress.some((line) => /Getty listed 2\/2/.test(line))).toBe(true);
     } finally {
       vi.useRealTimers();
@@ -260,7 +267,7 @@ describe("Getty web upload verification", () => {
     expect(result.state.contributions).toEqual(["star_01.eps", "moon_02.eps"]);
   });
 
-  it("keeps waiting while Getty is still processing the upload", async () => {
+  it("reports each file as it lands, then counts only the ones with a thumbnail", async () => {
     vi.useFakeTimers();
     try {
       mountBatchPage();
@@ -273,11 +280,28 @@ describe("Getty web upload verification", () => {
       await vi.advanceTimersByTimeAsync(5000);
       const done = await result;
       expect(done.ok).toBe(true);
+      // The thumbnail is there, so the file counts as uploaded even while Getty
+      // still reports it as processing — and the panel said so as it happened.
+      expect(done.state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
       expect(done.state.processing).toBe(true);
-      expect(progress.some((line) => /processing/i.test(line))).toBe(true);
+      expect(progress.some((line) => /Getty uploaded 1\/1/.test(line))).toBe(true);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("never counts a card reading Upload failed as uploaded, and names its id", async () => {
+    mountBatchPage();
+    document.body.insertAdjacentHTML("beforeend", card("icon-megaphone_5_01.eps", false, true));
+    const result = await attachFiles(new DomConnection(), "page", {
+      paths: ["/staged/icon-megaphone_5_01.jpg", "/staged/icon-megaphone_5_01.eps"],
+      names: ["icon-megaphone_5_01.jpg", "icon-megaphone_5_01.eps"],
+      timeoutMs: 2000, readyTimeoutMs: 200,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.state.uploaded).toEqual([]);
+    expect(result.state.failed).toEqual(["icon-megaphone_5_01.jpg", "icon-megaphone_5_01.eps"]);
+    expect(result.state.failures).toEqual([{ name: "icon-megaphone_5_01.eps", id: "FSPID51446" }]);
   });
 
   it("fails with the count when a card never appears", async () => {
@@ -329,6 +353,20 @@ describe("completing one batch for several icons", () => {
     expect(result.ok).toBe(true);
     expect(result.report.completion).toMatchObject({ clicked: true, label: "SUBMIT" });
     expect(result.report.state.submitted).toBe(true);
+  });
+
+  it("refuses to submit while a card says Upload failed", async () => {
+    document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + `
+      <div data-cy="grid-row"><div data-cy="item-card">
+        <div data-cy="image-card"><p>Upload failed</p></div>
+        <p data-cy="contribution-file-name">icon-map-pin_5_02.eps</p>
+      </div></div>`;
+    let clicks = 0;
+    document.querySelectorAll("button")[1].addEventListener("click", () => { clicks += 1; });
+    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED });
+    expect(result).toMatchObject({ ok: false, code: "page" });
+    expect(result.reason).toContain('"Upload failed" for 1 of 2');
+    expect(clicks).toBe(0);
   });
 
   it("dismisses a leftover dialog before attaching the next icon's files", async () => {

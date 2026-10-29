@@ -447,6 +447,29 @@ describe("Getty batch page as captured", () => {
     expect(state.processing).toBe(false);
   });
 
+  it("reads each card's own outcome: a thumbnail is uploaded, Upload failed is not", () => {
+    const uploaded = CARD_PAGE.replace(
+      '<img data-cy="image-thumbnail" alt="Location pinpointing">',
+      '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">',
+    ).replace('<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', "");
+    mount(uploaded);
+    const good = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
+    expect(good.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(good.failed).toEqual([]);
+    expect(good.failures).toEqual([]);
+
+    const failed = CARD_PAGE.replace(
+      '<div data-cy="image-card"><img data-cy="image-thumbnail" alt="Location pinpointing"></div>',
+      '<div data-cy="image-card"><p>Upload failed</p></div>',
+    ).replace("ID: 2302596512", "ID: FSPID51446");
+    mount(failed);
+    const bad = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"] });
+    // A listed row without a picture is not proof of an upload.
+    expect(bad.uploaded).toEqual([]);
+    expect(bad.failed).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
+    expect(bad.failures).toEqual([{ name: "icon-map-pin_5_01.eps", id: "FSPID51446" }]);
+  });
+
   it("selects a card by stem so the metadata drawer wakes up", () => {
     mount(CARD_PAGE);
     // The drawer enables its fields for the selected contribution only.

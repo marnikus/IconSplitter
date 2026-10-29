@@ -3931,3 +3931,19 @@ bridge_getty_web 19, stockupload_getty_web 8, Getty runs + UI 96. Docs: SOR
 Follow-up: `MAX_ICONS` raised to 200 so one run's whole selection fits the single
 request; Types/Lint/Quality gates re-run after the change: tsc clean, eslint 0
 errors / 21 warnings, quality gate PASS.
+
+## 2026-10-30 — Only thumbnail-verified files count as uploaded, with live progress
+
+Cause: the helper treated a listed row as an uploaded file, so a batch page that
+showed `Upload failed` for some icons still reported every file as uploaded and the
+run had no per-file feedback until the whole request returned. Now each card's own
+state decides: a thumbnail (`[data-cy="image-thumbnail"]`/loaded `img`) is an
+upload, `Upload failed` is a rejection reported with Getty's `ID: …`, and a listed
+row without a picture is not claimed. `GET /getty-web/progress` feeds the panel the
+live `{total,uploaded,failed,listed}` counts while the one upload request runs, and
+`finish` refuses a batch containing a rejected contribution.
+Measured: Types PASS (13.8 s), Lint PASS (12.1 s, 0 errors / 21 warnings), Quality
+gate (changed) PASS (0.7 s), Tests + coverage PASS (115.0 s), Build PASS (7.6 s).
+Focused suites: getty_web_driver 31, getty_web_batch 17, getty_web_upload 16,
+bridge_getty_web 20, stockupload_getty_web 10, Getty runs + UI 122 total. Docs:
+SOR 8,987 B / 9,000 B, selectors 6,439 B.

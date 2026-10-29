@@ -123,14 +123,50 @@ function fileStem(name) {
 
 const CARD_NAME = '[data-cy="contribution-file-name"]';
 const CARD_PROCESSING = '[data-cy="not-ready-icon"], [aria-label="not_ready_to_submit"]';
+// The captured batch page shows "Upload failed" instead of a picture, and a
+// successful contribution renders its thumbnail. That picture, not the arrival of
+// the row, is the proof that Getty accepted the file.
+const CARD_FAILED = /upload failed|failed to upload|upload error/i;
+const CARD_THUMBNAIL = '[data-cy="image-thumbnail"], [data-cy="image-card"] img, img';
 
-/** One entry per contribution card the batch page lists, with its ready flag. */
+/** The contribution id Getty prints under a name (`ID: FSPID51446`). */
+function cardIdOf(scope) {
+  const match = /ID:\s*([A-Za-z0-9_-]{3,})/.exec(textOf(scope));
+  return match ? match[1] : null;
+}
+
+/** A real picture in the card: a loaded/remote/embedded image, not a placeholder. */
+function cardHasThumbnail(scope) {
+  const img = scope.querySelector(CARD_THUMBNAIL);
+  if (!img) return false;
+  const src = String(img.currentSrc || img.getAttribute("src") || "");
+  return img.naturalWidth > 0 || /^(https?:|data:|blob:)/.test(src);
+}
+
+/** One entry per contribution card the batch page lists, with what it shows. */
 function uploadCards() {
   return [...document.querySelectorAll(CARD_NAME)].map((el) => {
     const name = textOf(el);
     const scope = el.closest('[data-cy="item-card"]') ?? el.closest('[data-cy="grid-row"]') ?? el.parentElement ?? el;
-    return { name, stem: fileStem(name), processing: Boolean(scope.querySelector(CARD_PROCESSING)), el, scope };
+    return {
+      name, stem: fileStem(name), id: cardIdOf(scope),
+      processing: Boolean(scope.querySelector(CARD_PROCESSING)),
+      failed: CARD_FAILED.test(textOf(scope)),
+      thumbnail: cardHasThumbnail(scope),
+      el, scope,
+    };
   });
+}
+
+/**
+ * How one file of this call stands right now: not on the page yet, failed on
+ * Getty's side, uploaded (its card shows a picture) or still processing.
+ */
+function fileStatus(cards, name) {
+  const card = cards.find((entry) => entry.stem === fileStem(name)) ?? null;
+  if (!card) return "pending";
+  if (card.failed) return "failed";
+  return card.thumbnail ? "uploaded" : "processing";
 }
 
 /**
@@ -348,17 +384,25 @@ export function readUploadState({ names }) {
   const wanted = Array.isArray(names) ? names.filter((n) => typeof n === "string" && n !== "") : [];
   const cards = uploadCards();
   const lower = body.toLowerCase();
-  const listed = (name) => {
-    const stem = fileStem(name);
-    if (stem === "") return false;
-    // Cards are authoritative; a page without them (older layout) falls back to text.
-    return cards.length > 0 ? cards.some((card) => card.stem === stem) : lower.includes(stem);
-  };
+  // A page without cards (older layout) has no thumbnail to check: a name in the
+  // text is all the proof there is, so it keeps the old "listed means uploaded".
+  const statusOf = (name) => (cards.length > 0
+    ? fileStatus(cards, name)
+    : (fileStem(name) !== "" && lower.includes(fileStem(name)) ? "uploaded" : "pending"));
+  const listed = (name) => statusOf(name) !== "pending";
+  const byStatus = (status) => wanted.filter((name) => statusOf(name) === status);
   const count = (re) => Number((re.exec(body) ?? [])[1] ?? 0);
   return {
     url: location.href,
     namesSeen: wanted.filter(listed),
     missing: wanted.filter((name) => !listed(name)),
+    /** Names whose card shows a picture: Getty took them, and the app may say so. */
+    uploaded: byStatus("uploaded"),
+    /** Names Getty answered with "Upload failed" — never counted as uploaded. */
+    failed: byStatus("failed"),
+    /** Listed, no picture yet: recognition or the thumbnail is still coming. */
+    processingNames: byStatus("processing"),
+    failures: cards.filter((card) => card.failed).map((card) => ({ name: card.name, id: card.id })).slice(0, 50),
     contributions: cards.map((card) => card.name).slice(0, 50),
     fileCount: cards.length,
     processing: cards.some((card) => card.processing),
@@ -540,13 +584,16 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  fileStem, uploadCards, inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
+  fileStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
+  submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n")
   + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`
   + `\nconst CREATE_BATCH_DIALOG_SELECTOR = ${JSON.stringify(CREATE_BATCH_DIALOG_SELECTOR)};`
   + `\nconst CARD_NAME = ${JSON.stringify(CARD_NAME)};`
-  + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`;
+  + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`
+  + `\nconst CARD_FAILED = ${CARD_FAILED.toString()};`
+  + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`;
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [

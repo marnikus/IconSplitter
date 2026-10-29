@@ -226,7 +226,10 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       });
     }
     return json(res, 200, {
-      ok: true, batchId: result.batchId ?? null, accepted: result.state?.namesSeen ?? icons.flatMap((icon) => icon.files.map((f) => f.name)),
+      ok: true, batchId: result.batchId ?? null,
+      // Only a card with a picture counts: "Upload failed" is reported, never accepted.
+      accepted: result.accepted ?? result.state?.uploaded ?? [],
+      failed: result.failed ?? result.state?.failures ?? [],
       chips: result.state?.chips ?? null,
       completed: result.report?.completion?.clicked === true,
       completion: result.report?.completion ?? null,
@@ -235,6 +238,27 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
     });
   } catch (err) {
     return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
+  }
+}
+
+/**
+ * `GET /getty-web/progress?sessionKey=…`: the live per-file counts of a running
+ * upload, so the panel can show what Getty reports while it works. Counts only —
+ * no file name, no page text, no credentials leave this route.
+ */
+export function handleGettyWebProgress(req, res, json) {
+  const key = sessionKeyOf(req.url);
+  const entry = [...sessions.values()].find((item) => item.sessionKey === key && item.session);
+  if (!entry) return json(res, 404, { ok: false, code: "bad-request", reason: "no Getty upload is running for this run" });
+  return json(res, 200, { ok: true, progress: entry.session.progress ?? null });
+}
+
+function sessionKeyOf(rawUrl) {
+  try {
+    const value = new URL(String(rawUrl ?? "/"), "http://127.0.0.1").searchParams.get("sessionKey");
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
   }
 }
 

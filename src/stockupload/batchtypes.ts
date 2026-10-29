@@ -4,6 +4,7 @@
 import type { DirHandleLike } from "../lib/fs";
 import type { BridgeUploadInput, BridgeUploadResult } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
+import type { GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import type {
   GettyWebFinishInput, GettyWebResult, GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
@@ -27,6 +28,8 @@ export interface UploadBatchDeps {
   gettyWebUploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
   closeGettyWebFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
   finishGettyWebFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
+  /** Live per-file counts of the running upload, for the panel's progress line. */
+  gettyWebProgressFn?: (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null>;
 }
 
 export interface UploadBatchSummary {

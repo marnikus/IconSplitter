@@ -174,6 +174,15 @@ describe("Getty web helper routes", () => {
     expect(tested.status).toBe(503);
   });
 
+  it("has no progress to report for a run that is not uploading", async () => {
+    const helper = await startHelper();
+    const res = await fetch(`${helper.url}/getty-web/progress?sessionKey=run-1`);
+    expect(res.status).toBe(404);
+    const body = await res.json() as { ok: boolean; reason: string };
+    expect(body.ok).toBe(false);
+    expect(body.reason).toContain("no Getty upload is running");
+  });
+
   it("refuses to finish a batch it never opened, instead of launching a browser", async () => {
     const helper = await startHelper();
     const res = await fetch(`${helper.url}/getty-web/finish`, {
