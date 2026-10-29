@@ -52,14 +52,60 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
       id: "getty-images",
       name: "Getty Images",
       template: "getty-images",
-      protocol: "esp-https",
-      host: "api.gettyimages.com",
+      protocol: "esp-batch",
+      host: "esp.gettyimages.com",
       port: 443,
-      remoteDir: "/esp/submission/v1/submission_batches",
+      remoteDir: "/_getty_esp_batches",
       tlsPolicy: "strict",
     });
     expect(DEFAULT_STOCK_STATE.activePresetId).toBe("shutterstock");
     expect(DEFAULT_STOCK_STATE.checkedTargets).toEqual(["shutterstock"]);
+  });
+
+  it("auto-heals legacy v1 Getty Images presets stuck on broken api.gettyimages.com esp-https to esp-batch, while keeping explicit v2 esp-https", () => {
+    const legacyV1 = JSON.stringify({
+      v: 1,
+      presets: [
+        SHUTTERSTOCK_PRESET,
+        ADOBE_STOCK_PRESET,
+        {
+          id: "getty-images",
+          name: "Getty Images",
+          template: "getty-images",
+          protocol: "esp-https",
+          host: "api.gettyimages.com",
+          port: 443,
+          remoteDir: "/esp/submission/v1/submission_batches",
+          passive: true,
+          tlsPolicy: "strict",
+          pinnedCertSha256: "",
+          timeoutMs: 30000,
+        },
+      ],
+      activePresetId: "getty-images",
+      checkedTargets: ["getty-images"],
+      formats: { raster: true, svg: false, eps: true, zip: false },
+    });
+    const healed = parseStockPresetState(legacyV1);
+    expect(healed.presets.find((p) => p.id === "getty-images")).toMatchObject({
+      protocol: "esp-batch",
+      host: "esp.gettyimages.com",
+      remoteDir: "/_getty_esp_batches",
+    });
+
+    const explicitV2 = serializeStockPresetState(
+      patchStockPreset(DEFAULT_STOCK_STATE, "getty-images", {
+        protocol: "esp-https",
+        host: "api.gettyimages.com",
+        remoteDir: "/esp/submission/v1/submission_batches",
+      }),
+    );
+    const reparsed = parseStockPresetState(explicitV2);
+    expect(reparsed.presets.find((p) => p.id === "getty-images")).toMatchObject({
+      protocol: "esp-https",
+      host: "api.gettyimages.com",
+      remoteDir: "/esp/submission/v1/submission_batches",
+    });
   });
 
   it("migrates older localStorage snapshots that lacked Adobe Stock or Getty Images by appending missing built-in presets", () => {
@@ -74,7 +120,10 @@ describe("stock presets — Shutterstock FTPS, Adobe Stock SFTP & Getty Images E
     expect(parsed.presets.map((p) => p.id)).toEqual(["shutterstock", "adobe-stock", "getty-images"]);
   });
 
-  it("varies protocol fields and default ports across Explicit FTPS, SFTP, Getty ESP HTTPS, Implicit FTPS, and plain FTP", () => {
+  it("varies protocol fields and default ports across ESP Batch, Explicit FTPS, SFTP, Getty ESP HTTPS, Implicit FTPS, and plain FTP", () => {
+    expect(presetFieldsOf("esp-batch")).toEqual({
+      usesTls: false, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false,
+    });
     expect(presetFieldsOf("ftps-explicit")).toEqual({
       usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false,
     });

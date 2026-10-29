@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 export { DEFAULT_TIMEOUT, TIMEOUT_MAX, TIMEOUT_MIN, normalizeCertFingerprint, normalizeRemoteDir };
-export const STOCK_PRESETS_VERSION = 1;
+export const STOCK_PRESETS_VERSION = 2;
 export const MAX_STOCK_PRESETS = 20;
 
 export const SHUTTERSTOCK_PRESET: StockFtpPreset = {
@@ -46,10 +46,10 @@ export const GETTY_IMAGES_PRESET: StockFtpPreset = {
   id: "getty-images",
   name: "Getty Images",
   template: "getty-images",
-  protocol: "esp-https",
-  host: "api.gettyimages.com",
+  protocol: "esp-batch",
+  host: "esp.gettyimages.com",
   port: 443,
-  remoteDir: "/esp/submission/v1/submission_batches",
+  remoteDir: "/_getty_esp_batches",
   passive: true,
   tlsPolicy: "strict",
   pinnedCertSha256: "",
@@ -85,6 +85,7 @@ export interface ProtocolFieldSpec {
 }
 
 const PROTOCOL_SPECS: Record<FtpProtocol, ProtocolFieldSpec> = {
+  "esp-batch": { usesTls: false, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false },
   "ftps-explicit": { usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false },
   sftp: { usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false },
   "esp-https": { usesTls: true, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false },
@@ -169,12 +170,29 @@ function ensureBuiltinsAndDedupe(list: StockFtpPreset[]): StockFtpPreset[] {
   return out;
 }
 
+function healLegacyV1Preset(p: StockFtpPreset, version: number): StockFtpPreset {
+  if (
+    version === 1
+    && p.template === "getty-images"
+    && p.protocol === "esp-https"
+    && p.host === "api.gettyimages.com"
+  ) {
+    return { ...GETTY_IMAGES_PRESET };
+  }
+  return p;
+}
+
 export function parseStockPresetState(text: string | null): StockPresetState {
   if (!text) return DEFAULT_STOCK_STATE;
   try {
     const raw: unknown = JSON.parse(text);
-    if (!isRecord(raw) || raw.v !== STOCK_PRESETS_VERSION || !Array.isArray(raw.presets)) return DEFAULT_STOCK_STATE;
-    const presets = ensureBuiltinsAndDedupe(raw.presets.flatMap((p) => parsePreset(p) ?? []));
+    if (!isRecord(raw) || (raw.v !== 1 && raw.v !== 2) || !Array.isArray(raw.presets)) return DEFAULT_STOCK_STATE;
+    const ver = raw.v;
+    const parsedList = raw.presets.flatMap((p) => {
+      const item = parsePreset(p);
+      return item ? [healLegacyV1Preset(item, ver)] : [];
+    });
+    const presets = ensureBuiltinsAndDedupe(parsedList);
     const ids = new Set(presets.map((p) => p.id));
     const activePresetId = typeof raw.activePresetId === "string" && ids.has(raw.activePresetId)
       ? raw.activePresetId : presets[0].id;

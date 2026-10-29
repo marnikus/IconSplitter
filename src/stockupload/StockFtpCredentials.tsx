@@ -1,5 +1,5 @@
-// StockFtpCredentials.tsx — local-only non-expanded credentials card & connection
-// test status banner for FTPS (:21), SFTP (:22), and Getty ESP HTTPS (:443).
+// StockFtpCredentials.tsx — local-only non-expanded credentials card, Getty ESP
+// batch-folder readiness bar, OAuth2 PKCE trigger, & connection test banner.
 
 import { useState } from "react";
 import type { StockFtpPreset } from "../lib/stockupload/types";
@@ -13,20 +13,52 @@ export interface LocalCredentialsProps {
 }
 
 function credentialHelpCopy(active: StockFtpPreset): string {
+  if (active.protocol === "esp-batch") {
+    return "Getty Images / iStock offers no public contributor FTP/SFTP and restricts ESP API keys to approved partners. Click Upload below to stage paired <name>.eps + RGB <name>.jpg + getty_esp_metadata.csv into one flat folder, then drag all files into DeepMeta 4 or esp.gettyimages.com.";
+  }
+  if (active.protocol === "esp-https") {
+    return "Getty ESP Partner API (authentication.gettyimages.com OAuth2 PKCE → api.gettyimages.com:443/esp/submission/v1): requires an approved Getty Partner API key with ESP Submission access. Standard v3 search keys return 403 Forbidden — use 'Getty ESP Batch Folder' above if you do not have partner API access.";
+  }
   if (active.template === "adobe-stock") {
     return "Adobe Stock: in Contributor Portal → Upload → Learn More, copy your SFTP Member ID and click Generate password (standalone SVG/EPS/JPG/PNG only; no ZIPs). Saved locally only — never expanded.";
-  }
-  if (active.template === "getty-images") {
-    return "Getty Images / iStock (contributors.gettyimages.com → esp.gettyimages.com): Creative vectors require paired <name>.eps + RGB <name>.jpg (min 1900×2800 px). Use Getty ESP HTTPS API (:443), switch to SFTP (:22) for Media Manager DAM, or click Download ESP CSV for browser/DeepMeta uploads. Saved locally only — never expanded.";
   }
   return "Username and password are stored ONLY in this browser's local device vault — never expanded, exported, or logged.";
 }
 
 export default function StockFtpCredentials({ active, saved, testStatus, actions }: LocalCredentialsProps) {
+  if (active.protocol === "esp-batch") {
+    return <EspBatchReadyCard active={active} testStatus={testStatus} actions={actions} />;
+  }
+  return <NetworkCredentialsCard active={active} saved={saved} testStatus={testStatus} actions={actions} />;
+}
+
+function EspBatchReadyCard({ active, testStatus, actions }: {
+  active: StockFtpPreset; testStatus: FtpTestStatus; actions: StockFtpActions;
+}) {
+  return (
+    <div className="svg-provider-foot" data-testid="stock-ftp-cred-box">
+      <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span className="svg-badge processed" data-testid="stock-ftp-cred-status">
+          Ready locally (no API key or FTP password required)
+        </span>
+        <button type="button" className="svg-btn tiny" data-testid="stock-ftp-test"
+          disabled={testStatus.busy} onClick={() => { void actions.testConnection(active.id); }}>
+          {testStatus.busy ? "Checking…" : "Test batch folder"}
+        </button>
+      </div>
+      <TestResultNote active={active} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
+      <small className="up-hint">{credentialHelpCopy(active)}</small>
+    </div>
+  );
+}
+
+function NetworkCredentialsCard({ active, saved, testStatus, actions }: LocalCredentialsProps) {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const isEsp = active.protocol === "esp-https";
+  const canSave = (user.trim() !== "" && pass !== "") || (isEsp && apiKey.trim() !== "");
   const onSave = () => {
     void actions.saveCreds(active.id, user, pass, { apiKey, apiSecret }).then((ok) => {
       if (ok) { setUser(""); setPass(""); setApiKey(""); setApiSecret(""); }
@@ -38,12 +70,10 @@ export default function StockFtpCredentials({ active, saved, testStatus, actions
         <span className={`svg-badge ${saved ? "processed" : "pending"}`} data-testid="stock-ftp-cred-status">
           {saved ? "Saved locally (never expanded)" : "No local credentials"}
         </span>
+        {isEsp && <EspApiInputs saved={saved} apiKey={apiKey} apiSecret={apiSecret} onKey={setApiKey} onSecret={setApiSecret} />}
         <LoginInputs active={active} saved={saved} user={user} pass={pass} onUser={setUser} onPass={setPass} />
-        {active.protocol === "esp-https" && (
-          <EspApiInputs saved={saved} apiKey={apiKey} apiSecret={apiSecret} onKey={setApiKey} onSecret={setApiSecret} />
-        )}
-        <CredentialButtons activeId={active.id} saved={saved} canSave={user.trim() !== "" && pass !== ""}
-          busy={testStatus.busy} onSave={onSave} actions={actions} />
+        <CredentialButtons active={active} saved={saved} canSave={canSave} busy={testStatus.busy}
+          onSave={onSave} actions={actions} />
       </div>
       <TestResultNote active={active} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
       <small className="up-hint">{credentialHelpCopy(active)}</small>
@@ -57,8 +87,8 @@ function LoginInputs(p: {
 }) {
   const isAdobe = p.active.template === "adobe-stock";
   const isEsp = p.active.protocol === "esp-https";
-  const userLabel = isAdobe ? "SFTP Member ID" : (isEsp ? "ESP contributor email / login" : "Contributor email / username");
-  const passLabel = isAdobe ? "Generated SFTP password" : (isEsp ? "ESP password" : "Password");
+  const userLabel = isAdobe ? "SFTP Member ID" : (isEsp ? "ESP login (optional with PKCE)" : "Contributor email / username");
+  const passLabel = isAdobe ? "Generated SFTP password" : (isEsp ? "ESP password (optional)" : "Password");
   const userHint = p.saved ? "Replace saved login…" : (isAdobe ? "e.g. 210333617" : "Enter username…");
   return (
     <>
@@ -84,15 +114,15 @@ function EspApiInputs(p: {
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">Getty API Key</span>
+        <span className="svg-label">Getty Partner API Key</span>
         <input className="svg-input" type="password" autoComplete="new-password" data-testid="stock-ftp-apikey"
-          placeholder={p.saved ? "Replace API key…" : "Optional ESP client_id…"}
+          placeholder={p.saved ? "Replace API key…" : "Enter Getty client_id…"}
           value={p.apiKey} onChange={(e) => p.onKey(e.target.value)} />
       </label>
       <label className="svg-field">
         <span className="svg-label">Getty API Secret</span>
         <input className="svg-input" type="password" autoComplete="new-password" data-testid="stock-ftp-apisecret"
-          placeholder={p.saved ? "Replace API secret…" : "Optional ESP client_secret…"}
+          placeholder={p.saved ? "Replace API secret…" : "Enter client_secret (if confidential)…"}
           value={p.apiSecret} onChange={(e) => p.onSecret(e.target.value)} />
       </label>
     </>
@@ -100,7 +130,7 @@ function EspApiInputs(p: {
 }
 
 function CredentialButtons(p: {
-  activeId: string; saved: boolean; canSave: boolean; busy: boolean;
+  active: StockFtpPreset; saved: boolean; canSave: boolean; busy: boolean;
   onSave: () => void; actions: StockFtpActions;
 }) {
   return (
@@ -109,10 +139,16 @@ function CredentialButtons(p: {
         disabled={!p.canSave} onClick={p.onSave}>Save locally</button>
       {p.saved && (
         <button type="button" className="svg-btn tiny danger" data-testid="stock-ftp-cred-forget"
-          onClick={() => { void p.actions.forgetCreds(p.activeId); }}>Forget</button>
+          onClick={() => { void p.actions.forgetCreds(p.active.id); }}>Forget</button>
+      )}
+      {p.active.protocol === "esp-https" && (
+        <button type="button" className="svg-btn tiny" data-testid="stock-esp-oauth"
+          disabled={!p.saved} onClick={() => { void p.actions.authorizeEspOAuth(p.active.id); }}>
+          🔑 Authorize in Browser (OAuth2 PKCE)
+        </button>
       )}
       <button type="button" className="svg-btn tiny" data-testid="stock-ftp-test"
-        disabled={p.busy} onClick={() => { void p.actions.testConnection(p.activeId); }}>
+        disabled={p.busy} onClick={() => { void p.actions.testConnection(p.active.id); }}>
         {p.busy ? "Testing…" : "Test connection"}
       </button>
     </>

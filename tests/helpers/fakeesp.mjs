@@ -1,9 +1,9 @@
-// fakeesp.mjs — local self-signed HTTPS Getty ESP OAuth2 + Submission v1 server for TDD.
-// Generates its own ephemeral TLS certificate via pure DER/ASN.1 + node:crypto (no .pem/.key files!).
+// fakeesp.mjs — local self-signed HTTPS Getty OAuth2 (PKCE + client_credentials + password)
+// & ESP Submission v1 + API v3 server for hermetic TDD. No .pem/.key files on disk.
 
 import crypto from "node:crypto";
 import https from "node:https";
-import { URLSearchParams } from "node:url";
+import { URL, URLSearchParams } from "node:url";
 
 function derLen(len) {
   if (len < 128) return Buffer.from([len]);
@@ -29,7 +29,6 @@ function derInt(buf) {
   return derTlv(0x02, b);
 }
 
-/** Builds a valid self-signed X.509 v3 ECDSA-P256 certificate + PKCS#8 PEM in memory. */
 function generateSelfSignedTls() {
   const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const spki = publicKey.export({ type: "spki", format: "der" });
@@ -69,12 +68,19 @@ function sendJson(res, status, obj) {
   res.end(raw);
 }
 
+function s256Challenge(verifier) {
+  return crypto.createHash("sha256").update(verifier, "ascii").digest("base64url");
+}
+
 export async function startFakeEspServer(expected) {
   const tlsMat = generateSelfSignedTls();
   const issuedToken = `t_${crypto.randomBytes(3).toString("hex")}`;
+  const issuedRefresh = `r_${crypto.randomBytes(3).toString("hex")}`;
+  const authCodes = new Map();
   const state = {
     tokenRequests: 0,
     batchCreations: 0,
+    userAgents: [],
     batches: [],
     contributions: [],
     uploadedFiles: new Map(),
@@ -83,8 +89,7 @@ export async function startFakeEspServer(expected) {
   function checkBearer(req, res) {
     const auth = req.headers.authorization ?? "";
     const apiKey = req.headers["api-key"] ?? "";
-    const wantKey = expected.apiKey || expected.username;
-    if (auth !== `Bearer ${issuedToken}` || apiKey !== wantKey) {
+    if (auth !== `Bearer ${issuedToken}` || apiKey !== expected.apiKey) {
       sendJson(res, 401, { message: "Invalid access token or Api-Key" });
       return false;
     }
@@ -93,37 +98,83 @@ export async function startFakeEspServer(expected) {
 
   const server = https.createServer({ key: tlsMat.keyPem, cert: tlsMat.certPem }, async (req, res) => {
     const port = server.address().port;
-    const url = (req.url ?? "/").split("?")[0];
+    const fullUrl = new URL(req.url ?? "/", `https://127.0.0.1:${port}`);
+    const url = fullUrl.pathname;
+    state.userAgents.push(String(req.headers["user-agent"] ?? ""));
     const body = await readReqBody(req);
+
+    if (expected.requireUserAgent && !req.headers["user-agent"]) {
+      return sendJson(res, 403, { message: "Forbidden" });
+    }
+
+    if (req.method === "GET" && url === "/oauth2/auth") {
+      const clientId = fullUrl.searchParams.get("client_id");
+      const redirectUri = fullUrl.searchParams.get("redirect_uri") ?? "";
+      const st = fullUrl.searchParams.get("state") ?? "";
+      const challenge = fullUrl.searchParams.get("code_challenge") ?? "";
+      const method = fullUrl.searchParams.get("code_challenge_method") ?? "S256";
+      if (clientId !== expected.apiKey || !challenge || method !== "S256") {
+        return sendJson(res, 400, { error: "invalid_request" });
+      }
+      const code = `c_${crypto.randomBytes(4).toString("hex")}`;
+      authCodes.set(code, { challenge, redirectUri });
+      const redir = new URL(redirectUri);
+      redir.searchParams.set("code", code);
+      redir.searchParams.set("state", st);
+      res.writeHead(302, { location: redir.toString() });
+      res.end();
+      return;
+    }
 
     if (req.method === "POST" && url === "/oauth2/token") {
       state.tokenRequests += 1;
       const form = new URLSearchParams(body.toString("utf8"));
       const grant = form.get("grant_type");
+      const okAuthCode = (() => {
+        if (grant !== "authorization_code") return false;
+        const entry = authCodes.get(form.get("code") ?? "");
+        if (!entry || form.get("client_id") !== expected.apiKey) return false;
+        if (expected.publicClient && form.has("client_secret")) return false;
+        if (!expected.publicClient && expected.apiSecret && form.get("client_secret") !== expected.apiSecret) return false;
+        return s256Challenge(form.get("code_verifier") ?? "") === entry.challenge;
+      })();
+      const okRefresh = grant === "refresh_token"
+        && form.get("client_id") === expected.apiKey
+        && form.get("refresh_token") === issuedRefresh;
       const okPass = grant === "password"
         && form.get("client_id") === expected.apiKey
         && form.get("client_secret") === expected.apiSecret
         && form.get("username") === expected.username
         && form.get("password") === expected.password;
       const okClient = grant === "client_credentials"
-        && form.get("client_id") === (expected.apiKey || expected.username)
-        && form.get("client_secret") === (expected.apiSecret || expected.password);
-      if (!okPass && !okClient) {
+        && Boolean(expected.apiKey)
+        && form.get("client_id") === expected.apiKey
+        && form.get("client_secret") === expected.apiSecret;
+      if (!okAuthCode && !okRefresh && !okPass && !okClient) {
         return sendJson(res, 401, {
           error: "invalid_grant",
           error_description: `Auth rejected for ${form.get("username") ?? ""} ${form.get("password") ?? ""} ${form.get("client_id") ?? ""} ${form.get("client_secret") ?? ""}`,
         });
       }
-      return sendJson(res, 200, { access_token: issuedToken, token_type: "Bearer", expires_in: 1800 });
+      return sendJson(res, 200, {
+        access_token: issuedToken, token_type: "Bearer", expires_in: 1800, refresh_token: issuedRefresh,
+      });
+    }
+
+    if (req.method === "GET" && url === "/v3/countries") {
+      if (!checkBearer(req, res)) return;
+      return sendJson(res, 200, { countries: [{ iso_alpha_2: "CZ", name: "Czechia" }] });
     }
 
     if (req.method === "GET" && url === "/esp/submission/v1/submission_batches") {
       if (!checkBearer(req, res)) return;
+      if (expected.espForbidden) return sendJson(res, 403, { message: "Forbidden" });
       return sendJson(res, 200, { items: state.batches, meta: { total_items: state.batches.length } });
     }
 
     if (req.method === "POST" && url === "/esp/submission/v1/submission_batches") {
       if (!checkBearer(req, res)) return;
+      if (expected.espForbidden) return sendJson(res, 403, { message: "Forbidden" });
       state.batchCreations += 1;
       const parsed = JSON.parse(body.toString("utf8"));
       const batch = {

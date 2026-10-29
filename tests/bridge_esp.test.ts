@@ -58,8 +58,10 @@ afterEach(async () => {
 function makeGettyPreset(port: number, patch: Partial<StockFtpPreset> = {}): StockFtpPreset {
   return {
     ...GETTY_IMAGES_PRESET,
+    protocol: "esp-https",
     host: "127.0.0.1",
     port,
+    remoteDir: "/esp/submission/v1/submission_batches",
     timeoutMs: 10000,
     ...patch,
   };
@@ -166,5 +168,95 @@ describe("local loopback Getty ESP HTTPS bridge (api.gettyimages.com:443 protoco
     expect(esp.state.contributions).toHaveLength(2);
     expect(esp.state.uploadedFiles.get("batch-901/rocket_01.jpg")?.toString("utf8")).toBe("FAKE-RGB-JPEG-4075x4075");
     expect(esp.state.uploadedFiles.get("batch-901/rocket_01.eps")?.toString("utf8")).toBe("%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n");
+  });
+
+  it("sends User-Agent header, rejects missing apiKey cleanly, diagnoses v3-only 403 Forbidden on /esp/submission/v1, and completes OAuth2 PKCE (S256) flow", async () => {
+    const h = await startHelper();
+
+    const espV3Only = await startFakeEspServer({
+      username: "esp_contributor@example.com",
+      password: "GettyEspPassword!42",
+      apiKey: "SelfServiceV3Key",
+      apiSecret: "SelfServiceV3Sec",
+      requireUserAgent: true,
+      espForbidden: true,
+    });
+    liveEsp.push(espV3Only);
+    const v3Preset = makeGettyPreset(espV3Only.port, { tlsPolicy: "pinned", pinnedCertSha256: espV3Only.certSha256 });
+
+    const missingKeyRes = await testBridgeFtps(h.url, v3Preset, {
+      username: "esp_contributor@example.com",
+      password: "GettyEspPassword!42",
+    });
+    expect(missingKeyRes.ok).toBe(false);
+    expect(espV3Only.state.tokenRequests).toBe(0);
+    if (!missingKeyRes.ok) {
+      expect(missingKeyRes.reason).toContain("API Key");
+      expect(missingKeyRes.reason).toContain("ESP Batch Folder");
+    }
+
+    const v3ForbiddenRes = await testBridgeFtps(h.url, v3Preset, {
+      username: "",
+      password: "",
+      apiKey: "SelfServiceV3Key",
+      apiSecret: "SelfServiceV3Sec",
+    });
+    expect(v3ForbiddenRes.ok).toBe(false);
+    expect(espV3Only.state.userAgents.every((ua) => ua.includes("IconSplitter"))).toBe(true);
+    if (!v3ForbiddenRes.ok) {
+      expect(v3ForbiddenRes.reason).toContain("v3 OK");
+      expect(v3ForbiddenRes.reason).toContain("ESP Contributor Submission");
+      expect(v3ForbiddenRes.reason).toContain("ESP Batch Folder");
+    }
+
+    const espPkce = await startFakeEspServer({
+      username: "pkce_user@example.com",
+      password: "BrowserOnlyPassword",
+      apiKey: "PartnerPkceKey99",
+      apiSecret: "",
+      requireUserAgent: true,
+      publicClient: true,
+    });
+    liveEsp.push(espPkce);
+    const pkcePreset = makeGettyPreset(espPkce.port, { tlsPolicy: "pinned", pinnedCertSha256: espPkce.certSha256 });
+
+    const startRes = await fetch(`${h.url}/esp/oauth/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        apiKey: "PartnerPkceKey99",
+        apiSecret: "IgnoredForPublicClient",
+        host: "127.0.0.1",
+        port: espPkce.port,
+        tlsPolicy: "pinned",
+        pinnedCertSha256: espPkce.certSha256,
+      }),
+    });
+    expect(startRes.status).toBe(200);
+    const { state: oauthState, authorizeUrl } = (await startRes.json()) as { state: string; authorizeUrl: string };
+    expect(authorizeUrl).toContain("code_challenge_method=S256");
+
+    const httpsMod = await import("node:https");
+    const redirectLocation = await new Promise<string>((resolve, reject) => {
+      httpsMod.get(
+        authorizeUrl,
+        { rejectUnauthorized: false, headers: { "user-agent": "IconSplitter-Test/1.0" } },
+        (res) => resolve(String(res.headers.location ?? "")),
+      ).on("error", reject);
+    });
+    expect(redirectLocation).toContain("/esp/oauth/callback?");
+    const cbRes = await fetch(redirectLocation);
+    expect(cbRes.status).toBe(200);
+
+    const statusRes = await fetch(`${h.url}/esp/oauth/status?state=${encodeURIComponent(oauthState)}`);
+    const statusJson = (await statusRes.json()) as { authorized: boolean };
+    expect(statusJson.authorized).toBe(true);
+
+    const pkceTest = await testBridgeFtps(h.url, pkcePreset, {
+      username: "",
+      password: "",
+      apiKey: "PartnerPkceKey99",
+    });
+    expect(pkceTest).toEqual({ ok: true, serverCertSha256: espPkce.certSha256 });
   });
 });

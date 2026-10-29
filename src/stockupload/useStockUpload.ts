@@ -142,7 +142,7 @@ export function useStockUpload(): StockUploadApi {
     if (model.filter.badge === id) dispatch({ type: "filter", patch: { badge: "all" } });
   });
   const ftp = useStockFtpActions({
-    presetState, bridgeUrl: model.prefs.bridgeUrl, say,
+    presetState, bridgeUrl: model.prefs.bridgeUrl, rootRef: r.root, say,
     setCredSaved: (id, saved) => dispatch({ type: "cred", id, saved }),
     setTestStatus: (testStatus) => dispatch({ type: "patch", patch: { testStatus } }),
   });

@@ -85,6 +85,7 @@ function readBinaryBody(req, limit) {
 function validateConfig(cfg) {
   if (!cfg || typeof cfg !== "object") throw new FtpsError("bad-request", "missing FTPS configuration");
   if (typeof cfg.host !== "string" || cfg.host.trim() === "") throw new FtpsError("bad-request", "missing FTPS host");
+  if (cfg.protocol === "esp-https") return;
   if (typeof cfg.username !== "string" || cfg.username.trim() === "" || typeof cfg.password !== "string" || cfg.password === "") {
     throw new FtpsError("bad-request", "missing FTPS credentials");
   }

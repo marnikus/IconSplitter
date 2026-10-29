@@ -100,6 +100,18 @@ describe("stock FTP local credential vault", () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it("stores API-key-only Getty OAuth2 PKCE credentials when username/password are blank, while still rejecting completely empty saves", async () => {
+    const vault = createCredVault(memStorage(), "secrets", credSlotOf("getty-images"));
+    expect(await vault.save("", "", { apiKey: "  ", apiSecret: "  " })).toBe("empty");
+    expect(await vault.save("", "", { apiKey: "pkce_client_id_123", apiSecret: "pkce_secret_456" })).toBe("device");
+    expect(await vault.load()).toEqual({
+      username: "",
+      password: "",
+      apiKey: "pkce_client_id_123",
+      apiSecret: "pkce_secret_456",
+    });
+  });
+
   it("persists per-preset credentials in IndexedDB keystore slots independently", async () => {
     resetStockCredVaults();
     await clearStockCreds("shutterstock");

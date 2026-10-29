@@ -56,15 +56,19 @@ function normalizeExtra(extra?: ExtraCredentials): ExtraCredentials {
   return out;
 }
 
+function hasValidCredFields(username: string, password: string, extra: ExtraCredentials): boolean {
+  return (username !== "" && password !== "") || Boolean(extra.apiKey);
+}
+
 function parseStored(raw: unknown): FtpCredentials | null {
   if (!isRecord(raw)) return null;
   const username = typeof raw.username === "string" ? raw.username.trim() : "";
   const password = typeof raw.password === "string" ? raw.password : "";
-  if (username === "" || password === "") return null;
   const extra = normalizeExtra({
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
     apiSecret: typeof raw.apiSecret === "string" ? raw.apiSecret : undefined,
   });
+  if (!hasValidCredFields(username, password, extra)) return null;
   return { username, password, ...extra };
 }
 
@@ -105,8 +109,9 @@ export function createCredVault(storage: VaultStorage, store: string, slot: stri
 
   const save = async (rawUser: string, rawPass: string, extra?: ExtraCredentials): Promise<KeySaveOutcome> => {
     const username = rawUser.trim();
-    if (username === "" || rawPass === "") return "empty";
-    const creds: FtpCredentials = { username, password: rawPass, ...normalizeExtra(extra) };
+    const normExtra = normalizeExtra(extra);
+    if (!hasValidCredFields(username, rawPass, normExtra)) return "empty";
+    const creds: FtpCredentials = { username, password: rawPass, ...normExtra };
     session = creds;
     return (await putCreds(storage, store, slot, creds)) ? "device" : "session";
   };

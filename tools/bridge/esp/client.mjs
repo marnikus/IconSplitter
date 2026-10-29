@@ -1,11 +1,14 @@
 // client.mjs — Getty Images / iStock ESP (`api.gettyimages.com`) OAuth2 + Submission v1 session.
-// Implements the pooled transport session contract (`noop`, `uploadFile`, `quit`, `destroy`, `isAlive`).
+// Authenticates against `authentication.gettyimages.com` (PKCE / refresh_token / client_credentials)
+// and diagnoses v3-only API keys (`403 Forbidden` on `/esp/submission/v1`) cleanly.
 
 import { URL, URLSearchParams } from "node:url";
 import { FtpsError, assertSafeCommandToken, assertSafeFileName } from "../ftps/reply.mjs";
 import { espHttpsRequest, probeEspTls } from "./http.mjs";
+import { getCachedOrRefreshedEspToken, resolveEspAuthConn } from "./oauth.mjs";
 
 const DEFAULT_BATCHES_PATH = "/esp/submission/v1/submission_batches";
+const MISSING_KEY_HINT = "Getty ESP Partner API requires an approved Getty API Key — switch Protocol to 'Getty ESP Batch Folder' to upload via esp.gettyimages.com / DeepMeta 4 without an API key.";
 
 function mimeForFile(fileName) {
   const lower = fileName.toLowerCase();
@@ -16,22 +19,22 @@ function mimeForFile(fileName) {
   return "application/octet-stream";
 }
 
-function buildTokenForm(cfg) {
-  const apiKey = typeof cfg.apiKey === "string" ? cfg.apiKey.trim() : "";
-  const apiSecret = typeof cfg.apiSecret === "string" ? cfg.apiSecret : "";
+function buildTokenForm(cfg, apiKey, apiSecret) {
+  const user = typeof cfg.username === "string" ? cfg.username.trim() : "";
+  const pass = typeof cfg.password === "string" ? cfg.password : "";
   const params = new URLSearchParams();
-  if (apiKey !== "" && apiSecret !== "") {
+  if (user !== "" && pass !== "" && apiSecret !== "") {
     params.set("grant_type", "password");
     params.set("client_id", apiKey);
     params.set("client_secret", apiSecret);
-    params.set("username", cfg.username);
-    params.set("password", cfg.password);
-    return { form: params.toString(), headerApiKey: apiKey };
+    params.set("username", user);
+    params.set("password", pass);
+    return params.toString();
   }
   params.set("grant_type", "client_credentials");
-  params.set("client_id", apiKey || cfg.username);
-  params.set("client_secret", apiSecret || cfg.password);
-  return { form: params.toString(), headerApiKey: apiKey || cfg.username };
+  params.set("client_id", apiKey);
+  params.set("client_secret", apiSecret);
+  return params.toString();
 }
 
 function parseJsonSafe(buf) {
@@ -58,10 +61,18 @@ function resolveBatchesTarget(remoteDir) {
 }
 
 async function fetchOAuthToken(conn, cfg) {
-  const { form, headerApiKey } = buildTokenForm(cfg);
+  const apiKey = typeof cfg.apiKey === "string" ? cfg.apiKey.trim() : "";
+  const apiSecret = typeof cfg.apiSecret === "string" ? cfg.apiSecret : "";
+  if (apiKey === "") throw new FtpsError("auth", MISSING_KEY_HINT);
+
+  const authConn = resolveEspAuthConn(conn);
+  const cached = await getCachedOrRefreshedEspToken(authConn, apiKey, apiSecret);
+  if (cached) return { accessToken: cached, headerApiKey: apiKey };
+
+  const form = buildTokenForm(cfg, apiKey, apiSecret);
   const payload = Buffer.from(form, "utf8");
   const res = await espHttpsRequest({
-    ...conn,
+    ...authConn,
     method: "POST",
     path: "/oauth2/token",
     headers: {
@@ -76,7 +87,7 @@ async function fetchOAuthToken(conn, cfg) {
     const code = res.status === 400 || res.status === 401 || res.status === 403 ? "auth" : "ftp";
     throw new FtpsError(code, extractErrorDetail(res.status, res.body, "Getty OAuth2 token exchange failed"));
   }
-  return { accessToken: json.access_token, headerApiKey };
+  return { accessToken: json.access_token, headerApiKey: apiKey };
 }
 
 function espApiHeaders(auth, extra = {}) {
@@ -87,6 +98,24 @@ function espApiHeaders(auth, extra = {}) {
     authorization: `${bearerScheme} ${auth.accessToken}`,
     ...extra,
   };
+}
+
+async function throwEspApiFailure(conn, auth, status, bodyBuf, fallback) {
+  if (status === 403) {
+    const probe = await espHttpsRequest({ ...conn, method: "GET", path: "/v3/countries", headers: espApiHeaders(auth) }).catch(() => null);
+    if (probe && probe.status === 200) {
+      throw new FtpsError(
+        "auth",
+        "Getty API key authenticated (v3 OK), but /esp/submission/v1 returned 403 Forbidden — this API key lacks ESP Contributor Submission partner access. Switch Protocol to 'Getty ESP Batch Folder' to upload now, or request ESP submission access from Getty Support.",
+      );
+    }
+    throw new FtpsError(
+      "auth",
+      `${extractErrorDetail(status, bodyBuf, fallback)} — switch Protocol to 'Getty ESP Batch Folder' to upload via esp.gettyimages.com / DeepMeta 4 without a partner API key.`,
+    );
+  }
+  const code = status === 401 ? "auth" : "ftp";
+  throw new FtpsError(code, extractErrorDetail(status, bodyBuf, fallback));
 }
 
 function resolveUploadTarget(conn, batchPath, contrib, safeName) {
@@ -109,11 +138,11 @@ function resolveUploadTarget(conn, batchPath, contrib, safeName) {
 export async function openEspSession(cfg) {
   const {
     host = "api.gettyimages.com", port = 443, remoteDir = DEFAULT_BATCHES_PATH,
-    tlsPolicy = "strict", pinnedCertSha256 = "", timeoutMs = 30000, username, password,
+    tlsPolicy = "strict", pinnedCertSha256 = "", timeoutMs = 30000, username = "", password = "",
   } = cfg;
   assertSafeCommandToken(host, "host");
-  assertSafeCommandToken(username, "username");
-  assertSafeCommandToken(password, "password");
+  if (username !== "") assertSafeCommandToken(username, "username");
+  if (password !== "") assertSafeCommandToken(password, "password");
 
   const serverCertSha256 = await probeEspTls(host, Number(port), tlsPolicy, pinnedCertSha256, timeoutMs);
   const conn = { host, port: Number(port), tlsPolicy, pinnedCertSha256, timeoutMs };
@@ -140,8 +169,7 @@ export async function openEspSession(cfg) {
     const parsed = parseJsonSafe(res.body);
     const id = parsed?.id ?? parsed?.submission_batch?.id;
     if (res.status < 200 || res.status >= 300 || !id) {
-      const code = res.status === 401 || res.status === 403 ? "auth" : "ftp";
-      throw new FtpsError(code, extractErrorDetail(res.status, res.body, "Getty ESP batch creation failed"));
+      await throwEspApiFailure(conn, auth, res.status, res.body, "Getty ESP batch creation failed");
     }
     activeBatchId = String(id);
     return activeBatchId;
@@ -153,8 +181,7 @@ export async function openEspSession(cfg) {
     async noop() {
       const res = await espHttpsRequest({ ...conn, method: "GET", path: basePath, headers: espApiHeaders(auth) });
       if (res.status < 200 || res.status >= 300) {
-        const code = res.status === 401 || res.status === 403 ? "auth" : "ftp";
-        throw new FtpsError(code, extractErrorDetail(res.status, res.body, "Getty ESP batch check failed"));
+        await throwEspApiFailure(conn, auth, res.status, res.body, "Getty ESP batch check failed");
       }
     },
     async uploadFile(fileName, buffer, onAbortHook) {
@@ -177,8 +204,7 @@ export async function openEspSession(cfg) {
         onAbortHook,
       });
       if (created.status < 200 || created.status >= 300) {
-        const code = created.status === 401 || created.status === 403 ? "auth" : "ftp";
-        throw new FtpsError(code, extractErrorDetail(created.status, created.body, `Getty ESP rejected ${safeName}`));
+        await throwEspApiFailure(conn, auth, created.status, created.body, `Getty ESP rejected ${safeName}`);
       }
       const target = resolveUploadTarget(conn, batchPath, parseJsonSafe(created.body), safeName);
       const putHeaders = target.presigned
