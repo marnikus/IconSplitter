@@ -105,6 +105,7 @@ Never edit existing archived designs to match later changes.
 | `archive/2026-10-20-item-review-status/design.md` | Review is ONE status per icon row (the pair file's `review`), never per SVG version: the badge, filter, tally and approved count read the item, undo names no version, and old files migrate from their newest decided version (I-78) |
 | `archive/2026-10-27-stock-upload-tab-plan/README.md` | Upload (`stockUpload`) tab — strict `export/` + `export.json` discovery, local-only credentials, Explicit FTPS (`:21`) & SFTP (`:22`) bridge |
 | `archive/2026-10-29-getty-images-upload/README.md` | Getty Images / iStock (`contributors.gettyimages.com` → `esp.gettyimages.com`) — research, paired `EPS + JPG` rules, ESP HTTPS API (`:443`) + ESP CSV export & unified badge |
+| `archive/2026-10-29-getty-web-upload-automation/README.md` / `research.md` / `design.md` | Research and design (no code yet) for automating the **Getty ESP web upload page**: why the browser cannot drive it, the loopback-bridge browser driver (CDP attach or optional Playwright persistent profile), optional vault-credential sign-in, verified-before-recorded per-file upload, batch/journal/resume rules, selector-pack fail-closed policy, and the ToS/approval evidence — plus the sanctioned `esp-batch` phase-1 fallback |
 
 Archived docs are dated by the day they were written and never edited afterwards.
 
