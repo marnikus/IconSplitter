@@ -232,7 +232,7 @@ describe("Getty contributor page steps", () => {
     create.addEventListener("click", clicked);
 
     expect(driver.openCreateBatchDialog()).toEqual({ clicked: true, reason: null });
-    expect(clicked).toHaveBeenCalledTimes(1);
+    expect(clicked).not.toHaveBeenCalled(); // the dialog is already open
     expect(driver.readPageInfo().dialogOpen).toBe(true);
 
     expect(driver.fillBatchDetails({ batchName: "IconSplitter 2026-10-29 (3 icons)" })).toEqual({ filled: true, reason: null });

@@ -1,4 +1,4 @@
-/* global document, location, window, Event, HTMLInputElement, HTMLTextAreaElement */
+/* global document, location, window, Event, HTMLInputElement, HTMLTextAreaElement, MouseEvent */
 // driver.mjs — page-side steps for the Getty Images / iStock contributor upload
 // page (contribute.gettyimages.com). Every export here is a SELF-CONTAINED
 // function: `cdp.mjs` serializes it with Function.prototype.toString() and
@@ -10,6 +10,8 @@
 // create-batch-button, create-batch-dialog, create-batch-submission-type,
 // create-batch-confirm-button, submission_name, event_id). Nothing here fills
 // or reads credentials beyond the current step's arguments.
+
+export const CREATE_BATCH_DIALOG_SELECTOR = '[role="dialog"][aria-labelledby="create-batch-dialog"], [data-cy="create-batch-dialog"]';
 
 /** Visible controls only: hidden mirrors and off-screen inputs must not win. */
 function visible(el) {
@@ -158,7 +160,7 @@ export function readPageInfo() {
       type: el.type || "text", name: (el.name || el.id || "").slice(0, 40), hasValue: String(el.value ?? "") !== "",
     })),
     createBatch: Boolean(createButton),
-    dialogOpen: Boolean(document.querySelector('[data-cy="create-batch-dialog"]')),
+    dialogOpen: Boolean(firstVisible([CREATE_BATCH_DIALOG_SELECTOR])),
     batchId: batchMatch ? batchMatch[1] : null,
     fileInputs: [...document.querySelectorAll('input[type="file"]')].map((el, index) => ({
       index, accept: el.getAttribute("accept") ?? "", multiple: el.multiple === true, visible: visible(el),
@@ -252,6 +254,7 @@ export function submitLogin() {
 
 /** Clicks "Create Batch" on the batches page. */
 export function openCreateBatchDialog() {
+  if (firstVisible([CREATE_BATCH_DIALOG_SELECTOR])) return { clicked: true, reason: null };
   const button = firstVisible(['[data-cy="create-batch-button"]']);
   if (!button) return { clicked: false, reason: "Create Batch button not found" };
   click(button);
@@ -259,13 +262,18 @@ export function openCreateBatchDialog() {
 }
 
 /** Opens the submission-type menu (Material UI listbox renders in a portal). */
-export function openSubmissionTypeMenu() {
+export function openSubmissionTypeMenu({ label } = {}) {
   const control = firstVisible([
     '[data-cy="create-batch-submission-type"] [role=combobox]',
     '[data-cy="create-batch-submission-type"]',
   ]);
   if (!control) return { opened: false, options: [] };
-  click(control);
+  const wanted = String(label ?? "").trim().toLowerCase();
+  if (wanted && textOf(control).toLowerCase() === wanted) return { opened: true, selected: true, options: [] };
+  // MUI Select opens on mousedown, not click. Its listbox mounts in a portal.
+  control.scrollIntoView?.({ block: "center" });
+  control.focus?.();
+  control.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }));
   const options = [...document.querySelectorAll('[role="option"]')].map(textOf);
   return { opened: true, options };
 }
@@ -461,7 +469,8 @@ export const PAGE_PRELUDE = [
   inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n")
-  + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`;
+  + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`
+  + `\nconst CREATE_BATCH_DIALOG_SELECTOR = ${JSON.stringify(CREATE_BATCH_DIALOG_SELECTOR)};`;
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [

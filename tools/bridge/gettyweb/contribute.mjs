@@ -159,8 +159,13 @@ export async function ensureSignedIn(connection, sessionId, options) {
 }
 
 async function chooseSubmissionType(connection, sessionId, label, onProgress) {
-  const menu = await runDriverStep(connection, sessionId, "openSubmissionTypeMenu");
+  const menu = await runDriverStep(connection, sessionId, "openSubmissionTypeMenu", { label });
   if (!menu.opened) return { ok: false, reason: "submission type menu did not open" };
+  if (menu.selected) return { ok: true, reason: null };
+  const ready = await waitFor(connection, `Boolean(document.querySelector('[role="listbox"] [role="option"]'))`, {
+    sessionId, timeoutMs: 10000,
+  });
+  if (!ready.ok) return { ok: false, reason: "Getty did not show the submission type options" };
   const chosen = await runDriverStep(connection, sessionId, "chooseSubmissionTypeOption", { label });
   if (!chosen.chosen) return { ok: false, reason: chosen.reason };
   onProgress?.(`submission type: ${label}`);
@@ -170,21 +175,25 @@ async function chooseSubmissionType(connection, sessionId, label, onProgress) {
 /** Creates one batch and waits for its upload page (URL carries the batch id). */
 export async function createBatch(connection, sessionId, options) {
   if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
+  const before = await runDriverStep(connection, sessionId, "readPageInfo");
   const opened = await runDriverStep(connection, sessionId, "openCreateBatchDialog");
   if (!opened.clicked) return { ok: false, code: "page", reason: opened.reason };
-  const dialog = await waitFor(connection, "Boolean(document.querySelector('[data-cy=\"create-batch-dialog\"]'))", {
+  const dialog = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(driver.CREATE_BATCH_DIALOG_SELECTOR)}))`, {
     sessionId, timeoutMs: 15000,
   });
   if (!dialog.ok) return { ok: false, code: "page", reason: "the Create Batch dialog did not open" };
-  const type = await chooseSubmissionType(connection, sessionId, options.submissionType, options.onProgress);
+  const type = await chooseSubmissionType(connection, sessionId, options.submissionType || "iStock creative illustration", options.onProgress);
   if (!type.ok) return { ok: false, code: "page", reason: type.reason };
   const filled = await runDriverStep(connection, sessionId, "fillBatchDetails", {
-    batchName: options.batchName, briefCode: options.briefCode ?? "",
+    batchName: String(options.batchName ?? "").trim() || `IconSplitter ${new Date().toISOString()}`, briefCode: options.briefCode ?? "",
   });
   if (!filled.filled) return { ok: false, code: "page", reason: filled.reason };
   const submitted = await runDriverStep(connection, sessionId, "submitBatchCreation");
   if (!submitted.clicked) return { ok: false, code: "page", reason: submitted.reason };
-  const created = await waitFor(connection, "(() => { const m = /\\/contribute\\/batches\\/(\\d+)/.exec(location.pathname); return m ? m[1] : null; })()", {
+  const created = await waitFor(connection, `(() => {
+    const m = /\\/contribute\\/batches\\/(\\d+)/.exec(location.pathname);
+    return m && m[1] !== ${JSON.stringify(before.batchId ?? null)} ? m[1] : null;
+  })()`, {
     sessionId, timeoutMs: options.timeoutMs ?? 60000,
   });
   if (!created.ok) return { ok: false, code: "timeout", reason: "Getty did not open the new batch page" };
