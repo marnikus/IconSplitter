@@ -11,7 +11,9 @@ export function ensureSignedIn(connection: any, sessionId: string, options: {
 export function signInFailure(
   info: any,
   submitted: boolean,
+  diagnostic?: any,
 ): { ok: false; code: "auth" | "timeout"; reason: string };
+export function describeSignInPage(diagnostic: any): string;
 export function createBatch(connection: any, sessionId: string, options: any): Promise<any>;
 export function attachFiles(connection: any, sessionId: string, options: any): Promise<any>;
 export function finalizeBatch(connection: any, sessionId: string, options: {

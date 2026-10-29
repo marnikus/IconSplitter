@@ -2,6 +2,8 @@ export const PAGE_PRELUDE: string;
 export const DRIVER_STEPS: string[];
 export const readPageInfo: () => any;
 export const fillLoginForm: (arg: { username: string; password: string }) => any;
+export const focusLoginField: (arg: { which: "identifier" | "password" }) => any;
+export const inspectSignIn: () => any;
 export const choosePasswordOption: () => any;
 export const submitLogin: () => any;
 export const openCreateBatchDialog: () => any;

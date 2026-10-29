@@ -3727,3 +3727,27 @@ the launch path stays fake-driven):
   Getty accepts a numeric contributor ID in its identifier field, and which
   sign-in control a real page shows, remain unverified without a live account —
   the first visible-window run is what settles them.
+
+## 2026-10-29 — Getty web sign-in: real typing, Angular bridge, page summary
+
+Reported after a live attempt on `esp.gettyimages.com/sign-in`: the browser opened
+the Angular ESP sign-in page (`ng-app="SignInApp"`) and waited instead of
+signing in. Measured on this checkout (Node 22.22.3; still no Chrome or Getty
+account here, so live behaviour remains untested):
+
+- Focused: `tests/getty_web_signin.test.ts` 9 passed (adds a case proving the
+  identifier + password go in through `Input.insertText`),
+  `tests/getty_web_driver.test.ts` 22 passed (adds the `angular.element` write,
+  disabled-field fill, `focusLoginField`, and `inspectSignIn` with no value in
+  its output), plus the existing finalize/upload/cdp/bridge/runner/UI docs
+  suites.
+- `npm run verify:fast` → Types PASS 3.9 s, Lint PASS (0 errors / 21 warnings)
+  1.7 s, Quality gate (changed) PASS 0.6 s, Tests + coverage PASS 93.6 s,
+  Build PASS 6.7 s.
+- `docs/current/sor/stock-upload-getty-web.md` trimmed to 8,976 bytes (budget
+  9,000) while adding the typing path, the Arkose limit and the new steps.
+- The test for the fraud script uses `window.experiences` instead of a real
+  `verify.gettyimages.com` iframe so no test reaches the network.
+- Honest gap: whether Getty accepts the typed value and how its Arkose check
+  behaves can only be settled on the live page; the failure reason now carries
+  the screen summary (`inputs`, `buttons`, `angular-js`) to close that gap fast.

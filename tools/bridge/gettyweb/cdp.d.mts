@@ -12,3 +12,4 @@ export function runStep(connection: CdpConnection, prelude: string, stepSource: 
 export function waitFor(connection: CdpConnection, expression: string, options?: { timeoutMs?: number; intervalMs?: number; sessionId?: string }): Promise<{ ok: boolean; value: any }>;
 export function navigate(connection: CdpConnection, url: string, sessionId?: string): Promise<any>;
 export function setFiles(connection: CdpConnection, files: string[], options?: { selector?: string; index?: number; sessionId?: string }): Promise<{ ok: boolean; reason: string | null }>;
+export function insertText(connection: any, text: string, sessionId?: string): Promise<boolean>;
