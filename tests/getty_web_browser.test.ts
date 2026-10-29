@@ -3,7 +3,7 @@
 // refuses the connection. Chrome/Edge does not need to be installed here — the
 // spawn and the port probe are injectable, so the decisions are tested directly.
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -30,6 +30,7 @@ const fakeChild = (onSpawn?: () => void) => ({
   pid: 4242,
   kill: () => true,
   onSpawn,
+  once: () => {},
 });
 
 describe("Getty web browser profile decisions", () => {
@@ -172,5 +173,27 @@ describe("Getty web socket failure reason", () => {
     const reason = cdpFailureReason(new Error("boom"), { port: 9222 });
     expect(reason).toContain("9222");
     expect(reason).toContain("GETTY_WEB_CDP");
+  });
+});
+
+
+describe("visible Getty window ownership", () => {
+  it("leaves the launched browser alive when automation disconnects", async () => {
+    const dir = tempProfile();
+    let unreferenced = false;
+    const child = { ...fakeChild(), unref: () => { unreferenced = true; } };
+    try {
+      const launched = await launchBrowser({
+        profileDir: dir, env: FAKE_BROWSER_ENV, headed: true,
+        spawnFn: () => { writeActivePort(dir, 62222); return child; },
+        probeSocket: async () => "ws://127.0.0.1:62222/devtools/browser/live",
+      });
+      expect(launched.ok).toBe(true);
+      if (launched.ok) launched.stop({ keepOpen: true });
+      expect(unreferenced).toBe(true);
+      expect(readFileSync(path.join(dir, "DevToolsActivePort"), "utf8")).toContain("62222");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

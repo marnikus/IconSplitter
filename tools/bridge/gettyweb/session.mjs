@@ -63,7 +63,9 @@ export async function openGettySession(options) {
   const connection = openCdp(browser.socket);
   const cleanup = () => {
     connection.close();
-    browser.stop();
+    // A visible sign-in window belongs to the user: disconnect automation,
+    // but leave the page open for inspection or manual verification.
+    browser.stop({ keepOpen: options.headed === true });
   };
   try {
     const readyFailure = await connection.ready.then(() => null).catch((err) => err);

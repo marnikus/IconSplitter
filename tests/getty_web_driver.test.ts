@@ -351,3 +351,21 @@ describe("Getty contributor page steps", () => {
     }
   });
 });
+
+// Execute the actual wire-format script, not just module functions: module
+// scope can otherwise hide missing declarations in the browser prelude.
+describe("serialized Getty page steps", () => {
+  it("reads the login page with a declared non-text input list", () => {
+    document.body.innerHTML = LOGIN_PAGE + '<input type="hidden" name="token" />';
+    const read = new Function(`${driver.PAGE_PRELUDE}\nreturn (${driver.readPageInfo.toString()})();`);
+    const info = read();
+    expect(info.loginForm).toEqual({ email: true, password: true });
+    expect(info.fields).toHaveLength(2);
+  });
+
+  it("can evaluate every exported step with the actual browser prelude", () => {
+    for (const name of driver.DRIVER_STEPS) {
+      expect(() => new Function(`${driver.PAGE_PRELUDE}\nreturn (${driver[name].toString()});`)()).not.toThrow();
+    }
+  });
+});

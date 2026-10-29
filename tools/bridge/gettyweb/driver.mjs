@@ -458,9 +458,10 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  NON_TEXT_INPUTS, inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
+  inputFields, loginFields, submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
-  .map((fn) => fn.toString()).join("\n");
+  .map((fn) => fn.toString()).join("\n")
+  + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`;
 
 /** Names of every driver step the bridge may call, for a clear error message. */
 export const DRIVER_STEPS = [
