@@ -87,10 +87,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   `stockupload_discovery` and `stockupload_ui`.
 
 <a id="i-81"></a>
-* **I-81 (Stock FTP credentials are local-only and never expanded, RULE 20 —
-  2026-10-27):** FTP/FTPS/SFTP usernames and passwords are stored exclusively in the
-  device's IndexedDB `secrets` store (`stock-ftp-cred:<presetId>`, with
-  in-memory session fallback when IndexedDB is unavailable), never in
-  `localStorage`, `export.json`, presets, or logs, and are never expanded or
-  echoed back in the UI after saving. Pinned by `stockupload_credvault`,
-  `secret_hygiene`, and `stockupload_ui`.
+* **I-81 (Stock FTP/SFTP/ESP credentials are local-only and never expanded, RULE 20 —
+  2026-10-27):** stock usernames/logins, passwords, and Getty ESP API keys/secrets
+  are stored exclusively in the device's IndexedDB `secrets` store
+  (`stock-ftp-cred:<presetId>`, with in-memory session fallback when IndexedDB is
+  unavailable), never in `localStorage`, `export.json`, presets, or logs, and are
+  never expanded or echoed back in the UI after saving. Pinned by
+  `stockupload_credvault`, `secret_hygiene`, and `stockupload_ui`.

@@ -1,16 +1,18 @@
-// presets.ts — Stock FTP/FTPS/SFTP preset definitions, protocol-varying field rules
+// presets.ts — Stock FTPS/SFTP/ESP preset definitions, protocol-varying field rules
 // and validate-on-read normalization (RULE 13/20). Credentials never exist here.
 
 import { isRecord } from "../isrecord";
+import {
+  DEFAULT_TIMEOUT, TIMEOUT_MAX, TIMEOUT_MIN, clampPort, clampTimeout, normalizeCertFingerprint,
+  normalizeHost, normalizeProtocol, normalizeRemoteDir, normalizeTlsPolicy,
+} from "./presetnorm";
 import type {
-  FtpProtocol, StockFormatFlags, StockFtpPreset, StockPresetState, StockTemplate, TlsPolicy, UploadFormatKey,
+  FtpProtocol, StockFormatFlags, StockFtpPreset, StockPresetState, StockTemplate, UploadFormatKey,
 } from "./types";
 
+export { DEFAULT_TIMEOUT, TIMEOUT_MAX, TIMEOUT_MIN, normalizeCertFingerprint, normalizeRemoteDir };
 export const STOCK_PRESETS_VERSION = 1;
 export const MAX_STOCK_PRESETS = 20;
-export const TIMEOUT_MIN = 5000;
-export const TIMEOUT_MAX = 120000;
-export const DEFAULT_TIMEOUT = 30000;
 
 export const SHUTTERSTOCK_PRESET: StockFtpPreset = {
   id: "shutterstock",
@@ -40,9 +42,24 @@ export const ADOBE_STOCK_PRESET: StockFtpPreset = {
   timeoutMs: DEFAULT_TIMEOUT,
 };
 
+export const GETTY_IMAGES_PRESET: StockFtpPreset = {
+  id: "getty-images",
+  name: "Getty Images",
+  template: "getty-images",
+  protocol: "esp-https",
+  host: "api.gettyimages.com",
+  port: 443,
+  remoteDir: "/esp/submission/v1/submission_batches",
+  passive: true,
+  tlsPolicy: "strict",
+  pinnedCertSha256: "",
+  timeoutMs: DEFAULT_TIMEOUT,
+};
+
 export const BUILTIN_STOCK_PRESETS: readonly StockFtpPreset[] = [
   SHUTTERSTOCK_PRESET,
   ADOBE_STOCK_PRESET,
+  GETTY_IMAGES_PRESET,
 ];
 
 export const DEFAULT_FORMAT_FLAGS: StockFormatFlags = {
@@ -67,95 +84,55 @@ export interface ProtocolFieldSpec {
   unencryptedWarning: boolean;
 }
 
+const PROTOCOL_SPECS: Record<FtpProtocol, ProtocolFieldSpec> = {
+  "ftps-explicit": { usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false },
+  sftp: { usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false },
+  "esp-https": { usesTls: true, usesSshHostKey: false, defaultPort: 443, unencryptedWarning: false },
+  "ftps-implicit": { usesTls: true, usesSshHostKey: false, defaultPort: 990, unencryptedWarning: false },
+  ftp: { usesTls: false, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: true },
+};
+
 export function presetFieldsOf(protocol: FtpProtocol): ProtocolFieldSpec {
-  if (protocol === "sftp") {
-    return { usesTls: false, usesSshHostKey: true, defaultPort: 22, unencryptedWarning: false };
-  }
-  if (protocol === "ftps-implicit") {
-    return { usesTls: true, usesSshHostKey: false, defaultPort: 990, unencryptedWarning: false };
-  }
-  if (protocol === "ftp") {
-    return { usesTls: false, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: true };
-  }
-  return { usesTls: true, usesSshHostKey: false, defaultPort: 21, unencryptedWarning: false };
+  return PROTOCOL_SPECS[protocol];
 }
 
-export function normalizeRemoteDir(raw: unknown): string {
-  if (typeof raw !== "string") return "/";
-  const parts = raw.replace(/\\/g, "/").split("/").map((p) => p.trim()).filter((p) => p !== "" && p !== "." && p !== "..");
-  return parts.length === 0 ? "/" : `/${parts.join("/")}`;
+function builtinForTemplate(raw: unknown, id: string): StockFtpPreset | null {
+  return BUILTIN_STOCK_PRESETS.find((b) => b.template === raw || b.id === id) ?? null;
 }
 
-export function normalizeCertFingerprint(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  return raw.trim().replace(/^sha-?256:/i, "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 64);
-}
-
-function normalizeProtocol(raw: unknown): FtpProtocol {
-  if (raw === "sftp" || raw === "ftps-implicit" || raw === "ftp") return raw;
-  return "ftps-explicit";
-}
-
-function normalizeTlsPolicy(raw: unknown): TlsPolicy {
-  return raw === "pinned" || raw === "accept-self-signed" ? raw : "strict";
-}
-
-function normalizeTemplate(raw: unknown, id: string): StockTemplate {
-  if (raw === "shutterstock" || id === "shutterstock") return "shutterstock";
-  if (raw === "adobe-stock" || id === "adobe-stock") return "adobe-stock";
-  return "custom";
-}
-
-function defaultHostFor(template: StockTemplate): string {
-  if (template === "shutterstock") return SHUTTERSTOCK_PRESET.host;
-  return template === "adobe-stock" ? ADOBE_STOCK_PRESET.host : "";
-}
-
-function clampPort(raw: unknown, fallback: number): number {
-  const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : fallback;
-  return n >= 1 && n <= 65535 ? n : fallback;
-}
-
-function clampTimeout(raw: unknown): number {
-  const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : DEFAULT_TIMEOUT;
-  return Math.min(TIMEOUT_MAX, Math.max(TIMEOUT_MIN, n));
-}
-
-function normalizeHost(raw: unknown, fallback: string): string {
-  if (typeof raw !== "string") return fallback;
-  const clean = raw.trim().replace(/^(?:sftp|ftps?):\/\//i, "").replace(/\/.*$/, "");
-  return clean.slice(0, 253);
-}
-
-function defaultNameFor(template: StockTemplate): string {
-  if (template === "shutterstock") return SHUTTERSTOCK_PRESET.name;
-  return template === "adobe-stock" ? ADOBE_STOCK_PRESET.name : "Stock FTP";
-}
-
-function resolvePresetTransport(raw: Record<string, unknown>, template: StockTemplate): {
+function resolvePresetTransport(raw: Record<string, unknown>, template: StockTemplate, builtin: StockFtpPreset | null): {
   protocol: FtpProtocol; port: number;
 } {
-  const protocol: FtpProtocol = template === "adobe-stock" ? "sftp" : normalizeProtocol(raw.protocol);
+  const defaultProto = builtin?.protocol ?? "ftps-explicit";
+  const protocol: FtpProtocol = template === "adobe-stock" ? "sftp" : normalizeProtocol(raw.protocol, defaultProto);
   const spec = presetFieldsOf(protocol);
   const rawPort = template === "adobe-stock" && raw.port === 21 ? 22 : raw.port;
   return { protocol, port: clampPort(rawPort, spec.defaultPort) };
 }
 
+function resolvePresetName(rawName: unknown, builtin: StockFtpPreset | null): string {
+  const fallback = builtin?.name ?? "Stock FTP";
+  return typeof rawName === "string" && rawName.trim() !== "" ? rawName.trim().slice(0, 60) : fallback;
+}
+
+function resolvePresetDir(rawDir: unknown, builtin: StockFtpPreset | null): string {
+  return rawDir === undefined ? (builtin?.remoteDir ?? "/") : normalizeRemoteDir(rawDir);
+}
+
 function parsePreset(raw: unknown): StockFtpPreset | null {
   if (!isRecord(raw) || typeof raw.id !== "string" || raw.id.trim() === "") return null;
   const id = raw.id.trim().slice(0, 48);
-  const template = normalizeTemplate(raw.template, id);
-  const { protocol, port } = resolvePresetTransport(raw, template);
-  const fallbackName = defaultNameFor(template);
-  const name = typeof raw.name === "string" && raw.name.trim() !== "" ? raw.name.trim().slice(0, 60) : fallbackName;
+  const builtin = builtinForTemplate(raw.template, id);
+  const template: StockTemplate = builtin?.template ?? "custom";
+  const { protocol, port } = resolvePresetTransport(raw, template, builtin);
   return {
     id,
-    name,
+    name: resolvePresetName(raw.name, builtin),
     template,
     protocol,
-    host: normalizeHost(raw.host, defaultHostFor(template)),
+    host: normalizeHost(raw.host, builtin?.host ?? ""),
     port,
-    remoteDir: normalizeRemoteDir(raw.remoteDir),
+    remoteDir: resolvePresetDir(raw.remoteDir, builtin),
     passive: raw.passive !== false,
     tlsPolicy: normalizeTlsPolicy(raw.tlsPolicy),
     pinnedCertSha256: normalizeCertFingerprint(raw.pinnedCertSha256),

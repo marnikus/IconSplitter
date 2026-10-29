@@ -71,14 +71,33 @@ describe("stock FTP local credential vault", () => {
     expect(await vault.read()).toEqual({ creds: null, source: "unreadable" });
   });
 
-  it("redacts both username and password from error or status strings", () => {
+  it("redacts username, password, apiKey, and apiSecret from error or status strings", () => {
     const out = redactCredentials(
-      "530 Login failed for user contributor@example.com with pass s3cr3t!Pass",
-      { username: "contributor@example.com", password: "s3cr3t!Pass" },
+      "401 OAuth failed for user contributor@example.com pass s3cr3t!Pass key gKey999 secret gSec888",
+      { username: "contributor@example.com", password: "s3cr3t!Pass", apiKey: "gKey999", apiSecret: "gSec888" },
     );
     expect(out).not.toContain("contributor@example.com");
     expect(out).not.toContain("s3cr3t!Pass");
+    expect(out).not.toContain("gKey999");
+    expect(out).not.toContain("gSec888");
     expect(out).toContain("••••••••");
+  });
+
+  it("stores optional Getty ESP apiKey and apiSecret in the local device slot without touching localStorage", async () => {
+    localStorage.clear();
+    const vault = createCredVault(memStorage(), "secrets", credSlotOf("getty-images"));
+    const outcome = await vault.save("  esp_artist@example.com ", "EspPass#1", {
+      apiKey: "  getty_client_id_42  ",
+      apiSecret: "getty_client_secret_99",
+    });
+    expect(outcome).toBe("device");
+    expect(await vault.load()).toEqual({
+      username: "esp_artist@example.com",
+      password: "EspPass#1",
+      apiKey: "getty_client_id_42",
+      apiSecret: "getty_client_secret_99",
+    });
+    expect(localStorage.length).toBe(0);
   });
 
   it("persists per-preset credentials in IndexedDB keystore slots independently", async () => {

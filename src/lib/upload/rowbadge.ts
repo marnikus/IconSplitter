@@ -31,6 +31,7 @@ export const EMPTY_ROW_BADGES: RowBadgeState = { v: ROW_BADGE_VERSION, catalog: 
 export const HARDCODED_STOCK_BADGES: readonly RowBadge[] = [
   { id: "shutterstock", name: "Shutterstock", color: "#ff4b4b" },
   { id: "adobe-stock", name: "Adobe Stock", color: "#3898ff" },
+  { id: "getty-images", name: "Getty Images", color: "#14c997" },
 ];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -187,19 +188,21 @@ function normalizeLegacyStockId(id: string): string {
 }
 
 function migrateLegacyStockIds(state: RowBadgeState): RowBadgeState {
-  const hasLegacy = state.catalog.some((b) => b.id.startsWith("stock:"));
+  const hasLegacy = state.catalog.some((b) => b.id.startsWith("stock:"))
+    || Object.values(state.assigned).some((ids) => ids.some((id) => id.startsWith("stock:")));
   if (!hasLegacy) return state;
-  const seen = new Set<string>();
+  const seen = new Set<string>(HARDCODED_STOCK_BADGES.map((b) => b.id));
   const catalog: RowBadge[] = [];
   for (const b of state.catalog) {
     const id = normalizeLegacyStockId(b.id);
-    if (seen.has(id)) continue;
+    if (catalog.some((c) => c.id === id)) continue;
     seen.add(id);
     catalog.push(id === b.id ? b : { ...b, id });
   }
   const assigned: Record<string, string[]> = {};
   for (const [pairId, ids] of Object.entries(state.assigned)) {
-    assigned[pairId] = [...new Set(ids.map(normalizeLegacyStockId))].filter((id) => seen.has(id));
+    const kept = [...new Set(ids.map(normalizeLegacyStockId))].filter((id) => seen.has(id));
+    if (kept.length > 0) assigned[pairId] = kept;
   }
   return { ...state, catalog, assigned };
 }

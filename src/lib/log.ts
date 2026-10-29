@@ -63,7 +63,7 @@ export interface LogPayload {
 }
 
 /** Keys whose VALUE is a secret or an image: dropped before anything is kept. */
-const SENSITIVE_KEY = /(^|[^a-z])(api_?key|key|secret|password|passwd|username|ftp_?user|ftp_?pass(?:word)?|authorization|auth|bearer|credentials?|token|data_?url)$/i;
+const SENSITIVE_KEY = /(^|[^a-z])(api_?key|api_?secret|client_?id|client_?secret|key|secret|password|passwd|username|ftp_?user|ftp_?pass(?:word)?|authorization|auth|bearer|credentials?|token|data_?url)$/i;
 const DATA_URL_SHAPE = /data:[a-z0-9.+-]*\/?[a-z0-9.+-]*;?[a-z0-9-]*,?[A-Za-z0-9+/=%]{24,}/gi;
 
 export function isLogLevel(value: unknown): value is LogLevel {

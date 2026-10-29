@@ -21,6 +21,7 @@ export default function StockUploadControls({ g }: { g: StockUploadApi }) {
         actions={g}
         onToggleOpen={(ftpOpen) => g.setPrefs({ ftpOpen })}
         onBridgeUrl={(bridgeUrl) => g.setPrefs({ bridgeUrl })}
+        onDownloadGettyCsv={g.downloadGettyCsv}
       />
       <FilterBar g={g} />
     </section>

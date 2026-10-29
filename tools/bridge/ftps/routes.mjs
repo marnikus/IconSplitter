@@ -3,6 +3,7 @@
 // scrubs credentials from any returned error reason; aborts immediately on browser disconnect (RULE 7).
 
 import crypto from "node:crypto";
+import { openEspSession } from "../esp/client.mjs";
 import { openSftpSession } from "../sftp/client.mjs";
 import { openFtpsSession } from "./client.mjs";
 import { FtpsError, describeSocketError } from "./reply.mjs";
@@ -11,12 +12,13 @@ const SESSION_IDLE_MS = 15000;
 const sessions = new Map();
 
 function openTransportSession(cfg) {
+  if (cfg.protocol === "esp-https") return openEspSession(cfg);
   return cfg.protocol === "sftp" ? openSftpSession(cfg) : openFtpsSession(cfg);
 }
 
 function scrubSecrets(text, cfg) {
   let out = typeof text === "string" && text.trim() !== "" ? text.trim() : "Connection failed";
-  for (const raw of [cfg?.password, cfg?.username]) {
+  for (const raw of [cfg?.password, cfg?.apiSecret, cfg?.apiKey, cfg?.username]) {
     const s = typeof raw === "string" ? raw.trim() : "";
     if (s !== "") out = out.split(s).join("••••••••");
   }
@@ -35,7 +37,7 @@ function poolIdOf(cfg) {
   if (!cfg.sessionKey) return null;
   const raw = JSON.stringify([
     cfg.sessionKey, cfg.protocol, cfg.host, cfg.port, cfg.remoteDir,
-    cfg.tlsPolicy, cfg.pinnedCertSha256, cfg.username, cfg.password,
+    cfg.tlsPolicy, cfg.pinnedCertSha256, cfg.username, cfg.password, cfg.apiKey ?? "", cfg.apiSecret ?? "",
   ]);
   return crypto.createHash("sha256").update(raw).digest("hex");
 }

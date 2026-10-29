@@ -61,22 +61,33 @@ describe("the global log never leaks a key", () => {
     resetLogStore();
   });
 
-  it("drops FTP username and password fields from logged data and ids", () => {
+  it("drops FTP/ESP username, password, apiKey and apiSecret fields from logged data and ids", () => {
     localStorage.clear();
     resetLogStore();
     log({
       feature: "stockUpload",
       action: "ftps-test",
-      ids: { preset: "shutterstock", username: "artist@example.com" },
-      data: { ok: false, username: "artist@example.com", password: "MySecretPassword99", ftpUser: "artist", ftpPass: "MySecretPassword99" },
+      ids: { preset: "getty-images", username: "artist@example.com", apiKey: "GettyKey77", apiSecret: "GettySecret88" },
+      data: {
+        ok: false,
+        username: "artist@example.com",
+        password: "MySecretPassword99",
+        ftpUser: "artist",
+        ftpPass: "MySecretPassword99",
+        apiKey: "GettyKey77",
+        apiSecret: "GettySecret88",
+        clientSecret: "GettySecret88",
+      },
     });
     flushLog();
     const state = getLogState();
     const copied = formatLogText(state.entries);
     expect(copied).not.toContain("artist@example.com");
     expect(copied).not.toContain("MySecretPassword99");
+    expect(copied).not.toContain("GettyKey77");
+    expect(copied).not.toContain("GettySecret88");
     expect(state.entries[0].data).toEqual({ ok: false });
-    expect(state.entries[0].ids).toEqual({ preset: "shutterstock" });
+    expect(state.entries[0].ids).toEqual({ preset: "getty-images" });
     localStorage.clear();
     resetLogStore();
   });

@@ -265,20 +265,24 @@ describe("Upload (stockUpload) tab UI", () => {
 
     await waitUntil(() => q("stock-row-item-star") !== null, "exported row loaded");
 
-    // Both Shutterstock and Adobe Stock appear in the drop list AND quick-switch header buttons
+    // Shutterstock, Adobe Stock, and Getty Images appear in the drop list AND quick-switch header buttons
     const presetSelect = q("stock-ftp-preset-select") as HTMLSelectElement;
     const optionLabels = Array.from(presetSelect.options).map((o) => o.textContent);
-    expect(optionLabels).toEqual(["Shutterstock", "Adobe Stock"]);
+    expect(optionLabels).toEqual(["Shutterstock", "Adobe Stock", "Getty Images"]);
     expect(q("stock-ftp-quick-shutterstock")?.textContent).toContain("Shutterstock");
     expect(q("stock-ftp-quick-adobe-stock")?.textContent).toContain("Adobe Stock");
+    expect(q("stock-ftp-quick-getty-images")?.textContent).toContain("Getty Images");
 
     // Hardcoded stock badges live in the ONE general badge system; no Stock sites column or pending pills!
     const initialCatalog = getRowBadgeState().catalog;
     const shutterBadge = initialCatalog.find((b) => b.id === "shutterstock");
     const adobeBadge = initialCatalog.find((b) => b.id === "adobe-stock");
+    const gettyBadge = initialCatalog.find((b) => b.id === "getty-images");
     expect(shutterBadge?.name).toBe("Shutterstock");
     expect(adobeBadge?.name).toBe("Adobe Stock");
+    expect(gettyBadge?.name).toBe("Getty Images");
     expect(shutterBadge?.color).not.toBe(adobeBadge?.color);
+    expect(adobeBadge?.color).not.toBe(gettyBadge?.color);
     expect(host.querySelector(".stock-up-columns")?.textContent).not.toContain("Stock sites");
     expect(host.querySelector("[data-testid^='stock-site-pill-']")).toBeNull();
     expect(q("stock-filter-status")).toBeNull();
@@ -288,7 +292,7 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-ftp-add")!);
     await settle();
     expect(getRowBadgeState().catalog.some((b) => b.name === "Dreamstime")).toBe(true);
-    await clickEl(q("stock-target-check-stock-3")!);
+    await clickEl(q("stock-target-check-stock-4")!);
 
     // Switch stock dropdown to Adobe Stock
     await setSelect(q("stock-ftp-preset-select") as HTMLSelectElement, "adobe-stock");
