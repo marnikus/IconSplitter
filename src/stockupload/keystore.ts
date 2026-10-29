@@ -5,7 +5,9 @@
 import { idbDelete, idbGet, idbPut } from "../batch/store";
 import { SECRET_STORE } from "../lib/idbvault";
 import type { KeySaveOutcome, VaultStorage } from "../lib/keyvault";
-import { credSlotOf, createCredVault, type CredRead, type CredVault, type FtpCredentials } from "../lib/stockupload/credvault";
+import {
+  credSlotOf, createCredVault, type CredRead, type CredVault, type ExtraCredentials, type FtpCredentials,
+} from "../lib/stockupload/credvault";
 
 const vaults = new Map<string, CredVault>();
 
@@ -32,8 +34,10 @@ export function loadStockCreds(presetId: string): Promise<FtpCredentials | null>
   return vaultFor(presetId).load();
 }
 
-export function saveStockCreds(presetId: string, username: string, password: string): Promise<KeySaveOutcome> {
-  return vaultFor(presetId).save(username, password);
+export function saveStockCreds(
+  presetId: string, username: string, password: string, extra?: ExtraCredentials,
+): Promise<KeySaveOutcome> {
+  return vaultFor(presetId).save(username, password, extra);
 }
 
 export function clearStockCreds(presetId: string): Promise<void> {
@@ -53,7 +57,10 @@ export function readFtpCredentials(presetId: string): Promise<FtpCredentials | n
 }
 
 export function saveFtpCredentials(presetId: string, creds: FtpCredentials): Promise<KeySaveOutcome> {
-  return saveStockCreds(presetId, creds.username, creds.password);
+  return saveStockCreds(presetId, creds.username, creds.password, {
+    apiKey: creds.apiKey,
+    apiSecret: creds.apiSecret,
+  });
 }
 
 export function clearFtpCredentials(presetId: string): Promise<void> {

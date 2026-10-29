@@ -8,6 +8,7 @@ import type { FtpProtocol, StockFtpPreset } from "./types";
 export const DEFAULT_FTP_BRIDGE_URL = "http://127.0.0.1:47391";
 export const BRIDGE_FIX_HINT = "start run_ftp_bridge.bat (or run_inkscape_bridge.bat) on this machine";
 const OUTDATED_SFTP_REASON = "Local helper on 127.0.0.1:47391 is an older FTPS-only instance — close that helper cmd window and run run_ftp_bridge.bat to enable SFTP (:22)";
+const OUTDATED_ESP_REASON = "Local helper on 127.0.0.1:47391 predates Getty ESP support — restart run_ftp_bridge.bat to enable Getty ESP HTTPS (:443)";
 
 export type FtpsErrorCode = "helper-down" | "bad-request" | "auth" | "cert" | "network" | "ftp" | "timeout";
 
@@ -55,6 +56,9 @@ function toFailure(raw: unknown, creds: FtpCredentials, protocol?: FtpProtocol):
   if (protocol === "sftp" && /^FTPS\b/i.test(rawReason)) {
     return { code: "helper-down", reason: OUTDATED_SFTP_REASON, serverCertSha256: null };
   }
+  if (protocol === "esp-https" && /^FTPS\b/i.test(rawReason)) {
+    return { code: "helper-down", reason: OUTDATED_ESP_REASON, serverCertSha256: null };
+  }
   const code = typeof raw.code === "string" ? (raw.code as FtpsErrorCode) : "ftp";
   const nonEmpty = rawReason.trim() !== "" ? rawReason : `Connection failed (${code})`;
   const reason = redactCredentials(nonEmpty, creds);
@@ -66,22 +70,27 @@ function hasReadyFlag(body: unknown, key: string): boolean {
   return isRecord(body) && isRecord(body[key]) && body[key].ready === true;
 }
 
+function verifyProbeCapabilities(
+  body: unknown,
+  opts?: { requireSftp?: boolean; requireEsp?: boolean },
+): BridgeProbeResult {
+  if (!hasReadyFlag(body, "ftps")) {
+    return { ok: false, reason: `local helper does not expose FTPS/SFTP — restart ${BRIDGE_FIX_HINT}` };
+  }
+  if (opts?.requireSftp && !hasReadyFlag(body, "sftp")) return { ok: false, reason: OUTDATED_SFTP_REASON };
+  if (opts?.requireEsp && !hasReadyFlag(body, "esp")) return { ok: false, reason: OUTDATED_ESP_REASON };
+  return { ok: true };
+}
+
 export async function probeBridgeFtps(
   bridgeUrl = DEFAULT_FTP_BRIDGE_URL,
   fetchImpl: typeof fetch = globalThis.fetch,
-  opts?: { requireSftp?: boolean },
+  opts?: { requireSftp?: boolean; requireEsp?: boolean },
 ): Promise<BridgeProbeResult> {
   try {
     const res = await fetchImpl(`${trimSlash(bridgeUrl)}/health`);
     if (!res.ok) return { ok: false, reason: `local helper answered HTTP ${res.status} — ${BRIDGE_FIX_HINT}` };
-    const body: unknown = await res.json();
-    if (!hasReadyFlag(body, "ftps")) {
-      return { ok: false, reason: `local helper does not expose FTPS/SFTP — restart ${BRIDGE_FIX_HINT}` };
-    }
-    if (opts?.requireSftp && !hasReadyFlag(body, "sftp")) {
-      return { ok: false, reason: OUTDATED_SFTP_REASON };
-    }
-    return { ok: true };
+    return verifyProbeCapabilities(await res.json(), opts);
   } catch {
     return { ok: false, reason: `local FTPS/SFTP helper is not running — ${BRIDGE_FIX_HINT}` };
   }
@@ -94,7 +103,13 @@ export async function testBridgeFtps(
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Promise<BridgeTestResult> {
   try {
-    const payload = { ...preset, username: creds.username, password: creds.password };
+    const payload = {
+      ...preset,
+      username: creds.username,
+      password: creds.password,
+      ...(creds.apiKey ? { apiKey: creds.apiKey } : {}),
+      ...(creds.apiSecret ? { apiSecret: creds.apiSecret } : {}),
+    };
     const res = await fetchImpl(`${trimSlash(bridgeUrl)}/ftps/test`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -115,6 +130,8 @@ function buildUploadHeader(input: BridgeUploadInput): string {
     ...input.preset,
     username: input.creds.username,
     password: input.creds.password,
+    ...(input.creds.apiKey ? { apiKey: input.creds.apiKey } : {}),
+    ...(input.creds.apiSecret ? { apiSecret: input.creds.apiSecret } : {}),
     fileName: input.fileName,
     sessionKey: input.sessionKey,
   }));

@@ -3,6 +3,7 @@
 import { useMemo, useRef } from "react";
 import { copyFolderText } from "../lib/copypath";
 import { probeBridgeFtps } from "../lib/stockupload/bridgeclient";
+import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
 import { buildStockUploadPlan, type StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -44,6 +45,7 @@ export interface StockPanelOps {
   startUploadFlow: () => void;
   confirmUpload: () => void;
   cancelUpload: () => void;
+  downloadGettyCsv: () => void;
 }
 
 async function performChooseRoot(c: OpsCtx): Promise<void> {
@@ -86,6 +88,7 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
   c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Probing local FTPS/SFTP helper…" } } });
   const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
     requireSftp: plan.targets.some((t) => t.protocol === "sftp"),
+    requireEsp: plan.targets.some((t) => t.protocol === "esp-https"),
   });
   if (!probe.ok) {
     c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
@@ -118,9 +121,24 @@ function performStartUpload(c: OpsCtx): void {
   c.dispatch({ type: "patch", patch: { dialog: { kind: "confirmUpload", plan } } });
 }
 
+function triggerGettyCsvDownload(c: OpsCtx): void {
+  const checkedSet = new Set(c.checked);
+  const rows = checkedSet.size > 0 ? c.items.filter((it) => checkedSet.has(it.id)) : c.items;
+  if (rows.length === 0) { c.say("Open a folder with exported items first", true); return; }
+  const csv = buildGettyEspCsv(rows);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "getty-esp-metadata.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+  c.say(`Exported Getty ESP CSV for ${rows.length} item(s)`);
+}
+
 function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
   StockPanelOps,
-  "metaDraftOf" | "editMeta" | "acceptMeta" | "copyMeta" | "startUploadFlow" | "confirmUpload" | "cancelUpload"
+  "metaDraftOf" | "editMeta" | "acceptMeta" | "copyMeta" | "startUploadFlow" | "confirmUpload" | "cancelUpload" | "downloadGettyCsv"
 > {
   return {
     metaDraftOf: (item) => ref.current.model.drafts[item.id] ?? initialMetaDraft(item),
@@ -145,6 +163,7 @@ function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
       ref.current.r.abort.current?.abort();
       ref.current.say("Cancelling upload — completed files stay on server");
     },
+    downloadGettyCsv: () => triggerGettyCsvDownload(ref.current),
   };
 }
 

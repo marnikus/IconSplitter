@@ -86,7 +86,7 @@ function readBody(req, limit) {
 
 function health(res, port) {
   const inkscape = findInkscape(config.inkscape);
-  return json(res, 200, { ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, port });
+  return json(res, 200, { ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true }, port });
 }
 
 async function convert(req, res) {

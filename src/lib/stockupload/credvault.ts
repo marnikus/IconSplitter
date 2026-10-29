@@ -1,7 +1,7 @@
-// credvault.ts — local-only FTP/FTPS credential vault (RULE 10/20).
-// Username and password live exclusively in IndexedDB `secrets` (with a
-// session-only fallback when storage is blocked), never in localStorage,
-// presets, sidecars or logs, and are never expanded back into UI plaintext.
+// credvault.ts — local-only FTP/FTPS/SFTP/ESP credential vault (RULE 10/20).
+// Credentials live exclusively in IndexedDB `secrets` (with a session-only
+// fallback when storage is blocked), never in localStorage, presets, sidecars
+// or logs, and are never expanded back into UI plaintext.
 
 import { isRecord } from "../isrecord";
 import type { KeySaveOutcome, KeySource, VaultStorage } from "../keyvault";
@@ -9,6 +9,13 @@ import type { KeySaveOutcome, KeySource, VaultStorage } from "../keyvault";
 export interface FtpCredentials {
   username: string;
   password: string;
+  apiKey?: string;
+  apiSecret?: string;
+}
+
+export interface ExtraCredentials {
+  apiKey?: string;
+  apiSecret?: string;
 }
 
 export interface CredRead {
@@ -19,7 +26,7 @@ export interface CredRead {
 export interface CredVault {
   read(): Promise<CredRead>;
   load(): Promise<FtpCredentials | null>;
-  save(username: string, password: string): Promise<KeySaveOutcome>;
+  save(username: string, password: string, extra?: ExtraCredentials): Promise<KeySaveOutcome>;
   clear(): Promise<void>;
   has(): Promise<boolean>;
 }
@@ -33,18 +40,32 @@ export function credSlotOf(presetId: string): string {
 export function redactCredentials(text: string, creds?: FtpCredentials | null): string {
   if (!creds) return text;
   let safe = text;
-  for (const part of [creds.password, creds.username]) {
-    const token = part.trim();
+  for (const part of [creds.password, creds.apiSecret, creds.apiKey, creds.username]) {
+    const token = typeof part === "string" ? part.trim() : "";
     if (token !== "") safe = safe.split(token).join(MASK);
   }
   return safe;
+}
+
+function normalizeExtra(extra?: ExtraCredentials): ExtraCredentials {
+  const out: ExtraCredentials = {};
+  const key = typeof extra?.apiKey === "string" ? extra.apiKey.trim() : "";
+  const secret = typeof extra?.apiSecret === "string" ? extra.apiSecret : "";
+  if (key !== "") out.apiKey = key;
+  if (secret !== "") out.apiSecret = secret;
+  return out;
 }
 
 function parseStored(raw: unknown): FtpCredentials | null {
   if (!isRecord(raw)) return null;
   const username = typeof raw.username === "string" ? raw.username.trim() : "";
   const password = typeof raw.password === "string" ? raw.password : "";
-  return username !== "" && password !== "" ? { username, password } : null;
+  if (username === "" || password === "") return null;
+  const extra = normalizeExtra({
+    apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
+    apiSecret: typeof raw.apiSecret === "string" ? raw.apiSecret : undefined,
+  });
+  return { username, password, ...extra };
 }
 
 async function putCreds(storage: VaultStorage, store: string, slot: string, creds: FtpCredentials): Promise<boolean> {
@@ -82,10 +103,10 @@ export function createCredVault(storage: VaultStorage, store: string, slot: stri
   let session: FtpCredentials | null = null;
   const read = () => readCreds(storage, store, slot, session);
 
-  const save = async (rawUser: string, rawPass: string): Promise<KeySaveOutcome> => {
+  const save = async (rawUser: string, rawPass: string, extra?: ExtraCredentials): Promise<KeySaveOutcome> => {
     const username = rawUser.trim();
     if (username === "" || rawPass === "") return "empty";
-    const creds: FtpCredentials = { username, password: rawPass };
+    const creds: FtpCredentials = { username, password: rawPass, ...normalizeExtra(extra) };
     session = creds;
     return (await putCreds(storage, store, slot, creds)) ? "device" : "session";
   };

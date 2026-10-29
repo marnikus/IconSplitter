@@ -1,8 +1,9 @@
-// ftpactions.ts — Stock FTP/SFTP preset mutations, local-only credential actions,
-// and connection test (credentials never enter React state or localStorage).
+// ftpactions.ts — Stock FTPS/SFTP/ESP preset mutations, local-only credential
+// actions, and connection test (credentials never enter React state or localStorage).
 
 import { useMemo, useRef } from "react";
 import { testBridgeFtps } from "../lib/stockupload/bridgeclient";
+import type { ExtraCredentials, FtpCredentials } from "../lib/stockupload/credvault";
 import {
   addCustomStockPreset, patchStockPreset, removeStockPreset,
   resetBuiltinStockPreset, toggleTargetPreset,
@@ -26,7 +27,7 @@ export interface StockFtpActions {
   updatePreset: (id: string, patch: Partial<StockFtpPreset>) => void;
   toggleTarget: (id: string) => void;
   setFormat: (key: UploadFormatKey, enabled: boolean) => void;
-  saveCreds: (presetId: string, username: string, password: string) => Promise<boolean>;
+  saveCreds: (presetId: string, username: string, password: string, extra?: ExtraCredentials) => Promise<boolean>;
   forgetCreds: (presetId: string) => Promise<void>;
   testConnection: (presetId: string) => Promise<void>;
   trustPinnedCert: (presetId: string, sha256: string) => void;
@@ -40,10 +41,8 @@ export interface FtpCtx {
   setTestStatus: (s: FtpTestStatus) => void;
 }
 
-async function performSaveCreds(
-  c: FtpCtx, presetId: string, username: string, password: string,
-): Promise<boolean> {
-  const outcome = await saveFtpCredentials(presetId, { username, password });
+async function performSaveCreds(c: FtpCtx, presetId: string, creds: FtpCredentials): Promise<boolean> {
+  const outcome = await saveFtpCredentials(presetId, creds);
   if (outcome === "empty") {
     c.say("Enter both username and password — empty fields never overwrite saved credentials", true);
     return false;
@@ -57,9 +56,14 @@ async function performSaveCreds(
 }
 
 function protocolSuccessLabel(preset: StockFtpPreset): string {
-  return preset.protocol === "sftp"
-    ? "Connected & authenticated via SFTP (SSH port 22)"
-    : "Connected & authenticated via FTPS";
+  if (preset.protocol === "esp-https") return "Connected & authenticated via Getty ESP HTTPS (port 443)";
+  if (preset.protocol === "sftp") return "Connected & authenticated via SFTP (SSH port 22)";
+  return "Connected & authenticated via FTPS";
+}
+
+function protocolShortName(preset: StockFtpPreset): string {
+  if (preset.protocol === "esp-https") return "Getty ESP HTTPS";
+  return preset.protocol === "sftp" ? "SFTP" : "FTPS";
 }
 
 async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise<void> {
@@ -70,7 +74,7 @@ async function performTestWithPreset(c: FtpCtx, preset: StockFtpPreset): Promise
     c.say(missing, true);
     return;
   }
-  const protoLabel = preset.protocol === "sftp" ? "SFTP" : "FTPS";
+  const protoLabel = protocolShortName(preset);
   c.setTestStatus({ busy: true, ok: null, note: `Connecting to ${preset.host}:${preset.port} over ${protoLabel}…`, certSha256: null });
   const res = await testBridgeFtps(c.bridgeUrl, preset, creds);
   const note = (res.ok ? protocolSuccessLabel(preset) : res.reason).trim() || "Connection failed";
@@ -137,7 +141,8 @@ export function useStockFtpActions(ctx: FtpCtx): StockFtpActions {
   return useMemo(() => ({
     ...buildPresetListCrud(ref),
     ...buildPresetFieldOps(ref),
-    saveCreds: (presetId, username, password) => performSaveCreds(ref.current, presetId, username, password),
+    saveCreds: (presetId, username, password, extra) =>
+      performSaveCreds(ref.current, presetId, { username, password, ...extra }),
     forgetCreds: async (presetId) => {
       await clearFtpCredentials(presetId);
       ref.current.setCredSaved(presetId, false);

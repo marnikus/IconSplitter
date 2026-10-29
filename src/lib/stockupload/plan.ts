@@ -1,5 +1,6 @@
 // plan.ts — pure upload planner across (checkedTargets × checkedRows × checkedFormats).
 
+import { collectGettyWarnings } from "./gettycsv";
 import type {
   ExportedFileRef, ExportedItem, StockFormatFlags, StockFtpPreset, UploadFormatKey,
 } from "./types";
@@ -186,6 +187,7 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
   const warnings = [
     ...collectShutterstockWarnings(targets, tasks),
     ...collectAdobeStockWarnings(targets, selectedRows, tasks),
+    ...collectGettyWarnings(targets, selectedRows, input.formats, tasks),
   ];
   return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes };
 }
