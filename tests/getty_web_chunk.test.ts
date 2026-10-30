@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_BYTES, GETTY_WEB_MAX_BATCH_ICONS, gettyWebBatchLabel,
   gettyWebBatchName, gettyWebBatchSummary, gettyWebBatchSummaryOf, gettyWebRequestBytes,
-  planGettyWebBatches,
+  planGettyWebBatches, randomBatchOrder,
 } from "../src/lib/stockupload/gettyweb";
 
 const icons = (n: number) => Array.from({ length: n }, (_v, i) => ({ id: `icon-${i}` }));
@@ -50,6 +50,18 @@ describe("Getty web batch planning", () => {
     expect(gettyWebBatchName(now, 7, { index: 1, total: 1, retry: true }))
       .toBe("2026-10-30 retry 1/1 (7 icons)");
     expect(gettyWebBatchName(now, 100, { index: 3, total: 3 }).length).toBeLessThanOrEqual(60);
+  });
+
+  it("can order the whole selection at random, so every batch is a random draw", () => {
+    // Random batch selection: a shuffle of every icon, then the usual 100-icon
+    // chunking — so batch 1 is not simply the first 100 rows of the list.
+    const rng = () => 0;
+    const order = randomBatchOrder(5, rng);
+    expect([...order].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
+    expect(order).not.toEqual([0, 1, 2, 3, 4]);
+    // The same icons, every one of them exactly once.
+    expect(randomBatchOrder(0, rng)).toEqual([]);
+    expect(randomBatchOrder(3, () => 0.5)).toEqual([0, 2, 1]);
   });
 
   it("labels a batch for the progress line", () => {

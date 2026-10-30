@@ -44,6 +44,10 @@ export interface UploadBatchDeps {
   gettyWebMaxIcons?: number;
   /** Bytes one Getty request may carry; the real helper cap unless a test injects one. */
   gettyWebMaxBytes?: number;
+  /** Draw each 100-icon Getty batch at random instead of taking the list in order. */
+  gettyWebRandomBatches?: boolean;
+  /** The shuffle's randomness; `Math.random` unless a test injects one. */
+  gettyWebRandomFn?: () => number;
   closeGettyWebFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
   finishGettyWebFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
   /** The shell's log dock; the run writes what went up and what did not. */

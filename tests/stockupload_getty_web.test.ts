@@ -173,6 +173,43 @@ describe("Getty web upload in the batch runner", () => {
       .toBe("Getty Images (web upload): 7 of 7 file(s) uploaded, 1 failed");
   });
 
+  it("draws every batch at random instead of taking the list in order", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const send = async (random: boolean, rng?: () => number): Promise<string[][]> => {
+      const sent: string[][] = [];
+      await executeStockUploadBatch(planFor(found.items), {
+        root,
+        bridgeUrl: "http://127.0.0.1:47391",
+        signal: new AbortController().signal,
+        loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+        gettyWebMaxIcons: 1,
+        gettyWebRandomBatches: random,
+        gettyWebRandomFn: rng,
+        gettyWebUploadFn: async (input) => {
+          sent.push(input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
+          return {
+            ok: true, batchId: "b", accepted: input.icons.flatMap((icon) => icon.files.map((f) => f.name)),
+            failed: [], completed: false, completion: null, metadata: [],
+          };
+        },
+        finishGettyWebFn: async () => ({
+          ok: true, batchId: "b", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+        }),
+        closeGettyWebFn: async () => undefined,
+      });
+      return sent;
+    };
+    // Off: the list order, first icon first.
+    expect((await send(false))[0]).toEqual(["star_01.jpg", "star_01.eps"]);
+    // On: a shuffle of the whole selection decides who goes into batch 1.
+    const shuffled = await send(true, () => 0);
+    expect(shuffled).toEqual([["moon_02.jpg", "moon_02.eps"], ["star_01.jpg", "star_01.eps"]]);
+  });
+
   it("keeps the bar's total across batches instead of restarting at every 100 icons", async () => {
     // Batch 1's icons were validated, so batch 2 starts from them: the panel used
     // to fall back to batch 2's own counts (0 of 418) and never recovered.

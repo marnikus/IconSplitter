@@ -15,22 +15,21 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 ## Stock presets, Getty ESP CSV & local-only credentials (`StockFtpPanel.tsx`, `StockFtpCredentials.tsx`)
 - `stock-ftp-panel`, `stock-ftp-toggle`, `stock-ftp-active-name`, `stock-ftp-quick-<presetId>` — collapsible preset panel & quick preset switch (`Shutterstock`, `Adobe Stock`, `Getty Images`, plus custom presets).
 - `stock-ftp-preset-select`, `stock-ftp-new-name`, `stock-ftp-add`, `stock-ftp-delete`, `stock-ftp-reset-builtin`, `stock-getty-csv`, `stock-open-esp`, `stock-open-deepmeta` — stock preset dropdown, CRUD, built-in reset, Getty ESP metadata CSV export (`getty-esp-metadata.csv`), and direct launchers for `esp.gettyimages.com` & DeepMeta 4 (`deepmeta.creativ.zone`).
-- `stock-ftp-host`, `stock-ftp-port`, `stock-ftp-protocol`, `stock-ftp-remotedir`, `stock-ftp-tls`, `stock-ftp-pin`, `stock-ftp-bridge-url` — per-stock connection settings (`esp-https`, `getty-web`, `ftps-explicit`, `sftp`, `ftps-implicit`, `ftp`); the retired local batch option is not offered. `getty-web` shows "Getty Images web upload (browser automation)" and the contributor page path (`/contribute`).
+- `stock-ftp-host`, `stock-ftp-port`, `stock-ftp-protocol`, `stock-ftp-remotedir`, `stock-ftp-tls`, `stock-ftp-pin`, `stock-ftp-bridge-url` — per-stock connection settings (`esp-https`, `getty-web`, `ftps-explicit`, `sftp`, `ftps-implicit`, `ftp`); no retired local batch option. `getty-web` shows "Getty Images web upload (browser automation)" and the contributor page path (`/contribute`).
 - Getty web sign-in (no captured ids): the identifier is the visible
-  username/account input, else the first text input beside the password; the submit
-  is the form's `[type=submit]` or a control labelled
-  `Sign in|Log in|Continue|Next|Submit`, else Enter / `form.requestSubmit()`;
-  disabled fields stay candidates, because the page hydrates late.
+  username/account input, else the first text input beside the password; submit is
+  the form's `[type=submit]` or a control labelled
+  `Sign in|Log in|Continue|Next|Submit`, else Enter; disabled fields stay
+  candidates, because the page hydrates late.
 - Getty web cards (captured after a real upload): `[data-cy="contribution-file-name"]`
   names the contribution; `[data-cy="invalid-file-media"]` ("Upload failed") is a
   rejection, reported with its `ID: …` text. Every card carries
   `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests and
   `[data-cy="pending-icon"]` (`Ready to submit`) once it validated the file.
-  Two stages: the card's picture (`[data-cy="image-thumbnail"]`) means the file
-  **arrived**, which is what starts the metadata step; the ready icon is what
-  **finishes** the run, and it only appears after Save metadata, so the helper
-  re-saves after 30 s and then re-uploads the file (same hidden uploader) for the
-  cards that still lack it.
+  Two stages: the picture (`[data-cy="image-thumbnail"]`) means the file
+  **arrived**, which starts the metadata step; the ready icon **finishes** the
+  run, and it only appears after Save metadata, so the helper re-saves after 30 s
+  and then re-uploads the file (same hidden uploader) when a card still lacks it.
 - Getty web Complete: the control is matched by label among *enabled* buttons only;
   `completionState` reports presence/enabled so the finish waits for Getty instead
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair
@@ -75,6 +74,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom slider & preview background.
 - `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checkboxes.
 - `stock-combine-title-description` — opt-in locally persisted combination of accepted title and description in upload copies only.
+- `stock-random-batches` — opt-in, persisted: each 100-icon Getty web batch is a random draw from the remaining icons, not list order.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
 - `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
 - `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons and 64 MB per request) is visible before Upload.

@@ -4320,3 +4320,14 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
   PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 147 tests green;
   docs 4/4 (soR 9,000 B).
+- 2026-10-30 — Random 100-icon batch selection (`stock-random-batches`): the
+  Getty web run can now draw each 100-icon batch at random from the icons not yet
+  sent (`randomBatchOrder`, Fisher–Yates over the index list, opt-in through the
+  persisted `randomBatches` preference, default off) instead of taking the list in
+  row order; every selected icon is still uploaded exactly once, the last batch
+  keeps the remainder, and batch names, counts, progress totals, retries and the
+  metadata step are untouched. Injected `rng` keeps it deterministic in tests.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 107 tests green;
+  `tests/stockupload*` 14 files / 101 tests green; docs 4/4 (soR 8,992 B,
+  selectors 8,994 B).

@@ -134,6 +134,24 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(getRowBadgeState().assigned["item-star"] ?? []).not.toContain("shutterstock");
   });
 
+  it("offers random 100-icon batch selection, off by default and remembered", async () => {
+    stored.set("__stock_upload__", { source: makeWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
+    const box = q("stock-random-batches") as HTMLInputElement;
+    expect(box).not.toBeNull();
+    // Nobody gets a random upload order unless they ask for it.
+    expect(box.checked).toBe(false);
+    await clickEl(box);
+    expect(box.checked).toBe(true);
+    // A saved preference, so a rerun keeps drawing batches at random.
+    expect(localStorage.getItem("iconSplitter.stockUpload.prefs.v1")).toContain('"randomBatches":true');
+    // Reloading the panel reads it back instead of resetting the choice.
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row reloaded");
+    expect((q("stock-random-batches") as HTMLInputElement).checked).toBe(true);
+  });
+
   it("offers an opt-in combined title and discloses it before upload", async () => {
     stored.set("__stock_upload__", { source: makeWorkspace() });
     act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });

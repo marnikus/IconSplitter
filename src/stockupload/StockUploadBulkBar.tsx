@@ -55,6 +55,7 @@ function ActionCluster({ g }: { g: StockUploadApi }) {
       <span className="svg-divider" aria-hidden="true" />
       <FormatCheckboxes g={g} />
       <CombinedTitleOption g={g} />
+      <RandomBatchesOption g={g} />
       <span className="svg-divider" aria-hidden="true" />
       <TargetSiteCheckboxes g={g} />
       <UploadButtons g={g} />
@@ -110,6 +111,18 @@ function CombinedTitleOption({ g }: { g: StockUploadApi }) {
         checked={g.model.prefs.combineTitleDescription}
         onChange={(e) => g.setPrefs({ combineTitleDescription: e.target.checked })} />
       <span>Title + description</span>
+    </label>
+  );
+}
+
+function RandomBatchesOption({ g }: { g: StockUploadApi }) {
+  return (
+    <label className="svg-chip" style={{ cursor: "pointer" }}
+      title="Getty web takes 100 icons per batch: draw each batch at random from the remaining icons instead of taking them in list order">
+      <input type="checkbox" data-testid="stock-random-batches"
+        checked={g.model.prefs.randomBatches}
+        onChange={(e) => g.setPrefs({ randomBatches: e.target.checked })} />
+      <span>Random batches</span>
     </label>
   );
 }

@@ -8,7 +8,7 @@
 import type { DirHandleLike } from "../lib/fs";
 import {
   GETTY_WEB_MAX_ATTEMPTS, gettyWebBatchLabel, gettyWebBatchName, planGettyWebBatches,
-  type GettyWebBatchSlot,
+  randomBatchOrder, type GettyWebBatchSlot,
 } from "../lib/stockupload/gettyweb";
 import {
   finishBridgeGettyWeb, uploadBridgeGettyWeb, type GettyWebErrorCode, type GettyWebFinishInput,
@@ -39,6 +39,10 @@ export interface GettyWebRunInput {
   maxIcons?: number;
   /** Bytes one request may carry; the real budget unless a test injects one. */
   maxBytes?: number;
+  /** Draw each 100-icon batch at random from what is left, not in list order. */
+  randomizeBatches?: boolean;
+  /** The shuffle's source of randomness; `Math.random` unless a test injects one. */
+  rng?: () => number;
   uploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
   finishFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
   /** The batch a request belongs to, so the panel's line can name it. */
@@ -184,9 +188,15 @@ function membersWithRetries(state: RunState, chunk: readonly number[]): number[]
   return [...chunk, ...extra];
 }
 
+/** The order the run walks the selection in: list order, or a random draw. */
+function primaryOrder(state: RunState): number[] {
+  const count = state.input.icons.length;
+  if (state.input.randomizeBatches !== true) return Array.from({ length: count }, (_icon, index) => index);
+  return randomBatchOrder(count, state.input.rng);
+}
+
 async function runPrimaryPass(state: RunState): Promise<void> {
-  const indexes = state.input.icons.map((_icon, index) => index);
-  const chunks = chunkOf(state, indexes);
+  const chunks = chunkOf(state, primaryOrder(state));
   for (let k = 0; k < chunks.length; k += 1) {
     if (stopped(state)) return;
     await runBatch(state, membersWithRetries(state, chunks[k]), { index: k + 1, total: chunks.length });

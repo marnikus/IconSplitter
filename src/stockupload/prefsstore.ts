@@ -14,6 +14,8 @@ export interface StockUploadPrefs {
   ftpOpen: boolean;
   bridgeUrl: string;
   combineTitleDescription: boolean;
+  /** Draw each 100-icon Getty batch at random instead of taking the list in order. */
+  randomBatches: boolean;
 }
 
 export const DEFAULT_STOCK_PREFS: StockUploadPrefs = {
@@ -22,6 +24,7 @@ export const DEFAULT_STOCK_PREFS: StockUploadPrefs = {
   ftpOpen: true,
   bridgeUrl: DEFAULT_FTP_BRIDGE_URL,
   combineTitleDescription: false,
+  randomBatches: false,
 };
 
 export function loadStockPrefs(): StockUploadPrefs {
@@ -35,6 +38,7 @@ export function loadStockPrefs(): StockUploadPrefs {
       bg: parsePreviewBackground(raw.bg),
       ftpOpen: raw.ftpOpen !== false,
       combineTitleDescription: raw.combineTitleDescription === true,
+      randomBatches: raw.randomBatches === true,
       bridgeUrl: typeof raw.bridgeUrl === "string" && raw.bridgeUrl.trim() !== ""
         ? raw.bridgeUrl.trim()
         : DEFAULT_FTP_BRIDGE_URL,

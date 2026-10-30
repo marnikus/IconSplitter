@@ -91,6 +91,20 @@ export function isGettyWebPreset(preset: StockFtpPreset): boolean {
   return preset.protocol === "getty-web";
 }
 
+/**
+ * The order a run uploads its icons in when **random batch selection** is on: a
+ * Fisher–Yates shuffle, so the 100-icon chunks are random draws from what is
+ * left instead of the next slice of the list. `rng` is injectable for tests.
+ */
+export function randomBatchOrder(count: number, rng: () => number = Math.random): number[] {
+  const order = Array.from({ length: Math.max(0, Math.trunc(count)) }, (_value, index) => index);
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const pick = Math.min(i, Math.max(0, Math.floor(rng() * (i + 1))));
+    [order[i], order[pick]] = [order[pick], order[i]];
+  }
+  return order;
+}
+
 /** Batch name the bridge types into Getty's Create Batch dialog: date, place, size. */
 export function gettyWebBatchName(now: Date, itemCount: number, slot?: GettyWebBatchSlot): string {
   const stamp = now.toISOString().slice(0, 10);
