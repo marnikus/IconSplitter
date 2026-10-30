@@ -16,6 +16,8 @@ export interface GettyWebProgress {
   ready?: number;
   /** How many times the helper had to reload Getty's page to get it moving. */
   reloads: number;
+  /** Which 100-icon batch of the run these counts belong to (1-based). */
+  batch?: number;
 }
 
 function trimSlash(url: string): string {
@@ -32,6 +34,7 @@ function readProgress(raw: Record<string, unknown>): GettyWebProgress {
     // Readiness is reported only once the helper has seen it.
     ...(countOf(raw.ready) > 0 ? { ready: countOf(raw.ready) } : {}),
     reloads: countOf(raw.reloads),
+    ...(countOf(raw.batch) > 0 ? { batch: countOf(raw.batch) } : {}),
   };
 }
 

@@ -12,6 +12,7 @@ import { getStockHistory, resetStockHistory } from "../src/stockupload/historyst
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
 import { progressLabel, settledFiles, watchGettyProgress } from "../src/stockupload/gettywebprogress";
+import type { GettyWebProgress } from "../src/lib/stockupload/gettyprogress";
 import { resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import type { GettyWebUploadInput } from "../src/lib/stockupload/gettywebclient";
@@ -171,6 +172,66 @@ describe("Getty web upload in the batch runner", () => {
       .toBe("Getty Images (web upload): 7 of 7 file(s) uploaded, 1 failed");
   });
 
+  it("keeps the bar's total across batches instead of restarting at every 100 icons", async () => {
+    // Batch 1's icons were validated, so batch 2 starts from them: the panel used
+    // to fall back to batch 2's own counts (0 of 418) and never recovered.
+    vi.useFakeTimers();
+    try {
+      const root = new FakeDir("ws");
+      addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+      addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+      const found = await discoverExportedItems(root);
+      const steps: Array<{ done: number; total: number; label: string; phase?: string }> = [];
+      const gates: Array<() => void> = [];
+      let reading: Record<string, unknown> | null = null;
+      let batch = 0;
+      const run = executeStockUploadBatch(planFor(found.items), {
+        root,
+        bridgeUrl: "http://127.0.0.1:47391",
+        signal: new AbortController().signal,
+        loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+        onProgress: (step) => steps.push({ ...step }),
+        gettyWebMaxIcons: 1,
+        gettyWebUploadFn: async (input) => {
+          batch += 1;
+          reading = { phase: "uploading", batch, total: 2, uploaded: 2, failed: 0, listed: 2, reloads: 0 };
+          await new Promise<void>((resolve) => gates.push(resolve));
+          return {
+            ok: true, batchId: "b",
+            accepted: input.icons.flatMap((icon) => icon.files.map((file) => file.name)),
+            failed: [], completed: false, completion: null, metadata: [],
+          };
+        },
+        gettyWebProgressFn: async () => reading as unknown as GettyWebProgress | null,
+        finishGettyWebFn: async () => ({
+          ok: true, batchId: "b", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+        }),
+        closeGettyWebFn: async () => undefined,
+      });
+      await vi.advanceTimersByTimeAsync(2500);
+      // Batch 1 verified: every card carries the chip.
+      reading = { phase: "metadata", batch: 1, total: 2, uploaded: 2, ready: 2, failed: 0, listed: 2, reloads: 0 };
+      await vi.advanceTimersByTimeAsync(2500);
+      gates.shift()!();
+      await vi.advanceTimersByTimeAsync(2500);
+      // Batch 2 is in flight: its own counts are 2 of 2, plus the 2 already done.
+      await vi.advanceTimersByTimeAsync(2500);
+      reading = { phase: "metadata", batch: 2, total: 2, uploaded: 2, ready: 2, failed: 0, listed: 2, reloads: 0 };
+      await vi.advanceTimersByTimeAsync(2500);
+      gates.shift()!();
+      await run;
+      const second = steps.filter((step) => step.label.includes("batch 2/2"));
+      expect(second.length).toBeGreaterThan(0);
+      // Never restarts at 0 once batch 2 owns the page...
+      expect(Math.min(...second.map((step) => step.done))).toBeGreaterThanOrEqual(2);
+      // ...and batch 2's verified cards land on top of batch 1's.
+      expect(second.some((step) => step.done === 4)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("says so when Getty's page had to be reloaded to get moving", () => {
     const base = { phase: "uploading", total: 14, uploaded: 5, failed: 2, listed: 14 };
     expect(progressLabel({ ...base, reloads: 0 }, "Getty Images (web upload)"))
@@ -229,24 +290,29 @@ describe("Getty web upload in the batch runner", () => {
     expect(polls).toBeGreaterThan(3);
   });
 
-  it("reads a live upload through a helper that answers nothing at first", async () => {
+  it("keeps watching a batch that reports done, because the next batch follows", async () => {
+    // Stopping at the first "done" is what froze the panel after batch 1: the
+    // helper reports "done" at the end of every batch, and the run then starts
+    // the next one. Only the run's own stop() may end the watch.
     vi.useFakeTimers();
-    const seen: number[] = [];
+    const seen: Array<{ settled: number; batch?: number }> = [];
     let calls = 0;
     const stop = watchGettyProgress(
       { bridgeUrl: "http://127.0.0.1:47391", sessionKey: "run-7", targetName: "Getty" },
-      (progress) => seen.push(settledFiles(progress)),
+      (progress) => seen.push({ settled: settledFiles(progress), batch: progress.batch }),
       async () => {
         calls += 1;
-        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "metadata", total: 4, uploaded: 2, ready: 2, failed: 1, listed: 4, reloads: 1 };
+        if (calls <= 3) return null;
+        if (calls <= 6) return { phase: "done", batch: 1, total: 4, uploaded: 4, ready: 2, failed: 1, listed: 4, reloads: 1 };
+        return { phase: "uploading", batch: 2, total: 4, uploaded: 1, failed: 0, listed: 1, reloads: 0 };
       },
     );
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(8000);
     stop();
-    // 404s are retried, and a settled reading ends the watch instead of polling on.
-    // Two files Getty has (validated) plus one rejection are what counts as settled.
-    expect(seen).toEqual([3, 3]);
-    expect(calls).toBe(5);
+    // The batch-1 readings kept coming, and batch 2's own reading arrived too.
+    expect(seen.filter((reading) => reading.batch === 1)).toHaveLength(3);
+    expect(seen.at(-1)).toEqual({ settled: 1, batch: 2 });
+    expect(calls).toBeGreaterThan(6);
   });
 
   it("stops watching when the run is over, with no timer left behind", async () => {

@@ -66,6 +66,14 @@ is above navigation in Workbench, outside the hidden panel. Hidden Upload does
 not own Q/E or arrow navigation. Page reloads do not revive an in-flight bar
 or resend provider work; journals still report interrupted items.
 
+## Live provider progress (Getty web)
+
+A Getty web run is several 100-icon batches in one session, so the panel
+polls `/getty-web/progress` for the **whole run**: a `done` reading ends one
+batch, never the watching, and every reading names its batch. The last count of
+a batch is banked when the next one starts, so the bar carries its total instead
+of restarting at zero every 100 icons.
+
 ## Handles
 
 - Shell: `upload-progress-mount`, `upload-shell` (`hidden` when inactive).

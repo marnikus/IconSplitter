@@ -7,6 +7,7 @@ import {
 import { GETTY_WEB_SUBMISSION_TYPE } from "../lib/stockupload/gettyweb";
 import { closeBridgeGettyWeb, type GettyWebResult } from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
+import type { GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
@@ -121,25 +122,38 @@ async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
   return uploaded;
 }
 
-/**
- * Wires Getty's live counts into the panel: each card Getty marks "Ready to
- * submit" (or its own "Upload failed") moves the bar at once instead of only at
- * the end of the run, re-based on every batch so the counts of batch 2 do not
- * stack onto batch 1.
- */
+/** Where the bar stands: what closed batches proved, and this batch's count. */
+interface ProgressBound { base: number; seen: number; batchNo: number; batch: string; reloads: number }
+
+/** A new batch banks the last one's count, so the bar never falls back to zero. */
+function rebaseOnBatch(bound: ProgressBound, progress: GettyWebProgress, total: number): void {
+  if (progress.batch === undefined || progress.batch === bound.batchNo) return;
+  bound.base = Math.min(total, bound.base + bound.seen);
+  bound.batchNo = progress.batch;
+  bound.seen = 0;
+  bound.reloads = 0;
+}
+
+/** A reload is a fact worth keeping: it explains a long silence in the run. */
+function noteReload(ctx: NetworkCtx, bound: ProgressBound, reloads: number): void {
+  const reload = reloadNoteOf(bound.reloads, reloads);
+  if (reload === null) return;
+  bound.reloads = reload;
+  ctx.deps.logFn?.(pageReloadedSpec({ target: ctx.target.name, reloads: reload }));
+}
+
+/** Getty's live counts in the panel: every card that turns moves the bar at once,
+ *  across the whole run — the total carries from batch to batch. */
 function liveGettyProgress(ctx: NetworkCtx): { stop: () => void; onBatch: (label: string) => void } {
-  const bound = { base: ctx.counters.done, batch: "", reloads: 0 };
+  const bound: ProgressBound = { base: 0, seen: 0, batchNo: 0, batch: "", reloads: 0 };
   const stop = watchGettyProgress(
     { bridgeUrl: ctx.deps.bridgeUrl, sessionKey: ctx.sessionKey, targetName: ctx.target.name },
     (progress) => {
-      // A reload is a fact worth keeping: it explains a long silence in the run.
-      const reload = reloadNoteOf(bound.reloads, progress.reloads);
-      if (reload !== null) {
-        bound.reloads = reload;
-        ctx.deps.logFn?.(pageReloadedSpec({ target: ctx.target.name, reloads: reload }));
-      }
+      rebaseOnBatch(bound, progress, ctx.counters.total);
+      bound.seen = settledFiles(progress);
+      noteReload(ctx, bound, progress.reloads);
       ctx.deps.onProgress?.({
-        done: Math.min(ctx.counters.total, bound.base + settledFiles(progress)),
+        done: Math.min(ctx.counters.total, bound.base + bound.seen),
         total: ctx.counters.total,
         // The bar may only say "complete" once Getty validated every card, so the
         // stage travels with the counts: bytes in, or chips flipping.
@@ -149,11 +163,8 @@ function liveGettyProgress(ctx: NetworkCtx): { stop: () => void; onBatch: (label
     },
     ctx.deps.gettyWebProgressFn,
   );
-  return {
-    stop,
-    // A new batch owns the page now: its counts start from what is already done.
-    onBatch: (label) => { bound.batch = label; bound.base = ctx.counters.done; },
-  };
+  // A new batch owns the page now; its counts are named by the reading itself.
+  return { stop, onBatch: (label) => { bound.batch = label; } };
 }
 
 /** One log line per closed batch; a batch name is a count, never a file name. */

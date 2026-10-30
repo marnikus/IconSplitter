@@ -67,8 +67,10 @@ async function progressTick(state: WatchState): Promise<void> {
   else {
     state.misses = 0;
     state.report(progress);
-    if (progress.phase === "done" || progress.phase === "failed") return;
   }
+  // "done" is the end of **one batch**, not of the run: a 209-icon selection is
+  // three batches, and stopping at the first one is what froze the bar there.
+  // Only the run's own stop() ends the watch.
   if (state.misses <= PROGRESS_MAX_MISSES) {
     state.timer = setTimeout(() => void progressTick(state), PROGRESS_POLL_MS);
   }

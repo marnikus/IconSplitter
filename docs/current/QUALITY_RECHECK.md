@@ -4292,3 +4292,22 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   full suite 3,437/3,438 (only the environmental `algo_efficiency` 1000px budget,
   259 ms vs 200 ms, budgets untouched); docs 4/4 (soR 8,998 B, invariants
   8,926 B).
+
+## 2026-10-30 — Getty web: the bar keeps counting after batch 1
+
+- Symptom: batch 1 verified, then the panel froze ("Verifying Ready to submit ·
+  0 completed / 418") while the browser kept uploading: only the first batch was
+  ever shown.
+- Cause 1 (`progressTick`): the poller **returned** on a `done`/`failed` reading.
+  The helper reports "done" at the end of *every* batch, so the watcher died after
+  batch 1 and no later reading was ever requested. It now runs until the run's own
+  `stop()` (the miss cap still covers a dead helper).
+- Cause 2 (`liveGettyProgress`): `done` was `base + settled` with `base` taken
+  from `counters.done` (only written after the whole run), so every batch restarted
+  the bar at 0. Readings now carry the **batch they belong to** (`progressOf`,
+  `batch`), a new batch banks the previous one's last count (`rebaseOnBatch`), and
+  the total is clamped to the run's file count.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`runupload.ts` 296 lines); `verify:fast` ALL LANES PASSED; focused 8
+  files / 91 tests green; full suite green except the environmental
+  `algo_efficiency` budget; docs 4/4 (process-progress 8,998 B).

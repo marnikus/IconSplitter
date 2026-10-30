@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SESSION_COOKIE_FILE, restoreSessionCookies, saveSessionCookies, sessionCookiePath,
 } from "../tools/bridge/gettyweb/sessioncookies.mjs";
-import { acceptedOf, notReadyOf, repairTargets } from "../tools/bridge/gettyweb/session.mjs";
+import { acceptedOf, notReadyOf, progressOf, repairTargets } from "../tools/bridge/gettyweb/session.mjs";
 
 const COOKIE = {
   name: "esp_session", value: "s3cr3t-token", domain: ".gettyimages.com", path: "/",
@@ -33,6 +33,19 @@ class FakeConnection {
 function tempProfile(): string {
   return mkdtempSync(path.join(tmpdir(), "getty-web-cookies-test-"));
 }
+
+describe("Getty web progress counts", () => {
+  it("names the batch a reading belongs to, so the panel never restarts at zero", () => {
+    // The panel keeps its total across a run's batches by watching this number.
+    const read = {
+      uploaded: ["a.jpg"], failed: [], namesSeen: ["a.jpg", "b.jpg"],
+      missing: [], readyToSubmit: ["a.jpg"],
+    };
+    expect(progressOf(read, 1, 2)).toMatchObject({ batch: 2, total: 2, uploaded: 1, ready: 1, reloads: 1 });
+    // A helper that names no batch (an older build) keeps the old payload shape.
+    expect(progressOf(read, 0, 0)).not.toHaveProperty("batch");
+  });
+});
 
 describe("Getty web remembered cookies", () => {
   it("names the snapshot inside the profile folder only", () => {

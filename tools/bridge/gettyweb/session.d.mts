@@ -1,7 +1,8 @@
 export function safeStagedName(fileName: string): string;
 /** Turns one page reading into the counts the app's progress line shows. */
-export function progressOf(read: any, reloads?: number): {
-  total: number; uploaded: number; failed: number; listed: number; ready?: number; reloads: number;
+export function progressOf(read: any, reloads?: number, batch?: number): {
+  total: number; uploaded: number; failed: number; listed: number; ready?: number;
+  reloads: number; batch?: number;
 };
 /**
  * What the run may call uploaded: the last reading (after the metadata save),
