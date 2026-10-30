@@ -241,6 +241,37 @@ class SilentPageThenCards extends DomConnection {
   }
 }
 
+/**
+ * A page that freezes the moment the files are attached: every one of the
+ * helper's own readings times out (what a hung Getty tab looks like) until the
+ * page is reloaded, after which it lists the cards it was given.
+ */
+class FrozenReadPage extends DomConnection {
+  reloads = 0;
+  listAfterReload: string[];
+  constructor(listAfterReload: string[] = []) {
+    super();
+    this.listAfterReload = listAfterReload;
+  }
+  override async send(method: string, params: Record<string, unknown>) {
+    if (this.frozen && method === "Runtime.evaluate") throw new Error("Runtime.evaluate timed out after 20000 ms");
+    if (method === "Page.reload") {
+      this.reloads += 1;
+      this.frozen = false;
+      for (const name of this.listAfterReload) document.body.insertAdjacentHTML("beforeend", card(name));
+    }
+    const answer = await super.send(method, params);
+    // Only the first attach freezes the page; the retry after a reload goes through.
+    if (method === "DOM.setFileInputFiles" && this.attachments === 0) {
+      this.attachments += 1;
+      this.frozen = true;
+    }
+    return answer;
+  }
+  frozen = false;
+  attachments = 0;
+}
+
 const PAIR = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"];
 const UPLOADER = `<button data-cy="open-upload-dialog-button">Upload</button>
   <input type="file" multiple data-cy="upload-button-file-input" style="display:none">`;
@@ -502,6 +533,47 @@ describe("completing one batch for several icons", () => {
       ]);
       // The a.eps card covers the whole first pair; b.jpg has its own.
       expect(settled.state.uploaded).toEqual(["a.jpg", "a.eps", "b.jpg"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reloads a page whose own readings freeze instead of failing the run", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new FrozenReadPage(["a.eps"]);
+      const notes: string[] = [];
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps"], names: ["a.jpg", "a.eps"],
+        timeoutMs: 60000, readyTimeoutMs: 5000, stallMs: 3000,
+        onProgress: (note: string) => notes.push(note),
+      });
+      await vi.advanceTimersByTimeAsync(20000);
+      const settled = await result;
+      // A timed-out reading is a stall, not the end of the run: it reloads once.
+      expect(settled.ok).toBe(true);
+      expect(page.reloads).toBe(1);
+      expect(notes.some((note) => /stopped answering/.test(note))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps waiting and names a page that never answers, after the reloads are used up", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new FrozenReadPage();
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg"], names: ["a.jpg"],
+        timeoutMs: 60000, readyTimeoutMs: 1000, stallMs: 1000,
+      });
+      await vi.advanceTimersByTimeAsync(30000);
+      const failed = await result;
+      expect(failed).toMatchObject({ ok: false, code: "page" });
+      expect(failed.reason).toContain("stopped answering");
+      expect(page.reloads).toBe(2);
     } finally {
       vi.useRealTimers();
     }

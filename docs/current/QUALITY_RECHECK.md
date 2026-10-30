@@ -4042,3 +4042,14 @@ unlocked, and after refusing to submit while an "Upload failed" card is listed:
 coverage 105.7 s (319 files) · Build 7.5 s → ALL LANES PASSED (twice). Focused:
 `getty_web_driver` 41, `getty_web_finalize` 18, six Getty suites 121.
 SOR 8,946 B, selectors 8,060 B.
+
+## 2026-10-30 — Getty web: a frozen page stalls and reloads, and the run logs itself
+Measured after making every page reading non-fatal (a timed-out read is a stall,
+not the end of the run), after reloading and re-attaching even when nothing was
+ever read, and after adding `src/stockupload/stockuploadlog.ts` so the tab writes
+a start line, one line per file, every failure reason, each page reload and one
+closing line to the shell's log dock:
+`verify:fast` Types 6.4 s · Lint 1.8 s (0/21) · Quality gate 0.5 s · Tests +
+coverage 111.7 s · Build 7.4 s → ALL LANES PASSED. Focused:
+`getty_web_batch` 24, `getty_web_driver` 41, `getty_web_finalize` 18,
+`getty_web_session` 6, `stockupload_log` 9. SOR 8,986 B, parent SOR 6,989 B.

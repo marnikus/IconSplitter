@@ -19,6 +19,9 @@ import { markUploadInFlight } from "./journal";
 import {
   flushTargetStatuses, recordMissingCreds, recordTaskResult, reportNetworkCertificate,
 } from "./statusflush";
+import {
+  batchSubmittedSpec, pageReloadedSpec, reloadNoteOf, runFinishedSpec, runStartedSpec,
+} from "./stockuploadlog";
 import { resolveTransferBytes } from "./transferpayload";
 
 export type { UploadBatchDeps, UploadBatchSummary, UploadProgressStep } from "./batchtypes";
@@ -122,13 +125,22 @@ async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
  */
 function liveGettyProgress(ctx: NetworkCtx): () => void {
   const base = ctx.counters.done;
+  let reloads = 0;
   return watchGettyProgress(
     { bridgeUrl: ctx.deps.bridgeUrl, sessionKey: ctx.sessionKey, targetName: ctx.target.name },
-    (progress) => ctx.deps.onProgress?.({
-      done: Math.min(ctx.counters.total, base + settledFiles(progress)),
-      total: ctx.counters.total,
-      label: progressLabel(progress, ctx.target.name),
-    }),
+    (progress) => {
+      // A reload is a fact worth keeping: it explains a long silence in the run.
+      const reload = reloadNoteOf(reloads, progress.reloads);
+      if (reload !== null) {
+        reloads = reload;
+        ctx.deps.logFn?.(pageReloadedSpec({ target: ctx.target.name, reloads: reload }));
+      }
+      ctx.deps.onProgress?.({
+        done: Math.min(ctx.counters.total, base + settledFiles(progress)),
+        total: ctx.counters.total,
+        label: progressLabel(progress, ctx.target.name),
+      });
+    },
     ctx.deps.gettyWebProgressFn,
   );
 }
@@ -176,7 +188,10 @@ async function submitGettyBatch(
   // Keep both: the per-icon reason names the file, the finish reason the batch.
   if (fin.error) counters.lastError = [counters.lastError, fin.error].filter(Boolean).join(" — ");
   else if (fin.note) counters.lastError = fin.note;
-  if (fin.submitted) deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
+  if (fin.submitted) {
+    deps.logFn?.(batchSubmittedSpec(target.name));
+    deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
+  }
 }
 
 async function runNetworkTargetGroup(
@@ -228,10 +243,15 @@ export async function executeStockUploadBatch(
   const counters: RunCounters = {
     done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null, stagedDir: null,
   };
+  deps.logFn?.(runStartedSpec({ targets: plan.targets.map((t) => t.name), files: plan.tasks.length }));
   for (const target of plan.targets) {
     if (deps.signal.aborted) break;
     await runTargetGroup(plan, target, deps, counters);
   }
+  deps.logFn?.(runFinishedSpec({
+    uploaded: counters.uploadedFiles, failed: counters.failedFiles,
+    cancelled: deps.signal.aborted, lastError: counters.lastError,
+  }));
   return {
     uploadedFiles: counters.uploadedFiles,
     failedFiles: counters.failedFiles,

@@ -245,35 +245,40 @@ async function waitForFileNames(connection, sessionId, names, options) {
   let reloads = 0;
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
-    last = await readState(connection, sessionId, names);
-    options.onState?.(last);
-    if (last.signInRequired) {
-      return { ok: false, code: "auth", reason: "Getty signed the browser out during the upload", state: last };
+    const read = await readStateSafe(connection, sessionId, names);
+    if (read.ok) {
+      last = read.state;
+      options.onState?.(last);
+      if (last.signInRequired) {
+        return { ok: false, code: "auth", reason: "Getty signed the browser out during the upload", state: last };
+      }
+      if (last.namesSeen.length !== seen) {
+        seen = last.namesSeen.length;
+        movedAt = Date.now();
+      }
+      if (seen === names.length) break;
+      options.onProgress?.(`Getty listed ${seen}/${names.length} file(s) — waiting for the rest`);
+    } else {
+      options.onProgress?.("the Getty page stopped answering — it is given another chance before the reload");
     }
-    if (last.namesSeen.length !== seen) {
-      seen = last.namesSeen.length;
-      movedAt = Date.now();
-    }
-    if (seen === names.length) break;
-    options.onProgress?.(`Getty listed ${seen}/${names.length} file(s) — waiting for the rest`);
     if (Date.now() - movedAt >= stallMs) {
       // Nothing has arrived for a while: reload, then re-attach only the rest.
-      const stuckReason = "the Getty batch page stopped reacting and did not accept the remaining files after a reload";
-      if (reloads >= MAX_RELOADS) return { ok: false, code: "page", reason: stuckReason, state: last };
+      if (reloads >= MAX_RELOADS) return { ok: false, code: "page", reason: PAGE_STOPPED, state: last };
       reloads += 1;
       options.onProgress?.(`no file for ${Math.round(stallMs / 1000)} s — reloading the Getty page and retrying the rest`);
-      const recovered = await reloadAndRetry(connection, sessionId, last, options);
-      if (!recovered) return { ok: false, code: "page", reason: stuckReason, state: last };
+      const recovered = await reloadAndRetry(connection, sessionId, last, options).catch(() => false);
       options.onReload?.(reloads);
+      if (!recovered) options.onProgress?.("the reload did not take — waiting for the page to answer again");
       movedAt = Date.now();
       continue;
     }
     await sleep(UPLOAD_POLL_MS);
   }
-  if (!last || last.namesSeen.length < names.length) {
+  if (!last) return { ok: false, code: "page", reason: PAGE_STOPPED, state: null };
+  if (last.namesSeen.length < names.length) {
     return {
       ok: false, code: "timeout",
-      reason: `Getty listed ${last?.namesSeen.length ?? 0} of ${names.length} file(s) in ${Math.round(timeoutMs / 1000)} s`,
+      reason: `Getty listed ${last.namesSeen.length} of ${names.length} file(s) in ${Math.round(timeoutMs / 1000)} s`,
       state: last,
     };
   }
@@ -286,21 +291,22 @@ async function waitForFileNames(connection, sessionId, names, options) {
  * reload is the documented recovery when the page stops reacting to its uploader.
  */
 async function reloadAndRetry(connection, sessionId, last, options) {
-  const reloaded = await reloadPage(connection, sessionId);
+  const reloaded = await reloadPage(connection, sessionId).catch(() => ({ ok: false }));
   if (!reloaded.ok) return false;
-  const missing = new Set((last?.missing ?? []).map((name) => String(name)));
+  // A page that never answered tells us nothing: hand it every file again.
+  const missing = last ? new Set((last.missing ?? []).map((name) => String(name))) : null;
   const paths = [];
-  const names = [];
   options.names.forEach((name, index) => {
     const path = options.paths?.[index];
-    if (!missing.has(name) || typeof path !== "string") return;
-    paths.push(path); names.push(name);
+    if (typeof path !== "string") return;
+    if (missing !== null && !missing.has(name)) return;
+    paths.push(path);
   });
   if (paths.length === 0) return true;
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
     sessionId, timeoutMs: 60000, intervalMs: 1000,
-  });
+  }).catch(() => ({ ok: false }));
   if (!input.ok) return false;
   const attached = await setFiles(connection, paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
   if (!attached.ok) return false;
@@ -311,6 +317,21 @@ async function reloadAndRetry(connection, sessionId, last, options) {
 async function readState(connection, sessionId, names) {
   return runDriverStep(connection, sessionId, "readUploadState", { names });
 }
+
+/**
+ * One reading that never throws. A frozen Getty tab answers a timed-out CDP
+ * call instead of state; that is a stall to recover from, not the end of a run.
+ */
+async function readStateSafe(connection, sessionId, names) {
+  try {
+    return { ok: true, state: await readState(connection, sessionId, names) };
+  } catch {
+    return { ok: false, state: null };
+  }
+}
+
+/** The reason a page that neither answers nor accepts its files is given. */
+const PAGE_STOPPED = "the Getty batch page stopped answering and did not accept the remaining files after a reload";
 
 function settled(state, names) {
   return names.every((name) => state.uploaded.includes(name) || state.failed.includes(name));
@@ -327,7 +348,9 @@ async function waitForVerified(connection, sessionId, names, options, first) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
     options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)`);
     await sleep(UPLOAD_POLL_MS);
-    last = await readState(connection, sessionId, names);
+    const read = await readStateSafe(connection, sessionId, names);
+    if (!read.ok) continue; // a frozen tab is waited out, never reported as uploaded
+    last = read.state;
     options.onState?.(last);
   }
   const stuck = names.length - last.uploaded.length - last.failed.length;
@@ -369,7 +392,7 @@ export async function attachFiles(connection, sessionId, options) {
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
     sessionId, timeoutMs: 60000, intervalMs: 1000,
-  });
+  }).catch(() => ({ ok: false }));
   if (!input.ok) return { ok: false, code: "page", reason: "Getty contribution uploader (Upload from device) did not become ready within 60 seconds; release inputs were not used", state: null };
   const result = await setFiles(connection, options.paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
   if (!result.ok) return { ok: false, code: "page", reason: result.reason, state: null };

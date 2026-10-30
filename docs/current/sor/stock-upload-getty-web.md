@@ -24,11 +24,12 @@ a real browser.
    Stray dialogs are dismissed first — one blocks Getty's uploader.
 5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
    reloads the batch page and re-attaches only the files still missing (twice,
-   then it fails honestly). It waits until every file is listed, then until each
+   then it fails honestly). A page whose own readings time out is that same
+   stall, not a dead run: the read is retried, the window restarts after the
+   reload, and the run keeps waiting instead of returning a socket error. It waits until every file is listed, then until each
    card proves its outcome: **a thumbnail means uploaded**, `invalid-file-media`
-   ("Upload failed") means not — a listed row proves nothing, and a card that
-   never renders a picture fails the wait (300 s) rather than counting. A
-   rejected file is named with Getty's id. `GET /getty-web/progress` feeds the
+   ("Upload failed") means not — a listed row proves nothing, and a card with no
+   picture fails the wait (300 s). A rejected file is named with Getty's id. `GET /getty-web/progress` feeds the
    panel the live counts, so **the bar moves with each thumbnail** (1 s poll).
 6. **Metadata:** per contribution it selects the card by stem (clicking twice if
    Getty drops the first), waits for that drawer to unlock (disabled fields drop
@@ -45,18 +46,18 @@ a real browser.
    (bounded) for Getty to enable Complete — every card carries
    `not_ready_to_submit` while ingesting — clicks it and accepts the confirmation.
 8. `/getty-web/close` lets the browser go and deletes the staged files; an idle
-   session closes after five minutes. A visible window is only let go.
+   session closes after five minutes.
 
 **Sign-in is typed, not assigned.** Each poll focuses the identifier (then the
 password), inserts the saved text with real input events (`Input.insertText`) and
 writes through `angular.element(el)` too: the page is `ng-app="SignInApp"` and
-AngularJS ignores `.value =`, which submits an empty form. It then presses submit
-or Enter, takes a "sign in with password" option on an SSO screen and returns to
-`/contribute`. A stalled run names the step, never a value.
+AngularJS ignores `.value =`. It then presses submit or Enter, takes a "sign in
+with password" option on an SSO screen and returns to `/contribute`. A stalled
+run names the step, never a value.
 
 ## 3. Background, headed, attach, profile and self-check
 
-- Default: `chrome --headless=new` with a throwaway profile (never steals focus).
+- Default: `chrome --headless=new`, throwaway profile (never steals focus).
 - `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window; a visible
   window is never killed, so a failed run leaves it up.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) is what remembers the
@@ -70,8 +71,8 @@ or Enter, takes a "sign in with password" option on an SSO screen and returns to
 - `--getty-reset --getty-profile <folder>` ends that browser.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
-- `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
-  (180 s) and `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound the waits.
+- `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS` (180 s)
+  and `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound the waits.
 
 **A vector pair is one contribution:** files are matched by **stem** (`.jpg` +
 `.eps` = one card).
@@ -80,9 +81,8 @@ or Enter, takes a "sign in with password" option on an SSO screen and returns to
 folder's port is attached to. A locked folder without a port means a leftover
 window owns it, so the helper ends the browsers carrying that exact
 `--user-data-dir`, clears the stale locks and launches again — no manual "close
-every window" step, no other browser touched. Only a failed reset stops the run,
-naming the folder. Closing kills the browser tree; a visible window is only let
-go.
+every window" step, no other browser touched. Closing kills the browser tree; a
+visible window is only let go.
 
 ## 4. What is sent
 

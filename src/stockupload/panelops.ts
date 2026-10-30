@@ -15,6 +15,7 @@ import { saveExportedMetadata } from "./metaembed";
 import type { StockModelAction, StockRefs, StockUploadModel } from "./model";
 import type { StockUploadPrefs } from "./prefsstore";
 import { ALL_STOCK_FILTER, initialMetaDraft, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
+import { log } from "../log/logstore";
 import { executeStockUploadBatch, type UploadBatchSummary } from "./runupload";
 import { rememberStockRoot } from "./scan";
 
@@ -128,6 +129,7 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
     signal: controller.signal,
     loadCreds: readFtpCredentials,
     onProgress: (progress) => c.dispatch({ type: "patch", patch: { progress } }),
+    logFn: log,
     onCertWarning: (_id, sha256) => c.dispatch({ type: "patch", patch: { testStatus: { busy: false, ok: false, note: "Server certificate requires trust", certSha256: sha256 } } }),
   });
   c.r.abort.current = null;

@@ -7,6 +7,7 @@ import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import type { ItemTracker, RunCounters, UploadBatchDeps } from "./batchtypes";
 import { recordSiteUploadStatus } from "./historystore";
 import { clearUploadInFlight } from "./journal";
+import { failedSpec, uploadedSpec } from "./stockuploadlog";
 
 export function outcomeOf(tr: ItemTracker): StockUploadOutcome {
   if (tr.succeeded.length === 0) return "failed";
@@ -49,6 +50,10 @@ export function recordTaskResult(
     status: outcomeOf(tr), formats: [...tr.succeeded], uploadedAt: new Date().toISOString(), error: tr.lastError,
   });
   state.counters.done += 1;
+  // The log is the trail: one line per file, and a failure carries its reason.
+  state.deps.logFn?.(res.ok
+    ? uploadedSpec({ target: state.target.name, file: task.fileName })
+    : failedSpec({ target: state.target.name, file: task.fileName, reason: res.reason }));
   state.deps.onProgress?.({
     done: state.counters.done, total: state.counters.total, label: `${state.target.name} · ${task.fileName}`,
   });
@@ -65,6 +70,7 @@ export function recordMissingCreds(
   state.counters.failedFiles += taskCount;
   state.counters.done += taskCount;
   state.counters.lastError = msg;
+  state.deps.logFn?.(failedSpec({ target: target.name, file: `${taskCount} file(s)`, reason: msg }));
   state.deps.onProgress?.({ done: state.counters.done, total: state.counters.total, label: `${target.name}: missing credentials` });
   flushTargetStatuses(target.id, state.trackers);
 }
