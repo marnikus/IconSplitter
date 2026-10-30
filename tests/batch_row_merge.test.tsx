@@ -4,6 +4,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { atScale } from "./helpers/scale";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 import { clearKnownRoots } from "../src/lib/knownroots";
@@ -196,9 +197,10 @@ describe("Batch per-row merge override", () => {
     expect(clampMergeFrac(0.08)).toBe(0.08); expect(clampMergeFrac(0.2)).toBeNull();
   });
 
-  it("high perf: 1000 rows renders per-row controls without crash", async () => {
+  it(`high perf: ${atScale(1000, 400)} rows renders per-row controls without crash`, async () => {
+    const rows = atScale(1000, 400); // render budget, not an assertion (ICONSPLITTER_TEST_SCALE=full -> 1000)
     const dir = new FakeDir("big_row_merge");
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < rows; i++) {
       dir.children.set(`icon-${i}_AI.png`, new FakeFile(`icon-${i}_AI.png`, 10, Date.now(), `a${i}`));
       dir.children.set(`icon-${i}.png`, new FakeFile(`icon-${i}.png`, 5, 1000, `ref${i}`));
     }

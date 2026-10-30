@@ -13,6 +13,7 @@ import * as preview from "../src/lib/svgpreview";
 import * as decorations from "../src/lib/upload/decorations";
 import { useBatchSelection } from "../src/batch/useBatchSelection";
 import { patchBatch, resetAppStore } from "../src/state/appstore";
+import { atScale } from "./helpers/scale";
 
 // Selection work is independent of export geometry; full previews are covered separately.
 const settings = { ...DEFAULT_UPLOAD_SETTINGS, ...AS_IS_SETTINGS };
@@ -26,21 +27,24 @@ afterEach(() => {
   act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); resetAppStore();
 });
 
-it.each(["batch", "selectionV2", "generateSvg", "upload"] as const)('%s: 100 checkboxes change without rerunning row presentation', async (tab) => {
+it.each(["batch", "selectionV2", "generateSvg", "upload"] as const)('%s: every checkbox changes without rerunning row presentation', async (tab) => {
+  // Row count is a render budget, not an assertion: the guard is "no row presentation
+  // work when rows are selected" at any scale (ICONSPLITTER_TEST_SCALE=full restores 100).
+  const count = atScale(100, 40);
   const dates = vi.spyOn(fmt, "fmtDate");
   const svg = vi.spyOn(preview, "buildSvgPreview");
   const shell = vi.spyOn(rowmodel, "statusOf");
   const rowSettings = vi.spyOn(decorations, "rowSettings");
-  await act(async () => { root.render(<Fixture tab={tab} count={100} settings={settings} />); });
+  await act(async () => { root.render(<Fixture tab={tab} count={count} settings={settings} />); });
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 220)); });
   const work = tab === "batch" || tab === "selectionV2" ? dates : tab === "generateSvg" ? svg : rowSettings;
   expect(work.mock.calls.length).toBeGreaterThan(0); // prove the real presentation executed
   for (const on of [true, false, true]) {
     work.mockClear(); shell.mockClear();
     act(() => host.querySelector<HTMLButtonElement>(on ? "#select-all" : "#clear-all")!.click());
-    expect(host.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(on ? 100 : 0);
-    expect(host.querySelectorAll('[role="listitem"]')).toHaveLength(100);
-    expect(host.querySelectorAll('[role="listitem"].selected')).toHaveLength(on ? 100 : 0);
+    expect(host.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(on ? count : 0);
+    expect(host.querySelectorAll('[role="listitem"]')).toHaveLength(count);
+    expect(host.querySelectorAll('[role="listitem"].selected')).toHaveLength(on ? count : 0);
     expect(work.mock.calls.length).toBe(0);
     if (tab === "upload") expect(shell.mock.calls.length).toBe(0);
   }

@@ -4,6 +4,7 @@
 // decision and the row preview. Real panel, real history bar (RULE 8).
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { atScale } from "./helpers/scale";
 import { pairId } from "../src/lib/pairing";
 import { STANDALONE_INK } from "../src/lib/svgpreview";
 import { BG_PRESETS } from "../src/lib/svgbackground";
@@ -231,7 +232,7 @@ describe("Generate SVG panel", () => {
       .toEqual([`svg-ai-${FOG}`, `svg-prev-frame-${FOG}`]);
   });
 
-  it("sizes both previews by the one rule at EVERY slider value, never cropping one", async () => {
+  it("sizes both previews by the one rule across the slider range, never cropping one", async () => {
     await mount(await makeRoot());
     const panel = q(".svg") as HTMLElement;
     const box = (sel: string) => {
@@ -239,7 +240,8 @@ describe("Generate SVG panel", () => {
       return [el.style.width, el.style.height];
     };
     const seen = new Set<number>();
-    for (let px = 48; px <= 800; px += 4) {
+    const stride = atScale(4, 16); // every 16px by default; ICONSPLITTER_TEST_SCALE=full samples every 4px
+    for (let px = 48; px <= 800; px += stride) {
       await type("[data-testid=svg-thumb]", String(px));
       await settle();
       const side = `${px}px`;
@@ -252,8 +254,9 @@ describe("Generate SVG panel", () => {
       expect(box(`[data-testid=svg-prev-${FOG}]`)).toEqual([side, side]);
       seen.add(px);
     }
-    // the whole documented range was really exercised: 48, 52, ... 800
-    expect(seen.size).toBe((800 - 48) / 4 + 1);
+    // the whole documented range was really exercised, endpoints included
+    expect(seen.size).toBe(Math.floor((800 - 48) / stride) + 1);
+    expect(seen.has(48) && seen.has(800)).toBe(true);
   }, 20000); // 189 slider steps: CPU-bound, so give it room on a loaded runner
 
   it("puts every background behind the artwork and never into it", async () => {

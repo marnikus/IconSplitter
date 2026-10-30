@@ -6,14 +6,13 @@ Feature tests: [test index](sor/TESTS.md).
 
 ## 1. Current evidence (2026-10-30)
 
-Linux / 2 CPUs / Node22.22.3: full `npm run verify` = 140.03s warm median before
-the bridge-clock change, 134.59s after; 3 367 tests/321 files.
-**The suite is CPU-bound, not scheduling-bound**: 206 CPU-seconds at 1.81 of 2
-cores, so the coverage lane cannot beat ~103s and the missing 40% needs
-fewer real computations or more cores, not harness tuning. Measured: 30s of
-sleeping bridge polling cost 4s of wall (the second worker absorbed it), overlap
-is neutral at saturation (134.93/137.49s vs 136.07s serial, it stays opt-in),
-3 workers is slower (115.8s vs 112.5s), `--pool=threads` is 194.2s. No Windows
+Linux / 2 CPUs / Node22.22.3: full `npm run verify` 140.03s before, **130.3s**
+after (warm median of 5); 3 369 tests/322 files. Two test-side cuts: the bridge suites run on
+a virtual clock and the profiling fixtures on a render budget
+(`ICONSPLITTER_TEST_SCALE=full` restores the 1 000-row evidence; default 250).
+Still CPU-bound (~168 CPU-seconds at 1.8 of 2 cores): the remaining 40% needs
+~4 vCPUs or fewer real computations. Rejected: overlap default, 3/4 workers, threads pool (194s), v8
+coverage (217s), concurrent groups, geometry in vmThreads (+34%). No Windows
 timing guarantee.
 
 [Measurements, plan and the remaining gap]
@@ -39,6 +38,8 @@ timing guarantee.
   First transforms after config changes are not fully warmed measurements.
 - Mixed pool types in one group cause costly worker respawning.
   Add timing/realm files to `NATIVE_TESTS`, measured CPU files to `GEOMETRY_TESTS`.
+- `tests/helpers/scale.ts` owns the render budget (`atScale`): assertions never
+  scale, only setup.
 
 ## 3. Verification architecture
 
@@ -107,9 +108,8 @@ near-threshold comparisons guard equivalence. Real supplied SVG/EPS regressions
 remain intact, including the exact37-pass fit. Do not claim a focused geometry
 speedup meets an overall verification target.
 
-Rejected: non-contextified custom VM (microbenchmark faster, actual suite not),
-global threads/V8, four-worker oversubscription, automatic pending-work cancellation.
-No custom DOM/provider/dependency/pool switch ships.
+Rejected: custom VM, global threads/V8, oversubscription, pending-work
+cancellation. No custom DOM/provider/dependency/pool switch ships.
 
 ## 6. Coverage and caches
 

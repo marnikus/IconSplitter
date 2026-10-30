@@ -4068,3 +4068,17 @@ coverage 111.7 s · Build 7.4 s → ALL LANES PASSED. Focused:
   groups, `--pool=threads`, overlap as default.
 - Gates: 3 367 tests / 321 files green, coverage 95.02/88.91/98.35/97.93
   unchanged, native budgets green, tsc + lint (0 errors) + quality PASS.
+
+## 2026-10-30 — render budget for the profiling fixtures
+
+- Change: `tests/helpers/scale.ts` (+ canary `tests/harness_scale.test.ts`) owns
+  the render budget; `ICONSPLITTER_TEST_SCALE=full` restores every historical
+  number. One full 1 000-row research case stays as scale evidence; the pinned
+  variants run at 250 rows, `batch_row_merge` at 400 rows, the SVG slider samples
+  every 16 px (48…800 px endpoints kept). No production file changed.
+- Measured: coverage lane 113.0 -> 106.2s; full `npm run verify` 140.03 -> 130.3s warm
+  median, 5 runs 127.5-134.4 (-6.9%, target 40% still NOT met: ~168 CPU-s at 1.8 of 2 cores).
+- RULE 8 canary: dropping the `useMemo` around `uploadBulkSummary` in
+  `src/upload/UploadPanel.tsx` made all four profiling cases fail, including both
+  250-row ones; mutation reverted.
+- Coverage unchanged 95.02/88.91/98.35/97.93; 3 369 tests/322 files.

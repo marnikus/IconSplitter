@@ -27,6 +27,7 @@ import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { commitPackage, PACKAGE_SVG } from "./helpers/uploadpackage";
 import { waitUntil } from "./helpers/quiet";
+import { atScale, FULL_SCALE, PROFILE_ROWS } from "./helpers/scale";
 
 const stored = new Map<string, unknown>();
 vi.mock("../src/batch/store", async (original) => ({
@@ -89,7 +90,12 @@ describe("Upload full-panel response research", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it.each([{ count: 100, pinned: false }, { count: 1000, pinned: false }, { count: 1000, pinned: true }, { count: 1000, pinned: "snapshot" as const }])(
+  // Scale evidence stays at the full 1 000 rows; the pinned variants assert the
+  // same per-gesture budgets at PROFILE_ROWS (ICONSPLITTER_TEST_SCALE=full runs
+  // every case at 1 000 again). See tests/helpers/scale.ts.
+  it.each([{ count: 100, pinned: false }, { count: FULL_SCALE, pinned: false },
+    { count: atScale(FULL_SCALE, PROFILE_ROWS), pinned: true },
+    { count: atScale(FULL_SCALE, PROFILE_ROWS), pinned: "snapshot" as const }])(
     "profiles real warm gestures for $count rows, stored pins=$pinned", async ({ count, pinned }) => {
       const ids = fixture(count, pinned);
       const storedBytes = localStorage.getItem("iconSplitter.upload.settings.v1")!.length;
