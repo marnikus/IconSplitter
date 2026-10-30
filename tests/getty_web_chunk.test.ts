@@ -6,7 +6,8 @@
 import { describe, expect, it } from "vitest";
 import {
   GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_BYTES, GETTY_WEB_MAX_BATCH_ICONS, gettyWebBatchLabel,
-  gettyWebBatchName, gettyWebBatchSummary, gettyWebBatchSummaryOf, planGettyWebBatches,
+  gettyWebBatchName, gettyWebBatchSummary, gettyWebBatchSummaryOf, gettyWebRequestBytes,
+  planGettyWebBatches,
 } from "../src/lib/stockupload/gettyweb";
 
 const icons = (n: number) => Array.from({ length: n }, (_v, i) => ({ id: `icon-${i}` }));
@@ -89,6 +90,18 @@ describe("Getty web batch planning", () => {
     expect(gettyWebBatchSummaryOf(Array.from({ length: 209 }, () => 1.5 * MB))).toContain("5 batches");
     expect(gettyWebBatchSummaryOf(Array.from({ length: 7 }, () => 0.6 * MB))).toContain("1 batch");
     expect(gettyWebBatchSummaryOf([])).toContain("1 batch");
+  });
+
+  it("sizes a request to the running helper, not to what this build hopes for", () => {
+    const MB = 1024 * 1024;
+    // A helper that says what it takes is believed, up to this build's budget.
+    expect(gettyWebRequestBytes(40 * MB)).toBe(40 * MB);
+    expect(gettyWebRequestBytes(400 * MB)).toBe(GETTY_WEB_MAX_BATCH_BYTES);
+    // An older helper reports nothing — and its Getty cap is far below today's,
+    // which is what failed a 209-icon run with "the helper did not answer".
+    expect(gettyWebRequestBytes(undefined)).toBe(16 * MB);
+    expect(gettyWebRequestBytes(0)).toBe(16 * MB);
+    expect(gettyWebRequestBytes(Number.NaN)).toBe(16 * MB);
   });
 
   it("keeps the cap where Getty put it", () => {

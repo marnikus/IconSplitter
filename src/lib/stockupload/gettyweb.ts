@@ -22,6 +22,24 @@ export const GETTY_WEB_MAX_BATCH_ICONS = 100;
  * cuts a batch early when the bytes would cross this budget.
  */
 export const GETTY_WEB_MAX_BATCH_BYTES = 64 * 1024 * 1024;
+/**
+ * What to assume when the running helper does not say what it takes: a helper
+ * from before `GETTY_WEB_MAX_BYTES` capped a Getty body far lower than 64 MB, and
+ * guessing high is what made a 209-icon run lose every file to one refused
+ * request. Staying low only costs a few more batches.
+ */
+export const GETTY_WEB_OLD_HELPER_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The bytes one request may carry: what the helper reports it takes, never more
+ * than this build's own budget, and the small guess when it reports nothing.
+ */
+export function gettyWebRequestBytes(advertised?: number): number {
+  if (typeof advertised !== "number" || !Number.isFinite(advertised) || advertised <= 0) {
+    return GETTY_WEB_OLD_HELPER_BYTES;
+  }
+  return Math.max(1, Math.min(GETTY_WEB_MAX_BATCH_BYTES, Math.floor(advertised)));
+}
 /** One upload plus one retry: an icon is never sent a third time. */
 export const GETTY_WEB_MAX_ATTEMPTS = 2;
 export const GETTY_WEB_ERROR_HINT =

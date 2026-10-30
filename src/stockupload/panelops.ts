@@ -5,6 +5,7 @@ import { copyFolderText } from "../lib/copypath";
 import { probeBridgeFtps } from "../lib/stockupload/bridgeclient";
 import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
+import { gettyWebRequestBytes } from "../lib/stockupload/gettyweb";
 import { buildStockUploadPlan, type StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockFtpPreset, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -108,29 +109,42 @@ function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { tex
   return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s)`, err: false };
 }
 
-/** Probes the loopback helper exactly for the protocols this run will use. */
-async function probeUploadHelpers(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise<string | null> {
+/** What the helper said about its Getty limits, or why the probe refused the run. */
+interface HelperProbe { failure: string | null; gettyMaxBytes: number }
+
+/**
+ * Probes the loopback helper exactly for the protocols this run will use. The
+ * Getty body cap travels with the answer: batches are sized to the helper that is
+ * actually running, not to what this build assumes it can take.
+ */
+async function probeUploadHelpers(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise<HelperProbe> {
   const probe = await probeBridgeFtps(c.model.prefs.bridgeUrl, globalThis.fetch, {
     requireSftp: targets.some((t) => t.protocol === "sftp"),
     requireEsp: targets.some((t) => t.protocol === "esp-https"),
   });
-  if (!probe.ok) return probe.reason;
-  if (!targets.some((t) => t.protocol === "getty-web")) return null;
+  if (!probe.ok) return { failure: probe.reason, gettyMaxBytes: gettyWebRequestBytes() };
+  if (!targets.some((t) => t.protocol === "getty-web")) return { failure: null, gettyMaxBytes: gettyWebRequestBytes() };
   const gettyWeb = await probeBridgeGettyWeb(c.model.prefs.bridgeUrl, globalThis.fetch);
-  return gettyWeb.ok ? null : gettyWeb.reason;
+  if (!gettyWeb.ok) return { failure: gettyWeb.reason, gettyMaxBytes: gettyWebRequestBytes() };
+  return { failure: null, gettyMaxBytes: gettyWebRequestBytes(gettyWeb.maxBytes) };
+}
+
+/** The helper's Getty byte cap, or why the run may not start at all. */
+async function budgetFor(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise<{ failure: string | null; gettyMaxBytes?: number }> {
+  if (targets.length === 0) return { failure: null };
+  const probe = await probeUploadHelpers(c, targets);
+  return probe.failure !== null ? { failure: probe.failure } : { failure: null, gettyMaxBytes: probe.gettyMaxBytes };
 }
 
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
   if (!c.r.root.current) return;
   const networkTargets = plan.targets.filter((t) => t.protocol !== "esp-batch");
   c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Preparing upload batch…" } } });
-  if (networkTargets.length > 0) {
-    const failure = await probeUploadHelpers(c, networkTargets);
-    if (failure !== null) {
-      c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
-      c.say(failure, true);
-      return;
-    }
+  const budget = await budgetFor(c, networkTargets);
+  if (budget.failure !== null) {
+    c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
+    c.say(budget.failure, true);
+    return;
   }
   const controller = new AbortController();
   c.r.abort.current = controller;
@@ -139,6 +153,8 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
     bridgeUrl: c.model.prefs.bridgeUrl,
     signal: controller.signal,
     loadCreds: readFtpCredentials,
+    // The batch bytes the running helper can take, so no request is sent blind.
+    gettyWebMaxBytes: budget.gettyMaxBytes,
     onProgress: (progress) => c.dispatch({ type: "patch", patch: { progress } }),
     logFn: log,
     onCertWarning: (_id, sha256) => c.dispatch({ type: "patch", patch: { testStatus: { busy: false, ok: false, note: "Server certificate requires trust", certSha256: sha256 } } }),

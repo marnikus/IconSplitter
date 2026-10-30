@@ -122,9 +122,17 @@ function noteFailureCode(state: RunState, res: GettyWebResult): void {
   state.stopReason = res.reason;
 }
 
-async function runBatch(state: RunState, members: readonly number[], slot: GettyWebBatchSlot): Promise<void> {
-  const prepared = await prepareMembers(state, members);
-  if (prepared.length === 0) return;
+/** How far one batch may be halved when the helper never answered its request. */
+const MAX_SPLITS = 2;
+
+/**
+ * Sends one request; a batch the helper never answered carried nothing, so it is
+ * sent again **in halves** instead of losing every icon in it to one dropped
+ * request. Only after the last split does the failure settle the icons.
+ */
+async function sendRequest(
+  state: RunState, prepared: readonly PreparedIcon[], slot: GettyWebBatchSlot, depth = 0,
+): Promise<void> {
   const input = state.input;
   const label = gettyWebBatchLabel(slot);
   const name = gettyWebBatchName(input.now ?? new Date(), prepared.length, slot);
@@ -132,11 +140,22 @@ async function runBatch(state: RunState, members: readonly number[], slot: Getty
   for (const entry of prepared) state.attempts[entry.index] = (state.attempts[entry.index] ?? 0) + 1;
   input.onBatch?.(label);
   const res = await sendBatch(state, prepared, name);
+  if (!res.ok && res.code === "helper-down" && depth < MAX_SPLITS && prepared.length > 1) {
+    const half = Math.ceil(prepared.length / 2);
+    await sendRequest(state, prepared.slice(0, half), slot, depth + 1);
+    await sendRequest(state, prepared.slice(half), slot, depth + 1);
+    return;
+  }
   settleBatch(state, prepared, res);
   noteFailureCode(state, res);
   const accepted = prepared.filter((entry) => state.outcomes[entry.index]?.ok === true).length;
   // An empty batch is never created or completed: there is nothing to submit.
   if (accepted > 0) await completeBatch(state, accepted, label);
+}
+
+async function runBatch(state: RunState, members: readonly number[], slot: GettyWebBatchSlot): Promise<void> {
+  const prepared = await prepareMembers(state, members);
+  if (prepared.length > 0) await sendRequest(state, prepared, slot);
 }
 
 function stopped(state: RunState): boolean {

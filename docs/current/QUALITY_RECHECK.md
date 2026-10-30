@@ -4242,3 +4242,15 @@ pre-existing warnings); `npm run quality:changed` GATE PASSED (new
 Full suite 3,426 of 3,427: the only miss is `algo_efficiency`'s "synthetic
 1000px grid <200 ms" (216–308 ms) on this 2-vCPU box at load 1.3–2.1; it touches
 no file changed here and the budget was not touched.
+
+## 2026-10-30 — request sizing against the helper that is running
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (24
+pre-existing warnings); `npm run quality:changed` GATE PASSED (`gettywebtransfer.ts`
+235 lines, `panelops.ts` 268, `runupload.ts` 285); `npm run verify:fast` ALL LANES
+PASSED. Focused vitest 10 files / 168 tests green: `getty_web_chunk` 11/11,
+`getty_web_upload` 23/23, `stockupload_getty_web` 26/26, `bridge_getty_web`
+26/26, `getty_web_batch`, `getty_web_finalize`, `getty_web_session`,
+`stockupload_progress_ui`, `stockupload_getty_web_ui`, `docs_navigation`. Full
+suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
+<200 ms" (228 ms on this 2-vCPU box) missed, untouched by this change.

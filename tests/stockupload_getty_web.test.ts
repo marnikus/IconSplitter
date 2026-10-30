@@ -598,6 +598,19 @@ describe("Getty web batches above the cap", () => {
     expect(summary).toMatchObject({ uploadedFiles: 10, failedFiles: 0 });
   });
 
+  it("sends a batch the helper never answered again in halves", async () => {
+    // Nothing was received, so nothing is lost: a dropped request is retried as
+    // two smaller ones instead of failing every icon in it.
+    const { summary, sent, sentAt } = await runWith({ count: 4, cap: 4 }, async (input, call) => {
+      if (call === 1) return { ok: false, code: "helper-down", reason: "the local helper did not answer" };
+      return { ok: true, batchId: `b${call}`, accepted: accepted(input), completed: false, completion: null, metadata: [] };
+    }, async () => doneBatch);
+    expect(sent.map((input) => input.icons.length)).toEqual([4, 2, 2]);
+    // The dropped request is never "completed": no finish for a batch Getty lacks.
+    expect(sentAt).toEqual(["upload:1", "upload:2", "finish:1", "upload:3", "finish:2"]);
+    expect(summary).toMatchObject({ uploadedFiles: 8, failedFiles: 0 });
+  });
+
   it("retries a rejected icon inside the last batch, which still had room", async () => {
     const { summary, sent } = await runWith({ count: 5, cap: 2 }, async (input, call) => {
       if (call === 1) {

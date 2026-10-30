@@ -196,6 +196,17 @@ describe("Getty web loopback client", () => {
     }
   });
 
+  it("reads the helper's own Getty byte cap, so batches are sized to it", async () => {
+    const advertises = vi.fn(async () => jsonResponse(200, {
+      gettyWeb: { ready: true, browser: "found", maxBytes: 32 * 1024 * 1024 },
+    }));
+    expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", advertises))
+      .toEqual({ ok: true, maxBytes: 32 * 1024 * 1024 });
+    // An older helper says nothing about its limits: the app then assumes the small cap.
+    const silent = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "found" } }));
+    expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", silent)).toEqual({ ok: true });
+  });
+
   it("probes the helper for the Getty web capability and a browser", async () => {
     const okFetch = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "found" } }));
     expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", okFetch)).toEqual({ ok: true });

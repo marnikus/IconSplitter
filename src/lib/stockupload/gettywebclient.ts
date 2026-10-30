@@ -121,7 +121,8 @@ function megabytesOf(bytes: number): string {
  */
 function uploadTransportReason(input: GettyWebUploadInput): string {
   return `the local helper did not answer while taking ${megabytesOf(stagedBytesOf(input))} of files — `
-    + `a batch the helper cannot take answers 413; raise GETTY_WEB_MAX_BYTES on it, and ${BRIDGE_FIX_HINT}`;
+    + `restart run_ftp_bridge.bat (or run_inkscape_bridge.bat) so it reports GETTY_WEB_MAX_BYTES, `
+    + `and raise that limit above this batch if it is still refused (${BRIDGE_FIX_HINT})`;
 }
 
 /** Every staged byte of every icon, in the order the config lists them. */
@@ -217,7 +218,7 @@ export async function closeBridgeGettyWeb(
 export async function probeBridgeGettyWeb(
   bridgeUrl = DEFAULT_FTP_BRIDGE_URL,
   fetchImpl: typeof fetch = globalThis.fetch,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; maxBytes?: number } | { ok: false; reason: string }> {
   try {
     const res = await fetchImpl(`${trimSlash(bridgeUrl)}/health`);
     if (!res.ok) return { ok: false, reason: `local helper answered HTTP ${res.status} — ${BRIDGE_FIX_HINT}` };
@@ -226,7 +227,9 @@ export async function probeBridgeGettyWeb(
       return { ok: false, reason: OUTDATED_GETTY_WEB_REASON };
     }
     if (body.gettyWeb.browser === "missing") return { ok: false, reason: NO_BROWSER_REASON };
-    return { ok: true };
+    // Absent means an older helper: the app then assumes the small cap.
+    const maxBytes = body.gettyWeb.maxBytes;
+    return typeof maxBytes === "number" && Number.isFinite(maxBytes) && maxBytes > 0 ? { ok: true, maxBytes } : { ok: true };
   } catch {
     return { ok: false, reason: `local helper is not running — ${BRIDGE_FIX_HINT}` };
   }

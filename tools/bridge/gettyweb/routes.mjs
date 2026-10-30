@@ -41,9 +41,16 @@ export function sanitizeMetadata(raw) {
 }
 
 /** `/health` capability block; never launches a browser. */
-export function gettyWebHealth() {
+export function gettyWebHealth(env = process.env) {
   const browser = findBrowser();
-  return { ready: true, browser: browser.found ? "found" : "missing", headed: process.env.GETTY_WEB_HEADED === "1" };
+  return {
+    ready: true,
+    browser: browser.found ? "found" : "missing",
+    headed: env.GETTY_WEB_HEADED === "1",
+    // What one upload request may weigh. The app sizes its batches to this, and a
+    // helper that reports nothing is an older build the app must not overfill.
+    maxBytes: Number(env.GETTY_WEB_MAX_BYTES ?? 256 * 1024 * 1024),
+  };
 }
 
 function scrub(text, cfg) {

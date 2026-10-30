@@ -329,6 +329,15 @@ describe("Getty web batch limits in the helper", () => {
     expect(resetBatchState(state)).toEqual({ batchId: null, expected: [], progress: null, reloads: 0 });
   });
 
+  it("tells the app what one upload request may weigh", async () => {
+    // The app sizes its batches to this; a helper that stays silent is an older
+    // build, and the app then assumes the small cap rather than overfilling it.
+    const helper = await startHelper([], { GETTY_WEB_MAX_BYTES: "2048" });
+    const res = await fetch(`${helper.url}/health`);
+    const body = await res.json() as { gettyWeb?: { maxBytes?: number } };
+    expect(body.gettyWeb?.maxBytes).toBe(2048);
+  });
+
   it("answers an oversized batch with a 413 instead of dropping the connection", async () => {
     // The symptom a 209-icon run hit: the helper refused by content-length before
     // reading the body, closed the socket mid-upload, and the browser could only
