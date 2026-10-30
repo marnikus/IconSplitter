@@ -3977,3 +3977,5 @@ Measured: Types PASS (18.3 s), Lint PASS (15.7 s, 0 errors / 21 warnings), Quali
 gate (changed) PASS (0.7 s), Tests + coverage PASS (129.6 s), Build PASS (8.2 s).
 Focused: stockupload_getty_web 13, getty_web_upload 16, getty_web_batch 19.
 Docs: SOR 8,989 B / 9,000 B, selectors 6,822 B.
+
+- 2026-10-30 — row badge Ctrl-click removal and successful re-upload behavior: focused badge/selection tests passed; `npm run verify` passed all lanes, including typecheck, lint, quality, full tests/coverage, and build.

@@ -125,6 +125,33 @@ describe("upload row badges", () => {
     expect(q(`upload-rowbadge-chip-${COURT}-rb1`)).toBeNull();
   });
 
+  it("plain-click removes one row; Ctrl-click removes that badge from every checked row and is undoable", async () => {
+    await mount();
+    await addBadge("Priority");
+    await click("upload-rowbadge-close");
+    await click(`upload-check-${FOG}`);
+    await click(`upload-check-${COURT}`);
+    await click(`upload-rowbadge-toggle-${FOG}`);
+    await click(`upload-rowbadge-option-${FOG}-rb1`);
+    await click(`upload-rowbadge-toggle-${COURT}`);
+    await click(`upload-rowbadge-option-${COURT}-rb1`);
+
+    await click(`upload-rowbadge-chip-${FOG}-rb1`);
+    expect(getRowBadgeState().assigned[FOG]).toBeUndefined();
+    expect(getRowBadgeState().assigned[COURT]).toEqual(["rb1"]);
+    await click(`upload-rowbadge-option-${FOG}-rb1`);
+    await act(async () => {
+      const chip = q(`upload-rowbadge-chip-${FOG}-rb1`)!;
+      chip.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, ctrlKey: true }));
+    });
+    await settle(0);
+    expect(getRowBadgeState().assigned[FOG]).toBeUndefined();
+    expect(getRowBadgeState().assigned[COURT]).toBeUndefined();
+    await click("hist-undo");
+    expect(getRowBadgeState().assigned[FOG]).toEqual(["rb1"]);
+    expect(getRowBadgeState().assigned[COURT]).toEqual(["rb1"]);
+  });
+
   it("applies a badge to every selected row and filters by it", async () => {
     await mount();
     await addBadge("Redo");

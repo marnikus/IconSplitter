@@ -37,8 +37,9 @@ export function recordTaskResult(
   if (res.ok) {
     tr.succeeded.push(task.format);
     state.counters.uploadedFiles += 1;
+    // Re-derive from current saved labels on every success: user removal is not a permanent opt-out.
     const baseBadges = ensureHardcodedBadges(getRowBadgeState());
-    setRowBadgeState(assignNamedBadge(baseBadges, task.itemId, state.target.name, state.target.id));
+    setRowBadgeState(assignNamedBadge(baseBadges, task.itemId, task.targetName, task.targetId));
   } else {
     tr.lastError = res.reason;
     state.counters.failedFiles += 1;

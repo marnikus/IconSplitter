@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_ROW_BADGES, ROW_BADGE_MAX, addBadge, applyBadgeToIds, applyState,
   badgesOf, knownBadges, parseBadgeFilter, parseRowBadgeState, recolorBadge,
-  removeBadge, renameBadge, rowMatchesBadge, toggleBadgeOn,
+  removeBadge, removeBadgeFromIds, renameBadge, rowMatchesBadge, toggleBadgeOn,
 } from "../src/lib/upload/rowbadge";
 
 function withBadge(name = "Priority", color = "#ff5b7e") {
@@ -76,6 +76,17 @@ describe("assignment and multi-apply", () => {
     expect(applyBadgeToIds(catalog, [], "rb1")).toBe(catalog);
     expect(applyBadgeToIds(catalog, ["pair_a"], "rb9")).toBe(catalog);
     expect(toggleBadgeOn(catalog, "pair_a", "rb9")).toBe(catalog);
+  });
+
+  it("removes a badge from every checked row without toggling it onto mixed rows", () => {
+    const catalog = withBadge();
+    const assigned = toggleBadgeOn(toggleBadgeOn(catalog, "pair_a", "rb1"), "pair_c", "rb1");
+    const removed = removeBadgeFromIds(assigned, ["pair_a", "pair_b", "pair_c"], "rb1");
+    expect(badgesOf(removed, "pair_a")).toEqual([]);
+    expect(badgesOf(removed, "pair_b")).toEqual([]);
+    expect(badgesOf(removed, "pair_c")).toEqual([]);
+    expect(removeBadgeFromIds(assigned, [], "rb1")).toBe(assigned);
+    expect(removeBadgeFromIds(assigned, ["pair_a"], "missing")).toBe(assigned);
   });
 });
 

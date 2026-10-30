@@ -25,6 +25,7 @@ export interface StockRowPresentation {
   selectRow: (id: string, intent: SelectIntent) => void;
   openLocation: (id: string) => void;
   toggleRowBadge: (pairId: string, badgeId: string) => void;
+  removeRowBadgeSelected: (badgeId: string) => void;
   metaDraftOf: (item: ExportedItem) => StockMetaDraft;
   editMeta: (item: ExportedItem, patch: Partial<IconMetadata>) => void;
   acceptMeta: (item: ExportedItem) => void;
@@ -87,7 +88,8 @@ function FileIdentityCell({ item, a }: { item: ExportedItem; a: StockRowPresenta
       <div className="svg-file-name" data-testid={`stock-name-${item.id}`} title={item.stem}>{item.stem}</div>
       <div className="svg-file-sub" data-testid={`stock-path-${item.id}`} title={primary}>{primary}</div>
       <div className="svg-persist" title={item.recordPath}>export folder → {item.exportDir || "export"}</div>
-      <UploadRowBadges pairId={item.id} state={a.rowBadges} onToggle={a.toggleRowBadge} />
+      <UploadRowBadges pairId={item.id} state={a.rowBadges}
+        onToggle={a.toggleRowBadge} onRemoveSelected={a.removeRowBadgeSelected} />
     </div>
   );
 }

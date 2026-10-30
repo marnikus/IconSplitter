@@ -49,6 +49,7 @@ export interface UploadRowActions {
   exportRow: (id: string) => void;
   rowBadges: RowBadgeState;
   toggleRowBadge: (pairId: string, badgeId: string) => void;
+  removeRowBadgeSelected: (badgeId: string) => void;
 }
 
 export type UploadRowPresentation = Omit<UploadRowActions, "checked" | "activeId">;
@@ -118,7 +119,8 @@ function FileCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
         export → {exportDirOf(row.source.dirPath)} · approved v{row.source.version}
         {row.source.approvedValid > 1 ? ` · ${row.source.approvedValid} approved versions` : ""}
       </div>
-      <UploadRowBadges pairId={id} state={a.rowBadges} onToggle={a.toggleRowBadge} />
+      <UploadRowBadges pairId={id} state={a.rowBadges}
+        onToggle={a.toggleRowBadge} onRemoveSelected={a.removeRowBadgeSelected} />
     </div>
   );
 }

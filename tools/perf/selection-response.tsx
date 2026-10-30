@@ -106,7 +106,7 @@ export function Fixture({ tab, count, settings = DEFAULT_UPLOAD_SETTINGS }: { ta
   const u = { activeId, checked, thumb: 64, bg, rootToken: 1, rootRef, defaults: settings,
     overrides: emptySettings, applied: emptySettings, toggleCheck: toggle, selectRow: (id: string) => click(id), openSettings: noop, openLocation: noop,
     requestMetadata: noop, acceptMetadata: noop, editMetadata: noop, copyMeta: noop, exportRow: noop,
-    rowBadges: EMPTY_ROW_BADGES, toggleRowBadge: noop } satisfies UploadRowActions;
+    rowBadges: EMPTY_ROW_BADGES, toggleRowBadge: noop, removeRowBadgeSelected: noop } satisfies UploadRowActions;
   const first = ids[0] ?? "";
   const last = ids[ids.length - 1] ?? "";
   return <div>
