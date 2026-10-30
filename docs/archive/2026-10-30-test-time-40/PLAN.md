@@ -1,6 +1,10 @@
 # Test system: plan for a further ≥40% reduction in full-verification time
 
-Status: **plan only — no implementation in this change.**
+Status: **W1 implemented; W2–W5 measured and rejected.** See
+[`RESULTS.md`](RESULTS.md) for the measured outcome (140.03 s → 136.07 s, target
+84.02 s missed because the suite is CPU-bound at 206 CPU-seconds on 2 cores) and
+for what would actually reach the target. The plan below is kept as written
+before implementation.
 Date: 2026-10-30. Owner-relevant pages for the implementation phase:
 [`TEST_HARNESS.md`](../../current/TEST_HARNESS.md), [`CODE_VERIFICATION.md`](../../current/CODE_VERIFICATION.md),
 [`sor/TESTS.md`](../../current/sor/TESTS.md).

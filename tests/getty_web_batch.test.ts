@@ -1,7 +1,20 @@
 // Real serialized driver steps and CDP expressions against the supplied MUI
 // dialog shape. No queued success replies that could hide selector errors.
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { attachFiles, createBatch, finishBatch } from "../tools/bridge/gettyweb/contribute.mjs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { attachFiles as realAttachFiles, createBatch as realCreateBatch,
+  finishBatch as realFinishBatch } from "../tools/bridge/gettyweb/contribute.mjs";
+import { installVirtualClock, restoreRealClock, settleVirtual } from "./helpers/virtualclock";
+
+// The real driver waits on page timings (1000ms upload poll, 1500ms bulk settle,
+// 700ms confirm settle). Every call below runs on the virtual clock: same waits,
+// same order, no wall-clock sleep. Tests that advanced timers by hand keep doing
+// so — an already-settled promise simply ignores the extra advance.
+const createBatch = (...args: Parameters<typeof realCreateBatch>): ReturnType<typeof realCreateBatch> =>
+  settleVirtual(realCreateBatch(...args)) as ReturnType<typeof realCreateBatch>;
+const attachFiles = (...args: Parameters<typeof realAttachFiles>): ReturnType<typeof realAttachFiles> =>
+  settleVirtual(realAttachFiles(...args)) as ReturnType<typeof realAttachFiles>;
+const finishBatch = (...args: Parameters<typeof realFinishBatch>): ReturnType<typeof realFinishBatch> =>
+  settleVirtual(realFinishBatch(...args)) as ReturnType<typeof realFinishBatch>;
 
 const TYPE = "iStock creative illustration";
 const DIALOG = `<div role="dialog" aria-labelledby="create-batch-dialog" aria-modal="true">
@@ -76,7 +89,10 @@ class DomConnection {
 beforeEach(() => {
   window.history.replaceState({}, "", "/contribute/batches");
   document.body.innerHTML = '<button data-cy="create-batch-button">Create Batch</button>';
+  installVirtualClock();
 });
+
+afterEach(restoreRealClock);
 
 describe("Getty MUI batch creation and attachment", () => {
   it("recognizes the real dialog, uses the selected type, creates a named batch and attaches selected files", async () => {

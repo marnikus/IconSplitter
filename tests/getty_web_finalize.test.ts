@@ -2,10 +2,21 @@
 // the accepted export.json text, save it, then complete the batch — sequenced
 // through the real page steps with a recording CDP connection.
 
-import { describe, expect, it } from "vitest";
-import { finalizeBatch, gettyCreatedDate } from "../tools/bridge/gettyweb/contribute.mjs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { finalizeBatch as runFinalizeBatch, gettyCreatedDate } from "../tools/bridge/gettyweb/contribute.mjs";
+import { installVirtualClock, restoreRealClock, settleVirtual } from "./helpers/virtualclock";
 import { gettyWebCreatedDate } from "../src/lib/stockupload/gettyweb";
 import type { CdpConnection } from "../tools/bridge/gettyweb/cdp.mjs";
+
+// The real helper polls and settles on real page timings (1500ms bulk save, 700ms
+// confirm, 500ms editor poll). Drive those timers virtually: the same waits, the
+// same order, none of the wall-clock sleep.
+beforeEach(installVirtualClock);
+afterEach(restoreRealClock);
+
+/** `finalizeBatch` on the virtual clock; every assertion of this file is unchanged. */
+const finalizeBatch = (...args: Parameters<typeof runFinalizeBatch>): ReturnType<typeof runFinalizeBatch> =>
+  settleVirtual(runFinalizeBatch(...args)) as ReturnType<typeof runFinalizeBatch>;
 
 const META = { title: "Charity hand icon", description: "Open palm holding a heart.", keywords: ["charity", "care"] };
 

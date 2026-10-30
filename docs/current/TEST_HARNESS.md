@@ -4,26 +4,20 @@ Harness configuration, verification runner and quiet-helper contracts.
 Commands/gates: [Code Verification](CODE_VERIFICATION.md).
 Feature tests: [test index](sor/TESTS.md).
 
-## 1. Current evidence (2026-10-25)
+## 1. Current evidence (2026-10-30)
 
-**Additional 40% full-system time reduction is NOT achieved.** Reference
-281edd6, Linux / 2 CPUs / 3.85 GiB / Node22.22.3:
+Linux / 2 CPUs / Node22.22.3: full `npm run verify` = 140.03s warm median before
+the bridge-clock change, 134.59s after; 3 367 tests/321 files.
+**The suite is CPU-bound, not scheduling-bound**: 206 CPU-seconds at 1.81 of 2
+cores, so the coverage lane cannot beat ~103s and the missing 40% needs
+fewer real computations or more cores, not harness tuning. Measured: 30s of
+sleeping bridge polling cost 4s of wall (the second worker absorbed it), overlap
+is neutral at saturation (134.93/137.49s vs 136.07s serial, it stays opt-in),
+3 workers is slower (115.8s vs 112.5s), `--pool=threads` is 194.2s. No Windows
+timing guarantee.
 
-| Full verification | Reference | Candidate |
-|---|---:|---:|
-| Warm runs |91.85/96.16s|92.14/90.31s|
-| Warm median |94.00s|91.23s|
-| Cache-bypassed |129.92s|117.85s|
-
-Warm target <=56.40s. Nominal reduction: warm 2.95%, cold 9.29%; neither 40%.
-Release recheck86.38s also PASS; it does not replace the planned pair.
-Host/timing variation is substantial; **do not advertise a guaranteed multiplier**.
-Measured opt-in overlap82.05s versus serial82.37s is within noise and was not
-selected as the default. Older~80s/255s and118s comparisons describe older work,
-not this task's baseline. No Windows timing guarantee.
-
-[Plan and research](../archive/2026-10-25-harness-40/README.md),
-[results, scope and rejected experiments](../archive/2026-10-25-harness-40/results.md).
+[Measurements, plan and the remaining gap]
+(../archive/2026-10-30-test-time-40/RESULTS.md).
 
 ## 2. Isolated projects and resource budget
 
@@ -84,6 +78,7 @@ budget. This is not a promise of faster execution on CPU-bound two-core hosts.
 |---|---|
 | `settle(maxMs=80)` | three calm turns inside act; accelerate timers due within maxMs, bounded by max(maxMs,250) real ms |
 | `waitUntil(pred,what,budgetMs=4000)` | flush queued Promise/React/immediate work, recheck readiness BEFORE advancing a future timer; throw `never reached: what` on timeout |
+| `tests/helpers/virtualclock.ts` | fakes only `setTimeout`/`clearTimeout`/`Date`; `settleVirtual(promise)` advances virtual time until it settles (throws, never hangs). For bridge helpers polling on real page timings |
 
 A step drains immediates first (IndexedDB/React); it only advances an eligible
 timer when otherwise idle. A timer beyond the caller's window is left alone.

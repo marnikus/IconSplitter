@@ -4053,3 +4053,18 @@ closing line to the shell's log dock:
 coverage 111.7 s · Build 7.4 s → ALL LANES PASSED. Focused:
 `getty_web_batch` 24, `getty_web_driver` 41, `getty_web_finalize` 18,
 `getty_web_session` 6, `stockupload_log` 9. SOR 8,986 B, parent SOR 6,989 B.
+
+## 2026-10-30 — bridge suites on a virtual clock
+
+- Change: `tests/helpers/virtualclock.ts` (+ canary `tests/virtual_clock.test.ts`)
+  drives the Getty bridge helpers on a fake `setTimeout`/`Date`; production
+  timings (1500/1000/700/500ms) unchanged. `getty_web_finalize` 22.75s -> 0.58s,
+  `getty_web_batch` 7.60s -> 0.19s.
+- Measured: plain suite 99.81 -> 97.82s; coverage lane 117.50 -> 113.0s; full
+  `npm run verify` 140.03 -> 134.59s warm median (-3.9%; comparator 4.09%, target
+  40% NOT met). Suite costs 206 CPU-s at 1.81 of 2 cores, so 40% needs fewer real
+  computations or more cores (docs/archive/2026-10-30-test-time-40/RESULTS.md).
+- Rejected by measurement: 3/4 workers, `meta` project, concurrent project
+  groups, `--pool=threads`, overlap as default.
+- Gates: 3 367 tests / 321 files green, coverage 95.02/88.91/98.35/97.93
+  unchanged, native budgets green, tsc + lint (0 errors) + quality PASS.
