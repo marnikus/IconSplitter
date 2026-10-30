@@ -533,11 +533,47 @@ describe("Getty batch page as captured", () => {
 
   it("types title, description, keywords and today's Date Created into the drawer", () => {
     mount(CARD_PAGE.replace(/disabled/g, ""));
+    const date = "10/10/2026 00:00:00 +0000";
     const filled = driver.fillMetadataFields({
-      title: "Foldable paper map", description: "Pin marking a spot.", keywords: ["map", "pin"], dateCreated: "2026-10-29",
+      title: "Foldable paper map", description: "Pin marking a spot.", keywords: ["map", "pin"], dateCreated: date,
     });
     expect(filled.filled).toMatchObject({ title: true, description: true, keywords: true, dateCreated: true });
     expect(document.querySelector<HTMLTextAreaElement>('textarea[name="headline"]')!.value).toBe("Foldable paper map");
-    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!.value).toBe("2026-10-29");
+    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!.value).toBe(date);
+  });
+
+  it("rewrites the date Getty prefilled so every file can become ready today", () => {
+    // The captured drawer already holds a date, and overwrite:false keeps prefilled
+    // prose — but the run's date must still land, or cards stay not-ready.
+    mount(CARD_PAGE.replace(/disabled/g, ""));
+    const seen: string[] = [];
+    const textarea = document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!;
+    textarea.value = "10/10/2026 00:00:00 +0000";
+    textarea.addEventListener("input", () => seen.push(textarea.value));
+    textarea.addEventListener("change", () => seen.push(`change:${textarea.value}`));
+    const today = "11/02/2026 00:00:00 +0000";
+    const filled = driver.fillMetadataFields({ title: "Prefilled", description: "Kept", keywords: ["map"], dateCreated: today, overwrite: false });
+    expect(textarea.value).toBe(today);
+    // React listens for input+change: both must fire with the new value.
+    expect(seen).toContain(today);
+    expect(seen).toContain(`change:${today}`);
+    expect(filled.filled.dateCreated).toBe(true);
+  });
+
+  it("finds the date field by its data-cy when no visible label names it", () => {
+    mount(`<div data-cy="metadata-form"><div data-cy="md-created_date">
+      <textarea name="created_date"></textarea></div></div>`);
+    const filled = driver.fillMetadataFields({ dateCreated: "12/31/2026 00:00:00 +0000" });
+    expect(filled.present.dateCreated).toBe(true);
+    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!.value).toBe("12/31/2026 00:00:00 +0000");
+  });
+
+  it("reports the metadata editor as not ready while its fields are still disabled", () => {
+    mount(CARD_PAGE);
+    expect(driver.metadataEditorReady()).toMatchObject({ ready: false, present: true });
+    mount(CARD_PAGE.replace(/disabled/g, ""));
+    expect(driver.metadataEditorReady()).toMatchObject({ ready: true, present: true });
+    mount(BATCHES_PAGE);
+    expect(driver.metadataEditorReady()).toMatchObject({ ready: false, present: false });
   });
 });

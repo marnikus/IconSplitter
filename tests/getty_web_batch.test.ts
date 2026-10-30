@@ -333,6 +333,41 @@ describe("Getty web upload verification", () => {
     expect(result.state.failures).toEqual([{ name: "icon-megaphone_5_01.eps", id: "FSPID51446" }]);
   });
 
+  it("keeps waiting and then says which files never showed a thumbnail", async () => {
+    // The user's "wait for the full upload": a listed card without a picture is
+    // not an upload, so the run must not report success while it stays empty.
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new DomConnection();
+      const original = page.send.bind(page);
+      page.send = async (method: string, params: Record<string, unknown>) => {
+        const answer = await original(method, params);
+        if (method === "DOM.setFileInputFiles") {
+          document.body.insertAdjacentHTML("beforeend", `
+            <div data-cy="grid-row"><div data-cy="item-card">
+              <div data-cy="image-card"></div>
+              <p data-cy="contribution-file-name">sleepy_09.eps</p>
+            </div></div>`);
+        }
+        return answer;
+      };
+      const progress: string[] = [];
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/sleepy_09.jpg"], names: ["sleepy_09.jpg"],
+        readyTimeoutMs: 1000, onProgress: (line: string) => progress.push(line),
+      });
+      await vi.advanceTimersByTimeAsync(4000);
+      const done = await result;
+      expect(done).toMatchObject({ ok: false, code: "timeout" });
+      expect(done.reason).toContain("thumbnail");
+      expect(done.state.uploaded).toEqual([]);
+      expect(progress.some((line) => /still processing/.test(line))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("fails with the count when a card never appears", async () => {
     vi.useFakeTimers();
     try {

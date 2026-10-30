@@ -28,7 +28,9 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair
   is listed once, under the EPS name. The metadata drawer uses
   `md-headline`/`md-caption`/`md-created_date`/`metadata-keyword-multiselect` and
-  `save-metadata`, and only enables its fields once a card is selected.
+  `save-metadata`, and only enables its fields once a card is selected — a
+  `metadataEditorReady` poll waits for that unlock, and Date Created
+  (`textarea[name="created_date"]`) takes `MM/DD/YYYY 00:00:00 +0000`.
 - Getty web waits: the Create Batch control, `input[name="submission_name"]` and
   `[data-cy="create-batch-confirm-button"]` must render enabled within 60 s (else a
   `timeout` failure naming the control); an open dialog or an already-chosen

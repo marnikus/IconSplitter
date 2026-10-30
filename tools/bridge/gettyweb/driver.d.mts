@@ -17,8 +17,10 @@ export const readUploadState: (arg: { names?: string[] }) => {
   processing: boolean; ready: boolean; [key: string]: unknown;
 };
 export const labelTextOf: (el: any) => string;
-export const fillMetadataFields: (arg: { title: string; description: string; keywords: string[]; dateCreated?: string; overwrite?: boolean }) => any;
+export const fillMetadataFields: (arg: { title?: string; description?: string; keywords?: string[]; dateCreated?: string; overwrite?: boolean }) => any;
 export const openFileMetadata: (arg: { fileName: string }) => any;
+/** True once the clicked card's drawer accepts input; disabled fields drop typed text. */
+export const metadataEditorReady: () => { ready: boolean; present: boolean };
 export const saveMetadataEditor: () => any;
 export const closeMetadataEditor: () => any;
 export const dismissPageDialogs: () => any;

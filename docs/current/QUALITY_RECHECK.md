@@ -3995,3 +3995,12 @@ gate (changed) PASS (0.7 s), Tests + coverage PASS (120.4 s), Build PASS (8.3 s)
 Focused: getty_web_batch 21, getty_web_driver 32, getty_web_cdp 11,
 getty_web_upload 16, stockupload_getty_web 14. Docs: SOR 8,992 B / 9,000 B,
 selectors 7,204 B.
+
+## 2026-10-30 — Getty web: today's Date Created on every file, and wait for the full upload
+Measured after `gettyCreatedDate` (Getty's `MM/DD/YYYY 00:00:00 +0000`), the
+drawer-ready wait, the honest thumbnail timeout and the failed-card submit guard:
+`verify:fast` Types 3.7 s · Lint 1.5 s (0/21) · Quality gate 0.7 s · Tests +
+coverage 99.4 s (3325 passed) · Build 7.1 s → ALL LANES PASSED. Focused:
+`getty_web_driver` 35, `getty_web_finalize` 11, `getty_web_batch` 22,
+`getty_web_upload` 17, `getty_web_cdp` 11, `bridge_getty_web` 20,
+`stockupload_getty_web` 14 = 130 passed. SOR 8,966 B, selectors 7,349 B.

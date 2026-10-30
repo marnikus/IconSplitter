@@ -456,6 +456,38 @@ function setFieldValue(el, value) {
 }
 
 /**
+ * The drawer's Date Created control: its own `data-cy` block or `name` first,
+ * because the captured markup labels it only in the drawer, not per field.
+ */
+function dateFieldOf(fields) {
+  const block = document.querySelector('[data-cy="md-created_date"]');
+  const inside = block ? [...block.querySelectorAll("input, textarea, [contenteditable=true]")].find(shown) : null;
+  return inside
+    ?? fields.find((el) => el.getAttribute("name") === "created_date")
+    ?? fields.find((el) => /date created|created date|created_date|creation date/i.test(labelTextOf(el)))
+    ?? null;
+}
+
+/**
+ * True once the selected contribution's drawer accepts input. A card must be
+ * clicked first; until then Getty keeps every field disabled and a typed value
+ * is dropped, which is how files stayed "not ready to submit".
+ */
+export function metadataEditorReady() {
+  const form = document.querySelector('[data-cy="metadata-form"]');
+  const fields = [...(form ?? document).querySelectorAll("input, textarea, [contenteditable=true]")].filter(shown);
+  const present = fields.length > 0;
+  const editable = fields.some((el) => !el.disabled && !el.readOnly && seenField(el));
+  return { ready: present && editable, present };
+}
+
+/** One of the drawer fields the run fills (title, caption, date, keywords). */
+function seenField(el) {
+  return /date created|created date|created_date|headline|caption|keyword/i
+    .test(`${labelTextOf(el)} ${el.getAttribute("name") ?? ""}`);
+}
+
+/**
  * Types title/description/keywords into whatever metadata editor is open.
  * `overwrite: false` keeps values Getty already prefilled from the file's
  * embedded XMP/IPTC, so an upload never silently rewrites accepted text.
@@ -467,7 +499,7 @@ export function fillMetadataFields({ title, description, keywords, dateCreated, 
     title: find(/title|headline/i),
     description: find(/description|caption/i),
     keywords: find(/keyword|\btags?\b/i),
-    dateCreated: find(/date created|created date|created_date|creation date/i),
+    dateCreated: dateFieldOf(fields),
   };
   const filled = { title: false, description: false, keywords: false };
   const present = {
@@ -477,7 +509,8 @@ export function fillMetadataFields({ title, description, keywords, dateCreated, 
   for (const [key, el] of Object.entries(targets)) {
     if (!el) continue;
     const current = el.isContentEditable ? (el.textContent ?? "") : String(el.value ?? "");
-    if (!overwrite && current.trim() !== "") continue;
+    // The run's Date Created is required and is today: it replaces Getty's guess.
+    if (!overwrite && key !== "dateCreated" && current.trim() !== "") continue;
     const value = key === "keywords" ? (Array.isArray(keywords) ? keywords.join(", ") : "")
       : (key === "title" ? title : key === "dateCreated" ? dateCreated : description);
     if (typeof value !== "string" || value.trim() === "") continue;
@@ -619,7 +652,7 @@ export function readCompletionState() {
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
   fileStem, mentionsStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
-  submitControl, pageSignals, labelTextOf, setFieldValue,
+  submitControl, pageSignals, labelTextOf, setFieldValue, dateFieldOf, seenField,
 ]
   .map((fn) => fn.toString()).join("\n")
   + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`
@@ -637,6 +670,6 @@ export const DRIVER_STEPS = [
   "readPageInfo", "fillLoginForm", "focusLoginField", "inspectSignIn", "choosePasswordOption", "submitLogin",
   "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
-  "fillMetadataFields", "openFileMetadata", "saveMetadataEditor", "closeMetadataEditor",
+  "fillMetadataFields", "openFileMetadata", "metadataEditorReady", "saveMetadataEditor", "closeMetadataEditor",
   "dismissPageDialogs", "completionState", "completeBatch", "confirmCompletion", "readCompletionState",
 ];

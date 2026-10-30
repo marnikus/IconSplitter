@@ -26,7 +26,8 @@ export function attachFiles(connection: any, sessionId: string, options: {
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
 }): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any }>;
-export function todayIso(now?: Date): string;
+/** Getty's own Date Created rendering, e.g. "10/10/2026 00:00:00 +0000". */
+export function gettyCreatedDate(now?: Date): string;
 export function contributionCount(names: string[]): number;
 export function listedContributions(expected: string[], state: any): number;
 /** How many of the run's contributions Getty itself marked "Upload failed". */
@@ -43,7 +44,12 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
     name: string;
     metadata: { title: string; description: string; keywords: string[]; dateCreated?: string } | null;
   }>;
+  /** Names Getty itself marked "Upload failed": the batch is then not submitted. */
+  failed?: string[];
   complete?: boolean;
+  /** How long one clicked card's drawer may stay disabled before it is reported. */
+  editorTimeoutMs?: number;
+  editorPollMs?: number;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
 }): Promise<any>;
